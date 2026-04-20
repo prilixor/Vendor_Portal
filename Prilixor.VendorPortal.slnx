@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="Prilixor.Shared/Prilixor.Shared.csproj" />
+  <Project Path="Prilixor.VendorPortal.API/Prilixor.VendorPortal.API.csproj" />
+  <Project Path="Prilixor.VendorPortal.Application/Prilixor.VendorPortal.Application.csproj" />
+  <Project Path="Prilixor.VendorPortal.Domain/Prilixor.VendorPortal.Domain.csproj" />
+  <Project Path="Prilixor.VendorPortal.Infrastructure/Prilixor.VendorPortal.Infrastructure.csproj" />
+  <Project Path="Prilixor.VendorPortal.Tests/Prilixor.VendorPortal.Tests.csproj" />
+</Solution>

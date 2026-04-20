@@ -1,0 +1,49 @@
+-- Table 17: vendor_notifications
+-- Notification delivery log for vendors.
+
+create table if not exists public.vendor_notifications (
+    id uuid primary key default gen_random_uuid(),
+    vendor_id uuid not null,
+    notification_type varchar(50) not null,
+    title varchar(255) not null,
+    message text not null,
+    channel varchar(30) not null,
+    status varchar(30) not null default 'pending',
+    sent_at timestamptz null,
+    read_at timestamptz null,
+
+    -- Audit columns
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    created_by uuid null,
+    updated_by uuid null,
+    is_deleted boolean not null default false,
+    deleted_at timestamptz null,
+    deleted_by uuid null,
+
+    constraint fk_vendor_notifications_vendor
+        foreign key (vendor_id) references public.vendors(id),
+    constraint chk_vendor_notifications_channel
+        check (channel in ('in_app', 'email', 'push', 'sms')),
+    constraint chk_vendor_notifications_status
+        check (status in ('pending', 'sent', 'failed', 'read'))
+);
+
+create index if not exists ix_vendor_notifications_vendor_id
+    on public.vendor_notifications(vendor_id);
+
+create index if not exists ix_vendor_notifications_status
+    on public.vendor_notifications(status);
+
+create index if not exists ix_vendor_notifications_created_at
+    on public.vendor_notifications(created_at desc);
+
+drop trigger if exists trg_vendor_notifications_set_audit_columns on public.vendor_notifications;
+create trigger trg_vendor_notifications_set_audit_columns
+before insert or update on public.vendor_notifications
+for each row execute function public.fn_set_audit_columns();
+
+drop trigger if exists trg_vendor_notifications_write_audit_log on public.vendor_notifications;
+create trigger trg_vendor_notifications_write_audit_log
+after insert or update or delete on public.vendor_notifications
+for each row execute function audit.fn_write_audit_log();
