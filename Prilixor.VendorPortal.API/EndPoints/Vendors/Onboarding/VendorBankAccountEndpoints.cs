@@ -12,7 +12,6 @@ public class CreateVendorBankAccountRequest : VendorIdRequest
     public string BankName { get; set; } = string.Empty;
     public string AccountNumber { get; set; } = string.Empty;
     public string IfscCode { get; set; } = string.Empty;
-    public string VerificationStatus { get; set; } = "pending";
 }
 
 public sealed class UpdateVendorBankAccountRequest : CreateVendorBankAccountRequest
@@ -37,8 +36,7 @@ public sealed class CreateVendorBankAccountEndpoint(IMediator mediator)
             req.AccountHolderName,
             req.BankName,
             req.AccountNumber,
-            req.IfscCode,
-            req.VerificationStatus);
+            req.IfscCode);
 
         var result = await mediator.Send(command, ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
@@ -62,8 +60,7 @@ public sealed class UpdateVendorBankAccountEndpoint(IMediator mediator)
             req.AccountHolderName,
             req.BankName,
             req.AccountNumber,
-            req.IfscCode,
-            req.VerificationStatus);
+            req.IfscCode);
 
         var result = await mediator.Send(command, ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();

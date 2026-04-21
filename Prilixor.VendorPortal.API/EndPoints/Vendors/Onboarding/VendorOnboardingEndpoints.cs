@@ -34,6 +34,11 @@ public sealed class AddVendorDocumentRequest : VendorIdRequest
     public string? DocumentNumber { get; set; }
 }
 
+public sealed class DeleteVendorDocumentRequest : VendorIdRequest
+{
+    public string DocumentId { get; set; } = string.Empty;
+}
+
 public sealed class RegisterVendorEndpoint(IMediator mediator)
     : Endpoint<RegisterVendorRequest, Results<Ok<VendorDto>, ProblemHttpResult>>
 {
@@ -142,6 +147,22 @@ public sealed class GetVendorDocumentsEndpoint(IMediator mediator)
     {
         var result = await mediator.Send(new GetVendorDocumentsQuery(req.VendorId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class DeleteVendorDocumentEndpoint(IMediator mediator)
+    : Endpoint<DeleteVendorDocumentRequest, Results<NoContent, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Delete("{vendorId}/documents/{documentId}");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(DeleteVendorDocumentRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new DeleteVendorDocumentCommand(req.VendorId, req.DocumentId), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
     }
 }
 

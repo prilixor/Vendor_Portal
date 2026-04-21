@@ -12,7 +12,7 @@ import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCirc
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { VendorDocument, VerificationStatus } from "@/app/models";
-import { getVendorDocuments, saveVendorDocuments } from "@/app/services/vendorDocuments";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 
 const steps = [
   { label: "Basic Info", description: "Account" },
@@ -27,10 +27,12 @@ const Onboarding = () => {
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState(mockBusinessProfile);
   const [documents, setDocuments] = useState<VendorDocument[]>([]);
-  const [bank, setBank] = useState(mockBankDetails);
-  const [submission, setSubmission] = useState<VerificationStatus>("under_review");
+  const [bank, setBank] = useState({ ...mockBankDetails, status: "pending" as const });
+  const [submission, setSubmission] = useState<VerificationStatus>("pending");
   const [documentType, setDocumentType] = useState("GST Certificate");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [bankAccountId, setBankAccountId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const next = () => setStep((s) => Math.min(s + 1, steps.length - 1));
   const prev = () => setStep((s) => Math.max(s - 1, 0));
@@ -40,10 +42,87 @@ const Onboarding = () => {
 
   const updateBank = <K extends keyof typeof bank>(k: K, v: (typeof bank)[K]) => setBank((p) => ({ ...p, [k]: v }));
 
+  const mapStatus = (status?: string): VerificationStatus => {
+    if (!status) return "pending";
+    if (status === "under_review" || status === "submitted") return "under_review";
+    if (status === "approved" || status === "rejected" || status === "pending") return status;
+    return "pending";
+  };
+
+  const mapDocuments = (docsDto: Awaited<ReturnType<typeof vendorOnboardingApi.getVendorDocuments>>) =>
+    docsDto.map((doc) => ({
+      id: doc.id,
+      vendorId: doc.vendorId,
+      type: doc.documentType,
+      fileName: doc.fileUrl.split("/").pop() || doc.documentType,
+      fileUrl: doc.fileUrl,
+      status: mapStatus(doc.verificationStatus),
+      rejectionReason: doc.rejectionReason,
+      uploadedAt: doc.verifiedAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+    }));
+
   useEffect(() => {
     if (!user) return;
-    const loadedDocuments = getVendorDocuments(user.id);
-    setDocuments(loadedDocuments);
+
+    const loadOnboardingData = async () => {
+      setBusy(true);
+      try {
+        const [profileRes, docsRes, bankRes, verificationRes] = await Promise.allSettled([
+          vendorOnboardingApi.getVendorProfile(user.id),
+          vendorOnboardingApi.getVendorDocuments(user.id),
+          vendorOnboardingApi.getVendorBankAccounts(user.id),
+          vendorOnboardingApi.getVerificationRequests(user.id),
+        ]);
+
+        if (profileRes.status === "fulfilled") {
+          const profileDto = profileRes.value;
+          setProfile((prev) => ({
+            ...prev,
+            businessName: profileDto.businessName,
+            ownerName: profileDto.ownerName,
+            phone: profileDto.supportPhone,
+            gstNumber: profileDto.gstNumber ?? "",
+            addressLine1: profileDto.addressLine1,
+            addressLine2: profileDto.addressLine2 ?? "",
+            city: profileDto.city,
+            state: profileDto.state,
+            postalCode: profileDto.postalCode,
+            latitude: profileDto.latitude ?? prev.latitude,
+            longitude: profileDto.longitude ?? prev.longitude,
+          }));
+        }
+
+        if (docsRes.status === "fulfilled") {
+          setDocuments(mapDocuments(docsRes.value));
+        } else {
+          const reason = docsRes.reason instanceof Error ? docsRes.reason.message : "Failed to load documents.";
+          toast.error(reason);
+        }
+
+        if (bankRes.status === "fulfilled" && bankRes.value.length > 0) {
+          const latestBank = bankRes.value[0];
+          setBank({
+            accountHolderName: latestBank.accountHolderName,
+            bankName: latestBank.bankName,
+            accountNumber: latestBank.accountNumber,
+            ifscCode: latestBank.ifscCode,
+            status: mapStatus(latestBank.verificationStatus),
+          });
+          setBankAccountId(latestBank.id);
+        }
+
+        if (verificationRes.status === "fulfilled" && verificationRes.value.length > 0) {
+          setSubmission(mapStatus(verificationRes.value[0].reviewStatus));
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load onboarding data.";
+        toast.error(message);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    void loadOnboardingData();
   }, [user]);
 
   const handleFileUpload = async () => {
@@ -52,37 +131,43 @@ const Onboarding = () => {
       toast.error("Please select a file to upload.");
       return;
     }
-    const fileUrl = await fileToDataUrl(selectedFile);
 
-    const newDoc: VendorDocument = {
-      id: `d${Date.now()}`,
-      vendorId: user.id,
-      type: documentType,
-      fileName: selectedFile.name,
-      fileUrl,
-      fileType: selectedFile.type,
-      fileSize: selectedFile.size,
-      status: "pending",
-      uploadedAt: new Date().toISOString().slice(0, 10),
-    };
+    try {
+      setBusy(true);
+      const uploaded = await vendorOnboardingApi.uploadVendorFile(user.id, selectedFile);
+      await vendorOnboardingApi.addVendorDocument(user.id, {
+        vendorId: user.id,
+        documentType,
+        fileUrl: uploaded.fileUrl,
+      });
 
-    setDocuments((prev) => {
-      const updated = [...prev, newDoc];
-      saveVendorDocuments(user.id, updated);
-      return updated;
-    });
-
-    setSelectedFile(null);
-    toast.success("Document uploaded. Awaiting verification.");
+      const latestDocs = await vendorOnboardingApi.getVendorDocuments(user.id);
+      setDocuments(mapDocuments(latestDocs));
+      setSelectedFile(null);
+      toast.success("Document uploaded. Awaiting verification.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to upload document.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const removeDoc = (id: string) => {
+  const removeDoc = async (id: string) => {
     if (!user) return;
-    setDocuments((prev) => {
-      const updated = prev.filter((x) => x.id !== id);
-      saveVendorDocuments(user.id, updated);
-      return updated;
-    });
+
+    try {
+      setBusy(true);
+      await vendorOnboardingApi.deleteVendorDocument(user.id, id);
+      const latestDocs = await vendorOnboardingApi.getVendorDocuments(user.id);
+      setDocuments(mapDocuments(latestDocs));
+      toast.success("Document deleted.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete document.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const previewDoc = (doc: VendorDocument) => {
@@ -101,10 +186,86 @@ const Onboarding = () => {
     }
   };
 
-  const submit = () => {
-    setSubmission("under_review");
-    toast.success("Application submitted! Our team will review within 24 hours.");
-    setStep(4);
+  const saveProfile = async () => {
+    if (!user) return;
+
+    await vendorOnboardingApi.upsertVendorProfile(user.id, {
+      vendorId: user.id,
+      businessName: profile.businessName,
+      ownerName: profile.ownerName,
+      supportPhone: profile.phone,
+      gstNumber: profile.gstNumber,
+      addressLine1: profile.addressLine1,
+      addressLine2: profile.addressLine2,
+      city: profile.city,
+      state: profile.state,
+      postalCode: profile.postalCode,
+      latitude: profile.latitude,
+      longitude: profile.longitude,
+    });
+  };
+
+  const saveBank = async () => {
+    if (!user) return;
+
+    if (bankAccountId) {
+      const updated = await vendorOnboardingApi.updateVendorBankAccount(user.id, bankAccountId, {
+        vendorId: user.id,
+        bankAccountId,
+        accountHolderName: bank.accountHolderName,
+        bankName: bank.bankName,
+        accountNumber: bank.accountNumber,
+        ifscCode: bank.ifscCode,
+      });
+      setBankAccountId(updated.id);
+      return;
+    }
+
+    const created = await vendorOnboardingApi.createVendorBankAccount(user.id, {
+      vendorId: user.id,
+      accountHolderName: bank.accountHolderName,
+      bankName: bank.bankName,
+      accountNumber: bank.accountNumber,
+      ifscCode: bank.ifscCode,
+    });
+    setBankAccountId(created.id);
+  };
+
+  const handleContinue = async () => {
+    if (step === 1) {
+      try {
+        setBusy(true);
+        await saveProfile();
+        toast.success("Business profile saved.");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to save profile.";
+        toast.error(message);
+        return;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    next();
+  };
+
+  const submit = async () => {
+    if (!user) return;
+
+    try {
+      setBusy(true);
+      await saveProfile();
+      await saveBank();
+      const verification = await vendorOnboardingApi.createVerificationRequest(user.id);
+      setSubmission(mapStatus(verification.reviewStatus));
+      toast.success("Application submitted! Our team will review within 24 hours.");
+      setStep(4);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to submit application.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -131,11 +292,11 @@ const Onboarding = () => {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Account name</Label>
-                <Input value={user?.name ?? ""} readOnly className="bg-muted/50" />
+                <Input value={profile.ownerName || user?.name || "Not set"} readOnly className="bg-muted/50" />
               </div>
               <div className="space-y-1.5">
                 <Label>Account type</Label>
-                <Input value="Vendor" readOnly className="bg-muted/50" />
+                <Input value={user?.role ? `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}` : "Vendor"} readOnly className="bg-muted/50" />
               </div>
             </div>
           </div>
@@ -199,7 +360,7 @@ const Onboarding = () => {
                   />
                 </div>
                 <div className="flex items-end">
-                  <Button onClick={handleFileUpload} variant="outline" className="w-full">
+                  <Button onClick={handleFileUpload} variant="outline" className="w-full" disabled={busy}>
                     <Upload className="mr-2 h-4 w-4" /> Upload document
                   </Button>
                 </div>
@@ -240,10 +401,10 @@ const Onboarding = () => {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => previewDoc(doc)}>
+                          <Button variant="ghost" size="icon" onClick={() => previewDoc(doc)} disabled={busy}>
                             <Eye className="h-4 w-4 text-muted-foreground" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => removeDoc(doc.id)}>
+                          <Button variant="ghost" size="icon" onClick={() => removeDoc(doc.id)} disabled={busy}>
                             <Trash2 className="h-4 w-4 text-muted-foreground" />
                           </Button>
                         </div>
@@ -305,11 +466,11 @@ const Onboarding = () => {
             </Button>
             <p className="text-xs text-muted-foreground">Step {step + 1} of {steps.length}</p>
             {step === 3 ? (
-              <Button onClick={submit} className="bg-gradient-primary shadow-glow">
+              <Button onClick={submit} className="bg-gradient-primary shadow-glow" disabled={busy}>
                 Submit for verification
               </Button>
             ) : (
-              <Button onClick={next}>
+              <Button onClick={handleContinue} disabled={busy}>
                 Continue <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             )}
@@ -336,14 +497,6 @@ const Field = ({
     <Input value={value} onChange={(e) => onChange(e.target.value)} />
   </div>
 );
-
-const fileToDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("Could not read file"));
-    reader.readAsDataURL(file);
-  });
 
 const getPreviewUrl = (fileUrl: string): string => {
   if (!fileUrl.startsWith("data:")) return fileUrl;

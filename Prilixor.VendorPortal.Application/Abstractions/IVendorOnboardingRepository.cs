@@ -13,6 +13,8 @@ public interface IVendorOnboardingRepository
 
     Task AddVendorDocumentAsync(VendorDocument document, CancellationToken cancellationToken);
     Task<List<VendorDocument>> GetVendorDocumentsAsync(Guid vendorId, CancellationToken cancellationToken);
+    Task<VendorDocument?> GetVendorDocumentByIdAsync(Guid vendorId, Guid documentId, CancellationToken cancellationToken);
+    Task UpdateVendorDocumentAsync(VendorDocument document, CancellationToken cancellationToken);
 
     Task AddVerificationRequestAsync(VendorVerificationRequest request, CancellationToken cancellationToken);
     Task<List<VendorVerificationRequest>> GetVerificationRequestsAsync(Guid vendorId, CancellationToken cancellationToken);

@@ -1,23 +1,106 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Switch } from "@/app/components/ui/switch";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
-import { mockWorkingHours } from "@/app/services/mockData";
 import { WorkingHour } from "@/app/models";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
+import { useAuth } from "@/app/guards/AuthContext";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 
 const dayLabels: Record<WorkingHour["day"], string> = {
   mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday",
 };
 
+const orderedDays: WorkingHour["day"][] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const dayToNumber: Record<WorkingHour["day"], number> = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 };
+const numberToDay: Record<number, WorkingHour["day"]> = { 0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun" };
+
+const defaultHours: WorkingHour[] = orderedDays.map((day) => ({
+  day,
+  open: day !== "sun",
+  openTime: "09:00",
+  closeTime: "18:00",
+}));
+
+const toTimeInput = (time?: string): string => {
+  if (!time) return "";
+  return time.slice(0, 5);
+};
+
 const WorkingHours = () => {
-  const [hours, setHours] = useState<WorkingHour[]>(mockWorkingHours);
+  const { user } = useAuth();
+  const [hours, setHours] = useState<WorkingHour[]>(defaultHours);
+  const [busy, setBusy] = useState(false);
 
   const update = (day: WorkingHour["day"], patch: Partial<WorkingHour>) =>
     setHours((h) => h.map((d) => (d.day === day ? { ...d, ...patch } : d)));
+
+  const saveHours = async () => {
+    if (!user) {
+      toast.error("Please login again.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+
+      await Promise.all(hours.map((h) => {
+        const dayOfWeek = dayToNumber[h.day];
+        return vendorOnboardingApi.upsertVendorWorkingHour(user.id, dayOfWeek, {
+          vendorId: user.id,
+          dayOfWeek,
+          isOpen: h.open,
+          openTime: h.open ? h.openTime : undefined,
+          closeTime: h.open ? h.closeTime : undefined,
+        });
+      }));
+
+      toast.success("Working hours saved");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save working hours.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+
+    const loadHours = async () => {
+      setBusy(true);
+      try {
+        const rows = await vendorOnboardingApi.getVendorWorkingHours(user.id);
+        if (rows.length === 0) {
+          setHours(defaultHours);
+          return;
+        }
+
+        const mapped = defaultHours.map((d) => {
+          const row = rows.find((r) => numberToDay[r.dayOfWeek] === d.day);
+          if (!row) return d;
+          return {
+            day: d.day,
+            open: row.isOpen,
+            openTime: row.isOpen ? toTimeInput(row.openTime) || d.openTime : d.openTime,
+            closeTime: row.isOpen ? toTimeInput(row.closeTime) || d.closeTime : d.closeTime,
+          };
+        });
+
+        setHours(mapped);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load working hours.";
+        toast.error(message);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    void loadHours();
+  }, [user]);
 
   return (
     <div>
@@ -25,7 +108,7 @@ const WorkingHours = () => {
         title="Working hours"
         description="Set your weekly schedule. Customers can only place rental requests during your open hours."
         actions={
-          <Button onClick={() => toast.success("Working hours saved")} className="bg-gradient-primary shadow-glow">
+          <Button onClick={saveHours} className="bg-gradient-primary shadow-glow" disabled={busy}>
             <Save className="mr-2 h-4 w-4" /> Save changes
           </Button>
         }

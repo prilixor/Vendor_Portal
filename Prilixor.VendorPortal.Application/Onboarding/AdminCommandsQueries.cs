@@ -183,3 +183,88 @@ internal sealed class GetAdminAuditLogsQueryHandler(IVendorOnboardingRepository 
         return Result.Success(result);
     }
 }
+
+public sealed record VerifyVendorBankAccountCommand(
+    string AdminUserId,
+    string VendorId,
+    string BankAccountId,
+    string VerificationStatus,
+    string? Notes) : ICommand<VendorBankAccountDto>;
+
+public sealed class VerifyVendorBankAccountCommandValidator : AbstractValidator<VerifyVendorBankAccountCommand>
+{
+    public VerifyVendorBankAccountCommandValidator()
+    {
+        RuleFor(x => x.AdminUserId).NotEmpty();
+        RuleFor(x => x.VendorId).NotEmpty();
+        RuleFor(x => x.BankAccountId).NotEmpty();
+        RuleFor(x => x.VerificationStatus)
+            .NotEmpty()
+            .Must(x => x is "approved" or "rejected")
+            .WithMessage("Verification status must be either 'approved' or 'rejected'.");
+    }
+}
+
+internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRepository repository)
+    : ICommandHandler<VerifyVendorBankAccountCommand, VendorBankAccountDto>
+{
+    public async Task<Result<VendorBankAccountDto>> Handle(VerifyVendorBankAccountCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.AdminUserId, out var adminUserId))
+        {
+            return Result.Failure<VendorBankAccountDto>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        if (!Guid.TryParse(request.VendorId, out var vendorId))
+        {
+            return Result.Failure<VendorBankAccountDto>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        if (!Guid.TryParse(request.BankAccountId, out var bankAccountId))
+        {
+            return Result.Failure<VendorBankAccountDto>(new Error("vendors.bank_account.invalid_id", "Bank account id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var adminUser = await repository.GetAdminUserByIdAsync(adminUserId, cancellationToken);
+        if (adminUser is null || !adminUser.IsActive)
+        {
+            return Result.Failure<VendorBankAccountDto>(new Error("admin.not_found", "Active admin user not found.", ErrorCategory.NotFound));
+        }
+
+        var bankAccount = await repository.GetVendorBankAccountByIdAsync(vendorId, bankAccountId, cancellationToken);
+        if (bankAccount is null)
+        {
+            return Result.Failure<VendorBankAccountDto>(new Error("vendors.bank_account.not_found", "Vendor bank account not found.", ErrorCategory.NotFound));
+        }
+
+        var oldStatus = bankAccount.VerificationStatus;
+        bankAccount.VerificationStatus = request.VerificationStatus;
+        bankAccount.VerifiedAt = request.VerificationStatus == "approved" ? DateTimeOffset.UtcNow : null;
+
+        await repository.UpdateVendorBankAccountAsync(bankAccount, cancellationToken);
+
+        var auditLog = new AdminAuditLog
+        {
+            AdminUserId = adminUserId,
+            ActionType = "VENDOR_BANK_ACCOUNT_VERIFIED",
+            EntityType = "VendorBankAccount",
+            EntityId = bankAccount.Id,
+            OldValue = oldStatus,
+            NewValue = request.VerificationStatus,
+            Notes = request.Notes
+        };
+
+        await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return Result.Success(new VendorBankAccountDto(
+            bankAccount.Id.ToString(),
+            bankAccount.VendorId.ToString(),
+            bankAccount.AccountHolderName,
+            bankAccount.BankName,
+            bankAccount.AccountNumber,
+            bankAccount.IfscCode,
+            bankAccount.VerificationStatus,
+            bankAccount.VerifiedAt));
+    }
+}

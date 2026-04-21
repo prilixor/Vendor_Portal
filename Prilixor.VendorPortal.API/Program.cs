@@ -42,6 +42,49 @@ var app = builder.Build();
 app.UseAuthentication()
     .UseAuthorization();
 
+app.UseStaticFiles();
+
+app.MapPost("/api/files/upload", async (HttpRequest request, IWebHostEnvironment environment, CancellationToken cancellationToken) =>
+{
+    if (!request.HasFormContentType)
+    {
+        return Results.BadRequest(new { detail = "Request must be multipart/form-data." });
+    }
+
+    var form = await request.ReadFormAsync(cancellationToken);
+    var file = form.Files["file"] ?? form.Files.FirstOrDefault();
+    var vendorId = (form["vendorId"].ToString() ?? "common").Trim();
+
+    if (file is null || file.Length == 0)
+    {
+        return Results.BadRequest(new { detail = "No file provided." });
+    }
+
+    var uploadsRoot = Path.Combine(environment.ContentRootPath, "wwwroot", "uploads", "vendors", string.IsNullOrWhiteSpace(vendorId) ? "common" : vendorId);
+    Directory.CreateDirectory(uploadsRoot);
+
+    var extension = Path.GetExtension(file.FileName);
+    var storedFileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
+    var filePath = Path.Combine(uploadsRoot, storedFileName);
+
+    await using (var stream = File.Create(filePath))
+    {
+        await file.CopyToAsync(stream, cancellationToken);
+    }
+
+    var relativeUrl = $"/uploads/vendors/{(string.IsNullOrWhiteSpace(vendorId) ? "common" : vendorId)}/{storedFileName}";
+    var absoluteUrl = $"{request.Scheme}://{request.Host}{relativeUrl}";
+
+    return Results.Ok(new
+    {
+        fileUrl = absoluteUrl,
+        fileName = storedFileName,
+        originalFileName = file.FileName,
+        contentType = file.ContentType,
+        size = file.Length
+    });
+});
+
 app.UseFastEndpoints(op =>
 {
     op.Endpoints.RoutePrefix = "api";

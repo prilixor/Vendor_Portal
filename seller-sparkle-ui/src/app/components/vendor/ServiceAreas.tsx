@@ -5,32 +5,83 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { MapPicker } from "@/app/components/shared/MapPicker";
-import { mockServiceAreas } from "@/app/services/mockData";
 import { ServiceArea } from "@/app/models";
 import { Plus, MapPin, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
+import { useAuth } from "@/app/guards/AuthContext";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 
 const blank: ServiceArea = { id: "", name: "", city: "", latitude: 19.07, longitude: 72.87, radiusKm: 5 };
 
 const ServiceAreas = () => {
-  const [areas, setAreas] = useState<ServiceArea[]>(mockServiceAreas);
+  const { user } = useAuth();
+  const [areas, setAreas] = useState<ServiceArea[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ServiceArea>(blank);
   const [mapReady, setMapReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const toUiArea = (a: Awaited<ReturnType<typeof vendorOnboardingApi.getVendorServiceAreas>>[number]): ServiceArea => ({
+    id: a.id,
+    name: a.areaName,
+    city: a.city,
+    latitude: a.centerLatitude,
+    longitude: a.centerLongitude,
+    radiusKm: a.serviceRadiusKm,
+  });
 
   const startNew = () => { setEditing({ ...blank, id: `sa${Date.now()}` }); setOpen(true); };
   const startEdit = (a: ServiceArea) => { setEditing(a); setOpen(true); };
-  const remove = (id: string) => { setAreas((a) => a.filter((x) => x.id !== id)); toast.success("Service area removed"); };
+  const remove = (_id: string) => {
+    toast.info("Delete service area API is not available yet.");
+  };
 
-  const save = () => {
+  const save = async () => {
+    if (!user) {
+      toast.error("Please login again.");
+      return;
+    }
+
     if (!editing.name || !editing.city) { toast.error("Name and city are required"); return; }
-    setAreas((prev) => {
-      const exists = prev.some((p) => p.id === editing.id);
-      return exists ? prev.map((p) => (p.id === editing.id ? editing : p)) : [...prev, editing];
-    });
-    setOpen(false);
-    toast.success("Service area saved");
+
+    try {
+      setBusy(true);
+      const exists = areas.some((p) => p.id === editing.id);
+
+      if (exists) {
+        await vendorOnboardingApi.updateVendorServiceArea(user.id, editing.id, {
+          vendorId: user.id,
+          serviceAreaId: editing.id,
+          areaName: editing.name,
+          city: editing.city,
+          centerLatitude: editing.latitude,
+          centerLongitude: editing.longitude,
+          serviceRadiusKm: editing.radiusKm,
+          isActive: true,
+        });
+      } else {
+        await vendorOnboardingApi.createVendorServiceArea(user.id, {
+          vendorId: user.id,
+          areaName: editing.name,
+          city: editing.city,
+          centerLatitude: editing.latitude,
+          centerLongitude: editing.longitude,
+          serviceRadiusKm: editing.radiusKm,
+          isActive: true,
+        });
+      }
+
+      const latest = await vendorOnboardingApi.getVendorServiceAreas(user.id);
+      setAreas(latest.map(toUiArea));
+      setOpen(false);
+      toast.success("Service area saved");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save service area.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -45,6 +96,25 @@ const ServiceAreas = () => {
 
     return () => window.clearTimeout(timer);
   }, [open]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const loadServiceAreas = async () => {
+      setBusy(true);
+      try {
+        const rows = await vendorOnboardingApi.getVendorServiceAreas(user.id);
+        setAreas(rows.map(toUiArea));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load service areas.";
+        toast.error(message);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    void loadServiceAreas();
+  }, [user]);
 
   return (
     <div>
@@ -117,10 +187,10 @@ const ServiceAreas = () => {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>
               <X className="mr-2 h-4 w-4" /> Cancel
             </Button>
-            <Button onClick={save}>Save area</Button>
+            <Button onClick={save} disabled={busy}>Save area</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

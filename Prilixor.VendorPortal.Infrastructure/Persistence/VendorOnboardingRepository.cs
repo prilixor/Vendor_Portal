@@ -56,6 +56,18 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
             .ToListAsync(cancellationToken);
     }
 
+    public Task<VendorDocument?> GetVendorDocumentByIdAsync(Guid vendorId, Guid documentId, CancellationToken cancellationToken)
+    {
+        return dbContext.VendorDocuments
+            .FirstOrDefaultAsync(x => x.Id == documentId && x.VendorId == vendorId && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task UpdateVendorDocumentAsync(VendorDocument document, CancellationToken cancellationToken)
+    {
+        dbContext.VendorDocuments.Update(document);
+        return Task.CompletedTask;
+    }
+
     public async Task AddVerificationRequestAsync(VendorVerificationRequest request, CancellationToken cancellationToken)
     {
         await dbContext.VendorVerificationRequests.AddAsync(request, cancellationToken);

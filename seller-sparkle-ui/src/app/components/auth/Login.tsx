@@ -22,7 +22,7 @@ const Login = () => {
   const validate = () => {
     const e: typeof errors = {};
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) e.email = "Enter a valid email address";
-    if (password.length < 6) e.password = "Password must be at least 6 characters";
+    if (password.length < 8) e.password = "Password must be at least 8 characters";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -35,8 +35,9 @@ const Login = () => {
       await login(email, password, role);
       toast.success(`Welcome back, ${role === "admin" ? "Admin" : "Vendor"}!`);
       navigate(role === "admin" ? "/admin" : "/vendor");
-    } catch {
-      toast.error("Sign in failed. Please try again.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Sign in failed. Please try again.";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

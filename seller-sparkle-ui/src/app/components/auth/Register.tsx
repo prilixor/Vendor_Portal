@@ -52,8 +52,9 @@ const Register = () => {
       await register(email, password);
       toast.success("Account created! Let's complete your onboarding.");
       navigate("/vendor/onboarding");
-    } catch {
-      toast.error("Registration failed.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Registration failed.";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

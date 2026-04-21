@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://localhost:5001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://localhost:7257/api";
 
 const TOKEN_KEY = 'vendor_portal_token';
 
@@ -6,7 +6,7 @@ class ApiClient {
   private baseUrl: string;
 
   constructor(baseUrl: string = API_BASE_URL) {
-    this.baseUrl = baseUrl;
+    this.baseUrl = baseUrl.replace(/\/+$/, "");
   }
 
   private getToken(): string | null {
@@ -21,17 +21,30 @@ class ApiClient {
     localStorage.removeItem(TOKEN_KEY);
   }
 
-  private getHeaders(): HeadersInit {
+  private getHeaders(includeJsonContentType: boolean = true): HeadersInit {
     const token = this.getToken();
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
+    const headers: HeadersInit = {};
+
+    if (includeJsonContentType) {
+      headers["Content-Type"] = "application/json";
+    }
 
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers["Authorization"] = `Bearer ${token}`;
     }
 
     return headers;
+  }
+
+  private getAuthHeaders(): HeadersInit {
+    const token = this.getToken();
+    if (!token) {
+      return {};
+    }
+
+    return {
+      Authorization: `Bearer ${token}`,
+    };
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
@@ -40,22 +53,30 @@ class ApiClient {
       throw new Error(error.detail || error.title || 'An error occurred');
     }
 
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
     return response.json();
   }
 
+  private buildUrl(endpoint: string): string {
+    return `${this.baseUrl}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+  }
+
   async get<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await fetch(this.buildUrl(endpoint), {
       method: 'GET',
-      headers: this.getHeaders(),
+      headers: this.getHeaders(false),
     });
 
     return this.handleResponse<T>(response);
   }
 
   async post<T>(endpoint: string, data?: unknown): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await fetch(this.buildUrl(endpoint), {
       method: 'POST',
-      headers: this.getHeaders(),
+      headers: this.getHeaders(true),
       body: data ? JSON.stringify(data) : undefined,
     });
 
@@ -63,9 +84,9 @@ class ApiClient {
   }
 
   async put<T>(endpoint: string, data?: unknown): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await fetch(this.buildUrl(endpoint), {
       method: 'PUT',
-      headers: this.getHeaders(),
+      headers: this.getHeaders(true),
       body: data ? JSON.stringify(data) : undefined,
     });
 
@@ -73,9 +94,19 @@ class ApiClient {
   }
 
   async delete<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await fetch(this.buildUrl(endpoint), {
       method: 'DELETE',
-      headers: this.getHeaders(),
+      headers: this.getHeaders(false),
+    });
+
+    return this.handleResponse<T>(response);
+  }
+
+  async postForm<T>(endpoint: string, data: FormData): Promise<T> {
+    const response = await fetch(this.buildUrl(endpoint), {
+      method: "POST",
+      headers: this.getAuthHeaders(),
+      body: data,
     });
 
     return this.handleResponse<T>(response);

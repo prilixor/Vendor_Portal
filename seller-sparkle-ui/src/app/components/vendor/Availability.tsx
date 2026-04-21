@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -6,41 +6,88 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Switch } from "@/app/components/ui/switch";
 import { Calendar } from "@/app/components/ui/calendar";
-import { mockOverrides } from "@/app/services/mockData";
 import { AvailabilityOverride } from "@/app/models";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Trash2, Plus } from "lucide-react";
+import { useAuth } from "@/app/guards/AuthContext";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 
 const Availability = () => {
-  const [overrides, setOverrides] = useState<AvailabilityOverride[]>(mockOverrides);
+  const { user } = useAuth();
+  const [overrides, setOverrides] = useState<AvailabilityOverride[]>([]);
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [available, setAvailable] = useState(false);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const dateMap = new Map(overrides.map((o) => [o.date, o]));
 
-  const add = () => {
+  const toUiOverride = (row: Awaited<ReturnType<typeof vendorOnboardingApi.getVendorAvailabilityOverrides>>[number]): AvailabilityOverride => ({
+    id: row.id,
+    date: row.overrideDate,
+    available: row.isAvailable,
+    startTime: row.startTime?.slice(0, 5),
+    endTime: row.endTime?.slice(0, 5),
+    reason: row.reason,
+  });
+
+  const add = async () => {
+    if (!user) {
+      toast.error("Please login again.");
+      return;
+    }
     if (!date) return;
     const iso = format(date, "yyyy-MM-dd");
-    const ov: AvailabilityOverride = {
-      id: `ov${Date.now()}`,
-      date: iso,
-      available,
-      startTime: start || undefined,
-      endTime: end || undefined,
-      reason: reason || undefined,
-    };
-    setOverrides((o) => [...o.filter((x) => x.date !== iso), ov]);
-    setReason("");
-    setStart("");
-    setEnd("");
-    toast.success("Availability override added");
+    try {
+      setBusy(true);
+      await vendorOnboardingApi.upsertVendorAvailabilityOverride(user.id, iso, {
+        vendorId: user.id,
+        overrideDate: iso,
+        isAvailable: available,
+        startTime: available ? (start || undefined) : undefined,
+        endTime: available ? (end || undefined) : undefined,
+        reason: reason || undefined,
+      });
+
+      const latest = await vendorOnboardingApi.getVendorAvailabilityOverrides(user.id);
+      setOverrides(latest.map(toUiOverride));
+      setReason("");
+      setStart("");
+      setEnd("");
+      toast.success("Availability override added");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save availability override.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const remove = (id: string) => setOverrides((o) => o.filter((x) => x.id !== id));
+  const remove = (_id: string) => {
+    toast.info("Delete availability override API is not available yet.");
+  };
+
+  useEffect(() => {
+    if (!user) return;
+
+    const loadOverrides = async () => {
+      setBusy(true);
+      try {
+        const rows = await vendorOnboardingApi.getVendorAvailabilityOverrides(user.id);
+        setOverrides(rows.map(toUiOverride));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load availability overrides.";
+        toast.error(message);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    void loadOverrides();
+  }, [user]);
 
   return (
     <div>
@@ -95,7 +142,7 @@ const Availability = () => {
               <Label>Reason</Label>
               <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Public holiday" />
             </div>
-            <Button onClick={add} className="w-full bg-gradient-primary shadow-glow">
+            <Button onClick={add} className="w-full bg-gradient-primary shadow-glow" disabled={busy}>
               <Plus className="mr-2 h-4 w-4" /> Add override
             </Button>
           </div>

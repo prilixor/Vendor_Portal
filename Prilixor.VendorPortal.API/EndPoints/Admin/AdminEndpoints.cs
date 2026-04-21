@@ -30,6 +30,14 @@ public sealed class GetAdminAuditLogsRequest
     public string? AdminUserId { get; set; }
 }
 
+public sealed class VerifyVendorBankAccountRequest : AdminUserIdRequest
+{
+    public string VendorId { get; set; } = string.Empty;
+    public string BankAccountId { get; set; } = string.Empty;
+    public string VerificationStatus { get; set; } = string.Empty;
+    public string? Notes { get; set; }
+}
+
 public sealed class RegisterAdminUserEndpoint(IMediator mediator)
     : Endpoint<RegisterAdminUserRequest, Results<Ok<AdminUserDto>, ProblemHttpResult>>
 {
@@ -104,6 +112,28 @@ public sealed class GetAdminAuditLogsEndpoint(IMediator mediator)
     public override async Task<Results<Ok<List<AdminAuditLogDto>>, ProblemHttpResult>> ExecuteAsync(GetAdminAuditLogsRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new GetAdminAuditLogsQuery(req.AdminUserId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class VerifyVendorBankAccountEndpoint(IMediator mediator)
+    : Endpoint<VerifyVendorBankAccountRequest, Results<Ok<VendorBankAccountDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("vendors/{vendorId}/bank-accounts/{bankAccountId}/verification");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorBankAccountDto>, ProblemHttpResult>> ExecuteAsync(VerifyVendorBankAccountRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new VerifyVendorBankAccountCommand(
+            req.AdminUserId,
+            req.VendorId,
+            req.BankAccountId,
+            req.VerificationStatus,
+            req.Notes), ct);
+
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
