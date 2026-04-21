@@ -66,8 +66,24 @@ const Availability = () => {
     }
   };
 
-  const remove = (_id: string) => {
-    toast.info("Delete availability override API is not available yet.");
+  const remove = async (id: string) => {
+    if (!user) {
+      toast.error("Please login again.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      await vendorOnboardingApi.deleteVendorAvailabilityOverride(user.id, id);
+      const latest = await vendorOnboardingApi.getVendorAvailabilityOverrides(user.id);
+      setOverrides(latest.map(toUiOverride));
+      toast.success("Availability override deleted.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete availability override.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -168,7 +184,7 @@ const Availability = () => {
                   {o.reason && <p className="text-xs text-muted-foreground">{o.reason}</p>}
                 </div>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => remove(o.id)}>
+              <Button variant="ghost" size="icon" onClick={() => remove(o.id)} disabled={busy}>
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
             </li>

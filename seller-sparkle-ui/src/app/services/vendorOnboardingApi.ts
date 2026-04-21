@@ -212,6 +212,10 @@ export const vendorOnboardingApi = {
     return apiClient.get<VendorServiceAreaApiDto[]>(`/vendors/${vendorId}/service-areas`);
   },
 
+  deleteVendorServiceArea(vendorId: string, serviceAreaId: string) {
+    return apiClient.delete<void>(`/vendors/${vendorId}/service-areas/${serviceAreaId}`);
+  },
+
   upsertVendorWorkingHour(vendorId: string, dayOfWeek: number, payload: UpsertVendorWorkingHourPayload) {
     return apiClient.put<VendorWorkingHourApiDto>(`/vendors/${vendorId}/working-hours/${dayOfWeek}`, payload);
   },
@@ -226,5 +230,9 @@ export const vendorOnboardingApi = {
 
   getVendorAvailabilityOverrides(vendorId: string) {
     return apiClient.get<VendorAvailabilityOverrideApiDto[]>(`/vendors/${vendorId}/availability-overrides`);
+  },
+
+  deleteVendorAvailabilityOverride(vendorId: string, overrideId: string) {
+    return apiClient.delete<void>(`/vendors/${vendorId}/availability-overrides/${overrideId}`);
   },
 };

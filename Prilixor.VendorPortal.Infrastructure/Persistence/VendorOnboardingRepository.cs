@@ -128,7 +128,13 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
     public Task<VendorAvailabilityOverride?> GetVendorAvailabilityOverrideByDateAsync(Guid vendorId, DateOnly overrideDate, CancellationToken cancellationToken)
     {
         return dbContext.VendorAvailabilityOverrides
-            .FirstOrDefaultAsync(x => x.VendorId == vendorId && x.OverrideDate == overrideDate && !x.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(x => x.VendorId == vendorId && x.OverrideDate == overrideDate, cancellationToken);
+    }
+
+    public Task<VendorAvailabilityOverride?> GetVendorAvailabilityOverrideByIdAsync(Guid vendorId, Guid overrideId, CancellationToken cancellationToken)
+    {
+        return dbContext.VendorAvailabilityOverrides
+            .FirstOrDefaultAsync(x => x.Id == overrideId && x.VendorId == vendorId && !x.IsDeleted, cancellationToken);
     }
 
     public async Task UpsertVendorAvailabilityOverrideAsync(VendorAvailabilityOverride availabilityOverride, CancellationToken cancellationToken)

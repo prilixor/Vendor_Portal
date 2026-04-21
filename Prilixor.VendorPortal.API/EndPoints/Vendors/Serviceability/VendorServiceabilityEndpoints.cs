@@ -21,6 +21,11 @@ public sealed class UpdateVendorServiceAreaRequest : CreateVendorServiceAreaRequ
     public string ServiceAreaId { get; set; } = string.Empty;
 }
 
+public sealed class DeleteVendorServiceAreaRequest : VendorIdRequest
+{
+    public string ServiceAreaId { get; set; } = string.Empty;
+}
+
 public sealed class UpsertVendorWorkingHourRequest : VendorIdRequest
 {
     public short DayOfWeek { get; set; }
@@ -36,6 +41,11 @@ public sealed class UpsertVendorAvailabilityOverrideRequest : VendorIdRequest
     public TimeOnly? StartTime { get; set; }
     public TimeOnly? EndTime { get; set; }
     public string? Reason { get; set; }
+}
+
+public sealed class DeleteVendorAvailabilityOverrideRequest : VendorIdRequest
+{
+    public string OverrideId { get; set; } = string.Empty;
 }
 
 public sealed class CreateVendorServiceAreaEndpoint(IMediator mediator)
@@ -102,6 +112,22 @@ public sealed class GetVendorServiceAreasEndpoint(IMediator mediator)
     {
         var result = await mediator.Send(new GetVendorServiceAreasQuery(req.VendorId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class DeleteVendorServiceAreaEndpoint(IMediator mediator)
+    : Endpoint<DeleteVendorServiceAreaRequest, Results<NoContent, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Delete("{vendorId}/service-areas/{serviceAreaId}");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(DeleteVendorServiceAreaRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new DeleteVendorServiceAreaCommand(req.VendorId, req.ServiceAreaId), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
     }
 }
 
@@ -181,5 +207,21 @@ public sealed class GetVendorAvailabilityOverridesEndpoint(IMediator mediator)
     {
         var result = await mediator.Send(new GetVendorAvailabilityOverridesQuery(req.VendorId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class DeleteVendorAvailabilityOverrideEndpoint(IMediator mediator)
+    : Endpoint<DeleteVendorAvailabilityOverrideRequest, Results<NoContent, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Delete("{vendorId}/availability-overrides/{overrideId}");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(DeleteVendorAvailabilityOverrideRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new DeleteVendorAvailabilityOverrideCommand(req.VendorId, req.OverrideId), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
     }
 }

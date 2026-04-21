@@ -33,8 +33,24 @@ const ServiceAreas = () => {
 
   const startNew = () => { setEditing({ ...blank, id: `sa${Date.now()}` }); setOpen(true); };
   const startEdit = (a: ServiceArea) => { setEditing(a); setOpen(true); };
-  const remove = (_id: string) => {
-    toast.info("Delete service area API is not available yet.");
+  const remove = async (id: string) => {
+    if (!user) {
+      toast.error("Please login again.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      await vendorOnboardingApi.deleteVendorServiceArea(user.id, id);
+      const latest = await vendorOnboardingApi.getVendorServiceAreas(user.id);
+      setAreas(latest.map(toUiArea));
+      toast.success("Service area deleted.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete service area.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const save = async () => {
@@ -143,10 +159,10 @@ const ServiceAreas = () => {
                   </p>
                 </div>
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => startEdit(area)}>
+                  <Button variant="ghost" size="icon" onClick={() => startEdit(area)} disabled={busy}>
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => remove(area.id)}>
+                  <Button variant="ghost" size="icon" onClick={() => remove(area.id)} disabled={busy}>
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </div>

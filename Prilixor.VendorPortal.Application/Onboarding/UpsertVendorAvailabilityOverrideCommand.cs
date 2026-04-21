@@ -56,6 +56,9 @@ internal sealed class UpsertVendorAvailabilityOverrideCommandHandler(IVendorOnbo
         row.StartTime = request.StartTime;
         row.EndTime = request.EndTime;
         row.Reason = request.Reason;
+        row.IsDeleted = false;
+        row.DeletedAt = null;
+        row.DeletedBy = null;
 
         await repository.UpsertVendorAvailabilityOverrideAsync(row, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
