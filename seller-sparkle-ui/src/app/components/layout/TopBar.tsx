@@ -1,0 +1,88 @@
+import { useNavigate } from "react-router-dom";
+import { Bell, LogOut, Sun, Moon, ChevronDown } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useAuth } from "@/app/guards/AuthContext";
+import { Button } from "@/app/components/ui/button";
+import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/app/components/ui/dropdown-menu";
+
+export const TopBar = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [dark, setDark] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+  }, [dark]);
+
+  const initials = (user?.name ?? "U").split(" ").map((n) => n[0]).slice(0, 2).join("");
+
+  return (
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border bg-background/80 px-4 backdrop-blur-xl sm:px-6">
+      <div className="ml-auto flex items-center gap-2">
+        <Button variant="ghost" size="icon" onClick={() => setDark((v) => !v)} aria-label="Toggle theme">
+          {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate(user?.role === "admin" ? "/admin" : "/vendor/notifications")}
+          aria-label="Notifications"
+          className="relative"
+        >
+          <Bell className="h-4 w-4" />
+          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive ring-2 ring-background" />
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-muted transition-colors">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-gradient-primary text-xs font-semibold text-primary-foreground">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="hidden text-left sm:block">
+                <p className="text-xs font-semibold leading-tight">{user?.name}</p>
+                <p className="text-[11px] capitalize text-muted-foreground leading-tight">{user?.role}</p>
+              </div>
+              <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground sm:block" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>
+              <div>
+                <p className="text-sm font-semibold">{user?.name}</p>
+                <p className="text-xs font-normal text-muted-foreground">{user?.email}</p>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => navigate(user?.role === "admin" ? "/admin" : "/vendor/settings")}>
+              Account settings
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => {
+                logout();
+                navigate("/login");
+              }}
+              className="text-destructive focus:text-destructive"
+            >
+              <LogOut className="mr-2 h-4 w-4" /> Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </header>
+  );
+};
+
+
