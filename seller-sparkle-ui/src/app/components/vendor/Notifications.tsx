@@ -24,6 +24,8 @@ const Notifications = () => {
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [prefs, setPrefs] = useState({ email: true, push: true, orders: true });
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const filtered = useMemo(
     () => (filter === "unread" ? items.filter((i) => !i.read) : items),
@@ -52,6 +54,7 @@ const Notifications = () => {
   const loadNotificationData = async () => {
     if (!user) return;
     setBusy(true);
+    setLoadError(null);
     try {
       const [prefRes, notifRes] = await Promise.allSettled([
         vendorOnboardingApi.getVendorNotificationPreference(user.id),
@@ -70,10 +73,16 @@ const Notifications = () => {
         setItems(mapNotifications(notifRes.value));
       } else {
         const message = notifRes.reason instanceof Error ? notifRes.reason.message : "Failed to load notifications.";
+        setLoadError(message);
         toast.error(message);
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load notifications.";
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
+      setHasLoaded(true);
     }
   };
 
@@ -147,6 +156,13 @@ const Notifications = () => {
         }
       />
 
+      {!hasLoaded && busy && (
+        <Card className="mb-4 border-border/60 p-4 text-sm text-muted-foreground">Loading notifications...</Card>
+      )}
+      {loadError && (
+        <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
           <div className="flex items-center justify-between border-b border-border pb-4">
@@ -199,7 +215,9 @@ const Notifications = () => {
               <li className="flex flex-col items-center justify-center px-6 py-12 text-center">
                 <Bell className="mb-3 h-10 w-10 text-muted-foreground" />
                 <p className="text-sm font-semibold">You're all caught up</p>
-                <p className="text-xs text-muted-foreground">No unread notifications.</p>
+                <p className="text-xs text-muted-foreground">
+                  {filter === "unread" ? "No unread notifications." : "No notifications yet."}
+                </p>
               </li>
             )}
           </ul>

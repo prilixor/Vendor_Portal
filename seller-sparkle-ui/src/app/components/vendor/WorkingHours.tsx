@@ -34,6 +34,8 @@ const WorkingHours = () => {
   const { user } = useAuth();
   const [hours, setHours] = useState<WorkingHour[]>(defaultHours);
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const update = (day: WorkingHour["day"], patch: Partial<WorkingHour>) =>
     setHours((h) => h.map((d) => (d.day === day ? { ...d, ...patch } : d)));
@@ -72,6 +74,7 @@ const WorkingHours = () => {
 
     const loadHours = async () => {
       setBusy(true);
+      setLoadError(null);
       try {
         const rows = await vendorOnboardingApi.getVendorWorkingHours(user.id);
         if (rows.length === 0) {
@@ -93,9 +96,11 @@ const WorkingHours = () => {
         setHours(mapped);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to load working hours.";
+        setLoadError(message);
         toast.error(message);
       } finally {
         setBusy(false);
+        setHasLoaded(true);
       }
     };
 
@@ -113,6 +118,13 @@ const WorkingHours = () => {
           </Button>
         }
       />
+
+      {!hasLoaded && busy && (
+        <Card className="mb-4 border-border/60 p-4 text-sm text-muted-foreground">Loading working hours...</Card>
+      )}
+      {loadError && (
+        <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
+      )}
 
       <Card className="overflow-hidden border-border/60">
         <div className="hidden grid-cols-12 gap-4 border-b border-border bg-muted/30 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:grid">

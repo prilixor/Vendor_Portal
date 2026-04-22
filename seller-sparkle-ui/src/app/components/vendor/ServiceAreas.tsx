@@ -21,6 +21,8 @@ const ServiceAreas = () => {
   const [editing, setEditing] = useState<ServiceArea>(blank);
   const [mapReady, setMapReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const toUiArea = (a: Awaited<ReturnType<typeof vendorOnboardingApi.getVendorServiceAreas>>[number]): ServiceArea => ({
     id: a.id,
@@ -118,14 +120,17 @@ const ServiceAreas = () => {
 
     const loadServiceAreas = async () => {
       setBusy(true);
+      setLoadError(null);
       try {
         const rows = await vendorOnboardingApi.getVendorServiceAreas(user.id);
         setAreas(rows.map(toUiArea));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to load service areas.";
+        setLoadError(message);
         toast.error(message);
       } finally {
         setBusy(false);
+        setHasLoaded(true);
       }
     };
 
@@ -143,6 +148,13 @@ const ServiceAreas = () => {
           </Button>
         }
       />
+
+      {!hasLoaded && busy && (
+        <Card className="mb-4 border-border/60 p-4 text-sm text-muted-foreground">Loading service areas...</Card>
+      )}
+      {loadError && (
+        <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {areas.map((area) => (
@@ -171,6 +183,11 @@ const ServiceAreas = () => {
           </Card>
         ))}
       </div>
+      {hasLoaded && !busy && areas.length === 0 && (
+        <Card className="mt-4 border-border/60 p-6 text-center text-sm text-muted-foreground">
+          No service areas added yet.
+        </Card>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl">

@@ -32,6 +32,8 @@ const Inventory = () => {
   const [movementType, setMovementType] = useState<"in" | "out">("in");
   const [movementQtyInput, setMovementQtyInput] = useState("1");
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const loadInventory = async () => {
     if (!user) return;
@@ -110,13 +112,16 @@ const Inventory = () => {
     if (!user) return;
     const run = async () => {
       setBusy(true);
+      setLoadError(null);
       try {
         await loadInventory();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to load inventory.";
+        setLoadError(message);
         toast.error(message);
       } finally {
         setBusy(false);
+        setHasLoaded(true);
       }
     };
     void run();
@@ -238,6 +243,13 @@ const Inventory = () => {
     <div>
       <PageHeader title="Inventory" description="Track stock levels and movements across all your products." />
 
+      {!hasLoaded && busy && (
+        <Card className="mb-4 border-border/60 p-4 text-sm text-muted-foreground">Loading inventory...</Card>
+      )}
+      {loadError && (
+        <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
+      )}
+
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <StatCard label="Total" value={totals.total} icon={Boxes} accent="primary" />
         <StatCard label="Available" value={totals.available} icon={CheckCircle2} accent="success" />
@@ -299,6 +311,13 @@ const Inventory = () => {
                   </tr>
                 );
               })}
+              {hasLoaded && !busy && inventory.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    No listings found to track inventory yet.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -331,6 +350,9 @@ const Inventory = () => {
               </li>
             );
           })}
+          {hasLoaded && !busy && movements.length === 0 && (
+            <li className="p-6 text-center text-sm text-muted-foreground">No movement history yet.</li>
+          )}
         </ul>
       </Card>
 

@@ -396,6 +396,69 @@ internal sealed class GetVendorProductImagesQueryHandler(IVendorOnboardingReposi
     }
 }
 
+public sealed record DeleteVendorProductImageCommand(string VendorId, string ListingId, string ImageId) : ICommand;
+
+public sealed class DeleteVendorProductImageCommandValidator : AbstractValidator<DeleteVendorProductImageCommand>
+{
+    public DeleteVendorProductImageCommandValidator()
+    {
+        RuleFor(x => x.VendorId).NotEmpty();
+        RuleFor(x => x.ListingId).NotEmpty();
+        RuleFor(x => x.ImageId).NotEmpty();
+    }
+}
+
+internal sealed class DeleteVendorProductImageCommandHandler(IVendorOnboardingRepository repository)
+    : ICommandHandler<DeleteVendorProductImageCommand>
+{
+    public async Task<Result> Handle(DeleteVendorProductImageCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.VendorId, out var vendorId)
+            || !Guid.TryParse(request.ListingId, out var listingId)
+            || !Guid.TryParse(request.ImageId, out var imageId))
+        {
+            return Result.Failure(new Error("vendors.listing.invalid_id", "Vendor/listing/image id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var listing = await repository.GetVendorProductListingByIdAsync(vendorId, listingId, cancellationToken);
+        if (listing is null)
+        {
+            return Result.Failure(new Error("vendors.listing.not_found", "Vendor listing not found.", ErrorCategory.NotFound));
+        }
+
+        var image = await repository.GetVendorProductImageByIdAsync(vendorId, listingId, imageId, cancellationToken);
+        if (image is null)
+        {
+            return Result.Failure(new Error("vendors.listing.image.not_found", "Listing image not found.", ErrorCategory.NotFound));
+        }
+
+        var wasPrimary = image.IsPrimary;
+        image.IsDeleted = true;
+        image.DeletedAt = DateTimeOffset.UtcNow;
+        image.DeletedBy = vendorId;
+        image.IsPrimary = false;
+        await repository.UpdateVendorProductImageAsync(image, cancellationToken);
+
+        if (wasPrimary)
+        {
+            var remaining = await repository.GetVendorProductImagesAsync(listingId, cancellationToken);
+            var fallback = remaining
+                .Where(x => x.Id != imageId)
+                .OrderBy(x => x.DisplayOrder)
+                .FirstOrDefault();
+
+            if (fallback is not null && !fallback.IsPrimary)
+            {
+                fallback.IsPrimary = true;
+                await repository.UpdateVendorProductImageAsync(fallback, cancellationToken);
+            }
+        }
+
+        await repository.SaveChangesAsync(cancellationToken);
+        return Result.Success();
+    }
+}
+
 public sealed record AddVendorProductDocumentCommand(
     string VendorId,
     string ListingId,
@@ -480,5 +543,50 @@ internal sealed class GetVendorProductDocumentsQueryHandler(IVendorOnboardingRep
             x.VerifiedAt)).ToList();
 
         return Result.Success(result);
+    }
+}
+
+public sealed record DeleteVendorProductDocumentCommand(string VendorId, string ListingId, string DocumentId) : ICommand;
+
+public sealed class DeleteVendorProductDocumentCommandValidator : AbstractValidator<DeleteVendorProductDocumentCommand>
+{
+    public DeleteVendorProductDocumentCommandValidator()
+    {
+        RuleFor(x => x.VendorId).NotEmpty();
+        RuleFor(x => x.ListingId).NotEmpty();
+        RuleFor(x => x.DocumentId).NotEmpty();
+    }
+}
+
+internal sealed class DeleteVendorProductDocumentCommandHandler(IVendorOnboardingRepository repository)
+    : ICommandHandler<DeleteVendorProductDocumentCommand>
+{
+    public async Task<Result> Handle(DeleteVendorProductDocumentCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.VendorId, out var vendorId)
+            || !Guid.TryParse(request.ListingId, out var listingId)
+            || !Guid.TryParse(request.DocumentId, out var documentId))
+        {
+            return Result.Failure(new Error("vendors.listing.invalid_id", "Vendor/listing/document id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var listing = await repository.GetVendorProductListingByIdAsync(vendorId, listingId, cancellationToken);
+        if (listing is null)
+        {
+            return Result.Failure(new Error("vendors.listing.not_found", "Vendor listing not found.", ErrorCategory.NotFound));
+        }
+
+        var document = await repository.GetVendorProductDocumentByIdAsync(vendorId, listingId, documentId, cancellationToken);
+        if (document is null)
+        {
+            return Result.Failure(new Error("vendors.listing.document.not_found", "Listing document not found.", ErrorCategory.NotFound));
+        }
+
+        document.IsDeleted = true;
+        document.DeletedAt = DateTimeOffset.UtcNow;
+        document.DeletedBy = vendorId;
+        await repository.UpdateVendorProductDocumentAsync(document, cancellationToken);
+        await repository.SaveChangesAsync(cancellationToken);
+        return Result.Success();
     }
 }

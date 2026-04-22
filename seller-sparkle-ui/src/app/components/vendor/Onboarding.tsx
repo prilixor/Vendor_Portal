@@ -8,11 +8,10 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { FormGrid } from "@/app/components/shared/FormGrid";
-import { mockBankDetails, mockBusinessProfile } from "@/app/services/mockData";
 import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
-import { VendorDocument, VerificationStatus } from "@/app/models";
+import { BankDetails, BusinessProfile, VendorDocument, VerificationStatus } from "@/app/models";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 
 const steps = [
@@ -23,17 +22,41 @@ const steps = [
   { label: "Review", description: "Submit" },
 ];
 
+const defaultProfile: BusinessProfile = {
+  businessName: "",
+  ownerName: "",
+  phone: "",
+  gstNumber: "",
+  addressLine1: "",
+  addressLine2: "",
+  city: "",
+  state: "",
+  postalCode: "",
+  latitude: 19.07,
+  longitude: 72.87,
+};
+
+const defaultBank: BankDetails = {
+  accountHolderName: "",
+  bankName: "",
+  accountNumber: "",
+  ifscCode: "",
+  status: "pending",
+};
+
 const Onboarding = () => {
   const { user } = useAuth();
   const [step, setStep] = useState(0);
-  const [profile, setProfile] = useState(mockBusinessProfile);
+  const [profile, setProfile] = useState<BusinessProfile>(defaultProfile);
   const [documents, setDocuments] = useState<VendorDocument[]>([]);
-  const [bank, setBank] = useState({ ...mockBankDetails, status: "pending" as VerificationStatus });
+  const [bank, setBank] = useState<BankDetails>(defaultBank);
   const [submission, setSubmission] = useState<VerificationStatus>("pending");
   const [documentType, setDocumentType] = useState("GST Certificate");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [bankAccountId, setBankAccountId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const next = () => setStep((s) => Math.min(s + 1, steps.length - 1));
   const prev = () => setStep((s) => Math.max(s - 1, 0));
@@ -67,6 +90,7 @@ const Onboarding = () => {
 
     const loadOnboardingData = async () => {
       setBusy(true);
+      setLoadError(null);
       try {
         const [profileRes, docsRes, bankRes, verificationRes] = await Promise.allSettled([
           vendorOnboardingApi.getVendorProfile(user.id),
@@ -117,9 +141,11 @@ const Onboarding = () => {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to load onboarding data.";
+        setLoadError(message);
         toast.error(message);
       } finally {
         setBusy(false);
+        setHasLoaded(true);
       }
     };
 
@@ -281,6 +307,17 @@ const Onboarding = () => {
           <Stepper steps={steps} current={step} onStepClick={setStep} />
         </div>
 
+        {!hasLoaded && busy && (
+          <div className="mb-4 rounded-lg border border-border bg-muted/30 px-4 py-2 text-sm text-muted-foreground">
+            Loading onboarding data...
+          </div>
+        )}
+        {loadError && (
+          <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-2 text-sm text-destructive">
+            {loadError}
+          </div>
+        )}
+
         <div className="max-h-[calc(100vh-280px)] overflow-y-auto px-1">
           {/* STEP 1 */}
         {step === 0 && (
@@ -413,6 +450,13 @@ const Onboarding = () => {
                       </td>
                     </tr>
                   ))}
+                  {documents.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                        No documents uploaded yet.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

@@ -37,7 +37,7 @@ export const vendorNav: NavSection[] = [
   {
     title: "Account",
     items: [
-      { label: "Notifications", to: "/vendor/notifications", icon: Bell, badge: "2" },
+      { label: "Notifications", to: "/vendor/notifications", icon: Bell },
       { label: "Settings", to: "/vendor/settings", icon: Settings },
     ],
   },

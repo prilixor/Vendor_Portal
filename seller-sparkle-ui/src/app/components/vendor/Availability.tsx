@@ -22,6 +22,8 @@ const Availability = () => {
   const [end, setEnd] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const dateMap = new Map(overrides.map((o) => [o.date, o]));
 
@@ -91,14 +93,17 @@ const Availability = () => {
 
     const loadOverrides = async () => {
       setBusy(true);
+      setLoadError(null);
       try {
         const rows = await vendorOnboardingApi.getVendorAvailabilityOverrides(user.id);
         setOverrides(rows.map(toUiOverride));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to load availability overrides.";
+        setLoadError(message);
         toast.error(message);
       } finally {
         setBusy(false);
+        setHasLoaded(true);
       }
     };
 
@@ -111,6 +116,13 @@ const Availability = () => {
         title="Availability overrides"
         description="Block dates for holidays, maintenance, or stocktake — or extend your hours for high-demand dates."
       />
+
+      {!hasLoaded && busy && (
+        <Card className="mb-4 border-border/60 p-4 text-sm text-muted-foreground">Loading availability overrides...</Card>
+      )}
+      {loadError && (
+        <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card className="p-4 sm:p-6 lg:p-8 border-border/60">
@@ -189,6 +201,9 @@ const Availability = () => {
               </Button>
             </li>
           ))}
+          {hasLoaded && !busy && overrides.length === 0 && (
+            <li className="p-6 text-center text-sm text-muted-foreground">No overrides scheduled yet.</li>
+          )}
         </ul>
       </Card>
     </div>
