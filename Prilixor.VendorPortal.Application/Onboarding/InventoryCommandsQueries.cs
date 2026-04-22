@@ -119,11 +119,31 @@ public sealed record AddVendorInventoryMovementCommand(
 
 public sealed class AddVendorInventoryMovementCommandValidator : AbstractValidator<AddVendorInventoryMovementCommand>
 {
+    private static readonly string[] AllowedMovementTypes =
+    [
+        "stock_added",
+        "stock_removed",
+        "reserved",
+        "reservation_released",
+        "rented",
+        "returned",
+        "blocked",
+        "unblocked",
+        "corrected",
+        "in",
+        "out",
+        "released"
+    ];
+
     public AddVendorInventoryMovementCommandValidator()
     {
         RuleFor(x => x.VendorId).NotEmpty();
         RuleFor(x => x.ListingId).NotEmpty();
-        RuleFor(x => x.MovementType).NotEmpty().MaximumLength(40);
+        RuleFor(x => x.MovementType)
+            .NotEmpty()
+            .MaximumLength(40)
+            .Must(x => AllowedMovementTypes.Contains(x.Trim().ToLowerInvariant()))
+            .WithMessage("Movement type is invalid.");
         RuleFor(x => x.Quantity).GreaterThan(0);
     }
 }
@@ -164,7 +184,7 @@ internal sealed class AddVendorInventoryMovementCommandHandler(IVendorOnboarding
         var movement = new VendorInventoryMovement
         {
             VendorInventoryId = inventory.Id,
-            MovementType = request.MovementType,
+            MovementType = NormalizeMovementType(request.MovementType),
             Quantity = request.Quantity,
             ReferenceType = request.ReferenceType,
             ReferenceId = referenceId,
@@ -181,7 +201,31 @@ internal sealed class AddVendorInventoryMovementCommandHandler(IVendorOnboarding
             movement.Quantity,
             movement.ReferenceType,
             movement.ReferenceId?.ToString(),
-            movement.Notes));
+            movement.Notes,
+            ToSafeCreatedAt(movement.CreatedOnUtc)));
+    }
+
+    private static string NormalizeMovementType(string movementType)
+    {
+        var normalized = movementType.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "in" => "stock_added",
+            "out" => "stock_removed",
+            "released" => "reservation_released",
+            _ => normalized
+        };
+    }
+
+    private static DateTimeOffset ToSafeCreatedAt(DateTime createdOnUtc)
+    {
+        if (createdOnUtc <= DateTime.MinValue.AddDays(1))
+        {
+            return DateTimeOffset.UtcNow;
+        }
+
+        var utc = DateTime.SpecifyKind(createdOnUtc, DateTimeKind.Utc);
+        return new DateTimeOffset(utc, TimeSpan.Zero);
     }
 }
 
@@ -217,8 +261,20 @@ internal sealed class GetVendorInventoryMovementsQueryHandler(IVendorOnboardingR
             x.Quantity,
             x.ReferenceType,
             x.ReferenceId?.ToString(),
-            x.Notes)).ToList();
+            x.Notes,
+            ToSafeCreatedAt(x.CreatedOnUtc))).ToList();
 
         return Result.Success(result);
+    }
+
+    private static DateTimeOffset ToSafeCreatedAt(DateTime createdOnUtc)
+    {
+        if (createdOnUtc <= DateTime.MinValue.AddDays(1))
+        {
+            return DateTimeOffset.UtcNow;
+        }
+
+        var utc = DateTime.SpecifyKind(createdOnUtc, DateTimeKind.Utc);
+        return new DateTimeOffset(utc, TimeSpan.Zero);
     }
 }

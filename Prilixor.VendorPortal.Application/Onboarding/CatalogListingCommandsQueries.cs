@@ -174,6 +174,18 @@ public sealed record UpsertVendorProductListingCommand(
 
 public sealed class UpsertVendorProductListingCommandValidator : AbstractValidator<UpsertVendorProductListingCommand>
 {
+    private static readonly string[] AllowedListingStatuses =
+    [
+        "draft",
+        "submitted",
+        "under_review",
+        "approved",
+        "rejected",
+        "inactive",
+        "blocked",
+        "active"
+    ];
+
     public UpsertVendorProductListingCommandValidator()
     {
         RuleFor(x => x.VendorId).NotEmpty();
@@ -183,7 +195,11 @@ public sealed class UpsertVendorProductListingCommandValidator : AbstractValidat
         RuleFor(x => x.MonthlyRent).GreaterThanOrEqualTo(0);
         RuleFor(x => x.SecurityDeposit).GreaterThanOrEqualTo(0);
         RuleFor(x => x.AvailableQuantity).GreaterThanOrEqualTo(0);
-        RuleFor(x => x.ListingStatus).NotEmpty().MaximumLength(30);
+        RuleFor(x => x.ListingStatus)
+            .NotEmpty()
+            .MaximumLength(30)
+            .Must(status => AllowedListingStatuses.Contains(status.Trim().ToLowerInvariant()))
+            .WithMessage("Listing status is invalid.");
     }
 }
 
@@ -236,7 +252,12 @@ internal sealed class UpsertVendorProductListingCommandHandler(IVendorOnboarding
         entity.MonthlyRent = request.MonthlyRent;
         entity.SecurityDeposit = request.SecurityDeposit;
         entity.AvailableQuantity = request.AvailableQuantity;
-        entity.ListingStatus = request.ListingStatus;
+        var normalizedListingStatus = request.ListingStatus.Trim().ToLowerInvariant();
+        if (normalizedListingStatus == "active")
+        {
+            normalizedListingStatus = "approved";
+        }
+        entity.ListingStatus = normalizedListingStatus;
         entity.ProductId = productId;
 
         if (entity.Id == Guid.Empty)

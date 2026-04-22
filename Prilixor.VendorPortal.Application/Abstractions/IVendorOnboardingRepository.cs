@@ -7,6 +7,7 @@ public interface IVendorOnboardingRepository
     Task<Vendor?> GetVendorByIdAsync(Guid vendorId, CancellationToken cancellationToken);
     Task<Vendor?> GetVendorByEmailAsync(string email, CancellationToken cancellationToken);
     Task AddVendorAsync(Vendor vendor, CancellationToken cancellationToken);
+    Task UpdateVendorAsync(Vendor vendor, CancellationToken cancellationToken);
 
     Task<VendorProfile?> GetVendorProfileAsync(Guid vendorId, CancellationToken cancellationToken);
     Task UpsertVendorProfileAsync(VendorProfile profile, CancellationToken cancellationToken);
@@ -55,6 +56,8 @@ public interface IVendorOnboardingRepository
     Task<List<VendorProductImage>> GetVendorProductImagesAsync(Guid listingId, CancellationToken cancellationToken);
 
     Task AddVendorProductDocumentAsync(VendorProductDocument document, CancellationToken cancellationToken);
+    Task<VendorProductDocument?> GetVendorProductDocumentByIdAsync(Guid vendorId, Guid listingId, Guid documentId, CancellationToken cancellationToken);
+    Task UpdateVendorProductDocumentAsync(VendorProductDocument document, CancellationToken cancellationToken);
     Task<List<VendorProductDocument>> GetVendorProductDocumentsAsync(Guid listingId, CancellationToken cancellationToken);
 
     Task<VendorInventory?> GetVendorInventoryByListingIdAsync(Guid listingId, CancellationToken cancellationToken);
@@ -67,6 +70,8 @@ public interface IVendorOnboardingRepository
     Task UpsertVendorNotificationPreferenceAsync(VendorNotificationPreference preference, CancellationToken cancellationToken);
 
     Task AddVendorNotificationAsync(VendorNotification notification, CancellationToken cancellationToken);
+    Task<VendorNotification?> GetVendorNotificationByIdAsync(Guid vendorId, Guid notificationId, CancellationToken cancellationToken);
+    Task UpdateVendorNotificationAsync(VendorNotification notification, CancellationToken cancellationToken);
     Task<List<VendorNotification>> GetVendorNotificationsAsync(Guid vendorId, CancellationToken cancellationToken);
 
     Task<AdminUser?> GetAdminUserByIdAsync(Guid adminUserId, CancellationToken cancellationToken);

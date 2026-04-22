@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
-import { mockNotifications } from "@/app/services/mockData";
 import { Notification } from "@/app/models";
 import { CheckCheck, Bell, Info, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useAuth } from "@/app/guards/AuthContext";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import { toast } from "sonner";
 
 const typeIcons = {
   info: { icon: Info, cls: "bg-info-soft text-info" },
@@ -17,13 +19,121 @@ const typeIcons = {
 };
 
 const Notifications = () => {
-  const [items, setItems] = useState<Notification[]>(mockNotifications);
+  const { user } = useAuth();
+  const [items, setItems] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [prefs, setPrefs] = useState({ email: true, push: true, orders: true });
+  const [busy, setBusy] = useState(false);
 
-  const filtered = filter === "unread" ? items.filter((i) => !i.read) : items;
-  const markAll = () => setItems((arr) => arr.map((n) => ({ ...n, read: true })));
-  const toggleRead = (id: string) => setItems((arr) => arr.map((n) => (n.id === id ? { ...n, read: !n.read } : n)));
+  const filtered = useMemo(
+    () => (filter === "unread" ? items.filter((i) => !i.read) : items),
+    [filter, items]
+  );
+
+  const mapType = (type: string): Notification["type"] => {
+    const t = type.trim().toLowerCase();
+    if (t === "success" || t === "warning" || t === "error" || t === "info") return t;
+    if (t.includes("approved") || t.includes("payout")) return "success";
+    if (t.includes("rejected") || t.includes("failed")) return "error";
+    if (t.includes("stock") || t.includes("warning")) return "warning";
+    return "info";
+  };
+
+  const mapNotifications = (rows: Awaited<ReturnType<typeof vendorOnboardingApi.getVendorNotifications>>): Notification[] =>
+    rows.map((n) => ({
+      id: n.id,
+      title: n.title,
+      message: n.message,
+      type: mapType(n.notificationType),
+      read: n.status.trim().toLowerCase() === "read" || !!n.readAt,
+      timestamp: n.sentAt ?? n.readAt ?? new Date().toISOString(),
+    }));
+
+  const loadNotificationData = async () => {
+    if (!user) return;
+    setBusy(true);
+    try {
+      const [prefRes, notifRes] = await Promise.allSettled([
+        vendorOnboardingApi.getVendorNotificationPreference(user.id),
+        vendorOnboardingApi.getVendorNotifications(user.id),
+      ]);
+
+      if (prefRes.status === "fulfilled") {
+        setPrefs({
+          email: prefRes.value.emailNotificationsEnabled,
+          push: prefRes.value.pushNotificationsEnabled,
+          orders: prefRes.value.newOrderNotifications,
+        });
+      }
+
+      if (notifRes.status === "fulfilled") {
+        setItems(mapNotifications(notifRes.value));
+      } else {
+        const message = notifRes.reason instanceof Error ? notifRes.reason.message : "Failed to load notifications.";
+        toast.error(message);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadNotificationData();
+  }, [user]);
+
+  const updatePreference = async (next: typeof prefs) => {
+    if (!user) return;
+    setPrefs(next);
+    try {
+      await vendorOnboardingApi.upsertVendorNotificationPreference(user.id, {
+        vendorId: user.id,
+        emailNotificationsEnabled: next.email,
+        pushNotificationsEnabled: next.push,
+        newOrderNotifications: next.orders,
+      });
+      toast.success("Preferences saved.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save preferences.";
+      toast.error(message);
+      await loadNotificationData();
+    }
+  };
+
+  const markAll = async () => {
+    if (!user) return;
+    setBusy(true);
+    try {
+      const res = await vendorOnboardingApi.markAllVendorNotificationsAsRead(user.id);
+      if (res.updatedCount > 0) {
+        setItems((arr) => arr.map((n) => ({ ...n, read: true })));
+        toast.success(`Marked ${res.updatedCount} notification(s) as read.`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to mark all notifications as read.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleRead = async (id: string) => {
+    if (!user) return;
+    const target = items.find((n) => n.id === id);
+    if (!target) return;
+
+    try {
+      if (target.read) {
+        await vendorOnboardingApi.markVendorNotificationAsUnread(user.id, id);
+        setItems((arr) => arr.map((n) => (n.id === id ? { ...n, read: false } : n)));
+      } else {
+        await vendorOnboardingApi.markVendorNotificationAsRead(user.id, id);
+        setItems((arr) => arr.map((n) => (n.id === id ? { ...n, read: true } : n)));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update notification read status.";
+      toast.error(message);
+    }
+  };
 
   return (
     <div>
@@ -31,7 +141,7 @@ const Notifications = () => {
         title="Notifications"
         description="Stay updated with rental requests, document reviews, and stock alerts."
         actions={
-          <Button variant="outline" onClick={markAll}>
+          <Button variant="outline" onClick={markAll} disabled={busy}>
             <CheckCheck className="mr-2 h-4 w-4" /> Mark all read
           </Button>
         }
@@ -41,7 +151,7 @@ const Notifications = () => {
         <Card className="lg:col-span-2 border-border/60">
           <div className="flex items-center justify-between border-b border-border p-4">
             <h2 className="font-semibold">Inbox</h2>
-            <Tabs value={filter} onValueChange={(v: any) => setFilter(v)}>
+            <Tabs value={filter} onValueChange={(v: string) => setFilter(v as "all" | "unread")}>
               <TabsList>
                 <TabsTrigger value="all">All</TabsTrigger>
                 <TabsTrigger value="unread">Unread</TabsTrigger>
@@ -70,6 +180,18 @@ const Notifications = () => {
                       {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
                     </p>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void toggleRead(n.id);
+                    }}
+                    disabled={busy}
+                  >
+                    Mark {n.read ? "unread" : "read"}
+                  </Button>
                 </li>
               );
             })}
@@ -96,7 +218,11 @@ const Notifications = () => {
                   <p className="text-sm font-medium">{p.label}</p>
                   <p className="text-xs text-muted-foreground">{p.desc}</p>
                 </div>
-                <Switch checked={prefs[p.key]} onCheckedChange={(v) => setPrefs((s) => ({ ...s, [p.key]: v }))} />
+                <Switch
+                  checked={prefs[p.key]}
+                  onCheckedChange={(v) => void updatePreference({ ...prefs, [p.key]: v })}
+                  disabled={busy}
+                />
               </div>
             ))}
           </div>

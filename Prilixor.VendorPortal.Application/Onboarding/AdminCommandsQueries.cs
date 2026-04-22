@@ -243,6 +243,24 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
 
         await repository.UpdateVendorBankAccountAsync(bankAccount, cancellationToken);
 
+        if (!string.Equals(oldStatus, "rejected", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase))
+        {
+            var notification = new VendorNotification
+            {
+                VendorId = vendorId,
+                NotificationType = "bank_rejected",
+                Title = "Bank account verification rejected",
+                Message = AdminNotificationMessageBuilder.WithReason(
+                    $"Your bank account ending with {GetLast4(bankAccount.AccountNumber)} was rejected. Please review and resubmit.",
+                    request.Notes),
+                Channel = "in_app",
+                Status = "sent",
+                SentAt = DateTimeOffset.UtcNow
+            };
+            await repository.AddVendorNotificationAsync(notification, cancellationToken);
+        }
+
         var auditLog = new AdminAuditLog
         {
             AdminUserId = adminUserId,
@@ -266,5 +284,301 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
             bankAccount.IfscCode,
             bankAccount.VerificationStatus,
             bankAccount.VerifiedAt));
+    }
+
+    private static string GetLast4(string accountNumber)
+    {
+        if (string.IsNullOrWhiteSpace(accountNumber))
+        {
+            return "N/A";
+        }
+
+        var cleaned = accountNumber.Trim();
+        return cleaned.Length <= 4 ? cleaned : cleaned[^4..];
+    }
+}
+
+public sealed record VerifyVendorDocumentCommand(
+    string AdminUserId,
+    string VendorId,
+    string DocumentId,
+    string VerificationStatus,
+    string? Notes) : ICommand<VendorDocumentDto>;
+
+public sealed class VerifyVendorDocumentCommandValidator : AbstractValidator<VerifyVendorDocumentCommand>
+{
+    public VerifyVendorDocumentCommandValidator()
+    {
+        RuleFor(x => x.AdminUserId).NotEmpty();
+        RuleFor(x => x.VendorId).NotEmpty();
+        RuleFor(x => x.DocumentId).NotEmpty();
+        RuleFor(x => x.VerificationStatus)
+            .NotEmpty()
+            .Must(x => x is "approved" or "rejected")
+            .WithMessage("Verification status must be either 'approved' or 'rejected'.");
+    }
+}
+
+internal sealed class VerifyVendorDocumentCommandHandler(IVendorOnboardingRepository repository)
+    : ICommandHandler<VerifyVendorDocumentCommand, VendorDocumentDto>
+{
+    public async Task<Result<VendorDocumentDto>> Handle(VerifyVendorDocumentCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.AdminUserId, out var adminUserId))
+        {
+            return Result.Failure<VendorDocumentDto>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        if (!Guid.TryParse(request.VendorId, out var vendorId))
+        {
+            return Result.Failure<VendorDocumentDto>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        if (!Guid.TryParse(request.DocumentId, out var documentId))
+        {
+            return Result.Failure<VendorDocumentDto>(new Error("vendors.documents.invalid_id", "Document id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var adminUser = await repository.GetAdminUserByIdAsync(adminUserId, cancellationToken);
+        if (adminUser is null || !adminUser.IsActive)
+        {
+            return Result.Failure<VendorDocumentDto>(new Error("admin.not_found", "Active admin user not found.", ErrorCategory.NotFound));
+        }
+
+        var document = await repository.GetVendorDocumentByIdAsync(vendorId, documentId, cancellationToken);
+        if (document is null)
+        {
+            return Result.Failure<VendorDocumentDto>(new Error("vendors.documents.not_found", "Vendor document not found.", ErrorCategory.NotFound));
+        }
+
+        var oldStatus = document.VerificationStatus;
+        document.VerificationStatus = request.VerificationStatus;
+        document.VerifiedAt = request.VerificationStatus == "approved" ? DateTimeOffset.UtcNow : null;
+        document.RejectionReason = request.VerificationStatus == "rejected" ? request.Notes : null;
+
+        await repository.UpdateVendorDocumentAsync(document, cancellationToken);
+
+        if (!string.Equals(oldStatus, "rejected", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase))
+        {
+            var notification = new VendorNotification
+            {
+                VendorId = vendorId,
+                NotificationType = "document_rejected",
+                Title = "Document verification rejected",
+                Message = AdminNotificationMessageBuilder.WithReason(
+                    $"Your {document.DocumentType} document was rejected. Please update and resubmit.",
+                    request.Notes),
+                Channel = "in_app",
+                Status = "sent",
+                SentAt = DateTimeOffset.UtcNow
+            };
+            await repository.AddVendorNotificationAsync(notification, cancellationToken);
+        }
+
+        var auditLog = new AdminAuditLog
+        {
+            AdminUserId = adminUserId,
+            ActionType = "VENDOR_DOCUMENT_VERIFIED",
+            EntityType = "VendorDocument",
+            EntityId = document.Id,
+            OldValue = oldStatus,
+            NewValue = request.VerificationStatus,
+            Notes = request.Notes
+        };
+        await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return Result.Success(new VendorDocumentDto(
+            document.Id.ToString(),
+            document.VendorId.ToString(),
+            document.DocumentType,
+            document.FileUrl,
+            document.DocumentNumber,
+            document.VerificationStatus,
+            document.RejectionReason,
+            document.VerifiedAt));
+    }
+}
+
+public sealed record VerifyVendorListingCommand(
+    string AdminUserId,
+    string VendorId,
+    string ListingId,
+    string ListingStatus,
+    string? Notes) : ICommand<VendorProductListingDto>;
+
+public sealed class VerifyVendorListingCommandValidator : AbstractValidator<VerifyVendorListingCommand>
+{
+    public VerifyVendorListingCommandValidator()
+    {
+        RuleFor(x => x.AdminUserId).NotEmpty();
+        RuleFor(x => x.VendorId).NotEmpty();
+        RuleFor(x => x.ListingId).NotEmpty();
+        RuleFor(x => x.ListingStatus)
+            .NotEmpty()
+            .Must(x => x is "approved" or "rejected")
+            .WithMessage("Listing status must be either 'approved' or 'rejected'.");
+    }
+}
+
+internal sealed class VerifyVendorListingCommandHandler(IVendorOnboardingRepository repository)
+    : ICommandHandler<VerifyVendorListingCommand, VendorProductListingDto>
+{
+    public async Task<Result<VendorProductListingDto>> Handle(VerifyVendorListingCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.AdminUserId, out var adminUserId))
+        {
+            return Result.Failure<VendorProductListingDto>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        if (!Guid.TryParse(request.VendorId, out var vendorId))
+        {
+            return Result.Failure<VendorProductListingDto>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        if (!Guid.TryParse(request.ListingId, out var listingId))
+        {
+            return Result.Failure<VendorProductListingDto>(new Error("vendors.listing.invalid_id", "Listing id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var adminUser = await repository.GetAdminUserByIdAsync(adminUserId, cancellationToken);
+        if (adminUser is null || !adminUser.IsActive)
+        {
+            return Result.Failure<VendorProductListingDto>(new Error("admin.not_found", "Active admin user not found.", ErrorCategory.NotFound));
+        }
+
+        var listing = await repository.GetVendorProductListingByIdAsync(vendorId, listingId, cancellationToken);
+        if (listing is null)
+        {
+            return Result.Failure<VendorProductListingDto>(new Error("vendors.listing.not_found", "Vendor listing not found.", ErrorCategory.NotFound));
+        }
+
+        var oldStatus = listing.ListingStatus;
+        listing.ListingStatus = request.ListingStatus;
+        await repository.UpdateVendorProductListingAsync(listing, cancellationToken);
+
+        if (!string.Equals(oldStatus, "rejected", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(request.ListingStatus, "rejected", StringComparison.OrdinalIgnoreCase))
+        {
+            var notification = new VendorNotification
+            {
+                VendorId = vendorId,
+                NotificationType = "listing_rejected",
+                Title = "Listing review rejected",
+                Message = AdminNotificationMessageBuilder.WithReason(
+                    $"Your listing '{listing.ListingTitle}' was rejected. Please update and resubmit.",
+                    request.Notes),
+                Channel = "in_app",
+                Status = "sent",
+                SentAt = DateTimeOffset.UtcNow
+            };
+            await repository.AddVendorNotificationAsync(notification, cancellationToken);
+        }
+
+        var auditLog = new AdminAuditLog
+        {
+            AdminUserId = adminUserId,
+            ActionType = "VENDOR_LISTING_VERIFIED",
+            EntityType = "VendorProductListing",
+            EntityId = listing.Id,
+            OldValue = oldStatus,
+            NewValue = request.ListingStatus,
+            Notes = request.Notes
+        };
+        await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return Result.Success(new VendorProductListingDto(
+            listing.Id.ToString(),
+            listing.VendorId.ToString(),
+            listing.ProductId.ToString(),
+            listing.ListingTitle,
+            listing.DailyRent,
+            listing.MonthlyRent,
+            listing.SecurityDeposit,
+            listing.AvailableQuantity,
+            listing.ListingStatus));
+    }
+}
+
+public sealed record ForceResetVendorPasswordCommand(
+    string AdminUserId,
+    string VendorId,
+    string NewPassword,
+    string? Notes) : ICommand<AdminPasswordResetDto>;
+
+public sealed class ForceResetVendorPasswordCommandValidator : AbstractValidator<ForceResetVendorPasswordCommand>
+{
+    public ForceResetVendorPasswordCommandValidator()
+    {
+        RuleFor(x => x.AdminUserId).NotEmpty();
+        RuleFor(x => x.VendorId).NotEmpty();
+        RuleFor(x => x.NewPassword).NotEmpty().MinimumLength(8);
+    }
+}
+
+internal sealed class ForceResetVendorPasswordCommandHandler(
+    IVendorOnboardingRepository repository,
+    IPasswordHasherService passwordHasherService)
+    : ICommandHandler<ForceResetVendorPasswordCommand, AdminPasswordResetDto>
+{
+    public async Task<Result<AdminPasswordResetDto>> Handle(ForceResetVendorPasswordCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.AdminUserId, out var adminUserId))
+        {
+            return Result.Failure<AdminPasswordResetDto>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        if (!Guid.TryParse(request.VendorId, out var vendorId))
+        {
+            return Result.Failure<AdminPasswordResetDto>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var adminUser = await repository.GetAdminUserByIdAsync(adminUserId, cancellationToken);
+        if (adminUser is null || !adminUser.IsActive)
+        {
+            return Result.Failure<AdminPasswordResetDto>(new Error("admin.not_found", "Active admin user not found.", ErrorCategory.NotFound));
+        }
+
+        var vendor = await repository.GetVendorByIdAsync(vendorId, cancellationToken);
+        if (vendor is null || vendor.IsDeleted)
+        {
+            return Result.Failure<AdminPasswordResetDto>(new Error("vendors.not_found", "Vendor not found.", ErrorCategory.NotFound));
+        }
+
+        vendor.PasswordHash = passwordHasherService.HashPassword(request.NewPassword);
+        await repository.UpdateVendorAsync(vendor, cancellationToken);
+
+        var auditLog = new AdminAuditLog
+        {
+            AdminUserId = adminUserId,
+            ActionType = "VENDOR_PASSWORD_FORCE_RESET",
+            EntityType = "Vendor",
+            EntityId = vendorId,
+            OldValue = null,
+            NewValue = "password_reset",
+            Notes = request.Notes
+        };
+        await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return Result.Success(new AdminPasswordResetDto(
+            vendorId.ToString(),
+            "Vendor password reset successfully.",
+            DateTimeOffset.UtcNow));
+    }
+}
+
+internal static class AdminNotificationMessageBuilder
+{
+    public static string WithReason(string baseMessage, string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes))
+        {
+            return baseMessage;
+        }
+
+        return $"{baseMessage} Reason: {notes.Trim()}";
     }
 }

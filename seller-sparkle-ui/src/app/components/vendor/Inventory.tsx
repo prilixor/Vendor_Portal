@@ -6,10 +6,12 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
-import { mockInventory, mockMovements } from "@/app/services/mockData";
 import { InventoryMovement, InventoryRecord } from "@/app/models";
 import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus } from "lucide-react";
 import { format } from "date-fns";
+import { useAuth } from "@/app/guards/AuthContext";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import { toast } from "sonner";
 
 const movementMeta = {
   in: { label: "Stock In", icon: ArrowDownRight, cls: "bg-success-soft text-success" },
@@ -19,44 +21,105 @@ const movementMeta = {
   blocked: { label: "Blocked", icon: Ban, cls: "bg-destructive-soft text-destructive" },
 };
 
-const INVENTORY_STORAGE_KEY = "vendor_inventory_records";
-const INVENTORY_MOVEMENTS_STORAGE_KEY = "vendor_inventory_movements";
-
 const Inventory = () => {
-  const [inventory, setInventory] = useState<InventoryRecord[]>(() => {
-    const raw = localStorage.getItem(INVENTORY_STORAGE_KEY);
-    if (!raw) return mockInventory;
-    try {
-      const parsed = JSON.parse(raw) as InventoryRecord[];
-      if (!Array.isArray(parsed)) return mockInventory;
-      return parsed;
-    } catch {
-      return mockInventory;
-    }
-  });
+  const { user } = useAuth();
+  const [inventory, setInventory] = useState<InventoryRecord[]>([]);
   const [editingRow, setEditingRow] = useState<InventoryRecord | null>(null);
   const [editForm, setEditForm] = useState({ total: 0, reserved: 0, rented: 0, blocked: 0 });
-  const [movements, setMovements] = useState<InventoryMovement[]>(() => {
-    const raw = localStorage.getItem(INVENTORY_MOVEMENTS_STORAGE_KEY);
-    if (!raw) return mockMovements;
-    try {
-      const parsed = JSON.parse(raw) as InventoryMovement[];
-      if (!Array.isArray(parsed)) return mockMovements;
-      return parsed;
-    } catch {
-      return mockMovements;
-    }
-  });
+  const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [movementRow, setMovementRow] = useState<InventoryRecord | null>(null);
   const [movementType, setMovementType] = useState<"in" | "out">("in");
   const [movementQtyInput, setMovementQtyInput] = useState("1");
+  const [busy, setBusy] = useState(false);
+
+  const loadInventory = async () => {
+    if (!user) return;
+
+    const [listings, products] = await Promise.all([
+      vendorOnboardingApi.getVendorProductListings(user.id),
+      vendorOnboardingApi.getProducts(),
+    ]);
+
+    const productById = new Map(products.map((p) => [p.id, p.productName]));
+
+    const rows = await Promise.all(
+      listings.map(async (listing) => {
+        try {
+          const inv = await vendorOnboardingApi.getVendorInventory(user.id, listing.id);
+          return {
+            productId: listing.id,
+            productName: `${listing.listingTitle}${productById.get(listing.productId) ? ` (${productById.get(listing.productId)})` : ""}`,
+            total: inv.totalQuantity,
+            available: inv.availableQuantity,
+            reserved: inv.reservedQuantity,
+            rented: inv.rentedQuantity,
+            blocked: inv.blockedQuantity,
+          } satisfies InventoryRecord;
+        } catch (error) {
+          const message = error instanceof Error ? error.message.toLowerCase() : "";
+          if (!message.includes("not found")) {
+            throw error;
+          }
+          const seeded = await vendorOnboardingApi.upsertVendorInventory(user.id, listing.id, {
+            vendorId: user.id,
+            listingId: listing.id,
+            totalQuantity: listing.availableQuantity,
+            availableQuantity: listing.availableQuantity,
+            reservedQuantity: 0,
+            rentedQuantity: 0,
+            blockedQuantity: 0,
+          });
+          return {
+            productId: listing.id,
+            productName: `${listing.listingTitle}${productById.get(listing.productId) ? ` (${productById.get(listing.productId)})` : ""}`,
+            total: seeded.totalQuantity,
+            available: seeded.availableQuantity,
+            reserved: seeded.reservedQuantity,
+            rented: seeded.rentedQuantity,
+            blocked: seeded.blockedQuantity,
+          } satisfies InventoryRecord;
+        }
+      })
+    );
+
+    setInventory(rows);
+
+    const movementRows = await Promise.all(
+      listings.map(async (listing) => {
+        try {
+          const m = await vendorOnboardingApi.getVendorInventoryMovements(user.id, listing.id);
+          return m.map((x) => ({
+            id: x.id,
+            productName: `${listing.listingTitle}${productById.get(listing.productId) ? ` (${productById.get(listing.productId)})` : ""}`,
+            type: toUiMovementType(x.movementType),
+            quantity: x.quantity,
+            reference: x.referenceType || x.referenceId || "-",
+            timestamp: x.createdAt || new Date().toISOString(),
+          } satisfies InventoryMovement));
+        } catch {
+          return [] as InventoryMovement[];
+        }
+      })
+    );
+
+    setMovements(movementRows.flat());
+  };
 
   useEffect(() => {
-    localStorage.setItem(INVENTORY_STORAGE_KEY, JSON.stringify(inventory));
-  }, [inventory]);
-  useEffect(() => {
-    localStorage.setItem(INVENTORY_MOVEMENTS_STORAGE_KEY, JSON.stringify(movements));
-  }, [movements]);
+    if (!user) return;
+    const run = async () => {
+      setBusy(true);
+      try {
+        await loadInventory();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load inventory.";
+        toast.error(message);
+      } finally {
+        setBusy(false);
+      }
+    };
+    void run();
+  }, [user]);
 
   const totals = useMemo(
     () =>
@@ -93,28 +156,33 @@ const Inventory = () => {
 
   const computedAvailable = Math.max(0, editForm.total - editForm.reserved - editForm.rented - editForm.blocked);
 
-  const saveEdit = () => {
-    if (!editingRow) return;
+  const saveEdit = async () => {
+    if (!editingRow || !user) return;
     const cappedReserved = Math.min(editForm.reserved, editForm.total);
     const cappedRented = Math.min(editForm.rented, Math.max(0, editForm.total - cappedReserved));
     const cappedBlocked = Math.min(editForm.blocked, Math.max(0, editForm.total - cappedReserved - cappedRented));
     const nextAvailable = Math.max(0, editForm.total - cappedReserved - cappedRented - cappedBlocked);
 
-    setInventory((prev) =>
-      prev.map((row) =>
-        row.productId === editingRow.productId
-          ? {
-              ...row,
-              total: editForm.total,
-              reserved: cappedReserved,
-              rented: cappedRented,
-              blocked: cappedBlocked,
-              available: nextAvailable,
-            }
-          : row
-      )
-    );
-    setEditingRow(null);
+    try {
+      setBusy(true);
+      await vendorOnboardingApi.upsertVendorInventory(user.id, editingRow.productId, {
+        vendorId: user.id,
+        listingId: editingRow.productId,
+        totalQuantity: editForm.total,
+        availableQuantity: nextAvailable,
+        reservedQuantity: cappedReserved,
+        rentedQuantity: cappedRented,
+        blockedQuantity: cappedBlocked,
+      });
+      await loadInventory();
+      setEditingRow(null);
+      toast.success("Inventory updated.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update inventory.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const openMovement = (row: InventoryRecord, type: "in" | "out") => {
@@ -123,41 +191,46 @@ const Inventory = () => {
     setMovementQtyInput("1");
   };
 
-  const saveMovement = () => {
-    if (!movementRow) return;
+  const saveMovement = async () => {
+    if (!movementRow || !user) return;
     const parsedQty = Number(movementQtyInput);
     const qty = Number.isFinite(parsedQty) ? Math.max(1, Math.floor(parsedQty)) : 1;
 
-    setInventory((prev) =>
-      prev.map((row) => {
-        if (row.productId !== movementRow.productId) return row;
-        if (movementType === "in") {
-          return {
-            ...row,
-            total: row.total + qty,
-            available: row.available + qty,
-          };
-        }
-        const removable = Math.min(qty, row.available);
-        return {
-          ...row,
-          total: Math.max(0, row.total - removable),
-          available: Math.max(0, row.available - removable),
-        };
-      })
-    );
+    const current = movementRow;
+    const removable = Math.min(qty, current.available);
+    const nextTotal = movementType === "in" ? current.total + qty : Math.max(0, current.total - removable);
+    const nextAvailable = movementType === "in" ? current.available + qty : Math.max(0, current.available - removable);
 
-    const refPrefix = movementType === "in" ? "ADD" : "REM";
-    const movement: InventoryMovement = {
-      id: `m-${Date.now()}`,
-      productName: movementRow.productName,
-      type: movementType,
-      quantity: qty,
-      reference: `${refPrefix}-${Date.now().toString().slice(-6)}`,
-      timestamp: new Date().toISOString(),
-    };
-    setMovements((prev) => [movement, ...prev]);
-    setMovementRow(null);
+    try {
+      setBusy(true);
+      await vendorOnboardingApi.upsertVendorInventory(user.id, current.productId, {
+        vendorId: user.id,
+        listingId: current.productId,
+        totalQuantity: nextTotal,
+        availableQuantity: nextAvailable,
+        reservedQuantity: current.reserved,
+        rentedQuantity: current.rented,
+        blockedQuantity: current.blocked,
+      });
+
+      await vendorOnboardingApi.addVendorInventoryMovement(user.id, current.productId, {
+        vendorId: user.id,
+        listingId: current.productId,
+        movementType: movementType === "in" ? "stock_added" : "stock_removed",
+        quantity: movementType === "in" ? qty : removable,
+        referenceType: "manual_adjustment",
+        notes: movementType === "in" ? "Manual stock add from vendor UI" : "Manual stock remove from vendor UI",
+      });
+
+      await loadInventory();
+      setMovementRow(null);
+      toast.success(movementType === "in" ? "Stock added." : "Stock removed.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save movement.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -211,13 +284,13 @@ const Inventory = () => {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openMovement(row, "in")} aria-label={`Add stock for ${row.productName}`}>
+                        <Button variant="ghost" size="icon" onClick={() => openMovement(row, "in")} aria-label={`Add stock for ${row.productName}`} disabled={busy}>
                           <Plus className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openMovement(row, "out")} aria-label={`Remove stock for ${row.productName}`}>
+                        <Button variant="ghost" size="icon" onClick={() => openMovement(row, "out")} aria-label={`Remove stock for ${row.productName}`} disabled={busy}>
                           <Minus className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(row)} aria-label={`Edit ${row.productName} stock`}>
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(row)} aria-label={`Edit ${row.productName} stock`} disabled={busy}>
                           <Pencil className="h-4 w-4" />
                         </Button>
                       </div>
@@ -287,10 +360,10 @@ const Inventory = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingRow(null)}>
+            <Button variant="outline" onClick={() => setEditingRow(null)} disabled={busy}>
               Cancel
             </Button>
-            <Button onClick={saveEdit}>Save stock</Button>
+            <Button onClick={() => void saveEdit()} disabled={busy}>Save stock</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -313,10 +386,10 @@ const Inventory = () => {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setMovementRow(null)}>
+            <Button variant="outline" onClick={() => setMovementRow(null)} disabled={busy}>
               Cancel
             </Button>
-            <Button onClick={saveMovement}>{movementType === "in" ? "Add Stock" : "Remove Stock"}</Button>
+            <Button onClick={() => void saveMovement()} disabled={busy}>{movementType === "in" ? "Add Stock" : "Remove Stock"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -325,5 +398,22 @@ const Inventory = () => {
 };
 
 export default Inventory;
+
+const toUiMovementType = (type: string): InventoryMovement["type"] => {
+  const value = type.trim().toLowerCase();
+  if (value === "stock_added" || value === "in") return "in";
+  if (value === "stock_removed" || value === "out") return "out";
+  if (value === "reservation_released" || value === "released") return "released";
+  if (value === "reserved" || value === "blocked") return value;
+  if (value === "unblocked") return "released";
+  if (value === "rented") return "out";
+  if (value === "returned") return "in";
+  if (value === "corrected") return "in";
+  if (value === "reservation_released") return "released";
+  if (value === "in" || value === "out" || value === "released") {
+    return value;
+  }
+  return "in";
+};
 
 

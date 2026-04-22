@@ -22,6 +22,16 @@ public sealed class CreateVendorNotificationRequest : VendorIdRequest
     public string Status { get; set; } = "pending";
 }
 
+public sealed class VendorNotificationReadRequest : VendorIdRequest
+{
+    public string NotificationId { get; set; } = string.Empty;
+}
+
+public sealed class MarkAllNotificationsReadResponse
+{
+    public int UpdatedCount { get; set; }
+}
+
 public sealed class UpsertVendorNotificationPreferenceEndpoint(IMediator mediator)
     : Endpoint<UpsertVendorNotificationPreferenceRequest, Results<Ok<VendorNotificationPreferenceDto>, ProblemHttpResult>>
 {
@@ -95,5 +105,55 @@ public sealed class GetVendorNotificationsEndpoint(IMediator mediator)
     {
         var result = await mediator.Send(new GetVendorNotificationsQuery(req.VendorId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class MarkVendorNotificationAsReadEndpoint(IMediator mediator)
+    : Endpoint<VendorNotificationReadRequest, Results<Ok<VendorNotificationDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("{vendorId}/notifications/{notificationId}/read");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorNotificationDto>, ProblemHttpResult>> ExecuteAsync(VendorNotificationReadRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new MarkVendorNotificationAsReadCommand(req.VendorId, req.NotificationId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class MarkVendorNotificationAsUnreadEndpoint(IMediator mediator)
+    : Endpoint<VendorNotificationReadRequest, Results<Ok<VendorNotificationDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("{vendorId}/notifications/{notificationId}/unread");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorNotificationDto>, ProblemHttpResult>> ExecuteAsync(VendorNotificationReadRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new MarkVendorNotificationAsUnreadCommand(req.VendorId, req.NotificationId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class MarkAllVendorNotificationsAsReadEndpoint(IMediator mediator)
+    : Endpoint<VendorIdRequest, Results<Ok<MarkAllNotificationsReadResponse>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("{vendorId}/notifications/read-all");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<MarkAllNotificationsReadResponse>, ProblemHttpResult>> ExecuteAsync(VendorIdRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new MarkAllVendorNotificationsAsReadCommand(req.VendorId), ct);
+        return result.IsSuccess
+            ? TypedResults.Ok(new MarkAllNotificationsReadResponse { UpdatedCount = result.Value })
+            : result.ToErrorResponse();
     }
 }

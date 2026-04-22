@@ -1,35 +1,81 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
-import { mockProducts } from "@/app/services/mockData";
 import { ProductListing } from "@/app/models";
 import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/app/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { toast } from "sonner";
+import { useAuth } from "@/app/guards/AuthContext";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 
-const categories = ["Power Tools", "Camping", "Photography", "Cleaning Equipment", "Event Equipment", "Audio Visual"];
-const catalogProducts = ["Bosch GSB 550 Drill", "Quechua Arpenaz 4-Person Tent", "Sony A7 III Body", "Karcher Pressure Washer", "JBL PA Speaker", "Manfrotto Tripod", "DJI Ronin Gimbal"];
-
-const blank: ProductListing = {
-  id: "", category: "Power Tools", productName: "", title: "", dailyRent: 0, monthlyRent: 0,
-  securityDeposit: 0, quantity: 1, status: "draft", images: [], createdAt: new Date().toISOString(),
+type LocalListing = ProductListing & {
+  productId: string;
+  categoryId: string;
 };
 
+type CatalogCategory = {
+  id: string;
+  name: string;
+};
+
+type CatalogProduct = {
+  id: string;
+  categoryId: string;
+  name: string;
+};
+
+const normalizeListingStatus = (status: string): ProductListing["status"] => {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "approved" || normalized === "active") return "active";
+  if (normalized === "inactive" || normalized === "blocked" || normalized === "rejected") return "inactive";
+  return "draft";
+};
+
+const blankListing = (category?: CatalogCategory, product?: CatalogProduct): LocalListing => ({
+  id: "",
+  productId: product?.id ?? "",
+  categoryId: category?.id ?? "",
+  category: category?.name ?? "",
+  productName: product?.name ?? "",
+  title: "",
+  dailyRent: 0,
+  monthlyRent: 0,
+  securityDeposit: 0,
+  quantity: 1,
+  status: "draft",
+  images: [],
+  createdAt: new Date().toISOString(),
+});
+
 const Products = () => {
-  const [products, setProducts] = useState<ProductListing[]>(mockProducts);
+  const { user } = useAuth();
+  const [products, setProducts] = useState<LocalListing[]>([]);
+  const [categories, setCategories] = useState<CatalogCategory[]>([]);
+  const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "active" | "draft">("all");
-  const [editing, setEditing] = useState<ProductListing | null>(null);
-  const [mediaFor, setMediaFor] = useState<ProductListing | null>(null);
+  const [filter, setFilter] = useState<"all" | "active" | "draft" | "inactive">("all");
+  const [editing, setEditing] = useState<LocalListing | null>(null);
+  const [mediaFor, setMediaFor] = useState<LocalListing | null>(null);
   const [tempImages, setTempImages] = useState<MediaImage[]>([]);
+  const [listingDocuments, setListingDocuments] = useState<ListingDocument[]>([]);
+  const [docType, setDocType] = useState("spec_sheet");
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newProductName, setNewProductName] = useState("");
+  const [newProductBrand, setNewProductBrand] = useState("");
+  const [newProductModel, setNewProductModel] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const docFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const filtered = products.filter((p) => {
     const m = (filter === "all" || p.status === filter);
@@ -37,69 +83,330 @@ const Products = () => {
     return m && s;
   });
 
-  const openNew = () => setEditing({ ...blank, id: `p${Date.now()}` });
-  const save = () => {
-    if (!editing) return;
-    if (!editing.title || !editing.productName) { toast.error("Title and product are required"); return; }
-    setProducts((prev) => prev.some((p) => p.id === editing.id) ? prev.map((p) => p.id === editing.id ? editing : p) : [...prev, editing]);
-    setEditing(null);
-    toast.success("Listing saved");
+  const loadCatalogAndListings = async () => {
+    if (!user) return;
+
+    const [categoriesRes, productsRes, listingsRes] = await Promise.all([
+      vendorOnboardingApi.getProductCategories(),
+      vendorOnboardingApi.getProducts(),
+      vendorOnboardingApi.getVendorProductListings(user.id),
+    ]);
+
+    const mappedCategories: CatalogCategory[] = categoriesRes.map((c) => ({ id: c.id, name: c.categoryName }));
+    const mappedProducts: CatalogProduct[] = productsRes.map((p) => ({ id: p.id, categoryId: p.categoryId, name: p.productName }));
+    const byProductId = new Map(mappedProducts.map((p) => [p.id, p]));
+    const byCategoryId = new Map(mappedCategories.map((c) => [c.id, c]));
+
+    setCategories(mappedCategories);
+    setCatalogProducts(mappedProducts);
+    setProducts(
+      listingsRes.map((l) => {
+        const product = byProductId.get(l.productId);
+        const category = product ? byCategoryId.get(product.categoryId) : undefined;
+        return {
+          id: l.id,
+          productId: l.productId,
+          categoryId: product?.categoryId ?? "",
+          category: category?.name ?? "Unknown",
+          productName: product?.name ?? "Unknown",
+          title: l.listingTitle,
+          dailyRent: l.dailyRent,
+          monthlyRent: l.monthlyRent,
+          securityDeposit: l.securityDeposit,
+          quantity: l.availableQuantity,
+          status: normalizeListingStatus(l.listingStatus),
+          images: [],
+          createdAt: new Date().toISOString(),
+        };
+      })
+    );
   };
 
-  const openMedia = (p: ProductListing) => {
-    setMediaFor(p);
-    const sourceImages = p.images.length ? p.images : p.primaryImage ? [p.primaryImage] : [];
-    setTempImages(
-      sourceImages.map((url, i) => ({
-        id: `img-${i}-${Date.now()}`,
-        primary: i === 0,
-        url,
-      }))
-    );
+  useEffect(() => {
+    if (!user) return;
+
+    const load = async () => {
+      setBusy(true);
+      try {
+        await loadCatalogAndListings();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load product listings.";
+        toast.error(message);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    void load();
+  }, [user]);
+
+  const openNew = () => {
+    const firstCategory = categories[0];
+    const firstProduct = firstCategory ? catalogProducts.find((p) => p.categoryId === firstCategory.id) : undefined;
+    setEditing(blankListing(firstCategory, firstProduct));
+  };
+
+  const onCategoryChange = (categoryId: string) => {
+    if (!editing) return;
+    const category = categories.find((c) => c.id === categoryId);
+    const firstProduct = catalogProducts.find((p) => p.categoryId === categoryId);
+    setEditing({
+      ...editing,
+      categoryId,
+      category: category?.name ?? "",
+      productId: firstProduct?.id ?? "",
+      productName: firstProduct?.name ?? "",
+    });
+  };
+
+  const save = async () => {
+    if (!editing || !user) return;
+    if (!editing.title || !editing.productId) { toast.error("Title and product are required"); return; }
+
+    try {
+      setBusy(true);
+
+      if (editing.id) {
+        await vendorOnboardingApi.updateVendorProductListing(user.id, editing.id, {
+          vendorId: user.id,
+          listingId: editing.id,
+          productId: editing.productId,
+          listingTitle: editing.title,
+          dailyRent: editing.dailyRent,
+          monthlyRent: editing.monthlyRent,
+          securityDeposit: editing.securityDeposit,
+          availableQuantity: editing.quantity,
+          listingStatus: editing.status,
+        });
+      } else {
+        await vendorOnboardingApi.createVendorProductListing(user.id, {
+          vendorId: user.id,
+          productId: editing.productId,
+          listingTitle: editing.title,
+          dailyRent: editing.dailyRent,
+          monthlyRent: editing.monthlyRent,
+          securityDeposit: editing.securityDeposit,
+          availableQuantity: editing.quantity,
+          listingStatus: editing.status,
+        });
+      }
+
+      await loadCatalogAndListings();
+      setEditing(null);
+      toast.success("Listing saved");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save listing.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openCreateCategory = () => {
+    setNewCategoryName("");
+    setCategoryDialogOpen(true);
+  };
+
+  const createCategory = async () => {
+    if (!newCategoryName.trim()) {
+      toast.error("Category name is required.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      await vendorOnboardingApi.createProductCategory({
+        categoryName: newCategoryName.trim(),
+        prescriptionRequired: false,
+        depositRequired: false,
+        installationRequired: false,
+        isActive: true,
+      });
+      await loadCatalogAndListings();
+      setCategoryDialogOpen(false);
+      toast.success("Category created");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create category.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openCreateProduct = () => {
+    if (!editing?.categoryId) {
+      toast.error("Select a category first.");
+      return;
+    }
+
+    setNewProductName("");
+    setNewProductBrand("");
+    setNewProductModel("");
+    setProductDialogOpen(true);
+  };
+
+  const createProduct = async () => {
+    if (!editing?.categoryId) {
+      toast.error("Select a category first.");
+      return;
+    }
+    if (!newProductName.trim()) {
+      toast.error("Product name is required.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      const created = await vendorOnboardingApi.createProduct({
+        categoryId: editing.categoryId,
+        productName: newProductName.trim(),
+        brandName: newProductBrand.trim() || undefined,
+        modelName: newProductModel.trim() || undefined,
+        isActive: true,
+      });
+      await loadCatalogAndListings();
+      setEditing({
+        ...editing,
+        productId: created.id,
+        productName: created.productName,
+      });
+      setProductDialogOpen(false);
+      toast.success("Product created");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create product.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openMedia = async (p: LocalListing) => {
+    if (!user) return;
+    try {
+      setBusy(true);
+      const [imagesRes, docsRes] = await Promise.all([
+        vendorOnboardingApi.getVendorProductImages(user.id, p.id),
+        vendorOnboardingApi.getVendorProductDocuments(user.id, p.id),
+      ]);
+
+      setMediaFor(p);
+      setTempImages(imagesRes
+        .sort((a, b) => a.displayOrder - b.displayOrder)
+        .map((img) => ({
+          id: img.id,
+          primary: img.isPrimary,
+          url: img.imageUrl,
+          persisted: true,
+        })));
+      setListingDocuments(docsRes);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load listing media.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const setPrimary = (id: string) => setTempImages((imgs) => imgs.map((i) => ({ ...i, primary: i.id === id })));
-  const removeImg = (id: string) => setTempImages((imgs) => imgs.filter((i) => i.id !== id));
+  const removeImg = (id: string) => {
+    const img = tempImages.find((i) => i.id === id);
+    if (img?.persisted) {
+      toast.info("Delete image API is not available yet.");
+      return;
+    }
+    setTempImages((imgs) => imgs.filter((i) => i.id !== id));
+  };
+
   const addImg = async (files: FileList | null) => {
+    if (!user || !mediaFor) return;
     if (!files || files.length === 0) return;
-    const uploaded = await Promise.all(
-      Array.from(files).map(async (file) => ({
-        id: `img-${Date.now()}-${file.name}`,
-        primary: false,
-        url: await fileToDataUrl(file),
-      }))
-    );
-    setTempImages((imgs) => {
-      const merged = [...imgs, ...uploaded];
-      if (merged.length > 0 && !merged.some((img) => img.primary)) {
-        merged[0] = { ...merged[0], primary: true };
+    try {
+      setBusy(true);
+      const uploaded = await Promise.all(
+        Array.from(files).map(async (file) => {
+          const fileResult = await vendorOnboardingApi.uploadVendorFile(user.id, file);
+          return {
+            id: `temp-${Date.now()}-${file.name}`,
+            primary: false,
+            url: fileResult.fileUrl,
+            persisted: false,
+          } satisfies MediaImage;
+        })
+      );
+      setTempImages((imgs) => {
+        const merged = [...imgs, ...uploaded];
+        if (merged.length > 0 && !merged.some((img) => img.primary)) {
+          merged[0] = { ...merged[0], primary: true };
+        }
+        return merged;
+      });
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
       }
-      return merged;
-    });
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to upload image.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
     }
   };
+
   const reorder = (from: number, to: number) => setTempImages((imgs) => { const c = [...imgs]; const [m] = c.splice(from, 1); c.splice(to, 0, m); return c; });
   const previewImage = (url: string) => setPreviewUrl(url);
-  const saveMedia = () => {
-    if (!mediaFor) return;
-    const sorted = [...tempImages];
-    const primary = sorted.find((img) => img.primary) ?? sorted[0];
-    const updatedImages = sorted.map((img) => img.url);
-    setProducts((prev) =>
-      prev.map((product) =>
-        product.id === mediaFor.id
-          ? {
-              ...product,
-              images: updatedImages,
-              primaryImage: primary?.url,
-            }
-          : product
-      )
-    );
-    setMediaFor(null);
-    toast.success("Media updated");
+
+  const saveMedia = async () => {
+    if (!mediaFor || !user) return;
+
+    try {
+      setBusy(true);
+      const unsaved = tempImages.filter((i) => !i.persisted);
+      if (unsaved.length > 0) {
+        await Promise.all(
+          unsaved.map((img, idx) =>
+            vendorOnboardingApi.addVendorProductImage(user.id, mediaFor.id, {
+              vendorId: user.id,
+              listingId: mediaFor.id,
+              imageUrl: img.url,
+              displayOrder: tempImages.length + idx + 1,
+              isPrimary: img.primary,
+            })
+          )
+        );
+      }
+      toast.success("Media updated");
+      setMediaFor(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save media.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const uploadListingDoc = async () => {
+    if (!mediaFor || !user || !docFile) return;
+    try {
+      setBusy(true);
+      const fileResult = await vendorOnboardingApi.uploadVendorFile(user.id, docFile);
+      await vendorOnboardingApi.addVendorProductDocument(user.id, mediaFor.id, {
+        vendorId: user.id,
+        listingId: mediaFor.id,
+        documentType: docType,
+        fileUrl: fileResult.fileUrl,
+      });
+      const docs = await vendorOnboardingApi.getVendorProductDocuments(user.id, mediaFor.id);
+      setListingDocuments(docs);
+      setDocFile(null);
+      if (docFileInputRef.current) {
+        docFileInputRef.current.value = "";
+      }
+      toast.success("Listing document uploaded");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to upload listing document.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -108,7 +415,7 @@ const Products = () => {
         title="Products"
         description="Manage your rental catalog. Add new listings, set pricing, and control availability."
         actions={
-          <Button onClick={openNew} className="bg-gradient-primary shadow-glow">
+          <Button onClick={openNew} className="bg-gradient-primary shadow-glow" disabled={busy}>
             <Plus className="mr-2 h-4 w-4" /> New listing
           </Button>
         }
@@ -120,11 +427,12 @@ const Products = () => {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search listings…" className="pl-9" />
           </div>
-          <Tabs value={filter} onValueChange={(v) => setFilter(v as any)}>
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as "all" | "active" | "draft" | "inactive")}>
             <TabsList>
               <TabsTrigger value="all">All <span className="ml-1.5 text-xs text-muted-foreground">({products.length})</span></TabsTrigger>
               <TabsTrigger value="active">Active</TabsTrigger>
               <TabsTrigger value="draft">Draft</TabsTrigger>
+              <TabsTrigger value="inactive">Inactive</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -161,13 +469,13 @@ const Products = () => {
                   <td className="px-4 py-3 text-right font-mono">₹{p.monthlyRent.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right font-mono">₹{p.securityDeposit.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right">{p.quantity}</td>
-                  <td className="px-4 py-3"><StatusBadge status={p.status === "active" ? "approved" : "pending"} /></td>
+                  <td className="px-4 py-3"><StatusBadge status={p.status === "active" ? "approved" : p.status === "inactive" ? "rejected" : "pending"} /></td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openMedia(p)} aria-label="Media">
+                      <Button variant="ghost" size="icon" onClick={() => void openMedia(p)} aria-label="Media" disabled={busy}>
                         <ImageIcon className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setEditing(p)} aria-label="Edit">
+                      <Button variant="ghost" size="icon" onClick={() => setEditing(p)} aria-label="Edit" disabled={busy}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                     </div>
@@ -189,17 +497,34 @@ const Products = () => {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Category</Label>
-                <Select value={editing.category} onValueChange={(v) => setEditing({ ...editing, category: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <Select value={editing.categoryId} onValueChange={onCategoryChange}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Button variant="outline" onClick={openCreateCategory} type="button" disabled={busy}>New</Button>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label>Product (from catalog)</Label>
-                <Select value={editing.productName} onValueChange={(v) => setEditing({ ...editing, productName: v })}>
-                  <SelectTrigger><SelectValue placeholder="Choose product" /></SelectTrigger>
-                  <SelectContent>{catalogProducts.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <Select value={editing.productId} onValueChange={(v) => {
+                    const selected = catalogProducts.find((p) => p.id === v);
+                    setEditing({
+                      ...editing,
+                      productId: v,
+                      productName: selected?.name ?? "",
+                    });
+                  }}>
+                    <SelectTrigger><SelectValue placeholder="Choose product" /></SelectTrigger>
+                    <SelectContent>
+                      {catalogProducts.filter((p) => p.categoryId === editing.categoryId).map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" onClick={openCreateProduct} type="button" disabled={busy}>New</Button>
+                </div>
               </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <Label>Listing title</Label>
@@ -207,23 +532,23 @@ const Products = () => {
               </div>
               <div className="space-y-1.5">
                 <Label>Daily rent (₹)</Label>
-                <Input type="number" value={editing.dailyRent} onChange={(e) => setEditing({ ...editing, dailyRent: +e.target.value })} />
+                <Input type="number" value={editing.dailyRent} onChange={(e) => setEditing({ ...editing, dailyRent: Number(e.target.value) })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Monthly rent (₹)</Label>
-                <Input type="number" value={editing.monthlyRent} onChange={(e) => setEditing({ ...editing, monthlyRent: +e.target.value })} />
+                <Input type="number" value={editing.monthlyRent} onChange={(e) => setEditing({ ...editing, monthlyRent: Number(e.target.value) })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Security deposit (₹)</Label>
-                <Input type="number" value={editing.securityDeposit} onChange={(e) => setEditing({ ...editing, securityDeposit: +e.target.value })} />
+                <Input type="number" value={editing.securityDeposit} onChange={(e) => setEditing({ ...editing, securityDeposit: Number(e.target.value) })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Quantity</Label>
-                <Input type="number" value={editing.quantity} onChange={(e) => setEditing({ ...editing, quantity: +e.target.value })} />
+                <Input type="number" value={editing.quantity} onChange={(e) => setEditing({ ...editing, quantity: Number(e.target.value) })} />
               </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <Label>Status</Label>
-                <Select value={editing.status} onValueChange={(v: any) => setEditing({ ...editing, status: v })}>
+                <Select value={editing.status} onValueChange={(v) => setEditing({ ...editing, status: v as ProductListing["status"] })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="draft">Draft</SelectItem>
@@ -235,8 +560,72 @@ const Products = () => {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button onClick={save}>Save listing</Button>
+            <Button variant="outline" onClick={() => setEditing(null)} disabled={busy}>Cancel</Button>
+            <Button onClick={() => void save()} disabled={busy}>Save listing</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New category</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Create a reusable catalog category for future products and listings.
+          </p>
+          <div className="space-y-1.5">
+            <Label>Category name</Label>
+            <Input
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              placeholder="E.g. Home Appliance Rentals"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCategoryDialogOpen(false)} disabled={busy}>Cancel</Button>
+            <Button onClick={() => void createCategory()} disabled={busy}>Create category</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New product</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Product will be created under the selected category in the listing form.
+          </p>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Product name</Label>
+              <Input
+                value={newProductName}
+                onChange={(e) => setNewProductName(e.target.value)}
+                placeholder="E.g. Washing Machine"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Brand (optional)</Label>
+              <Input
+                value={newProductBrand}
+                onChange={(e) => setNewProductBrand(e.target.value)}
+                placeholder="E.g. IFB"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Model (optional)</Label>
+              <Input
+                value={newProductModel}
+                onChange={(e) => setNewProductModel(e.target.value)}
+                placeholder="E.g. Senator Plus SX"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProductDialogOpen(false)} disabled={busy}>Cancel</Button>
+            <Button onClick={() => void createProduct()} disabled={busy}>Create product</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -248,7 +637,7 @@ const Products = () => {
             <DialogTitle>Media — {mediaFor?.title}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={busy}>
               <Upload className="mr-2 h-4 w-4" /> Upload images
             </Button>
             <input
@@ -299,12 +688,47 @@ const Products = () => {
               )}
             </div>
             <p className="text-xs text-muted-foreground">Drag to reorder. The primary image appears first in your listing.</p>
+
+            <div className="rounded-lg border border-border p-4">
+              <h3 className="mb-3 font-medium">Listing documents</h3>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[180px_1fr_auto]">
+                <Select value={docType} onValueChange={setDocType}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="spec_sheet">Spec Sheet</SelectItem>
+                    <SelectItem value="warranty">Warranty</SelectItem>
+                    <SelectItem value="compliance">Compliance</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  ref={docFileInputRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp"
+                  onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+                />
+                <Button onClick={() => void uploadListingDoc()} disabled={busy || !docFile}>Upload</Button>
+              </div>
+              <div className="mt-3 space-y-2">
+                {listingDocuments.map((doc) => (
+                  <div key={doc.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
+                    <div>
+                      <p className="font-medium">{doc.documentType}</p>
+                      <p className="text-xs text-muted-foreground">{doc.fileUrl.split("/").pop()}</p>
+                    </div>
+                    <StatusBadge status={doc.verificationStatus === "approved" ? "approved" : doc.verificationStatus === "rejected" ? "rejected" : "pending"} />
+                  </div>
+                ))}
+                {listingDocuments.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No listing documents uploaded yet.</p>
+                )}
+              </div>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setMediaFor(null)}>
+            <Button variant="outline" onClick={() => setMediaFor(null)} disabled={busy}>
               <X className="mr-2 h-4 w-4" /> Close
             </Button>
-            <Button onClick={saveMedia}>Save changes</Button>
+            <Button onClick={() => void saveMedia()} disabled={busy}>Save changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -336,14 +760,12 @@ interface MediaImage {
   id: string;
   primary: boolean;
   url: string;
+  persisted: boolean;
 }
 
-const fileToDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("Could not read file"));
-    reader.readAsDataURL(file);
-  });
-
-
+interface ListingDocument {
+  id: string;
+  documentType: string;
+  fileUrl: string;
+  verificationStatus: string;
+}

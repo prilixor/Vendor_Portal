@@ -79,6 +79,77 @@ export interface VendorAvailabilityOverrideApiDto {
   reason?: string;
 }
 
+export interface ProductCategoryApiDto {
+  id: string;
+  categoryName: string;
+  prescriptionRequired: boolean;
+  depositRequired: boolean;
+  installationRequired: boolean;
+  isActive: boolean;
+}
+
+export interface ProductApiDto {
+  id: string;
+  categoryId: string;
+  productName: string;
+  brandName?: string;
+  modelName?: string;
+  shortDescription?: string;
+  longDescription?: string;
+  isActive: boolean;
+}
+
+export interface VendorProductListingApiDto {
+  id: string;
+  vendorId: string;
+  productId: string;
+  listingTitle: string;
+  dailyRent: number;
+  monthlyRent: number;
+  securityDeposit: number;
+  availableQuantity: number;
+  listingStatus: string;
+}
+
+export interface VendorProductImageApiDto {
+  id: string;
+  vendorProductListingId: string;
+  imageUrl: string;
+  displayOrder: number;
+  isPrimary: boolean;
+}
+
+export interface VendorProductDocumentApiDto {
+  id: string;
+  vendorProductListingId: string;
+  documentType: string;
+  fileUrl: string;
+  verificationStatus: string;
+  rejectionReason?: string;
+  verifiedAt?: string;
+}
+
+export interface VendorInventoryApiDto {
+  id: string;
+  vendorProductListingId: string;
+  totalQuantity: number;
+  availableQuantity: number;
+  reservedQuantity: number;
+  rentedQuantity: number;
+  blockedQuantity: number;
+}
+
+export interface VendorInventoryMovementApiDto {
+  id: string;
+  vendorInventoryId: string;
+  movementType: string;
+  quantity: number;
+  referenceType?: string;
+  referenceId?: string;
+  notes?: string;
+  createdAt: string;
+}
+
 export interface UploadedFileResponse {
   fileUrl: string;
   fileName: string;
@@ -150,6 +221,85 @@ export interface UpsertVendorAvailabilityOverridePayload {
   startTime?: string;
   endTime?: string;
   reason?: string;
+}
+
+export interface CreateProductCategoryPayload {
+  categoryName: string;
+  prescriptionRequired: boolean;
+  depositRequired: boolean;
+  installationRequired: boolean;
+  isActive: boolean;
+}
+
+export interface CreateProductPayload {
+  categoryId: string;
+  productName: string;
+  brandName?: string;
+  modelName?: string;
+  shortDescription?: string;
+  longDescription?: string;
+  isActive: boolean;
+}
+
+export interface UpsertVendorProductListingPayload {
+  vendorId: string;
+  productId: string;
+  listingTitle: string;
+  dailyRent: number;
+  monthlyRent: number;
+  securityDeposit: number;
+  availableQuantity: number;
+  listingStatus: string;
+}
+
+export interface UpdateVendorProductListingPayload extends UpsertVendorProductListingPayload {
+  listingId: string;
+}
+
+export interface AddVendorProductImagePayload {
+  vendorId: string;
+  listingId: string;
+  imageUrl: string;
+  displayOrder: number;
+  isPrimary: boolean;
+}
+
+export interface AddVendorProductDocumentPayload {
+  vendorId: string;
+  listingId: string;
+  documentType: string;
+  fileUrl: string;
+}
+
+export interface UpsertVendorInventoryPayload {
+  vendorId: string;
+  listingId: string;
+  totalQuantity: number;
+  availableQuantity: number;
+  reservedQuantity: number;
+  rentedQuantity: number;
+  blockedQuantity: number;
+}
+
+export interface AddVendorInventoryMovementPayload {
+  vendorId: string;
+  listingId: string;
+  movementType: string;
+  quantity: number;
+  referenceType?: string;
+  referenceId?: string;
+  notes?: string;
+}
+
+export interface UpsertVendorNotificationPreferencePayload {
+  vendorId: string;
+  emailNotificationsEnabled: boolean;
+  pushNotificationsEnabled: boolean;
+  newOrderNotifications: boolean;
+}
+
+export interface MarkAllNotificationsReadResponse {
+  updatedCount: number;
 }
 
 export const vendorOnboardingApi = {
@@ -234,5 +384,90 @@ export const vendorOnboardingApi = {
 
   deleteVendorAvailabilityOverride(vendorId: string, overrideId: string) {
     return apiClient.delete<void>(`/vendors/${vendorId}/availability-overrides/${overrideId}`);
+  },
+
+  createProductCategory(payload: CreateProductCategoryPayload) {
+    return apiClient.post<ProductCategoryApiDto>("/vendors/catalog/categories", payload);
+  },
+
+  getProductCategories() {
+    return apiClient.get<ProductCategoryApiDto[]>("/vendors/catalog/categories");
+  },
+
+  createProduct(payload: CreateProductPayload) {
+    return apiClient.post<ProductApiDto>("/vendors/catalog/products", payload);
+  },
+
+  getProducts(categoryId?: string) {
+    const query = categoryId ? `?categoryId=${encodeURIComponent(categoryId)}` : "";
+    return apiClient.get<ProductApiDto[]>(`/vendors/catalog/products${query}`);
+  },
+
+  createVendorProductListing(vendorId: string, payload: UpsertVendorProductListingPayload) {
+    return apiClient.post<VendorProductListingApiDto>(`/vendors/${vendorId}/listings`, payload);
+  },
+
+  updateVendorProductListing(vendorId: string, listingId: string, payload: UpdateVendorProductListingPayload) {
+    return apiClient.put<VendorProductListingApiDto>(`/vendors/${vendorId}/listings/${listingId}`, payload);
+  },
+
+  getVendorProductListings(vendorId: string) {
+    return apiClient.get<VendorProductListingApiDto[]>(`/vendors/${vendorId}/listings`);
+  },
+
+  addVendorProductImage(vendorId: string, listingId: string, payload: AddVendorProductImagePayload) {
+    return apiClient.post<VendorProductImageApiDto>(`/vendors/${vendorId}/listings/${listingId}/images`, payload);
+  },
+
+  getVendorProductImages(vendorId: string, listingId: string) {
+    return apiClient.get<VendorProductImageApiDto[]>(`/vendors/${vendorId}/listings/${listingId}/images`);
+  },
+
+  addVendorProductDocument(vendorId: string, listingId: string, payload: AddVendorProductDocumentPayload) {
+    return apiClient.post<VendorProductDocumentApiDto>(`/vendors/${vendorId}/listings/${listingId}/documents`, payload);
+  },
+
+  getVendorProductDocuments(vendorId: string, listingId: string) {
+    return apiClient.get<VendorProductDocumentApiDto[]>(`/vendors/${vendorId}/listings/${listingId}/documents`);
+  },
+
+  upsertVendorInventory(vendorId: string, listingId: string, payload: UpsertVendorInventoryPayload) {
+    return apiClient.put<VendorInventoryApiDto>(`/vendors/${vendorId}/listings/${listingId}/inventory`, payload);
+  },
+
+  getVendorInventory(vendorId: string, listingId: string) {
+    return apiClient.get<VendorInventoryApiDto>(`/vendors/${vendorId}/listings/${listingId}/inventory`);
+  },
+
+  addVendorInventoryMovement(vendorId: string, listingId: string, payload: AddVendorInventoryMovementPayload) {
+    return apiClient.post<VendorInventoryMovementApiDto>(`/vendors/${vendorId}/listings/${listingId}/inventory/movements`, payload);
+  },
+
+  getVendorInventoryMovements(vendorId: string, listingId: string) {
+    return apiClient.get<VendorInventoryMovementApiDto[]>(`/vendors/${vendorId}/listings/${listingId}/inventory/movements`);
+  },
+
+  upsertVendorNotificationPreference(vendorId: string, payload: UpsertVendorNotificationPreferencePayload) {
+    return apiClient.put<VendorNotificationPreferenceDto>(`/vendors/${vendorId}/notification-preferences`, payload);
+  },
+
+  getVendorNotificationPreference(vendorId: string) {
+    return apiClient.get<VendorNotificationPreferenceDto>(`/vendors/${vendorId}/notification-preferences`);
+  },
+
+  getVendorNotifications(vendorId: string) {
+    return apiClient.get<VendorNotificationDto[]>(`/vendors/${vendorId}/notifications`);
+  },
+
+  markVendorNotificationAsRead(vendorId: string, notificationId: string) {
+    return apiClient.patch<VendorNotificationDto>(`/vendors/${vendorId}/notifications/${notificationId}/read`);
+  },
+
+  markVendorNotificationAsUnread(vendorId: string, notificationId: string) {
+    return apiClient.patch<VendorNotificationDto>(`/vendors/${vendorId}/notifications/${notificationId}/unread`);
+  },
+
+  markAllVendorNotificationsAsRead(vendorId: string) {
+    return apiClient.patch<MarkAllNotificationsReadResponse>(`/vendors/${vendorId}/notifications/read-all`);
   },
 };

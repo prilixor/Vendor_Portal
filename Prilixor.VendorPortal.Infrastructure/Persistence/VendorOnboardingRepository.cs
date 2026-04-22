@@ -26,6 +26,12 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
         await dbContext.Vendors.AddAsync(vendor, cancellationToken);
     }
 
+    public Task UpdateVendorAsync(Vendor vendor, CancellationToken cancellationToken)
+    {
+        dbContext.Vendors.Update(vendor);
+        return Task.CompletedTask;
+    }
+
     public Task<VendorProfile?> GetVendorProfileAsync(Guid vendorId, CancellationToken cancellationToken)
     {
         return dbContext.VendorProfiles
@@ -274,6 +280,24 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
         await dbContext.VendorProductDocuments.AddAsync(document, cancellationToken);
     }
 
+    public Task<VendorProductDocument?> GetVendorProductDocumentByIdAsync(Guid vendorId, Guid listingId, Guid documentId, CancellationToken cancellationToken)
+    {
+        return dbContext.VendorProductDocuments
+            .Where(x => x.Id == documentId && x.VendorProductListingId == listingId && !x.IsDeleted)
+            .Join(
+                dbContext.VendorProductListings.Where(l => l.VendorId == vendorId && !l.IsDeleted),
+                doc => doc.VendorProductListingId,
+                listing => listing.Id,
+                (doc, _) => doc)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public Task UpdateVendorProductDocumentAsync(VendorProductDocument document, CancellationToken cancellationToken)
+    {
+        dbContext.VendorProductDocuments.Update(document);
+        return Task.CompletedTask;
+    }
+
     public Task<List<VendorProductDocument>> GetVendorProductDocumentsAsync(Guid listingId, CancellationToken cancellationToken)
     {
         return dbContext.VendorProductDocuments
@@ -332,6 +356,18 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
     public async Task AddVendorNotificationAsync(VendorNotification notification, CancellationToken cancellationToken)
     {
         await dbContext.VendorNotifications.AddAsync(notification, cancellationToken);
+    }
+
+    public Task<VendorNotification?> GetVendorNotificationByIdAsync(Guid vendorId, Guid notificationId, CancellationToken cancellationToken)
+    {
+        return dbContext.VendorNotifications
+            .FirstOrDefaultAsync(x => x.Id == notificationId && x.VendorId == vendorId && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task UpdateVendorNotificationAsync(VendorNotification notification, CancellationToken cancellationToken)
+    {
+        dbContext.VendorNotifications.Update(notification);
+        return Task.CompletedTask;
     }
 
     public Task<List<VendorNotification>> GetVendorNotificationsAsync(Guid vendorId, CancellationToken cancellationToken)

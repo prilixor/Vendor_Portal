@@ -27,6 +27,17 @@ export interface RegisterVendorResponse {
   email: string;
 }
 
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface ChangePasswordResponse {
+  success: boolean;
+  message: string;
+  updatedAt: string;
+}
+
 export const authApi = {
   async login(email: string, password: string, role: Role): Promise<{ token: string; user: User }> {
     const response = await apiClient.post<LoginResponse>('/auth/login', {
@@ -53,6 +64,10 @@ export const authApi = {
       email,
       password,
     });
+  },
+
+  async changePassword(payload: ChangePasswordPayload): Promise<ChangePasswordResponse> {
+    return apiClient.post<ChangePasswordResponse>('/auth/change-password', payload);
   },
 
   logout(): void {

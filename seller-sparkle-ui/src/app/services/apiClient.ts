@@ -93,6 +93,17 @@ class ApiClient {
     return this.handleResponse<T>(response);
   }
 
+  async patch<T>(endpoint: string, data?: unknown): Promise<T> {
+    const hasBody = data !== undefined;
+    const response = await fetch(this.buildUrl(endpoint), {
+      method: 'PATCH',
+      headers: this.getHeaders(hasBody),
+      body: hasBody ? JSON.stringify(data) : undefined,
+    });
+
+    return this.handleResponse<T>(response);
+  }
+
   async delete<T>(endpoint: string): Promise<T> {
     const response = await fetch(this.buildUrl(endpoint), {
       method: 'DELETE',
