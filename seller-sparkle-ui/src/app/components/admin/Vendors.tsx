@@ -11,7 +11,7 @@ const Vendors = () => (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {mockVendors.map((v) => (
         <Link key={v.id} to={`/admin/vendors/${v.id}`} className="group">
-          <Card className="border-border/60 p-5 transition-all hover:-translate-y-0.5 hover:shadow-elegant">
+          <Card className="border-border/60 p-4 sm:p-5 lg:p-6 transition-all hover:-translate-y-0.5 hover:shadow-elegant">
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-soft text-primary">

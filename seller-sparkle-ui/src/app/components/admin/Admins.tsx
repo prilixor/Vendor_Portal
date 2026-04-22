@@ -5,6 +5,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
+import { FormGrid } from "@/app/components/shared/FormGrid";
 import { mockAdmins } from "@/app/services/mockData";
 import { AdminUser } from "@/app/models";
 import { Plus, Trash2, Shield, Users, Headphones } from "lucide-react";
@@ -46,14 +47,14 @@ const Admins = () => {
         }
       />
 
-      <Card className="border-border/60">
+      <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
         <ul className="divide-y divide-border">
           {admins.map((a) => {
             const cfg = roleConfig[a.role];
             const Icon = cfg.icon;
             const initials = a.name.split(" ").map((n) => n[0]).slice(0, 2).join("");
             return (
-              <li key={a.id} className="flex items-center justify-between gap-4 p-4">
+              <li key={a.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <Avatar className="h-10 w-10">
                     <AvatarFallback className="bg-gradient-primary text-xs font-semibold text-primary-foreground">
@@ -65,7 +66,7 @@ const Admins = () => {
                     <p className="text-xs text-muted-foreground">{a.email}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
                   <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${cfg.cls}`}>
                     <Icon className="h-3.5 w-3.5" /> {cfg.label}
                   </span>
@@ -85,20 +86,23 @@ const Admins = () => {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Add admin user</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" /></div>
-            <div className="space-y-1.5"><Label>Email</Label><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@portal.com" type="email" /></div>
-            <div className="space-y-1.5">
-              <Label>Role</Label>
-              <Select value={role} onValueChange={(v: any) => setRole(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="super_admin">Super admin</SelectItem>
-                  <SelectItem value="verifier">Verifier</SelectItem>
-                  <SelectItem value="support">Support</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
+            <FormGrid cols={1}>
+              <div className="space-y-1.5"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" /></div>
+              <div className="space-y-1.5"><Label>Email</Label><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@portal.com" type="email" /></div>
+              <div className="space-y-1.5">
+                <Label>Role</Label>
+                <Select value={role} onValueChange={(v: any) => setRole(v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="super_admin">Super admin</SelectItem>
+                    <SelectItem value="verifier">Verifier</SelectItem>
+                    <SelectItem value="support">Support</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </FormGrid>
+            <div className="h-5" />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>

@@ -1,15 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
+import { FormGrid } from "@/app/components/shared/FormGrid";
 import { ProductListing } from "@/app/models";
 import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
@@ -421,7 +422,7 @@ const Products = () => {
         }
       />
 
-      <Card className="border-border/60">
+      <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -436,8 +437,8 @@ const Products = () => {
             </TabsList>
           </Tabs>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full min-w-[800px] text-sm">
             <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-semibold">Listing</th>
@@ -494,7 +495,8 @@ const Products = () => {
             <DialogTitle>{products.some((p) => p.id === editing?.id) ? "Edit listing" : "New listing"}</DialogTitle>
           </DialogHeader>
           {editing && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
+              <FormGrid cols={2}>
               <div className="space-y-1.5">
                 <Label>Category</Label>
                 <div className="flex items-center gap-2">
@@ -557,6 +559,8 @@ const Products = () => {
                   </SelectContent>
                 </Select>
               </div>
+            </FormGrid>
+            <div className="h-5" />
             </div>
           )}
           <DialogFooter>
@@ -571,16 +575,19 @@ const Products = () => {
           <DialogHeader>
             <DialogTitle>New category</DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground">
-            Create a reusable catalog category for future products and listings.
-          </p>
-          <div className="space-y-1.5">
+          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
+            <p className="text-xs text-muted-foreground">
+              Create a reusable catalog category for future products and listings.
+            </p>
+            <div className="space-y-1.5">
             <Label>Category name</Label>
             <Input
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
               placeholder="E.g. Home Appliance Rentals"
             />
+            <div className="h-5" />
+          </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCategoryDialogOpen(false)} disabled={busy}>Cancel</Button>
@@ -594,10 +601,11 @@ const Products = () => {
           <DialogHeader>
             <DialogTitle>New product</DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground">
-            Product will be created under the selected category in the listing form.
-          </p>
-          <div className="space-y-3">
+          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
+            <p className="text-xs text-muted-foreground">
+              Product will be created under the selected category in the listing form.
+            </p>
+            <div className="space-y-3">
             <div className="space-y-1.5">
               <Label>Product name</Label>
               <Input
@@ -622,6 +630,8 @@ const Products = () => {
                 placeholder="E.g. Senator Plus SX"
               />
             </div>
+            <div className="h-5" />
+          </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setProductDialogOpen(false)} disabled={busy}>Cancel</Button>
@@ -629,12 +639,10 @@ const Products = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Media dialog */}
       <Dialog open={!!mediaFor} onOpenChange={(v) => !v && setMediaFor(null)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Media — {mediaFor?.title}</DialogTitle>
+            <DialogTitle>Manage images</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={busy}>
@@ -682,7 +690,7 @@ const Products = () => {
                 </div>
               ))}
               {tempImages.length === 0 && (
-                <div className="col-span-2 rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground sm:col-span-4">
+                <div className="col-span-2 rounded-lg border border-dashed border-border p-4 sm:p-6 text-center text-sm text-muted-foreground sm:col-span-4">
                   No images uploaded yet.
                 </div>
               )}

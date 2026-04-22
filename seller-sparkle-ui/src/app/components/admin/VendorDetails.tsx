@@ -86,7 +86,7 @@ const VendorDetails = () => {
         }
       />
 
-      <Card className="border-border/60 p-4 sm:p-5">
+      <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-soft text-primary">
@@ -112,7 +112,7 @@ const VendorDetails = () => {
         </TabsList>
 
         <TabsContent value="profile">
-          <Card className="border-border/60 p-5">
+          <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
             <div className="grid grid-cols-1 gap-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
               <Detail label="Business" value={vendor.businessName} />
               <Detail label="Owner" value={vendor.ownerName} />
@@ -128,7 +128,7 @@ const VendorDetails = () => {
         </TabsContent>
 
         <TabsContent value="docs">
-          <Card className="border-border/60 p-5">
+          <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-semibold">Documents</h3>
               <p className="text-xs text-muted-foreground">{documents.length} uploaded</p>
@@ -156,7 +156,7 @@ const VendorDetails = () => {
         </TabsContent>
 
         <TabsContent value="bank">
-          <Card className="border-border/60 p-5">
+          <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
             <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
               <Detail label="Account holder" value={mockBankDetails.accountHolderName} />
               <Detail label="Bank" value={mockBankDetails.bankName} />
@@ -170,7 +170,7 @@ const VendorDetails = () => {
         </TabsContent>
 
         <TabsContent value="areas">
-          <Card className="border-border/60 p-5">
+          <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {mockServiceAreas.map((area) => (
                 <div key={area.id} className="rounded-lg border border-border p-3">
@@ -185,7 +185,7 @@ const VendorDetails = () => {
         </TabsContent>
 
         <TabsContent value="hours">
-          <Card className="border-border/60 p-5">
+          <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
             <div className="mb-4 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               Open on {activeDays} of 7 days
             </div>
@@ -209,7 +209,7 @@ const VendorDetails = () => {
         </TabsContent>
 
         <TabsContent value="products">
-          <Card className="border-border/60 p-5">
+          <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-semibold">Listings</h3>
               <p className="text-xs text-muted-foreground">{vendor.productsCount} total</p>

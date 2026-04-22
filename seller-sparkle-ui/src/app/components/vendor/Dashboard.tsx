@@ -31,7 +31,7 @@ const Dashboard = () => {
 
       {/* Verification banner */}
       <Card className="mb-6 overflow-hidden border-primary/20 bg-gradient-soft">
-        <div className="flex flex-col items-start gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col items-start gap-4 p-4 sm:p-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-primary text-primary-foreground shadow-glow">
               <Sparkles className="h-5 w-5" />
@@ -57,7 +57,7 @@ const Dashboard = () => {
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Recent activity */}
-        <Card className="lg:col-span-2 p-5 border-border/60">
+        <Card className="lg:col-span-2 p-4 sm:p-6 lg:p-8 border-border/60">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-semibold">Recent activity</h2>
             <Button variant="ghost" size="sm" onClick={() => navigate("/vendor/notifications")}>
@@ -86,7 +86,7 @@ const Dashboard = () => {
         </Card>
 
         {/* Quick actions */}
-        <Card className="p-5 border-border/60">
+        <Card className="p-4 sm:p-6 lg:p-8 border-border/60">
           <h2 className="mb-4 font-semibold">Quick actions</h2>
           <div className="space-y-2">
             {[
@@ -110,13 +110,13 @@ const Dashboard = () => {
       </div>
 
       {/* Top listings */}
-      <Card className="mt-6 p-5 border-border/60">
+      <Card className="mt-6 p-4 sm:p-6 lg:p-8 border-border/60">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-semibold">Top listings</h2>
           <Button variant="ghost" size="sm" onClick={() => navigate("/vendor/products")}>View all</Button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full min-w-[600px] text-sm">
             <thead className="text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="py-2 font-semibold">Product</th>

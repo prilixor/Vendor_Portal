@@ -64,14 +64,14 @@ const Verification = () => {
     <div>
       <PageHeader title="Vendor verification" description="Review business profiles, documents, and bank details. Approve or reject with feedback." />
 
-      <Card className="border-border/60">
-        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+      <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
+        <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search vendors…" className="pl-9" />
           </div>
           <Tabs value={filter} onValueChange={(v: any) => setFilter(v)}>
-            <TabsList>
+            <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-lg p-1">
               <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="pending">Pending</TabsTrigger>
               <TabsTrigger value="under_review">Review</TabsTrigger>
@@ -80,8 +80,8 @@ const Verification = () => {
             </TabsList>
           </Tabs>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full min-w-[700px] text-sm">
             <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-semibold">Business</th>
@@ -122,12 +122,13 @@ const Verification = () => {
 
       {/* Vendor detail */}
       <Dialog open={!!selected} onOpenChange={(v) => !v && setSelected(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Vendor details</DialogTitle>
           </DialogHeader>
           {selected && (
-            <div className="space-y-5">
+            <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
+              <div className="space-y-5">
               <div className="rounded-xl border border-border bg-gradient-soft p-4">
                 <div className="flex items-start justify-between">
                   <div>
@@ -187,6 +188,7 @@ const Verification = () => {
                 </div>
               </div>
             </div>
+            </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setRejectOpen(true); }}>
@@ -204,9 +206,12 @@ const Verification = () => {
           <DialogHeader>
             <DialogTitle>Rejection reason</DialogTitle>
           </DialogHeader>
-          <div className="space-y-1.5">
+          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
+            <div className="space-y-1.5">
             <Label>Why is this vendor being rejected?</Label>
             <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Provide clear feedback so the vendor can fix the issue…" rows={5} />
+          </div>
+          <div className="h-5" />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectOpen(false)}>Cancel</Button>

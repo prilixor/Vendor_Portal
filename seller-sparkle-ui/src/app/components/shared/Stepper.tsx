@@ -14,13 +14,13 @@ interface StepperProps {
 
 export const Stepper = ({ steps, current, onStepClick }: StepperProps) => (
   <div className="w-full">
-    <div className="flex items-start">
+    <div className="flex items-start overflow-x-auto pb-2 scrollbar-hide">
       {steps.map((step, idx) => {
         const completed = idx < current;
         const active = idx === current;
         const reachable = idx <= current;
         return (
-          <div key={step.label} className={cn("flex flex-1 items-start", idx === steps.length - 1 && "flex-none")}>
+          <div key={step.label} className={cn("flex min-w-[100px] flex-1 items-start sm:min-w-0", idx === steps.length - 1 && "flex-none")}>
             <div className="flex flex-col items-center">
               <button
                 type="button"

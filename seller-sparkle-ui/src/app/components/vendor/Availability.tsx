@@ -113,7 +113,7 @@ const Availability = () => {
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card className="p-5 border-border/60">
+        <Card className="p-4 sm:p-6 lg:p-8 border-border/60">
           <h2 className="mb-4 font-semibold">Pick a date</h2>
           <div className="flex justify-center">
             <Calendar
@@ -132,7 +132,7 @@ const Availability = () => {
           )}
         </Card>
 
-        <Card className="p-5 border-border/60">
+        <Card className="p-4 sm:p-6 lg:p-8 border-border/60">
           <h2 className="mb-4 font-semibold">Override details</h2>
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2.5">

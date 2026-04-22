@@ -148,8 +148,8 @@ const Notifications = () => {
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2 border-border/60">
-          <div className="flex items-center justify-between border-b border-border p-4">
+        <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
+          <div className="flex items-center justify-between border-b border-border pb-4">
             <h2 className="font-semibold">Inbox</h2>
             <Tabs value={filter} onValueChange={(v: string) => setFilter(v as "all" | "unread")}>
               <TabsList>
@@ -205,7 +205,7 @@ const Notifications = () => {
           </ul>
         </Card>
 
-        <Card className="border-border/60 p-5 h-fit">
+        <Card className="border-border/60 p-4 sm:p-6 lg:p-8 h-fit">
           <h2 className="mb-4 font-semibold">Preferences</h2>
           <div className="space-y-3">
             {[

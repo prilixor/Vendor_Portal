@@ -27,8 +27,8 @@ const AdminDashboard = () => {
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2 border-border/60">
-          <div className="flex items-center justify-between border-b border-border p-4">
+        <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
+          <div className="flex items-center justify-between border-b border-border pb-4">
             <h2 className="font-semibold">Verification queue</h2>
             <Button variant="ghost" size="sm" onClick={() => navigate("/admin/verification")}>
               Open queue <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
@@ -47,8 +47,8 @@ const AdminDashboard = () => {
           </ul>
         </Card>
 
-        <Card className="border-border/60">
-          <div className="border-b border-border p-4">
+        <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
+          <div className="border-b border-border pb-4">
             <h2 className="font-semibold">Recent audit events</h2>
           </div>
           <ul className="divide-y divide-border">

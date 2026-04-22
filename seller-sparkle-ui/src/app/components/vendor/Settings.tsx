@@ -4,6 +4,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { FormGrid } from "@/app/components/shared/FormGrid";
 import { useAuth } from "@/app/guards/AuthContext";
 import { authApi } from "@/app/services/authApi";
 import { vendorOnboardingApi, type VendorProfileApiDto } from "@/app/services/vendorOnboardingApi";
@@ -134,9 +135,9 @@ const Settings = () => {
     <div>
       <PageHeader title="Settings" description="Manage your account, security, and preferences." />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2 border-border/60 p-6">
+        <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
           <h2 className="mb-4 font-semibold">Account</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormGrid cols={2}>
             <div className="space-y-1.5">
               <Label>Full name</Label>
               <Input value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={loading || savingProfile} />
@@ -153,12 +154,12 @@ const Settings = () => {
               <Label>Time zone</Label>
               <Input value={timeZone} disabled />
             </div>
-          </div>
+          </FormGrid>
           <Button className="mt-5 bg-gradient-primary shadow-glow" onClick={() => void saveProfile()} disabled={loading || savingProfile}>
             <Save className="mr-2 h-4 w-4" /> Save changes
           </Button>
         </Card>
-        <Card className="border-border/60 p-6">
+        <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
           <h2 className="mb-4 font-semibold">Security</h2>
           <div className="space-y-3">
             <div className="space-y-1.5">

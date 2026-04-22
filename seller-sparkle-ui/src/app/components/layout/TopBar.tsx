@@ -13,7 +13,11 @@ import {
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
 
-export const TopBar = () => {
+interface TopBarProps {
+  onMenuClick?: () => void;
+}
+
+export const TopBar = ({ onMenuClick }: TopBarProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [dark, setDark] = useState(false);
@@ -26,6 +30,14 @@ export const TopBar = () => {
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border bg-background/80 px-4 backdrop-blur-xl sm:px-6">
+      {/* Hamburger menu - only visible on mobile */}
+      {onMenuClick && (
+        <Button variant="ghost" size="icon" onClick={onMenuClick} className="lg:hidden" aria-label="Menu">
+          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </Button>
+      )}
       <div className="ml-auto flex items-center gap-2">
         <Button variant="ghost" size="icon" onClick={() => setDark((v) => !v)} aria-label="Toggle theme">
           {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

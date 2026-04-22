@@ -5,6 +5,7 @@ import { StatCard } from "@/app/components/shared/StatCard";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { InventoryMovement, InventoryRecord } from "@/app/models";
 import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus } from "lucide-react";
@@ -245,12 +246,12 @@ const Inventory = () => {
         <StatCard label="Blocked" value={totals.blocked} icon={Lock} accent="primary" />
       </div>
 
-      <Card className="mt-6 border-border/60">
-        <div className="border-b border-border p-4">
+      <Card className="mt-6 border-border/60 p-4 sm:p-6 lg:p-8">
+        <div className="border-b border-border pb-4">
           <h2 className="font-semibold">Stock by product</h2>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full min-w-[700px] text-sm">
             <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-semibold">Product</th>
@@ -338,7 +339,8 @@ const Inventory = () => {
           <DialogHeader>
             <DialogTitle>Edit stock - {editingRow?.productName}</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
+            <FormGrid cols={2}>
             <div className="space-y-1.5">
               <Label>Total</Label>
               <Input type="number" min={0} value={editForm.total} onChange={(e) => updateFormValue("total", e.target.value)} />
@@ -355,9 +357,10 @@ const Inventory = () => {
               <Label>Blocked</Label>
               <Input type="number" min={0} value={editForm.blocked} onChange={(e) => updateFormValue("blocked", e.target.value)} />
             </div>
-            <div className="col-span-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+            <div className="sm:col-span-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
               Available (auto): <span className="font-semibold">{computedAvailable}</span>
             </div>
+          </FormGrid>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingRow(null)} disabled={busy}>
@@ -373,7 +376,8 @@ const Inventory = () => {
           <DialogHeader>
             <DialogTitle>{movementType === "in" ? "Stock Added" : "Stock Removed"} - {movementRow?.productName}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-1.5">
+          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
+            <div className="space-y-1.5">
             <Label>Quantity</Label>
             <Input
               type="number"
@@ -384,6 +388,10 @@ const Inventory = () => {
             {movementType === "out" && (
               <p className="text-xs text-muted-foreground">Available to remove: {movementRow?.available ?? 0}</p>
             )}
+            {movementType === "in" && (
+              <div className="h-5" />
+            )}
+          </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setMovementRow(null)} disabled={busy}>

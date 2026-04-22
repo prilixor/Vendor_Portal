@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink } from "@/app/components/shared/NavLink";
 import { useLocation } from "react-router-dom";
-import { ChevronLeft, Sparkles } from "lucide-react";
+import { ChevronLeft, Sparkles, X } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
 import { NavSection } from "@/app/helpers/navigation";
 import { Badge } from "@/app/components/ui/badge";
@@ -9,9 +9,11 @@ import { Badge } from "@/app/components/ui/badge";
 interface SidebarProps {
   sections: NavSection[];
   brandLabel: string;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export const Sidebar = ({ sections, brandLabel }: SidebarProps) => {
+export const Sidebar = ({ sections, brandLabel, isOpen, onClose }: SidebarProps) => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
 
@@ -21,12 +23,21 @@ export const Sidebar = ({ sections, brandLabel }: SidebarProps) => {
   return (
     <aside
       className={cn(
-        "sticky top-0 h-screen shrink-0 border-r border-sidebar-border bg-sidebar transition-[width] duration-300 ease-out flex flex-col",
-        collapsed ? "w-[72px]" : "w-[260px]"
+        "fixed inset-y-0 left-0 z-50 flex flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-300 ease-out lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
+        isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+        collapsed ? "lg:w-[72px]" : "lg:w-[260px] w-[260px]"
       )}
     >
       {/* Brand */}
       <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
+        {/* Close button for mobile */}
+        <button
+          onClick={onClose}
+          className="absolute right-3 top-4 z-50 flex h-8 w-8 items-center justify-center rounded-full border-0 bg-background text-muted-foreground shadow-md hover:bg-muted lg:hidden"
+          aria-label="Close menu"
+        >
+          <X className="h-4 w-4" />
+        </button>
         <div className="flex items-center gap-2.5 overflow-hidden">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
             <Sparkles className="h-5 w-5 text-primary-foreground" />
@@ -98,7 +109,7 @@ export const Sidebar = ({ sections, brandLabel }: SidebarProps) => {
 
       {/* Footer hint */}
       {!collapsed && (
-        <div className="m-3 rounded-xl bg-gradient-soft p-3 text-xs">
+        <div className="m-3 hidden rounded-xl bg-gradient-soft p-3 text-xs lg:block">
           <p className="font-semibold">Need help?</p>
           <p className="mt-0.5 text-muted-foreground">Check the docs or chat with support.</p>
         </div>

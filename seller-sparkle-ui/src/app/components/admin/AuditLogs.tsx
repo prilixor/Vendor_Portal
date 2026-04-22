@@ -23,8 +23,8 @@ const AuditLogs = () => {
     <div>
       <PageHeader title="Audit logs" description="Track every important action taken by admins and the system." />
 
-      <Card className="border-border/60">
-        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center">
+      <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
+        <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center">
           <div className="relative w-full sm:max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search action or entity…" className="pl-9" />
@@ -37,8 +37,8 @@ const AuditLogs = () => {
             </SelectContent>
           </Select>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full min-w-[700px] text-sm">
             <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-semibold">Action</th>

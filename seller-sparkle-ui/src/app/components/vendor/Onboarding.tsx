@@ -7,6 +7,7 @@ import { Stepper } from "@/app/components/shared/Stepper";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { MapPicker } from "@/app/components/shared/MapPicker";
+import { FormGrid } from "@/app/components/shared/FormGrid";
 import { mockBankDetails, mockBusinessProfile } from "@/app/services/mockData";
 import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye } from "lucide-react";
 import { toast } from "sonner";
@@ -27,7 +28,7 @@ const Onboarding = () => {
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState(mockBusinessProfile);
   const [documents, setDocuments] = useState<VendorDocument[]>([]);
-  const [bank, setBank] = useState({ ...mockBankDetails, status: "pending" as const });
+  const [bank, setBank] = useState({ ...mockBankDetails, status: "pending" as VerificationStatus });
   const [submission, setSubmission] = useState<VerificationStatus>("pending");
   const [documentType, setDocumentType] = useState("GST Certificate");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -275,12 +276,13 @@ const Onboarding = () => {
         description="Complete all steps to get verified and start listing products."
       />
 
-      <Card className="p-6 sm:p-8 shadow-elegant border-border/60">
-        <div className="mb-8">
+      <Card className="p-4 sm:p-6 lg:p-8 shadow-elegant border-border/60">
+        <div className="mb-6">
           <Stepper steps={steps} current={step} onStepClick={setStep} />
         </div>
 
-        {/* STEP 1 */}
+        <div className="max-h-[calc(100vh-280px)] overflow-y-auto px-1">
+          {/* STEP 1 */}
         {step === 0 && (
           <div className="space-y-5 max-w-xl animate-fade-in">
             <h2 className="text-lg font-semibold">Basic information</h2>
@@ -306,17 +308,17 @@ const Onboarding = () => {
         {step === 1 && (
           <div className="space-y-5 animate-fade-in">
             <h2 className="text-lg font-semibold">Business profile</h2>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <FormGrid cols={2}>
               <Field label="Business name" value={profile.businessName} onChange={(v) => updateProfile("businessName", v)} />
               <Field label="Owner name" value={profile.ownerName} onChange={(v) => updateProfile("ownerName", v)} />
               <Field label="Phone" value={profile.phone} onChange={(v) => updateProfile("phone", v)} />
               <Field label="GST number" value={profile.gstNumber} onChange={(v) => updateProfile("gstNumber", v)} />
-              <Field className="md:col-span-2" label="Address line 1" value={profile.addressLine1} onChange={(v) => updateProfile("addressLine1", v)} />
-              <Field className="md:col-span-2" label="Address line 2 (optional)" value={profile.addressLine2 ?? ""} onChange={(v) => updateProfile("addressLine2", v)} />
+              <Field className="sm:col-span-2" label="Address line 1" value={profile.addressLine1} onChange={(v) => updateProfile("addressLine1", v)} />
+              <Field className="sm:col-span-2" label="Address line 2 (optional)" value={profile.addressLine2 ?? ""} onChange={(v) => updateProfile("addressLine2", v)} />
               <Field label="City" value={profile.city} onChange={(v) => updateProfile("city", v)} />
               <Field label="State" value={profile.state} onChange={(v) => updateProfile("state", v)} />
               <Field label="Postal code" value={profile.postalCode} onChange={(v) => updateProfile("postalCode", v)} />
-            </div>
+            </FormGrid>
             <div className="space-y-2 pt-2">
               <Label>Pin your business location</Label>
               <MapPicker
@@ -336,7 +338,7 @@ const Onboarding = () => {
           <div className="space-y-5 animate-fade-in">
             <div className="space-y-3">
               <h2 className="text-lg font-semibold">Document verification</h2>
-              <div className="grid grid-cols-1 gap-3 rounded-xl border border-border p-3 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 rounded-xl border border-border p-3 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label>Document type</Label>
                   <select
@@ -366,8 +368,8 @@ const Onboarding = () => {
                 </div>
               </div>
             </div>
-            <div className="overflow-hidden rounded-xl border border-border">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <table className="w-full min-w-[600px] text-sm">
                 <thead className="bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 font-semibold">Document</th>
@@ -424,12 +426,12 @@ const Onboarding = () => {
               <h2 className="text-lg font-semibold">Bank details</h2>
               <StatusBadge status={bank.status} />
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormGrid cols={2}>
               <Field label="Account holder name" value={bank.accountHolderName} onChange={(v) => updateBank("accountHolderName", v)} />
               <Field label="Bank name" value={bank.bankName} onChange={(v) => updateBank("bankName", v)} />
               <Field label="Account number" value={bank.accountNumber} onChange={(v) => updateBank("accountNumber", v)} />
               <Field label="IFSC code" value={bank.ifscCode} onChange={(v) => updateBank("ifscCode", v)} />
-            </div>
+            </FormGrid>
             <div className="rounded-lg border border-info/20 bg-info-soft p-3 text-xs text-info">
               <ShieldCheck className="mr-1.5 inline h-4 w-4" />
               Bank details are encrypted and used only for payouts.
@@ -457,20 +459,21 @@ const Onboarding = () => {
             </div>
           </div>
         )}
+        </div>
 
         {/* Footer actions */}
         {step < 4 && (
-          <div className="mt-8 flex items-center justify-between border-t border-border pt-5">
-            <Button variant="ghost" onClick={prev} disabled={step === 0}>
+          <div className="mt-6 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <Button variant="ghost" onClick={prev} disabled={step === 0} className="w-full sm:w-auto">
               <ArrowLeft className="mr-2 h-4 w-4" /> Back
             </Button>
-            <p className="text-xs text-muted-foreground">Step {step + 1} of {steps.length}</p>
+            <p className="text-xs text-muted-foreground text-center sm:text-right">Step {step + 1} of {steps.length}</p>
             {step === 3 ? (
-              <Button onClick={submit} className="bg-gradient-primary shadow-glow" disabled={busy}>
+              <Button onClick={submit} className="bg-gradient-primary shadow-glow w-full sm:w-auto" disabled={busy}>
                 Submit for verification
               </Button>
             ) : (
-              <Button onClick={handleContinue} disabled={busy}>
+              <Button onClick={handleContinue} className="w-full sm:w-auto" disabled={busy}>
                 Continue <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             )}
