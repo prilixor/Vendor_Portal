@@ -1,4 +1,5 @@
 using Prilixor.VendorPortal.Domain.Vendors;
+using Prilixor.VendorPortal.Domain.Auth;
 using Prilixor.Shared.Abstractions.DB;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,6 +27,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<VendorNotification> VendorNotifications => Set<VendorNotification>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
     public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -474,6 +476,19 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
             entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+        });
+
+        modelBuilder.Entity<PasswordResetToken>(entity =>
+        {
+            entity.ToTable("password_reset_tokens");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.Email).HasColumnName("email");
+            entity.Property(x => x.Token).HasColumnName("token");
+            entity.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(x => x.IsUsed).HasColumnName("is_used");
+            entity.Property(x => x.UsedAt).HasColumnName("used_at");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
         });
     }
 }

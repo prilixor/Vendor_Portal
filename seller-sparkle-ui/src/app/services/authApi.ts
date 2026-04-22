@@ -38,6 +38,26 @@ export interface ChangePasswordResponse {
   updatedAt: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
+export interface ResetPasswordResponse {
+  success: boolean;
+  message: string;
+}
+
 export const authApi = {
   async login(email: string, password: string, role: Role): Promise<{ token: string; user: User }> {
     const response = await apiClient.post<LoginResponse>('/auth/login', {
@@ -68,6 +88,18 @@ export const authApi = {
 
   async changePassword(payload: ChangePasswordPayload): Promise<ChangePasswordResponse> {
     return apiClient.post<ChangePasswordResponse>('/auth/change-password', payload);
+  },
+
+  async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
+    return apiClient.post<ForgotPasswordResponse>('/auth/forgot-password', { email });
+  },
+
+  async resetPassword(token: string, newPassword: string, confirmPassword: string): Promise<ResetPasswordResponse> {
+    return apiClient.post<ResetPasswordResponse>('/auth/reset-password', {
+      token,
+      newPassword,
+      confirmPassword,
+    });
   },
 
   logout(): void {

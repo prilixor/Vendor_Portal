@@ -1,4 +1,5 @@
 using Prilixor.VendorPortal.Domain.Vendors;
+using Prilixor.VendorPortal.Domain.Auth;
 
 namespace Prilixor.VendorPortal.Application.Abstractions;
 
@@ -81,6 +82,10 @@ public interface IVendorOnboardingRepository
 
     Task AddAdminAuditLogAsync(AdminAuditLog auditLog, CancellationToken cancellationToken);
     Task<List<AdminAuditLog>> GetAdminAuditLogsAsync(Guid? adminUserId, CancellationToken cancellationToken);
+
+    Task<PasswordResetToken?> GetPasswordResetTokenAsync(string token, CancellationToken cancellationToken);
+    Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken);
+    Task MarkPasswordResetTokenAsUsedAsync(string token, CancellationToken cancellationToken);
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

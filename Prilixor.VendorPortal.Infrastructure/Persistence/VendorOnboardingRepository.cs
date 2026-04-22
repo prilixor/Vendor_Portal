@@ -1,5 +1,6 @@
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Vendors;
+using Prilixor.VendorPortal.Domain.Auth;
 using Prilixor.Shared.Abstractions.DI;
 using Microsoft.EntityFrameworkCore;
 
@@ -423,6 +424,30 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
         return query
             .OrderByDescending(x => x.CreatedOnUtc)
             .ToListAsync(cancellationToken);
+    }
+
+    public Task<PasswordResetToken?> GetPasswordResetTokenAsync(string token, CancellationToken cancellationToken)
+    {
+        return dbContext.PasswordResetTokens
+            .FirstOrDefaultAsync(x => x.Token == token, cancellationToken);
+    }
+
+    public async Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken)
+    {
+        await dbContext.PasswordResetTokens.AddAsync(token, cancellationToken);
+    }
+
+    public async Task MarkPasswordResetTokenAsUsedAsync(string token, CancellationToken cancellationToken)
+    {
+        var resetToken = await dbContext.PasswordResetTokens
+            .FirstOrDefaultAsync(x => x.Token == token, cancellationToken);
+        
+        if (resetToken != null)
+        {
+            resetToken.IsUsed = true;
+            resetToken.UsedAt = DateTimeOffset.UtcNow;
+            dbContext.PasswordResetTokens.Update(resetToken);
+        }
     }
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken)

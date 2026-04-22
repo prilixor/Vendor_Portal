@@ -2,6 +2,7 @@ using FastEndpoints;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.IdentityModel.Tokens;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Domain.Auth;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Infrastructure.Persistence;
 using System.IdentityModel.Tokens.Jwt;
@@ -28,6 +29,22 @@ public sealed class ChangePasswordRequest
 }
 
 public sealed record ChangePasswordResponse(bool Success, string Message, DateTimeOffset UpdatedAt);
+
+public sealed class ForgotPasswordRequest
+{
+    public string Email { get; set; } = string.Empty;
+}
+
+public sealed record ForgotPasswordResponse(bool Success, string Message);
+
+public sealed class ResetPasswordRequest
+{
+    public string Token { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
+    public string ConfirmPassword { get; set; } = string.Empty;
+}
+
+public sealed record ResetPasswordResponse(bool Success, string Message);
 
 public sealed class LoginEndpoint(
     IConfiguration configuration,
@@ -181,3 +198,151 @@ public sealed class ChangePasswordEndpoint(
     }
 }
 
+public sealed class ForgotPasswordEndpoint(
+    IVendorOnboardingRepository repository,
+    IEmailService emailService)
+    : Endpoint<ForgotPasswordRequest, Results<Ok<ForgotPasswordResponse>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("auth/forgot-password");
+        AllowAnonymous();
+    }
+
+    public override async Task<Results<Ok<ForgotPasswordResponse>, ProblemHttpResult>> ExecuteAsync(ForgotPasswordRequest req, CancellationToken ct)
+    {
+        var email = (req.Email ?? string.Empty).Trim().ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return TypedResults.Problem(title: "auth.invalid_email", detail: "Email is required.", statusCode: 400);
+        }
+
+        // Check if email exists in vendors or admin_users
+        var vendor = await repository.GetVendorByEmailAsync(email, ct);
+        var admin = await repository.GetAdminUserByEmailAsync(email, ct);
+
+        if (vendor != null || admin != null)
+        {
+            // Generate secure token
+            var token = Guid.NewGuid().ToString();
+            var resetToken = new PasswordResetToken
+            {
+                Id = Guid.NewGuid(),
+                Email = email,
+                Token = token,
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
+                IsUsed = false,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+
+            await repository.AddPasswordResetTokenAsync(resetToken, ct);
+            await repository.SaveChangesAsync(ct);
+
+            // Send reset link email
+            var resetLink = $"http://localhost:5173/reset-password?token={token}";
+            var subject = "Reset Your Password";
+            var body = $@"
+                <h2>Password Reset Request</h2>
+                <p>You requested a password reset for your account.</p>
+                <p>Click the link below to reset your password:</p>
+                <p><a href='{resetLink}'>Reset Password</a></p>
+                <p>This link will expire in 15 minutes.</p>
+                <p>If you didn't request this, please ignore this email.</p>
+            ";
+
+            try
+            {
+                await emailService.SendEmailAsync(email, subject, body, ct);
+            }
+            catch
+            {
+                // Log error but don't fail the request
+            }
+        }
+
+        // Always return success (don't reveal if email exists)
+        return TypedResults.Ok(new ForgotPasswordResponse(true, "If the email exists, a reset link has been sent."));
+    }
+}
+
+public sealed class ResetPasswordEndpoint(
+    IVendorOnboardingRepository repository,
+    IPasswordHasherService passwordHasher)
+    : Endpoint<ResetPasswordRequest, Results<Ok<ResetPasswordResponse>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("auth/reset-password");
+        AllowAnonymous();
+    }
+
+    public override async Task<Results<Ok<ResetPasswordResponse>, ProblemHttpResult>> ExecuteAsync(ResetPasswordRequest req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.Token))
+        {
+            return TypedResults.Problem(title: "auth.invalid_token", detail: "Token is required.", statusCode: 400);
+        }
+
+        if (string.IsNullOrWhiteSpace(req.NewPassword) || string.IsNullOrWhiteSpace(req.ConfirmPassword))
+        {
+            return TypedResults.Problem(title: "auth.invalid_password", detail: "New password and confirm password are required.", statusCode: 400);
+        }
+
+        if (req.NewPassword.Length < 8)
+        {
+            return TypedResults.Problem(title: "auth.invalid_password", detail: "Password must be at least 8 characters.", statusCode: 400);
+        }
+
+        if (req.NewPassword != req.ConfirmPassword)
+        {
+            return TypedResults.Problem(title: "auth.password_mismatch", detail: "Passwords do not match.", statusCode: 400);
+        }
+
+        // Validate token
+        var resetToken = await repository.GetPasswordResetTokenAsync(req.Token, ct);
+        if (resetToken == null)
+        {
+            return TypedResults.Problem(title: "auth.invalid_token", detail: "Invalid or expired token.", statusCode: 400);
+        }
+
+        if (resetToken.IsUsed)
+        {
+            return TypedResults.Problem(title: "auth.token_used", detail: "This token has already been used.", statusCode: 400);
+        }
+
+        if (resetToken.ExpiresAt < DateTimeOffset.UtcNow)
+        {
+            return TypedResults.Problem(title: "auth.token_expired", detail: "Token has expired.", statusCode: 400);
+        }
+
+        // Find user by email
+        var vendor = await repository.GetVendorByEmailAsync(resetToken.Email, ct);
+        var admin = await repository.GetAdminUserByEmailAsync(resetToken.Email, ct);
+
+        if (vendor != null)
+        {
+            vendor.PasswordHash = passwordHasher.HashPassword(req.NewPassword);
+            await repository.UpdateVendorAsync(vendor, ct);
+        }
+        else if (admin != null)
+        {
+            if (admin.IsDeleted || !admin.IsActive)
+            {
+                return TypedResults.Problem(title: "auth.user_not_found", detail: "User not found or inactive.", statusCode: 404);
+            }
+            admin.PasswordHash = passwordHasher.HashPassword(req.NewPassword);
+            await repository.SaveChangesAsync(ct);
+        }
+        else
+        {
+            return TypedResults.Problem(title: "auth.user_not_found", detail: "User not found.", statusCode: 404);
+        }
+
+        // Mark token as used
+        await repository.MarkPasswordResetTokenAsUsedAsync(req.Token, ct);
+        await repository.SaveChangesAsync(ct);
+
+        return TypedResults.Ok(new ResetPasswordResponse(true, "Password reset successfully."));
+    }
+}

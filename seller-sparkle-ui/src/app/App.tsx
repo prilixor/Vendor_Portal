@@ -10,6 +10,8 @@ import Index from "@/app/components/common/Index";
 import NotFound from "@/app/components/common/NotFound";
 import Login from "@/app/components/auth/Login";
 import Register from "@/app/components/auth/Register";
+import ForgotPassword from "@/app/components/auth/ForgotPassword";
+import ResetPassword from "@/app/components/auth/ResetPassword";
 
 import VendorDashboard from "@/app/components/vendor/Dashboard";
 import Onboarding from "@/app/components/vendor/Onboarding";
@@ -41,6 +43,8 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
 
             <Route path="/vendor" element={<AppShell variant="vendor" />}>
               <Route index element={<VendorDashboard />} />

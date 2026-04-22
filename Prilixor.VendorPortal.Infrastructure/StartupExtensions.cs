@@ -1,5 +1,7 @@
+using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Infrastructure.Persistence;
+using Prilixor.VendorPortal.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +24,8 @@ namespace Prilixor.VendorPortal.Infrastructure
                 cfg.EnableDetailedErrors(databaseOptions?.EnableDetailedErrors ?? false);
             });
 
+            services.AddScoped<IEmailService, SmtpEmailService>();
+
             return services;
         }
 
@@ -29,6 +33,9 @@ namespace Prilixor.VendorPortal.Infrastructure
         {
             services.Configure<DataBaseOptions>(
                 configuration.GetSection(nameof(ApplicationOptions.DataBaseOptions)));
+
+            services.Configure<SmtpOptions>(
+                configuration.GetSection(nameof(SmtpOptions)));
 
             return services;
         }
