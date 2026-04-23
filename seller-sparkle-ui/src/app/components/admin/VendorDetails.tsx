@@ -59,25 +59,23 @@ import {
 import { toast } from "sonner";
 
 
+const dayLabel: Record<number, string> = {
 
-const dayLabel: Record<string, string> = {
+  0: "Monday",
 
-  mon: "Monday",
+  1: "Tuesday",
 
-  tue: "Tuesday",
+  2: "Wednesday",
 
-  wed: "Wednesday",
+  3: "Thursday",
 
-  thu: "Thursday",
+  4: "Friday",
 
-  fri: "Friday",
+  5: "Saturday",
 
-  sat: "Saturday",
-
-  sun: "Sunday",
+  6: "Sunday",
 
 };
-
 
 
 const vendorTabs = ["profile", "docs", "bank", "areas", "hours", "products"] as const;
@@ -742,11 +740,13 @@ const VendorDetails = () => {
 
             <div className="space-y-2">
 
-              {workingHours.map((h) => (
+              {workingHours
+                .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
+                .map((h) => (
 
                 <div key={h.id} className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
 
-                  <span className="font-medium">{dayLabel[["mon", "tue", "wed", "thu", "fri", "sat", "sun"][h.dayOfWeek - 1]] || `Day ${h.dayOfWeek}`}</span>
+                  <span className="font-medium">{dayLabel[h.dayOfWeek] || `Day ${h.dayOfWeek}`}</span>
 
                   {h.isOpen ? (
 
