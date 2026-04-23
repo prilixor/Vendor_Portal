@@ -39,6 +39,15 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
   if (isHydrating) return <div className="min-h-screen w-full bg-background" />;
 
+  // Auth check - redirect if not authenticated or wrong role
+  if (variant === "admin" && (!user || user.role !== "admin")) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
+  if (variant === "vendor" && (!user || user.role !== "vendor")) {
+    return <Navigate to="/login" replace />;
+  }
+
 
 
 

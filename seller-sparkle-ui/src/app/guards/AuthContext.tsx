@@ -41,7 +41,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (raw) {
         try {
           const parsedUser = JSON.parse(raw);
-          console.log("AuthContext: Loaded vendor user from localStorage", parsedUser);
           setUser(parsedUser);
         } catch {
           localStorage.removeItem(STORAGE_KEY);
