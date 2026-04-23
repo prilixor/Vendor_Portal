@@ -49,7 +49,7 @@ builder.Services.AddCors(options =>
     {
         if (corsOptions?.Origins != null && corsOptions.Origins.Length > 0)
         {
-            policy.WithOrigins("https://vendor-portal-psi-amber.vercel.app/", "https://localhost:7257/api")
+            policy.WithOrigins("https://vendor-portal-psi-amber.vercel.app", "https://localhost:7257/api")
                   .AllowAnyHeader()
                   .AllowAnyMethod();
         }
