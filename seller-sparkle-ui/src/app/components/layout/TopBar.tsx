@@ -48,31 +48,20 @@ export const TopBar = ({ onMenuClick, unreadNotifications = 0 }: TopBarProps) =>
           {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
 
-<<<<<<< HEAD
-        {user?.role !== "admin" && (
+{user?.role !== "admin" && (
           <Button
             variant="ghost"
             size="icon"
             onClick={() => navigate("/vendor/notifications")}
             aria-label="Notifications"
+            className="relative"
           >
             <Bell className="h-4 w-4" />
+            {unreadNotifications > 0 && (
+              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive ring-2 ring-background" />
+            )}
           </Button>
         )}
-=======
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate(user?.role === "admin" ? "/admin" : "/vendor/notifications")}
-          aria-label="Notifications"
-          className="relative"
-        >
-          <Bell className="h-4 w-4" />
-          {unreadNotifications > 0 && (
-            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive ring-2 ring-background" />
-          )}
-        </Button>
->>>>>>> 0399c18d534dc3e3b50b0cd688f56bb05ae59ef6
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

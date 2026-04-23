@@ -22,6 +22,10 @@ const Vendors = () => {
 
   const [loading, setLoading] = useState(false);
 
+  const [documentCounts, setDocumentCounts] = useState<Record<string, number>>({});
+
+  const [listingCounts, setListingCounts] = useState<Record<string, number>>({});
+
 
 
   useEffect(() => {
@@ -41,6 +45,29 @@ const Vendors = () => {
       const data = await adminApi.getVendors();
 
       setVendors(data);
+
+      // Fetch document and listing counts for each vendor
+      const docCounts: Record<string, number> = {};
+      const listCounts: Record<string, number> = {};
+
+      await Promise.all(data.map(async (v) => {
+        try {
+          const docs = await adminApi.getVendorDocuments(v.id);
+          docCounts[v.id] = docs.length;
+        } catch {
+          docCounts[v.id] = 0;
+        }
+
+        try {
+          const listings = await adminApi.getVendorProductListings(v.id);
+          listCounts[v.id] = listings.length;
+        } catch {
+          listCounts[v.id] = 0;
+        }
+      }));
+
+      setDocumentCounts(docCounts);
+      setListingCounts(listCounts);
 
     } catch (error) {
 
@@ -112,7 +139,7 @@ const Vendors = () => {
 
                   <div>
 
-                    <p className="text-lg font-bold">-</p>
+                    <p className="text-lg font-bold">{documentCounts[v.id] ?? 0}</p>
 
                     <p className="text-muted-foreground">Documents</p>
 
@@ -120,7 +147,7 @@ const Vendors = () => {
 
                   <div>
 
-                    <p className="text-lg font-bold">-</p>
+                    <p className="text-lg font-bold">{listingCounts[v.id] ?? 0}</p>
 
                     <p className="text-muted-foreground">Listings</p>
 
