@@ -52,18 +52,22 @@ internal sealed class ApproveVendorCommandHandler(
             return Result.Failure<VendorDto>(new Error("vendors.invalid_status", "Vendor must be in pending status to be approved.", ErrorCategory.Validation));
         }
 
-        // Validate all documents are approved
-        var allDocumentsApproved = await repository.AreAllVendorDocumentsApprovedAsync(vendorId, cancellationToken);
-        if (!allDocumentsApproved)
+        // Approve all pending documents
+        var documents = await repository.GetVendorDocumentsAsync(vendorId, cancellationToken);
+        foreach (var doc in documents.Where(d => d.VerificationStatus != "approved"))
         {
-            return Result.Failure<VendorDto>(new Error("vendors.documents_not_approved", "All vendor documents must be approved before approving the vendor.", ErrorCategory.Validation));
+            doc.VerificationStatus = "approved";
+            doc.VerifiedAt = DateTime.UtcNow;
+            await repository.UpdateVendorDocumentAsync(doc, cancellationToken);
         }
 
-        // Validate at least one bank account is approved
+        // Approve all pending bank accounts
         var bankAccounts = await repository.GetVendorBankAccountsAsync(vendorId, cancellationToken);
-        if (bankAccounts.Count == 0 || !bankAccounts.Any(b => b.VerificationStatus == "approved"))
+        foreach (var bank in bankAccounts.Where(b => b.VerificationStatus != "approved"))
         {
-            return Result.Failure<VendorDto>(new Error("vendors.bank_not_approved", "At least one bank account must be approved before approving the vendor.", ErrorCategory.Validation));
+            bank.VerificationStatus = "approved";
+            bank.VerifiedAt = DateTime.UtcNow;
+            await repository.UpdateVendorBankAccountAsync(bank, cancellationToken);
         }
 
         // Approve vendor

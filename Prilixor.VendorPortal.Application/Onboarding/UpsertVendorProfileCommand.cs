@@ -74,6 +74,35 @@ internal sealed class UpsertVendorProfileCommandHandler(IVendorOnboardingReposit
 
         await repository.UpsertVendorProfileAsync(profile, cancellationToken);
 
+        // Create or update service area if latitude/longitude are provided
+        if (request.Latitude.HasValue && request.Longitude.HasValue)
+        {
+            var existingServiceArea = await repository.GetVendorServiceAreasAsync(vendorId, cancellationToken);
+            var businessPinArea = existingServiceArea.FirstOrDefault(sa => sa.AreaName == "Business Location");
+
+            if (businessPinArea is null)
+            {
+                businessPinArea = new VendorServiceArea
+                {
+                    VendorId = vendorId,
+                    AreaName = "Business Location",
+                    City = request.City,
+                    CenterLatitude = request.Latitude.Value,
+                    CenterLongitude = request.Longitude.Value,
+                    ServiceRadiusKm = 5, // Default 5km radius
+                    IsActive = true
+                };
+                await repository.AddVendorServiceAreaAsync(businessPinArea, cancellationToken);
+            }
+            else
+            {
+                businessPinArea.City = request.City;
+                businessPinArea.CenterLatitude = request.Latitude.Value;
+                businessPinArea.CenterLongitude = request.Longitude.Value;
+                businessPinArea.IsActive = true;
+            }
+        }
+
         vendor.RegistrationStage = "profile_pending";
         await repository.SaveChangesAsync(cancellationToken);
 

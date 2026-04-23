@@ -48,6 +48,7 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
+  RefreshCw,
   Eye,
   MoreVertical,
   Ban,
@@ -127,6 +128,17 @@ const VendorDetails = () => {
 
     loadVendorData(vendorId);
 
+  }, [vendorId]);
+
+  // Auto-refresh vendor data every 10 seconds
+  useEffect(() => {
+    if (!vendorId) return;
+
+    const interval = setInterval(() => {
+      loadVendorData(vendorId);
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, [vendorId]);
 
 
@@ -583,7 +595,18 @@ const VendorDetails = () => {
 
               <h3 className="font-semibold">Documents</h3>
 
-              <p className="text-xs text-muted-foreground">{documents.length} uploaded</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-muted-foreground">{documents.length} uploaded</p>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => vendorId && loadVendorData(vendorId)}
+                  className="h-7 w-7"
+                  aria-label="Refresh documents"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </Button>
+              </div>
 
             </div>
 

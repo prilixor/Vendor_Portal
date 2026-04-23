@@ -6,13 +6,13 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
-import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw, FileText, Eye, Building } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { Textarea } from "@/app/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { adminApi, VendorDto } from "@/app/services/adminApi";
+import { adminApi, VendorDto, VendorDocumentDto, VendorBankAccountDto } from "@/app/services/adminApi";
 
 const getAdminUserId = () => {
   const adminUser = localStorage.getItem("adminUser");
@@ -38,10 +38,93 @@ const Verification = () => {
   const [reason, setReason] = useState("");
   const [actionType, setActionType] = useState<"reject" | "suspend" | "ban" | "reactivate">("reject");
   const [verifying, setVerifying] = useState(false);
+  const [documents, setDocuments] = useState<VendorDocumentDto[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState<VendorBankAccountDto[]>([]);
+  const [loadingBanks, setLoadingBanks] = useState(false);
 
   useEffect(() => {
     loadVendors();
   }, []);
+
+  // Load documents when a vendor is selected
+  useEffect(() => {
+    if (selected) {
+      loadDocuments(selected.id);
+      loadBankAccounts(selected.id);
+    } else {
+      setDocuments([]);
+      setBankAccounts([]);
+    }
+  }, [selected]);
+
+  // Auto-refresh documents every 10 seconds when dialog is open
+  useEffect(() => {
+    if (!selected) return;
+
+    const interval = setInterval(() => {
+      loadDocuments(selected.id);
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [selected]);
+
+  const loadDocuments = async (vendorId: string) => {
+    setLoadingDocs(true);
+    try {
+      const docs = await adminApi.getVendorDocuments(vendorId);
+      setDocuments(docs);
+    } catch (error) {
+      console.error("Failed to load documents:", error);
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
+
+  const loadBankAccounts = async (vendorId: string) => {
+    setLoadingBanks(true);
+    try {
+      const banks = await adminApi.getVendorBankAccounts(vendorId);
+      setBankAccounts(banks);
+    } catch (error) {
+      console.error("Failed to load bank accounts:", error);
+    } finally {
+      setLoadingBanks(false);
+    }
+  };
+
+  const previewDoc = (doc: VendorDocumentDto) => {
+    if (!doc.fileUrl) {
+      toast.info("Preview is available for uploaded files.");
+      return;
+    }
+    const previewUrl = getPreviewUrl(doc.fileUrl);
+    const popup = window.open(previewUrl, "_blank", "noopener,noreferrer");
+    if (!popup) {
+      toast.error("Popup blocked. Please allow popups for this site.");
+      return;
+    }
+    if (previewUrl !== doc.fileUrl) {
+      setTimeout(() => URL.revokeObjectURL(previewUrl), 60_000);
+    }
+  };
+
+  const getPreviewUrl = (fileUrl: string): string => {
+    if (!fileUrl.startsWith("data:")) return fileUrl;
+    try {
+      const [meta, data] = fileUrl.split(",");
+      if (!meta || !data) return fileUrl;
+      const mime = meta.match(/data:(.*?);base64/)?.[1] ?? "application/octet-stream";
+      const binary = atob(data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return URL.createObjectURL(new Blob([bytes], { type: mime }));
+    } catch {
+      return fileUrl;
+    }
+  };
 
   const loadVendors = async () => {
     setLoading(true);
@@ -68,7 +151,8 @@ const Verification = () => {
       // TODO: Get adminUserId from auth context
       const adminUserId = getAdminUserId() || "";
       await adminApi.approveVendor({ adminUserId, vendorId: id });
-      setVendors((arr) => arr.map((v) => (v.id === id ? { ...v, accountStatus: "active" } : v)));
+      // Reload vendors to get updated status from backend
+      await loadVendors();
       setSelected(null);
       toast.success("Vendor approved");
     } catch (error) {
@@ -85,7 +169,7 @@ const Verification = () => {
       // TODO: Get adminUserId from auth context
       const adminUserId = getAdminUserId() || "";
       await adminApi.rejectVendor({ adminUserId, vendorId: id, reason });
-      setVendors((arr) => arr.map((v) => (v.id === id ? { ...v, accountStatus: "rejected" } : v)));
+      await loadVendors();
       setSelected(null);
       setReason("");
       setRejectOpen(false);
@@ -103,7 +187,7 @@ const Verification = () => {
     try {
       const adminUserId = getAdminUserId() || "";
       await adminApi.suspendVendor({ adminUserId, vendorId: id, reason });
-      setVendors((arr) => arr.map((v) => (v.id === id ? { ...v, accountStatus: "suspended" } : v)));
+      await loadVendors();
       setSelected(null);
       setReason("");
       setRejectOpen(false);
@@ -121,7 +205,7 @@ const Verification = () => {
     try {
       const adminUserId = getAdminUserId() || "";
       await adminApi.banVendor({ adminUserId, vendorId: id, reason });
-      setVendors((arr) => arr.map((v) => (v.id === id ? { ...v, accountStatus: "banned" } : v)));
+      await loadVendors();
       setSelected(null);
       setReason("");
       setRejectOpen(false);
@@ -139,7 +223,7 @@ const Verification = () => {
     try {
       const adminUserId = getAdminUserId() || "";
       await adminApi.reactivateVendor({ adminUserId, vendorId: id, reason });
-      setVendors((arr) => arr.map((v) => (v.id === id ? { ...v, accountStatus: "active" } : v)));
+      await loadVendors();
       setSelected(null);
       setReason("");
       setRejectOpen(false);
@@ -241,8 +325,77 @@ const Verification = () => {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-                <p>For detailed vendor information (documents, bank details, profile), please use the Vendor Details page.</p>
+              <div className="rounded-lg border border-border p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="font-semibold">Documents</h4>
+                  <span className="text-xs text-muted-foreground">{documents.length} uploaded</span>
+                </div>
+                {loadingDocs ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : documents.length > 0 ? (
+                  <div className="space-y-2">
+                    {documents.map((d) => (
+                      <div key={d.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-primary" />
+                          <div>
+                            <p className="text-sm font-medium">{d.documentType}</p>
+                            <p className="text-xs text-muted-foreground">{d.documentNumber || "No number"}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <StatusBadge status={d.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => previewDoc(d)}
+                            className="h-7 w-7"
+                            aria-label="Preview document"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                    No documents uploaded.
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-border p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="font-semibold">Bank Accounts</h4>
+                  <span className="text-xs text-muted-foreground">{bankAccounts.length} added</span>
+                </div>
+                {loadingBanks ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : bankAccounts.length > 0 ? (
+                  <div className="space-y-2">
+                    {bankAccounts.map((b) => (
+                      <div key={b.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+                        <div className="flex items-center gap-2">
+                          <Building className="h-4 w-4 text-primary" />
+                          <div>
+                            <p className="text-sm font-medium">{b.bankName}</p>
+                            <p className="text-xs text-muted-foreground">{b.accountHolderName} ••••{b.accountNumber.slice(-4)}</p>
+                          </div>
+                        </div>
+                        <StatusBadge status={b.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                    No bank accounts added.
+                  </div>
+                )}
               </div>
             </div>
             </div>

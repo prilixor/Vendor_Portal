@@ -466,10 +466,7 @@ const Onboarding = () => {
         {/* STEP 4 */}
         {step === 3 && (
           <div className="space-y-5 max-w-2xl animate-fade-in">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Bank details</h2>
-              <StatusBadge status={bank.status} />
-            </div>
+            <h2 className="text-lg font-semibold">Bank details</h2>
             <FormGrid cols={2}>
               <Field label="Account holder name" value={bank.accountHolderName} onChange={(v) => updateBank("accountHolderName", v)} />
               <Field label="Bank name" value={bank.bankName} onChange={(v) => updateBank("bankName", v)} />
