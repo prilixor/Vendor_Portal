@@ -75,6 +75,8 @@ const Products = () => {
   const [newProductModel, setNewProductModel] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const docFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -128,13 +130,16 @@ const Products = () => {
 
     const load = async () => {
       setBusy(true);
+      setLoadError(null);
       try {
         await loadCatalogAndListings();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to load product listings.";
+        setLoadError(message);
         toast.error(message);
       } finally {
         setBusy(false);
+        setHasLoaded(true);
       }
     };
 
@@ -309,13 +314,35 @@ const Products = () => {
   };
 
   const setPrimary = (id: string) => setTempImages((imgs) => imgs.map((i) => ({ ...i, primary: i.id === id })));
-  const removeImg = (id: string) => {
+  const removeImg = async (id: string) => {
+    if (!user || !mediaFor) return;
     const img = tempImages.find((i) => i.id === id);
-    if (img?.persisted) {
-      toast.info("Delete image API is not available yet.");
+    if (!img) return;
+
+    if (!img.persisted) {
+      setTempImages((imgs) => imgs.filter((i) => i.id !== id));
       return;
     }
-    setTempImages((imgs) => imgs.filter((i) => i.id !== id));
+
+    try {
+      setBusy(true);
+      await vendorOnboardingApi.deleteVendorProductImage(user.id, mediaFor.id, id);
+      const imagesRes = await vendorOnboardingApi.getVendorProductImages(user.id, mediaFor.id);
+      setTempImages(imagesRes
+        .sort((a, b) => a.displayOrder - b.displayOrder)
+        .map((serverImg) => ({
+          id: serverImg.id,
+          primary: serverImg.isPrimary,
+          url: serverImg.imageUrl,
+          persisted: true,
+        })));
+      toast.success("Image deleted");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete image.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const addImg = async (files: FileList | null) => {
@@ -410,6 +437,27 @@ const Products = () => {
     }
   };
 
+  const viewListingDoc = (fileUrl: string) => {
+    window.open(fileUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const deleteListingDoc = async (documentId: string) => {
+    if (!mediaFor || !user) return;
+
+    try {
+      setBusy(true);
+      await vendorOnboardingApi.deleteVendorProductDocument(user.id, mediaFor.id, documentId);
+      const docs = await vendorOnboardingApi.getVendorProductDocuments(user.id, mediaFor.id);
+      setListingDocuments(docs);
+      toast.success("Document deleted");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete listing document.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -423,6 +471,17 @@ const Products = () => {
       />
 
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
+        {!hasLoaded && busy && (
+          <div className="mb-4 rounded-lg border border-border bg-muted/30 px-4 py-2 text-sm text-muted-foreground">
+            Loading product listings...
+          </div>
+        )}
+        {loadError && (
+          <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-2 text-sm text-destructive">
+            {loadError}
+          </div>
+        )}
+
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -483,6 +542,15 @@ const Products = () => {
                   </td>
                 </tr>
               ))}
+              {hasLoaded && !busy && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    {products.length === 0
+                      ? "No listings created yet."
+                      : "No listings match your current search/filter."}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -640,99 +708,123 @@ const Products = () => {
         </DialogContent>
       </Dialog>
       <Dialog open={!!mediaFor} onOpenChange={(v) => !v && setMediaFor(null)}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-4xl p-0">
+          <DialogHeader className="px-4 pt-4 sm:px-6 sm:pt-6">
             <DialogTitle>Manage images</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={busy}>
-              <Upload className="mr-2 h-4 w-4" /> Upload images
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                void addImg(e.target.files);
-              }}
-            />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {tempImages.map((img, idx) => (
-                <div
-                  key={img.id}
-                  draggable
-                  onDragStart={(e) => e.dataTransfer.setData("text/plain", String(idx))}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => { e.preventDefault(); const from = +e.dataTransfer.getData("text/plain"); reorder(from, idx); }}
-                  className={`group relative aspect-square cursor-move overflow-hidden rounded-lg border-2 ${img.primary ? "border-primary ring-2 ring-primary/20" : "border-border"}`}
-                >
-                  <img src={img.url} alt={`Product image ${idx + 1}`} className="h-full w-full object-cover" />
-                  {img.primary && (
-                    <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                      <Star className="h-3 w-3" fill="currentColor" /> Primary
+          <div className="max-h-[calc(100vh-12rem)] overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
+            <Tabs defaultValue="images" className="space-y-4">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="images">Images</TabsTrigger>
+                <TabsTrigger value="documents">Documents</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="images" className="space-y-4">
+                <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={busy} className="w-full sm:w-auto">
+                  <Upload className="mr-2 h-4 w-4" /> Upload images
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    void addImg(e.target.files);
+                  }}
+                />
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {tempImages.map((img, idx) => (
+                    <div
+                      key={img.id}
+                      draggable
+                      onDragStart={(e) => e.dataTransfer.setData("text/plain", String(idx))}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => { e.preventDefault(); const from = +e.dataTransfer.getData("text/plain"); reorder(from, idx); }}
+                      className={`group relative aspect-square cursor-move overflow-hidden rounded-lg border-2 ${img.primary ? "border-primary ring-2 ring-primary/20" : "border-border"}`}
+                    >
+                      <img src={img.url} alt={`Product image ${idx + 1}`} className="h-full w-full object-cover" />
+                      {img.primary && (
+                        <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                          <Star className="h-3 w-3" fill="currentColor" /> Primary
+                        </div>
+                      )}
+                      <div className="absolute right-2 top-2 flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                        <button onClick={() => previewImage(img.url)} className="rounded-md bg-background/90 p-1 text-foreground hover:bg-background" aria-label="Preview">
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                        {!img.primary && (
+                          <button onClick={() => setPrimary(img.id)} className="rounded-md bg-background/90 p-1 text-foreground hover:bg-background" aria-label="Set primary">
+                            <Star className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button onClick={() => void removeImg(img.id)} className="rounded-md bg-background/90 p-1 text-destructive hover:bg-background" aria-label="Remove">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {tempImages.length === 0 && (
+                    <div className="col-span-2 rounded-lg border border-dashed border-border p-4 sm:p-6 text-center text-sm text-muted-foreground sm:col-span-4">
+                      No images uploaded yet.
                     </div>
                   )}
-                  <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button onClick={() => previewImage(img.url)} className="rounded-md bg-background/90 p-1 text-foreground hover:bg-background" aria-label="Preview">
-                      <Eye className="h-3.5 w-3.5" />
-                    </button>
-                    {!img.primary && (
-                      <button onClick={() => setPrimary(img.id)} className="rounded-md bg-background/90 p-1 text-foreground hover:bg-background" aria-label="Set primary">
-                        <Star className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                    <button onClick={() => removeImg(img.id)} className="rounded-md bg-background/90 p-1 text-destructive hover:bg-background" aria-label="Remove">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
                 </div>
-              ))}
-              {tempImages.length === 0 && (
-                <div className="col-span-2 rounded-lg border border-dashed border-border p-4 sm:p-6 text-center text-sm text-muted-foreground sm:col-span-4">
-                  No images uploaded yet.
-                </div>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">Drag to reorder. The primary image appears first in your listing.</p>
+                <p className="text-xs text-muted-foreground">Drag to reorder on desktop. The primary image appears first in your listing.</p>
+              </TabsContent>
 
-            <div className="rounded-lg border border-border p-4">
-              <h3 className="mb-3 font-medium">Listing documents</h3>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[180px_1fr_auto]">
-                <Select value={docType} onValueChange={setDocType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="spec_sheet">Spec Sheet</SelectItem>
-                    <SelectItem value="warranty">Warranty</SelectItem>
-                    <SelectItem value="compliance">Compliance</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  ref={docFileInputRef}
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.webp"
-                  onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
-                />
-                <Button onClick={() => void uploadListingDoc()} disabled={busy || !docFile}>Upload</Button>
-              </div>
-              <div className="mt-3 space-y-2">
-                {listingDocuments.map((doc) => (
-                  <div key={doc.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
-                    <div>
-                      <p className="font-medium">{doc.documentType}</p>
-                      <p className="text-xs text-muted-foreground">{doc.fileUrl.split("/").pop()}</p>
-                    </div>
-                    <StatusBadge status={doc.verificationStatus === "approved" ? "approved" : doc.verificationStatus === "rejected" ? "rejected" : "pending"} />
+              <TabsContent value="documents" className="space-y-4">
+                <div className="rounded-lg border border-border p-4">
+                  <h3 className="mb-3 font-medium">Listing documents</h3>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[180px_1fr_auto]">
+                    <Select value={docType} onValueChange={setDocType}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="spec_sheet">Spec Sheet</SelectItem>
+                        <SelectItem value="warranty">Warranty</SelectItem>
+                        <SelectItem value="compliance">Compliance</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      ref={docFileInputRef}
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp"
+                      onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+                    />
+                    <Button onClick={() => void uploadListingDoc()} disabled={busy || !docFile}>Upload</Button>
                   </div>
-                ))}
-                {listingDocuments.length === 0 && (
-                  <p className="text-xs text-muted-foreground">No listing documents uploaded yet.</p>
-                )}
-              </div>
-            </div>
+                  {docFile && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Selected: <span className="font-medium">{docFile.name}</span>
+                    </p>
+                  )}
+                  <div className="mt-3 space-y-2">
+                    {listingDocuments.map((doc) => (
+                      <div key={doc.id} className="flex flex-col gap-2 rounded-md border border-border px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="font-medium">{doc.documentType}</p>
+                          <p className="truncate text-xs text-muted-foreground">{doc.fileUrl.split("/").pop()}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <StatusBadge status={doc.verificationStatus === "approved" ? "approved" : doc.verificationStatus === "rejected" ? "rejected" : "pending"} />
+                          <Button variant="ghost" size="icon" onClick={() => viewListingDoc(doc.fileUrl)} aria-label="View document" disabled={busy}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => void deleteListingDoc(doc.id)} aria-label="Delete document" disabled={busy}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {listingDocuments.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No listing documents uploaded yet.</p>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
           </div>
-          <DialogFooter>
+          <DialogFooter className="border-t px-4 py-3 sm:px-6">
             <Button variant="outline" onClick={() => setMediaFor(null)} disabled={busy}>
               <X className="mr-2 h-4 w-4" /> Close
             </Button>

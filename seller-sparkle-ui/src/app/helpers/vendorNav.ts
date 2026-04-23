@@ -75,9 +75,13 @@ export const vendorNav: NavSection[] = [
     title: "Account",
 
     items: [
+<<<<<<< HEAD
 
       { label: "Notifications", to: "/vendor/notifications", icon: Bell },
 
+=======
+      { label: "Notifications", to: "/vendor/notifications", icon: Bell },
+>>>>>>> 0399c18d534dc3e3b50b0cd688f56bb05ae59ef6
       { label: "Settings", to: "/vendor/settings", icon: Settings },
 
     ],

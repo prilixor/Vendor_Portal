@@ -1,23 +1,184 @@
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/app/components/ui/card";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { StatCard } from "@/app/components/shared/StatCard";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { Button } from "@/app/components/ui/button";
-import { mockNotifications, mockProducts } from "@/app/services/mockData";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { Package, CheckCircle2, Boxes, Bell, Plus, ArrowUpRight, Clock, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/app/guards/AuthContext";
+import { toast } from "sonner";
+import type { VerificationStatus } from "@/app/models";
+
+type DashboardNotification = {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  type: "info" | "success" | "warning" | "error";
+  read: boolean;
+};
+
+type TopListingRow = {
+  id: string;
+  title: string;
+  category: string;
+  dailyRent: number;
+  stock: number;
+  status: VerificationStatus;
+};
+
+const normalizeListingStatus = (status: string): VerificationStatus => {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "approved" || normalized === "active") return "approved";
+  if (normalized === "rejected" || normalized === "blocked") return "rejected";
+  if (normalized === "under_review" || normalized === "submitted") return "under_review";
+  return "pending";
+};
+
+const normalizeVerificationStatus = (status: string): VerificationStatus => {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "approved") return "approved";
+  if (normalized === "rejected") return "rejected";
+  if (normalized === "under_review") return "under_review";
+  return "pending";
+};
+
+const mapNotificationType = (type: string): DashboardNotification["type"] => {
+  const t = type.trim().toLowerCase();
+  if (t === "success" || t.includes("approved")) return "success";
+  if (t === "error" || t.includes("rejected") || t.includes("failed")) return "error";
+  if (t === "warning" || t.includes("warning") || t.includes("stock")) return "warning";
+  return "info";
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const active = mockProducts.filter((p) => p.status === "active").length;
-  const totalQty = mockProducts.reduce((s, p) => s + p.quantity, 0);
-  const unread = mockNotifications.filter((n) => !n.read).length;
+  const [ownerName, setOwnerName] = useState<string>("");
+  const [isVerified, setIsVerified] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState("Complete your onboarding verifications.");
+
+  const [totalListings, setTotalListings] = useState(0);
+  const [activeListings, setActiveListings] = useState(0);
+  const [inventoryUnits, setInventoryUnits] = useState(0);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  const [recentActivity, setRecentActivity] = useState<DashboardNotification[]>([]);
+  const [topListings, setTopListings] = useState<TopListingRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!user) return;
+      setLoading(true);
+
+      try {
+        const [profileRes, docsRes, banksRes, listingsRes, notificationsRes, productsRes, categoriesRes] = await Promise.allSettled([
+          vendorOnboardingApi.getVendorProfile(user.id),
+          vendorOnboardingApi.getVendorDocuments(user.id),
+          vendorOnboardingApi.getVendorBankAccounts(user.id),
+          vendorOnboardingApi.getVendorProductListings(user.id),
+          vendorOnboardingApi.getVendorNotifications(user.id),
+          vendorOnboardingApi.getProducts(),
+          vendorOnboardingApi.getProductCategories(),
+        ]);
+
+        if (profileRes.status === "fulfilled") {
+          setOwnerName(profileRes.value.ownerName || user.name);
+        } else {
+          setOwnerName(user.name);
+        }
+
+        const docs = docsRes.status === "fulfilled" ? docsRes.value : [];
+        const banks = banksRes.status === "fulfilled" ? banksRes.value : [];
+        const listings = listingsRes.status === "fulfilled" ? listingsRes.value : [];
+        const notifications = notificationsRes.status === "fulfilled" ? notificationsRes.value : [];
+        const products = productsRes.status === "fulfilled" ? productsRes.value : [];
+        const categories = categoriesRes.status === "fulfilled" ? categoriesRes.value : [];
+
+        const approvedDocs = docs.filter((d) => normalizeVerificationStatus(d.verificationStatus) === "approved").length;
+        const rejectedDocs = docs.filter((d) => normalizeVerificationStatus(d.verificationStatus) === "rejected").length;
+        const approvedBanks = banks.filter((b) => normalizeVerificationStatus(b.verificationStatus) === "approved").length;
+        const rejectedBanks = banks.filter((b) => normalizeVerificationStatus(b.verificationStatus) === "rejected").length;
+
+        const verified = docs.length > 0 && approvedDocs === docs.length && approvedBanks > 0;
+        setIsVerified(verified);
+        if (verified) {
+          setVerificationMessage("All documents and bank details have been approved.");
+        } else if (rejectedDocs > 0 || rejectedBanks > 0) {
+          setVerificationMessage("Some verifications were rejected. Please review and resubmit from onboarding.");
+        } else {
+          setVerificationMessage(`Approved documents: ${approvedDocs}/${docs.length}. Approved bank accounts: ${approvedBanks}/${banks.length}.`);
+        }
+
+        const active = listings.filter((l) => normalizeListingStatus(l.listingStatus) === "approved").length;
+        setTotalListings(listings.length);
+        setActiveListings(active);
+
+        const mappedNotifications = notifications
+          .map<DashboardNotification>((n) => ({
+            id: n.id,
+            title: n.title,
+            message: n.message,
+            timestamp: n.sentAt ?? n.readAt ?? new Date().toISOString(),
+            type: mapNotificationType(n.notificationType),
+            read: n.status.trim().toLowerCase() === "read" || !!n.readAt,
+          }))
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        setUnreadNotifications(mappedNotifications.filter((n) => !n.read).length);
+        setRecentActivity(mappedNotifications.slice(0, 5));
+
+        const inventoryResponses = await Promise.allSettled(
+          listings.map((l) => vendorOnboardingApi.getVendorInventory(user.id, l.id))
+        );
+        const inventorySum = inventoryResponses.reduce((sum, r, idx) => {
+          if (r.status === "fulfilled") {
+            return sum + r.value.totalQuantity;
+          }
+          return sum + listings[idx].availableQuantity;
+        }, 0);
+        setInventoryUnits(inventorySum);
+
+        const productsById = new Map(products.map((p) => [p.id, p]));
+        const categoriesById = new Map(categories.map((c) => [c.id, c.categoryName]));
+
+        const top = listings
+          .map<TopListingRow>((l) => {
+            const product = productsById.get(l.productId);
+            const categoryName = product ? (categoriesById.get(product.categoryId) ?? "N/A") : "N/A";
+            return {
+              id: l.id,
+              title: l.listingTitle,
+              category: categoryName,
+              dailyRent: l.dailyRent,
+              stock: l.availableQuantity,
+              status: normalizeListingStatus(l.listingStatus),
+            };
+          })
+          .sort((a, b) => b.stock - a.stock)
+          .slice(0, 4);
+
+        setTopListings(top);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load dashboard.";
+        toast.error(message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void load();
+  }, [user]);
+
+  const greetingName = useMemo(() => ownerName || user?.name || "Vendor", [ownerName, user?.name]);
 
   return (
     <div>
       <PageHeader
-        title="Welcome back, Priya 👋"
+        title={`Welcome back, ${greetingName}`}
         description="Here's what's happening with your rentals today."
         actions={
           <>
@@ -37,8 +198,8 @@ const Dashboard = () => {
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
-              <p className="font-semibold">Your account is verified</p>
-              <p className="text-sm text-muted-foreground">All documents and bank details have been approved.</p>
+              <p className="font-semibold">{isVerified ? "Your account is verified" : "Verification in progress"}</p>
+              <p className="text-sm text-muted-foreground">{verificationMessage}</p>
             </div>
           </div>
           <Button variant="outline" onClick={() => navigate("/vendor/onboarding")}>
@@ -49,10 +210,10 @@ const Dashboard = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total listings" value={mockProducts.length} icon={Package} accent="primary" trend={{ value: "12% this month", positive: true }} />
-        <StatCard label="Active listings" value={active} icon={CheckCircle2} accent="success" trend={{ value: "2 new", positive: true }} />
-        <StatCard label="Inventory units" value={totalQty} icon={Boxes} accent="info" />
-        <StatCard label="Notifications" value={unread} icon={Bell} accent="warning" />
+        <StatCard label="Total listings" value={loading ? "..." : totalListings} icon={Package} accent="primary" />
+        <StatCard label="Active listings" value={loading ? "..." : activeListings} icon={CheckCircle2} accent="success" />
+        <StatCard label="Inventory units" value={loading ? "..." : inventoryUnits} icon={Boxes} accent="info" />
+        <StatCard label="Notifications" value={loading ? "..." : unreadNotifications} icon={Bell} accent="warning" />
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -65,7 +226,7 @@ const Dashboard = () => {
             </Button>
           </div>
           <ul className="divide-y divide-border">
-            {mockNotifications.slice(0, 5).map((n) => (
+            {recentActivity.map((n) => (
               <li key={n.id} className="flex items-start gap-3 py-3">
                 <div className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
                   n.type === "success" ? "bg-success" :
@@ -82,6 +243,9 @@ const Dashboard = () => {
                 </span>
               </li>
             ))}
+            {recentActivity.length === 0 && (
+              <li className="py-4 text-sm text-muted-foreground">No recent activity yet.</li>
+            )}
           </ul>
         </Card>
 
@@ -127,17 +291,24 @@ const Dashboard = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {mockProducts.slice(0, 4).map((p) => (
+              {topListings.map((p) => (
                 <tr key={p.id}>
                   <td className="py-3 font-medium">{p.title}</td>
                   <td className="py-3 text-muted-foreground">{p.category}</td>
                   <td className="py-3 text-right font-mono">₹{p.dailyRent}</td>
-                  <td className="py-3 text-right">{p.quantity}</td>
+                  <td className="py-3 text-right">{p.stock}</td>
                   <td className="py-3">
-                    <StatusBadge status={p.status === "active" ? "approved" : "pending"} />
+                    <StatusBadge status={p.status} />
                   </td>
                 </tr>
               ))}
+              {topListings.length === 0 && (
+                <tr>
+                  <td className="py-4 text-sm text-muted-foreground" colSpan={5}>
+                    No listings available.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -67,6 +67,18 @@ public sealed class AddVendorProductDocumentRequest : VendorIdRequest
     public string FileUrl { get; set; } = string.Empty;
 }
 
+public sealed class DeleteVendorProductImageRequest : VendorIdRequest
+{
+    public string ListingId { get; set; } = string.Empty;
+    public string ImageId { get; set; } = string.Empty;
+}
+
+public sealed class DeleteVendorProductDocumentRequest : VendorIdRequest
+{
+    public string ListingId { get; set; } = string.Empty;
+    public string DocumentId { get; set; } = string.Empty;
+}
+
 public sealed class CreateProductCategoryEndpoint(IMediator mediator)
     : Endpoint<CreateProductCategoryRequest, Results<Ok<ProductCategoryDto>, ProblemHttpResult>>
 {
@@ -285,5 +297,37 @@ public sealed class GetVendorProductDocumentsEndpoint(IMediator mediator)
     {
         var result = await mediator.Send(new GetVendorProductDocumentsQuery(req.VendorId, req.ListingId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class DeleteVendorProductImageEndpoint(IMediator mediator)
+    : Endpoint<DeleteVendorProductImageRequest, Results<NoContent, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Delete("{vendorId}/listings/{listingId}/images/{imageId}");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(DeleteVendorProductImageRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new DeleteVendorProductImageCommand(req.VendorId, req.ListingId, req.ImageId), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
+    }
+}
+
+public sealed class DeleteVendorProductDocumentEndpoint(IMediator mediator)
+    : Endpoint<DeleteVendorProductDocumentRequest, Results<NoContent, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Delete("{vendorId}/listings/{listingId}/documents/{documentId}");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(DeleteVendorProductDocumentRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new DeleteVendorProductDocumentCommand(req.VendorId, req.ListingId, req.DocumentId), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
     }
 }

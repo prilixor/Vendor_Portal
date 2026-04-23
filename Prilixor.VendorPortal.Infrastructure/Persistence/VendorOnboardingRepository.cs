@@ -286,6 +286,24 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
         await dbContext.VendorProductImages.AddAsync(image, cancellationToken);
     }
 
+    public Task<VendorProductImage?> GetVendorProductImageByIdAsync(Guid vendorId, Guid listingId, Guid imageId, CancellationToken cancellationToken)
+    {
+        return dbContext.VendorProductImages
+            .Where(x => x.Id == imageId && x.VendorProductListingId == listingId && !x.IsDeleted)
+            .Join(
+                dbContext.VendorProductListings.Where(l => l.VendorId == vendorId && !l.IsDeleted),
+                img => img.VendorProductListingId,
+                listing => listing.Id,
+                (img, _) => img)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public Task UpdateVendorProductImageAsync(VendorProductImage image, CancellationToken cancellationToken)
+    {
+        dbContext.VendorProductImages.Update(image);
+        return Task.CompletedTask;
+    }
+
     public Task<List<VendorProductImage>> GetVendorProductImagesAsync(Guid listingId, CancellationToken cancellationToken)
     {
         return dbContext.VendorProductImages

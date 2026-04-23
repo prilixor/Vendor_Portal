@@ -443,12 +443,20 @@ export const vendorOnboardingApi = {
     return apiClient.get<VendorProductImageApiDto[]>(`/vendors/${vendorId}/listings/${listingId}/images`);
   },
 
+  deleteVendorProductImage(vendorId: string, listingId: string, imageId: string) {
+    return apiClient.delete<void>(`/vendors/${vendorId}/listings/${listingId}/images/${imageId}`);
+  },
+
   addVendorProductDocument(vendorId: string, listingId: string, payload: AddVendorProductDocumentPayload) {
     return apiClient.post<VendorProductDocumentApiDto>(`/vendors/${vendorId}/listings/${listingId}/documents`, payload);
   },
 
   getVendorProductDocuments(vendorId: string, listingId: string) {
     return apiClient.get<VendorProductDocumentApiDto[]>(`/vendors/${vendorId}/listings/${listingId}/documents`);
+  },
+
+  deleteVendorProductDocument(vendorId: string, listingId: string, documentId: string) {
+    return apiClient.delete<void>(`/vendors/${vendorId}/listings/${listingId}/documents/${documentId}`);
   },
 
   upsertVendorInventory(vendorId: string, listingId: string, payload: UpsertVendorInventoryPayload) {
