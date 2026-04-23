@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY . ./
 
-RUN dotnet restore Prilixor.VendorPortal.sln
+RUN dotnet restore Prilixor.VendorPortal.API/Prilixor.VendorPortal.API.csproj
 RUN dotnet publish Prilixor.VendorPortal.API/Prilixor.VendorPortal.API.csproj -c Release -o out
 
 # Runtime stage
