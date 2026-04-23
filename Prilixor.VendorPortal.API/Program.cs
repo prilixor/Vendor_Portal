@@ -49,7 +49,7 @@ builder.Services.AddCors(options =>
     {
         if (corsOptions?.Origins != null && corsOptions.Origins.Length > 0)
         {
-            policy.WithOrigins(corsOptions.Origins)
+            policy.WithOrigins("https://vendor-portal-ui.onrender.com")
                   .AllowAnyHeader()
                   .AllowAnyMethod();
         }
@@ -67,6 +67,8 @@ builder.Services.Configure<JsonOptions>(o =>
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 
 var app = builder.Build();
+
+app.UseCors();
 
 app.UseAuthentication()
     .UseAuthorization();
@@ -119,7 +121,7 @@ app.UseFastEndpoints(op =>
     op.Endpoints.RoutePrefix = "api";
 }).UseSwaggerGen();
 
-app.UseCors();
+
 app.UseHttpsRedirection();
 app.UseExceptionHandler();
 
