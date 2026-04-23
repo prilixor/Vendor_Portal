@@ -4,8 +4,8 @@ WORKDIR /app
 
 COPY . ./
 
-RUN dotnet restore
-RUN dotnet publish -c Release -o out
+RUN dotnet restore Prilixor.VendorPortal.sln
+RUN dotnet publish Prilixor.VendorPortal.API/Prilixor.VendorPortal.API.csproj -c Release -o out
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview
