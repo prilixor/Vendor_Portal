@@ -4,7 +4,7 @@ namespace Prilixor.VendorPortal.Domain.Vendors;
 
 public class AdminAuditLog : AuditableEntity<Guid>, ISoftDelete
 {
-    public Guid AdminUserId { get; set; }
+    public Guid AdminId { get; set; }
     public string ActionType { get; set; } = string.Empty;
     public string EntityType { get; set; } = string.Empty;
     public Guid? EntityId { get; set; }
@@ -15,5 +15,5 @@ public class AdminAuditLog : AuditableEntity<Guid>, ISoftDelete
     public DateTimeOffset? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }
 
-    public AdminUser AdminUser { get; set; } = null!;
+    public AdminUser? AdminUser { get; set; }
 }

@@ -54,6 +54,35 @@ public sealed class VerifyVendorListingRequest : AdminUserIdRequest
     public string? Notes { get; set; }
 }
 
+public sealed class ApproveVendorRequest : AdminUserIdRequest
+{
+    public string VendorId { get; set; } = string.Empty;
+}
+
+public sealed class RejectVendorRequest : AdminUserIdRequest
+{
+    public string VendorId { get; set; } = string.Empty;
+    public string? Reason { get; set; }
+}
+
+public sealed class SuspendVendorRequest : AdminUserIdRequest
+{
+    public string VendorId { get; set; } = string.Empty;
+    public string? Reason { get; set; }
+}
+
+public sealed class BanVendorRequest : AdminUserIdRequest
+{
+    public string VendorId { get; set; } = string.Empty;
+    public string? Reason { get; set; }
+}
+
+public sealed class ReactivateVendorRequest : AdminUserIdRequest
+{
+    public string VendorId { get; set; } = string.Empty;
+    public string? Reason { get; set; }
+}
+
 public sealed class ForceResetVendorPasswordRequest : AdminUserIdRequest
 {
     public string VendorId { get; set; } = string.Empty;
@@ -95,6 +124,22 @@ public sealed class GetAdminUsersEndpoint(IMediator mediator)
     public override async Task<Results<Ok<List<AdminUserDto>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
     {
         var result = await mediator.Send(new GetAdminUsersQuery(), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetVendorsEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<List<VendorDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("vendors");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<List<VendorDto>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetVendorsQuery(), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -221,6 +266,105 @@ public sealed class ForceResetVendorPasswordEndpoint(IMediator mediator)
             req.VendorId,
             req.NewPassword,
             req.Notes), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class ApproveVendorEndpoint(IMediator mediator)
+    : Endpoint<ApproveVendorRequest, Results<Ok<VendorDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("vendors/{vendorId}/approve");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(ApproveVendorRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new ApproveVendorCommand(
+            req.VendorId,
+            req.AdminUserId), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class RejectVendorEndpoint(IMediator mediator)
+    : Endpoint<RejectVendorRequest, Results<Ok<VendorDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("vendors/{vendorId}/reject");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(RejectVendorRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new RejectVendorCommand(
+            req.VendorId,
+            req.AdminUserId,
+            req.Reason), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class SuspendVendorEndpoint(IMediator mediator)
+    : Endpoint<SuspendVendorRequest, Results<Ok<VendorDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("vendors/{vendorId}/suspend");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(SuspendVendorRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new SuspendVendorCommand(
+            req.VendorId,
+            req.AdminUserId,
+            req.Reason), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class BanVendorEndpoint(IMediator mediator)
+    : Endpoint<BanVendorRequest, Results<Ok<VendorDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("vendors/{vendorId}/ban");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(BanVendorRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new BanVendorCommand(
+            req.VendorId,
+            req.AdminUserId,
+            req.Reason), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class ReactivateVendorEndpoint(IMediator mediator)
+    : Endpoint<ReactivateVendorRequest, Results<Ok<VendorDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("vendors/{vendorId}/reactivate");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(ReactivateVendorRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new ReactivateVendorCommand(
+            req.VendorId,
+            req.AdminUserId,
+            req.Reason), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }

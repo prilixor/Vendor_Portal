@@ -22,6 +22,13 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
             .FirstOrDefaultAsync(x => x.Email == normalized && !x.IsDeleted, cancellationToken);
     }
 
+    public Task<List<Vendor>> GetVendorsAsync(CancellationToken cancellationToken)
+    {
+        return dbContext.Vendors
+            .Where(x => !x.IsDeleted)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task AddVendorAsync(Vendor vendor, CancellationToken cancellationToken)
     {
         await dbContext.Vendors.AddAsync(vendor, cancellationToken);
@@ -61,6 +68,17 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
             .Where(x => x.VendorId == vendorId && !x.IsDeleted)
             .OrderByDescending(x => x.CreatedOnUtc)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<bool> AreAllVendorDocumentsApprovedAsync(Guid vendorId, CancellationToken cancellationToken)
+    {
+        var documents = await dbContext.VendorDocuments
+            .Where(x => x.VendorId == vendorId && !x.IsDeleted)
+            .ToListAsync(cancellationToken);
+
+        if (documents.Count == 0) return false;
+
+        return documents.All(d => d.VerificationStatus == "approved");
     }
 
     public Task<VendorDocument?> GetVendorDocumentByIdAsync(Guid vendorId, Guid documentId, CancellationToken cancellationToken)
@@ -410,15 +428,16 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
         await dbContext.AdminAuditLogs.AddAsync(auditLog, cancellationToken);
     }
 
-    public Task<List<AdminAuditLog>> GetAdminAuditLogsAsync(Guid? adminUserId, CancellationToken cancellationToken)
+    public Task<List<AdminAuditLog>> GetAdminAuditLogsAsync(Guid? adminId, CancellationToken cancellationToken)
     {
         var query = dbContext.AdminAuditLogs
+            .Include(x => x.AdminUser)
             .Where(x => !x.IsDeleted)
             .AsQueryable();
 
-        if (adminUserId.HasValue)
+        if (adminId.HasValue && adminId.Value != Guid.Empty)
         {
-            query = query.Where(x => x.AdminUserId == adminUserId.Value);
+            query = query.Where(x => x.AdminId == adminId.Value);
         }
 
         return query

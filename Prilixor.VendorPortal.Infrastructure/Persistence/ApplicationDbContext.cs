@@ -454,7 +454,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
             entity.HasMany(x => x.AuditLogs)
                 .WithOne(x => x.AdminUser)
-                .HasForeignKey(x => x.AdminUserId);
+                .HasForeignKey(x => x.AdminId);
         });
 
         modelBuilder.Entity<AdminAuditLog>(entity =>
@@ -462,7 +462,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.ToTable("admin_audit_logs");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id).HasColumnName("id");
-            entity.Property(x => x.AdminUserId).HasColumnName("admin_user_id");
+            entity.Property(x => x.AdminId).HasColumnName("admin_user_id");
             entity.Property(x => x.ActionType).HasColumnName("action_type");
             entity.Property(x => x.EntityType).HasColumnName("entity_type");
             entity.Property(x => x.EntityId).HasColumnName("entity_id");

@@ -29,6 +29,8 @@ import Vendors from "@/app/components/admin/Vendors";
 import VendorDetails from "@/app/components/admin/VendorDetails";
 import Admins from "@/app/components/admin/Admins";
 import AuditLogs from "@/app/components/admin/AuditLogs";
+import AdminRegister from "@/app/components/admin/AdminRegister";
+import AdminLogin from "@/app/components/admin/AdminLogin";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +45,8 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/register" element={<AdminRegister />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
 

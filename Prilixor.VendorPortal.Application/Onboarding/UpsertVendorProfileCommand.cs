@@ -74,7 +74,7 @@ internal sealed class UpsertVendorProfileCommandHandler(IVendorOnboardingReposit
 
         await repository.UpsertVendorProfileAsync(profile, cancellationToken);
 
-        vendor.RegistrationStage = "documents_pending";
+        vendor.RegistrationStage = "profile_pending";
         await repository.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new VendorProfileDto(

@@ -14,18 +14,38 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const STORAGE_KEY = "vendor_portal_user";
+const ADMIN_STORAGE_KEY = "adminUser";
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isHydrating, setIsHydrating] = useState(true);
 
   useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
+    // Try to get admin user first
+    const adminRaw = localStorage.getItem(ADMIN_STORAGE_KEY);
+    if (adminRaw) {
       try {
-        setUser(JSON.parse(raw));
+        const adminUser = JSON.parse(adminRaw);
+        setUser({
+          id: adminUser.id,
+          email: adminUser.email,
+          name: adminUser.fullName || adminUser.name || "Admin",
+          role: "admin",
+        });
       } catch {
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(ADMIN_STORAGE_KEY);
+      }
+    } else {
+      // Fall back to vendor user
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        try {
+          const parsedUser = JSON.parse(raw);
+          console.log("AuthContext: Loaded vendor user from localStorage", parsedUser);
+          setUser(parsedUser);
+        } catch {
+          localStorage.removeItem(STORAGE_KEY);
+        }
       }
     }
     setIsHydrating(false);
@@ -51,6 +71,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     authApi.logout();
     persist(null);
+    // Also clear admin user data and token
+    localStorage.removeItem(ADMIN_STORAGE_KEY);
+    localStorage.removeItem("vendor_portal_token");
   };
 
   const switchRole = (role: Role) => {

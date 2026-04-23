@@ -15,7 +15,7 @@ export const adminNav: NavSection[] = [
   {
     title: "Vendors",
     items: [
-      { label: "Verification", to: "/admin/verification", icon: ShieldCheck, badge: "3" },
+      { label: "Verification", to: "/admin/verification", icon: ShieldCheck },
       { label: "All Vendors", to: "/admin/vendors", icon: Building2 },
     ],
   },

@@ -1,6 +1,10 @@
-export type Role = "vendor" | "admin";
+export type Role = "vendor" | "admin" | "super_admin" | "verifier" | "operations_admin";
 
 export type VerificationStatus = "pending" | "approved" | "rejected" | "under_review";
+
+export type AccountStatus = "pending" | "active" | "suspended" | "banned" | "rejected";
+
+export type RegistrationStage = "email_registered" | "profile_pending" | "documents_pending" | "under_review" | "approved" | "rejected";
 
 export interface User {
   id: string;

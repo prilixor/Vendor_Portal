@@ -298,6 +298,26 @@ export interface UpsertVendorNotificationPreferencePayload {
   newOrderNotifications: boolean;
 }
 
+export interface VendorNotificationPreferenceDto {
+  id: string;
+  vendorId: string;
+  emailNotificationsEnabled: boolean;
+  pushNotificationsEnabled: boolean;
+  newOrderNotifications: boolean;
+}
+
+export interface VendorNotificationDto {
+  id: string;
+  vendorId: string;
+  notificationType: string;
+  title: string;
+  message: string;
+  channel: string;
+  status: string;
+  sentAt?: string;
+  readAt?: string;
+}
+
 export interface MarkAllNotificationsReadResponse {
   updatedCount: number;
 }
@@ -460,14 +480,14 @@ export const vendorOnboardingApi = {
   },
 
   markVendorNotificationAsRead(vendorId: string, notificationId: string) {
-    return apiClient.patch<VendorNotificationDto>(`/vendors/${vendorId}/notifications/${notificationId}/read`);
+    return apiClient.patch<VendorNotificationDto>(`/vendors/${vendorId}/notifications/${notificationId}/read`, { vendorId, notificationId });
   },
 
   markVendorNotificationAsUnread(vendorId: string, notificationId: string) {
-    return apiClient.patch<VendorNotificationDto>(`/vendors/${vendorId}/notifications/${notificationId}/unread`);
+    return apiClient.patch<VendorNotificationDto>(`/vendors/${vendorId}/notifications/${notificationId}/unread`, { vendorId, notificationId });
   },
 
   markAllVendorNotificationsAsRead(vendorId: string) {
-    return apiClient.patch<MarkAllNotificationsReadResponse>(`/vendors/${vendorId}/notifications/read-all`);
+    return apiClient.patch<MarkAllNotificationsReadResponse>(`/vendors/${vendorId}/notifications/read-all`, { vendorId });
   },
 };

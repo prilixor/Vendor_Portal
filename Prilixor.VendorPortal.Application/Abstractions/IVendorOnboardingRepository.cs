@@ -7,6 +7,7 @@ public interface IVendorOnboardingRepository
 {
     Task<Vendor?> GetVendorByIdAsync(Guid vendorId, CancellationToken cancellationToken);
     Task<Vendor?> GetVendorByEmailAsync(string email, CancellationToken cancellationToken);
+    Task<List<Vendor>> GetVendorsAsync(CancellationToken cancellationToken);
     Task AddVendorAsync(Vendor vendor, CancellationToken cancellationToken);
     Task UpdateVendorAsync(Vendor vendor, CancellationToken cancellationToken);
 
@@ -17,6 +18,7 @@ public interface IVendorOnboardingRepository
     Task<List<VendorDocument>> GetVendorDocumentsAsync(Guid vendorId, CancellationToken cancellationToken);
     Task<VendorDocument?> GetVendorDocumentByIdAsync(Guid vendorId, Guid documentId, CancellationToken cancellationToken);
     Task UpdateVendorDocumentAsync(VendorDocument document, CancellationToken cancellationToken);
+    Task<bool> AreAllVendorDocumentsApprovedAsync(Guid vendorId, CancellationToken cancellationToken);
 
     Task AddVerificationRequestAsync(VendorVerificationRequest request, CancellationToken cancellationToken);
     Task<List<VendorVerificationRequest>> GetVerificationRequestsAsync(Guid vendorId, CancellationToken cancellationToken);
@@ -81,7 +83,7 @@ public interface IVendorOnboardingRepository
     Task<List<AdminUser>> GetAdminUsersAsync(CancellationToken cancellationToken);
 
     Task AddAdminAuditLogAsync(AdminAuditLog auditLog, CancellationToken cancellationToken);
-    Task<List<AdminAuditLog>> GetAdminAuditLogsAsync(Guid? adminUserId, CancellationToken cancellationToken);
+    Task<List<AdminAuditLog>> GetAdminAuditLogsAsync(Guid? adminId, CancellationToken cancellationToken);
 
     Task<PasswordResetToken?> GetPasswordResetTokenAsync(string token, CancellationToken cancellationToken);
     Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken);

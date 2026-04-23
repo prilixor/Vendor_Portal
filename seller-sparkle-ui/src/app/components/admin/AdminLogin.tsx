@@ -4,13 +4,12 @@ import { AuthLayout } from "@/app/components/layout/AuthLayout";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { useAuth } from "@/app/guards/AuthContext";
+import { apiClient } from "@/app/services/apiClient";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 
-const Login = () => {
+const AdminLogin = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -30,12 +29,21 @@ const Login = () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      await login(email, password, "vendor");
-      // Clear any admin user data from previous session
-      localStorage.removeItem("adminUser");
-      toast.success("Welcome back, Vendor!");
-      // Use window.location.href to force full page reload
-      window.location.href = "/vendor";
+      const response = await apiClient.post<{ token: string; user: { id: string; email: string; fullName: string; role: string } }>('/auth/login', {
+        email,
+        password,
+        role: 'admin',
+      });
+
+      toast.success("Welcome back, Admin!");
+      // Clear any existing vendor auth data
+      localStorage.removeItem("vendor_portal_user");
+      // Store admin info in localStorage for AuthContext to pick up
+      localStorage.setItem("adminUser", JSON.stringify(response.user));
+      localStorage.setItem("vendor_portal_token", response.token);
+      apiClient.setAuthToken(response.token);
+      // Reload page to force AuthContext to re-read localStorage
+      window.location.href = "/admin";
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sign in failed. Please try again.";
       toast.error(message);
@@ -45,7 +53,7 @@ const Login = () => {
   };
 
   return (
-    <AuthLayout title="Welcome back" subtitle="Sign in to continue to your workspace.">
+    <AuthLayout title="Admin Sign In" subtitle="Access the admin dashboard and manage vendors.">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>
@@ -54,7 +62,7 @@ const Login = () => {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@company.com"
+            placeholder="admin@company.com"
             aria-invalid={!!errors.email}
             className={errors.email ? "border-destructive focus-visible:ring-destructive" : ""}
           />
@@ -89,19 +97,16 @@ const Login = () => {
         </div>
 
         <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>
-          {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in…</> : "Sign in"}
+          {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in…</> : "Sign in as Admin"}
         </Button>
       </form>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
-        New to the platform?{" "}
-        <Link to="/register" className="font-semibold text-primary hover:underline">Create an account</Link>
+        New admin?{" "}
+        <Link to="/admin/register" className="font-semibold text-primary hover:underline">Create admin account</Link>
       </p>
-
     </AuthLayout>
   );
 };
 
-export default Login;
-
-
+export default AdminLogin;

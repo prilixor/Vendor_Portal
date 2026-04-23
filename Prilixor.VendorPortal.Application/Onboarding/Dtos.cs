@@ -172,7 +172,9 @@ public sealed record AdminUserDto(
 
 public sealed record AdminAuditLogDto(
     string Id,
-    string AdminUserId,
+    string AdminId,
+    string? AdminName,
+    string? AdminEmail,
     string ActionType,
     string EntityType,
     string? EntityId,

@@ -1,62 +1,167 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
-import { mockVendors, mockBankDetails, mockBusinessProfile } from "@/app/services/mockData";
-import { Vendor } from "@/app/models";
-import { Search, FileText, CheckCircle2, XCircle, Building2, MapPin, Phone, Mail, Eye } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { Textarea } from "@/app/components/ui/textarea";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { getVendorDocuments } from "@/app/services/vendorDocuments";
+import { adminApi, VendorDto } from "@/app/services/adminApi";
+
+const getAdminUserId = () => {
+  const adminUser = localStorage.getItem("adminUser");
+  if (adminUser) {
+    try {
+      const parsed = JSON.parse(adminUser);
+      return parsed.id;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
 
 const Verification = () => {
-  const [vendors, setVendors] = useState<Vendor[]>(mockVendors);
+  const [vendors, setVendors] = useState<VendorDto[]>([]);
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "pending" | "under_review" | "approved" | "rejected">("all");
-  const [selected, setSelected] = useState<Vendor | null>(null);
+  const [selected, setSelected] = useState<VendorDto | null>(null);
+  const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const [actionType, setActionType] = useState<"reject" | "suspend" | "ban" | "reactivate">("reject");
+  const [verifying, setVerifying] = useState(false);
+
+  useEffect(() => {
+    loadVendors();
+  }, []);
+
+  const loadVendors = async () => {
+    setLoading(true);
+    try {
+      const data = await adminApi.getVendors();
+      setVendors(data);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load vendors.";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filtered = vendors.filter((v) => {
-    const m = filter === "all" || v.status === filter;
-    const s = !search || v.businessName.toLowerCase().includes(search.toLowerCase()) || v.email.toLowerCase().includes(search.toLowerCase());
+    const m = filter === "all" || v.accountStatus === filter;
+    const s = !search || v.email.toLowerCase().includes(search.toLowerCase());
     return m && s;
   });
 
-  const approve = (id: string) => {
-    setVendors((arr) => arr.map((v) => (v.id === id ? { ...v, status: "approved" } : v)));
-    setSelected(null);
-    toast.success("Vendor approved");
-  };
-  const reject = () => {
-    if (!selected || !reason) { toast.error("Please add a rejection reason"); return; }
-    setVendors((arr) => arr.map((v) => (v.id === selected.id ? { ...v, status: "rejected" } : v)));
-    setRejectOpen(false);
-    setSelected(null);
-    setReason("");
-    toast.success("Vendor rejected with reason");
+  const approve = async (id: string) => {
+    setVerifying(true);
+    try {
+      // TODO: Get adminUserId from auth context
+      const adminUserId = getAdminUserId() || "";
+      await adminApi.approveVendor({ adminUserId, vendorId: id });
+      setVendors((arr) => arr.map((v) => (v.id === id ? { ...v, accountStatus: "active" } : v)));
+      setSelected(null);
+      toast.success("Vendor approved");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to approve vendor.";
+      toast.error(message);
+    } finally {
+      setVerifying(false);
+    }
   };
 
-  const selectedDocuments = selected ? getVendorDocuments(selected.id) : [];
+  const reject = async (id: string) => {
+    setVerifying(true);
+    try {
+      // TODO: Get adminUserId from auth context
+      const adminUserId = getAdminUserId() || "";
+      await adminApi.rejectVendor({ adminUserId, vendorId: id, reason });
+      setVendors((arr) => arr.map((v) => (v.id === id ? { ...v, accountStatus: "rejected" } : v)));
+      setSelected(null);
+      setReason("");
+      setRejectOpen(false);
+      toast.success("Vendor rejected with reason");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to reject vendor.";
+      toast.error(message);
+    } finally {
+      setVerifying(false);
+    }
+  };
 
-  const previewDoc = (fileUrl?: string) => {
-    if (!fileUrl) {
-      toast.info("Preview is available for uploaded files.");
-      return;
+  const suspend = async (id: string) => {
+    setVerifying(true);
+    try {
+      const adminUserId = getAdminUserId() || "";
+      await adminApi.suspendVendor({ adminUserId, vendorId: id, reason });
+      setVendors((arr) => arr.map((v) => (v.id === id ? { ...v, accountStatus: "suspended" } : v)));
+      setSelected(null);
+      setReason("");
+      setRejectOpen(false);
+      toast.success("Vendor suspended successfully");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to suspend vendor.";
+      toast.error(message);
+    } finally {
+      setVerifying(false);
     }
-    const previewUrl = getPreviewUrl(fileUrl);
-    const popup = window.open(previewUrl, "_blank", "noopener,noreferrer");
-    if (!popup) {
-      toast.error("Popup blocked. Please allow popups for this site.");
-      return;
+  };
+
+  const ban = async (id: string) => {
+    setVerifying(true);
+    try {
+      const adminUserId = getAdminUserId() || "";
+      await adminApi.banVendor({ adminUserId, vendorId: id, reason });
+      setVendors((arr) => arr.map((v) => (v.id === id ? { ...v, accountStatus: "banned" } : v)));
+      setSelected(null);
+      setReason("");
+      setRejectOpen(false);
+      toast.success("Vendor banned successfully");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to ban vendor.";
+      toast.error(message);
+    } finally {
+      setVerifying(false);
     }
-    if (previewUrl !== fileUrl) {
-      setTimeout(() => URL.revokeObjectURL(previewUrl), 60_000);
+  };
+
+  const reactivate = async (id: string) => {
+    setVerifying(true);
+    try {
+      const adminUserId = getAdminUserId() || "";
+      await adminApi.reactivateVendor({ adminUserId, vendorId: id, reason });
+      setVendors((arr) => arr.map((v) => (v.id === id ? { ...v, accountStatus: "active" } : v)));
+      setSelected(null);
+      setReason("");
+      setRejectOpen(false);
+      toast.success("Vendor reactivated successfully");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to reactivate vendor.";
+      toast.error(message);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleAction = () => {
+    if (!selectedVendorId) return;
+    if (actionType === "reject") {
+      reject(selectedVendorId);
+    } else if (actionType === "suspend") {
+      suspend(selectedVendorId);
+    } else if (actionType === "ban") {
+      ban(selectedVendorId);
+    } else if (actionType === "reactivate") {
+      reactivate(selectedVendorId);
     }
   };
 
@@ -84,10 +189,8 @@ const Verification = () => {
           <table className="w-full min-w-[700px] text-sm">
             <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="px-4 py-3 font-semibold">Business</th>
-                <th className="px-4 py-3 font-semibold">Owner</th>
-                <th className="px-4 py-3 font-semibold">City</th>
-                <th className="px-4 py-3 font-semibold">Joined</th>
+                <th className="px-4 py-3 font-semibold">Email</th>
+                <th className="px-4 py-3 font-semibold">Registration Stage</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -100,16 +203,11 @@ const Verification = () => {
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-soft text-primary">
                         <Building2 className="h-4 w-4" />
                       </div>
-                      <div>
-                        <p className="font-medium">{v.businessName}</p>
-                        <p className="text-xs text-muted-foreground">{v.email}</p>
-                      </div>
+                      <p className="font-medium">{v.email}</p>
                     </div>
                   </td>
-                  <td className="px-4 py-3">{v.ownerName}</td>
-                  <td className="px-4 py-3">{v.city}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{v.joinedAt}</td>
-                  <td className="px-4 py-3"><StatusBadge status={v.status} /></td>
+                  <td className="px-4 py-3">{v.registrationStage}</td>
+                  <td className="px-4 py-3"><StatusBadge status={v.accountStatus as "pending" | "approved" | "rejected" | "under_review"} /></td>
                   <td className="px-4 py-3 text-right">
                     <Button variant="outline" size="sm" onClick={() => setSelected(v)}>Review</Button>
                   </td>
@@ -132,70 +230,49 @@ const Verification = () => {
               <div className="rounded-xl border border-border bg-gradient-soft p-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="text-lg font-bold">{selected.businessName}</h3>
-                    <p className="text-sm text-muted-foreground">{selected.ownerName}</p>
+                    <h3 className="text-lg font-bold">{selected.email}</h3>
+                    <p className="text-sm text-muted-foreground">Registration Stage: {selected.registrationStage}</p>
                   </div>
-                  <StatusBadge status={selected.status} />
+                  <StatusBadge status={selected.accountStatus as "pending" | "approved" | "rejected" | "under_review"} />
                 </div>
                 <div className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                   <p className="inline-flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /> {selected.email}</p>
-                  <p className="inline-flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /> {mockBusinessProfile.phone}</p>
-                  <p className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground" /> {mockBusinessProfile.addressLine1}, {selected.city}</p>
-                  <p className="font-mono text-xs">GST: {mockBusinessProfile.gstNumber}</p>
+                  <p className="inline-flex items-center gap-2"><Building2 className="h-4 w-4 text-muted-foreground" /> Email Verified: {selected.emailVerified ? "Yes" : "No"}</p>
                 </div>
               </div>
 
-              <div>
-                <h4 className="mb-2 text-sm font-semibold">Documents ({selectedDocuments.length})</h4>
-                <div className="space-y-2">
-                  {selectedDocuments.map((d) => (
-                    <div key={d.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                          <FileText className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">{d.type}</p>
-                          <p className="text-xs text-muted-foreground">{d.fileName}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => previewDoc(d.fileUrl)}>
-                          <Eye className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                        <StatusBadge status={d.status} />
-                      </div>
-                    </div>
-                  ))}
-                  {selectedDocuments.length === 0 && (
-                    <p className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
-                      No documents uploaded yet.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <h4 className="mb-2 text-sm font-semibold">Bank details</h4>
-                <div className="rounded-lg border border-border p-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold">{mockBankDetails.bankName}</p>
-                    <StatusBadge status={mockBankDetails.status} />
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {mockBankDetails.accountHolderName} · ****{mockBankDetails.accountNumber.slice(-4)} · {mockBankDetails.ifscCode}
-                  </p>
-                </div>
+              <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                <p>For detailed vendor information (documents, bank details, profile), please use the Vendor Details page.</p>
               </div>
             </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setRejectOpen(true); }}>
-              <XCircle className="mr-2 h-4 w-4 text-destructive" /> Reject
-            </Button>
-            <Button onClick={() => selected && approve(selected.id)} className="bg-success hover:bg-success/90 text-success-foreground">
-              <CheckCircle2 className="mr-2 h-4 w-4" /> Approve
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" disabled={verifying}>
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => { setActionType("reject"); setSelectedVendorId(selected?.id || null); setSelected(null); setRejectOpen(true); }}>
+                  <XCircle className="mr-2 h-4 w-4 text-destructive" /> Reject
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setActionType("suspend"); setSelectedVendorId(selected?.id || null); setSelected(null); setRejectOpen(true); }}>
+                  <ShieldAlert className="mr-2 h-4 w-4 text-warning" /> Suspend
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setActionType("ban"); setSelectedVendorId(selected?.id || null); setSelected(null); setRejectOpen(true); }}>
+                  <Ban className="mr-2 h-4 w-4 text-destructive" /> Ban
+                </DropdownMenuItem>
+                {(selected?.accountStatus === "suspended" || selected?.accountStatus === "banned") && (
+                  <DropdownMenuItem onClick={() => { setActionType("reactivate"); setSelectedVendorId(selected?.id || null); setSelected(null); setRejectOpen(true); }}>
+                    <RotateCcw className="mr-2 h-4 w-4 text-success" /> Reactivate
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={() => selected && approve(selected.id)} className="bg-success hover:bg-success/90 text-success-foreground" disabled={verifying}>
+              {verifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />} Approve
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -204,18 +281,20 @@ const Verification = () => {
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rejection reason</DialogTitle>
+            <DialogTitle>{actionType === "reject" ? "Rejection reason" : actionType === "suspend" ? "Suspension reason" : actionType === "ban" ? "Ban reason" : "Reactivate reason"}</DialogTitle>
           </DialogHeader>
           <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
             <div className="space-y-1.5">
-            <Label>Why is this vendor being rejected?</Label>
+            <Label>{actionType === "reject" ? "Why is this vendor being rejected?" : actionType === "suspend" ? "Why is this vendor being suspended?" : actionType === "ban" ? "Why is this vendor being banned?" : "Why is this vendor being reactivated?"}</Label>
             <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Provide clear feedback so the vendor can fix the issue…" rows={5} />
           </div>
           <div className="h-5" />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={reject}>Confirm rejection</Button>
+            <Button variant="outline" onClick={() => setRejectOpen(false)} disabled={verifying}>Cancel</Button>
+            <Button variant={actionType === "reactivate" ? "default" : "destructive"} onClick={handleAction} disabled={verifying}>
+              {verifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Confirm {actionType}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -223,23 +302,4 @@ const Verification = () => {
   );
 };
 
-const getPreviewUrl = (fileUrl: string): string => {
-  if (!fileUrl.startsWith("data:")) return fileUrl;
-  try {
-    const [meta, data] = fileUrl.split(",");
-    if (!meta || !data) return fileUrl;
-    const mime = meta.match(/data:(.*?);base64/)?.[1] ?? "application/octet-stream";
-    const binary = atob(data);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return URL.createObjectURL(new Blob([bytes], { type: mime }));
-  } catch {
-    return fileUrl;
-  }
-};
-
 export default Verification;
-
-

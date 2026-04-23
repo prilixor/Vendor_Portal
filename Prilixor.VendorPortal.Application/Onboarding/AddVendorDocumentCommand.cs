@@ -48,7 +48,7 @@ internal sealed class AddVendorDocumentCommandHandler(IVendorOnboardingRepositor
         };
 
         await repository.AddVendorDocumentAsync(doc, cancellationToken);
-        vendor.RegistrationStage = "under_review";
+        vendor.RegistrationStage = "documents_pending";
         await repository.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new VendorDocumentDto(

@@ -20,7 +20,9 @@ public sealed class RegisterAdminUserCommandValidator : AbstractValidator<Regist
         RuleFor(x => x.Email).NotEmpty().EmailAddress();
         RuleFor(x => x.Password).NotEmpty().MinimumLength(8);
         RuleFor(x => x.FullName).NotEmpty().MaximumLength(255);
-        RuleFor(x => x.Role).NotEmpty().MaximumLength(40);
+        RuleFor(x => x.Role).NotEmpty().MaximumLength(40)
+            .Must(role => role is "super_admin" or "verifier" or "operations_admin")
+            .WithMessage("Role must be 'super_admin', 'verifier', or 'operations_admin'.");
     }
 }
 
@@ -80,7 +82,7 @@ internal sealed class GetAdminUsersQueryHandler(IVendorOnboardingRepository repo
 }
 
 public sealed record AddAdminAuditLogCommand(
-    string AdminUserId,
+    string AdminId,
     string ActionType,
     string EntityType,
     string? EntityId,
@@ -92,7 +94,7 @@ public sealed class AddAdminAuditLogCommandValidator : AbstractValidator<AddAdmi
 {
     public AddAdminAuditLogCommandValidator()
     {
-        RuleFor(x => x.AdminUserId).NotEmpty();
+        RuleFor(x => x.AdminId).NotEmpty();
         RuleFor(x => x.ActionType).NotEmpty().MaximumLength(50);
         RuleFor(x => x.EntityType).NotEmpty().MaximumLength(100);
     }
@@ -103,7 +105,7 @@ internal sealed class AddAdminAuditLogCommandHandler(IVendorOnboardingRepository
 {
     public async Task<Result<AdminAuditLogDto>> Handle(AddAdminAuditLogCommand request, CancellationToken cancellationToken)
     {
-        if (!Guid.TryParse(request.AdminUserId, out var adminUserId))
+        if (!Guid.TryParse(request.AdminId, out var adminUserId))
         {
             return Result.Failure<AdminAuditLogDto>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
         }
@@ -127,7 +129,7 @@ internal sealed class AddAdminAuditLogCommandHandler(IVendorOnboardingRepository
 
         var entity = new AdminAuditLog
         {
-            AdminUserId = adminUserId,
+            AdminId = adminUserId,
             ActionType = request.ActionType,
             EntityType = request.EntityType,
             EntityId = entityId,
@@ -141,7 +143,9 @@ internal sealed class AddAdminAuditLogCommandHandler(IVendorOnboardingRepository
 
         return Result.Success(new AdminAuditLogDto(
             entity.Id.ToString(),
-            entity.AdminUserId.ToString(),
+            entity.AdminId.ToString(),
+            adminUser?.FullName,
+            adminUser?.Email,
             entity.ActionType,
             entity.EntityType,
             entity.EntityId?.ToString(),
@@ -151,7 +155,7 @@ internal sealed class AddAdminAuditLogCommandHandler(IVendorOnboardingRepository
     }
 }
 
-public sealed record GetAdminAuditLogsQuery(string? AdminUserId) : IQuery<List<AdminAuditLogDto>>;
+public sealed record GetAdminAuditLogsQuery(string? AdminId) : IQuery<List<AdminAuditLogDto>>;
 
 internal sealed class GetAdminAuditLogsQueryHandler(IVendorOnboardingRepository repository)
     : IQueryHandler<GetAdminAuditLogsQuery, List<AdminAuditLogDto>>
@@ -159,20 +163,22 @@ internal sealed class GetAdminAuditLogsQueryHandler(IVendorOnboardingRepository 
     public async Task<Result<List<AdminAuditLogDto>>> Handle(GetAdminAuditLogsQuery request, CancellationToken cancellationToken)
     {
         Guid? adminUserId = null;
-        if (!string.IsNullOrWhiteSpace(request.AdminUserId))
+        if (!string.IsNullOrWhiteSpace(request.AdminId))
         {
-            if (!Guid.TryParse(request.AdminUserId, out var parsedAdminUserId))
+            if (!Guid.TryParse(request.AdminId, out var parsedAdminId))
             {
                 return Result.Failure<List<AdminAuditLogDto>>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
             }
 
-            adminUserId = parsedAdminUserId;
+            adminUserId = parsedAdminId;
         }
 
         var rows = await repository.GetAdminAuditLogsAsync(adminUserId, cancellationToken);
         var result = rows.Select(x => new AdminAuditLogDto(
             x.Id.ToString(),
-            x.AdminUserId.ToString(),
+            x.AdminId.ToString(),
+            x.AdminUser?.FullName,
+            x.AdminUser?.Email,
             x.ActionType,
             x.EntityType,
             x.EntityId?.ToString(),
@@ -185,7 +191,7 @@ internal sealed class GetAdminAuditLogsQueryHandler(IVendorOnboardingRepository 
 }
 
 public sealed record VerifyVendorBankAccountCommand(
-    string AdminUserId,
+    string AdminId,
     string VendorId,
     string BankAccountId,
     string VerificationStatus,
@@ -195,7 +201,7 @@ public sealed class VerifyVendorBankAccountCommandValidator : AbstractValidator<
 {
     public VerifyVendorBankAccountCommandValidator()
     {
-        RuleFor(x => x.AdminUserId).NotEmpty();
+        RuleFor(x => x.AdminId).NotEmpty();
         RuleFor(x => x.VendorId).NotEmpty();
         RuleFor(x => x.BankAccountId).NotEmpty();
         RuleFor(x => x.VerificationStatus)
@@ -210,7 +216,7 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
 {
     public async Task<Result<VendorBankAccountDto>> Handle(VerifyVendorBankAccountCommand request, CancellationToken cancellationToken)
     {
-        if (!Guid.TryParse(request.AdminUserId, out var adminUserId))
+        if (!Guid.TryParse(request.AdminId, out var adminUserId))
         {
             return Result.Failure<VendorBankAccountDto>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
         }
@@ -263,7 +269,7 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
 
         var auditLog = new AdminAuditLog
         {
-            AdminUserId = adminUserId,
+            AdminId = adminUserId,
             ActionType = "VENDOR_BANK_ACCOUNT_VERIFIED",
             EntityType = "VendorBankAccount",
             EntityId = bankAccount.Id,
@@ -299,7 +305,7 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
 }
 
 public sealed record VerifyVendorDocumentCommand(
-    string AdminUserId,
+    string AdminId,
     string VendorId,
     string DocumentId,
     string VerificationStatus,
@@ -309,7 +315,7 @@ public sealed class VerifyVendorDocumentCommandValidator : AbstractValidator<Ver
 {
     public VerifyVendorDocumentCommandValidator()
     {
-        RuleFor(x => x.AdminUserId).NotEmpty();
+        RuleFor(x => x.AdminId).NotEmpty();
         RuleFor(x => x.VendorId).NotEmpty();
         RuleFor(x => x.DocumentId).NotEmpty();
         RuleFor(x => x.VerificationStatus)
@@ -324,7 +330,7 @@ internal sealed class VerifyVendorDocumentCommandHandler(IVendorOnboardingReposi
 {
     public async Task<Result<VendorDocumentDto>> Handle(VerifyVendorDocumentCommand request, CancellationToken cancellationToken)
     {
-        if (!Guid.TryParse(request.AdminUserId, out var adminUserId))
+        if (!Guid.TryParse(request.AdminId, out var adminUserId))
         {
             return Result.Failure<VendorDocumentDto>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
         }
@@ -378,7 +384,7 @@ internal sealed class VerifyVendorDocumentCommandHandler(IVendorOnboardingReposi
 
         var auditLog = new AdminAuditLog
         {
-            AdminUserId = adminUserId,
+            AdminId = adminUserId,
             ActionType = "VENDOR_DOCUMENT_VERIFIED",
             EntityType = "VendorDocument",
             EntityId = document.Id,
@@ -402,7 +408,7 @@ internal sealed class VerifyVendorDocumentCommandHandler(IVendorOnboardingReposi
 }
 
 public sealed record VerifyVendorListingCommand(
-    string AdminUserId,
+    string AdminId,
     string VendorId,
     string ListingId,
     string ListingStatus,
@@ -412,7 +418,7 @@ public sealed class VerifyVendorListingCommandValidator : AbstractValidator<Veri
 {
     public VerifyVendorListingCommandValidator()
     {
-        RuleFor(x => x.AdminUserId).NotEmpty();
+        RuleFor(x => x.AdminId).NotEmpty();
         RuleFor(x => x.VendorId).NotEmpty();
         RuleFor(x => x.ListingId).NotEmpty();
         RuleFor(x => x.ListingStatus)
@@ -427,7 +433,7 @@ internal sealed class VerifyVendorListingCommandHandler(IVendorOnboardingReposit
 {
     public async Task<Result<VendorProductListingDto>> Handle(VerifyVendorListingCommand request, CancellationToken cancellationToken)
     {
-        if (!Guid.TryParse(request.AdminUserId, out var adminUserId))
+        if (!Guid.TryParse(request.AdminId, out var adminUserId))
         {
             return Result.Failure<VendorProductListingDto>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
         }
@@ -478,7 +484,7 @@ internal sealed class VerifyVendorListingCommandHandler(IVendorOnboardingReposit
 
         var auditLog = new AdminAuditLog
         {
-            AdminUserId = adminUserId,
+            AdminId = adminUserId,
             ActionType = "VENDOR_LISTING_VERIFIED",
             EntityType = "VendorProductListing",
             EntityId = listing.Id,
@@ -503,7 +509,7 @@ internal sealed class VerifyVendorListingCommandHandler(IVendorOnboardingReposit
 }
 
 public sealed record ForceResetVendorPasswordCommand(
-    string AdminUserId,
+    string AdminId,
     string VendorId,
     string NewPassword,
     string? Notes) : ICommand<AdminPasswordResetDto>;
@@ -512,7 +518,7 @@ public sealed class ForceResetVendorPasswordCommandValidator : AbstractValidator
 {
     public ForceResetVendorPasswordCommandValidator()
     {
-        RuleFor(x => x.AdminUserId).NotEmpty();
+        RuleFor(x => x.AdminId).NotEmpty();
         RuleFor(x => x.VendorId).NotEmpty();
         RuleFor(x => x.NewPassword).NotEmpty().MinimumLength(8);
     }
@@ -525,7 +531,7 @@ internal sealed class ForceResetVendorPasswordCommandHandler(
 {
     public async Task<Result<AdminPasswordResetDto>> Handle(ForceResetVendorPasswordCommand request, CancellationToken cancellationToken)
     {
-        if (!Guid.TryParse(request.AdminUserId, out var adminUserId))
+        if (!Guid.TryParse(request.AdminId, out var adminUserId))
         {
             return Result.Failure<AdminPasswordResetDto>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
         }
@@ -552,7 +558,7 @@ internal sealed class ForceResetVendorPasswordCommandHandler(
 
         var auditLog = new AdminAuditLog
         {
-            AdminUserId = adminUserId,
+            AdminId = adminUserId,
             ActionType = "VENDOR_PASSWORD_FORCE_RESET",
             EntityType = "Vendor",
             EntityId = vendorId,

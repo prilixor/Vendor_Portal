@@ -68,9 +68,16 @@ internal sealed class GetVendorNotificationPreferenceQueryHandler(IVendorOnboard
         }
 
         var entity = await repository.GetVendorNotificationPreferenceAsync(vendorId, cancellationToken);
+        
+        // Return default preferences if none exist
         if (entity is null)
         {
-            return Result.Failure<VendorNotificationPreferenceDto>(new Error("vendors.notifications.preference_not_found", "Notification preference not found.", ErrorCategory.NotFound));
+            return Result.Success(new VendorNotificationPreferenceDto(
+                Guid.Empty.ToString(),
+                vendorId.ToString(),
+                true,  // EmailNotificationsEnabled
+                true,  // PushNotificationsEnabled
+                true)); // NewOrderNotifications
         }
 
         return Result.Success(new VendorNotificationPreferenceDto(

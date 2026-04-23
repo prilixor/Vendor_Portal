@@ -20,10 +20,14 @@ interface TopBarProps {
 export const TopBar = ({ onMenuClick }: TopBarProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem("theme");
+    return saved === "dark";
+  });
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("theme", dark ? "dark" : "light");
   }, [dark]);
 
   const initials = (user?.name ?? "U").split(" ").map((n) => n[0]).slice(0, 2).join("");
@@ -43,16 +47,16 @@ export const TopBar = ({ onMenuClick }: TopBarProps) => {
           {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate(user?.role === "admin" ? "/admin" : "/vendor/notifications")}
-          aria-label="Notifications"
-          className="relative"
-        >
-          <Bell className="h-4 w-4" />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive ring-2 ring-background" />
-        </Button>
+        {user?.role !== "admin" && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/vendor/notifications")}
+            aria-label="Notifications"
+          >
+            <Bell className="h-4 w-4" />
+          </Button>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -76,10 +80,6 @@ export const TopBar = ({ onMenuClick }: TopBarProps) => {
                 <p className="text-xs font-normal text-muted-foreground">{user?.email}</p>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate(user?.role === "admin" ? "/admin" : "/vendor/settings")}>
-              Account settings
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => {

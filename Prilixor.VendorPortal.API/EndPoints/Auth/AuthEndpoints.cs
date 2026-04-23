@@ -68,15 +68,15 @@ public sealed class LoginEndpoint(
             return TypedResults.Problem(title: "auth.invalid_credentials", detail: "Email and password are required.", statusCode: 400);
         }
 
-        if (role != "vendor" && role != "admin")
+        if (role != "vendor" && role != "admin" && role != "super_admin" && role != "verifier" && role != "operations_admin")
         {
-            return TypedResults.Problem(title: "auth.invalid_role", detail: "Role must be 'vendor' or 'admin'.", statusCode: 400);
+            return TypedResults.Problem(title: "auth.invalid_role", detail: "Role must be 'vendor', 'admin', 'super_admin', 'verifier', or 'operations_admin'.", statusCode: 400);
         }
 
         string userId;
         string name;
 
-        if (role == "admin")
+        if (role == "admin" || role == "super_admin" || role == "verifier" || role == "operations_admin")
         {
             var admin = await repository.GetAdminUserByEmailAsync(email, ct);
             if (admin is null || admin.IsDeleted || !admin.IsActive || !passwordHasher.VerifyPassword(req.Password, admin.PasswordHash))

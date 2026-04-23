@@ -4,7 +4,7 @@ import { User, Role } from '@/app/models';
 export interface LoginRequest {
   email: string;
   password: string;
-  role: 'vendor' | 'admin';
+  role: 'vendor' | 'admin' | 'super_admin' | 'verifier' | 'operations_admin';
 }
 
 export interface LoginResponse {
