@@ -2,8 +2,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
 WORKDIR /app
 
-COPY ../ ./
-WORKDIR /app/Prilixor.VendorPortal.API
+COPY . ./
 
 RUN dotnet restore
 RUN dotnet publish -c Release -o out
@@ -12,7 +11,7 @@ RUN dotnet publish -c Release -o out
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview
 WORKDIR /app
 
-COPY --from=build /app/Prilixor.VendorPortal.API/out .
+COPY --from=build /app/out .
 
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:${PORT:-8080}
