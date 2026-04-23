@@ -45,21 +45,23 @@ builder.Services.AddAuthorization();
 builder.Services.AddCors(options =>
 {
     var corsOptions = builder.Configuration.GetSection("CorsOptions").Get<CorsOptions>();
-    options.AddDefaultPolicy(policy =>
+   options.AddDefaultPolicy(policy =>
     {
         if (corsOptions?.Origins != null && corsOptions.Origins.Length > 0)
         {
-            policy.WithOrigins("https://vendor-portal-psi-amber.vercel.app", "https://localhost:7257/api")
+            policy.WithOrigins(corsOptions.Origins)
                   .AllowAnyHeader()
                   .AllowAnyMethod();
         }
         else
         {
-            policy.AllowAnyOrigin()
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
+            policy.WithOrigins(
+                "http://localhost:5173",
+                "https://vendor-portal-psi-amber.vercel.app"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod();
         }
-
     });
 });
 
