@@ -5,6 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="EPPlus" Version="8.5.3" />
     <PackageReference Include="FastEndpoints" Version="8.1.0" />
     <PackageReference Include="FastEndpoints.Swagger" Version="8.1.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
