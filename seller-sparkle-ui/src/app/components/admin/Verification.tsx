@@ -75,6 +75,7 @@ const Verification = () => {
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<VendorBankAccountDto[]>([]);
   const [loadingBanks, setLoadingBanks] = useState(false);
+  const [previewDocument, setPreviewDocument] = useState<{ url: string; type: string } | null>(null);
 
   useEffect(() => {
     loadVendors();
@@ -132,14 +133,7 @@ const Verification = () => {
       return;
     }
     const previewUrl = getPreviewUrl(doc.fileUrl);
-    const popup = window.open(previewUrl, "_blank", "noopener,noreferrer");
-    if (!popup) {
-      toast.error("Popup blocked. Please allow popups for this site.");
-      return;
-    }
-    if (previewUrl.startsWith("blob:")) {
-      setTimeout(() => URL.revokeObjectURL(previewUrl), 60_000);
-    }
+    setPreviewDocument({ url: previewUrl, type: doc.documentType });
   };
 
   const getPreviewUrl = (fileUrl: string): string => {
@@ -656,6 +650,47 @@ const Verification = () => {
               {verifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Confirm {actionType}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Document Preview Modal */}
+      <Dialog open={previewDocument !== null} onOpenChange={(open) => !open && setPreviewDocument(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Document Preview - {previewDocument?.type}</DialogTitle>
+          </DialogHeader>
+          {previewDocument && (
+            <div className="w-full h-[70vh] flex items-center justify-center bg-muted/30 rounded-lg overflow-hidden">
+              {previewDocument.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                <img
+                  src={previewDocument.url}
+                  alt="Document preview"
+                  className="max-w-full max-h-full object-contain"
+                />
+              ) : previewDocument.url.match(/\.pdf$/i) ? (
+                <iframe
+                  src={previewDocument.url}
+                  className="w-full h-full border-0"
+                  title="PDF Preview"
+                />
+              ) : (
+                <div className="text-center p-6">
+                  <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    Preview not available for this file type.
+                    <a
+                      href={previewDocument.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline ml-2"
+                    >
+                      Download file
+                    </a>
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

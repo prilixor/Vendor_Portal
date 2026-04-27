@@ -121,6 +121,7 @@ const VendorDetails = () => {
   const [workingHours, setWorkingHours] = useState<VendorWorkingHourDto[]>([]);
 
   const [productListings, setProductListings] = useState<VendorProductListingDto[]>([]);
+  const [previewDocument, setPreviewDocument] = useState<{ url: string; type: string } | null>(null);
 
 
 
@@ -363,15 +364,12 @@ const VendorDetails = () => {
     }
   };
 
-  const previewDoc = (fileUrl: string) => {
+  const previewDoc = (fileUrl: string, documentType: string) => {
     if (!fileUrl) {
       toast.info("No document URL found.");
       return;
     }
-    const popup = window.open(fileUrl, "_blank", "noopener,noreferrer");
-    if (!popup) {
-      toast.error("Popup blocked. Please allow popups for this site.");
-    }
+    setPreviewDocument({ url: fileUrl, type: documentType });
   };
 
   const openItemRejectDialog = (kind: "doc" | "bank", itemId: string) => {
@@ -756,7 +754,7 @@ const VendorDetails = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => previewDoc(d.fileUrl)}
+                      onClick={() => previewDoc(d.fileUrl, d.documentType)}
                       className="h-7 w-7"
                       aria-label="Preview document"
                     >
@@ -1094,6 +1092,47 @@ const VendorDetails = () => {
 
         </DialogContent>
 
+      </Dialog>
+
+      {/* Document Preview Modal */}
+      <Dialog open={previewDocument !== null} onOpenChange={(open) => !open && setPreviewDocument(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Document Preview - {previewDocument?.type}</DialogTitle>
+          </DialogHeader>
+          {previewDocument && (
+            <div className="w-full h-[70vh] flex items-center justify-center bg-muted/30 rounded-lg overflow-hidden">
+              {previewDocument.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                <img
+                  src={previewDocument.url}
+                  alt="Document preview"
+                  className="max-w-full max-h-full object-contain"
+                />
+              ) : previewDocument.url.match(/\.pdf$/i) ? (
+                <iframe
+                  src={previewDocument.url}
+                  className="w-full h-full border-0"
+                  title="PDF Preview"
+                />
+              ) : (
+                <div className="text-center p-6">
+                  <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    Preview not available for this file type.
+                    <a
+                      href={previewDocument.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline ml-2"
+                    >
+                      Download file
+                    </a>
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
       </Dialog>
 
     </div>

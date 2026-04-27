@@ -46,11 +46,10 @@ export const vendorNav: NavSection[] = [
 
     items: [
 
-      { label: "Service Areas", to: "/vendor/service-areas", icon: MapPin },
-
+      // Temporarily disabled
+      // { label: "Service Areas", to: "/vendor/service-areas", icon: MapPin },
       { label: "Working Hours", to: "/vendor/working-hours", icon: Clock },
-
-      { label: "Availability", to: "/vendor/availability", icon: CalendarDays },
+      // { label: "Availability", to: "/vendor/availability", icon: CalendarDays },
 
     ],
 

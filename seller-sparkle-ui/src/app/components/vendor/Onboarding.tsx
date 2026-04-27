@@ -10,6 +10,7 @@ import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye, Building2, ChevronLeft, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -66,6 +67,7 @@ const Onboarding = () => {
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [previewDocument, setPreviewDocument] = useState<{ url: string; type: string } | null>(null);
 
   const prev = () => setStep((s) => Math.max(s - 1, 0));
 
@@ -209,6 +211,13 @@ const Onboarding = () => {
       return;
     }
 
+    // Check if document type already exists
+    const existingDoc = documents.find((doc) => doc.type === documentType);
+    if (existingDoc) {
+      toast.error("This document is already uploaded. Please delete the existing file before uploading a new one.");
+      return;
+    }
+
     try {
       setBusy(true);
       const uploaded = await vendorOnboardingApi.uploadVendorFile(user.id, selectedFile);
@@ -253,14 +262,7 @@ const Onboarding = () => {
       return;
     }
     const previewUrl = getPreviewUrl(doc.fileUrl);
-    const popup = window.open(previewUrl, "_blank", "noopener,noreferrer");
-    if (!popup) {
-      toast.error("Popup blocked. Please allow popups for this site.");
-      return;
-    }
-    if (previewUrl !== doc.fileUrl) {
-      setTimeout(() => URL.revokeObjectURL(previewUrl), 60_000);
-    }
+    setPreviewDocument({ url: previewUrl, type: doc.type });
   };
 
   const saveProfile = async () => {
@@ -868,6 +870,47 @@ const Onboarding = () => {
           </Card>
         </>
       )}
+
+      {/* Document Preview Modal */}
+      <Dialog open={previewDocument !== null} onOpenChange={(open) => !open && setPreviewDocument(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Document Preview - {previewDocument?.type}</DialogTitle>
+          </DialogHeader>
+          {previewDocument && (
+            <div className="w-full h-[70vh] flex items-center justify-center bg-muted/30 rounded-lg overflow-hidden">
+              {previewDocument.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                <img
+                  src={previewDocument.url}
+                  alt="Document preview"
+                  className="max-w-full max-h-full object-contain"
+                />
+              ) : previewDocument.url.match(/\.pdf$/i) ? (
+                <iframe
+                  src={previewDocument.url}
+                  className="w-full h-full border-0"
+                  title="PDF Preview"
+                />
+              ) : (
+                <div className="text-center p-6">
+                  <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    Preview not available for this file type. 
+                    <a
+                      href={previewDocument.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline ml-2"
+                    >
+                      Download file
+                    </a>
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

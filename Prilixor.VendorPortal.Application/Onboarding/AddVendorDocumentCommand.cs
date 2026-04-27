@@ -38,6 +38,14 @@ internal sealed class AddVendorDocumentCommandHandler(IVendorOnboardingRepositor
             return Result.Failure<VendorDocumentDto>(new Error("vendors.not_found", "Vendor not found.", ErrorCategory.NotFound));
         }
 
+        // Check if a document of the same type already exists for this vendor
+        var existingDocuments = await repository.GetVendorDocumentsAsync(vendorId, cancellationToken);
+        var existingDoc = existingDocuments.FirstOrDefault(d => d.DocumentType == request.DocumentType);
+        if (existingDoc is not null)
+        {
+            return Result.Failure<VendorDocumentDto>(new Error("vendors.document_duplicate", "This document is already uploaded. Please delete the existing file before uploading a new one.", ErrorCategory.Validation));
+        }
+
         var doc = new VendorDocument
         {
             VendorId = vendorId,

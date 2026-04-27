@@ -53,9 +53,10 @@ const App = () => (
             <Route path="/vendor" element={<AppShell variant="vendor" />}>
               <Route index element={<VendorDashboard />} />
               <Route path="onboarding" element={<Onboarding />} />
-              <Route path="service-areas" element={<ServiceAreas />} />
+              {/* Temporarily disabled */}
+              {/* <Route path="service-areas" element={<ServiceAreas />} /> */}
               <Route path="working-hours" element={<WorkingHours />} />
-              <Route path="availability" element={<Availability />} />
+              {/* <Route path="availability" element={<Availability />} /> */}
               <Route path="products" element={<Products />} />
               <Route path="inventory" element={<Inventory />} />
               <Route path="notifications" element={<Notifications />} />
