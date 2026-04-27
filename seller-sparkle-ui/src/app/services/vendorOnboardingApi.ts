@@ -53,6 +53,7 @@ export interface VendorBankAccountApiDto {
   accountHolderName: string;
   bankName: string;
   accountNumber: string;
+  branchName: string;
   ifscCode: string;
   verificationStatus: string;
   verifiedAt?: string;
@@ -194,6 +195,7 @@ export interface CreateVendorBankAccountPayload {
   accountHolderName: string;
   bankName: string;
   accountNumber: string;
+  branchName: string;
   ifscCode: string;
 }
 

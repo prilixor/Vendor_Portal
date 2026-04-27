@@ -43,6 +43,8 @@ const defaultBank: BankDetails = {
   accountHolderName: "",
   bankName: "",
   accountNumber: "",
+  confirmAccountNumber: "",
+  branchName: "",
   ifscCode: "",
   status: "pending",
 };
@@ -68,6 +70,8 @@ const Onboarding = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [previewDocument, setPreviewDocument] = useState<{ url: string; type: string } | null>(null);
+  const [ifscLoading, setIfscLoading] = useState(false);
+  const [ifscError, setIfscError] = useState<string | null>(null);
 
   const prev = () => setStep((s) => Math.max(s - 1, 0));
 
@@ -88,6 +92,55 @@ const Onboarding = () => {
     setProfile((p) => ({ ...p, [k]: v }));
 
   const updateBank = <K extends keyof typeof bank>(k: K, v: (typeof bank)[K]) => setBank((p) => ({ ...p, [k]: v }));
+
+  const validateIFSC = (ifsc: string): boolean => {
+    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+    return ifscRegex.test(ifsc.toUpperCase());
+  };
+
+  const fetchBankDetails = async (ifsc: string) => {
+    if (!validateIFSC(ifsc)) {
+      setIfscError("Invalid IFSC format. Must be 11 characters: 4 letters + 0 + 6 alphanumeric");
+      return;
+    }
+
+    setIfscLoading(true);
+    setIfscError(null);
+
+    try {
+      const response = await fetch(`https://ifsc.razorpay.com/${ifsc.toUpperCase()}`);
+      if (!response.ok) {
+        throw new Error("IFSC not found");
+      }
+      const data = await response.json();
+      if (!data || !data.BANK || !data.BRANCH) {
+        throw new Error("Invalid IFSC code");
+      }
+
+      setBank((prev) => ({
+        ...prev,
+        bankName: data.BANK,
+        branchName: data.BRANCH,
+      }));
+      setIfscError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to fetch bank details";
+      setIfscError(message);
+      setBank((prev) => ({
+        ...prev,
+        bankName: "",
+        branchName: "",
+      }));
+    } finally {
+      setIfscLoading(false);
+    }
+  };
+
+  const handleIFSCBlur = () => {
+    if (bank.ifscCode && bank.ifscCode.length === 11) {
+      fetchBankDetails(bank.ifscCode);
+    }
+  };
 
   const mapStatus = (status?: string): VerificationStatus => {
     if (!status) return "pending";
@@ -166,6 +219,8 @@ const Onboarding = () => {
             accountHolderName: latestBank.accountHolderName,
             bankName: latestBank.bankName,
             accountNumber: latestBank.accountNumber,
+            confirmAccountNumber: latestBank.accountNumber,
+            branchName: latestBank.branchName || "",
             ifscCode: latestBank.ifscCode,
             status: mapStatus(latestBank.verificationStatus),
           });
@@ -294,6 +349,7 @@ const Onboarding = () => {
         accountHolderName: bank.accountHolderName,
         bankName: bank.bankName,
         accountNumber: bank.accountNumber,
+        branchName: bank.branchName,
         ifscCode: bank.ifscCode,
       });
       setBankAccountId(updated.id);
@@ -305,6 +361,7 @@ const Onboarding = () => {
       accountHolderName: bank.accountHolderName,
       bankName: bank.bankName,
       accountNumber: bank.accountNumber,
+      branchName: bank.branchName,
       ifscCode: bank.ifscCode,
     });
     setBankAccountId(created.id);
@@ -359,6 +416,10 @@ const Onboarding = () => {
     if (editingSection === 1) {
       await saveProfile();
     } else if (editingSection === 3) {
+      if (bank.accountNumber !== bank.confirmAccountNumber) {
+        toast.error("Account numbers do not match");
+        return;
+      }
       await saveBank();
     }
     setEditingSection(null);
@@ -566,12 +627,30 @@ const Onboarding = () => {
                   <div className="space-y-4">
                     <FormGrid cols={2}>
                       <Field label="Account holder name" value={bank.accountHolderName} onChange={(v) => updateBank("accountHolderName", v)} />
-                      <Field label="Bank name" value={bank.bankName} onChange={(v) => updateBank("bankName", v)} />
                       <Field label="Account number" value={bank.accountNumber} onChange={(v) => updateBank("accountNumber", v)} />
-                      <Field label="IFSC code" value={bank.ifscCode} onChange={(v) => updateBank("ifscCode", v)} />
+                      <Field label="Confirm account number" value={bank.confirmAccountNumber} onChange={(v) => updateBank("confirmAccountNumber", v)} />
+                      <div className="space-y-1.5">
+                        <Label>IFSC code</Label>
+                        <div className="relative">
+                          <Input
+                            value={bank.ifscCode}
+                            onChange={(e) => updateBank("ifscCode", e.target.value)}
+                            onBlur={handleIFSCBlur}
+                            disabled={ifscLoading}
+                          />
+                          {ifscLoading && (
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                            </div>
+                          )}
+                        </div>
+                        {ifscError && <p className="text-xs text-destructive">{ifscError}</p>}
+                      </div>
+                      <Field label="Bank name" value={bank.bankName} onChange={(v) => updateBank("bankName", v)} readonly />
+                      <Field label="Branch name" value={bank.branchName} onChange={(v) => updateBank("branchName", v)} readonly />
                     </FormGrid>
                     <div className="flex gap-2 pt-2">
-                      <Button onClick={handleSaveSection} disabled={busy}>Save</Button>
+                      <Button onClick={handleSaveSection} disabled={busy || ifscLoading}>Save</Button>
                       <Button variant="outline" onClick={handleCancelEdit}>Cancel</Button>
                     </div>
                   </div>
@@ -580,6 +659,7 @@ const Onboarding = () => {
                     <Detail label="Account holder name" value={bank.accountHolderName || "Not set"} />
                     <Detail label="Bank name" value={bank.bankName || "Not set"} />
                     <Detail label="Account number" value={bank.accountNumber || "Not set"} />
+                    <Detail label="Branch name" value={bank.branchName || "Not set"} />
                     <Detail label="IFSC code" value={bank.ifscCode || "Not set"} />
                   </div>
                 )}
@@ -766,9 +846,27 @@ const Onboarding = () => {
             <h2 className="text-lg font-semibold">Bank details</h2>
             <FormGrid cols={2}>
               <Field label="Account holder name" value={bank.accountHolderName} onChange={(v) => updateBank("accountHolderName", v)} />
-              <Field label="Bank name" value={bank.bankName} onChange={(v) => updateBank("bankName", v)} />
               <Field label="Account number" value={bank.accountNumber} onChange={(v) => updateBank("accountNumber", v)} />
-              <Field label="IFSC code" value={bank.ifscCode} onChange={(v) => updateBank("ifscCode", v)} />
+              <Field label="Confirm account number" value={bank.confirmAccountNumber} onChange={(v) => updateBank("confirmAccountNumber", v)} />
+              <div className="space-y-1.5">
+                <Label>IFSC code</Label>
+                <div className="relative">
+                  <Input
+                    value={bank.ifscCode}
+                    onChange={(e) => updateBank("ifscCode", e.target.value)}
+                    onBlur={handleIFSCBlur}
+                    disabled={ifscLoading}
+                  />
+                  {ifscLoading && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    </div>
+                  )}
+                </div>
+                {ifscError && <p className="text-xs text-destructive">{ifscError}</p>}
+              </div>
+              <Field label="Bank name" value={bank.bankName} onChange={(v) => updateBank("bankName", v)} readonly />
+              <Field label="Branch name" value={bank.branchName} onChange={(v) => updateBank("branchName", v)} readonly />
             </FormGrid>
             <div className="rounded-lg border border-info/20 bg-info-soft p-3 text-xs text-info">
               <ShieldCheck className="mr-1.5 inline h-4 w-4" />
@@ -920,15 +1018,24 @@ const Field = ({
   value,
   onChange,
   className,
+  readonly,
+  onBlur,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   className?: string;
+  readonly?: boolean;
+  onBlur?: () => void;
 }) => (
   <div className={`space-y-1.5 ${className ?? ""}`}>
     <Label>{label}</Label>
-    <Input value={value} onChange={(e) => onChange(e.target.value)} />
+    <Input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      readOnly={readonly}
+      onBlur={onBlur}
+    />
   </div>
 );
 

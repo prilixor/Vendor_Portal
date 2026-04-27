@@ -7,6 +7,7 @@ import { Label } from "@/app/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { Switch } from "@/app/components/ui/switch";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { ProductListing } from "@/app/models";
@@ -60,7 +61,7 @@ const Products = () => {
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "active" | "draft" | "inactive">("all");
+  const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
   const [editing, setEditing] = useState<LocalListing | null>(null);
   const [mediaFor, setMediaFor] = useState<LocalListing | null>(null);
   const [tempImages, setTempImages] = useState<MediaImage[]>([]);
@@ -85,6 +86,31 @@ const Products = () => {
     const s = !search || p.title.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase());
     return m && s;
   });
+
+  const toggleListingStatus = async (listing: LocalListing) => {
+    try {
+      setBusy(true);
+      const newStatus = listing.status === "active" ? "inactive" : "active";
+      const updated = await vendorOnboardingApi.updateVendorProductListing(user.id, listing.id, {
+        vendorId: user.id,
+        listingId: listing.id,
+        productId: listing.productId,
+        listingTitle: listing.title,
+        dailyRent: listing.dailyRent,
+        monthlyRent: listing.monthlyRent,
+        securityDeposit: listing.securityDeposit,
+        availableQuantity: listing.quantity,
+        listingStatus: newStatus,
+      });
+      setProducts(products.map((p) => (p.id === listing.id ? { ...p, status: newStatus } : p)));
+      toast.success("Listing status updated successfully");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update listing status.";
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const loadCatalogAndListings = async () => {
     if (!user) return;
@@ -487,11 +513,10 @@ const Products = () => {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search listings…" className="pl-9" />
           </div>
-          <Tabs value={filter} onValueChange={(v) => setFilter(v as "all" | "active" | "draft" | "inactive")}>
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as "all" | "active" | "inactive")}>
             <TabsList>
               <TabsTrigger value="all">All <span className="ml-1.5 text-xs text-muted-foreground">({products.length})</span></TabsTrigger>
               <TabsTrigger value="active">Active</TabsTrigger>
-              <TabsTrigger value="draft">Draft</TabsTrigger>
               <TabsTrigger value="inactive">Inactive</TabsTrigger>
             </TabsList>
           </Tabs>
@@ -529,7 +554,13 @@ const Products = () => {
                   <td className="px-4 py-3 text-right font-mono">₹{p.monthlyRent.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right font-mono">₹{p.securityDeposit.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right">{p.quantity}</td>
-                  <td className="px-4 py-3"><StatusBadge status={p.status === "active" ? "approved" : p.status === "inactive" ? "rejected" : "pending"} /></td>
+                  <td className="px-4 py-3">
+                    <Switch
+                      checked={p.status === "active"}
+                      onCheckedChange={() => toggleListingStatus(p)}
+                      disabled={busy}
+                    />
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-1">
                       <Button variant="ghost" size="icon" onClick={() => void openMedia(p)} aria-label="Media" disabled={busy}>
@@ -572,7 +603,8 @@ const Products = () => {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                   </Select>
-                  <Button variant="outline" onClick={openCreateCategory} type="button" disabled={busy}>New</Button>
+                  {/* Vendor catalog creation disabled - managed by admin */}
+                  {/* <Button variant="outline" onClick={openCreateCategory} type="button" disabled={busy}>New</Button> */}
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -593,7 +625,8 @@ const Products = () => {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button variant="outline" onClick={openCreateProduct} type="button" disabled={busy}>New</Button>
+                  {/* Vendor catalog creation disabled - managed by admin */}
+                  {/* <Button variant="outline" onClick={openCreateProduct} type="button" disabled={busy}>New</Button> */}
                 </div>
               </div>
               <div className="space-y-1.5 sm:col-span-2">
@@ -621,7 +654,6 @@ const Products = () => {
                 <Select value={editing.status} onValueChange={(v) => setEditing({ ...editing, status: v as ProductListing["status"] })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="inactive">Inactive</SelectItem>
                   </SelectContent>
@@ -638,7 +670,8 @@ const Products = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+      {/* Category creation dialog - Disabled, managed by admin */}
+      {/* <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>New category</DialogTitle>
@@ -662,9 +695,10 @@ const Products = () => {
             <Button onClick={() => void createCategory()} disabled={busy}>Create category</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog> */}
 
-      <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
+      {/* Product creation dialog - Disabled, managed by admin */}
+      {/* <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>New product</DialogTitle>
@@ -706,7 +740,7 @@ const Products = () => {
             <Button onClick={() => void createProduct()} disabled={busy}>Create product</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog> */}
       <Dialog open={!!mediaFor} onOpenChange={(v) => !v && setMediaFor(null)}>
         <DialogContent className="w-[calc(100vw-1rem)] max-w-4xl p-0">
           <DialogHeader className="px-4 pt-4 sm:px-6 sm:pt-6">

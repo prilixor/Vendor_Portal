@@ -11,6 +11,7 @@ public class CreateVendorBankAccountRequest : VendorIdRequest
     public string AccountHolderName { get; set; } = string.Empty;
     public string BankName { get; set; } = string.Empty;
     public string AccountNumber { get; set; } = string.Empty;
+    public string BranchName { get; set; } = string.Empty;
     public string IfscCode { get; set; } = string.Empty;
 }
 
@@ -36,6 +37,7 @@ public sealed class CreateVendorBankAccountEndpoint(IMediator mediator)
             req.AccountHolderName,
             req.BankName,
             req.AccountNumber,
+            req.BranchName,
             req.IfscCode);
 
         var result = await mediator.Send(command, ct);
@@ -60,6 +62,7 @@ public sealed class UpdateVendorBankAccountEndpoint(IMediator mediator)
             req.AccountHolderName,
             req.BankName,
             req.AccountNumber,
+            req.BranchName,
             req.IfscCode);
 
         var result = await mediator.Send(command, ct);

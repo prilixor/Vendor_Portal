@@ -12,6 +12,7 @@ public sealed record UpsertVendorBankAccountCommand(
     string AccountHolderName,
     string BankName,
     string AccountNumber,
+    string BranchName,
     string IfscCode) : ICommand<VendorBankAccountDto>;
 
 public sealed class UpsertVendorBankAccountCommandValidator : AbstractValidator<UpsertVendorBankAccountCommand>
@@ -22,6 +23,7 @@ public sealed class UpsertVendorBankAccountCommandValidator : AbstractValidator<
         RuleFor(x => x.AccountHolderName).NotEmpty().MaximumLength(255);
         RuleFor(x => x.BankName).NotEmpty().MaximumLength(255);
         RuleFor(x => x.AccountNumber).NotEmpty().MaximumLength(100);
+        RuleFor(x => x.BranchName).MaximumLength(255);
         RuleFor(x => x.IfscCode).NotEmpty().MaximumLength(20);
     }
 }
@@ -61,6 +63,7 @@ internal sealed class UpsertVendorBankAccountCommandHandler(IVendorOnboardingRep
         entity.AccountHolderName = request.AccountHolderName;
         entity.BankName = request.BankName;
         entity.AccountNumber = request.AccountNumber;
+        entity.BranchName = request.BranchName;
         entity.IfscCode = request.IfscCode;
         entity.VerificationStatus = "pending";
         entity.VerifiedAt = null;
@@ -82,6 +85,7 @@ internal sealed class UpsertVendorBankAccountCommandHandler(IVendorOnboardingRep
             entity.AccountHolderName,
             entity.BankName,
             entity.AccountNumber,
+            entity.BranchName,
             entity.IfscCode,
             entity.VerificationStatus,
             entity.VerifiedAt));
@@ -107,6 +111,7 @@ internal sealed class GetVendorBankAccountsQueryHandler(IVendorOnboardingReposit
             x.AccountHolderName,
             x.BankName,
             x.AccountNumber,
+            x.BranchName,
             x.IfscCode,
             x.VerificationStatus,
             x.VerifiedAt)).ToList();

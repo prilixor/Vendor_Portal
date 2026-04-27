@@ -43,10 +43,14 @@ public interface IVendorOnboardingRepository
 
     Task<ProductCategory?> GetProductCategoryByIdAsync(Guid categoryId, CancellationToken cancellationToken);
     Task AddProductCategoryAsync(ProductCategory category, CancellationToken cancellationToken);
+    Task UpdateProductCategoryAsync(ProductCategory category, CancellationToken cancellationToken);
+    Task DeleteProductCategoryAsync(Guid categoryId, CancellationToken cancellationToken);
     Task<List<ProductCategory>> GetProductCategoriesAsync(CancellationToken cancellationToken);
 
     Task<Product?> GetProductByIdAsync(Guid productId, CancellationToken cancellationToken);
     Task AddProductAsync(Product product, CancellationToken cancellationToken);
+    Task UpdateProductAsync(Product product, CancellationToken cancellationToken);
+    Task DeleteProductAsync(Guid productId, CancellationToken cancellationToken);
     Task<List<Product>> GetProductsAsync(Guid? categoryId, CancellationToken cancellationToken);
 
     Task<VendorProductListing?> GetVendorProductListingByIdAsync(Guid vendorId, Guid listingId, CancellationToken cancellationToken);

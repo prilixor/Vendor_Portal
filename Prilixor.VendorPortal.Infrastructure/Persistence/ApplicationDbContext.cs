@@ -209,6 +209,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(x => x.AccountHolderName).HasColumnName("account_holder_name");
             entity.Property(x => x.BankName).HasColumnName("bank_name");
             entity.Property(x => x.AccountNumber).HasColumnName("account_number");
+            entity.Property(x => x.BranchName).HasColumnName("branch_name");
             entity.Property(x => x.IfscCode).HasColumnName("ifsc_code");
             entity.Property(x => x.VerificationStatus).HasColumnName("verification_status");
             entity.Property(x => x.VerifiedAt).HasColumnName("verified_at");

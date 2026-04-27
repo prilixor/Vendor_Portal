@@ -221,6 +221,79 @@ export interface ReactivateVendorRequest {
   reason?: string;
 }
 
+// Catalog DTOs
+export interface ProductCategoryDto {
+  id: string;
+  categoryName: string;
+  prescriptionRequired: boolean;
+  depositRequired: boolean;
+  installationRequired: boolean;
+  isActive: boolean;
+}
+
+export interface ProductDto {
+  id: string;
+  categoryId: string;
+  productName: string;
+  brandName?: string;
+  modelName?: string;
+  shortDescription?: string;
+  longDescription?: string;
+  isActive: boolean;
+}
+
+export interface CreateProductCategoryRequest {
+  categoryName: string;
+  prescriptionRequired: boolean;
+  depositRequired: boolean;
+  installationRequired: boolean;
+  isActive: boolean;
+}
+
+export interface UpdateProductCategoryRequest {
+  id: string;
+  categoryName: string;
+  prescriptionRequired: boolean;
+  depositRequired: boolean;
+  installationRequired: boolean;
+  isActive: boolean;
+}
+
+export interface CreateProductRequest {
+  categoryId: string;
+  productName: string;
+  brandName?: string;
+  modelName?: string;
+  shortDescription?: string;
+  longDescription?: string;
+  isActive: boolean;
+}
+
+export interface UpdateProductRequest {
+  id: string;
+  categoryId: string;
+  productName: string;
+  brandName?: string;
+  modelName?: string;
+  shortDescription?: string;
+  longDescription?: string;
+  isActive: boolean;
+}
+
+export interface ExcelUploadErrorDto {
+  row: number;
+  sheet: string;
+  field: string;
+  message: string;
+}
+
+export interface ExcelUploadResponseDto {
+  success: boolean;
+  errors: ExcelUploadErrorDto[];
+  categoriesCreated: number;
+  productsCreated: number;
+}
+
 export const adminApi = {
   // Vendors
   async getVendors(): Promise<VendorDto[]> {
@@ -318,5 +391,45 @@ export const adminApi = {
 
   async reactivateVendor(data: ReactivateVendorRequest): Promise<VendorDto> {
     return apiClient.patch<VendorDto>(`/admin/vendors/${data.vendorId}/reactivate`, data);
+  },
+
+  // Catalog Management
+  async getProductCategories(): Promise<ProductCategoryDto[]> {
+    return apiClient.get<ProductCategoryDto[]>('/admin/catalog/categories');
+  },
+
+  async createProductCategory(data: CreateProductCategoryRequest): Promise<ProductCategoryDto> {
+    return apiClient.post<ProductCategoryDto>('/admin/catalog/categories', data);
+  },
+
+  async updateProductCategory(id: string, data: UpdateProductCategoryRequest): Promise<ProductCategoryDto> {
+    return apiClient.put<ProductCategoryDto>(`/admin/catalog/categories/${id}`, data);
+  },
+
+  async deleteProductCategory(id: string): Promise<void> {
+    return apiClient.delete<void>(`/admin/catalog/categories/${id}`);
+  },
+
+  async getProducts(categoryId?: string): Promise<ProductDto[]> {
+    const url = categoryId ? `/admin/catalog/products?categoryId=${categoryId}` : '/admin/catalog/products';
+    return apiClient.get<ProductDto[]>(url);
+  },
+
+  async createProduct(data: CreateProductRequest): Promise<ProductDto> {
+    return apiClient.post<ProductDto>('/admin/catalog/products', data);
+  },
+
+  async updateProduct(id: string, data: UpdateProductRequest): Promise<ProductDto> {
+    return apiClient.put<ProductDto>(`/admin/catalog/products/${id}`, data);
+  },
+
+  async deleteProduct(id: string): Promise<void> {
+    return apiClient.delete<void>(`/admin/catalog/products/${id}`);
+  },
+
+  async uploadCatalogExcel(file: File): Promise<ExcelUploadResponseDto> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post<ExcelUploadResponseDto>('/admin/catalog/upload-excel', formData);
   },
 };

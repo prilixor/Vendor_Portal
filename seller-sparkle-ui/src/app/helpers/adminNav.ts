@@ -4,6 +4,7 @@ import {
   ShieldCheck,
   ScrollText,
   Building2,
+  Package,
 } from "lucide-react";
 import type { NavSection } from "@/app/helpers/navigation";
 
@@ -17,6 +18,12 @@ export const adminNav: NavSection[] = [
     items: [
       { label: "Verification", to: "/admin/verification", icon: ShieldCheck },
       { label: "All Vendors", to: "/admin/vendors", icon: Building2 },
+    ],
+  },
+  {
+    title: "Catalog",
+    items: [
+      { label: "Products Management", to: "/admin/products", icon: Package },
     ],
   },
   {

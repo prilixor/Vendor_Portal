@@ -76,6 +76,7 @@ public sealed record VendorBankAccountDto(
     string AccountHolderName,
     string BankName,
     string AccountNumber,
+    string BranchName,
     string IfscCode,
     string VerificationStatus,
     DateTimeOffset? VerifiedAt);
@@ -186,3 +187,15 @@ public sealed record AdminPasswordResetDto(
     string VendorId,
     string Message,
     DateTimeOffset UpdatedAt);
+
+public sealed record ExcelUploadErrorDto(
+    int Row,
+    string Sheet,
+    string Field,
+    string Message);
+
+public sealed record ExcelUploadResponseDto(
+    bool Success,
+    List<ExcelUploadErrorDto> Errors,
+    int CategoriesCreated,
+    int ProductsCreated);

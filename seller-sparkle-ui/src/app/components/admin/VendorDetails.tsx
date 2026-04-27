@@ -133,17 +133,6 @@ const VendorDetails = () => {
 
   }, [vendorId]);
 
-  // Auto-refresh vendor data every 10 seconds
-  useEffect(() => {
-    if (!vendorId) return;
-
-    const interval = setInterval(() => {
-      loadVendorData(vendorId);
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [vendorId]);
-
 
 
   const loadVendorData = async (id: string) => {

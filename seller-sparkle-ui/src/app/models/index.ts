@@ -45,6 +45,8 @@ export interface BankDetails {
   accountHolderName: string;
   bankName: string;
   accountNumber: string;
+  confirmAccountNumber: string;
+  branchName: string;
   ifscCode: string;
   status: VerificationStatus;
 }

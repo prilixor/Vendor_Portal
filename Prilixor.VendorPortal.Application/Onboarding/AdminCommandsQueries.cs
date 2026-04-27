@@ -287,6 +287,7 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
             bankAccount.AccountHolderName,
             bankAccount.BankName,
             bankAccount.AccountNumber,
+            bankAccount.BranchName,
             bankAccount.IfscCode,
             bankAccount.VerificationStatus,
             bankAccount.VerifiedAt));

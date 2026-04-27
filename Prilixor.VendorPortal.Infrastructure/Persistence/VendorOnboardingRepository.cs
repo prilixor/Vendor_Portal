@@ -217,6 +217,25 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
         await dbContext.ProductCategories.AddAsync(category, cancellationToken);
     }
 
+    public Task UpdateProductCategoryAsync(ProductCategory category, CancellationToken cancellationToken)
+    {
+        dbContext.ProductCategories.Update(category);
+        return Task.CompletedTask;
+    }
+
+    public async Task DeleteProductCategoryAsync(Guid categoryId, CancellationToken cancellationToken)
+    {
+        var category = await dbContext.ProductCategories
+            .FirstOrDefaultAsync(x => x.Id == categoryId && !x.IsDeleted, cancellationToken);
+        
+        if (category != null)
+        {
+            category.IsDeleted = true;
+            category.DeletedAt = DateTimeOffset.UtcNow;
+            dbContext.ProductCategories.Update(category);
+        }
+    }
+
     public Task<List<ProductCategory>> GetProductCategoriesAsync(CancellationToken cancellationToken)
     {
         return dbContext.ProductCategories
@@ -234,6 +253,25 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
     public async Task AddProductAsync(Product product, CancellationToken cancellationToken)
     {
         await dbContext.Products.AddAsync(product, cancellationToken);
+    }
+
+    public Task UpdateProductAsync(Product product, CancellationToken cancellationToken)
+    {
+        dbContext.Products.Update(product);
+        return Task.CompletedTask;
+    }
+
+    public async Task DeleteProductAsync(Guid productId, CancellationToken cancellationToken)
+    {
+        var product = await dbContext.Products
+            .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
+        
+        if (product != null)
+        {
+            product.IsDeleted = true;
+            product.DeletedAt = DateTimeOffset.UtcNow;
+            dbContext.Products.Update(product);
+        }
     }
 
     public Task<List<Product>> GetProductsAsync(Guid? categoryId, CancellationToken cancellationToken)

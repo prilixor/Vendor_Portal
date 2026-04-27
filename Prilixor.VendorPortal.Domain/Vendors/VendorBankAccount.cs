@@ -8,6 +8,7 @@ public class VendorBankAccount : AuditableEntity<Guid>, ISoftDelete
     public string AccountHolderName { get; set; } = string.Empty;
     public string BankName { get; set; } = string.Empty;
     public string AccountNumber { get; set; } = string.Empty;
+    public string BranchName { get; set; } = string.Empty;
     public string IfscCode { get; set; } = string.Empty;
     public string VerificationStatus { get; set; } = "pending";
     public DateTimeOffset? VerifiedAt { get; set; }
