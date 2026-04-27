@@ -52,6 +52,7 @@ const Onboarding = () => {
   const [documents, setDocuments] = useState<VendorDocument[]>([]);
   const [bank, setBank] = useState<BankDetails>(defaultBank);
   const [submission, setSubmission] = useState<VerificationStatus>("pending");
+  const [accountStatus, setAccountStatus] = useState<string>("active");
   const [documentType, setDocumentType] = useState("GST Certificate");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [bankAccountId, setBankAccountId] = useState<string | null>(null);
@@ -105,11 +106,12 @@ const Onboarding = () => {
       setBusy(true);
       setLoadError(null);
       try {
-        const [profileRes, docsRes, bankRes, verificationRes] = await Promise.allSettled([
+        const [profileRes, docsRes, bankRes, verificationRes, statusRes] = await Promise.allSettled([
           vendorOnboardingApi.getVendorProfile(user.id),
           vendorOnboardingApi.getVendorDocuments(user.id),
           vendorOnboardingApi.getVendorBankAccounts(user.id),
           vendorOnboardingApi.getVerificationRequests(user.id),
+          vendorOnboardingApi.getVendorStatus(user.id),
         ]);
 
         const completed = new Set<number>();
@@ -167,6 +169,10 @@ const Onboarding = () => {
           setSubmission(mapStatus(verificationRes.value[0].reviewStatus));
           // Step 4 (Review) is complete if submitted
           completed.add(4);
+        }
+
+        if (statusRes.status === "fulfilled") {
+          setAccountStatus(statusRes.value.accountStatus);
         }
 
         setCompletedSteps(completed);
@@ -516,20 +522,70 @@ const Onboarding = () => {
         {/* STEP 5 */}
         {step === 4 && (
           <div className="max-w-xl animate-fade-in text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success-soft text-success">
-              <CheckCircle2 className="h-8 w-8" />
-            </div>
-            <h2 className="text-xl font-semibold">Application submitted</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Our team will review your business details and documents. You'll receive an update via email and in-app notification.
-            </p>
-            <div className="mt-6 inline-flex items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground">Current status:</span>
-              <StatusBadge status={submission} />
-            </div>
+            {(() => {
+              const statusConfig: Record<string, { icon: any; color: string; title: string; description: string }> = {
+                approved: {
+                  icon: CheckCircle2,
+                  color: "bg-success-soft text-success",
+                  title: "Application Approved",
+                  description: "Congratulations! Your vendor application has been approved. You can now start listing your products and accepting orders.",
+                },
+                rejected: {
+                  icon: CheckCircle2,
+                  color: "bg-destructive-soft text-destructive",
+                  title: "Application Rejected",
+                  description: "Your application was not approved. Please review the feedback and resubmit with updated information.",
+                },
+                suspended: {
+                  icon: CheckCircle2,
+                  color: "bg-warning-soft text-warning",
+                  title: "Application Suspended",
+                  description: "Your vendor account has been suspended. Please contact support for more information.",
+                },
+                banned: {
+                  icon: CheckCircle2,
+                  color: "bg-destructive-soft text-destructive",
+                  title: "Application Banned",
+                  description: "Your vendor account has been banned. This action is permanent.",
+                },
+                under_review: {
+                  icon: CheckCircle2,
+                  color: "bg-info-soft text-info",
+                  title: "Application Under Review",
+                  description: "Our team is reviewing your business details and documents. You'll receive an update via email and in-app notification.",
+                },
+                active: {
+                  icon: CheckCircle2,
+                  color: "bg-success-soft text-success",
+                  title: "Application Approved",
+                  description: "Congratulations! Your vendor application has been approved. You can now start listing your products and accepting orders.",
+                },
+              };
+
+              const config = statusConfig[accountStatus] || statusConfig.active;
+              const Icon = config.icon;
+
+              return (
+                <>
+                  <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${config.color}`}>
+                    <Icon className="h-8 w-8" />
+                  </div>
+                  <h2 className="text-xl font-semibold">{config.title}</h2>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {config.description}
+                  </p>
+                  <div className="mt-6 inline-flex items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Account status:</span>
+                    <StatusBadge status={accountStatus as VerificationStatus} />
+                  </div>
+                </>
+              );
+            })()}
             <div className="mt-8 flex justify-center gap-2">
               <Button variant="outline" onClick={() => setStep(0)}>Review my info</Button>
-              <Button onClick={submit}>Resubmit</Button>
+              {(accountStatus === "rejected" || accountStatus === "suspended") && (
+                <Button onClick={submit}>Resubmit</Button>
+              )}
             </div>
           </div>
         )}
