@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -8,7 +9,8 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { FormGrid } from "@/app/components/shared/FormGrid";
-import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
+import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye, Building2, ChevronLeft, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { BankDetails, BusinessProfile, VendorDocument, VerificationStatus } from "@/app/models";
@@ -46,6 +48,7 @@ const defaultBank: BankDetails = {
 
 const Onboarding = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [profile, setProfile] = useState<BusinessProfile>(defaultProfile);
@@ -53,6 +56,10 @@ const Onboarding = () => {
   const [bank, setBank] = useState<BankDetails>(defaultBank);
   const [submission, setSubmission] = useState<VerificationStatus>("pending");
   const [accountStatus, setAccountStatus] = useState<string>("active");
+  const [hasSubmittedBefore, setHasSubmittedBefore] = useState(false);
+  const [viewMode, setViewMode] = useState<"onboarding" | "profile">("onboarding");
+  const [editingSection, setEditingSection] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState("profile");
   const [documentType, setDocumentType] = useState("GST Certificate");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [bankAccountId, setBankAccountId] = useState<string | null>(null);
@@ -167,12 +174,18 @@ const Onboarding = () => {
 
         if (verificationRes.status === "fulfilled" && verificationRes.value.length > 0) {
           setSubmission(mapStatus(verificationRes.value[0].reviewStatus));
+          setHasSubmittedBefore(true);
           // Step 4 (Review) is complete if submitted
           completed.add(4);
         }
 
         if (statusRes.status === "fulfilled") {
           setAccountStatus(statusRes.value.accountStatus);
+        }
+
+        // Switch to profile view if vendor has submitted before
+        if (hasSubmittedBefore || (verificationRes.status === "fulfilled" && verificationRes.value.length > 0)) {
+          setViewMode("profile");
         }
 
         setCompletedSteps(completed);
@@ -324,8 +337,9 @@ const Onboarding = () => {
       await saveBank();
       const verification = await vendorOnboardingApi.createVerificationRequest(user.id);
       setSubmission(mapStatus(verification.reviewStatus));
+      setHasSubmittedBefore(true);
+      setViewMode("profile");
       toast.success("Application submitted! Our team will review within 24 hours.");
-      setStep(4);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to submit application.";
       toast.error(message);
@@ -334,51 +348,293 @@ const Onboarding = () => {
     }
   };
 
+  const handleEditSection = (sectionIndex: number) => {
+    setEditingSection(sectionIndex);
+    setStep(sectionIndex);
+  };
+
+  const handleSaveSection = async () => {
+    if (editingSection === 1) {
+      await saveProfile();
+    } else if (editingSection === 3) {
+      await saveBank();
+    }
+    setEditingSection(null);
+    toast.success("Section updated successfully.");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSection(null);
+  };
+
   return (
     <div>
-      <PageHeader
-        title="Vendor onboarding"
-        description="Complete all steps to get verified and start listing products."
-      />
+      {viewMode === "profile" ? (
+        // PROFILE VIEW MODE - Admin-style design
+        <>
+          <PageHeader
+            title={profile.businessName || user?.name || "Vendor"}
+            description={`${profile.ownerName || ""} · ${profile.city || ""}`}
+            breadcrumbs={[
+              { label: "Vendor", href: "/vendor/dashboard" },
+              { label: "Profile" },
+            ]}
+            actions={
+              <Button onClick={submit} className="bg-gradient-primary shadow-glow" disabled={busy}>
+                Submit for Verification
+              </Button>
+            }
+          />
 
-      <Card className="p-4 sm:p-6 lg:p-8 shadow-elegant border-border/60">
-        <div className="mb-6">
-          <Stepper steps={steps} current={step} onStepClick={handleStepClick} completedSteps={completedSteps} />
-        </div>
-
-        {!hasLoaded && busy && (
-          <div className="mb-4 rounded-lg border border-border bg-muted/30 px-4 py-2 text-sm text-muted-foreground">
-            Loading onboarding data...
-          </div>
-        )}
-        {loadError && (
-          <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-2 text-sm text-destructive">
-            {loadError}
-          </div>
-        )}
-
-        <div className="max-h-[calc(100vh-280px)] overflow-y-auto px-1">
-          {/* STEP 1 */}
-        {step === 0 && (
-          <div className="space-y-5 max-w-xl animate-fade-in">
-            <h2 className="text-lg font-semibold">Basic information</h2>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input value={user?.email ?? ""} readOnly className="bg-muted/50" />
-              <p className="text-xs text-muted-foreground">This is the email tied to your account and cannot be changed here.</p>
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Username Name</Label>
-                <Input value={profile.ownerName || user?.name || "Not set"} readOnly className="bg-muted/50" />
+          <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-soft text-primary">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-lg font-semibold">{profile.businessName || user?.name}</p>
+                  <p className="text-sm text-muted-foreground">{profile.ownerName || ""} · {user?.email}</p>
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label>User type</Label>
-                <Input value={user?.role ? `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}` : "Vendor"} readOnly className="bg-muted/50" />
-              </div>
+              <StatusBadge status={accountStatus as "pending" | "approved" | "rejected" | "under_review"} />
             </div>
-          </div>
-        )}
+          </Card>
+
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
+            <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-lg p-1">
+              <TabsTrigger value="profile">Profile</TabsTrigger>
+              <TabsTrigger value="docs">Docs</TabsTrigger>
+              <TabsTrigger value="bank">Bank</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="profile">
+              <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold">Business Profile</h2>
+                  <Button variant="outline" size="sm" onClick={() => handleEditSection(1)} disabled={editingSection !== null}>
+                    Edit
+                  </Button>
+                </div>
+                {editingSection === 1 ? (
+                  <div className="space-y-4">
+                    <FormGrid cols={3}>
+                      <Field label="Business name" value={profile.businessName} onChange={(v) => updateProfile("businessName", v)} />
+                      <Field label="Owner name" value={profile.ownerName} onChange={(v) => updateProfile("ownerName", v)} />
+                      <Field label="Phone" value={profile.phone} onChange={(v) => updateProfile("phone", v)} />
+                      <Field label="GST number" value={profile.gstNumber} onChange={(v) => updateProfile("gstNumber", v)} />
+                      <Field label="City" value={profile.city} onChange={(v) => updateProfile("city", v)} />
+                      <Field label="State" value={profile.state} onChange={(v) => updateProfile("state", v)} />
+                      <Field className="sm:col-span-2" label="Address line 1" value={profile.addressLine1} onChange={(v) => updateProfile("addressLine1", v)} />
+                      <Field className="sm:col-span-2" label="Address line 2 (optional)" value={profile.addressLine2 ?? ""} onChange={(v) => updateProfile("addressLine2", v)} />
+                      <Field label="Postal code" value={profile.postalCode} onChange={(v) => updateProfile("postalCode", v)} />
+                    </FormGrid>
+                    <div className="space-y-2 pt-2">
+                      <Label>Pin your business location</Label>
+                      <MapPicker
+                        latitude={profile.latitude}
+                        longitude={profile.longitude}
+                        onChange={(lat, lng) => {
+                          updateProfile("latitude", lat);
+                          updateProfile("longitude", lng);
+                        }}
+                      />
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <Button onClick={handleSaveSection} disabled={busy}>Save</Button>
+                      <Button variant="outline" onClick={handleCancelEdit}>Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                    <Detail label="Business" value={profile.businessName || "Not set"} />
+                    <Detail label="Owner" value={profile.ownerName || "Not set"} />
+                    <Detail label="Phone" value={profile.phone || "Not set"} />
+                    <Detail label="GSTIN" value={profile.gstNumber || "Not set"} />
+                    <Detail label="City" value={profile.city || "Not set"} />
+                    <Detail label="State" value={profile.state || "Not set"} />
+                    <Detail className="sm:col-span-2" label="Address" value={`${profile.addressLine1 || ""} ${profile.addressLine2 || ""}`.trim() || "Not set"} />
+                    <Detail label="Pincode" value={profile.postalCode || "Not set"} />
+                  </div>
+                )}
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="docs">
+              <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
+                <h2 className="text-lg font-semibold mb-4">Documents</h2>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 rounded-xl border border-border p-3 sm:grid-cols-3">
+                    <div className="space-y-1.5">
+                      <Label>Document type</Label>
+                      <select
+                        value={documentType}
+                        onChange={(e) => setDocumentType(e.target.value)}
+                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        {["GST Certificate", "PAN Card", "Trade License", "Address Proof", "Cancelled Cheque"].map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>File</Label>
+                      <Input
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp"
+                        onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button onClick={handleFileUpload} variant="outline" className="w-full" disabled={busy}>
+                        <Upload className="mr-2 h-4 w-4" /> Upload document
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto rounded-xl border border-border">
+                    <table className="w-full min-w-[600px] text-sm">
+                      <thead className="bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                        <tr>
+                          <th className="px-4 py-3 font-semibold">Document</th>
+                          <th className="px-4 py-3 font-semibold">Uploaded</th>
+                          <th className="px-4 py-3 font-semibold">Status</th>
+                          <th className="px-4 py-3" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {documents.map((doc) => (
+                          <tr key={doc.id} className="hover:bg-muted/30">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                                  <FileText className="h-4 w-4" />
+                                </div>
+                                <div>
+                                  <p className="font-medium">{doc.type}</p>
+                                  <p className="text-xs text-muted-foreground">{doc.fileName}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">{doc.uploadedAt}</td>
+                            <td className="px-4 py-3">
+                              <div className="space-y-1">
+                                <StatusBadge status={doc.status} />
+                                {doc.status === "rejected" && doc.rejectionReason && (
+                                  <p className="text-xs text-destructive">{doc.rejectionReason}</p>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button variant="ghost" size="icon" onClick={() => previewDoc(doc)} disabled={busy}>
+                                  <Eye className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => removeDoc(doc.id)} disabled={busy}>
+                                  <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {documents.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                              No documents uploaded yet.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="bank">
+              <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold">Bank Details</h2>
+                  <Button variant="outline" size="sm" onClick={() => handleEditSection(3)} disabled={editingSection !== null}>
+                    Edit
+                  </Button>
+                </div>
+                {editingSection === 3 ? (
+                  <div className="space-y-4">
+                    <FormGrid cols={2}>
+                      <Field label="Account holder name" value={bank.accountHolderName} onChange={(v) => updateBank("accountHolderName", v)} />
+                      <Field label="Bank name" value={bank.bankName} onChange={(v) => updateBank("bankName", v)} />
+                      <Field label="Account number" value={bank.accountNumber} onChange={(v) => updateBank("accountNumber", v)} />
+                      <Field label="IFSC code" value={bank.ifscCode} onChange={(v) => updateBank("ifscCode", v)} />
+                    </FormGrid>
+                    <div className="flex gap-2 pt-2">
+                      <Button onClick={handleSaveSection} disabled={busy}>Save</Button>
+                      <Button variant="outline" onClick={handleCancelEdit}>Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                    <Detail label="Account holder name" value={bank.accountHolderName || "Not set"} />
+                    <Detail label="Bank name" value={bank.bankName || "Not set"} />
+                    <Detail label="Account number" value={bank.accountNumber || "Not set"} />
+                    <Detail label="IFSC code" value={bank.ifscCode || "Not set"} />
+                  </div>
+                )}
+                <div className="rounded-lg border border-info/20 bg-info-soft p-3 text-xs text-info mt-4">
+                  <ShieldCheck className="mr-1.5 inline h-4 w-4" />
+                  Bank details are encrypted and used only for payouts.
+                </div>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </>
+      ) : (
+        // ONBOARDING VIEW MODE
+        <>
+          <PageHeader
+            title="Vendor onboarding"
+            description="Complete all steps to get verified and start listing products."
+          />
+
+          <Card className="p-4 sm:p-6 lg:p-8 shadow-elegant border-border/60">
+            <div className="mb-6">
+              <Stepper steps={steps} current={step} onStepClick={handleStepClick} completedSteps={completedSteps} />
+            </div>
+
+            {!hasLoaded && busy && (
+              <div className="mb-4 rounded-lg border border-border bg-muted/30 px-4 py-2 text-sm text-muted-foreground">
+                Loading onboarding data...
+              </div>
+            )}
+            {loadError && (
+              <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-2 text-sm text-destructive">
+                {loadError}
+              </div>
+            )}
+
+            <div className="max-h-[calc(100vh-280px)] overflow-y-auto px-1">
+              {/* STEP 1 */}
+              {step === 0 && (
+                <div className="space-y-5 max-w-xl animate-fade-in">
+                  <h2 className="text-lg font-semibold">Basic information</h2>
+                  <div className="space-y-1.5">
+                    <Label>Email</Label>
+                    <Input value={user?.email ?? ""} readOnly className="bg-muted/50" />
+                    <p className="text-xs text-muted-foreground">This is the email tied to your account and cannot be changed here.</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label>Username Name</Label>
+                      <Input value={profile.ownerName || user?.name || "Not set"} readOnly className="bg-muted/50" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>User type</Label>
+                      <Input value={user?.role ? `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}` : "Vendor"} readOnly className="bg-muted/50" />
+                    </div>
+                  </div>
+                </div>
+              )}
 
         {/* STEP 2 */}
         {step === 1 && (
@@ -589,27 +845,29 @@ const Onboarding = () => {
             </div>
           </div>
         )}
-        </div>
+            </div>
 
-        {/* Footer actions */}
-        {step < 4 && (
-          <div className="mt-6 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <Button variant="ghost" onClick={prev} disabled={step === 0} className="w-full sm:w-auto">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back
-            </Button>
-            <p className="text-xs text-muted-foreground text-center sm:text-right">Step {step + 1} of {steps.length}</p>
-            {step === 3 ? (
-              <Button onClick={submit} className="bg-gradient-primary shadow-glow w-full sm:w-auto" disabled={busy}>
-                Submit for verification
-              </Button>
-            ) : (
-              <Button onClick={handleContinue} className="w-full sm:w-auto" disabled={busy}>
-                Continue <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
+            {/* Footer actions - only show in onboarding mode */}
+            {viewMode === "onboarding" && step < 4 && (
+              <div className="mt-6 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <Button variant="ghost" onClick={prev} disabled={step === 0} className="w-full sm:w-auto">
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                </Button>
+                <p className="text-xs text-muted-foreground text-center sm:text-right">Step {step + 1} of {steps.length}</p>
+                {step === 3 ? (
+                  <Button onClick={submit} className="bg-gradient-primary shadow-glow w-full sm:w-auto" disabled={busy}>
+                    Submit for verification
+                  </Button>
+                ) : (
+                  <Button onClick={handleContinue} className="w-full sm:w-auto" disabled={busy}>
+                    Continue <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             )}
-          </div>
-        )}
-      </Card>
+          </Card>
+        </>
+      )}
     </div>
   );
 };
@@ -628,6 +886,13 @@ const Field = ({
   <div className={`space-y-1.5 ${className ?? ""}`}>
     <Label>{label}</Label>
     <Input value={value} onChange={(e) => onChange(e.target.value)} />
+  </div>
+);
+
+const Detail = ({ label, value, className }: { label: string; value: string; className?: string }) => (
+  <div className={className}>
+    <p className="mb-1 text-xs text-muted-foreground">{label}</p>
+    <p className="font-medium">{value}</p>
   </div>
 );
 

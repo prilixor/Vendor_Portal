@@ -65,8 +65,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (role === "vendor") {
       try {
         const status = await vendorOnboardingApi.getVendorStatus(result.user.id);
-        const allowedStages = ["under_review", "approved", "rejected"];
-        if (!allowedStages.includes(status.registrationStage)) {
+        // Only redirect to onboarding if account_status is pending
+        if (status.accountStatus === "pending") {
           window.location.href = "/vendor/onboarding";
         }
       } catch (error) {

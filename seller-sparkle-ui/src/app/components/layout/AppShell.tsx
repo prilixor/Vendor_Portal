@@ -35,10 +35,8 @@ export const AppShell = ({ variant }: AppShellProps) => {
       const checkOnboardingStatus = async () => {
         try {
           const status = await vendorOnboardingApi.getVendorStatus(user.id);
-          // Allow access if registrationStage is under_review, approved, or rejected
-          // Redirect to onboarding if still in early stages
-          const allowedStages = ["under_review", "approved", "rejected"];
-          if (!allowedStages.includes(status.registrationStage)) {
+          // Only redirect to onboarding if account_status is pending
+          if (status.accountStatus === "pending") {
             setShouldRedirectToOnboarding(true);
           }
         } catch (error) {
