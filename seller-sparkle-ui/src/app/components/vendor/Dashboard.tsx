@@ -58,6 +58,7 @@ const Dashboard = () => {
   const { user } = useAuth();
 
   const [ownerName, setOwnerName] = useState<string>("");
+  const [businessName, setBusinessName] = useState<string>("");
   const [isVerified, setIsVerified] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState("Complete your onboarding verifications.");
 
@@ -88,8 +89,10 @@ const Dashboard = () => {
 
         if (profileRes.status === "fulfilled") {
           setOwnerName(profileRes.value.ownerName || user.name);
+          setBusinessName(profileRes.value.businessName || user.name);
         } else {
           setOwnerName(user.name);
+          setBusinessName(user.name);
         }
 
         const docs = docsRes.status === "fulfilled" ? docsRes.value : [];
@@ -173,7 +176,7 @@ const Dashboard = () => {
     void load();
   }, [user]);
 
-  const greetingName = useMemo(() => ownerName || user?.name || "Vendor", [ownerName, user?.name]);
+  const greetingName = useMemo(() => businessName || user?.name || "Vendor", [businessName, user?.name]);
 
   return (
     <div>
