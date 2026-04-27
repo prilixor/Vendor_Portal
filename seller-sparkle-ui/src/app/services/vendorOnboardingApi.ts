@@ -17,6 +17,15 @@ export interface VendorProfileApiDto {
   onboardingCompleted: boolean;
 }
 
+export interface VendorStatusDto {
+  id: string;
+  email: string;
+  emailVerified: boolean;
+  accountStatus: string;
+  registrationStage: string;
+  lastLoginAt?: string;
+}
+
 export interface VendorDocumentApiDto {
   id: string;
   vendorId: string;
@@ -497,5 +506,9 @@ export const vendorOnboardingApi = {
 
   markAllVendorNotificationsAsRead(vendorId: string) {
     return apiClient.patch<MarkAllNotificationsReadResponse>(`/vendors/${vendorId}/notifications/read-all`, { vendorId });
+  },
+
+  getVendorStatus(vendorId: string) {
+    return apiClient.get<VendorStatusDto>(`/vendors/${vendorId}`);
   },
 };

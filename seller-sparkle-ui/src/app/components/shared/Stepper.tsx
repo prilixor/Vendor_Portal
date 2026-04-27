@@ -10,15 +10,16 @@ interface StepperProps {
   steps: Step[];
   current: number; // 0-indexed
   onStepClick?: (idx: number) => void;
+  completedSteps?: Set<number>; // Set of step indices that are completed
 }
 
-export const Stepper = ({ steps, current, onStepClick }: StepperProps) => (
+export const Stepper = ({ steps, current, onStepClick, completedSteps = new Set() }: StepperProps) => (
   <div className="w-full">
     <div className="flex items-start overflow-x-auto pb-2 scrollbar-hide">
       {steps.map((step, idx) => {
-        const completed = idx < current;
+        const completed = completedSteps.has(idx);
         const active = idx === current;
-        const reachable = idx <= current;
+        const reachable = completed || idx <= current;
         return (
           <div key={step.label} className={cn("flex min-w-[100px] flex-1 items-start sm:min-w-0", idx === steps.length - 1 && "flex-none")}>
             <div className="flex flex-col items-center">
@@ -44,7 +45,7 @@ export const Stepper = ({ steps, current, onStepClick }: StepperProps) => (
               </div>
             </div>
             {idx < steps.length - 1 && (
-              <div className={cn("mx-1 mt-5 h-0.5 flex-1 rounded-full transition-all", completed ? "bg-primary" : "bg-border")} />
+              <div className={cn("mx-1 mt-5 h-0.5 flex-1 rounded-full transition-all", completedSteps.has(idx + 1) ? "bg-primary" : "bg-border")} />
             )}
           </div>
         );

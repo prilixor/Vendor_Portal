@@ -1,18 +1,10 @@
-import { Outlet, Navigate } from "react-router-dom";
-import { useState } from "react";
+import { Outlet, Navigate, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { Sidebar } from "./Sidebar";
-
-
-
 import { TopBar } from "./TopBar";
-
-
-
 import { vendorNav, adminNav } from "@/app/helpers/navigation";
-
-
-
 import { useAuth } from "@/app/guards/AuthContext";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 
 interface AppShellProps {
 
@@ -31,11 +23,38 @@ interface AppShellProps {
 
 
 export const AppShell = ({ variant }: AppShellProps) => {
-
-
-
   const { user, isHydrating } = useAuth();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [onboardingCheckDone, setOnboardingCheckDone] = useState(false);
+  const [shouldRedirectToOnboarding, setShouldRedirectToOnboarding] = useState(false);
+  const location = useLocation();
+
+  // Check vendor onboarding status for vendor routes (non-blocking)
+  useEffect(() => {
+    if (variant === "vendor" && user) {
+      const checkOnboardingStatus = async () => {
+        try {
+          const status = await vendorOnboardingApi.getVendorStatus(user.id);
+          // Allow access if registrationStage is under_review, approved, or rejected
+          // Redirect to onboarding if still in early stages
+          const allowedStages = ["under_review", "approved", "rejected"];
+          if (!allowedStages.includes(status.registrationStage)) {
+            setShouldRedirectToOnboarding(true);
+          }
+        } catch (error) {
+          // If we can't fetch status, allow access (fail open)
+          console.error("Failed to check onboarding status:", error);
+          setShouldRedirectToOnboarding(false);
+        } finally {
+          setOnboardingCheckDone(true);
+        }
+      };
+
+      checkOnboardingStatus();
+    } else {
+      setOnboardingCheckDone(true);
+    }
+  }, [variant, user]);
 
   if (isHydrating) return <div className="min-h-screen w-full bg-background" />;
 
@@ -46,6 +65,11 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
   if (variant === "vendor" && (!user || user.role !== "vendor")) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Redirect to onboarding if needed and not already on onboarding page
+  if (variant === "vendor" && onboardingCheckDone && shouldRedirectToOnboarding && location.pathname !== "/vendor/onboarding") {
+    return <Navigate to="/vendor/onboarding" replace />;
   }
 
 

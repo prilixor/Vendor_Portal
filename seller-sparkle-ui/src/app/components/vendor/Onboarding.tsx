@@ -47,6 +47,7 @@ const defaultBank: BankDetails = {
 const Onboarding = () => {
   const { user } = useAuth();
   const [step, setStep] = useState(0);
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [profile, setProfile] = useState<BusinessProfile>(defaultProfile);
   const [documents, setDocuments] = useState<VendorDocument[]>([]);
   const [bank, setBank] = useState<BankDetails>(defaultBank);
@@ -58,8 +59,20 @@ const Onboarding = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
 
-  const next = () => setStep((s) => Math.min(s + 1, steps.length - 1));
   const prev = () => setStep((s) => Math.max(s - 1, 0));
+
+  const handleStepClick = (idx: number) => {
+    // Allow clicking on completed steps or the current step
+    if (completedSteps.has(idx) || idx === step) {
+      setStep(idx);
+      return;
+    }
+
+    // Allow clicking on the next step if current step is complete
+    if (idx === step + 1) {
+      handleContinue();
+    }
+  };
 
   const updateProfile = <K extends keyof typeof profile>(k: K, v: (typeof profile)[K]) =>
     setProfile((p) => ({ ...p, [k]: v }));
@@ -99,6 +112,8 @@ const Onboarding = () => {
           vendorOnboardingApi.getVerificationRequests(user.id),
         ]);
 
+        const completed = new Set<number>();
+
         if (profileRes.status === "fulfilled") {
           const profileDto = profileRes.value;
           setProfile((prev) => ({
@@ -115,10 +130,20 @@ const Onboarding = () => {
             latitude: profileDto.latitude ?? prev.latitude,
             longitude: profileDto.longitude ?? prev.longitude,
           }));
+          // Step 0 (Basic Info) is always complete
+          completed.add(0);
+          // Step 1 (Business Profile) is complete if profile exists
+          if (profileDto.businessName && profileDto.ownerName && profileDto.supportPhone) {
+            completed.add(1);
+          }
         }
 
         if (docsRes.status === "fulfilled") {
           setDocuments(mapDocuments(docsRes.value));
+          // Step 2 (Documents) is complete if documents exist
+          if (docsRes.value.length > 0) {
+            completed.add(2);
+          }
         } else {
           const reason = docsRes.reason instanceof Error ? docsRes.reason.message : "Failed to load documents.";
           toast.error(reason);
@@ -134,11 +159,17 @@ const Onboarding = () => {
             status: mapStatus(latestBank.verificationStatus),
           });
           setBankAccountId(latestBank.id);
+          // Step 3 (Bank) is complete if bank account exists
+          completed.add(3);
         }
 
         if (verificationRes.status === "fulfilled" && verificationRes.value.length > 0) {
           setSubmission(mapStatus(verificationRes.value[0].reviewStatus));
+          // Step 4 (Review) is complete if submitted
+          completed.add(4);
         }
+
+        setCompletedSteps(completed);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to load onboarding data.";
         setLoadError(message);
@@ -273,7 +304,9 @@ const Onboarding = () => {
       }
     }
 
-    next();
+    // Mark current step as complete before moving
+    setCompletedSteps((prev) => new Set(prev).add(step));
+    setStep((s) => Math.min(s + 1, steps.length - 1));
   };
 
   const submit = async () => {
@@ -304,7 +337,7 @@ const Onboarding = () => {
 
       <Card className="p-4 sm:p-6 lg:p-8 shadow-elegant border-border/60">
         <div className="mb-6">
-          <Stepper steps={steps} current={step} onStepClick={setStep} />
+          <Stepper steps={steps} current={step} onStepClick={handleStepClick} completedSteps={completedSteps} />
         </div>
 
         {!hasLoaded && busy && (
@@ -330,11 +363,11 @@ const Onboarding = () => {
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Account name</Label>
+                <Label>Username Name</Label>
                 <Input value={profile.ownerName || user?.name || "Not set"} readOnly className="bg-muted/50" />
               </div>
               <div className="space-y-1.5">
-                <Label>Account type</Label>
+                <Label>User type</Label>
                 <Input value={user?.role ? `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}` : "Vendor"} readOnly className="bg-muted/50" />
               </div>
             </div>
