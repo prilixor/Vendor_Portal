@@ -70,6 +70,13 @@ builder.Services.Configure<JsonOptions>(o =>
 
 var app = builder.Build();
 
+app.UseExceptionHandler();
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseCors();
 
 app.UseAuthentication()
@@ -122,9 +129,5 @@ app.UseFastEndpoints(op =>
 {
     op.Endpoints.RoutePrefix = "api";
 }).UseSwaggerGen();
-
-
-app.UseHttpsRedirection();
-app.UseExceptionHandler();
 
 app.Run();

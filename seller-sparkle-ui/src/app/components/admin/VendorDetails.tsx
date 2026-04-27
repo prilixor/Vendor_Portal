@@ -103,6 +103,10 @@ const VendorDetails = () => {
   const [rejectReason, setRejectReason] = useState("");
 
   const [actionType, setActionType] = useState<"reject" | "suspend" | "ban" | "reactivate">("reject");
+  const [itemActionLoadingKey, setItemActionLoadingKey] = useState<string | null>(null);
+  const [itemRejectOpen, setItemRejectOpen] = useState(false);
+  const [itemRejectNotes, setItemRejectNotes] = useState("");
+  const [itemRejectTarget, setItemRejectTarget] = useState<{ kind: "doc" | "bank"; itemId: string } | null>(null);
 
   const [vendor, setVendor] = useState<VendorDto | null>(null);
 
@@ -301,6 +305,93 @@ const VendorDetails = () => {
 
     }
 
+  };
+
+  const verifyDocumentItem = async (targetDocumentId: string, verificationStatus: "approved" | "rejected", notes?: string) => {
+    if (!vendorId) return;
+    const adminUserId = getAdminUserId();
+    if (!adminUserId) {
+      toast.error("Admin session not found. Please login again.");
+      return;
+    }
+
+    const key = `doc-${targetDocumentId}-${verificationStatus}`;
+    setItemActionLoadingKey(key);
+    try {
+      await adminApi.verifyVendorDocument({
+        adminUserId,
+        vendorId,
+        documentId: targetDocumentId,
+        verificationStatus,
+        notes,
+      });
+      await loadVendorData(vendorId);
+      toast.success(`Document ${verificationStatus}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update document verification.";
+      toast.error(message);
+    } finally {
+      setItemActionLoadingKey(null);
+    }
+  };
+
+  const verifyBankItem = async (bankAccountId: string, verificationStatus: "approved" | "rejected", notes?: string) => {
+    if (!vendorId) return;
+    const adminUserId = getAdminUserId();
+    if (!adminUserId) {
+      toast.error("Admin session not found. Please login again.");
+      return;
+    }
+
+    const key = `bank-${bankAccountId}-${verificationStatus}`;
+    setItemActionLoadingKey(key);
+    try {
+      await adminApi.verifyVendorBankAccount({
+        adminUserId,
+        vendorId,
+        bankAccountId,
+        verificationStatus,
+        notes,
+      });
+      await loadVendorData(vendorId);
+      toast.success(`Bank account ${verificationStatus}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update bank account verification.";
+      toast.error(message);
+    } finally {
+      setItemActionLoadingKey(null);
+    }
+  };
+
+  const previewDoc = (fileUrl: string) => {
+    if (!fileUrl) {
+      toast.info("No document URL found.");
+      return;
+    }
+    const popup = window.open(fileUrl, "_blank", "noopener,noreferrer");
+    if (!popup) {
+      toast.error("Popup blocked. Please allow popups for this site.");
+    }
+  };
+
+  const openItemRejectDialog = (kind: "doc" | "bank", itemId: string) => {
+    setItemRejectTarget({ kind, itemId });
+    setItemRejectNotes("");
+    setItemRejectOpen(true);
+  };
+
+  const submitItemReject = async () => {
+    if (!itemRejectTarget) return;
+
+    if (itemRejectTarget.kind === "doc") {
+      await verifyDocumentItem(itemRejectTarget.itemId, "rejected", itemRejectNotes || undefined);
+    } else {
+      await verifyBankItem(itemRejectTarget.itemId, "rejected", itemRejectNotes || undefined);
+    }
+
+    setItemRejectOpen(false);
+    setItemRejectTarget(null);
+    setItemRejectNotes("");
   };
 
 
@@ -628,7 +719,50 @@ const VendorDetails = () => {
 
                   </div>
 
-                  <StatusBadge status={d.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} />
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={d.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} />
+                    {d.verificationStatus !== "approved" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => void verifyDocumentItem(d.id, "approved")}
+                        className="h-7 w-7"
+                        aria-label="Approve document"
+                        disabled={itemActionLoadingKey !== null}
+                      >
+                        {itemActionLoadingKey === `doc-${d.id}-approved` ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-success" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                        )}
+                      </Button>
+                    )}
+                    {d.verificationStatus !== "rejected" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openItemRejectDialog("doc", d.id)}
+                        className="h-7 w-7"
+                        aria-label="Reject document"
+                        disabled={itemActionLoadingKey !== null}
+                      >
+                        {itemActionLoadingKey === `doc-${d.id}-rejected` ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-destructive" />
+                        ) : (
+                          <XCircle className="h-3.5 w-3.5 text-destructive" />
+                        )}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => previewDoc(d.fileUrl)}
+                      className="h-7 w-7"
+                      aria-label="Preview document"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
 
                 </div>
 
@@ -660,22 +794,57 @@ const VendorDetails = () => {
 
               <>
 
-                <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                <div className="space-y-2">
+                  {bankAccounts.map((bank) => (
+                    <div key={bank.id} className="rounded-lg border border-border p-3">
+                      <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                        <Detail label="Account holder" value={bank.accountHolderName} />
+                        <Detail label="Bank" value={bank.bankName} />
+                        <Detail label="Account number" value={`••••${bank.accountNumber.slice(-4)}`} />
+                        <Detail label="IFSC" value={bank.ifscCode} />
+                      </div>
 
-                  <Detail label="Account holder" value={bankAccounts[0].accountHolderName} />
-
-                  <Detail label="Bank" value={bankAccounts[0].bankName} />
-
-                  <Detail label="Account number" value={`••••${bankAccounts[0].accountNumber.slice(-4)}`} />
-
-                  <Detail label="IFSC" value={bankAccounts[0].ifscCode} />
-
-                </div>
-
-                <div className="mt-4 inline-flex items-center gap-2 rounded-md bg-success-soft px-3 py-2 text-xs font-medium text-success">
-
-                  <ShieldCheck className="h-4 w-4" /> Bank verification {bankAccounts[0].verificationStatus.replace("_", " ")}
-
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="inline-flex items-center gap-2 rounded-md bg-success-soft px-3 py-2 text-xs font-medium text-success">
+                          <ShieldCheck className="h-4 w-4" /> Bank verification {bank.verificationStatus.replace("_", " ")}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {bank.verificationStatus !== "approved" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => void verifyBankItem(bank.id, "approved")}
+                              className="h-7 w-7"
+                              aria-label="Approve bank account"
+                              disabled={itemActionLoadingKey !== null}
+                            >
+                              {itemActionLoadingKey === `bank-${bank.id}-approved` ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-success" />
+                              ) : (
+                                <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                              )}
+                            </Button>
+                          )}
+                          {bank.verificationStatus !== "rejected" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openItemRejectDialog("bank", bank.id)}
+                              className="h-7 w-7"
+                              aria-label="Reject bank account"
+                              disabled={itemActionLoadingKey !== null}
+                            >
+                              {itemActionLoadingKey === `bank-${bank.id}-rejected` ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-destructive" />
+                              ) : (
+                                <XCircle className="h-3.5 w-3.5 text-destructive" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
               </>
@@ -841,6 +1010,51 @@ const VendorDetails = () => {
       </Tabs>
 
 
+
+      <Dialog open={itemRejectOpen} onOpenChange={setItemRejectOpen}>
+
+        <DialogContent>
+
+          <DialogHeader>
+
+            <DialogTitle>Reject {itemRejectTarget?.kind === "bank" ? "bank account" : "document"}</DialogTitle>
+
+          </DialogHeader>
+
+          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
+
+            <div className="space-y-1.5">
+
+              <Label>Optional notes</Label>
+
+              <Textarea
+                value={itemRejectNotes}
+                onChange={(e) => setItemRejectNotes(e.target.value)}
+                placeholder="Provide reason for rejection (optional)..."
+                rows={4}
+              />
+
+            </div>
+
+            <div className="h-5" />
+
+          </div>
+
+          <DialogFooter>
+
+            <Button variant="outline" onClick={() => setItemRejectOpen(false)} disabled={itemActionLoadingKey !== null}>Cancel</Button>
+
+            <Button variant="destructive" onClick={() => void submitItemReject()} disabled={itemActionLoadingKey !== null || !itemRejectTarget}>
+
+              {itemActionLoadingKey !== null ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Reject
+
+            </Button>
+
+          </DialogFooter>
+
+        </DialogContent>
+
+      </Dialog>
 
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
 
