@@ -125,6 +125,9 @@
     --sidebar-accent: 244 30% 18%;
     --sidebar-accent-foreground: 244 75% 85%;
     --sidebar-border: 240 6% 16%;
+
+    /* Gradients - dark mode */
+    --gradient-soft: linear-gradient(135deg, hsl(240 10% 12%), hsl(240 10% 14%));
   }
 }
 

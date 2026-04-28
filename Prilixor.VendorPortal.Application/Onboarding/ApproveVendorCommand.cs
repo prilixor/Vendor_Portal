@@ -46,28 +46,33 @@ internal sealed class ApproveVendorCommandHandler(
             return Result.Failure<VendorDto>(new Error("vendors.not_found", "Vendor not found.", ErrorCategory.NotFound));
         }
 
-        // Validate vendor status
-        if (vendor.AccountStatus != "pending")
-        {
-            return Result.Failure<VendorDto>(new Error("vendors.invalid_status", "Vendor must be in pending status to be approved.", ErrorCategory.Validation));
-        }
-
-        // Approve all pending documents
+        // Validate vendor has uploaded exactly 5 documents
         var documents = await repository.GetVendorDocumentsAsync(vendorId, cancellationToken);
-        foreach (var doc in documents.Where(d => d.VerificationStatus != "approved"))
+        if (documents.Count != 5)
         {
-            doc.VerificationStatus = "approved";
-            doc.VerifiedAt = DateTime.UtcNow;
-            await repository.UpdateVendorDocumentAsync(doc, cancellationToken);
+            return Result.Failure<VendorDto>(new Error("vendors.insufficient_documents", $"Vendor must upload exactly 5 documents. Currently uploaded: {documents.Count}/5.", ErrorCategory.Validation));
         }
 
-        // Approve all pending bank accounts
-        var bankAccounts = await repository.GetVendorBankAccountsAsync(vendorId, cancellationToken);
-        foreach (var bank in bankAccounts.Where(b => b.VerificationStatus != "approved"))
+        // Validate all documents are approved
+        var pendingOrRejectedDocuments = documents.Where(d => d.VerificationStatus != "approved").ToList();
+        if (pendingOrRejectedDocuments.Any())
         {
-            bank.VerificationStatus = "approved";
-            bank.VerifiedAt = DateTime.UtcNow;
-            await repository.UpdateVendorBankAccountAsync(bank, cancellationToken);
+            var notApprovedDocTypes = string.Join(", ", pendingOrRejectedDocuments.Select(d => d.DocumentType));
+            return Result.Failure<VendorDto>(new Error("vendors.documents_not_approved", $"The following documents are not approved: {notApprovedDocTypes}. All 5 documents must be approved before vendor can be approved.", ErrorCategory.Validation));
+        }
+
+        // Validate vendor has uploaded bank account
+        var bankAccounts = await repository.GetVendorBankAccountsAsync(vendorId, cancellationToken);
+        if (!bankAccounts.Any())
+        {
+            return Result.Failure<VendorDto>(new Error("vendors.no_bank_account", "Vendor must upload at least one bank account before approval.", ErrorCategory.Validation));
+        }
+
+        // Validate at least one bank account is approved
+        var approvedBankAccount = bankAccounts.FirstOrDefault(b => b.VerificationStatus == "approved");
+        if (approvedBankAccount == null)
+        {
+            return Result.Failure<VendorDto>(new Error("vendors.bank_account_not_approved", "At least one bank account must be approved before vendor can be approved.", ErrorCategory.Validation));
         }
 
         // Approve vendor

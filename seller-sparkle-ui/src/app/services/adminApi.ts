@@ -430,6 +430,11 @@ export const adminApi = {
   async uploadCatalogExcel(file: File): Promise<ExcelUploadResponseDto> {
     const formData = new FormData();
     formData.append('file', file);
-    return apiClient.post<ExcelUploadResponseDto>('/admin/catalog/upload-excel', formData);
+    return apiClient.postForm<ExcelUploadResponseDto>('/admin/catalog/upload-excel', formData);
+  },
+
+  async downloadCatalogExcel(): Promise<void> {
+    const filename = `catalog_export_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "_")}.xlsx`;
+    return apiClient.downloadBlob('/admin/catalog/download-excel', filename);
   },
 };

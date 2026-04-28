@@ -57,6 +57,7 @@ import {
 } from "lucide-react";
 
 import { toast } from "sonner";
+import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
 
 const dayLabel: Record<number, string> = {
@@ -190,8 +191,7 @@ const VendorDetails = () => {
       setProductListings(listingsData);
 
     } catch (error) {
-
-      const message = error instanceof Error ? error.message : "Failed to load vendor details.";
+      const message = getUserFriendlyMessage(error);
 
       toast.error(message);
 
@@ -284,8 +284,7 @@ const VendorDetails = () => {
       loadVendorData(vendorId);
 
     } catch (error) {
-
-      const message = error instanceof Error ? error.message : "Failed to approve vendor.";
+      const message = getUserFriendlyMessage(error);
 
       toast.error(message);
 
@@ -318,7 +317,7 @@ const VendorDetails = () => {
       await loadVendorData(vendorId);
       toast.success(`Document ${verificationStatus}.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update document verification.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setItemActionLoadingKey(null);
@@ -346,7 +345,7 @@ const VendorDetails = () => {
       await loadVendorData(vendorId);
       toast.success(`Bank account ${verificationStatus}.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update bank account verification.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setItemActionLoadingKey(null);
@@ -406,8 +405,7 @@ const VendorDetails = () => {
       loadVendorData(vendorId);
 
     } catch (error) {
-
-      const message = error instanceof Error ? error.message : "Failed to reject vendor.";
+      const message = getUserFriendlyMessage(error);
 
       toast.error(message);
 
@@ -430,7 +428,7 @@ const VendorDetails = () => {
       setRejectReason("");
       loadVendorData(vendorId);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to suspend vendor.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setRejecting(false);
@@ -448,7 +446,7 @@ const VendorDetails = () => {
       setRejectReason("");
       loadVendorData(vendorId);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to ban vendor.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setRejecting(false);
@@ -466,7 +464,7 @@ const VendorDetails = () => {
       setRejectReason("");
       loadVendorData(vendorId);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to reactivate vendor.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setRejecting(false);
@@ -787,7 +785,7 @@ const VendorDetails = () => {
                       <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
                         <Detail label="Account holder" value={bank.accountHolderName} />
                         <Detail label="Bank" value={bank.bankName} />
-                        <Detail label="Account number" value={`••••${bank.accountNumber.slice(-4)}`} />
+                        <Detail label="Account number" value={bank.accountNumber} />
                         <Detail label="IFSC" value={bank.ifscCode} />
                       </div>
 

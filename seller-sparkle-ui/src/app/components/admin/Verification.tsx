@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/app/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { adminApi, VendorDto, VendorDocumentDto, VendorBankAccountDto } from "@/app/services/adminApi";
+import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto } from "@/app/services/adminApi";
+import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
 const getApiOrigin = (): string | null => {
   const configured = import.meta.env.VITE_API_BASE_URL as string | undefined;
@@ -76,6 +77,8 @@ const Verification = () => {
   const [bankAccounts, setBankAccounts] = useState<VendorBankAccountDto[]>([]);
   const [loadingBanks, setLoadingBanks] = useState(false);
   const [previewDocument, setPreviewDocument] = useState<{ url: string; type: string } | null>(null);
+  const [vendorProfile, setVendorProfile] = useState<VendorProfileDto | null>(null);
+  const [vendorProfiles, setVendorProfiles] = useState<Map<string, VendorProfileDto>>(new Map());
 
   useEffect(() => {
     loadVendors();
@@ -86,9 +89,11 @@ const Verification = () => {
     if (selected) {
       loadDocuments(selected.id);
       loadBankAccounts(selected.id);
+      loadVendorProfile(selected.id);
     } else {
       setDocuments([]);
       setBankAccounts([]);
+      setVendorProfile(null);
     }
   }, [selected]);
 
@@ -127,6 +132,15 @@ const Verification = () => {
     }
   };
 
+  const loadVendorProfile = async (vendorId: string) => {
+    try {
+      const profile = await adminApi.getVendorProfile(vendorId);
+      setVendorProfile(profile);
+    } catch (error) {
+      console.error("Failed to load vendor profile:", error);
+    }
+  };
+
   const previewDoc = (doc: VendorDocumentDto) => {
     if (!doc.fileUrl) {
       toast.info("Preview is available for uploaded files.");
@@ -159,8 +173,22 @@ const Verification = () => {
     try {
       const data = await adminApi.getVendors();
       setVendors(data);
+      
+      // Load all vendor profiles
+      const profilesMap = new Map<string, VendorProfileDto>();
+      await Promise.allSettled(
+        data.map(async (vendor) => {
+          try {
+            const profile = await adminApi.getVendorProfile(vendor.id);
+            profilesMap.set(vendor.id, profile);
+          } catch (error) {
+            console.error(`Failed to load profile for vendor ${vendor.id}:`, error);
+          }
+        })
+      );
+      setVendorProfiles(profilesMap);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load vendors.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setLoading(false);
@@ -188,7 +216,7 @@ const Verification = () => {
       await loadVendors();
       toast.success(`Document ${verificationStatus}.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update document verification.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setItemActionLoadingKey(null);
@@ -216,7 +244,7 @@ const Verification = () => {
       await loadVendors();
       toast.success(`Bank account ${verificationStatus}.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update bank account verification.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setItemActionLoadingKey(null);
@@ -260,7 +288,7 @@ const Verification = () => {
       setSelected(null);
       toast.success("Vendor approved");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to approve vendor.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setVerifying(false);
@@ -279,7 +307,7 @@ const Verification = () => {
       setRejectOpen(false);
       toast.success("Vendor rejected with reason");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to reject vendor.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setVerifying(false);
@@ -297,7 +325,7 @@ const Verification = () => {
       setRejectOpen(false);
       toast.success("Vendor suspended successfully");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to suspend vendor.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setVerifying(false);
@@ -315,7 +343,7 @@ const Verification = () => {
       setRejectOpen(false);
       toast.success("Vendor banned successfully");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to ban vendor.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setVerifying(false);
@@ -333,7 +361,7 @@ const Verification = () => {
       setRejectOpen(false);
       toast.success("Vendor reactivated successfully");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to reactivate vendor.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setVerifying(false);
@@ -377,30 +405,36 @@ const Verification = () => {
           <table className="w-full min-w-[700px] text-sm">
             <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="px-4 py-3 font-semibold">Email</th>
+                <th className="px-4 py-3 font-semibold">Business</th>
                 <th className="px-4 py-3 font-semibold">Registration Stage</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.map((v) => (
-                <tr key={v.id} className="hover:bg-muted/20">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-soft text-primary">
-                        <Building2 className="h-4 w-4" />
+              {filtered.map((v) => {
+                const profile = vendorProfiles.get(v.id);
+                return (
+                  <tr key={v.id} className="hover:bg-muted/20">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-soft text-primary">
+                          <Building2 className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium truncate" title={profile?.businessName || v.email}>{profile?.businessName || v.email}</p>
+                          <p className="text-xs text-muted-foreground truncate" title={v.email}>{v.email}</p>
+                        </div>
                       </div>
-                      <p className="font-medium">{v.email}</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">{v.registrationStage}</td>
-                  <td className="px-4 py-3"><StatusBadge status={v.accountStatus as "pending" | "approved" | "rejected" | "under_review"} /></td>
-                  <td className="px-4 py-3 text-right">
-                    <Button variant="outline" size="sm" onClick={() => setSelected(v)}>Review</Button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-3">{v.registrationStage}</td>
+                    <td className="px-4 py-3"><StatusBadge status={v.accountStatus as "pending" | "approved" | "rejected" | "under_review"} /></td>
+                    <td className="px-4 py-3 text-right">
+                      <Button variant="outline" size="sm" onClick={() => setSelected(v)}>Review</Button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -418,14 +452,20 @@ const Verification = () => {
               <div className="rounded-xl border border-border bg-gradient-soft p-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="text-lg font-bold">{selected.email}</h3>
+                    <h3 className="text-lg font-bold">{vendorProfile?.businessName || selected.email}</h3>
                     <p className="text-sm text-muted-foreground">Registration Stage: {selected.registrationStage}</p>
                   </div>
                   <StatusBadge status={selected.accountStatus as "pending" | "approved" | "rejected" | "under_review"} />
                 </div>
-                <div className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-                  <p className="inline-flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /> {selected.email}</p>
-                  <p className="inline-flex items-center gap-2"><Building2 className="h-4 w-4 text-muted-foreground" /> Email Verified: {selected.emailVerified ? "Yes" : "No"}</p>
+                <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="truncate" title={selected.email}>{selected.email}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span>Email Verified: {selected.emailVerified ? "Yes" : "No"}</span>
+                  </div>
                 </div>
               </div>
 
@@ -520,7 +560,7 @@ const Verification = () => {
                           <Building className="h-4 w-4 text-primary" />
                           <div>
                             <p className="text-sm font-medium">{b.bankName}</p>
-                            <p className="text-xs text-muted-foreground">{b.accountHolderName} ••••{b.accountNumber.slice(-4)}</p>
+                            <p className="text-xs text-muted-foreground">{b.accountHolderName} {b.accountNumber}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">

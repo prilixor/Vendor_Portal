@@ -273,8 +273,8 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
             ActionType = "VENDOR_BANK_ACCOUNT_VERIFIED",
             EntityType = "VendorBankAccount",
             EntityId = bankAccount.Id,
-            OldValue = oldStatus,
-            NewValue = request.VerificationStatus,
+            OldValue = System.Text.Json.JsonSerializer.Serialize(oldStatus),
+            NewValue = System.Text.Json.JsonSerializer.Serialize(request.VerificationStatus),
             Notes = request.Notes
         };
 
@@ -389,8 +389,8 @@ internal sealed class VerifyVendorDocumentCommandHandler(IVendorOnboardingReposi
             ActionType = "VENDOR_DOCUMENT_VERIFIED",
             EntityType = "VendorDocument",
             EntityId = document.Id,
-            OldValue = oldStatus,
-            NewValue = request.VerificationStatus,
+            OldValue = System.Text.Json.JsonSerializer.Serialize(oldStatus),
+            NewValue = System.Text.Json.JsonSerializer.Serialize(request.VerificationStatus),
             Notes = request.Notes
         };
         await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
@@ -489,8 +489,8 @@ internal sealed class VerifyVendorListingCommandHandler(IVendorOnboardingReposit
             ActionType = "VENDOR_LISTING_VERIFIED",
             EntityType = "VendorProductListing",
             EntityId = listing.Id,
-            OldValue = oldStatus,
-            NewValue = request.ListingStatus,
+            OldValue = System.Text.Json.JsonSerializer.Serialize(oldStatus),
+            NewValue = System.Text.Json.JsonSerializer.Serialize(request.ListingStatus),
             Notes = request.Notes
         };
         await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
@@ -564,7 +564,7 @@ internal sealed class ForceResetVendorPasswordCommandHandler(
             EntityType = "Vendor",
             EntityId = vendorId,
             OldValue = null,
-            NewValue = "password_reset",
+            NewValue = System.Text.Json.JsonSerializer.Serialize("password_reset"),
             Notes = request.Notes
         };
         await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);

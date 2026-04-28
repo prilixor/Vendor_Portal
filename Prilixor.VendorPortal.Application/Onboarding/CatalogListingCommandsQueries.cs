@@ -808,8 +808,7 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
 
         try
         {
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-            
+            ExcelPackage.License.SetNonCommercialPersonal("Prilixor");
             using var stream = new MemoryStream(request.FileData);
             using var package = new ExcelPackage(stream);
             
@@ -961,6 +960,103 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
         catch (Exception ex)
         {
             return Result.Failure<ExcelUploadResponseDto>(new Error("excel.upload_failed", $"Failed to process Excel file: {ex.Message}", ErrorCategory.Validation));
+        }
+    }
+}
+
+// Download existing catalog data as Excel
+public sealed record DownloadCatalogExcelQuery : IQuery<byte[]>;
+
+internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingRepository repository)
+    : IQueryHandler<DownloadCatalogExcelQuery, byte[]>
+{
+    public async Task<Result<byte[]>> Handle(DownloadCatalogExcelQuery request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            ExcelPackage.License.SetNonCommercialPersonal("Prilixor");
+            using var package = new ExcelPackage();
+
+            // Get all categories and products
+            var categories = await repository.GetProductCategoriesAsync(cancellationToken);
+            var products = await repository.GetProductsAsync(null, cancellationToken);
+
+            // Create Categories sheet
+            var categoriesSheet = package.Workbook.Worksheets.Add("Categories");
+            categoriesSheet.Cells[1, 1].Value = "category_name";
+            categoriesSheet.Cells[1, 2].Value = "prescription_required";
+            categoriesSheet.Cells[1, 3].Value = "deposit_required";
+            categoriesSheet.Cells[1, 4].Value = "installation_required";
+            categoriesSheet.Cells[1, 5].Value = "is_active";
+
+            // Style header row
+            using (var headerRange = categoriesSheet.Cells[1, 1, 1, 5])
+            {
+                headerRange.Style.Font.Bold = true;
+                headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
+                headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+            }
+
+            // Add category data
+            var row = 2;
+            foreach (var category in categories)
+            {
+                categoriesSheet.Cells[row, 1].Value = category.CategoryName;
+                categoriesSheet.Cells[row, 2].Value = category.PrescriptionRequired;
+                categoriesSheet.Cells[row, 3].Value = category.DepositRequired;
+                categoriesSheet.Cells[row, 4].Value = category.InstallationRequired;
+                categoriesSheet.Cells[row, 5].Value = category.IsActive;
+                row++;
+            }
+
+            // Auto-fit columns
+            categoriesSheet.Cells[1, 1, 1, 5].AutoFitColumns();
+
+            // Create Products sheet
+            var productsSheet = package.Workbook.Worksheets.Add("Products");
+            productsSheet.Cells[1, 1].Value = "category_name";
+            productsSheet.Cells[1, 2].Value = "product_name";
+            productsSheet.Cells[1, 3].Value = "brand_name";
+            productsSheet.Cells[1, 4].Value = "model_name";
+            productsSheet.Cells[1, 5].Value = "short_description";
+            productsSheet.Cells[1, 6].Value = "long_description";
+            productsSheet.Cells[1, 7].Value = "is_active";
+
+            // Style header row
+            using (var headerRange = productsSheet.Cells[1, 1, 1, 7])
+            {
+                headerRange.Style.Font.Bold = true;
+                headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
+                headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+            }
+
+            // Add product data
+            row = 2;
+            foreach (var product in products)
+            {
+                // Get category name for this product
+                var category = categories.FirstOrDefault(c => c.Id == product.CategoryId);
+                
+                productsSheet.Cells[row, 1].Value = category?.CategoryName ?? "";
+                productsSheet.Cells[row, 2].Value = product.ProductName;
+                productsSheet.Cells[row, 3].Value = product.BrandName;
+                productsSheet.Cells[row, 4].Value = product.ModelName;
+                productsSheet.Cells[row, 5].Value = product.ShortDescription;
+                productsSheet.Cells[row, 6].Value = product.LongDescription;
+                productsSheet.Cells[row, 7].Value = product.IsActive;
+                row++;
+            }
+
+            // Auto-fit columns
+            productsSheet.Cells[1, 1, 1, 7].AutoFitColumns();
+
+            // Save to byte array
+            var excelData = package.GetAsByteArray();
+            return Result.Success(excelData);
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<byte[]>(new Error("excel.download_failed", $"Failed to generate Excel file: {ex.Message}"));
         }
     }
 }

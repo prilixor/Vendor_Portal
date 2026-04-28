@@ -10,8 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/app/components/ui/switch";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { adminApi, ProductCategoryDto, ProductDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest } from "@/app/services/adminApi";
-import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/app/components/ui/dropdown-menu";
 
 const ProductManagement = () => {
   const [categories, setCategories] = useState<ProductCategoryDto[]>([]);
@@ -298,15 +305,80 @@ const ProductManagement = () => {
     }
   };
 
+  const downloadSampleExcel = () => {
+    try {
+      // Create workbook with two sheets
+      const wb = XLSX.utils.book_new();
+
+      // Categories sheet - headers only
+      const categoriesHeaders = [
+        ["category_name", "prescription_required", "deposit_required", "installation_required", "is_active"]
+      ];
+      const categoriesWs = XLSX.utils.aoa_to_sheet(categoriesHeaders);
+      XLSX.utils.book_append_sheet(wb, categoriesWs, "Categories");
+
+      // Products sheet - headers only
+      const productsHeaders = [
+        ["category_name", "product_name", "brand_name", "model_name", "short_description", "long_description", "is_active"]
+      ];
+      const productsWs = XLSX.utils.aoa_to_sheet(productsHeaders);
+      XLSX.utils.book_append_sheet(wb, productsWs, "Products");
+
+      // Download file
+      XLSX.writeFile(wb, "catalog_template.xlsx");
+      toast.success("Sample template downloaded");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to download template.";
+      toast.error(message);
+    }
+  };
+
+  const downloadExistingData = async () => {
+    try {
+      setLoading(true);
+      await adminApi.downloadCatalogExcel();
+      toast.success("Catalog data downloaded");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to download catalog data.";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div>
       <PageHeader
         title="Products Management"
         description="Manage product categories and products for the marketplace catalog."
         actions={
-          <Button onClick={() => setExcelDialogOpen(true)} disabled={loading}>
-            <Upload className="mr-2 h-4 w-4" /> Upload Excel
-          </Button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" disabled={loading} className="w-full sm:w-auto justify-center">
+                  <Download className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">Download Excel</span>
+                  <span className="sm:hidden">Download</span>
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] sm:w-auto max-w-sm">
+                <DropdownMenuItem onClick={downloadSampleExcel}>
+                  <FileDown className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="truncate">Download Sample Excel</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={downloadExistingData}>
+                  <Database className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="truncate">Download Existing Data Excel</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={() => setExcelDialogOpen(true)} disabled={loading} className="w-full sm:w-auto">
+              <Upload className="mr-2 h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">Upload Excel</span>
+              <span className="sm:hidden">Upload</span>
+            </Button>
+          </div>
         }
       />
 
@@ -318,12 +390,16 @@ const ProductManagement = () => {
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-4">
-            <TabsTrigger value="categories">
-              <FolderTree className="mr-2 h-4 w-4" /> Categories ({categories.length})
+          <TabsList className="mb-4 w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
+            <TabsTrigger value="categories" className="text-xs sm:text-sm">
+              <FolderTree className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+              <span className="truncate">Categories</span>
+              <span className="hidden sm:inline ml-1">({categories.length})</span>
             </TabsTrigger>
-            <TabsTrigger value="products">
-              <Package className="mr-2 h-4 w-4" /> Products ({products.length})
+            <TabsTrigger value="products" className="text-xs sm:text-sm">
+              <Package className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+              <span className="truncate">Products</span>
+              <span className="hidden sm:inline ml-1">({products.length})</span>
             </TabsTrigger>
           </TabsList>
 
@@ -334,29 +410,31 @@ const ProductManagement = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={`Search ${activeTab}...`}
-                className="pl-9"
+                className="pl-9 w-full"
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "active" | "inactive")}>
-                <SelectTrigger className="w-[150px]">
+                <SelectTrigger className="w-full sm:w-[150px]">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="max-w-[calc(100vw-2rem)]">
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="inactive">Inactive</SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={() => activeTab === "categories" ? openCategoryDialog() : openProductDialog()} disabled={loading}>
-                <Plus className="mr-2 h-4 w-4" /> New {activeTab === "categories" ? "Category" : "Product"}
+              <Button onClick={() => activeTab === "categories" ? openCategoryDialog() : openProductDialog()} disabled={loading} className="w-full sm:w-auto whitespace-nowrap">
+                <Plus className="mr-2 h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">New {activeTab === "categories" ? "Category" : "Product"}</span>
+                <span className="sm:hidden">New</span>
               </Button>
             </div>
           </div>
 
           <TabsContent value="categories" className="mt-4">
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full min-w-[800px] text-sm">
+            <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
+              <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
                 <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 font-semibold">Category Name</th>
@@ -406,8 +484,8 @@ const ProductManagement = () => {
           </TabsContent>
 
           <TabsContent value="products" className="mt-4">
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full min-w-[800px] text-sm">
+            <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
+              <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
                 <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 font-semibold">Product Name</th>
@@ -622,8 +700,7 @@ const ProductManagement = () => {
           <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
             <p className="text-sm text-muted-foreground mb-4">
               Upload an Excel file with two sheets: "Categories" and "Products".<br />
-              <strong>Categories sheet:</strong> category_name, prescription_required, deposit_required, installation_required, is_active<br />
-              <strong>Products sheet:</strong> category_name, product_name, brand_name, model_name, short_description, long_description, is_active
+              <strong>Need a template?</strong> Use the "Download Sample Excel" option above to get started.
             </p>
             <input
               ref={fileInputRef}

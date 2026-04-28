@@ -15,6 +15,7 @@ import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye 
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
 type LocalListing = ProductListing & {
   productId: string;
@@ -105,7 +106,7 @@ const Products = () => {
       setProducts(products.map((p) => (p.id === listing.id ? { ...p, status: newStatus } : p)));
       toast.success("Listing status updated successfully");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update listing status.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setBusy(false);
@@ -160,7 +161,7 @@ const Products = () => {
       try {
         await loadCatalogAndListings();
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to load product listings.";
+        const message = getUserFriendlyMessage(error);
         setLoadError(message);
         toast.error(message);
       } finally {
@@ -227,7 +228,7 @@ const Products = () => {
       setEditing(null);
       toast.success("Listing saved");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to save listing.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setBusy(false);
@@ -258,7 +259,7 @@ const Products = () => {
       setCategoryDialogOpen(false);
       toast.success("Category created");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create category.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setBusy(false);
@@ -305,7 +306,7 @@ const Products = () => {
       setProductDialogOpen(false);
       toast.success("Product created");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create product.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setBusy(false);
@@ -332,7 +333,7 @@ const Products = () => {
         })));
       setListingDocuments(docsRes);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load listing media.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setBusy(false);
@@ -364,7 +365,7 @@ const Products = () => {
         })));
       toast.success("Image deleted");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to delete image.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setBusy(false);
@@ -398,7 +399,7 @@ const Products = () => {
         fileInputRef.current.value = "";
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to upload image.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setBusy(false);
@@ -430,7 +431,7 @@ const Products = () => {
       toast.success("Media updated");
       setMediaFor(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to save media.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setBusy(false);
@@ -456,7 +457,7 @@ const Products = () => {
       }
       toast.success("Listing document uploaded");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to upload listing document.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setBusy(false);
@@ -477,7 +478,7 @@ const Products = () => {
       setListingDocuments(docs);
       toast.success("Document deleted");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to delete listing document.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setBusy(false);

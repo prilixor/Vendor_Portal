@@ -262,3 +262,32 @@ public sealed class UploadCatalogExcelEndpoint(IMediator mediator)
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
+
+// Excel Download Endpoint
+public sealed class DownloadCatalogExcelEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<FileStreamHttpResult, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/download-excel");
+        Group<AdminApiGroup>();
+        AllowAnonymous();
+    }
+
+    public override async Task<Results<FileStreamHttpResult, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        var result = await mediator.Send(new DownloadCatalogExcelQuery(), ct);
+        
+        if (!result.IsSuccess)
+        {
+            return result.ToErrorResponse();
+        }
+
+        var stream = new MemoryStream(result.Value);
+        return TypedResults.File(
+            stream,
+            contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            fileDownloadName: $"catalog_export_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx"
+        );
+    }
+}

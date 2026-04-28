@@ -11,11 +11,13 @@ import { MapPicker } from "@/app/components/shared/MapPicker";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye, Building2, ChevronLeft, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { BankDetails, BusinessProfile, VendorDocument, VerificationStatus } from "@/app/models";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
 const steps = [
   { label: "Basic Info", description: "Account" },
@@ -91,7 +93,13 @@ const Onboarding = () => {
   const updateProfile = <K extends keyof typeof profile>(k: K, v: (typeof profile)[K]) =>
     setProfile((p) => ({ ...p, [k]: v }));
 
-  const updateBank = <K extends keyof typeof bank>(k: K, v: (typeof bank)[K]) => setBank((p) => ({ ...p, [k]: v }));
+  const updateBank = <K extends keyof typeof bank>(k: K, v: (typeof bank)[K]) => {
+    // Only allow numeric characters for account number
+    if (k === "accountNumber" || k === "confirmAccountNumber") {
+      v = v.replace(/[^0-9]/g, "") as (typeof bank)[K];
+    }
+    setBank((p) => ({ ...p, [k]: v }));
+  };
 
   const validateIFSC = (ifsc: string): boolean => {
     const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
@@ -124,7 +132,7 @@ const Onboarding = () => {
       }));
       setIfscError(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to fetch bank details";
+      const message = getUserFriendlyMessage(error);
       setIfscError(message);
       setBank((prev) => ({
         ...prev,
@@ -139,6 +147,14 @@ const Onboarding = () => {
   const handleIFSCBlur = () => {
     if (bank.ifscCode && bank.ifscCode.length === 11) {
       fetchBankDetails(bank.ifscCode);
+    } else if (!bank.ifscCode) {
+      // Clear bank name and branch name when IFSC is empty
+      setBank((prev) => ({
+        ...prev,
+        bankName: "",
+        branchName: "",
+      }));
+      setIfscError(null);
     }
   };
 
@@ -247,7 +263,7 @@ const Onboarding = () => {
 
         setCompletedSteps(completed);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to load onboarding data.";
+        const message = getUserFriendlyMessage(error);
         setLoadError(message);
         toast.error(message);
       } finally {
@@ -287,7 +303,7 @@ const Onboarding = () => {
       setSelectedFile(null);
       toast.success("Document uploaded. Awaiting verification.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to upload document.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setBusy(false);
@@ -304,7 +320,7 @@ const Onboarding = () => {
       setDocuments(mapDocuments(latestDocs));
       toast.success("Document deleted.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to delete document.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setBusy(false);
@@ -374,7 +390,50 @@ const Onboarding = () => {
         await saveProfile();
         toast.success("Business profile saved.");
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to save profile.";
+        const message = getUserFriendlyMessage(error);
+        toast.error(message);
+        return;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    if (step === 3) {
+      // Validate required bank details fields
+      if (!bank.accountHolderName.trim()) {
+        toast.error("Please fill in account holder name");
+        return;
+      }
+      if (!bank.accountNumber.trim()) {
+        toast.error("Please fill in account number");
+        return;
+      }
+      if (!bank.confirmAccountNumber.trim()) {
+        toast.error("Please fill in confirm account number");
+        return;
+      }
+      if (bank.accountNumber !== bank.confirmAccountNumber) {
+        toast.error("Account numbers do not match");
+        return;
+      }
+      if (!bank.ifscCode.trim()) {
+        toast.error("Please fill in IFSC code");
+        return;
+      }
+      if (!bank.bankName.trim()) {
+        toast.error("Please enter a valid IFSC code to auto-fill bank name");
+        return;
+      }
+      if (!bank.branchName.trim()) {
+        toast.error("Please enter a valid IFSC code to auto-fill branch name");
+        return;
+      }
+      try {
+        setBusy(true);
+        await saveBank();
+        toast.success("Bank details saved.");
+      } catch (error) {
+        const message = getUserFriendlyMessage(error);
         toast.error(message);
         return;
       } finally {
@@ -400,7 +459,7 @@ const Onboarding = () => {
       setViewMode("profile");
       toast.success("Application submitted! Our team will review within 24 hours.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to submit application.";
+      const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
       setBusy(false);
@@ -416,8 +475,33 @@ const Onboarding = () => {
     if (editingSection === 1) {
       await saveProfile();
     } else if (editingSection === 3) {
+      // Validate required bank details fields
+      if (!bank.accountHolderName.trim()) {
+        toast.error("Please fill in account holder name");
+        return;
+      }
+      if (!bank.accountNumber.trim()) {
+        toast.error("Please fill in account number");
+        return;
+      }
+      if (!bank.confirmAccountNumber.trim()) {
+        toast.error("Please fill in confirm account number");
+        return;
+      }
       if (bank.accountNumber !== bank.confirmAccountNumber) {
         toast.error("Account numbers do not match");
+        return;
+      }
+      if (!bank.ifscCode.trim()) {
+        toast.error("Please fill in IFSC code");
+        return;
+      }
+      if (!bank.bankName.trim()) {
+        toast.error("Please enter a valid IFSC code to auto-fill bank name");
+        return;
+      }
+      if (!bank.branchName.trim()) {
+        toast.error("Please enter a valid IFSC code to auto-fill branch name");
         return;
       }
       await saveBank();
@@ -528,19 +612,20 @@ const Onboarding = () => {
                 <h2 className="text-lg font-semibold mb-4">Documents</h2>
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 gap-3 rounded-xl border border-border p-3 sm:grid-cols-3">
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label>Document type</Label>
-                      <select
-                        value={documentType}
-                        onChange={(e) => setDocumentType(e.target.value)}
-                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      >
-                        {["GST Certificate", "PAN Card", "Trade License", "Address Proof", "Cancelled Cheque"].map((type) => (
-                          <option key={type} value={type}>
-                            {type}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={documentType} onValueChange={setDocumentType}>
+                        <SelectTrigger className="h-10 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent position="popper" className="max-w-[calc(100vw-2rem)]">
+                          {["GST Certificate", "PAN Card", "Trade License", "Address Proof", "Cancelled Cheque"].map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-1.5">
                       <Label>File</Label>
@@ -556,8 +641,46 @@ const Onboarding = () => {
                       </Button>
                     </div>
                   </div>
-                  <div className="overflow-x-auto rounded-xl border border-border">
-                    <table className="w-full min-w-[600px] text-sm">
+                  {/* Mobile card view */}
+                  <div className="block sm:hidden space-y-3">
+                    {documents.map((doc) => (
+                      <Card key={doc.id} className="p-3 border-border/60">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                            <FileText className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{doc.type}</p>
+                            <p className="text-xs text-muted-foreground truncate">{doc.fileName}</p>
+                            <p className="text-xs text-muted-foreground mt-1">{doc.uploadedAt}</p>
+                            <div className="mt-2 flex items-center justify-between">
+                              <StatusBadge status={doc.status} />
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => previewDoc(doc)} disabled={busy}>
+                                  <Eye className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeDoc(doc.id)} disabled={busy}>
+                                  <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                              </div>
+                            </div>
+                            {doc.status === "rejected" && doc.rejectionReason && (
+                              <p className="text-xs text-destructive mt-2">{doc.rejectionReason}</p>
+                            )}
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                    {documents.length === 0 && (
+                      <div className="text-center py-8 text-sm text-muted-foreground border rounded-xl">
+                        No documents uploaded yet.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Desktop table view */}
+                  <div className="hidden sm:block overflow-x-auto rounded-xl border border-border">
+                    <table className="w-full text-sm">
                       <thead className="bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
                         <tr>
                           <th className="px-4 py-3 font-semibold">Document</th>
@@ -753,19 +876,20 @@ const Onboarding = () => {
             <div className="space-y-3">
               <h2 className="text-lg font-semibold">Document verification</h2>
               <div className="grid grid-cols-1 gap-3 rounded-xl border border-border p-3 sm:grid-cols-3">
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <Label>Document type</Label>
-                  <select
-                    value={documentType}
-                    onChange={(e) => setDocumentType(e.target.value)}
-                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    {["GST Certificate", "PAN Card", "Trade License", "Address Proof", "Cancelled Cheque"].map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={documentType} onValueChange={setDocumentType}>
+                    <SelectTrigger className="h-10 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper" className="max-w-[calc(100vw-2rem)]">
+                      {["GST Certificate", "PAN Card", "Trade License", "Address Proof", "Cancelled Cheque"].map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label>File</Label>
@@ -782,8 +906,46 @@ const Onboarding = () => {
                 </div>
               </div>
             </div>
-            <div className="overflow-x-auto rounded-xl border border-border">
-              <table className="w-full min-w-[600px] text-sm">
+            {/* Mobile card view */}
+            <div className="block sm:hidden space-y-3">
+              {documents.map((doc) => (
+                <Card key={doc.id} className="p-3 border-border/60">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                      <FileText className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{doc.type}</p>
+                      <p className="text-xs text-muted-foreground truncate">{doc.fileName}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{doc.uploadedAt}</p>
+                      <div className="mt-2 flex items-center justify-between">
+                        <StatusBadge status={doc.status} />
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => previewDoc(doc)} disabled={busy}>
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeDoc(doc.id)} disabled={busy}>
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      </div>
+                      {doc.status === "rejected" && doc.rejectionReason && (
+                        <p className="text-xs text-destructive mt-2">{doc.rejectionReason}</p>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+              {documents.length === 0 && (
+                <div className="text-center py-8 text-sm text-muted-foreground border rounded-xl">
+                  No documents uploaded yet.
+                </div>
+              )}
+            </div>
+
+            {/* Desktop table view */}
+            <div className="hidden sm:block overflow-x-auto rounded-xl border border-border">
+              <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 font-semibold">Document</th>
