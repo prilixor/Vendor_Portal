@@ -11,7 +11,7 @@ import { Switch } from "@/app/components/ui/switch";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { ProductListing } from "@/app/models";
-import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye } from "lucide-react";
+import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
@@ -810,50 +810,162 @@ const Products = () => {
 
               <TabsContent value="documents" className="space-y-4">
                 <div className="rounded-lg border border-border p-4">
-                  <h3 className="mb-3 font-medium">Listing documents</h3>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[180px_1fr_auto]">
-                    <Select value={docType} onValueChange={setDocType}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="spec_sheet">Spec Sheet</SelectItem>
-                        <SelectItem value="warranty">Warranty</SelectItem>
-                        <SelectItem value="compliance">Compliance</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      ref={docFileInputRef}
-                      type="file"
-                      accept=".pdf,.png,.jpg,.jpeg,.webp"
-                      onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
-                    />
-                    <Button onClick={() => void uploadListingDoc()} disabled={busy || !docFile}>Upload</Button>
-                  </div>
-                  {docFile && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Selected: <span className="font-medium">{docFile.name}</span>
-                    </p>
-                  )}
-                  <div className="mt-3 space-y-2">
-                    {listingDocuments.map((doc) => (
-                      <div key={doc.id} className="flex flex-col gap-2 rounded-md border border-border px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0">
-                          <p className="font-medium">{doc.documentType}</p>
-                          <p className="truncate text-xs text-muted-foreground">{doc.fileUrl.split("/").pop()}</p>
+                  <h3 className="mb-4 font-medium">Listing documents</h3>
+                  
+                  {/* Upload Section */}
+                  <div className="space-y-4">
+                    {/* Desktop Layout */}
+                    <div className="hidden sm:block">
+                      <div className="grid grid-cols-12 gap-4 items-end">
+                        {/* Document Type */}
+                        <div className="col-span-3">
+                          <label className="text-sm font-medium text-foreground mb-2 block">Document Type</label>
+                          <Select value={docType} onValueChange={setDocType}>
+                            <SelectTrigger className="h-10">
+                              <SelectValue placeholder="Select type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="spec_sheet">Spec Sheet</SelectItem>
+                              <SelectItem value="warranty">Warranty</SelectItem>
+                              <SelectItem value="compliance">Compliance</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <StatusBadge status={doc.verificationStatus === "approved" ? "approved" : doc.verificationStatus === "rejected" ? "rejected" : "pending"} />
-                          <Button variant="ghost" size="icon" onClick={() => viewListingDoc(doc.fileUrl)} aria-label="View document" disabled={busy}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => void deleteListingDoc(doc.id)} aria-label="Delete document" disabled={busy}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                        
+                        {/* File Upload */}
+                        <div className="col-span-6">
+                          <label className="text-sm font-medium text-foreground mb-2 block">Choose File</label>
+                          <div className="relative">
+                            <Input
+                              ref={docFileInputRef}
+                              type="file"
+                              accept=".pdf,.png,.jpg,.jpeg,.webp"
+                              onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                            />
+                            <div className="flex items-center h-10 px-3 py-2 border border-border rounded-md bg-background text-sm shadow-sm">
+                              <Upload className="mr-2 h-4 w-4 text-muted-foreground flex-shrink-0" />
+                              <span className="text-muted-foreground flex-1 truncate">
+                                {docFile ? docFile.name : "Choose file"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Upload Button */}
+                        <div className="col-span-3">
+                          <Button 
+                            onClick={() => void uploadListingDoc()} 
+                            disabled={busy || !docFile} 
+                            className="w-full h-10"
+                          >
+                            <Upload className="h-4 w-4" />
+                            Upload
                           </Button>
                         </div>
                       </div>
-                    ))}
-                    {listingDocuments.length === 0 && (
-                      <p className="text-xs text-muted-foreground">No listing documents uploaded yet.</p>
+                    </div>
+
+                    {/* Mobile Layout */}
+                    <div className="sm:hidden space-y-4">
+                      {/* Document Type */}
+                      <div>
+                        <label className="text-sm font-medium text-foreground mb-2 block">Document Type</label>
+                        <Select value={docType} onValueChange={setDocType}>
+                          <SelectTrigger className="h-10">
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="spec_sheet">Spec Sheet</SelectItem>
+                            <SelectItem value="warranty">Warranty</SelectItem>
+                            <SelectItem value="compliance">Compliance</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      {/* File Upload */}
+                      <div>
+                        <label className="text-sm font-medium text-foreground mb-2 block">Choose File</label>
+                        <div className="relative">
+                          <Input
+                            ref={docFileInputRef}
+                            type="file"
+                            accept=".pdf,.png,.jpg,.jpeg,.webp"
+                            onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                          />
+                          <div className="flex items-center h-10 px-3 py-2 border border-border rounded-md bg-background text-sm shadow-sm">
+                            <Upload className="mr-2 h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <span className="text-muted-foreground flex-1 truncate">
+                              {docFile ? docFile.name : "Choose file"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Upload Button */}
+                      <Button 
+                        onClick={() => void uploadListingDoc()} 
+                        disabled={busy || !docFile} 
+                        className="w-full h-10"
+                      >
+                        <Upload className="h-4 w-4" />
+                        Upload
+                      </Button>
+                    </div>
+                    
+                    {/* File Info Display */}
+                    {docFile && (
+                      <div className="rounded-md bg-muted/30 p-3 border border-border/50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium truncate">{docFile.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Size: {(docFile.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setDocFile(null)}
+                            className="text-muted-foreground hover:text-foreground ml-2"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
                     )}
+                  </div>
+
+                  {/* Documents List */}
+                  <div className="mt-6">
+                    <h4 className="text-sm font-medium text-foreground mb-3">Uploaded Documents</h4>
+                    <div className="space-y-2">
+                      {listingDocuments.map((doc) => (
+                        <div key={doc.id} className="flex items-center justify-between rounded-md border border-border p-3">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium truncate">{doc.documentType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+                              <p className="text-xs text-muted-foreground truncate">{doc.fileUrl.split('/').pop()}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => void deleteListingDoc(doc.id)}
+                            className="text-destructive hover:text-destructive/80 text-sm font-medium flex-shrink-0 ml-3"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                      {listingDocuments.length === 0 && (
+                        <div className="text-center py-8 text-sm text-muted-foreground">
+                          <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          No documents uploaded yet.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </TabsContent>
