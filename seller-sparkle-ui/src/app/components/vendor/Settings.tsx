@@ -115,9 +115,16 @@ const Settings = () => {
       return;
     }
 
+    // Check if user is authenticated
+    const token = localStorage.getItem('vendor_portal_token');
+    if (!token) {
+      toast.error("You are not logged in. Please log in again.");
+      return;
+    }
+
     setSavingPassword(true);
     try {
-      const res = await authApi.changePassword({ currentPassword, newPassword });
+      const res = await authApi.changePassword({ email: user?.email ?? "", currentPassword, newPassword });
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -125,7 +132,11 @@ const Settings = () => {
       toast.success(res.message);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update password.";
-      toast.error(message);
+      if (message.includes("401") || message.includes("Unauthorized")) {
+        toast.error("Your session has expired. Please log in again.");
+      } else {
+        toast.error(message);
+      }
     } finally {
       setSavingPassword(false);
     }

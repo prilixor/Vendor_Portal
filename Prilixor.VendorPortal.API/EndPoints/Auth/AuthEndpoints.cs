@@ -24,6 +24,7 @@ public sealed record LoginResponse(string Token, AuthUserDto User);
 
 public sealed class ChangePasswordRequest
 {
+    public string Email { get; set; } = string.Empty;
     public string CurrentPassword { get; set; } = string.Empty;
     public string NewPassword { get; set; } = string.Empty;
 }
@@ -139,21 +140,16 @@ public sealed class ChangePasswordEndpoint(
     public override void Configure()
     {
         Post("auth/change-password");
+        AllowAnonymous();
     }
 
     public override async Task<Results<Ok<ChangePasswordResponse>, ProblemHttpResult>> ExecuteAsync(ChangePasswordRequest req, CancellationToken ct)
     {
-        var userIdRaw = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var roleRaw = User.FindFirstValue(ClaimTypes.Role);
+        var email = (req.Email ?? string.Empty).Trim().ToLowerInvariant();
 
-        if (!Guid.TryParse(userIdRaw, out var userId))
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(req.CurrentPassword) || string.IsNullOrWhiteSpace(req.NewPassword))
         {
-            return TypedResults.Problem(title: "auth.invalid_user", detail: "Invalid authenticated user context.", statusCode: 401);
-        }
-
-        if (string.IsNullOrWhiteSpace(req.CurrentPassword) || string.IsNullOrWhiteSpace(req.NewPassword))
-        {
-            return TypedResults.Problem(title: "auth.invalid_password", detail: "Current and new password are required.", statusCode: 400);
+            return TypedResults.Problem(title: "auth.invalid_input", detail: "Email, current password, and new password are required.", statusCode: 400);
         }
 
         if (req.NewPassword.Length < 8)
@@ -161,15 +157,10 @@ public sealed class ChangePasswordEndpoint(
             return TypedResults.Problem(title: "auth.invalid_password", detail: "New password must be at least 8 characters.", statusCode: 400);
         }
 
-        var role = (roleRaw ?? "vendor").Trim().ToLowerInvariant();
-        if (role == "admin")
+        // Try admin first
+        var admin = await repository.GetAdminUserByEmailAsync(email, ct);
+        if (admin != null && !admin.IsDeleted && admin.IsActive)
         {
-            var admin = await repository.GetAdminUserByIdAsync(userId, ct);
-            if (admin is null || admin.IsDeleted || !admin.IsActive)
-            {
-                return TypedResults.Problem(title: "auth.user_not_found", detail: "Admin user not found.", statusCode: 404);
-            }
-
             if (!passwordHasher.VerifyPassword(req.CurrentPassword, admin.PasswordHash))
             {
                 return TypedResults.Problem(title: "auth.invalid_password", detail: "Current password is incorrect.", statusCode: 400);
@@ -180,10 +171,11 @@ public sealed class ChangePasswordEndpoint(
             return TypedResults.Ok(new ChangePasswordResponse(true, "Password updated successfully.", DateTimeOffset.UtcNow));
         }
 
-        var vendor = await repository.GetVendorByIdAsync(userId, ct);
+        // Try vendor
+        var vendor = await repository.GetVendorByEmailAsync(email, ct);
         if (vendor is null || vendor.IsDeleted)
         {
-            return TypedResults.Problem(title: "auth.user_not_found", detail: "Vendor user not found.", statusCode: 404);
+            return TypedResults.Problem(title: "auth.user_not_found", detail: "User not found.", statusCode: 404);
         }
 
         if (!passwordHasher.VerifyPassword(req.CurrentPassword, vendor.PasswordHash))
