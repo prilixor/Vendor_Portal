@@ -366,6 +366,22 @@ internal sealed class VerifyVendorDocumentCommandHandler(IVendorOnboardingReposi
 
         await repository.UpdateVendorDocumentAsync(document, cancellationToken);
 
+        // For active vendors, check if all documents are approved and restore registration stage
+        if (string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase))
+        {
+            var vendor = await repository.GetVendorByIdAsync(vendorId, cancellationToken);
+            if (vendor != null && vendor.AccountStatus == "active" && vendor.RegistrationStage != "approved")
+            {
+                var allDocuments = await repository.GetVendorDocumentsAsync(vendorId, cancellationToken);
+                var allApproved = allDocuments.All(d => d.VerificationStatus == "approved" && !d.IsDeleted);
+                
+                if (allApproved && allDocuments.Any())
+                {
+                    vendor.RegistrationStage = "approved";
+                }
+            }
+        }
+
         if (!string.Equals(oldStatus, "rejected", StringComparison.OrdinalIgnoreCase)
             && string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase))
         {

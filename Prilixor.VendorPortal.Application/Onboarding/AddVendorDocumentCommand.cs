@@ -56,7 +56,13 @@ internal sealed class AddVendorDocumentCommandHandler(IVendorOnboardingRepositor
         };
 
         await repository.AddVendorDocumentAsync(doc, cancellationToken);
-        vendor.RegistrationStage = "documents_pending";
+        
+        // Only change registration stage to documents_pending if vendor is not already active
+        if (vendor.AccountStatus != "active")
+        {
+            vendor.RegistrationStage = "documents_pending";
+        }
+        
         await repository.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new VendorDocumentDto(

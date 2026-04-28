@@ -6,7 +6,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
-import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw, FileText, Eye, Building } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw, FileText, Eye, Building, AlertCircle } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { Textarea } from "@/app/components/ui/textarea";
@@ -634,9 +634,19 @@ const Verification = () => {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button onClick={() => selected && approve(selected.id)} className="bg-success hover:bg-success/90 text-success-foreground" disabled={verifying}>
-              {verifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />} Approve
-            </Button>
+            {/* Only show main approve button for non-active vendors */}
+            {selected?.accountStatus !== "active" && (
+              <Button onClick={() => selected && approve(selected.id)} className="bg-success hover:bg-success/90 text-success-foreground" disabled={verifying}>
+                {verifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />} Approve
+              </Button>
+            )}
+            {/* Show indicator for active vendors with pending documents */}
+            {selected?.accountStatus === "active" && selected?.registrationStage === "documents_pending" && (
+              <div className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-md border border-amber-200">
+                <AlertCircle className="inline h-4 w-4 mr-1" />
+                Document replacement pending - approve individual documents below
+              </div>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
