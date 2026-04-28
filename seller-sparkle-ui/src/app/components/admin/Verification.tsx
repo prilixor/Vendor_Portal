@@ -61,7 +61,7 @@ const Verification = () => {
   const [vendors, setVendors] = useState<VendorDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "pending" | "under_review" | "approved" | "rejected">("all");
+  const [filter, setFilter] = useState<"all" | "pending" | "active" | "rejected" | "suspended" | "banned">("all");
   const [selected, setSelected] = useState<VendorDto | null>(null);
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -395,9 +395,10 @@ const Verification = () => {
             <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-lg p-1">
               <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="pending">Pending</TabsTrigger>
-              <TabsTrigger value="under_review">Review</TabsTrigger>
-              <TabsTrigger value="approved">Approved</TabsTrigger>
+              <TabsTrigger value="active">Active</TabsTrigger>
               <TabsTrigger value="rejected">Rejected</TabsTrigger>
+              <TabsTrigger value="suspended">Suspended</TabsTrigger>
+              <TabsTrigger value="banned">Ban</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
