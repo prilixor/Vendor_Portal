@@ -514,6 +514,18 @@ const Onboarding = () => {
     setEditingSection(null);
   };
 
+  // Show loading state until data is fully loaded to prevent UI flicker
+  if (!hasLoaded) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       {viewMode === "profile" ? (
@@ -807,11 +819,6 @@ const Onboarding = () => {
               <Stepper steps={steps} current={step} onStepClick={handleStepClick} completedSteps={completedSteps} />
             </div>
 
-            {!hasLoaded && busy && (
-              <div className="mb-4 rounded-lg border border-border bg-muted/30 px-4 py-2 text-sm text-muted-foreground">
-                Loading onboarding data...
-              </div>
-            )}
             {loadError && (
               <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-2 text-sm text-destructive">
                 {loadError}

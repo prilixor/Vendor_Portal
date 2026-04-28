@@ -446,6 +446,10 @@ export const vendorOnboardingApi = {
     return apiClient.get<VendorProductListingApiDto[]>(`/vendors/${vendorId}/listings`);
   },
 
+  deleteVendorProductListing(vendorId: string, listingId: string) {
+    return apiClient.delete<void>(`/vendors/${vendorId}/listings/${listingId}`);
+  },
+
   addVendorProductImage(vendorId: string, listingId: string, payload: AddVendorProductImagePayload) {
     return apiClient.post<VendorProductImageApiDto>(`/vendors/${vendorId}/listings/${listingId}/images`, payload);
   },

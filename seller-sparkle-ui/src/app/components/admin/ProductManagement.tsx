@@ -4,7 +4,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Switch } from "@/app/components/ui/switch";
@@ -55,6 +55,18 @@ const ProductManagement = () => {
   // Excel upload state
   const [excelDialogOpen, setExcelDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Status confirmation state
+  const [statusConfirmId, setStatusConfirmId] = useState<string | null>(null);
+  const [statusConfirmAction, setStatusConfirmAction] = useState<'activate' | 'deactivate' | null>(null);
+  
+  // Delete confirmation state
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  
+  // Category confirmation state
+  const [categoryStatusConfirmId, setCategoryStatusConfirmId] = useState<string | null>(null);
+  const [categoryStatusConfirmAction, setCategoryStatusConfirmAction] = useState<'activate' | 'deactivate' | null>(null);
+  const [categoryDeleteConfirmId, setCategoryDeleteConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -98,22 +110,33 @@ const ProductManagement = () => {
   };
 
   const toggleCategoryStatus = async (id: string, currentStatus: boolean) => {
+    const category = categories.find((c) => c.id === id);
+    if (!category) return;
+
+    const newStatus = !currentStatus;
+    setCategoryStatusConfirmId(id);
+    setCategoryStatusConfirmAction(newStatus ? 'activate' : 'deactivate');
+  };
+
+  const confirmCategoryStatusChange = async (id: string, action: 'activate' | 'deactivate') => {
+    const category = categories.find((c) => c.id === id);
+    if (!category) return;
+
     try {
       setLoading(true);
-      const category = categories.find((c) => c.id === id);
-      if (!category) return;
-
       const updated = await adminApi.updateProductCategory(id, {
         id,
         categoryName: category.categoryName,
         prescriptionRequired: category.prescriptionRequired,
         depositRequired: category.depositRequired,
         installationRequired: category.installationRequired,
-        isActive: !currentStatus,
+        isActive: action === 'activate',
       });
 
       setCategories(categories.map((c) => (c.id === id ? updated : c)));
-      toast.success("Category status updated successfully");
+      toast.success(`Category ${action}d successfully`);
+      setCategoryStatusConfirmId(null);
+      setCategoryStatusConfirmAction(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update category status.";
       toast.error(message);
@@ -123,11 +146,20 @@ const ProductManagement = () => {
   };
 
   const toggleProductStatus = async (id: string, currentStatus: boolean) => {
+    const product = products.find((p) => p.id === id);
+    if (!product) return;
+
+    const newStatus = !currentStatus;
+    setStatusConfirmId(id);
+    setStatusConfirmAction(newStatus ? 'activate' : 'deactivate');
+  };
+
+  const confirmStatusChange = async (id: string, action: 'activate' | 'deactivate') => {
+    const product = products.find((p) => p.id === id);
+    if (!product) return;
+
     try {
       setLoading(true);
-      const product = products.find((p) => p.id === id);
-      if (!product) return;
-
       const updated = await adminApi.updateProduct(id, {
         id,
         categoryId: product.categoryId,
@@ -136,11 +168,13 @@ const ProductManagement = () => {
         modelName: product.modelName,
         shortDescription: product.shortDescription,
         longDescription: product.longDescription,
-        isActive: !currentStatus,
+        isActive: action === 'activate',
       });
 
       setProducts(products.map((p) => (p.id === id ? updated : p)));
-      toast.success("Product status updated successfully");
+      toast.success(`Product ${action}d successfully`);
+      setStatusConfirmId(null);
+      setStatusConfirmAction(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update product status.";
       toast.error(message);
@@ -196,13 +230,20 @@ const ProductManagement = () => {
   };
 
   const deleteCategory = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this category? This will also delete all products in this category.")) return;
-    
+    const category = categories.find((c) => c.id === id);
+    if (!category) return;
+
+    // Show confirmation
+    setCategoryDeleteConfirmId(id);
+  };
+
+  const confirmCategoryDelete = async (id: string) => {
     try {
       setLoading(true);
       await adminApi.deleteProductCategory(id);
       toast.success("Category deleted");
       await loadData();
+      setCategoryDeleteConfirmId(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to delete category.";
       toast.error(message);
@@ -262,13 +303,36 @@ const ProductManagement = () => {
   };
 
   const deleteProduct = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this product?")) return;
-    
+    const product = products.find((p) => p.id === id);
+    if (!product) return;
+
+    // If already confirming for this product, execute the deletion
+    if (deleteConfirmId === id) {
+      try {
+        setLoading(true);
+        await adminApi.deleteProduct(id);
+        toast.success("Product deleted");
+        await loadData();
+        setDeleteConfirmId(null);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to delete product.";
+        toast.error(message);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Show confirmation
+      setDeleteConfirmId(id);
+    }
+  };
+
+  const confirmDelete = async (id: string) => {
     try {
       setLoading(true);
       await adminApi.deleteProduct(id);
       toast.success("Product deleted");
       await loadData();
+      setDeleteConfirmId(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to delete product.";
       toast.error(message);
@@ -535,6 +599,251 @@ const ProductManagement = () => {
           </TabsContent>
         </Tabs>
       </Card>
+
+      {/* Delete Confirmation Card */}
+      {deleteConfirmId && (() => {
+        const product = products.find(p => p.id === deleteConfirmId);
+        if (!product) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Delete Product</h3>
+                  <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-2">Are you sure you want to delete this product?</p>
+                <div className="p-3 bg-muted/50 rounded-md">
+                  <p className="font-medium text-sm">{product.productName}</p>
+                  <p className="text-xs text-muted-foreground">{getCategoryName(product.categoryId)}</p>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={() => confirmDelete(deleteConfirmId)}
+                  className="flex-1"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>
+                  ) : (
+                    <><Trash2 className="mr-2 h-4 w-4" /> Delete Product</>
+                  )}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+      
+      {/* Status Confirmation Card */}
+      {statusConfirmId && statusConfirmAction && (() => {
+        const product = products.find(p => p.id === statusConfirmId);
+        if (!product) return null;
+        const isActivating = statusConfirmAction === 'activate';
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isActivating ? 'bg-green-100' : 'bg-amber-100'}`}>
+                  {isActivating ? (
+                    <Package className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <Package className="h-5 w-5 text-amber-600" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">
+                    {isActivating ? 'Activate Product' : 'Deactivate Product'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {isActivating ? 'This will make the product available for vendors' : 'This will hide the product from vendors'}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Are you sure you want to {isActivating ? 'activate' : 'deactivate'} this product?
+                </p>
+                <div className="p-3 bg-muted/50 rounded-md">
+                  <p className="font-medium text-sm">{product.productName}</p>
+                  <p className="text-xs text-muted-foreground">{getCategoryName(product.categoryId)}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className={`w-2 h-2 rounded-full ${product.isActive ? 'bg-green-500' : 'bg-gray-400'}`} />
+                    <span className="text-xs text-muted-foreground">
+                      Currently: {product.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setStatusConfirmId(null);
+                    setStatusConfirmAction(null);
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant={isActivating ? 'default' : 'secondary'}
+                  onClick={() => confirmStatusChange(statusConfirmId, statusConfirmAction)}
+                  className="flex-1"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {isActivating ? 'Activating...' : 'Deactivating...'}</>
+                  ) : (
+                    <><Package className="mr-2 h-4 w-4" /> {isActivating ? 'Activate Product' : 'Deactivate Product'}</>
+                  )}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+      
+      {/* Category Status Confirmation Card */}
+      {categoryStatusConfirmId && categoryStatusConfirmAction && (() => {
+        const category = categories.find(c => c.id === categoryStatusConfirmId);
+        if (!category) return null;
+        const isActivating = categoryStatusConfirmAction === 'activate';
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isActivating ? 'bg-green-100' : 'bg-amber-100'}`}>
+                  {isActivating ? (
+                    <FolderTree className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <FolderTree className="h-5 w-5 text-amber-600" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">
+                    {isActivating ? 'Activate Category' : 'Deactivate Category'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {isActivating ? 'This will make the category and its products available for vendors' : 'This will hide the category and all its products from vendors'}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Are you sure you want to {isActivating ? 'activate' : 'deactivate'} this category?
+                </p>
+                <div className="p-3 bg-muted/50 rounded-md">
+                  <p className="font-medium text-sm">{category.categoryName}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className={`w-2 h-2 rounded-full ${category.isActive ? 'bg-green-500' : 'bg-gray-400'}`} />
+                    <span className="text-xs text-muted-foreground">
+                      Currently: {category.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setCategoryStatusConfirmId(null);
+                    setCategoryStatusConfirmAction(null);
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant={isActivating ? 'default' : 'secondary'}
+                  onClick={() => confirmCategoryStatusChange(categoryStatusConfirmId, categoryStatusConfirmAction)}
+                  className="flex-1"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {isActivating ? 'Activating...' : 'Deactivating...'}</>
+                  ) : (
+                    <><FolderTree className="mr-2 h-4 w-4" /> {isActivating ? 'Activate Category' : 'Deactivate Category'}</>
+                  )}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+      
+      {/* Category Delete Confirmation Card */}
+      {categoryDeleteConfirmId && (() => {
+        const category = categories.find(c => c.id === categoryDeleteConfirmId);
+        if (!category) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Delete Category</h3>
+                  <p className="text-sm text-muted-foreground">This will also delete all products in this category</p>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-2">Are you sure you want to delete this category?</p>
+                <div className="p-3 bg-muted/50 rounded-md">
+                  <p className="font-medium text-sm">{category.categoryName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {products.filter(p => p.categoryId === category.id).length} products will be deleted
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setCategoryDeleteConfirmId(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={() => confirmCategoryDelete(categoryDeleteConfirmId)}
+                  className="flex-1"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>
+                  ) : (
+                    <><Trash2 className="mr-2 h-4 w-4" /> Delete Category</>
+                  )}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* Category Dialog */}
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>

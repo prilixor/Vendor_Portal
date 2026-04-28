@@ -11,7 +11,7 @@ import { Switch } from "@/app/components/ui/switch";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { ProductListing } from "@/app/models";
-import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText } from "lucide-react";
+import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
@@ -51,7 +51,7 @@ const blankListing = (category?: CatalogCategory, product?: CatalogProduct): Loc
   monthlyRent: 0,
   securityDeposit: 0,
   quantity: 1,
-  status: "draft",
+  status: "inactive",
   images: [],
   createdAt: new Date().toISOString(),
 });
@@ -79,6 +79,9 @@ const Products = () => {
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [statusConfirmId, setStatusConfirmId] = useState<string | null>(null);
+  const [statusConfirmAction, setStatusConfirmAction] = useState<'activate' | 'deactivate' | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const docFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -89,10 +92,23 @@ const Products = () => {
   });
 
   const toggleListingStatus = async (listing: LocalListing) => {
+    if (!user) return;
+
+    const newStatus = listing.status === "active" ? "inactive" : "active";
+    setStatusConfirmId(listing.id);
+    setStatusConfirmAction(newStatus === "active" ? "activate" : "deactivate");
+  };
+
+  const confirmStatusChange = async (id: string, action: 'activate' | 'deactivate') => {
+    if (!user) return;
+
+    const listing = products.find(p => p.id === id);
+    if (!listing) return;
+
     try {
       setBusy(true);
-      const newStatus = listing.status === "active" ? "inactive" : "active";
-      const updated = await vendorOnboardingApi.updateVendorProductListing(user.id, listing.id, {
+      const newStatus = action === "activate" ? "active" : "inactive";
+      await vendorOnboardingApi.updateVendorProductListing(user.id, listing.id, {
         vendorId: user.id,
         listingId: listing.id,
         productId: listing.productId,
@@ -104,7 +120,32 @@ const Products = () => {
         listingStatus: newStatus,
       });
       setProducts(products.map((p) => (p.id === listing.id ? { ...p, status: newStatus } : p)));
-      toast.success("Listing status updated successfully");
+      toast.success(`Listing ${action}d successfully`);
+      setStatusConfirmId(null);
+      setStatusConfirmAction(null);
+    } catch (error) {
+      const message = getUserFriendlyMessage(error);
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteListing = async (id: string) => {
+    if (!user) return;
+    
+    setDeleteConfirmId(id);
+  };
+
+  const confirmDeleteListing = async (id: string) => {
+    if (!user) return;
+
+    try {
+      setBusy(true);
+      await vendorOnboardingApi.deleteVendorProductListing(user.id, id);
+      setProducts(products.filter((p) => p.id !== id));
+      toast.success("Listing deleted successfully");
+      setDeleteConfirmId(null);
     } catch (error) {
       const message = getUserFriendlyMessage(error);
       toast.error(message);
@@ -173,7 +214,10 @@ const Products = () => {
     void load();
   }, [user]);
 
-  const openNew = () => {
+  const openNew = async () => {
+    // Refresh catalog data to get latest products and categories
+    await loadCatalogAndListings();
+    
     const firstCategory = categories[0];
     const firstProduct = firstCategory ? catalogProducts.find((p) => p.categoryId === firstCategory.id) : undefined;
     setEditing(blankListing(firstCategory, firstProduct));
@@ -570,6 +614,9 @@ const Products = () => {
                       <Button variant="ghost" size="icon" onClick={() => setEditing(p)} aria-label="Edit" disabled={busy}>
                         <Pencil className="h-4 w-4" />
                       </Button>
+                      <Button variant="ghost" size="icon" onClick={() => deleteListing(p.id)} aria-label="Delete" disabled={busy}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -601,7 +648,7 @@ const Products = () => {
                 <Label>Category</Label>
                 <div className="flex items-center gap-2">
                   <Select value={editing.categoryId} onValueChange={onCategoryChange}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="pl-1"><SelectValue className="text-left min-w-0" /></SelectTrigger>
                     <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                   </Select>
                   {/* Vendor catalog creation disabled - managed by admin */}
@@ -619,7 +666,7 @@ const Products = () => {
                       productName: selected?.name ?? "",
                     });
                   }}>
-                    <SelectTrigger><SelectValue placeholder="Choose product" /></SelectTrigger>
+                    <SelectTrigger className="pl-1"><SelectValue placeholder="Choose product" className="text-left min-w-0" /></SelectTrigger>
                     <SelectContent>
                       {catalogProducts.filter((p) => p.categoryId === editing.categoryId).map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
@@ -997,6 +1044,130 @@ const Products = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Card */}
+      {deleteConfirmId && (() => {
+        const listing = products.find(p => p.id === deleteConfirmId);
+        if (!listing) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Delete Listing</h3>
+                  <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-2">Are you sure you want to delete this listing?</p>
+                <div className="p-3 bg-muted/50 rounded-md">
+                  <p className="font-medium text-sm">{listing.title}</p>
+                  <p className="text-xs text-muted-foreground">{listing.productName}</p>
+                  <p className="text-xs text-muted-foreground">{listing.category}</p>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={() => confirmDeleteListing(deleteConfirmId)}
+                  className="flex-1"
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>
+                  ) : (
+                    <><Trash2 className="mr-2 h-4 w-4" /> Delete Listing</>
+                  )}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+      
+      {/* Status Confirmation Card */}
+      {statusConfirmId && statusConfirmAction && (() => {
+        const listing = products.find(p => p.id === statusConfirmId);
+        if (!listing) return null;
+        const isActivating = statusConfirmAction === 'activate';
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isActivating ? 'bg-green-100' : 'bg-amber-100'}`}>
+                  {isActivating ? (
+                    <ImageIcon className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <ImageIcon className="h-5 w-5 text-amber-600" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">
+                    {isActivating ? 'Activate Listing' : 'Deactivate Listing'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {isActivating ? 'This will make the listing visible to customers' : 'This will hide the listing from customers'}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Are you sure you want to {isActivating ? 'activate' : 'deactivate'} this listing?
+                </p>
+                <div className="p-3 bg-muted/50 rounded-md">
+                  <p className="font-medium text-sm">{listing.title}</p>
+                  <p className="text-xs text-muted-foreground">{listing.productName}</p>
+                  <p className="text-xs text-muted-foreground">{listing.category}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className={`w-2 h-2 rounded-full ${listing.status === 'active' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                    <span className="text-xs text-muted-foreground">
+                      Currently: {listing.status === 'active' ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setStatusConfirmId(null);
+                    setStatusConfirmAction(null);
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant={isActivating ? 'default' : 'secondary'}
+                  onClick={() => confirmStatusChange(statusConfirmId, statusConfirmAction)}
+                  className="flex-1"
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {isActivating ? 'Activating...' : 'Deactivating...'}</>
+                  ) : (
+                    <><ImageIcon className="mr-2 h-4 w-4" /> {isActivating ? 'Activate Listing' : 'Deactivate Listing'}</>
+                  )}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
     </div>
   );
 };
