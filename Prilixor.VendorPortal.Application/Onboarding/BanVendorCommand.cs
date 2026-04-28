@@ -51,13 +51,15 @@ internal sealed class BanVendorCommandHandler(
         await repository.UpdateVendorAsync(vendor, cancellationToken);
 
         // Add audit log
+        var adminUser = await repository.GetAdminUserByIdAsync(adminUserId, cancellationToken);
         var auditLog = new AdminAuditLog
         {
             AdminId = adminUserId,
+            AdminUser = adminUser,
             ActionType = "vendor_banned",
             EntityType = "vendor",
             EntityId = vendorId,
-            OldValue = JsonSerializer.Serialize("active"),
+            OldValue = JsonSerializer.Serialize(vendor.AccountStatus),
             NewValue = JsonSerializer.Serialize("banned"),
             Notes = request.Reason,
             CreatedOnUtc = DateTime.UtcNow

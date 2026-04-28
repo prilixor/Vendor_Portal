@@ -54,9 +54,11 @@ internal sealed class ReactivateVendorCommandHandler(
         await repository.UpdateVendorAsync(vendor, cancellationToken);
 
         // Add audit log
+        var adminUser = await repository.GetAdminUserByIdAsync(adminUserId, cancellationToken);
         var auditLog = new AdminAuditLog
         {
             AdminId = adminUserId,
+            AdminUser = adminUser,
             ActionType = "vendor_reactivated",
             EntityType = "vendor",
             EntityId = vendorId,

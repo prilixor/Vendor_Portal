@@ -130,6 +130,7 @@ internal sealed class AddAdminAuditLogCommandHandler(IVendorOnboardingRepository
         var entity = new AdminAuditLog
         {
             AdminId = adminUserId,
+            AdminUser = adminUser,
             ActionType = request.ActionType,
             EntityType = request.EntityType,
             EntityId = entityId,

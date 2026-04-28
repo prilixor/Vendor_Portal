@@ -3,7 +3,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
-import { adminApi, AdminAuditLogDto } from "@/app/services/adminApi";
+import { adminApi, AdminAuditLogDto, AdminUserDto } from "@/app/services/adminApi";
 import { Search, ArrowRight, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ const AuditLogs = () => {
   const [search, setSearch] = useState("");
   const [actor, setActor] = useState<string>("all");
   const [auditLogs, setAuditLogs] = useState<AdminAuditLogDto[]>([]);
+  const [adminUsers, setAdminUsers] = useState<AdminUserDto[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -21,8 +22,12 @@ const AuditLogs = () => {
   const loadAuditLogs = async () => {
     setLoading(true);
     try {
-      const data = await adminApi.getAuditLogs();
-      setAuditLogs(data);
+      const [logsData, adminsData] = await Promise.all([
+        adminApi.getAuditLogs(),
+        adminApi.getAdminUsers()
+      ]);
+      setAuditLogs(logsData);
+      setAdminUsers(adminsData);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load audit logs.";
       toast.error(message);
@@ -31,7 +36,10 @@ const AuditLogs = () => {
     }
   };
 
-  const actors = Array.from(new Set(auditLogs.map((l) => l.adminName || l.adminEmail || l.adminId)));
+  const actors = Array.from(new Set([
+    ...adminUsers.map(a => a.fullName || a.email),
+    ...auditLogs.map((l) => l.adminName || l.adminEmail || l.adminId)
+  ]));
 
   const filtered = auditLogs.filter((l) => {
     const actorName = l.adminName || l.adminEmail || l.adminId;

@@ -82,9 +82,11 @@ internal sealed class ApproveVendorCommandHandler(
         await repository.UpdateVendorAsync(vendor, cancellationToken);
 
         // Add audit log
+        var adminUser = await repository.GetAdminUserByIdAsync(adminUserId, cancellationToken);
         var auditLog = new AdminAuditLog
         {
             AdminId = adminUserId,
+            AdminUser = adminUser,
             ActionType = "vendor_approved",
             EntityType = "vendor",
             EntityId = vendorId,

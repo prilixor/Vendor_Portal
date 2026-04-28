@@ -45,7 +45,7 @@ const AdminDashboard = () => {
       <PageHeader title="Admin overview" description="Monitor platform health, vendor verification queue, and recent activity." />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total vendors" value={total} icon={Building2} accent="primary" trend={{ value: "+8 this month", positive: true }} />
+        <StatCard label="Total vendors" value={total} icon={Building2} accent="primary"  />
         <StatCard label="Pending verifications" value={pending} icon={Clock} accent="warning" />
         <StatCard label="Active vendors" value={active} icon={CheckCircle2} accent="success" />
         <StatCard label="Audit events (24h)" value={auditLogs.length} icon={ScrollText} accent="info" />
