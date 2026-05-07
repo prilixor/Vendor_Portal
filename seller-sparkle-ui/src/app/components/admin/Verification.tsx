@@ -181,8 +181,8 @@ const Verification = () => {
           try {
             const profile = await adminApi.getVendorProfile(vendor.id);
             profilesMap.set(vendor.id, profile);
-          } catch (error) {
-            console.error(`Failed to load profile for vendor ${vendor.id}:`, error);
+          } catch {
+            // Profile not found - vendor hasn't submitted profile yet, this is expected
           }
         })
       );
@@ -272,9 +272,10 @@ const Verification = () => {
   };
 
   const filtered = vendors.filter((v) => {
+    const hasProfile = vendorProfiles.has(v.id);
     const m = filter === "all" || v.accountStatus === filter;
     const s = !search || v.email.toLowerCase().includes(search.toLowerCase());
-    return m && s;
+    return hasProfile && m && s;
   });
 
   const approve = async (id: string) => {

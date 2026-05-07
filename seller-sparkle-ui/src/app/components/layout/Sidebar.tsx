@@ -108,12 +108,12 @@ export const Sidebar = ({ sections, brandLabel, isOpen, onClose }: SidebarProps)
       </nav>
 
       {/* Footer hint */}
-      {!collapsed && (
+      {/* {!collapsed && (
         <div className="m-3 hidden rounded-xl bg-gradient-soft p-3 text-xs lg:block">
           <p className="font-semibold">Need help?</p>
           <p className="mt-0.5 text-muted-foreground">Check the docs or chat with support.</p>
         </div>
-      )}
+      )} */}
     </aside>
   );
 };

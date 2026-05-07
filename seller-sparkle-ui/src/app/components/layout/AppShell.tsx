@@ -5,6 +5,7 @@ import { TopBar } from "./TopBar";
 import { vendorNav, adminNav } from "@/app/helpers/navigation";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import { NotificationProvider, useNotificationContext } from "@/app/contexts/NotificationContext";
 
 interface AppShellProps {
 
@@ -139,27 +140,14 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar onMenuClick={() => setMobileSidebarOpen(true)} />
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-
-
-
-          <div className="mx-auto max-w-7xl">
-
-
-
-            <Outlet />
-
-
-
-          </div>
-
-
-
-        </main>
-
-
-
+        <NotificationProvider vendorId={variant === "vendor" ? user?.id : undefined}>
+          <TopBar onMenuClick={() => setMobileSidebarOpen(true)} />
+          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-7xl">
+              <Outlet />
+            </div>
+          </main>
+        </NotificationProvider>
       </div>
 
 

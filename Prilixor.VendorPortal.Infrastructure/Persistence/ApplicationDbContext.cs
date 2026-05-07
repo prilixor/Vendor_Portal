@@ -25,6 +25,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<VendorInventoryMovement> VendorInventoryMovements => Set<VendorInventoryMovement>();
     public DbSet<VendorNotificationPreference> VendorNotificationPreferences => Set<VendorNotificationPreference>();
     public DbSet<VendorNotification> VendorNotifications => Set<VendorNotification>();
+    public DbSet<VendorPushSubscription> VendorPushSubscriptions => Set<VendorPushSubscription>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
     public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
@@ -432,6 +433,27 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
             entity.HasOne(x => x.Vendor)
                 .WithMany(x => x.Notifications)
+                .HasForeignKey(x => x.VendorId);
+        });
+
+        modelBuilder.Entity<VendorPushSubscription>(entity =>
+        {
+            entity.ToTable("vendor_push_subscriptions");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.VendorId).HasColumnName("vendor_id");
+            entity.Property(x => x.Endpoint).HasColumnName("endpoint");
+            entity.Property(x => x.P256DH).HasColumnName("p256dh");
+            entity.Property(x => x.Auth).HasColumnName("auth");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.HasOne(x => x.Vendor)
+                .WithMany(x => x.PushSubscriptions)
                 .HasForeignKey(x => x.VendorId);
         });
 

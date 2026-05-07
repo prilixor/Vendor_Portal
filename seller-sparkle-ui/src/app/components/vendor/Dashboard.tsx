@@ -258,7 +258,7 @@ const Dashboard = () => {
           <div className="space-y-2">
             {[
               { label: "Add new product", to: "/vendor/products" },
-              { label: "Update working hours", to: "/vendor/working-hours" },
+              //{ label: "Update working hours", to: "/vendor/working-hours" },
               { label: "Add service area", to: "/vendor/service-areas" },
               { label: "Review documents", to: "/vendor/onboarding" },
               { label: "Notification preferences", to: "/vendor/notifications" },

@@ -110,7 +110,9 @@ public sealed class CreateVendorNotificationCommandValidator : AbstractValidator
     }
 }
 
-internal sealed class CreateVendorNotificationCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class CreateVendorNotificationCommandHandler(
+    IVendorOnboardingRepository repository,
+    IPushNotificationService pushNotificationService)
     : ICommandHandler<CreateVendorNotificationCommand, VendorNotificationDto>
 {
     public async Task<Result<VendorNotificationDto>> Handle(CreateVendorNotificationCommand request, CancellationToken cancellationToken)
@@ -139,7 +141,19 @@ internal sealed class CreateVendorNotificationCommandHandler(IVendorOnboardingRe
         };
 
         await repository.AddVendorNotificationAsync(entity, cancellationToken);
-        await repository.SaveChangesAsync(cancellationToken);
+        // Note: SaveChanges is called by the calling handler to avoid DbContext concurrency issues
+
+        // Send push notification if enabled
+        var preferences = await repository.GetVendorNotificationPreferenceAsync(vendorId, cancellationToken);
+        if (preferences?.PushNotificationsEnabled == true)
+        {
+            await pushNotificationService.SendPushNotificationToVendorAsync(
+                vendorId,
+                request.Title,
+                request.Message,
+                request.NotificationType,
+                cancellationToken);
+        }
 
         return Result.Success(new VendorNotificationDto(
             entity.Id.ToString(),
@@ -155,6 +169,8 @@ internal sealed class CreateVendorNotificationCommandHandler(IVendorOnboardingRe
 }
 
 public sealed record GetVendorNotificationsQuery(string VendorId) : IQuery<List<VendorNotificationDto>>;
+
+public sealed record GetUnreadNotificationCountQuery(string VendorId) : IQuery<int>;
 
 internal sealed class GetVendorNotificationsQueryHandler(IVendorOnboardingRepository repository)
     : IQueryHandler<GetVendorNotificationsQuery, List<VendorNotificationDto>>
@@ -179,6 +195,21 @@ internal sealed class GetVendorNotificationsQueryHandler(IVendorOnboardingReposi
             x.ReadAt)).ToList();
 
         return Result.Success(result);
+    }
+}
+
+internal sealed class GetUnreadNotificationCountQueryHandler(IVendorOnboardingRepository repository)
+    : IQueryHandler<GetUnreadNotificationCountQuery, int>
+{
+    public async Task<Result<int>> Handle(GetUnreadNotificationCountQuery request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.VendorId, out var vendorId))
+        {
+            return Result.Failure<int>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var count = await repository.GetUnreadNotificationCountAsync(vendorId, cancellationToken);
+        return Result.Success(count);
     }
 }
 

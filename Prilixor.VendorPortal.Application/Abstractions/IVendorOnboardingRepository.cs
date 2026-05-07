@@ -82,6 +82,11 @@ public interface IVendorOnboardingRepository
     Task<VendorNotification?> GetVendorNotificationByIdAsync(Guid vendorId, Guid notificationId, CancellationToken cancellationToken);
     Task UpdateVendorNotificationAsync(VendorNotification notification, CancellationToken cancellationToken);
     Task<List<VendorNotification>> GetVendorNotificationsAsync(Guid vendorId, CancellationToken cancellationToken);
+    Task<int> GetUnreadNotificationCountAsync(Guid vendorId, CancellationToken cancellationToken);
+
+    Task<VendorPushSubscription?> GetVendorPushSubscriptionAsync(Guid vendorId, CancellationToken cancellationToken);
+    Task UpsertVendorPushSubscriptionAsync(VendorPushSubscription subscription, CancellationToken cancellationToken);
+    Task DeleteVendorPushSubscriptionAsync(Guid vendorId, CancellationToken cancellationToken);
 
     Task<AdminUser?> GetAdminUserByIdAsync(Guid adminUserId, CancellationToken cancellationToken);
     Task<AdminUser?> GetAdminUserByEmailAsync(string email, CancellationToken cancellationToken);

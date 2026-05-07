@@ -449,8 +449,51 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
     {
         return dbContext.VendorNotifications
             .Where(x => x.VendorId == vendorId && !x.IsDeleted)
-            .OrderByDescending(x => x.CreatedOnUtc)
+            .OrderByDescending(x => x.SentAt)
             .ToListAsync(cancellationToken);
+    }
+
+    public Task<int> GetUnreadNotificationCountAsync(Guid vendorId, CancellationToken cancellationToken)
+    {
+        return dbContext.VendorNotifications
+            .CountAsync(x => x.VendorId == vendorId && !x.IsDeleted && x.ReadAt == null, cancellationToken);
+    }
+
+    public Task<VendorPushSubscription?> GetVendorPushSubscriptionAsync(Guid vendorId, CancellationToken cancellationToken)
+    {
+        return dbContext.VendorPushSubscriptions
+            .FirstOrDefaultAsync(x => x.VendorId == vendorId && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task UpsertVendorPushSubscriptionAsync(VendorPushSubscription subscription, CancellationToken cancellationToken)
+    {
+        var existing = await dbContext.VendorPushSubscriptions
+            .FirstOrDefaultAsync(x => x.VendorId == subscription.VendorId && !x.IsDeleted, cancellationToken);
+
+        if (existing != null)
+        {
+            existing.Endpoint = subscription.Endpoint;
+            existing.P256DH = subscription.P256DH;
+            existing.Auth = subscription.Auth;
+            dbContext.VendorPushSubscriptions.Update(existing);
+        }
+        else
+        {
+            await dbContext.VendorPushSubscriptions.AddAsync(subscription, cancellationToken);
+        }
+    }
+
+    public async Task DeleteVendorPushSubscriptionAsync(Guid vendorId, CancellationToken cancellationToken)
+    {
+        var subscription = await dbContext.VendorPushSubscriptions
+            .FirstOrDefaultAsync(x => x.VendorId == vendorId && !x.IsDeleted, cancellationToken);
+
+        if (subscription != null)
+        {
+            subscription.IsDeleted = true;
+            subscription.DeletedAt = DateTimeOffset.UtcNow;
+            dbContext.VendorPushSubscriptions.Update(subscription);
+        }
     }
 
     public Task<AdminUser?> GetAdminUserByIdAsync(Guid adminUserId, CancellationToken cancellationToken)

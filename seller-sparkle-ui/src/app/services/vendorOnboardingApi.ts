@@ -335,6 +335,21 @@ export interface MarkAllNotificationsReadResponse {
   updatedCount: number;
 }
 
+export interface VendorPushSubscriptionDto {
+  id: string;
+  vendorId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
+export interface RegisterPushSubscriptionPayload {
+  vendorId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
 export const vendorOnboardingApi = {
   uploadVendorFile(vendorId: string, file: File) {
     const data = new FormData();
@@ -518,5 +533,22 @@ export const vendorOnboardingApi = {
 
   getVendorStatus(vendorId: string) {
     return apiClient.get<VendorStatusDto>(`/vendors/${vendorId}`);
+  },
+
+  // Push subscription methods
+  registerPushSubscription(vendorId: string, payload: RegisterPushSubscriptionPayload) {
+    return apiClient.post<VendorPushSubscriptionDto>(`/vendors/${vendorId}/push-subscription`, payload);
+  },
+
+  unregisterPushSubscription(vendorId: string) {
+    return apiClient.delete<boolean>(`/vendors/${vendorId}/push-subscription`);
+  },
+
+  getPushSubscription(vendorId: string) {
+    return apiClient.get<VendorPushSubscriptionDto | null>(`/vendors/${vendorId}/push-subscription`);
+  },
+
+  getUnreadNotificationCount(vendorId: string) {
+    return apiClient.get<number>(`/vendors/${vendorId}/notifications/unread-count`);
   },
 };

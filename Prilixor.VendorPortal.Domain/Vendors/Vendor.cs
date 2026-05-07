@@ -24,4 +24,5 @@ public class Vendor : AuditableEntity<Guid>, ISoftDelete
     public ICollection<VendorProductListing> ProductListings { get; set; } = [];
     public ICollection<VendorNotification> Notifications { get; set; } = [];
     public VendorNotificationPreference? NotificationPreference { get; set; }
+    public ICollection<VendorPushSubscription> PushSubscriptions { get; set; } = [];
 }

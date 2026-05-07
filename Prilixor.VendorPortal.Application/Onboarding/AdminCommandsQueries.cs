@@ -1,4 +1,5 @@
 using FluentValidation;
+using MediatR;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
@@ -212,7 +213,7 @@ public sealed class VerifyVendorBankAccountCommandValidator : AbstractValidator<
     }
 }
 
-internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRepository repository, IMediator mediator)
     : ICommandHandler<VerifyVendorBankAccountCommand, VendorBankAccountDto>
 {
     public async Task<Result<VendorBankAccountDto>> Handle(VerifyVendorBankAccountCommand request, CancellationToken cancellationToken)
@@ -253,19 +254,15 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
         if (!string.Equals(oldStatus, "rejected", StringComparison.OrdinalIgnoreCase)
             && string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase))
         {
-            var notification = new VendorNotification
-            {
-                VendorId = vendorId,
-                NotificationType = "bank_rejected",
-                Title = "Bank account verification rejected",
-                Message = AdminNotificationMessageBuilder.WithReason(
+            await mediator.Send(new CreateVendorNotificationCommand(
+                vendorId.ToString(),
+                "bank_rejected",
+                "Bank account verification rejected",
+                AdminNotificationMessageBuilder.WithReason(
                     $"Your bank account ending with {GetLast4(bankAccount.AccountNumber)} was rejected. Please review and resubmit.",
                     request.Notes),
-                Channel = "in_app",
-                Status = "sent",
-                SentAt = DateTimeOffset.UtcNow
-            };
-            await repository.AddVendorNotificationAsync(notification, cancellationToken);
+                "in_app",
+                "sent"), cancellationToken);
         }
 
         var auditLog = new AdminAuditLog
@@ -329,7 +326,8 @@ public sealed class VerifyVendorDocumentCommandValidator : AbstractValidator<Ver
 
 internal sealed class VerifyVendorDocumentCommandHandler(
     IVendorOnboardingRepository repository,
-    IVendorFileUrlResolver fileUrlResolver)
+    IVendorFileUrlResolver fileUrlResolver,
+    IMediator mediator)
     : ICommandHandler<VerifyVendorDocumentCommand, VendorDocumentDto>
 {
     public async Task<Result<VendorDocumentDto>> Handle(VerifyVendorDocumentCommand request, CancellationToken cancellationToken)
@@ -387,19 +385,27 @@ internal sealed class VerifyVendorDocumentCommandHandler(
         if (!string.Equals(oldStatus, "rejected", StringComparison.OrdinalIgnoreCase)
             && string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase))
         {
-            var notification = new VendorNotification
-            {
-                VendorId = vendorId,
-                NotificationType = "document_rejected",
-                Title = "Document verification rejected",
-                Message = AdminNotificationMessageBuilder.WithReason(
+            await mediator.Send(new CreateVendorNotificationCommand(
+                vendorId.ToString(),
+                "document_rejected",
+                "Document verification rejected",
+                AdminNotificationMessageBuilder.WithReason(
                     $"Your {document.DocumentType} document was rejected. Please update and resubmit.",
                     request.Notes),
-                Channel = "in_app",
-                Status = "sent",
-                SentAt = DateTimeOffset.UtcNow
-            };
-            await repository.AddVendorNotificationAsync(notification, cancellationToken);
+                "in_app",
+                "sent"), cancellationToken);
+        }
+
+        if (!string.Equals(oldStatus, "approved", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase))
+        {
+            await mediator.Send(new CreateVendorNotificationCommand(
+                vendorId.ToString(),
+                "document_verified",
+                "Document verified successfully",
+                $"Your {document.DocumentType} document has been verified and approved.",
+                "in_app",
+                "sent"), cancellationToken);
         }
 
         var auditLog = new AdminAuditLog

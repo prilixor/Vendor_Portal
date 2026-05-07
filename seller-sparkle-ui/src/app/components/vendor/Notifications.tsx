@@ -9,7 +9,9 @@ import { CheckCheck, Bell, Info, AlertTriangle, CheckCircle2, XCircle } from "lu
 import { formatDistanceToNow } from "date-fns";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { toast } from "sonner";
+import { useNotificationContext } from "@/app/contexts/NotificationContext";
 
 const typeIcons = {
   info: { icon: Info, cls: "bg-info-soft text-info" },
@@ -20,6 +22,7 @@ const typeIcons = {
 
 const Notifications = () => {
   const { user } = useAuth();
+  const { refreshUnreadCount } = useNotificationContext();
   const [items, setItems] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [prefs, setPrefs] = useState({ email: true, push: true, orders: true });
@@ -90,6 +93,8 @@ const Notifications = () => {
     void loadNotificationData();
   }, [user]);
 
+  const { isSubscribed, subscribe, unsubscribe } = usePushNotifications();
+
   const updatePreference = async (next: typeof prefs) => {
     if (!user) return;
     setPrefs(next);
@@ -100,6 +105,14 @@ const Notifications = () => {
         pushNotificationsEnabled: next.push,
         newOrderNotifications: next.orders,
       });
+
+      // Handle push subscription when toggle changes
+      if (next.push && !isSubscribed) {
+        await subscribe();
+      } else if (!next.push && isSubscribed) {
+        await unsubscribe();
+      }
+
       toast.success("Preferences saved.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save preferences.";
@@ -116,6 +129,7 @@ const Notifications = () => {
       if (res.updatedCount > 0) {
         setItems((arr) => arr.map((n) => ({ ...n, read: true })));
         toast.success(`Marked ${res.updatedCount} notification(s) as read.`);
+        await refreshUnreadCount();
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to mark all notifications as read.";
@@ -138,8 +152,9 @@ const Notifications = () => {
         await vendorOnboardingApi.markVendorNotificationAsRead(user.id, id);
         setItems((arr) => arr.map((n) => (n.id === id ? { ...n, read: true } : n)));
       }
+      await refreshUnreadCount();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update notification read status.";
+      const message = error instanceof Error ? error.message : "Failed to toggle notification status.";
       toast.error(message);
     }
   };

@@ -199,3 +199,10 @@ public sealed record ExcelUploadResponseDto(
     List<ExcelUploadErrorDto> Errors,
     int CategoriesCreated,
     int ProductsCreated);
+
+public sealed record VendorPushSubscriptionDto(
+    string Id,
+    string VendorId,
+    string Endpoint,
+    string P256DH,
+    string Auth);

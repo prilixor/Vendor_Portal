@@ -29,6 +29,8 @@ namespace Prilixor.VendorPortal.Infrastructure
             });
 
             services.AddScoped<IEmailService, SmtpEmailService>();
+            services.AddScoped<IPushNotificationService, WebPushNotificationService>();
+            services.Configure<WebPushOptions>(configuration.GetSection(WebPushOptions.SectionName));
 
             RegisterVendorStorage(services, configuration);
 

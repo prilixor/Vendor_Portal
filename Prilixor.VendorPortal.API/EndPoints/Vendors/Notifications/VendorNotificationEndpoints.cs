@@ -108,6 +108,23 @@ public sealed class GetVendorNotificationsEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetUnreadNotificationCountEndpoint(IMediator mediator)
+    : Endpoint<VendorIdRequest, Results<Ok<int>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/notifications/unread-count");
+        Group<VendorOnboardingGroup>();
+        AllowAnonymous();
+    }
+
+    public override async Task<Results<Ok<int>, ProblemHttpResult>> ExecuteAsync(VendorIdRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetUnreadNotificationCountQuery(req.VendorId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class MarkVendorNotificationAsReadEndpoint(IMediator mediator)
     : Endpoint<VendorNotificationReadRequest, Results<Ok<VendorNotificationDto>, ProblemHttpResult>>
 {
@@ -155,5 +172,76 @@ public sealed class MarkAllVendorNotificationsAsReadEndpoint(IMediator mediator)
         return result.IsSuccess
             ? TypedResults.Ok(new MarkAllNotificationsReadResponse { UpdatedCount = result.Value })
             : result.ToErrorResponse();
+    }
+}
+
+// Push Subscription Endpoints
+
+public sealed class RegisterPushSubscriptionRequest : VendorIdRequest
+{
+    public string Endpoint { get; set; } = string.Empty;
+    public string P256DH { get; set; } = string.Empty;
+    public string Auth { get; set; } = string.Empty;
+}
+
+public sealed class RegisterPushSubscriptionEndpoint(IMediator mediator)
+    : Endpoint<RegisterPushSubscriptionRequest, Results<Ok<VendorPushSubscriptionDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("{vendorId}/push-subscription");
+        Group<VendorOnboardingGroup>();
+        Options(x => x.AllowAnonymous());
+    }
+
+    public override async Task<Results<Ok<VendorPushSubscriptionDto>, ProblemHttpResult>> ExecuteAsync(
+        RegisterPushSubscriptionRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new RegisterPushSubscriptionCommand(
+            req.VendorId,
+            req.Endpoint,
+            req.P256DH,
+            req.Auth), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class UnregisterPushSubscriptionEndpoint(IMediator mediator)
+    : Endpoint<VendorIdRequest, Results<Ok<bool>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Delete("{vendorId}/push-subscription");
+        Group<VendorOnboardingGroup>();
+        Options(x => x.AllowAnonymous());
+    }
+
+    public override async Task<Results<Ok<bool>, ProblemHttpResult>> ExecuteAsync(
+        VendorIdRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new UnregisterPushSubscriptionCommand(req.VendorId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetPushSubscriptionEndpoint(IMediator mediator)
+    : Endpoint<VendorIdRequest, Results<Ok<VendorPushSubscriptionDto?>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/push-subscription");
+        Group<VendorOnboardingGroup>();
+        Options(x => x.AllowAnonymous());
+    }
+
+    public override async Task<Results<Ok<VendorPushSubscriptionDto?>, ProblemHttpResult>> ExecuteAsync(
+        VendorIdRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetPushSubscriptionQuery(req.VendorId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

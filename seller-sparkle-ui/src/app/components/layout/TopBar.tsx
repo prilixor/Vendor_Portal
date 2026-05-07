@@ -12,13 +12,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
+import { useNotificationContext } from "@/app/contexts/NotificationContext";
 
 interface TopBarProps {
   onMenuClick?: () => void;
-  unreadNotifications?: number;
 }
 
-export const TopBar = ({ onMenuClick, unreadNotifications = 0 }: TopBarProps) => {
+export const TopBar = ({ onMenuClick }: TopBarProps) => {
+  const { unreadCount } = useNotificationContext();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [dark, setDark] = useState(() => {
@@ -57,8 +58,10 @@ export const TopBar = ({ onMenuClick, unreadNotifications = 0 }: TopBarProps) =>
             className="relative"
           >
             <Bell className="h-4 w-4" />
-            {unreadNotifications > 0 && (
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive ring-2 ring-background" />
+            {unreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
             )}
           </Button>
         )}
