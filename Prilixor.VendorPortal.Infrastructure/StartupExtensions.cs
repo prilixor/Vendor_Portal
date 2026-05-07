@@ -1,10 +1,14 @@
+using Amazon;
+using Amazon.S3;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Infrastructure.Persistence;
 using Prilixor.VendorPortal.Infrastructure.Services;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Prilixor.VendorPortal.Infrastructure
 {
@@ -26,7 +30,51 @@ namespace Prilixor.VendorPortal.Infrastructure
 
             services.AddScoped<IEmailService, SmtpEmailService>();
 
+            RegisterVendorStorage(services, configuration);
+
             return services;
+        }
+
+        private static void RegisterVendorStorage(IServiceCollection services, IConfiguration configuration)
+        {
+            services.Configure<S3StorageOptions>(configuration.GetSection(S3StorageOptions.SectionName));
+            services.Configure<VendorPortalAssetUrlOptions>(
+                configuration.GetSection(VendorPortalAssetUrlOptions.SectionName));
+
+            var s3Startup = configuration.GetSection(S3StorageOptions.SectionName).Get<S3StorageOptions>();
+            if (s3Startup?.Enabled == true && !string.IsNullOrWhiteSpace(s3Startup.BucketName))
+            {
+                services.AddSingleton<IAmazonS3>(sp =>
+                {
+                    var opt = sp.GetRequiredService<IOptions<S3StorageOptions>>().Value;
+                    var cfg = new AmazonS3Config
+                    {
+                        RegionEndpoint = RegionEndpoint.GetBySystemName(string.IsNullOrWhiteSpace(opt.Region) ? "us-east-1" : opt.Region)
+                    };
+                    if (!string.IsNullOrEmpty(opt.AccessKeyId) && !string.IsNullOrEmpty(opt.SecretAccessKey))
+                        return new AmazonS3Client(opt.AccessKeyId, opt.SecretAccessKey, cfg);
+                    return new AmazonS3Client(cfg);
+                });
+            }
+
+            services.AddScoped<IVendorFileUrlResolver>(sp =>
+            {
+                var s3Opts = sp.GetRequiredService<IOptions<S3StorageOptions>>();
+                var assetOpts = sp.GetRequiredService<IOptions<VendorPortalAssetUrlOptions>>();
+                var enabled = s3Opts.Value.Enabled && !string.IsNullOrWhiteSpace(s3Opts.Value.BucketName);
+                var client = enabled ? sp.GetService<IAmazonS3>() : null;
+                return new VendorFileUrlResolver(s3Opts, assetOpts, client);
+            });
+
+            services.AddScoped<IVendorUploadStorageService>(sp =>
+            {
+                var env = sp.GetRequiredService<IWebHostEnvironment>();
+                var s3Opts = sp.GetRequiredService<IOptions<S3StorageOptions>>();
+                var assetOpts = sp.GetRequiredService<IOptions<VendorPortalAssetUrlOptions>>();
+                var enabled = s3Opts.Value.Enabled && !string.IsNullOrWhiteSpace(s3Opts.Value.BucketName);
+                var client = enabled ? sp.GetService<IAmazonS3>() : null;
+                return new VendorUploadStorageService(env, s3Opts, assetOpts, client);
+            });
         }
 
         private static IServiceCollection AddOptions(this IServiceCollection services, IConfiguration configuration)

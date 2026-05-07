@@ -295,7 +295,7 @@ const Onboarding = () => {
       await vendorOnboardingApi.addVendorDocument(user.id, {
         vendorId: user.id,
         documentType,
-        fileUrl: uploaded.fileUrl,
+        fileUrl: uploaded.storageKey ?? uploaded.fileUrl,
       });
 
       const latestDocs = await vendorOnboardingApi.getVendorDocuments(user.id);

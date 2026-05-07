@@ -162,6 +162,8 @@ export interface VendorInventoryMovementApiDto {
 
 export interface UploadedFileResponse {
   fileUrl: string;
+  /** Persist this with documents/listings when set (S3 object key); omit legacy/local absolute URLs. */
+  storageKey?: string | null;
   fileName: string;
   originalFileName: string;
   contentType: string;

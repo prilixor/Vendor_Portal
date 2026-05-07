@@ -6,7 +6,9 @@ namespace Prilixor.VendorPortal.Application.Onboarding;
 
 public sealed record GetVendorDocumentsQuery(string VendorId) : IQuery<List<VendorDocumentDto>>;
 
-internal sealed class GetVendorDocumentsQueryHandler(IVendorOnboardingRepository repository)
+internal sealed class GetVendorDocumentsQueryHandler(
+    IVendorOnboardingRepository repository,
+    IVendorFileUrlResolver fileUrlResolver)
     : IQueryHandler<GetVendorDocumentsQuery, List<VendorDocumentDto>>
 {
     public async Task<Result<List<VendorDocumentDto>>> Handle(GetVendorDocumentsQuery request, CancellationToken cancellationToken)
@@ -23,7 +25,7 @@ internal sealed class GetVendorDocumentsQueryHandler(IVendorOnboardingRepository
                 doc.Id.ToString(),
                 doc.VendorId.ToString(),
                 doc.DocumentType,
-                doc.FileUrl,
+                fileUrlResolver.Resolve(doc.FileUrl),
                 doc.DocumentNumber,
                 doc.VerificationStatus,
                 doc.RejectionReason,

@@ -16,7 +16,9 @@ public sealed class DeleteVendorDocumentCommandValidator : AbstractValidator<Del
     }
 }
 
-internal sealed class DeleteVendorDocumentCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class DeleteVendorDocumentCommandHandler(
+    IVendorOnboardingRepository repository,
+    IVendorUploadStorageService uploadStorage)
     : ICommandHandler<DeleteVendorDocumentCommand>
 {
     public async Task<Result> Handle(DeleteVendorDocumentCommand request, CancellationToken cancellationToken)
@@ -36,6 +38,8 @@ internal sealed class DeleteVendorDocumentCommandHandler(IVendorOnboardingReposi
         {
             return Result.Failure(new Error("vendors.documents.not_found", "Document not found.", ErrorCategory.NotFound));
         }
+
+        await uploadStorage.DeleteStoredFileAsync(document.FileUrl, cancellationToken);
 
         document.IsDeleted = true;
         document.DeletedAt = DateTimeOffset.UtcNow;

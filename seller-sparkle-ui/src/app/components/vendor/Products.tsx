@@ -428,6 +428,7 @@ const Products = () => {
             id: `temp-${Date.now()}-${file.name}`,
             primary: false,
             url: fileResult.fileUrl,
+            storageKey: fileResult.storageKey ?? undefined,
             persisted: false,
           } satisfies MediaImage;
         })
@@ -465,7 +466,7 @@ const Products = () => {
             vendorOnboardingApi.addVendorProductImage(user.id, mediaFor.id, {
               vendorId: user.id,
               listingId: mediaFor.id,
-              imageUrl: img.url,
+              imageUrl: img.storageKey ?? img.url,
               displayOrder: tempImages.length + idx + 1,
               isPrimary: img.primary,
             })
@@ -491,7 +492,7 @@ const Products = () => {
         vendorId: user.id,
         listingId: mediaFor.id,
         documentType: docType,
-        fileUrl: fileResult.fileUrl,
+        fileUrl: fileResult.storageKey ?? fileResult.fileUrl,
       });
       const docs = await vendorOnboardingApi.getVendorProductDocuments(user.id, mediaFor.id);
       setListingDocuments(docs);
@@ -1178,6 +1179,8 @@ interface MediaImage {
   id: string;
   primary: boolean;
   url: string;
+  /** DB persistence path when using object storage */
+  storageKey?: string;
   persisted: boolean;
 }
 

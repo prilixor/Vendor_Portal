@@ -2,6 +2,7 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Prilixor.VendorPortal.API.Extensions;
+using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Options;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.IdentityModel.Tokens;
@@ -84,7 +85,7 @@ app.UseAuthentication()
 
 app.UseStaticFiles();
 
-app.MapPost("/api/files/upload", async (HttpRequest request, IWebHostEnvironment environment, CancellationToken cancellationToken) =>
+app.MapPost("/api/files/upload", async (HttpRequest request, IVendorUploadStorageService storage, CancellationToken cancellationToken) =>
 {
     if (!request.HasFormContentType)
     {
@@ -100,25 +101,25 @@ app.MapPost("/api/files/upload", async (HttpRequest request, IWebHostEnvironment
         return Results.BadRequest(new { detail = "No file provided." });
     }
 
-    var uploadsRoot = Path.Combine(environment.ContentRootPath, "wwwroot", "uploads", "vendors", string.IsNullOrWhiteSpace(vendorId) ? "common" : vendorId);
-    Directory.CreateDirectory(uploadsRoot);
+    await using var readStream = file.OpenReadStream();
+    var publicBase = new Uri($"{request.Scheme}://{request.Host}");
+    var persist = await storage.PersistVendorUploadAsync(
+        vendorId,
+        file.FileName,
+        file.ContentType,
+        readStream,
+        publicBase,
+        cancellationToken);
 
-    var extension = Path.GetExtension(file.FileName);
-    var storedFileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
-    var filePath = Path.Combine(uploadsRoot, storedFileName);
-
-    await using (var stream = File.Create(filePath))
-    {
-        await file.CopyToAsync(stream, cancellationToken);
-    }
-
-    var relativeUrl = $"/uploads/vendors/{(string.IsNullOrWhiteSpace(vendorId) ? "common" : vendorId)}/{storedFileName}";
-    var absoluteUrl = $"{request.Scheme}://{request.Host}{relativeUrl}";
+    var storageKey = persist.StoredReference.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+        ? null
+        : persist.StoredReference;
 
     return Results.Ok(new
     {
-        fileUrl = absoluteUrl,
-        fileName = storedFileName,
+        fileUrl = persist.BrowserAccessibleUrl,
+        storageKey,
+        fileName = Path.GetFileName(persist.StoredReference),
         originalFileName = file.FileName,
         contentType = file.ContentType,
         size = file.Length

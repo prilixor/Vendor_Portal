@@ -327,7 +327,9 @@ public sealed class VerifyVendorDocumentCommandValidator : AbstractValidator<Ver
     }
 }
 
-internal sealed class VerifyVendorDocumentCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class VerifyVendorDocumentCommandHandler(
+    IVendorOnboardingRepository repository,
+    IVendorFileUrlResolver fileUrlResolver)
     : ICommandHandler<VerifyVendorDocumentCommand, VendorDocumentDto>
 {
     public async Task<Result<VendorDocumentDto>> Handle(VerifyVendorDocumentCommand request, CancellationToken cancellationToken)
@@ -417,7 +419,7 @@ internal sealed class VerifyVendorDocumentCommandHandler(IVendorOnboardingReposi
             document.Id.ToString(),
             document.VendorId.ToString(),
             document.DocumentType,
-            document.FileUrl,
+            fileUrlResolver.Resolve(document.FileUrl),
             document.DocumentNumber,
             document.VerificationStatus,
             document.RejectionReason,

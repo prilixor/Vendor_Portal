@@ -22,7 +22,9 @@ public sealed class AddVendorDocumentCommandValidator : AbstractValidator<AddVen
     }
 }
 
-internal sealed class AddVendorDocumentCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class AddVendorDocumentCommandHandler(
+    IVendorOnboardingRepository repository,
+    IVendorFileUrlResolver fileUrlResolver)
     : ICommandHandler<AddVendorDocumentCommand, VendorDocumentDto>
 {
     public async Task<Result<VendorDocumentDto>> Handle(AddVendorDocumentCommand request, CancellationToken cancellationToken)
@@ -69,7 +71,7 @@ internal sealed class AddVendorDocumentCommandHandler(IVendorOnboardingRepositor
             doc.Id.ToString(),
             doc.VendorId.ToString(),
             doc.DocumentType,
-            doc.FileUrl,
+            fileUrlResolver.Resolve(doc.FileUrl),
             doc.DocumentNumber,
             doc.VerificationStatus,
             doc.RejectionReason,

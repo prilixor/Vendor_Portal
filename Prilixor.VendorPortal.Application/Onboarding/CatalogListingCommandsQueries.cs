@@ -331,7 +331,9 @@ public sealed class AddVendorProductImageCommandValidator : AbstractValidator<Ad
     }
 }
 
-internal sealed class AddVendorProductImageCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class AddVendorProductImageCommandHandler(
+    IVendorOnboardingRepository repository,
+    IVendorFileUrlResolver fileUrlResolver)
     : ICommandHandler<AddVendorProductImageCommand, VendorProductImageDto>
 {
     public async Task<Result<VendorProductImageDto>> Handle(AddVendorProductImageCommand request, CancellationToken cancellationToken)
@@ -361,7 +363,7 @@ internal sealed class AddVendorProductImageCommandHandler(IVendorOnboardingRepos
         return Result.Success(new VendorProductImageDto(
             entity.Id.ToString(),
             entity.VendorProductListingId.ToString(),
-            entity.ImageUrl,
+            fileUrlResolver.Resolve(entity.ImageUrl),
             entity.DisplayOrder,
             entity.IsPrimary));
     }
@@ -369,7 +371,9 @@ internal sealed class AddVendorProductImageCommandHandler(IVendorOnboardingRepos
 
 public sealed record GetVendorProductImagesQuery(string VendorId, string ListingId) : IQuery<List<VendorProductImageDto>>;
 
-internal sealed class GetVendorProductImagesQueryHandler(IVendorOnboardingRepository repository)
+internal sealed class GetVendorProductImagesQueryHandler(
+    IVendorOnboardingRepository repository,
+    IVendorFileUrlResolver fileUrlResolver)
     : IQueryHandler<GetVendorProductImagesQuery, List<VendorProductImageDto>>
 {
     public async Task<Result<List<VendorProductImageDto>>> Handle(GetVendorProductImagesQuery request, CancellationToken cancellationToken)
@@ -389,7 +393,7 @@ internal sealed class GetVendorProductImagesQueryHandler(IVendorOnboardingReposi
         var result = rows.Select(x => new VendorProductImageDto(
             x.Id.ToString(),
             x.VendorProductListingId.ToString(),
-            x.ImageUrl,
+            fileUrlResolver.Resolve(x.ImageUrl),
             x.DisplayOrder,
             x.IsPrimary)).ToList();
 
@@ -409,7 +413,9 @@ public sealed class DeleteVendorProductImageCommandValidator : AbstractValidator
     }
 }
 
-internal sealed class DeleteVendorProductImageCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class DeleteVendorProductImageCommandHandler(
+    IVendorOnboardingRepository repository,
+    IVendorUploadStorageService uploadStorage)
     : ICommandHandler<DeleteVendorProductImageCommand>
 {
     public async Task<Result> Handle(DeleteVendorProductImageCommand request, CancellationToken cancellationToken)
@@ -432,6 +438,8 @@ internal sealed class DeleteVendorProductImageCommandHandler(IVendorOnboardingRe
         {
             return Result.Failure(new Error("vendors.listing.image.not_found", "Listing image not found.", ErrorCategory.NotFound));
         }
+
+        await uploadStorage.DeleteStoredFileAsync(image.ImageUrl, cancellationToken);
 
         var wasPrimary = image.IsPrimary;
         image.IsDeleted = true;
@@ -477,7 +485,9 @@ public sealed class AddVendorProductDocumentCommandValidator : AbstractValidator
     }
 }
 
-internal sealed class AddVendorProductDocumentCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class AddVendorProductDocumentCommandHandler(
+    IVendorOnboardingRepository repository,
+    IVendorFileUrlResolver fileUrlResolver)
     : ICommandHandler<AddVendorProductDocumentCommand, VendorProductDocumentDto>
 {
     public async Task<Result<VendorProductDocumentDto>> Handle(AddVendorProductDocumentCommand request, CancellationToken cancellationToken)
@@ -508,7 +518,7 @@ internal sealed class AddVendorProductDocumentCommandHandler(IVendorOnboardingRe
             entity.Id.ToString(),
             entity.VendorProductListingId.ToString(),
             entity.DocumentType,
-            entity.FileUrl,
+            fileUrlResolver.Resolve(entity.FileUrl),
             entity.VerificationStatus,
             entity.RejectionReason,
             entity.VerifiedAt));
@@ -517,7 +527,9 @@ internal sealed class AddVendorProductDocumentCommandHandler(IVendorOnboardingRe
 
 public sealed record GetVendorProductDocumentsQuery(string VendorId, string ListingId) : IQuery<List<VendorProductDocumentDto>>;
 
-internal sealed class GetVendorProductDocumentsQueryHandler(IVendorOnboardingRepository repository)
+internal sealed class GetVendorProductDocumentsQueryHandler(
+    IVendorOnboardingRepository repository,
+    IVendorFileUrlResolver fileUrlResolver)
     : IQueryHandler<GetVendorProductDocumentsQuery, List<VendorProductDocumentDto>>
 {
     public async Task<Result<List<VendorProductDocumentDto>>> Handle(GetVendorProductDocumentsQuery request, CancellationToken cancellationToken)
@@ -538,7 +550,7 @@ internal sealed class GetVendorProductDocumentsQueryHandler(IVendorOnboardingRep
             x.Id.ToString(),
             x.VendorProductListingId.ToString(),
             x.DocumentType,
-            x.FileUrl,
+            fileUrlResolver.Resolve(x.FileUrl),
             x.VerificationStatus,
             x.RejectionReason,
             x.VerifiedAt)).ToList();
@@ -559,7 +571,9 @@ public sealed class DeleteVendorProductDocumentCommandValidator : AbstractValida
     }
 }
 
-internal sealed class DeleteVendorProductDocumentCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class DeleteVendorProductDocumentCommandHandler(
+    IVendorOnboardingRepository repository,
+    IVendorUploadStorageService uploadStorage)
     : ICommandHandler<DeleteVendorProductDocumentCommand>
 {
     public async Task<Result> Handle(DeleteVendorProductDocumentCommand request, CancellationToken cancellationToken)
@@ -582,6 +596,8 @@ internal sealed class DeleteVendorProductDocumentCommandHandler(IVendorOnboardin
         {
             return Result.Failure(new Error("vendors.listing.document.not_found", "Listing document not found.", ErrorCategory.NotFound));
         }
+
+        await uploadStorage.DeleteStoredFileAsync(document.FileUrl, cancellationToken);
 
         document.IsDeleted = true;
         document.DeletedAt = DateTimeOffset.UtcNow;
