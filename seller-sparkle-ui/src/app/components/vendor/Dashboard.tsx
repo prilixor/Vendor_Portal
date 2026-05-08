@@ -283,31 +283,27 @@ const Dashboard = () => {
           <Button variant="ghost" size="sm" onClick={() => navigate("/vendor/products")}>View all</Button>
         </div>
         <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-[600px] text-sm">
+          <table className="w-full min-w-[500px] text-sm">
             <thead className="text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="py-2 font-semibold">Product</th>
-                <th className="py-2 font-semibold">Category</th>
-                <th className="py-2 font-semibold text-right">Daily</th>
-                <th className="py-2 font-semibold text-right">Stock</th>
-                <th className="py-2 font-semibold">Status</th>
+                <th className="px-4 py-3 font-semibold">Product</th>
+                <th className="px-4 py-3 font-semibold">Category</th>
+                <th className="px-4 py-3 font-semibold text-right">Daily</th>
+                <th className="px-4 py-3 font-semibold text-right">Stock</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {topListings.map((p) => (
-                <tr key={p.id}>
-                  <td className="py-3 font-medium">{p.title}</td>
-                  <td className="py-3 text-muted-foreground">{p.category}</td>
-                  <td className="py-3 text-right font-mono">₹{p.dailyRent}</td>
-                  <td className="py-3 text-right">{p.stock}</td>
-                  <td className="py-3">
-                    <StatusBadge status={p.status} />
-                  </td>
+                <tr key={p.id} className="align-middle">
+                  <td className="px-4 py-3 font-medium">{p.title}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{p.category}</td>
+                  <td className="px-4 py-3 text-right font-mono">₹{p.dailyRent}</td>
+                  <td className="px-4 py-3 text-right">{p.stock}</td>
                 </tr>
               ))}
               {topListings.length === 0 && (
                 <tr>
-                  <td className="py-4 text-sm text-muted-foreground" colSpan={5}>
+                  <td className="px-4 py-4 text-sm text-muted-foreground" colSpan={4}>
                     No listings available.
                   </td>
                 </tr>

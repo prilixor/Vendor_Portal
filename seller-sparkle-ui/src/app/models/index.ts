@@ -106,7 +106,7 @@ export interface InventoryRecord {
 export interface InventoryMovement {
   id: string;
   productName: string;
-  type: "in" | "out" | "reserved" | "released" | "blocked";
+  type: "stock_added" | "stock_removed" | "reserved" | "reservation_released" | "rented" | "returned" | "blocked" | "unblocked" | "corrected" | "in" | "out" | "released";
   quantity: number;
   reference: string;
   timestamp: string;

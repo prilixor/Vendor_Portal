@@ -143,7 +143,7 @@ public sealed record VendorInventoryMovementDto(
     string? ReferenceType,
     string? ReferenceId,
     string? Notes,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset EventAt);
 
 public sealed record VendorNotificationPreferenceDto(
     string Id,
@@ -181,7 +181,8 @@ public sealed record AdminAuditLogDto(
     string? EntityId,
     string? OldValue,
     string? NewValue,
-    string? Notes);
+    string? Notes,
+    DateTimeOffset CreatedAt);
 
 public sealed record AdminPasswordResetDto(
     string VendorId,

@@ -14,12 +14,19 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 
-const movementMeta = {
+const movementMeta: Record<string, { label: string; icon: any; cls: string }> = {
+  stock_added: { label: "Stock Added", icon: ArrowDownRight, cls: "bg-success-soft text-success" },
+  stock_removed: { label: "Stock Removed", icon: ArrowUpRight, cls: "bg-info-soft text-info" },
+  reserved: { label: "Reserved", icon: Pause, cls: "bg-warning-soft text-warning" },
+  reservation_released: { label: "Reservation Released", icon: Play, cls: "bg-primary-soft text-primary" },
+  rented: { label: "Rented", icon: ArrowUpRight, cls: "bg-info-soft text-info" },
+  returned: { label: "Returned", icon: ArrowDownRight, cls: "bg-success-soft text-success" },
+  blocked: { label: "Blocked", icon: Ban, cls: "bg-destructive-soft text-destructive" },
+  unblocked: { label: "Unblocked", icon: Play, cls: "bg-primary-soft text-primary" },
+  corrected: { label: "Corrected", icon: Clock, cls: "bg-muted-soft text-muted-foreground" },
   in: { label: "Stock In", icon: ArrowDownRight, cls: "bg-success-soft text-success" },
   out: { label: "Stock Out", icon: ArrowUpRight, cls: "bg-info-soft text-info" },
-  reserved: { label: "Reserved", icon: Pause, cls: "bg-warning-soft text-warning" },
   released: { label: "Released", icon: Play, cls: "bg-primary-soft text-primary" },
-  blocked: { label: "Blocked", icon: Ban, cls: "bg-destructive-soft text-destructive" },
 };
 
 const Inventory = () => {
@@ -97,7 +104,7 @@ const Inventory = () => {
             type: toUiMovementType(x.movementType),
             quantity: x.quantity,
             reference: x.referenceType || x.referenceId || "-",
-            timestamp: x.createdAt || new Date().toISOString(),
+            timestamp: x.eventAt || new Date().toISOString(),
           } satisfies InventoryMovement));
         } catch {
           return [] as InventoryMovement[];
@@ -105,7 +112,10 @@ const Inventory = () => {
       })
     );
 
-    setMovements(movementRows.flat());
+    const sortedMovements = movementRows.flat().sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    setMovements(sortedMovements);
   };
 
   useEffect(() => {
@@ -164,6 +174,23 @@ const Inventory = () => {
 
   const saveEdit = async () => {
     if (!editingRow || !user) return;
+    
+    // Validation
+    if (editForm.reserved > editForm.total) {
+      toast.error("Reserved items cannot be more than total stock.");
+      return;
+    }
+    
+    if (editForm.rented > editForm.total - editForm.reserved) {
+      toast.error("Not enough stock available for rented items.");
+      return;
+    }
+    
+    if (editForm.blocked > editForm.total - editForm.reserved - editForm.rented) {
+      toast.error("Not enough stock available for blocked items.");
+      return;
+    }
+    
     const cappedReserved = Math.min(editForm.reserved, editForm.total);
     const cappedRented = Math.min(editForm.rented, Math.max(0, editForm.total - cappedReserved));
     const cappedBlocked = Math.min(editForm.blocked, Math.max(0, editForm.total - cappedReserved - cappedRented));
@@ -180,6 +207,101 @@ const Inventory = () => {
         rentedQuantity: cappedRented,
         blockedQuantity: cappedBlocked,
       });
+
+      // Create movement records for changes
+      const movements = [];
+      
+      // Total quantity change
+      const totalDiff = editForm.total - editingRow.total;
+      if (totalDiff > 0) {
+        movements.push(vendorOnboardingApi.addVendorInventoryMovement(user.id, editingRow.productId, {
+          vendorId: user.id,
+          listingId: editingRow.productId,
+          movementType: "stock_added",
+          quantity: totalDiff,
+          referenceType: "manual_correction",
+          notes: "Total quantity increased via edit",
+        }));
+      } else if (totalDiff < 0) {
+        movements.push(vendorOnboardingApi.addVendorInventoryMovement(user.id, editingRow.productId, {
+          vendorId: user.id,
+          listingId: editingRow.productId,
+          movementType: "stock_removed",
+          quantity: Math.abs(totalDiff),
+          referenceType: "manual_correction",
+          notes: "Total quantity decreased via edit",
+        }));
+      }
+
+      // Reserved quantity change
+      const reservedDiff = cappedReserved - editingRow.reserved;
+      if (reservedDiff > 0) {
+        movements.push(vendorOnboardingApi.addVendorInventoryMovement(user.id, editingRow.productId, {
+          vendorId: user.id,
+          listingId: editingRow.productId,
+          movementType: "reserved",
+          quantity: reservedDiff,
+          referenceType: "manual_correction",
+          notes: "Reserved quantity increased via edit",
+        }));
+      } else if (reservedDiff < 0) {
+        movements.push(vendorOnboardingApi.addVendorInventoryMovement(user.id, editingRow.productId, {
+          vendorId: user.id,
+          listingId: editingRow.productId,
+          movementType: "reservation_released",
+          quantity: Math.abs(reservedDiff),
+          referenceType: "manual_correction",
+          notes: "Reserved quantity decreased via edit",
+        }));
+      }
+
+      // Rented quantity change
+      const rentedDiff = cappedRented - editingRow.rented;
+      if (rentedDiff > 0) {
+        movements.push(vendorOnboardingApi.addVendorInventoryMovement(user.id, editingRow.productId, {
+          vendorId: user.id,
+          listingId: editingRow.productId,
+          movementType: "rented",
+          quantity: rentedDiff,
+          referenceType: "manual_correction",
+          notes: "Rented quantity increased via edit",
+        }));
+      } else if (rentedDiff < 0) {
+        movements.push(vendorOnboardingApi.addVendorInventoryMovement(user.id, editingRow.productId, {
+          vendorId: user.id,
+          listingId: editingRow.productId,
+          movementType: "returned",
+          quantity: Math.abs(rentedDiff),
+          referenceType: "manual_correction",
+          notes: "Rented quantity decreased via edit",
+        }));
+      }
+
+      // Blocked quantity change
+      const blockedDiff = cappedBlocked - editingRow.blocked;
+      if (blockedDiff > 0) {
+        movements.push(vendorOnboardingApi.addVendorInventoryMovement(user.id, editingRow.productId, {
+          vendorId: user.id,
+          listingId: editingRow.productId,
+          movementType: "blocked",
+          quantity: blockedDiff,
+          referenceType: "manual_correction",
+          notes: "Blocked quantity increased via edit",
+        }));
+      } else if (blockedDiff < 0) {
+        movements.push(vendorOnboardingApi.addVendorInventoryMovement(user.id, editingRow.productId, {
+          vendorId: user.id,
+          listingId: editingRow.productId,
+          movementType: "unblocked",
+          quantity: Math.abs(blockedDiff),
+          referenceType: "manual_correction",
+          notes: "Blocked quantity decreased via edit",
+        }));
+      }
+
+      // Execute all movement additions
+      await Promise.all(movements);
+
       await loadInventory();
       setEditingRow(null);
       toast.success("Inventory updated.");
@@ -331,7 +453,7 @@ const Inventory = () => {
           {movements.map((m) => {
             const meta = movementMeta[m.type];
             const Icon = meta.icon;
-            const isPositive = m.type === "in" || m.type === "released";
+            const isPositive = ["stock_added", "returned", "in", "released", "unblocked", "corrected"].includes(m.type);
             return (
               <li key={m.id} className="flex items-center justify-between gap-4 p-4">
                 <div className="flex items-center gap-3">
@@ -357,7 +479,7 @@ const Inventory = () => {
       </Card>
 
       <Dialog open={!!editingRow} onOpenChange={(open) => !open && setEditingRow(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit stock - {editingRow?.productName}</DialogTitle>
           </DialogHeader>
@@ -394,7 +516,7 @@ const Inventory = () => {
       </Dialog>
 
       <Dialog open={!!movementRow} onOpenChange={(open) => !open && setMovementRow(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{movementType === "in" ? "Stock Added" : "Stock Removed"} - {movementRow?.productName}</DialogTitle>
           </DialogHeader>
@@ -431,18 +553,12 @@ export default Inventory;
 
 const toUiMovementType = (type: string): InventoryMovement["type"] => {
   const value = type.trim().toLowerCase();
-  if (value === "stock_added" || value === "in") return "in";
-  if (value === "stock_removed" || value === "out") return "out";
-  if (value === "reservation_released" || value === "released") return "released";
-  if (value === "reserved" || value === "blocked") return value;
-  if (value === "unblocked") return "released";
-  if (value === "rented") return "out";
-  if (value === "returned") return "in";
-  if (value === "corrected") return "in";
-  if (value === "reservation_released") return "released";
-  if (value === "in" || value === "out" || value === "released") {
-    return value;
+  // Return the actual movement type if it's one of the valid types
+  const validTypes = ["stock_added", "stock_removed", "reserved", "reservation_released", "rented", "returned", "blocked", "unblocked", "corrected", "in", "out", "released"];
+  if (validTypes.includes(value)) {
+    return value as InventoryMovement["type"];
   }
+  // Fallback to "in" for unknown types
   return "in";
 };
 

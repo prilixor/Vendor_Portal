@@ -153,7 +153,19 @@ internal sealed class AddAdminAuditLogCommandHandler(IVendorOnboardingRepository
             entity.EntityId?.ToString(),
             entity.OldValue,
             entity.NewValue,
-            entity.Notes));
+            entity.Notes,
+            ToSafeCreatedAt(entity.CreatedOnUtc)));
+    }
+
+    private static DateTimeOffset ToSafeCreatedAt(DateTime createdOnUtc)
+    {
+        if (createdOnUtc <= DateTime.MinValue.AddDays(1))
+        {
+            return DateTimeOffset.UtcNow;
+        }
+
+        var utc = DateTime.SpecifyKind(createdOnUtc, DateTimeKind.Utc);
+        return new DateTimeOffset(utc, TimeSpan.Zero);
     }
 }
 
@@ -186,9 +198,21 @@ internal sealed class GetAdminAuditLogsQueryHandler(IVendorOnboardingRepository 
             x.EntityId?.ToString(),
             x.OldValue,
             x.NewValue,
-            x.Notes)).ToList();
+            x.Notes,
+            ToSafeCreatedAt(x.CreatedOnUtc))).ToList();
 
         return Result.Success(result);
+    }
+
+    private static DateTimeOffset ToSafeCreatedAt(DateTime createdOnUtc)
+    {
+        if (createdOnUtc <= DateTime.MinValue.AddDays(1))
+        {
+            return DateTimeOffset.UtcNow;
+        }
+
+        var utc = DateTime.SpecifyKind(createdOnUtc, DateTimeKind.Utc);
+        return new DateTimeOffset(utc, TimeSpan.Zero);
     }
 }
 

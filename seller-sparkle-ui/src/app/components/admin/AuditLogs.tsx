@@ -86,14 +86,10 @@ const AuditLogs = () => {
                   {filtered.map((log) => (
                     <tr key={log.id} className="hover:bg-muted/20">
                       <td className="px-4 py-3"><span className="rounded-md bg-primary-soft px-2 py-1 text-xs font-mono font-semibold text-primary">{log.actionType}</span></td>
-                      <td className="px-4 py-3"><p className="font-medium">{log.entityType}</p><p className="text-xs text-muted-foreground font-mono">{log.entityId}</p></td>
+                      <td className="px-4 py-3"><p className="font-medium">{log.entityType}</p></td>
                       <td className="px-4 py-3">{log.adminName || log.adminEmail || log.adminId}</td>
                       <td className="px-4 py-3">
-                        <div className="inline-flex items-center gap-2 text-xs">
-                          {log.oldValue && <span className="rounded bg-destructive-soft px-1.5 py-0.5 font-mono text-destructive">{log.oldValue}</span>}
-                          {log.oldValue && log.newValue && <ArrowRight className="h-3 w-3 text-muted-foreground" />}
-                          {log.newValue && <span className="rounded bg-success-soft px-1.5 py-0.5 font-mono text-success">{log.newValue}</span>}
-                        </div>
+                        <ChangeDisplay log={log} />
                       </td>
                     </tr>
                   ))}
@@ -103,6 +99,45 @@ const AuditLogs = () => {
           </>
         )}
       </Card>
+    </div>
+  );
+};
+
+const ChangeDisplay = ({ log }: { log: AdminAuditLogDto }) => {
+  // Get color based on the actual status value
+  const getStatusColor = (value: string | null): string => {
+    if (!value) return 'bg-muted text-muted-foreground';
+    const v = value.toLowerCase().trim();
+    
+    // Success/Green states - check if value contains these keywords
+    if (v.includes('approved') || v.includes('active') || v.includes('verified') || v.includes('completed') || v.includes('success') || v.includes('create')) {
+      return 'bg-success-soft text-success';
+    }
+    // Error/Destructive/Red states
+    if (v.includes('rejected') || v.includes('banned') || v.includes('failed') || v.includes('error') || v.includes('deleted') || v.includes('delete') || v.includes('remove')) {
+      return 'bg-destructive-soft text-destructive';
+    }
+    // Warning/Orange states
+    if (v.includes('suspended') || v.includes('under_review') || v.includes('warning') || v.includes('suspend')) {
+      return 'bg-warning-soft text-warning';
+    }
+    // Grey/Muted states
+    if (v.includes('pending')) {
+      return 'bg-muted text-muted-foreground';
+    }
+    // Info/Blue states
+    if (v.includes('submitted') || v.includes('processing') || v.includes('info') || v.includes('update') || v.includes('edit')) {
+      return 'bg-info-soft text-info';
+    }
+    // Default muted
+    return 'bg-muted text-muted-foreground';
+  };
+  
+  return (
+    <div className="inline-flex items-center gap-2 text-xs">
+      {log.oldValue && <span className={`rounded px-1.5 py-0.5 font-mono ${getStatusColor(log.oldValue)}`}>{log.oldValue}</span>}
+      {log.oldValue && log.newValue && <ArrowRight className="h-3 w-3 text-muted-foreground" />}
+      {log.newValue && <span className={`rounded px-1.5 py-0.5 font-mono ${getStatusColor(log.newValue)}`}>{log.newValue}</span>}
     </div>
   );
 };

@@ -381,6 +381,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(x => x.ReferenceType).HasColumnName("reference_type");
             entity.Property(x => x.ReferenceId).HasColumnName("reference_id");
             entity.Property(x => x.Notes).HasColumnName("notes");
+            entity.Property(x => x.EventAt).HasColumnName("event_at");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
             entity.Property(x => x.CreatedBy).HasColumnName("created_by");

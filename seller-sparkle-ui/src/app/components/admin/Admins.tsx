@@ -127,7 +127,7 @@ const Admins = () => {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader><DialogTitle>Add admin user</DialogTitle></DialogHeader>
           <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
             <FormGrid cols={1}>

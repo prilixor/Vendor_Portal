@@ -407,7 +407,7 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
     {
         return dbContext.VendorInventoryMovements
             .Where(x => x.VendorInventoryId == inventoryId && !x.IsDeleted)
-            .OrderByDescending(x => x.CreatedOnUtc)
+            .OrderByDescending(x => x.EventAt)
             .ToListAsync(cancellationToken);
     }
 

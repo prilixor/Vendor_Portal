@@ -554,60 +554,62 @@ const Products = () => {
           </div>
         )}
 
-        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search listings…" className="pl-9" />
+        <div className="mb-4 flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="w-full sm:max-w-xs">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search listings…" className="w-full pl-9" />
+            </div>
           </div>
           <Tabs value={filter} onValueChange={(v) => setFilter(v as "all" | "active" | "inactive")}>
-            <TabsList>
-              <TabsTrigger value="all">All <span className="ml-1.5 text-xs text-muted-foreground">({products.length})</span></TabsTrigger>
-              <TabsTrigger value="active">Active</TabsTrigger>
-              <TabsTrigger value="inactive">Inactive</TabsTrigger>
+            <TabsList className="w-full sm:w-auto">
+              <TabsTrigger value="all" className="flex-1 sm:flex-none">All <span className="ml-1.5 text-xs text-muted-foreground">({products.length})</span></TabsTrigger>
+              <TabsTrigger value="active" className="flex-1 sm:flex-none">Active</TabsTrigger>
+              <TabsTrigger value="inactive" className="flex-1 sm:flex-none">Inactive</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
         <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-[800px] text-sm">
+          <table className="w-full min-w-[600px] text-sm">
             <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="px-4 py-3 font-semibold">Listing</th>
-                <th className="px-4 py-3 font-semibold">Category</th>
-                <th className="px-4 py-3 font-semibold text-right">Daily</th>
-                <th className="px-4 py-3 font-semibold text-right">Monthly</th>
-                <th className="px-4 py-3 font-semibold text-right">Deposit</th>
-                <th className="px-4 py-3 font-semibold text-right">Qty</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3" />
+                <th className="px-3 py-3 font-semibold sm:px-4">Listing</th>
+                <th className="px-3 py-3 font-semibold sm:px-4">Category</th>
+                <th className="px-3 py-3 font-semibold text-right sm:px-4">Daily</th>
+                <th className="px-3 py-3 font-semibold text-right sm:px-4">Monthly</th>
+                <th className="px-3 py-3 font-semibold text-right sm:px-4">Deposit</th>
+                <th className="px-3 py-3 font-semibold text-right sm:px-4">Qty</th>
+                <th className="px-3 py-3 font-semibold sm:px-4">Status</th>
+                <th className="px-3 py-3 sm:px-4" />
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filtered.map((p) => (
-                <tr key={p.id} className="hover:bg-muted/20">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-soft">
+                <tr key={p.id} className="hover:bg-muted/20 align-middle">
+                  <td className="px-3 py-3 sm:px-4">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-soft">
                         <ImageIcon className="h-4 w-4 text-primary" />
                       </div>
-                      <div>
-                        <p className="font-medium">{p.title}</p>
-                        <p className="text-xs text-muted-foreground">{p.productName}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{p.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">{p.productName}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{p.category}</td>
-                  <td className="px-4 py-3 text-right font-mono">₹{p.dailyRent}</td>
-                  <td className="px-4 py-3 text-right font-mono">₹{p.monthlyRent.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right font-mono">₹{p.securityDeposit.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right">{p.quantity}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3 text-muted-foreground sm:px-4">{p.category}</td>
+                  <td className="px-3 py-3 text-right font-mono sm:px-4">₹{p.dailyRent}</td>
+                  <td className="px-3 py-3 text-right font-mono sm:px-4">₹{p.monthlyRent.toLocaleString()}</td>
+                  <td className="px-3 py-3 text-right font-mono sm:px-4">₹{p.securityDeposit.toLocaleString()}</td>
+                  <td className="px-3 py-3 text-right sm:px-4">{p.quantity}</td>
+                  <td className="px-3 py-3 sm:px-4">
                     <Switch
                       checked={p.status === "active"}
                       onCheckedChange={() => toggleListingStatus(p)}
                       disabled={busy}
                     />
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-3 py-3 text-right sm:px-4">
                     <div className="flex justify-end gap-1">
                       <Button variant="ghost" size="icon" onClick={() => void openMedia(p)} aria-label="Media" disabled={busy}>
                         <ImageIcon className="h-4 w-4" />
@@ -624,7 +626,7 @@ const Products = () => {
               ))}
               {hasLoaded && !busy && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={8} className="px-3 py-8 text-center text-sm text-muted-foreground sm:px-4">
                     {products.length === 0
                       ? "No listings created yet."
                       : "No listings match your current search/filter."}
@@ -638,7 +640,7 @@ const Products = () => {
 
       {/* Edit dialog */}
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{products.some((p) => p.id === editing?.id) ? "Edit listing" : "New listing"}</DialogTitle>
           </DialogHeader>
@@ -791,7 +793,7 @@ const Products = () => {
         </DialogContent>
       </Dialog> */}
       <Dialog open={!!mediaFor} onOpenChange={(v) => !v && setMediaFor(null)}>
-        <DialogContent className="w-[calc(100vw-1rem)] max-w-4xl p-0">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-4xl max-h-[90vh] overflow-y-auto p-0">
           <DialogHeader className="px-4 pt-4 sm:px-6 sm:pt-6">
             <DialogTitle>Manage images</DialogTitle>
           </DialogHeader>
@@ -1029,17 +1031,17 @@ const Products = () => {
       </Dialog>
 
       <Dialog open={!!previewUrl} onOpenChange={(open) => !open && setPreviewUrl(null)}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Image preview</DialogTitle>
           </DialogHeader>
           {previewUrl && (
             <div className="overflow-hidden rounded-lg border border-border">
-              <img src={previewUrl} alt="Preview" className="max-h-[70vh] w-full object-contain bg-muted/20" />
+              <img src={previewUrl} alt="Preview" className="max-h-[60vh] w-full object-contain bg-muted/20" />
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPreviewUrl(null)}>
+            <Button variant="outline" onClick={() => setPreviewUrl(null)} className="w-full sm:w-auto">
               <X className="mr-2 h-4 w-4" /> Close
             </Button>
           </DialogFooter>

@@ -109,6 +109,7 @@ export interface AdminAuditLogDto {
   oldValue?: string;
   newValue?: string;
   notes?: string;
+  createdAt: string;
 }
 
 export interface AddAdminAuditLogRequest {

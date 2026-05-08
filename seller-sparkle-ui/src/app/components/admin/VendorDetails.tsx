@@ -123,6 +123,7 @@ const VendorDetails = () => {
 
   const [productListings, setProductListings] = useState<VendorProductListingDto[]>([]);
   const [previewDocument, setPreviewDocument] = useState<{ url: string; type: string } | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
 
 
@@ -357,6 +358,7 @@ const VendorDetails = () => {
       toast.info("No document URL found.");
       return;
     }
+    setPdfLoading(true);
     setPreviewDocument({ url: fileUrl, type: documentType });
   };
 
@@ -998,7 +1000,7 @@ const VendorDetails = () => {
 
       <Dialog open={itemRejectOpen} onOpenChange={setItemRejectOpen}>
 
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-md">
 
           <DialogHeader>
 
@@ -1025,11 +1027,11 @@ const VendorDetails = () => {
 
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:gap-0">
 
-            <Button variant="outline" onClick={() => setItemRejectOpen(false)} disabled={itemActionLoadingKey !== null}>Cancel</Button>
+            <Button variant="outline" onClick={() => setItemRejectOpen(false)} disabled={itemActionLoadingKey !== null} className="w-full sm:w-auto">Cancel</Button>
 
-            <Button variant="destructive" onClick={() => void submitItemReject()} disabled={itemActionLoadingKey !== null || !itemRejectTarget}>
+            <Button variant="destructive" onClick={() => void submitItemReject()} disabled={itemActionLoadingKey !== null || !itemRejectTarget} className="w-full sm:w-auto">
 
               {itemActionLoadingKey !== null ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Reject
 
@@ -1043,7 +1045,7 @@ const VendorDetails = () => {
 
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
 
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-md">
 
           <DialogHeader>
 
@@ -1065,11 +1067,11 @@ const VendorDetails = () => {
 
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:gap-0">
 
-            <Button variant="outline" onClick={() => setRejectOpen(false)} disabled={rejecting}>Cancel</Button>
+            <Button variant="outline" onClick={() => setRejectOpen(false)} disabled={rejecting} className="w-full sm:w-auto">Cancel</Button>
 
-            <Button variant={actionType === "reactivate" ? "default" : "destructive"} onClick={handleAction} disabled={rejecting}>
+            <Button variant={actionType === "reactivate" ? "default" : "destructive"} onClick={handleAction} disabled={rejecting} className="w-full sm:w-auto">
 
               {rejecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Confirm {actionType}
 
@@ -1082,25 +1084,41 @@ const VendorDetails = () => {
       </Dialog>
 
       {/* Document Preview Modal */}
-      <Dialog open={previewDocument !== null} onOpenChange={(open) => !open && setPreviewDocument(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh]">
+      <Dialog open={previewDocument !== null} onOpenChange={(open) => { if (!open) { setPreviewDocument(null); setPdfLoading(false); } }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Document Preview - {previewDocument?.type}</DialogTitle>
           </DialogHeader>
           {previewDocument && (
-            <div className="w-full h-[70vh] flex items-center justify-center bg-muted/30 rounded-lg overflow-hidden">
+            <div className="w-full h-[60vh] flex items-center justify-center bg-muted/30 rounded-lg overflow-hidden relative">
               {previewDocument.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                 <img
                   src={previewDocument.url}
                   alt="Document preview"
                   className="max-w-full max-h-full object-contain"
+                  onLoad={() => setPdfLoading(false)}
                 />
               ) : previewDocument.url.match(/\.pdf$/i) ? (
-                <iframe
-                  src={previewDocument.url}
-                  className="w-full h-full border-0"
-                  title="PDF Preview"
-                />
+                <>
+                  {pdfLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-muted/30">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                        <p className="text-sm text-muted-foreground">Loading PDF...</p>
+                      </div>
+                    </div>
+                  )}
+                  <iframe
+                    src={previewDocument.url}
+                    className="w-full h-full border-0"
+                    title="PDF Preview"
+                    onLoad={() => setPdfLoading(false)}
+                    onError={() => {
+                      setPdfLoading(false);
+                      toast.error("Failed to load PDF. Please try downloading the file instead.");
+                    }}
+                  />
+                </>
               ) : (
                 <div className="text-center p-6">
                   <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
@@ -1119,6 +1137,26 @@ const VendorDetails = () => {
               )}
             </div>
           )}
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPreviewDocument(null);
+                setPdfLoading(false);
+              }}
+            >
+              Close
+            </Button>
+            {previewDocument && (
+              <Button
+                onClick={() => {
+                  window.open(previewDocument.url, '_blank', 'noopener,noreferrer');
+                }}
+              >
+                Download
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

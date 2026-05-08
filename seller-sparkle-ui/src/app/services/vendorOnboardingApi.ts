@@ -157,7 +157,7 @@ export interface VendorInventoryMovementApiDto {
   referenceType?: string;
   referenceId?: string;
   notes?: string;
-  createdAt: string;
+  eventAt: string;
 }
 
 export interface UploadedFileResponse {

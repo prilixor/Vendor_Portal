@@ -10,6 +10,7 @@ public class VendorInventoryMovement : AuditableEntity<Guid>, ISoftDelete
     public string? ReferenceType { get; set; }
     public Guid? ReferenceId { get; set; }
     public string? Notes { get; set; }
+    public DateTimeOffset EventAt { get; set; } = DateTimeOffset.UtcNow;
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }

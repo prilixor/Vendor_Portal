@@ -40,6 +40,14 @@ const AdminDashboard = () => {
   const pending = vendors.filter(v => v.accountStatus === "pending").length;
   const active = vendors.filter(v => v.accountStatus === "active").length;
 
+  // Filter audit logs for last 7 days
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const recentAuditLogs = auditLogs.filter(log => {
+    const logDate = new Date(log.createdAt);
+    return logDate >= sevenDaysAgo;
+  });
+
   return (
     <div>
       <PageHeader title="Admin overview" description="Monitor platform health, vendor verification queue, and recent activity." />
@@ -48,7 +56,7 @@ const AdminDashboard = () => {
         <StatCard label="Total vendors" value={total} icon={Building2} accent="primary"  />
         <StatCard label="Pending verifications" value={pending} icon={Clock} accent="warning" />
         <StatCard label="Active vendors" value={active} icon={CheckCircle2} accent="success" />
-        <StatCard label="Audit events (24h)" value={auditLogs.length} icon={ScrollText} accent="info" />
+        <StatCard label="Audit events (7d)" value={recentAuditLogs.length} icon={ScrollText} accent="info" />
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -93,7 +101,7 @@ const AdminDashboard = () => {
 
         <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
           <div className="border-b border-border pb-4">
-            <h2 className="font-semibold">Recent audit events</h2>
+            <h2 className="font-semibold">Recent audit events (Last 7 days)</h2>
           </div>
           {loading ? (
             <div className="flex items-center justify-center py-8">
@@ -101,7 +109,7 @@ const AdminDashboard = () => {
             </div>
           ) : (
             <ul className="divide-y divide-border">
-              {auditLogs.slice(0, 5).map((log) => (
+              {recentAuditLogs.slice(0, 5).map((log) => (
                 <li key={log.id} className="p-3">
                   <p className="text-xs font-mono font-semibold text-primary">{log.actionType}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -109,7 +117,7 @@ const AdminDashboard = () => {
                   </p>
                 </li>
               ))}
-              {auditLogs.length === 0 && (
+              {recentAuditLogs.length === 0 && (
                 <li className="p-8 text-center text-muted-foreground text-sm">No recent audit events</li>
               )}
             </ul>

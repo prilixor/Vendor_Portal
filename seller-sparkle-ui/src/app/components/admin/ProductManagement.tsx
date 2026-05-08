@@ -847,7 +847,7 @@ const ProductManagement = () => {
 
       {/* Category Dialog */}
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editingCategory ? "Edit Category" : "New Category"}</DialogTitle>
           </DialogHeader>
@@ -913,7 +913,7 @@ const ProductManagement = () => {
 
       {/* Product Dialog */}
       <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingProduct ? "Edit Product" : "New Product"}</DialogTitle>
           </DialogHeader>
@@ -1002,7 +1002,7 @@ const ProductManagement = () => {
 
       {/* Excel Upload Dialog */}
       <Dialog open={excelDialogOpen} onOpenChange={setExcelDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Upload Excel</DialogTitle>
           </DialogHeader>

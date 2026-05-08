@@ -188,7 +188,8 @@ internal sealed class AddVendorInventoryMovementCommandHandler(IVendorOnboarding
             Quantity = request.Quantity,
             ReferenceType = request.ReferenceType,
             ReferenceId = referenceId,
-            Notes = request.Notes
+            Notes = request.Notes,
+            EventAt = DateTimeOffset.UtcNow
         };
 
         await repository.AddVendorInventoryMovementAsync(movement, cancellationToken);
@@ -202,7 +203,7 @@ internal sealed class AddVendorInventoryMovementCommandHandler(IVendorOnboarding
             movement.ReferenceType,
             movement.ReferenceId?.ToString(),
             movement.Notes,
-            ToSafeCreatedAt(movement.CreatedOnUtc)));
+            movement.EventAt));
     }
 
     private static string NormalizeMovementType(string movementType)
@@ -262,7 +263,7 @@ internal sealed class GetVendorInventoryMovementsQueryHandler(IVendorOnboardingR
             x.ReferenceType,
             x.ReferenceId?.ToString(),
             x.Notes,
-            ToSafeCreatedAt(x.CreatedOnUtc))).ToList();
+            x.EventAt)).ToList();
 
         return Result.Success(result);
     }

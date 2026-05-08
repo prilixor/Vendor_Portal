@@ -10,7 +10,7 @@ import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye, Building2, ChevronLeft, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
@@ -74,6 +74,7 @@ const Onboarding = () => {
   const [previewDocument, setPreviewDocument] = useState<{ url: string; type: string } | null>(null);
   const [ifscLoading, setIfscLoading] = useState(false);
   const [ifscError, setIfscError] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const prev = () => setStep((s) => Math.max(s - 1, 0));
 
@@ -332,8 +333,12 @@ const Onboarding = () => {
       toast.info("Preview is available for newly uploaded files.");
       return;
     }
-    const previewUrl = getPreviewUrl(doc.fileUrl);
-    setPreviewDocument({ url: previewUrl, type: doc.type });
+    const openPreview = (doc: VendorDocument) => {
+      const previewUrl = doc.fileUrl;
+      setPdfLoading(true);
+      setPreviewDocument({ url: previewUrl, type: doc.type });
+    };
+    openPreview(doc);
   };
 
   const saveProfile = async () => {
@@ -1139,7 +1144,7 @@ const Onboarding = () => {
       )}
 
       {/* Document Preview Modal */}
-      <Dialog open={previewDocument !== null} onOpenChange={(open) => !open && setPreviewDocument(null)}>
+      <Dialog open={previewDocument !== null} onOpenChange={(open) => { if (!open) { setPreviewDocument(null); setPdfLoading(false); } }}>
         <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Document Preview - {previewDocument?.type}</DialogTitle>
@@ -1151,13 +1156,29 @@ const Onboarding = () => {
                   src={previewDocument.url}
                   alt="Document preview"
                   className="max-w-full max-h-full object-contain"
+                  onLoad={() => setPdfLoading(false)}
                 />
               ) : previewDocument.url.match(/\.pdf$/i) ? (
-                <iframe
-                  src={previewDocument.url}
-                  className="w-full h-full border-0"
-                  title="PDF Preview"
-                />
+                <>
+                  {pdfLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-muted/30">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                        <p className="text-sm text-muted-foreground">Loading PDF...</p>
+                      </div>
+                    </div>
+                  )}
+                  <iframe
+                    src={previewDocument.url}
+                    className="w-full h-full border-0"
+                    title="PDF Preview"
+                    onLoad={() => setPdfLoading(false)}
+                    onError={() => {
+                      setPdfLoading(false);
+                      toast.error("Failed to load PDF. Please try downloading the file instead.");
+                    }}
+                  />
+                </>
               ) : (
                 <div className="text-center p-6">
                   <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
@@ -1176,6 +1197,26 @@ const Onboarding = () => {
               )}
             </div>
           )}
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPreviewDocument(null);
+                setPdfLoading(false);
+              }}
+            >
+              Close
+            </Button>
+            {previewDocument && (
+              <Button
+                onClick={() => {
+                  window.open(previewDocument.url, '_blank', 'noopener,noreferrer');
+                }}
+              >
+                Download
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

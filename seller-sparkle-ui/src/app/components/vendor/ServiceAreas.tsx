@@ -190,7 +190,7 @@ const ServiceAreas = () => {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editing.id && areas.some((a) => a.id === editing.id) ? "Edit" : "New"} service area</DialogTitle>
           </DialogHeader>
@@ -206,24 +206,27 @@ const ServiceAreas = () => {
               </div>
             </div>
             {mapReady ? (
-              <MapPicker
-                key={`dialog-map-${editing.id}`}
-                latitude={editing.latitude}
-                longitude={editing.longitude}
-                radiusKm={editing.radiusKm}
-                showRadius
-                onChange={(lat, lng) => setEditing({ ...editing, latitude: lat, longitude: lng })}
-                onRadiusChange={(km) => setEditing({ ...editing, radiusKm: km })}
-              />
+              <div className="w-full overflow-hidden rounded-xl">
+                <MapPicker
+                  key={`dialog-map-${editing.id}`}
+                  latitude={editing.latitude}
+                  longitude={editing.longitude}
+                  radiusKm={editing.radiusKm}
+                  showRadius
+                  height="h-48 sm:h-72"
+                  onChange={(lat, lng) => setEditing({ ...editing, latitude: lat, longitude: lng })}
+                  onRadiusChange={(km) => setEditing({ ...editing, radiusKm: km })}
+                />
+              </div>
             ) : (
-              <div className="h-72 rounded-xl border border-border bg-muted/30 animate-pulse" />
+              <div className="h-48 sm:h-72 w-full rounded-xl border border-border bg-muted/30 animate-pulse" />
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:gap-0">
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={busy} className="w-full sm:w-auto">
               <X className="mr-2 h-4 w-4" /> Cancel
             </Button>
-            <Button onClick={save} disabled={busy}>Save area</Button>
+            <Button onClick={save} disabled={busy} className="w-full sm:w-auto">Save area</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
