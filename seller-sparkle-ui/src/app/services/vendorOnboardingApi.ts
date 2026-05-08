@@ -551,4 +551,29 @@ export const vendorOnboardingApi = {
   getUnreadNotificationCount(vendorId: string) {
     return apiClient.get<number>(`/vendors/${vendorId}/notifications/unread-count`);
   },
+
+  // CountryStateCity API methods
+  getIndianStates() {
+    return fetch("https://api.countrystatecity.in/v1/countries/IN/states", {
+      method: 'GET',
+      headers: {
+        'X-CSCAPI-KEY': import.meta.env.VITE_CSC_API_KEY || '',
+      },
+    }).then(response => {
+      if (!response.ok) throw new Error('Failed to fetch states');
+      return response.json() as Promise<{ name: string; iso2: string }[]>;
+    });
+  },
+
+  getCitiesByState(stateIso2: string) {
+    return fetch(`https://api.countrystatecity.in/v1/countries/IN/states/${stateIso2}/cities`, {
+      method: 'GET',
+      headers: {
+        'X-CSCAPI-KEY': import.meta.env.VITE_CSC_API_KEY || '',
+      },
+    }).then(response => {
+      if (!response.ok) throw new Error('Failed to fetch cities');
+      return response.json() as Promise<{ name: string }[]>;
+    });
+  },
 };

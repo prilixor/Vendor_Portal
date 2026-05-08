@@ -4,7 +4,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Switch } from "@/app/components/ui/switch";
@@ -81,6 +81,9 @@ const Products = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteDocConfirmId, setDeleteDocConfirmId] = useState<string | null>(null);
+  const [deleteImageConfirmId, setDeleteImageConfirmId] = useState<string | null>(null);
+  const [previewDocument, setPreviewDocument] = useState<{ id: string; type: string; url: string } | null>(null);
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -399,8 +402,7 @@ const Products = () => {
   };
 
   const setPrimary = (id: string) => setTempImages((imgs) => imgs.map((i) => ({ ...i, primary: i.id === id })));
-  const removeImg = async (id: string) => {
-    if (!user || !mediaFor) return;
+  const removeImg = (id: string) => {
     const img = tempImages.find((i) => i.id === id);
     if (!img) return;
 
@@ -408,6 +410,12 @@ const Products = () => {
       setTempImages((imgs) => imgs.filter((i) => i.id !== id));
       return;
     }
+
+    setDeleteImageConfirmId(id);
+  };
+
+  const confirmRemoveImg = async (id: string) => {
+    if (!user || !mediaFor) return;
 
     try {
       setBusy(true);
@@ -422,6 +430,7 @@ const Products = () => {
           persisted: true,
         })));
       toast.success("Image deleted");
+      setDeleteImageConfirmId(null);
     } catch (error) {
       const message = getUserFriendlyMessage(error);
       toast.error(message);
@@ -523,12 +532,16 @@ const Products = () => {
     }
   };
 
-  const viewListingDoc = (fileUrl: string) => {
-    window.open(fileUrl, "_blank", "noopener,noreferrer");
+  const viewListingDoc = (doc: { id: string; documentType: string; fileUrl: string }) => {
+    setPreviewDocument({ id: doc.id, type: doc.documentType, url: doc.fileUrl });
   };
 
-  const deleteListingDoc = async (documentId: string) => {
-    if (!mediaFor || !user) return;
+  const deleteListingDoc = (documentId: string) => {
+    setDeleteDocConfirmId(documentId);
+  };
+
+  const confirmDeleteListingDoc = async (documentId: string) => {
+    if (!user || !mediaFor) return;
 
     try {
       setBusy(true);
@@ -536,6 +549,7 @@ const Products = () => {
       const docs = await vendorOnboardingApi.getVendorProductDocuments(user.id, mediaFor.id);
       setListingDocuments(docs);
       toast.success("Document deleted");
+      setDeleteDocConfirmId(null);
     } catch (error) {
       const message = getUserFriendlyMessage(error);
       toast.error(message);
@@ -1028,12 +1042,24 @@ const Products = () => {
                               <p className="text-xs text-muted-foreground truncate">{doc.fileUrl.split('/').pop()}</p>
                             </div>
                           </div>
-                          <button
-                            onClick={() => void deleteListingDoc(doc.id)}
-                            className="text-destructive hover:text-destructive/80 text-sm font-medium flex-shrink-0 ml-3"
-                          >
-                            Remove
-                          </button>
+                          <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => viewListingDoc(doc)}
+                              className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                            >
+                              <Eye className="h-4 w-4 mr-1" /> Preview
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteListingDoc(doc.id)}
+                              className="h-8 px-2 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" /> Remove
+                            </Button>
+                          </div>
                         </div>
                       ))}
                       {listingDocuments.length === 0 && (
@@ -1198,6 +1224,133 @@ const Products = () => {
           </div>
         );
       })()}
+
+      {/* Document Preview Dialog */}
+      <Dialog open={previewDocument !== null} onOpenChange={(open) => { if (!open) setPreviewDocument(null); }}>
+        <DialogContent className="w-[95vw] max-w-4xl p-0 gap-0 flex flex-col" style={{ maxHeight: '90vh' }}>
+          <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b shrink-0">
+            <DialogTitle className="text-sm sm:text-base">Document Preview - {previewDocument?.type}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-auto bg-muted/30">
+            {previewDocument && (
+              <div className="p-3 sm:p-4">
+                {previewDocument.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                  <div className="flex items-center justify-center min-h-[40vh]">
+                    <img
+                      src={previewDocument.url}
+                      alt="Document preview"
+                      className="max-w-full max-h-[60vh] object-contain rounded-lg"
+                    />
+                  </div>
+                ) : previewDocument.url.match(/\.pdf$/i) ? (
+                  <div className="relative w-full" style={{ height: '60vh', minHeight: '300px' }}>
+                    <iframe
+                      src={previewDocument.url}
+                      className="w-full h-full border-0 rounded-lg"
+                      title="PDF Preview"
+                      style={{ maxWidth: '100%' }}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center min-h-[40vh] text-center p-4">
+                    <FileText className="h-12 w-12 sm:h-16 sm:w-16 mb-4 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      Preview not available for this file type.
+                    </p>
+                    <a
+                      href={previewDocument.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline mt-2 text-sm"
+                    >
+                      Download file
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-t bg-background shrink-0">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setPreviewDocument(null)}
+                className="w-full sm:w-auto"
+              >
+                Close
+              </Button>
+              {previewDocument && (
+                <Button
+                  onClick={() => {
+                    window.open(previewDocument.url, '_blank', 'noopener,noreferrer');
+                  }}
+                  className="w-full sm:w-auto"
+                >
+                  Download
+                </Button>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Document Delete Confirmation Dialog */}
+      <Dialog open={!!deleteDocConfirmId} onOpenChange={(open) => !open && setDeleteDocConfirmId(null)}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Document</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. Are you sure you want to delete this document?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDocConfirmId(null)}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteDocConfirmId && confirmDeleteListingDoc(deleteDocConfirmId)}
+              className="w-full sm:w-auto"
+              disabled={busy}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Delete Confirmation Dialog */}
+      <Dialog open={!!deleteImageConfirmId} onOpenChange={(open) => !open && setDeleteImageConfirmId(null)}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Image</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. Are you sure you want to delete this image?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteImageConfirmId(null)}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteImageConfirmId && confirmRemoveImg(deleteImageConfirmId)}
+              className="w-full sm:w-auto"
+              disabled={busy}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

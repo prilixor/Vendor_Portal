@@ -61,6 +61,10 @@ class ApiClient {
   }
 
   private buildUrl(endpoint: string): string {
+    // If endpoint is already an absolute URL (starts with http:// or https://), use it as-is
+    if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+      return endpoint;
+    }
     return `${this.baseUrl}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
   }
 

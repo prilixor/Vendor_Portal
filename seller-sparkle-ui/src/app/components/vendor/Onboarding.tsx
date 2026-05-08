@@ -12,12 +12,15 @@ import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
-import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye, Building2, ChevronLeft, MoreVertical } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/app/components/ui/command";
+import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye, Building2, ChevronLeft, MoreVertical, ChevronDown, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { BankDetails, BusinessProfile, VendorDocument, VerificationStatus } from "@/app/models";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { cn } from "@/app/helpers/utils";
 
 const steps = [
   { label: "Basic Info", description: "Account" },
@@ -51,6 +54,69 @@ const defaultBank: BankDetails = {
   status: "pending",
 };
 
+// Indian States and Cities data - now fetched from API
+// const indianStates = [
+//   "Andhra Pradesh",
+//   "Arunachal Pradesh",
+//   "Assam",
+//   "Bihar",
+//   "Chhattisgarh",
+//   "Goa",
+//   "Gujarat",
+//   "Haryana",
+//   "Himachal Pradesh",
+//   "Jharkhand",
+//   "Karnataka",
+//   "Kerala",
+//   "Madhya Pradesh",
+//   "Maharashtra",
+//   "Manipur",
+//   "Meghalaya",
+//   "Mizoram",
+//   "Nagaland",
+//   "Odisha",
+//   "Punjab",
+//   "Rajasthan",
+//   "Sikkim",
+//   "Tamil Nadu",
+//   "Telangana",
+//   "Tripura",
+//   "Uttar Pradesh",
+//   "Uttarakhand",
+//   "West Bengal",
+// ];
+
+// const stateCities: Record<string, string[]> = {
+//   "Andhra Pradesh": ["Adoni", "Amaravati", "Anantapur", "Bhimavaram", "Chittoor", "Dharmavaram", "Eluru", "Gudivada", "Guntakal", "Guntur", "Hindupur", "Kadapa", "Kakinada", "Kavali", "Kurnool", "Machilipatnam", "Madanapalle", "Nandyal", "Narasaraopet", "Nellore", "Ongole", "Proddatur", "Rajahmundry", "Srikakulam", "Tadepalligudem", "Tadipatri", "Tenali", "Tirupati", "Vijayawada", "Visakhapatnam", "Vizianagaram"],
+//   "Arunachal Pradesh": ["Along", "Bomdila", "Itanagar", "Naharlagun", "Pasighat", "Roing", "Tezu", "Ziro"],
+//   "Assam": ["Barpeta", "Bongaigaon", "Dhubri", "Dibrugarh", "Diphu", "Goalpara", "Guwahati", "Jorhat", "Karimganj", "Lanka", "Lumding", "Mangaldoi", "Nagaon", "Nalbari", "North Lakhimpur", "Sibsagar", "Silchar", "Tezpur", "Tinsukia"],
+//   "Bihar": ["Arrah", "Aurangabad", "Bagaha", "Bettiah", "Bhagalpur", "Bihar Sharif", "Buxar", "Chapra", "Darbhanga", "Dehri", "Gaya", "Hajipur", "Jamalpur", "Katihar", "Kishanganj", "Munger", "Muzaffarpur", "Nawada", "Patna", "Purnia", "Sasaram", "Siwan", "Sitamarhi"],
+//   "Chhattisgarh": ["Ambikapur", "Bhilai", "Bilaspur", "Chirmiri", "Dhamtari", "Durg", "Jagdalpur", "Korba", "Raigarh", "Raipur", "Rajnandgaon"],
+//   "Goa": ["Bicholim", "Curchorem", "Mapusa", "Margao", "Mormugao", "Panaji", "Ponda", "Quepem", "Sanguem", "Vasco da Gama"],
+//   "Gujarat": ["Ahmedabad", "Amreli", "Anand", "Ankleshwar", "Bardoli", "Bharuch", "Bhavnagar", "Bhuj", "Botad", "Dahod", "Deesa", "Gandhidham", "Gandhinagar", "Godhra", "Gondal", "Jamnagar", "Jetpur", "Junagadh", "Kalol", "Khambhat", "Mehsana", "Modasa", "Morvi", "Nadiad", "Navsari", "Palanpur", "Patan", "Porbandar", "Rajkot", "Surat", "Surendranagar", "Vadodara", "Valsad", "Veraval", "Vapi"],
+//   "Haryana": ["Ambala", "Ambala Cantt", "Bahadurgarh", "Bhiwani", "Faridabad", "Fatehabad", "Gurgaon", "Hisar", "Jhajjar", "Jind", "Kaithal", "Karnal", "Kurukshetra", "Mahendragarh", "Narnaul", "Narwana", "Palwal", "Panchkula", "Panipat", "Rewari", "Rohtak", "Sirsa", "Sonipat", "Thanesar", "Yamunanagar"],
+//   "Himachal Pradesh": ["Baddi", "Bilaspur", "Chamba", "Dalhousie", "Dharamshala", "Hamirpur", "Kangra", "Kullu", "Mandi", "Nahan", "Palampur", "Shimla", "Solan", "Sundarnagar", "Una"],
+//   "Jharkhand": ["Adityapur", "Bokaro Steel City", "Chaibasa", "Chatra", "Chirkunda", "Deoghar", "Dhanbad", "Dumka", "Giridih", "Godda", "Hazaribagh", "Jamshedpur", "Jhumri Tilaiya", "Jharia", "Koderma", "Medininagar", "Mihijam", "Musabani", "Pakur", "Phusro", "Ramgarh", "Ranchi", "Sahibganj"],
+//   "Karnataka": ["Bagalkot", "Ballari", "Bangalore", "Belgaum", "Bhadravati", "Bidar", "Bijapur", "Chamarajanagar", "Chikmagalur", "Chikkaballapur", "Chitradurga", "Davanagere", "Dharwad", "Gadag", "Gulbarga", "Hassan", "Haveri", "Hubli", "Kolar", "Koppal", "Madikeri", "Mandya", "Mangalore", "Mysore", "Raichur", "Ramanagara", "Ranebennur", "Shimoga", "Tumkur", "Udupi", "Vijayapura"],
+//   "Kerala": ["Alappuzha", "Aluva", "Angamaly", "Attingal", "Chalakudy", "Changanassery", "Cherthala", "Ernakulam", "Guruvayur", "Kannur", "Kasaragod", "Kayamkulam", "Kochi", "Kodungallur", "Kollam", "Kottayam", "Kozhikode", "Malappuram", "Manjeri", "Neyyattinkara", "Nilambur", "Palakkad", "Ponnani", "Thalassery", "Thiruvananthapuram", "Thrissur", "Tirur"],
+//   "Madhya Pradesh": ["Balaghat", "Barwani", "Betul", "Bhopal", "Burhanpur", "Chhindwara", "Chhatarpur", "Damoh", "Dewas", "Dhar", "Guna", "Gwalior", "Hoshangabad", "Indore", "Itarsi", "Jabalpur", "Katni", "Khandwa", "Khargone", "Mandsaur", "Morena", "Narsinghpur", "Neemuch", "Pithampur", "Ratlam", "Rewa", "Sagar", "Satna", "Sehore", "Seoni", "Shahdol", "Shivpuri", "Singrauli", "Ujjain", "Vidisha"],
+//   "Maharashtra": ["Ahmednagar", "Akola", "Amravati", "Aurangabad", "Bhiwandi", "Chandrapur", "Dhule", "Gondia", "Ichalkaranji", "Jalgaon", "Jalna", "Kalyan", "Kolhapur", "Latur", "Malegaon", "Mira-Bhayandar", "Mumbai", "Nagpur", "Nanded", "Nashik", "Navi Mumbai", "Osmanabad", "Palghar", "Parbhani", "Pimpri-Chinchwad", "Pune", "Raigad", "Ratnagiri", "Sangli", "Satara", "Solapur", "Thane", "Ulhasnagar", "Vasai-Virar", "Wardha", "Yavatmal"],
+//   "Manipur": ["Bishnupur", "Churachandpur", "Imphal", "Kakching", "Lilong", "Mayang Imphal", "Thoubal", "Ukhrul"],
+//   "Meghalaya": ["Baghmara", "Cherrapunji", "Jowai", "Nongpoh", "Nongstoin", "Shillong", "Tura", "Williamnagar"],
+//   "Mizoram": ["Aizawl", "Champhai", "Kolasib", "Lawngtlai", "Lunglei", "Mamit", "Saiha", "Serchhip"],
+//   "Nagaland": ["Dimapur", "Kohima", "Mokokchung", "Mon", "Tuensang", "Wokha", "Zunheboto"],
+//   "Odisha": ["Balangir", "Balasore", "Barbil", "Bargarh", "Baripada", "Berhampur", "Bhadrak", "Bhubaneswar", "Brahmapur", "Cuttack", "Dhenkanal", "Jagatsinghpur", "Jajpur", "Jeypore", "Jharsuguda", "Kendrapara", "Kendujhar", "Paradip", "Puri", "Rourkela", "Sambalpur", "Sunabeda"],
+//   "Punjab": ["Abohar", "Amritsar", "Barnala", "Batala", "Bathinda", "Fazilka", "Ferozepur", "Hoshiarpur", "Jalandhar", "Kapurthala", "Khanna", "Ludhiana", "Malerkotla", "Mandi Gobindgarh", "Moga", "Mohali", "Muktsar", "Nabha", "Pathankot", "Patiala", "Phagwara", "Rajpura", "Sangrur"],
+//   "Rajasthan": ["Ajmer", "Alwar", "Banswara", "Baran", "Barmer", "Beawar", "Bharatpur", "Bhilwara", "Bikaner", "Bundi", "Chittorgarh", "Churu", "Dausa", "Dholpur", "Ganganagar", "Hanumangarh", "Jaipur", "Jaisalmer", "Jalore", "Jhunjhunu", "Jodhpur", "Karauli", "Kishangarh", "Kota", "Nagaur", "Pali", "Pratapgarh", "Rajsamand", "Sikar", "Sirohi", "Sri Ganganagar", "Tonk", "Udaipur"],
+//   "Sikkim": ["Gangtok", "Geyzing", "Jorethang", "Mangan", "Namchi", "Naya Bazar", "Rangpo", "Singtam"],
+//   "Tamil Nadu": ["Ambur", "Ariyalur", "Arakkonam", "Aruppukkottai", "Chennai", "Coimbatore", "Cuddalore", "Dharmapuri", "Dindigul", "Erode", "Hosur", "Kanchipuram", "Karaikudi", "Karur", "Kovilpatti", "Kumbakonam", "Madurai", "Mayiladuthurai", "Nagapattinam", "Nagercoil", "Namakkal", "Neyveli", "Ooty", "Pollachi", "Pudukkottai", "Rajapalayam", "Salem", "Sivakasi", "Thanjavur", "Theni", "Thoothukudi", "Tiruchirappalli", "Tirunelveli", "Tiruppur", "Tiruvannamalai", "Udhagamandalam", "Vaniyambadi", "Vellore", "Villupuram", "Virudhunagar"],
+//   "Telangana": ["Adilabad", "Hyderabad", "Jagtial", "Karimnagar", "Khammam", "Mahbubnagar", "Mancherial", "Miryalaguda", "Nalgonda", "Nizamabad", "Ramagundam", "Sangareddy", "Siddipet", "Suryapet", "Warangal"],
+//   "Tripura": ["Agartala", "Belonia", "Dharmanagar", "Kailasahar", "Khowai", "Pratapgarh", "Sabroom", "Udaipur"],
+//   "Uttar Pradesh": ["Agra", "Aligarh", "Allahabad", "Amroha", "Azamgarh", "Bahraich", "Ballia", "Banda", "Barabanki", "Bareilly", "Basti", "Bhadohi", "Bijnor", "Budaun", "Bulandshahr", "Chandausi", "Chitrakoot", "Deoria", "Etah", "Etawah", "Faizabad", "Farrukhabad", "Fatehpur", "Firozabad", "Ghaziabad", "Gonda", "Gorakhpur", "Hapur", "Hardoi", "Hathras", "Jaunpur", "Jhansi", "Kannauj", "Kanpur", "Kasganj", "Khurja", "Lakhimpur", "Lalitpur", "Lucknow", "Mainpuri", "Mathura", "Mau", "Meerut", "Mirzapur", "Modinagar", "Moradabad", "Muzaffarnagar", "Noida", "Orai", "Pilibhit", "Prayagraj", "Raebareli", "Rampur", "Saharanpur", "Sambhal", "Shahjahanpur", "Shamli", "Sitapur", "Sultanpur", "Unnao", "Varanasi"],
+//   "Uttarakhand": ["Almora", "Bageshwar", "Chamoli", "Champawat", "Dehradun", "Haldwani", "Haridwar", "Kashipur", "Kotdwar", "Mussoorie", "Nainital", "Pauri", "Pithoragarh", "Rishikesh", "Roorkee", "Rudrapur", "Tehri", "Udham Singh Nagar", "Uttarkashi"],
+//   "West Bengal": ["Asansol", "Baharampur", "Bally", "Balurghat", "Bankura", "Baranagar", "Barasat", "Barrackpore", "Basirhat", "Bhatpara", "Bidhan Nagar", "Burnpur", "Chandannagar", "Dankuni", "Darjeeling", "Durgapur", "Habra", "Haldia", "Howrah", "Jalpaiguri", "Kalyani", "Kharagpur", "Krishnanagar", "Malda", "Medinipur", "Nabadwip", "North Dumdum", "Panihati", "Purulia", "Raiganj", "Ranaghat", "Shantipur", "Siliguri", "South Dumdum", "Uluberia"],
+// };
+
 const Onboarding = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -75,6 +141,15 @@ const Onboarding = () => {
   const [ifscLoading, setIfscLoading] = useState(false);
   const [ifscError, setIfscError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  
+  // State and City API state
+  const [states, setStates] = useState<{ name: string; iso2: string }[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [statesLoading, setStatesLoading] = useState(false);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+  const [statesError, setStatesError] = useState<string | null>(null);
+  const [citiesError, setCitiesError] = useState<string | null>(null);
+  const [selectedStateIso2, setSelectedStateIso2] = useState<string | null>(null);
 
   const prev = () => setStep((s) => Math.max(s - 1, 0));
 
@@ -166,6 +241,59 @@ const Onboarding = () => {
     return "pending";
   };
 
+  // Fetch states from API
+  useEffect(() => {
+    const fetchStates = async () => {
+      setStatesLoading(true);
+      setStatesError(null);
+      try {
+        const response = await vendorOnboardingApi.getIndianStates();
+        setStates(response);
+      } catch (error) {
+        console.error("Failed to fetch states:", error);
+        setStatesError("Failed to load states. Please try again.");
+      } finally {
+        setStatesLoading(false);
+      }
+    };
+
+    fetchStates();
+  }, []);
+
+  // Set selectedStateIso2 when states are loaded and profile has a state
+  useEffect(() => {
+    if (states.length > 0 && profile.state) {
+      const selectedState = states.find(s => s.name === profile.state);
+      if (selectedState) {
+        setSelectedStateIso2(selectedState.iso2);
+      }
+    }
+  }, [states, profile.state]);
+
+  // Fetch cities when state changes
+  useEffect(() => {
+    const fetchCities = async () => {
+      if (!selectedStateIso2) {
+        setCities([]);
+        return;
+      }
+
+      setCitiesLoading(true);
+      setCitiesError(null);
+      try {
+        const response = await vendorOnboardingApi.getCitiesByState(selectedStateIso2);
+        setCities(response.map((city) => city.name));
+      } catch (error) {
+        console.error("Failed to fetch cities:", error);
+        setCitiesError("Failed to load cities. Please try again.");
+      } finally {
+        setCitiesLoading(false);
+      }
+    };
+
+    fetchCities();
+  }, [selectedStateIso2]);
+
   const mapDocuments = (docsDto: Awaited<ReturnType<typeof vendorOnboardingApi.getVendorDocuments>>) =>
     docsDto.map((doc) => ({
       id: doc.id,
@@ -211,6 +339,10 @@ const Onboarding = () => {
             latitude: profileDto.latitude ?? prev.latitude,
             longitude: profileDto.longitude ?? prev.longitude,
           }));
+          // Set selectedStateIso2 when profile loads with existing state
+          if (profileDto.state) {
+            setSelectedStateIso2(null); // Will be set after states are loaded
+          }
           // Step 0 (Basic Info) is always complete
           completed.add(0);
           // Step 1 (Business Profile) is complete if profile exists
@@ -587,8 +719,27 @@ const Onboarding = () => {
                       <Field label="Owner name" value={profile.ownerName} onChange={(v) => updateProfile("ownerName", v)} />
                       <Field label="Phone" value={profile.phone} onChange={(v) => updateProfile("phone", v)} />
                       <Field label="GST number" value={profile.gstNumber} onChange={(v) => updateProfile("gstNumber", v)} />
-                      <Field label="City" value={profile.city} onChange={(v) => updateProfile("city", v)} />
-                      <Field label="State" value={profile.state} onChange={(v) => updateProfile("state", v)} />
+                      <StateCityCombobox
+                        label="State"
+                        value={profile.state}
+                        options={states.map(s => s.name)}
+                        onChange={(v) => {
+                          updateProfile("state", v);
+                          updateProfile("city", "");
+                          const selectedState = states.find(s => s.name === v);
+                          setSelectedStateIso2(selectedState?.iso2 || null);
+                        }}
+                        placeholder={statesLoading ? "Loading states..." : "Select state"}
+                        disabled={statesLoading}
+                      />
+                      <StateCityCombobox
+                        label="City"
+                        value={profile.city}
+                        options={cities}
+                        onChange={(v) => updateProfile("city", v)}
+                        placeholder={citiesLoading ? "Loading cities..." : profile.state ? "Select city" : "Select state first"}
+                        disabled={!profile.state || citiesLoading}
+                      />
                       <Field className="sm:col-span-2" label="Address line 1" value={profile.addressLine1} onChange={(v) => updateProfile("addressLine1", v)} />
                       <Field className="sm:col-span-2" label="Address line 2 (optional)" value={profile.addressLine2 ?? ""} onChange={(v) => updateProfile("addressLine2", v)} />
                       <Field label="Postal code" value={profile.postalCode} onChange={(v) => updateProfile("postalCode", v)} />
@@ -864,8 +1015,27 @@ const Onboarding = () => {
               <Field label="GST number" value={profile.gstNumber} onChange={(v) => updateProfile("gstNumber", v)} />
               <Field className="sm:col-span-2" label="Address line 1" value={profile.addressLine1} onChange={(v) => updateProfile("addressLine1", v)} />
               <Field className="sm:col-span-2" label="Address line 2 (optional)" value={profile.addressLine2 ?? ""} onChange={(v) => updateProfile("addressLine2", v)} />
-              <Field label="City" value={profile.city} onChange={(v) => updateProfile("city", v)} />
-              <Field label="State" value={profile.state} onChange={(v) => updateProfile("state", v)} />
+              <StateCityCombobox
+                label="State"
+                value={profile.state}
+                options={states.map(s => s.name)}
+                onChange={(v) => {
+                  updateProfile("state", v);
+                  updateProfile("city", "");
+                  const selectedState = states.find(s => s.name === v);
+                  setSelectedStateIso2(selectedState?.iso2 || null);
+                }}
+                placeholder={statesLoading ? "Loading states..." : "Select state"}
+                disabled={statesLoading}
+              />
+              <StateCityCombobox
+                label="City"
+                value={profile.city}
+                options={cities}
+                onChange={(v) => updateProfile("city", v)}
+                placeholder={citiesLoading ? "Loading cities..." : profile.state ? "Select city" : "Select state first"}
+                disabled={!profile.state || citiesLoading}
+              />
               <Field label="Postal code" value={profile.postalCode} onChange={(v) => updateProfile("postalCode", v)} />
             </FormGrid>
             <div className="space-y-2 pt-2">
@@ -1285,6 +1455,68 @@ const getPreviewUrl = (fileUrl: string): string => {
   } catch {
     return fileUrl;
   }
+};
+
+// Searchable Combobox for State/City selection
+interface StateCityComboboxProps {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+  placeholder: string;
+  disabled?: boolean;
+}
+
+const StateCityCombobox = ({ label, value, options, onChange, placeholder, disabled }: StateCityComboboxProps) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between"
+            disabled={disabled}
+          >
+            {value || placeholder}
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" side="bottom" sideOffset={4} avoidCollisions={false}>
+          <Command>
+            <CommandInput placeholder={`Search ${label.toLowerCase()}...`} />
+            <CommandList>
+              <CommandEmpty>No {label.toLowerCase()} found.</CommandEmpty>
+              <CommandGroup>
+                {options.map((option) => (
+                  <CommandItem
+                    key={option}
+                    value={option}
+                    onSelect={() => {
+                      onChange(option === value ? "" : option);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === option ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {option}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
 };
 
 export default Onboarding;

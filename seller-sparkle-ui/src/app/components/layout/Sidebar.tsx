@@ -75,6 +75,7 @@ export const Sidebar = ({ sections, brandLabel, isOpen, onClose }: SidebarProps)
                     <NavLink
                       to={item.to}
                       end={item.to === "/vendor" || item.to === "/admin"}
+                      onClick={() => onClose?.()}
                       className={cn(
                         "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
                         "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",

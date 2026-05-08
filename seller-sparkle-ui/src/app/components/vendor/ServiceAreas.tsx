@@ -23,6 +23,7 @@ const ServiceAreas = () => {
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const toUiArea = (a: Awaited<ReturnType<typeof vendorOnboardingApi.getVendorServiceAreas>>[number]): ServiceArea => ({
     id: a.id,
@@ -35,7 +36,11 @@ const ServiceAreas = () => {
 
   const startNew = () => { setEditing({ ...blank, id: `sa${Date.now()}` }); setOpen(true); };
   const startEdit = (a: ServiceArea) => { setEditing(a); setOpen(true); };
-  const remove = async (id: string) => {
+  const remove = (id: string) => {
+    setDeleteConfirmId(id);
+  };
+
+  const confirmRemove = async (id: string) => {
     if (!user) {
       toast.error("Please login again.");
       return;
@@ -47,6 +52,7 @@ const ServiceAreas = () => {
       const latest = await vendorOnboardingApi.getVendorServiceAreas(user.id);
       setAreas(latest.map(toUiArea));
       toast.success("Service area deleted.");
+      setDeleteConfirmId(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to delete service area.";
       toast.error(message);
@@ -230,6 +236,53 @@ const ServiceAreas = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Card */}
+      {deleteConfirmId && (() => {
+        const area = areas.find(a => a.id === deleteConfirmId);
+        if (!area) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Delete Service Area</h3>
+                  <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-3">Are you sure you want to delete this service area?</p>
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="font-medium">{area.name}</p>
+                  <p className="text-sm text-muted-foreground">{area.city} · {area.radiusKm} km radius</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => confirmRemove(deleteConfirmId)}
+                  className="flex-1"
+                  disabled={busy}
+                >
+                  Delete
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
     </div>
   );
 };
