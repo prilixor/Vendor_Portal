@@ -12,12 +12,16 @@ import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
-import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye, Building2, ChevronLeft, MoreVertical } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/app/components/ui/command";
+import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye, Building2, ChevronLeft, MoreVertical, ChevronDown, Check, Loader2 } from "lucide-react";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { BankDetails, BusinessProfile, VendorDocument, VerificationStatus } from "@/app/models";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { cn } from "@/app/helpers/utils";
 
 const steps = [
   { label: "Basic Info", description: "Account" },
@@ -51,6 +55,8 @@ const defaultBank: BankDetails = {
   status: "pending",
 };
 
+
+
 const Onboarding = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -64,6 +70,8 @@ const Onboarding = () => {
   const [hasSubmittedBefore, setHasSubmittedBefore] = useState(false);
   const [viewMode, setViewMode] = useState<"onboarding" | "profile">("onboarding");
   const [editingSection, setEditingSection] = useState<number | null>(null);
+  const [originalProfile, setOriginalProfile] = useState<BusinessProfile | null>(null);
+  const [originalBank, setOriginalBank] = useState<BankDetails | null>(null);
   const [activeTab, setActiveTab] = useState("profile");
   const [documentType, setDocumentType] = useState("GST Certificate");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -75,6 +83,15 @@ const Onboarding = () => {
   const [ifscLoading, setIfscLoading] = useState(false);
   const [ifscError, setIfscError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  
+  // State and City API state
+  const [states, setStates] = useState<{ name: string; iso2: string }[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [statesLoading, setStatesLoading] = useState(false);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+  const [statesError, setStatesError] = useState<string | null>(null);
+  const [citiesError, setCitiesError] = useState<string | null>(null);
+  const [selectedStateIso2, setSelectedStateIso2] = useState<string | null>(null);
 
   const prev = () => setStep((s) => Math.max(s - 1, 0));
 
@@ -166,6 +183,59 @@ const Onboarding = () => {
     return "pending";
   };
 
+  // Fetch states from API
+  useEffect(() => {
+    const fetchStates = async () => {
+      setStatesLoading(true);
+      setStatesError(null);
+      try {
+        const response = await vendorOnboardingApi.getIndianStates();
+        setStates(response);
+      } catch (error) {
+        console.error("Failed to fetch states:", error);
+        setStatesError("Failed to load states. Please try again.");
+      } finally {
+        setStatesLoading(false);
+      }
+    };
+
+    fetchStates();
+  }, []);
+
+  // Set selectedStateIso2 when states are loaded and profile has a state
+  useEffect(() => {
+    if (states.length > 0 && profile.state) {
+      const selectedState = states.find(s => s.name === profile.state);
+      if (selectedState) {
+        setSelectedStateIso2(selectedState.iso2);
+      }
+    }
+  }, [states, profile.state]);
+
+  // Fetch cities when state changes
+  useEffect(() => {
+    const fetchCities = async () => {
+      if (!selectedStateIso2) {
+        setCities([]);
+        return;
+      }
+
+      setCitiesLoading(true);
+      setCitiesError(null);
+      try {
+        const response = await vendorOnboardingApi.getCitiesByState(selectedStateIso2);
+        setCities(response.map((city) => city.name));
+      } catch (error) {
+        console.error("Failed to fetch cities:", error);
+        setCitiesError("Failed to load cities. Please try again.");
+      } finally {
+        setCitiesLoading(false);
+      }
+    };
+
+    fetchCities();
+  }, [selectedStateIso2]);
+
   const mapDocuments = (docsDto: Awaited<ReturnType<typeof vendorOnboardingApi.getVendorDocuments>>) =>
     docsDto.map((doc) => ({
       id: doc.id,
@@ -211,6 +281,10 @@ const Onboarding = () => {
             latitude: profileDto.latitude ?? prev.latitude,
             longitude: profileDto.longitude ?? prev.longitude,
           }));
+          // Set selectedStateIso2 when profile loads with existing state
+          if (profileDto.state) {
+            setSelectedStateIso2(null); // Will be set after states are loaded
+          }
           // Step 0 (Basic Info) is always complete
           completed.add(0);
           // Step 1 (Business Profile) is complete if profile exists
@@ -472,6 +546,12 @@ const Onboarding = () => {
   };
 
   const handleEditSection = (sectionIndex: number) => {
+    // Store original values before editing so we can restore on cancel
+    if (sectionIndex === 1) {
+      setOriginalProfile({ ...profile });
+    } else if (sectionIndex === 3) {
+      setOriginalBank({ ...bank });
+    }
     setEditingSection(sectionIndex);
     setStep(sectionIndex);
   };
@@ -516,16 +596,126 @@ const Onboarding = () => {
   };
 
   const handleCancelEdit = () => {
+    // Restore original values when canceling edit
+    if (editingSection === 1 && originalProfile) {
+      setProfile(originalProfile);
+      setOriginalProfile(null);
+    } else if (editingSection === 3 && originalBank) {
+      setBank(originalBank);
+      setOriginalBank(null);
+    }
     setEditingSection(null);
   };
 
   // Show loading state until data is fully loaded to prevent UI flicker
   if (!hasLoaded) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
+      <div className="min-h-[60vh] p-6">
+        {/* Header Skeleton */}
+        <div className="mb-8 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-64" />
+              <Skeleton className="h-4 w-48" />
+            </div>
+            <Skeleton className="h-10 w-32" />
+          </div>
+        </div>
+
+        {/* Stepper Skeleton */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between gap-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex flex-1 items-center gap-2">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <div className="hidden flex-1 space-y-1 sm:block">
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-2 w-2/3" />
+                </div>
+                {i < 5 && <Skeleton className="hidden h-0.5 flex-1 sm:block" />}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Content Cards Skeleton */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-4">
+            <Card className="p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <Skeleton className="h-10 w-10 rounded-lg" />
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 pt-4">
+                  <Skeleton className="h-10 w-24" />
+                  <Skeleton className="h-10 w-24" />
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <Skeleton className="h-10 w-10 rounded-lg" />
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-4">
+            <Card className="p-6">
+              <Skeleton className="mb-4 h-5 w-24" />
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <Skeleton className="h-8 w-8 rounded" />
+                    <div className="flex-1 space-y-1">
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-2 w-2/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <Skeleton className="mb-4 h-5 w-32" />
+              <div className="space-y-3">
+                {[1, 2].map((i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
         </div>
       </div>
     );
@@ -587,8 +777,27 @@ const Onboarding = () => {
                       <Field label="Owner name" value={profile.ownerName} onChange={(v) => updateProfile("ownerName", v)} />
                       <Field label="Phone" value={profile.phone} onChange={(v) => updateProfile("phone", v)} />
                       <Field label="GST number" value={profile.gstNumber} onChange={(v) => updateProfile("gstNumber", v)} />
-                      <Field label="City" value={profile.city} onChange={(v) => updateProfile("city", v)} />
-                      <Field label="State" value={profile.state} onChange={(v) => updateProfile("state", v)} />
+                      <StateCityCombobox
+                        label="State"
+                        value={profile.state}
+                        options={states.map(s => s.name)}
+                        onChange={(v) => {
+                          updateProfile("state", v);
+                          updateProfile("city", "");
+                          const selectedState = states.find(s => s.name === v);
+                          setSelectedStateIso2(selectedState?.iso2 || null);
+                        }}
+                        placeholder={statesLoading ? "Loading states..." : "Select state"}
+                        disabled={statesLoading}
+                      />
+                      <StateCityCombobox
+                        label="City"
+                        value={profile.city}
+                        options={cities}
+                        onChange={(v) => updateProfile("city", v)}
+                        placeholder={citiesLoading ? "Loading cities..." : profile.state ? "Select city" : "Select state first"}
+                        disabled={!profile.state || citiesLoading}
+                      />
                       <Field className="sm:col-span-2" label="Address line 1" value={profile.addressLine1} onChange={(v) => updateProfile("addressLine1", v)} />
                       <Field className="sm:col-span-2" label="Address line 2 (optional)" value={profile.addressLine2 ?? ""} onChange={(v) => updateProfile("addressLine2", v)} />
                       <Field label="Postal code" value={profile.postalCode} onChange={(v) => updateProfile("postalCode", v)} />
@@ -864,8 +1073,27 @@ const Onboarding = () => {
               <Field label="GST number" value={profile.gstNumber} onChange={(v) => updateProfile("gstNumber", v)} />
               <Field className="sm:col-span-2" label="Address line 1" value={profile.addressLine1} onChange={(v) => updateProfile("addressLine1", v)} />
               <Field className="sm:col-span-2" label="Address line 2 (optional)" value={profile.addressLine2 ?? ""} onChange={(v) => updateProfile("addressLine2", v)} />
-              <Field label="City" value={profile.city} onChange={(v) => updateProfile("city", v)} />
-              <Field label="State" value={profile.state} onChange={(v) => updateProfile("state", v)} />
+              <StateCityCombobox
+                label="State"
+                value={profile.state}
+                options={states.map(s => s.name)}
+                onChange={(v) => {
+                  updateProfile("state", v);
+                  updateProfile("city", "");
+                  const selectedState = states.find(s => s.name === v);
+                  setSelectedStateIso2(selectedState?.iso2 || null);
+                }}
+                placeholder={statesLoading ? "Loading states..." : "Select state"}
+                disabled={statesLoading}
+              />
+              <StateCityCombobox
+                label="City"
+                value={profile.city}
+                options={cities}
+                onChange={(v) => updateProfile("city", v)}
+                placeholder={citiesLoading ? "Loading cities..." : profile.state ? "Select city" : "Select state first"}
+                disabled={!profile.state || citiesLoading}
+              />
               <Field label="Postal code" value={profile.postalCode} onChange={(v) => updateProfile("postalCode", v)} />
             </FormGrid>
             <div className="space-y-2 pt-2">
@@ -1285,6 +1513,68 @@ const getPreviewUrl = (fileUrl: string): string => {
   } catch {
     return fileUrl;
   }
+};
+
+// Searchable Combobox for State/City selection
+interface StateCityComboboxProps {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+  placeholder: string;
+  disabled?: boolean;
+}
+
+const StateCityCombobox = ({ label, value, options, onChange, placeholder, disabled }: StateCityComboboxProps) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between"
+            disabled={disabled}
+          >
+            {value || placeholder}
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" side="bottom" sideOffset={4} avoidCollisions={false}>
+          <Command>
+            <CommandInput placeholder={`Search ${label.toLowerCase()}...`} />
+            <CommandList>
+              <CommandEmpty>No {label.toLowerCase()} found.</CommandEmpty>
+              <CommandGroup>
+                {options.map((option) => (
+                  <CommandItem
+                    key={option}
+                    value={option}
+                    onSelect={() => {
+                      onChange(option === value ? "" : option);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === option ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {option}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
 };
 
 export default Onboarding;

@@ -5,6 +5,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Switch } from "@/app/components/ui/switch";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { Calendar } from "@/app/components/ui/calendar";
 import { AvailabilityOverride } from "@/app/models";
 import { format } from "date-fns";
@@ -24,6 +25,7 @@ const Availability = () => {
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const dateMap = new Map(overrides.map((o) => [o.date, o]));
 
@@ -68,7 +70,11 @@ const Availability = () => {
     }
   };
 
-  const remove = async (id: string) => {
+  const remove = (id: string) => {
+    setDeleteConfirmId(id);
+  };
+
+  const confirmRemove = async (id: string) => {
     if (!user) {
       toast.error("Please login again.");
       return;
@@ -80,6 +86,7 @@ const Availability = () => {
       const latest = await vendorOnboardingApi.getVendorAvailabilityOverrides(user.id);
       setOverrides(latest.map(toUiOverride));
       toast.success("Availability override deleted.");
+      setDeleteConfirmId(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to delete availability override.";
       toast.error(message);
@@ -118,7 +125,39 @@ const Availability = () => {
       />
 
       {!hasLoaded && busy && (
-        <Card className="mb-4 border-border/60 p-4 text-sm text-muted-foreground">Loading availability overrides...</Card>
+        <div className="space-y-6">
+          {/* Calendar Skeleton */}
+          <Card className="p-4">
+            <Skeleton className="h-6 w-32 mb-4" />
+            <div className="grid grid-cols-7 gap-1">
+              {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                <Skeleton key={i} className="h-8 w-full" />
+              ))}
+              {[...Array(35)].map((_, i) => (
+                <Skeleton key={`day-${i}`} className="h-10 w-full" />
+              ))}
+            </div>
+          </Card>
+          
+          {/* Availability Overrides Skeleton */}
+          <Card className="p-4">
+            <div className="space-y-4">
+              <Skeleton className="h-6 w-40" />
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex items-center justify-between border-b border-border pb-4 last:border-0">
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-4">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-6 w-16" />
+                    </div>
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                  <Skeleton className="h-8 w-8" />
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
       )}
       {loadError && (
         <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
@@ -206,6 +245,54 @@ const Availability = () => {
           )}
         </ul>
       </Card>
+
+      {/* Delete Confirmation Card */}
+      {deleteConfirmId && (() => {
+        const override = overrides.find(o => o.id === deleteConfirmId);
+        if (!override) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Delete Override</h3>
+                  <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-3">Are you sure you want to delete this availability override?</p>
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="font-medium">{format(new Date(override.date), "MMMM d, yyyy")}</p>
+                  <p className="text-sm text-muted-foreground">{override.available ? "Available" : "Unavailable"}{override.startTime && ` · ${override.startTime}–${override.endTime}`}</p>
+                  {override.reason && <p className="text-sm text-muted-foreground mt-1">{override.reason}</p>}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => confirmRemove(deleteConfirmId)}
+                  className="flex-1"
+                  disabled={busy}
+                >
+                  Delete
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
     </div>
   );
 };

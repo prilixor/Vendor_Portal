@@ -4,6 +4,7 @@ import { Card } from "@/app/components/ui/card";
 import { Switch } from "@/app/components/ui/switch";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { WorkingHour } from "@/app/models";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
@@ -120,7 +121,29 @@ const WorkingHours = () => {
       />
 
       {!hasLoaded && busy && (
-        <Card className="mb-4 border-border/60 p-4 text-sm text-muted-foreground">Loading working hours...</Card>
+        <div className="space-y-4">
+          {/* Working Hours Skeleton */}
+          <Card className="p-6">
+            <div className="space-y-4">
+              {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                <div key={i} className="flex items-center justify-between border-b border-border pb-4 last:border-0">
+                  <div className="flex items-center gap-4">
+                    <Skeleton className="h-6 w-20" />
+                    <Skeleton className="h-6 w-16" />
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-10 w-20" />
+                      <Skeleton className="h-4 w-4" />
+                      <Skeleton className="h-10 w-20" />
+                    </div>
+                    <Skeleton className="h-6 w-12" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
       )}
       {loadError && (
         <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>

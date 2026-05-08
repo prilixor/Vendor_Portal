@@ -6,6 +6,8 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 
 import { Card } from "@/app/components/ui/card";
 
+import { Skeleton } from "@/app/components/ui/skeleton";
+
 import { Button } from "@/app/components/ui/button";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
@@ -21,6 +23,7 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 
 import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto, VendorWorkingHourDto, VendorProductListingDto } from "@/app/services/adminApi";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 
 const getAdminUserId = () => {
   const adminUser = localStorage.getItem("adminUser");
@@ -233,15 +236,89 @@ const VendorDetails = () => {
 
 
   if (loading) {
-
     return (
+      <div className="space-y-6">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-24" />
+            <Skeleton className="h-10 w-24" />
+          </div>
+        </div>
 
-      <div className="flex items-center justify-center py-12">
+        {/* Tabs Skeleton */}
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-10 w-20" />
+            ))}
+          </div>
 
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          {/* Content Skeleton */}
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-6">
+              {/* Profile Card Skeleton */}
+              <Card className="p-6">
+                <div className="space-y-4">
+                  <Skeleton className="h-6 w-32" />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <div key={i} className="space-y-2">
+                        <Skeleton className="h-3 w-20" />
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
 
+              {/* Documents Skeleton */}
+              <Card className="p-6">
+                <div className="space-y-4">
+                  <Skeleton className="h-6 w-24" />
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center justify-between p-3 border border-border/60 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="h-8 w-8 rounded" />
+                        <div className="space-y-1">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-24" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Skeleton className="h-8 w-8" />
+                        <Skeleton className="h-8 w-8" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+
+            {/* Sidebar Skeleton */}
+            <div className="space-y-4">
+              <Card className="p-6">
+                <Skeleton className="h-6 w-24 mb-4" />
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <Skeleton className="h-8 w-8 rounded" />
+                      <div className="flex-1 space-y-1">
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-2 w-2/3" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          </div>
+        </div>
       </div>
-
     );
 
   }
@@ -343,6 +420,15 @@ const VendorDetails = () => {
         verificationStatus,
         notes,
       });
+      
+      // Only create notification for approvals (backend handles rejections)
+      if (verificationStatus === "approved") {
+        const title = "Bank Account Verified";
+        const message = "Your bank account has been successfully verified by the admin.";
+        
+        await vendorOnboardingApi.createNotification(vendorId, title, message, "success");
+      }
+      
       await loadVendorData(vendorId);
       toast.success(`Bank account ${verificationStatus}.`);
     } catch (error) {

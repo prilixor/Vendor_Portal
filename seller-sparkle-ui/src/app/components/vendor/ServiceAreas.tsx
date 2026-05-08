@@ -4,6 +4,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { ServiceArea } from "@/app/models";
 import { Plus, MapPin, Pencil, Trash2, X } from "lucide-react";
@@ -23,6 +24,7 @@ const ServiceAreas = () => {
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const toUiArea = (a: Awaited<ReturnType<typeof vendorOnboardingApi.getVendorServiceAreas>>[number]): ServiceArea => ({
     id: a.id,
@@ -35,7 +37,11 @@ const ServiceAreas = () => {
 
   const startNew = () => { setEditing({ ...blank, id: `sa${Date.now()}` }); setOpen(true); };
   const startEdit = (a: ServiceArea) => { setEditing(a); setOpen(true); };
-  const remove = async (id: string) => {
+  const remove = (id: string) => {
+    setDeleteConfirmId(id);
+  };
+
+  const confirmRemove = async (id: string) => {
     if (!user) {
       toast.error("Please login again.");
       return;
@@ -47,6 +53,7 @@ const ServiceAreas = () => {
       const latest = await vendorOnboardingApi.getVendorServiceAreas(user.id);
       setAreas(latest.map(toUiArea));
       toast.success("Service area deleted.");
+      setDeleteConfirmId(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to delete service area.";
       toast.error(message);
@@ -150,7 +157,39 @@ const ServiceAreas = () => {
       />
 
       {!hasLoaded && busy && (
-        <Card className="mb-4 border-border/60 p-4 text-sm text-muted-foreground">Loading service areas...</Card>
+        <div className="space-y-4">
+          {/* Service Areas Grid Skeleton */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <Card key={i} className="p-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-4" />
+                      <Skeleton className="h-5 w-24" />
+                    </div>
+                    <div className="flex gap-1">
+                      <Skeleton className="h-8 w-8" />
+                      <Skeleton className="h-8 w-8" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-4 w-28" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
       )}
       {loadError && (
         <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
@@ -230,6 +269,53 @@ const ServiceAreas = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Card */}
+      {deleteConfirmId && (() => {
+        const area = areas.find(a => a.id === deleteConfirmId);
+        if (!area) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Delete Service Area</h3>
+                  <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-3">Are you sure you want to delete this service area?</p>
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="font-medium">{area.name}</p>
+                  <p className="text-sm text-muted-foreground">{area.city} · {area.radiusKm} km radius</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => confirmRemove(deleteConfirmId)}
+                  className="flex-1"
+                  disabled={busy}
+                >
+                  Delete
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
     </div>
   );
 };

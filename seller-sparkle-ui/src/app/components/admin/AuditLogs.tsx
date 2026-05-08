@@ -3,6 +3,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { adminApi, AdminAuditLogDto, AdminUserDto } from "@/app/services/adminApi";
 import { Search, ArrowRight, Loader2 } from "lucide-react";
 import { format } from "date-fns";
@@ -54,8 +55,32 @@ const AuditLogs = () => {
 
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <div className="space-y-4">
+            {/* Search and Filter Skeleton */}
+            <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center">
+              <div className="relative w-full sm:max-w-xs">
+                <Skeleton className="h-10 w-full pl-9" />
+                <Skeleton className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+              </div>
+              <Skeleton className="h-10 w-32" />
+            </div>
+            
+            {/* Audit Logs Skeleton */}
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <div key={i} className="flex items-center justify-between p-4 border border-border/60 rounded-lg">
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-3 w-16" />
+                    </div>
+                    <Skeleton className="h-3 w-48" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                  <Skeleton className="h-8 w-8" />
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <>

@@ -36,6 +36,29 @@ export const NotificationProvider = ({ children, vendorId }: { children: ReactNo
     }
   }, [vendorId]);
 
+  // Set up periodic polling for new notifications every 30 seconds
+  useEffect(() => {
+    if (!vendorId) return;
+
+    const interval = setInterval(() => {
+      refreshUnreadCount();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [vendorId]);
+
+  // Also refresh when window gains focus (user returns to the tab)
+  useEffect(() => {
+    if (!vendorId) return;
+
+    const handleFocus = () => {
+      refreshUnreadCount();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [vendorId]);
+
   return (
     <NotificationContext.Provider value={{ unreadCount, refreshUnreadCount }}>
       {children}
