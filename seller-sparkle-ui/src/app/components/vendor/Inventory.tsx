@@ -506,8 +506,8 @@ const Inventory = () => {
             return (
               <li key={m.id} className="flex items-center justify-between gap-4 p-4">
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${meta.cls}`}>
-                    <Icon className="h-4 w-4" />
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${meta.cls}`}>
+                    <Icon className="h-5 w-5 shrink-0" strokeWidth={2.5} />
                   </div>
                   <div>
                     <p className="text-sm font-medium">{meta.label} · {m.productName}</p>
