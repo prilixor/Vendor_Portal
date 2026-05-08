@@ -4,6 +4,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { StatCard } from "@/app/components/shared/StatCard";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { Button } from "@/app/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { Package, CheckCircle2, Boxes, Bell, Plus, ArrowUpRight, Clock, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -61,6 +62,27 @@ const Dashboard = () => {
   const [businessName, setBusinessName] = useState<string>("");
   const [isVerified, setIsVerified] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState("Complete your onboarding verifications.");
+  const [accountStatus, setAccountStatus] = useState<string | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      vendorOnboardingApi.getVendorStatus(user.id)
+        .then(status => {
+          setAccountStatus(status.accountStatus);
+        })
+        .catch(() => {
+          setAccountStatus(null);
+        })
+        .finally(() => {
+          setStatusLoading(false);
+        });
+    } else {
+      setStatusLoading(false);
+    }
+  }, [user]);
+
+  const isPending = accountStatus === "pending" || statusLoading;
 
   const [totalListings, setTotalListings] = useState(0);
   const [activeListings, setActiveListings] = useState(0);
@@ -182,13 +204,30 @@ const Dashboard = () => {
     <div>
       <PageHeader
         title={`Welcome back, ${greetingName}`}
-        description="Here's what's happening with your rentals today."
+        description={isPending ? "Your account is pending approval. Explore the platform while we review your application." : "Here's what's happening with your rentals today."}
         actions={
           <>
             <Button variant="outline" onClick={() => navigate("/vendor/inventory")}>View inventory</Button>
-            <Button onClick={() => navigate("/vendor/products")} className="bg-gradient-primary shadow-glow">
-              <Plus className="mr-2 h-4 w-4" /> Add listing
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-block">
+                    <Button 
+                      onClick={() => navigate("/vendor/products")} 
+                      className="bg-gradient-primary shadow-glow"
+                      disabled={isPending}
+                    >
+                      <Plus className="mr-2 h-4 w-4" /> Add listing
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {isPending && (
+                  <TooltipContent side="bottom">
+                    <p>Available once your account is approved</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           </>
         }
       />

@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Role, User } from "@/app/models";
 import { authApi } from "@/app/services/authApi";
-import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 
 interface AuthContextValue {
   user: User | null;
@@ -60,25 +59,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (email: string, password: string, role: Role) => {
     const result = await authApi.login(email, password, role);
     persist(result.user);
-
-    // For vendor users, check onboarding status and redirect if incomplete
-    if (role === "vendor") {
-      try {
-        const status = await vendorOnboardingApi.getVendorStatus(result.user.id);
-        // Only redirect to onboarding if account_status is pending
-        if (status.accountStatus === "pending") {
-          window.location.href = "/vendor/onboarding";
-        }
-      } catch (error) {
-        // If we can't check status, don't block login (fail open)
-        console.error("Failed to check onboarding status:", error);
-      }
-    }
+    // Vendors can now navigate freely - the pending banner will show on all pages
   };
 
   const register = async (email: string, password: string) => {
     await authApi.registerVendor(email, password);
-    // After registration, auto-login the user (login will handle onboarding redirect)
+    // After registration, auto-login the user (pending banner will show on all pages)
     await login(email, password, "vendor");
   };
 

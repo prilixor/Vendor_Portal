@@ -225,6 +225,12 @@ internal sealed class UpsertVendorProductListingCommandHandler(IVendorOnboarding
             return Result.Failure<VendorProductListingDto>(new Error("vendors.not_found", "Vendor not found.", ErrorCategory.NotFound));
         }
 
+        // Check if vendor account is pending
+        if (vendor.AccountStatus?.ToLowerInvariant() == "pending")
+        {
+            return Result.Failure<VendorProductListingDto>(new Error("vendors.account_pending", "Cannot create listings while account is pending approval.", ErrorCategory.Validation));
+        }
+
         var product = await repository.GetProductByIdAsync(productId, cancellationToken);
         if (product is null)
         {
@@ -282,6 +288,40 @@ internal sealed class UpsertVendorProductListingCommandHandler(IVendorOnboarding
             entity.SecurityDeposit,
             entity.AvailableQuantity,
             entity.ListingStatus));
+    }
+}
+
+public sealed record DeleteVendorProductListingCommand(string VendorId, string ListingId) : ICommand;
+
+public sealed class DeleteVendorProductListingCommandValidator : AbstractValidator<DeleteVendorProductListingCommand>
+{
+    public DeleteVendorProductListingCommandValidator()
+    {
+        RuleFor(x => x.VendorId).NotEmpty();
+        RuleFor(x => x.ListingId).NotEmpty();
+    }
+}
+
+internal sealed class DeleteVendorProductListingCommandHandler(IVendorOnboardingRepository repository)
+    : ICommandHandler<DeleteVendorProductListingCommand>
+{
+    public async Task<Result> Handle(DeleteVendorProductListingCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.VendorId, out var vendorId)
+            || !Guid.TryParse(request.ListingId, out var listingId))
+        {
+            return Result.Failure(new Error("vendors.listing.invalid_id", "Vendor/listing id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var listing = await repository.GetVendorProductListingByIdAsync(vendorId, listingId, cancellationToken);
+        if (listing is null)
+        {
+            return Result.Failure(new Error("vendors.listing.not_found", "Vendor listing not found.", ErrorCategory.NotFound));
+        }
+
+        await repository.DeleteVendorProductListingAsync(vendorId, listingId, cancellationToken);
+        await repository.SaveChangesAsync(cancellationToken);
+        return Result.Success();
     }
 }
 

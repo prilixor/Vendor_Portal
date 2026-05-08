@@ -7,6 +7,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { InventoryMovement, InventoryRecord } from "@/app/models";
 import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus } from "lucide-react";
 import { format } from "date-fns";
@@ -41,6 +42,19 @@ const Inventory = () => {
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [accountStatus, setAccountStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      vendorOnboardingApi.getVendorStatus(user.id).then(status => {
+        setAccountStatus(status.accountStatus);
+      }).catch(() => {
+        setAccountStatus(null);
+      });
+    }
+  }, [user]);
+
+  const isPending = accountStatus === "pending";
 
   const loadInventory = async () => {
     if (!user) return;
@@ -418,17 +432,52 @@ const Inventory = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openMovement(row, "in")} aria-label={`Add stock for ${row.productName}`} disabled={busy}>
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openMovement(row, "out")} aria-label={`Remove stock for ${row.productName}`} disabled={busy}>
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(row)} aria-label={`Edit ${row.productName} stock`} disabled={busy}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <TooltipProvider>
+                        <div className="flex justify-end gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-block">
+                                <Button variant="ghost" size="icon" onClick={() => openMovement(row, "in")} aria-label={`Add stock for ${row.productName}`} disabled={busy || isPending}>
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            {isPending && (
+                              <TooltipContent side="top">
+                                <p>Available once your account is approved</p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-block">
+                                <Button variant="ghost" size="icon" onClick={() => openMovement(row, "out")} aria-label={`Remove stock for ${row.productName}`} disabled={busy || isPending}>
+                                  <Minus className="h-4 w-4" />
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            {isPending && (
+                              <TooltipContent side="top">
+                                <p>Available once your account is approved</p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-block">
+                                <Button variant="ghost" size="icon" onClick={() => openEdit(row)} aria-label={`Edit ${row.productName} stock`} disabled={busy || isPending}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            {isPending && (
+                              <TooltipContent side="top">
+                                <p>Available once your account is approved</p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </div>
+                      </TooltipProvider>
                     </td>
                   </tr>
                 );

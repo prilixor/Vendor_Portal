@@ -311,6 +311,20 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
         return Task.CompletedTask;
     }
 
+    public async Task DeleteVendorProductListingAsync(Guid vendorId, Guid listingId, CancellationToken cancellationToken)
+    {
+        var listing = await dbContext.VendorProductListings
+            .FirstOrDefaultAsync(x => x.Id == listingId && x.VendorId == vendorId && !x.IsDeleted, cancellationToken);
+
+        if (listing is not null)
+        {
+            listing.IsDeleted = true;
+            listing.DeletedAt = DateTimeOffset.UtcNow;
+            listing.DeletedBy = vendorId;
+            dbContext.VendorProductListings.Update(listing);
+        }
+    }
+
     public Task<List<VendorProductListing>> GetVendorProductListingsAsync(Guid vendorId, CancellationToken cancellationToken)
     {
         return dbContext.VendorProductListings

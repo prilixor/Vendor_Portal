@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Switch } from "@/app/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { ProductListing } from "@/app/models";
@@ -80,6 +81,19 @@ const Products = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [accountStatus, setAccountStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      vendorOnboardingApi.getVendorStatus(user.id).then(status => {
+        setAccountStatus(status.accountStatus);
+      }).catch(() => {
+        setAccountStatus(null);
+      });
+    }
+  }, [user]);
+
+  const isPending = accountStatus === "pending";
   const [statusConfirmId, setStatusConfirmId] = useState<string | null>(null);
   const [statusConfirmAction, setStatusConfirmAction] = useState<'activate' | 'deactivate' | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -536,9 +550,22 @@ const Products = () => {
         title="Products"
         description="Manage your rental catalog. Add new listings, set pricing, and control availability."
         actions={
-          <Button onClick={openNew} className="bg-gradient-primary shadow-glow" disabled={busy}>
-            <Plus className="mr-2 h-4 w-4" /> New listing
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-block">
+                  <Button onClick={openNew} className="bg-gradient-primary shadow-glow" disabled={busy || isPending}>
+                    <Plus className="mr-2 h-4 w-4" /> New listing
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {isPending && (
+                <TooltipContent side="bottom">
+                  <p>Available once your account is approved</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         }
       />
 

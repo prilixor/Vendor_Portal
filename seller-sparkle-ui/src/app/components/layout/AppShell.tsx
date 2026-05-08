@@ -1,4 +1,4 @@
-import { Outlet, Navigate, useLocation } from "react-router-dom";
+import { Outlet, Navigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
@@ -6,6 +6,7 @@ import { vendorNav, adminNav } from "@/app/helpers/navigation";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { NotificationProvider, useNotificationContext } from "@/app/contexts/NotificationContext";
+import { PendingApprovalBanner } from "@/app/components/vendor/PendingApprovalBanner";
 
 interface AppShellProps {
 
@@ -26,32 +27,27 @@ interface AppShellProps {
 export const AppShell = ({ variant }: AppShellProps) => {
   const { user, isHydrating } = useAuth();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [onboardingCheckDone, setOnboardingCheckDone] = useState(false);
-  const [shouldRedirectToOnboarding, setShouldRedirectToOnboarding] = useState(false);
-  const location = useLocation();
+  const [accountStatus, setAccountStatus] = useState<string | null>(null);
+  const [statusCheckDone, setStatusCheckDone] = useState(false);
 
-  // Check vendor onboarding status for vendor routes (non-blocking)
+  // Check vendor account status for vendor routes
   useEffect(() => {
     if (variant === "vendor" && user) {
-      const checkOnboardingStatus = async () => {
+      const checkAccountStatus = async () => {
         try {
           const status = await vendorOnboardingApi.getVendorStatus(user.id);
-          // Only redirect to onboarding if account_status is pending
-          if (status.accountStatus === "pending") {
-            setShouldRedirectToOnboarding(true);
-          }
+          setAccountStatus(status.accountStatus);
         } catch (error) {
-          // If we can't fetch status, allow access (fail open)
-          console.error("Failed to check onboarding status:", error);
-          setShouldRedirectToOnboarding(false);
+          console.error("Failed to check account status:", error);
+          setAccountStatus(null);
         } finally {
-          setOnboardingCheckDone(true);
+          setStatusCheckDone(true);
         }
       };
 
-      checkOnboardingStatus();
+      checkAccountStatus();
     } else {
-      setOnboardingCheckDone(true);
+      setStatusCheckDone(true);
     }
   }, [variant, user]);
 
@@ -66,10 +62,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
     return <Navigate to="/login" replace />;
   }
 
-  // Redirect to onboarding if needed and not already on onboarding page
-  if (variant === "vendor" && onboardingCheckDone && shouldRedirectToOnboarding && location.pathname !== "/vendor/onboarding") {
-    return <Navigate to="/vendor/onboarding" replace />;
-  }
+  const isPending = accountStatus === "pending";
 
 
 
@@ -144,6 +137,9 @@ export const AppShell = ({ variant }: AppShellProps) => {
           <TopBar onMenuClick={() => setMobileSidebarOpen(true)} />
           <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-7xl">
+              {variant === "vendor" && statusCheckDone && isPending && (
+                <PendingApprovalBanner className="mb-6" />
+              )}
               <Outlet />
             </div>
           </main>

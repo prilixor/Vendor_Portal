@@ -13,6 +13,7 @@ const errorMessages: Record<string, string> = {
   "vendors.invalid_id": "Invalid vendor ID provided.",
   "vendors.not_found": "Vendor not found.",
   "vendors.invalid_status": "Vendor status is invalid for this action.",
+  "vendors.account_pending": "Your account is pending approval. You'll be able to add products once approved.",
   "vendors.no_documents": "Vendor must upload at least one document before approval.",
   "vendors.insufficient_documents": "Vendor must upload exactly 5 documents.",
   "vendors.documents_not_approved": "All documents must be approved before vendor can be approved.",
