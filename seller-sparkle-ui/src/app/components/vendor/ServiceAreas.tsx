@@ -4,6 +4,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { ServiceArea } from "@/app/models";
 import { Plus, MapPin, Pencil, Trash2, X } from "lucide-react";
@@ -156,7 +157,39 @@ const ServiceAreas = () => {
       />
 
       {!hasLoaded && busy && (
-        <Card className="mb-4 border-border/60 p-4 text-sm text-muted-foreground">Loading service areas...</Card>
+        <div className="space-y-4">
+          {/* Service Areas Grid Skeleton */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <Card key={i} className="p-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-4" />
+                      <Skeleton className="h-5 w-24" />
+                    </div>
+                    <div className="flex gap-1">
+                      <Skeleton className="h-8 w-8" />
+                      <Skeleton className="h-8 w-8" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-4 w-28" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
       )}
       {loadError && (
         <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>

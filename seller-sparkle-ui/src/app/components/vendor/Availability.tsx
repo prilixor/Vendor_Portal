@@ -5,6 +5,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Switch } from "@/app/components/ui/switch";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { Calendar } from "@/app/components/ui/calendar";
 import { AvailabilityOverride } from "@/app/models";
 import { format } from "date-fns";
@@ -124,7 +125,39 @@ const Availability = () => {
       />
 
       {!hasLoaded && busy && (
-        <Card className="mb-4 border-border/60 p-4 text-sm text-muted-foreground">Loading availability overrides...</Card>
+        <div className="space-y-6">
+          {/* Calendar Skeleton */}
+          <Card className="p-4">
+            <Skeleton className="h-6 w-32 mb-4" />
+            <div className="grid grid-cols-7 gap-1">
+              {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                <Skeleton key={i} className="h-8 w-full" />
+              ))}
+              {[...Array(35)].map((_, i) => (
+                <Skeleton key={`day-${i}`} className="h-10 w-full" />
+              ))}
+            </div>
+          </Card>
+          
+          {/* Availability Overrides Skeleton */}
+          <Card className="p-4">
+            <div className="space-y-4">
+              <Skeleton className="h-6 w-40" />
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex items-center justify-between border-b border-border pb-4 last:border-0">
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-4">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-6 w-16" />
+                    </div>
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                  <Skeleton className="h-8 w-8" />
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
       )}
       {loadError && (
         <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>

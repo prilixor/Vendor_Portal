@@ -45,7 +45,36 @@ export const AppShell = ({ variant }: AppShellProps) => {
         }
       };
 
+      // Initial check
       checkAccountStatus();
+
+      // Set up periodic checking for pending vendors (every 30 seconds)
+      const interval = setInterval(() => {
+        // Only check if currently pending (check current state)
+        setAccountStatus(currentStatus => {
+          if (currentStatus === "pending") {
+            checkAccountStatus();
+          }
+          return currentStatus;
+        });
+      }, 30000);
+
+      // Also check when window gains focus (user returns to the tab)
+      const handleFocus = () => {
+        setAccountStatus(currentStatus => {
+          if (currentStatus === "pending") {
+            checkAccountStatus();
+          }
+          return currentStatus;
+        });
+      };
+
+      window.addEventListener('focus', handleFocus);
+
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('focus', handleFocus);
+      };
     } else {
       setStatusCheckDone(true);
     }

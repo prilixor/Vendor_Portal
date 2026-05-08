@@ -93,6 +93,16 @@ const Notifications = () => {
     void loadNotificationData();
   }, [user]);
 
+  // Refresh notifications when window gains focus (user returns to the tab)
+  useEffect(() => {
+    const handleFocus = () => {
+      void loadNotificationData();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [user]);
+
   const { isSubscribed, subscribe, unsubscribe } = usePushNotifications();
 
   const updatePreference = async (next: typeof prefs) => {

@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/app/components/ui/command";
-import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye, Building2, ChevronLeft, MoreVertical, ChevronDown, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye, Building2, ChevronLeft, MoreVertical, ChevronDown, Check, Loader2 } from "lucide-react";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { BankDetails, BusinessProfile, VendorDocument, VerificationStatus } from "@/app/models";
@@ -54,68 +55,7 @@ const defaultBank: BankDetails = {
   status: "pending",
 };
 
-// Indian States and Cities data - now fetched from API
-// const indianStates = [
-//   "Andhra Pradesh",
-//   "Arunachal Pradesh",
-//   "Assam",
-//   "Bihar",
-//   "Chhattisgarh",
-//   "Goa",
-//   "Gujarat",
-//   "Haryana",
-//   "Himachal Pradesh",
-//   "Jharkhand",
-//   "Karnataka",
-//   "Kerala",
-//   "Madhya Pradesh",
-//   "Maharashtra",
-//   "Manipur",
-//   "Meghalaya",
-//   "Mizoram",
-//   "Nagaland",
-//   "Odisha",
-//   "Punjab",
-//   "Rajasthan",
-//   "Sikkim",
-//   "Tamil Nadu",
-//   "Telangana",
-//   "Tripura",
-//   "Uttar Pradesh",
-//   "Uttarakhand",
-//   "West Bengal",
-// ];
 
-// const stateCities: Record<string, string[]> = {
-//   "Andhra Pradesh": ["Adoni", "Amaravati", "Anantapur", "Bhimavaram", "Chittoor", "Dharmavaram", "Eluru", "Gudivada", "Guntakal", "Guntur", "Hindupur", "Kadapa", "Kakinada", "Kavali", "Kurnool", "Machilipatnam", "Madanapalle", "Nandyal", "Narasaraopet", "Nellore", "Ongole", "Proddatur", "Rajahmundry", "Srikakulam", "Tadepalligudem", "Tadipatri", "Tenali", "Tirupati", "Vijayawada", "Visakhapatnam", "Vizianagaram"],
-//   "Arunachal Pradesh": ["Along", "Bomdila", "Itanagar", "Naharlagun", "Pasighat", "Roing", "Tezu", "Ziro"],
-//   "Assam": ["Barpeta", "Bongaigaon", "Dhubri", "Dibrugarh", "Diphu", "Goalpara", "Guwahati", "Jorhat", "Karimganj", "Lanka", "Lumding", "Mangaldoi", "Nagaon", "Nalbari", "North Lakhimpur", "Sibsagar", "Silchar", "Tezpur", "Tinsukia"],
-//   "Bihar": ["Arrah", "Aurangabad", "Bagaha", "Bettiah", "Bhagalpur", "Bihar Sharif", "Buxar", "Chapra", "Darbhanga", "Dehri", "Gaya", "Hajipur", "Jamalpur", "Katihar", "Kishanganj", "Munger", "Muzaffarpur", "Nawada", "Patna", "Purnia", "Sasaram", "Siwan", "Sitamarhi"],
-//   "Chhattisgarh": ["Ambikapur", "Bhilai", "Bilaspur", "Chirmiri", "Dhamtari", "Durg", "Jagdalpur", "Korba", "Raigarh", "Raipur", "Rajnandgaon"],
-//   "Goa": ["Bicholim", "Curchorem", "Mapusa", "Margao", "Mormugao", "Panaji", "Ponda", "Quepem", "Sanguem", "Vasco da Gama"],
-//   "Gujarat": ["Ahmedabad", "Amreli", "Anand", "Ankleshwar", "Bardoli", "Bharuch", "Bhavnagar", "Bhuj", "Botad", "Dahod", "Deesa", "Gandhidham", "Gandhinagar", "Godhra", "Gondal", "Jamnagar", "Jetpur", "Junagadh", "Kalol", "Khambhat", "Mehsana", "Modasa", "Morvi", "Nadiad", "Navsari", "Palanpur", "Patan", "Porbandar", "Rajkot", "Surat", "Surendranagar", "Vadodara", "Valsad", "Veraval", "Vapi"],
-//   "Haryana": ["Ambala", "Ambala Cantt", "Bahadurgarh", "Bhiwani", "Faridabad", "Fatehabad", "Gurgaon", "Hisar", "Jhajjar", "Jind", "Kaithal", "Karnal", "Kurukshetra", "Mahendragarh", "Narnaul", "Narwana", "Palwal", "Panchkula", "Panipat", "Rewari", "Rohtak", "Sirsa", "Sonipat", "Thanesar", "Yamunanagar"],
-//   "Himachal Pradesh": ["Baddi", "Bilaspur", "Chamba", "Dalhousie", "Dharamshala", "Hamirpur", "Kangra", "Kullu", "Mandi", "Nahan", "Palampur", "Shimla", "Solan", "Sundarnagar", "Una"],
-//   "Jharkhand": ["Adityapur", "Bokaro Steel City", "Chaibasa", "Chatra", "Chirkunda", "Deoghar", "Dhanbad", "Dumka", "Giridih", "Godda", "Hazaribagh", "Jamshedpur", "Jhumri Tilaiya", "Jharia", "Koderma", "Medininagar", "Mihijam", "Musabani", "Pakur", "Phusro", "Ramgarh", "Ranchi", "Sahibganj"],
-//   "Karnataka": ["Bagalkot", "Ballari", "Bangalore", "Belgaum", "Bhadravati", "Bidar", "Bijapur", "Chamarajanagar", "Chikmagalur", "Chikkaballapur", "Chitradurga", "Davanagere", "Dharwad", "Gadag", "Gulbarga", "Hassan", "Haveri", "Hubli", "Kolar", "Koppal", "Madikeri", "Mandya", "Mangalore", "Mysore", "Raichur", "Ramanagara", "Ranebennur", "Shimoga", "Tumkur", "Udupi", "Vijayapura"],
-//   "Kerala": ["Alappuzha", "Aluva", "Angamaly", "Attingal", "Chalakudy", "Changanassery", "Cherthala", "Ernakulam", "Guruvayur", "Kannur", "Kasaragod", "Kayamkulam", "Kochi", "Kodungallur", "Kollam", "Kottayam", "Kozhikode", "Malappuram", "Manjeri", "Neyyattinkara", "Nilambur", "Palakkad", "Ponnani", "Thalassery", "Thiruvananthapuram", "Thrissur", "Tirur"],
-//   "Madhya Pradesh": ["Balaghat", "Barwani", "Betul", "Bhopal", "Burhanpur", "Chhindwara", "Chhatarpur", "Damoh", "Dewas", "Dhar", "Guna", "Gwalior", "Hoshangabad", "Indore", "Itarsi", "Jabalpur", "Katni", "Khandwa", "Khargone", "Mandsaur", "Morena", "Narsinghpur", "Neemuch", "Pithampur", "Ratlam", "Rewa", "Sagar", "Satna", "Sehore", "Seoni", "Shahdol", "Shivpuri", "Singrauli", "Ujjain", "Vidisha"],
-//   "Maharashtra": ["Ahmednagar", "Akola", "Amravati", "Aurangabad", "Bhiwandi", "Chandrapur", "Dhule", "Gondia", "Ichalkaranji", "Jalgaon", "Jalna", "Kalyan", "Kolhapur", "Latur", "Malegaon", "Mira-Bhayandar", "Mumbai", "Nagpur", "Nanded", "Nashik", "Navi Mumbai", "Osmanabad", "Palghar", "Parbhani", "Pimpri-Chinchwad", "Pune", "Raigad", "Ratnagiri", "Sangli", "Satara", "Solapur", "Thane", "Ulhasnagar", "Vasai-Virar", "Wardha", "Yavatmal"],
-//   "Manipur": ["Bishnupur", "Churachandpur", "Imphal", "Kakching", "Lilong", "Mayang Imphal", "Thoubal", "Ukhrul"],
-//   "Meghalaya": ["Baghmara", "Cherrapunji", "Jowai", "Nongpoh", "Nongstoin", "Shillong", "Tura", "Williamnagar"],
-//   "Mizoram": ["Aizawl", "Champhai", "Kolasib", "Lawngtlai", "Lunglei", "Mamit", "Saiha", "Serchhip"],
-//   "Nagaland": ["Dimapur", "Kohima", "Mokokchung", "Mon", "Tuensang", "Wokha", "Zunheboto"],
-//   "Odisha": ["Balangir", "Balasore", "Barbil", "Bargarh", "Baripada", "Berhampur", "Bhadrak", "Bhubaneswar", "Brahmapur", "Cuttack", "Dhenkanal", "Jagatsinghpur", "Jajpur", "Jeypore", "Jharsuguda", "Kendrapara", "Kendujhar", "Paradip", "Puri", "Rourkela", "Sambalpur", "Sunabeda"],
-//   "Punjab": ["Abohar", "Amritsar", "Barnala", "Batala", "Bathinda", "Fazilka", "Ferozepur", "Hoshiarpur", "Jalandhar", "Kapurthala", "Khanna", "Ludhiana", "Malerkotla", "Mandi Gobindgarh", "Moga", "Mohali", "Muktsar", "Nabha", "Pathankot", "Patiala", "Phagwara", "Rajpura", "Sangrur"],
-//   "Rajasthan": ["Ajmer", "Alwar", "Banswara", "Baran", "Barmer", "Beawar", "Bharatpur", "Bhilwara", "Bikaner", "Bundi", "Chittorgarh", "Churu", "Dausa", "Dholpur", "Ganganagar", "Hanumangarh", "Jaipur", "Jaisalmer", "Jalore", "Jhunjhunu", "Jodhpur", "Karauli", "Kishangarh", "Kota", "Nagaur", "Pali", "Pratapgarh", "Rajsamand", "Sikar", "Sirohi", "Sri Ganganagar", "Tonk", "Udaipur"],
-//   "Sikkim": ["Gangtok", "Geyzing", "Jorethang", "Mangan", "Namchi", "Naya Bazar", "Rangpo", "Singtam"],
-//   "Tamil Nadu": ["Ambur", "Ariyalur", "Arakkonam", "Aruppukkottai", "Chennai", "Coimbatore", "Cuddalore", "Dharmapuri", "Dindigul", "Erode", "Hosur", "Kanchipuram", "Karaikudi", "Karur", "Kovilpatti", "Kumbakonam", "Madurai", "Mayiladuthurai", "Nagapattinam", "Nagercoil", "Namakkal", "Neyveli", "Ooty", "Pollachi", "Pudukkottai", "Rajapalayam", "Salem", "Sivakasi", "Thanjavur", "Theni", "Thoothukudi", "Tiruchirappalli", "Tirunelveli", "Tiruppur", "Tiruvannamalai", "Udhagamandalam", "Vaniyambadi", "Vellore", "Villupuram", "Virudhunagar"],
-//   "Telangana": ["Adilabad", "Hyderabad", "Jagtial", "Karimnagar", "Khammam", "Mahbubnagar", "Mancherial", "Miryalaguda", "Nalgonda", "Nizamabad", "Ramagundam", "Sangareddy", "Siddipet", "Suryapet", "Warangal"],
-//   "Tripura": ["Agartala", "Belonia", "Dharmanagar", "Kailasahar", "Khowai", "Pratapgarh", "Sabroom", "Udaipur"],
-//   "Uttar Pradesh": ["Agra", "Aligarh", "Allahabad", "Amroha", "Azamgarh", "Bahraich", "Ballia", "Banda", "Barabanki", "Bareilly", "Basti", "Bhadohi", "Bijnor", "Budaun", "Bulandshahr", "Chandausi", "Chitrakoot", "Deoria", "Etah", "Etawah", "Faizabad", "Farrukhabad", "Fatehpur", "Firozabad", "Ghaziabad", "Gonda", "Gorakhpur", "Hapur", "Hardoi", "Hathras", "Jaunpur", "Jhansi", "Kannauj", "Kanpur", "Kasganj", "Khurja", "Lakhimpur", "Lalitpur", "Lucknow", "Mainpuri", "Mathura", "Mau", "Meerut", "Mirzapur", "Modinagar", "Moradabad", "Muzaffarnagar", "Noida", "Orai", "Pilibhit", "Prayagraj", "Raebareli", "Rampur", "Saharanpur", "Sambhal", "Shahjahanpur", "Shamli", "Sitapur", "Sultanpur", "Unnao", "Varanasi"],
-//   "Uttarakhand": ["Almora", "Bageshwar", "Chamoli", "Champawat", "Dehradun", "Haldwani", "Haridwar", "Kashipur", "Kotdwar", "Mussoorie", "Nainital", "Pauri", "Pithoragarh", "Rishikesh", "Roorkee", "Rudrapur", "Tehri", "Udham Singh Nagar", "Uttarkashi"],
-//   "West Bengal": ["Asansol", "Baharampur", "Bally", "Balurghat", "Bankura", "Baranagar", "Barasat", "Barrackpore", "Basirhat", "Bhatpara", "Bidhan Nagar", "Burnpur", "Chandannagar", "Dankuni", "Darjeeling", "Durgapur", "Habra", "Haldia", "Howrah", "Jalpaiguri", "Kalyani", "Kharagpur", "Krishnanagar", "Malda", "Medinipur", "Nabadwip", "North Dumdum", "Panihati", "Purulia", "Raiganj", "Ranaghat", "Shantipur", "Siliguri", "South Dumdum", "Uluberia"],
-// };
 
 const Onboarding = () => {
   const { user } = useAuth();
@@ -130,6 +70,8 @@ const Onboarding = () => {
   const [hasSubmittedBefore, setHasSubmittedBefore] = useState(false);
   const [viewMode, setViewMode] = useState<"onboarding" | "profile">("onboarding");
   const [editingSection, setEditingSection] = useState<number | null>(null);
+  const [originalProfile, setOriginalProfile] = useState<BusinessProfile | null>(null);
+  const [originalBank, setOriginalBank] = useState<BankDetails | null>(null);
   const [activeTab, setActiveTab] = useState("profile");
   const [documentType, setDocumentType] = useState("GST Certificate");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -604,6 +546,12 @@ const Onboarding = () => {
   };
 
   const handleEditSection = (sectionIndex: number) => {
+    // Store original values before editing so we can restore on cancel
+    if (sectionIndex === 1) {
+      setOriginalProfile({ ...profile });
+    } else if (sectionIndex === 3) {
+      setOriginalBank({ ...bank });
+    }
     setEditingSection(sectionIndex);
     setStep(sectionIndex);
   };
@@ -648,16 +596,126 @@ const Onboarding = () => {
   };
 
   const handleCancelEdit = () => {
+    // Restore original values when canceling edit
+    if (editingSection === 1 && originalProfile) {
+      setProfile(originalProfile);
+      setOriginalProfile(null);
+    } else if (editingSection === 3 && originalBank) {
+      setBank(originalBank);
+      setOriginalBank(null);
+    }
     setEditingSection(null);
   };
 
   // Show loading state until data is fully loaded to prevent UI flicker
   if (!hasLoaded) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
+      <div className="min-h-[60vh] p-6">
+        {/* Header Skeleton */}
+        <div className="mb-8 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-64" />
+              <Skeleton className="h-4 w-48" />
+            </div>
+            <Skeleton className="h-10 w-32" />
+          </div>
+        </div>
+
+        {/* Stepper Skeleton */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between gap-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex flex-1 items-center gap-2">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <div className="hidden flex-1 space-y-1 sm:block">
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-2 w-2/3" />
+                </div>
+                {i < 5 && <Skeleton className="hidden h-0.5 flex-1 sm:block" />}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Content Cards Skeleton */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-4">
+            <Card className="p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <Skeleton className="h-10 w-10 rounded-lg" />
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 pt-4">
+                  <Skeleton className="h-10 w-24" />
+                  <Skeleton className="h-10 w-24" />
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <Skeleton className="h-10 w-10 rounded-lg" />
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-4">
+            <Card className="p-6">
+              <Skeleton className="mb-4 h-5 w-24" />
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <Skeleton className="h-8 w-8 rounded" />
+                    <div className="flex-1 space-y-1">
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-2 w-2/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <Skeleton className="mb-4 h-5 w-32" />
+              <div className="space-y-3">
+                {[1, 2].map((i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
         </div>
       </div>
     );

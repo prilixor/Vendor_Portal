@@ -552,6 +552,16 @@ export const vendorOnboardingApi = {
     return apiClient.get<number>(`/vendors/${vendorId}/notifications/unread-count`);
   },
 
+  createNotification(vendorId: string, title: string, message: string, type: string = "info") {
+    return apiClient.post<VendorNotificationDto>(`/vendors/${vendorId}/notifications`, {
+      vendorId,
+      title,
+      message,
+      notificationType: type,
+      channel: "system", // Required field - using 'system' as default channel
+    });
+  },
+
   // CountryStateCity API methods
   getIndianStates() {
     return fetch("https://api.countrystatecity.in/v1/countries/IN/states", {

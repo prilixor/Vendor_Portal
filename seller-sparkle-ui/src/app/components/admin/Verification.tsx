@@ -5,6 +5,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw, FileText, Eye, Building, AlertCircle } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
@@ -13,6 +14,7 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto } from "@/app/services/adminApi";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
 const getApiOrigin = (): string | null => {
@@ -238,6 +240,15 @@ const Verification = () => {
         verificationStatus,
         notes,
       });
+      
+      // Only create notification for approvals (backend handles rejections)
+      if (verificationStatus === "approved") {
+        const title = "Bank Account Verified";
+        const message = "Your bank account has been successfully verified by the admin.";
+        
+        await vendorOnboardingApi.createNotification(vendorId, title, message, "success");
+      }
+      
       await loadBankAccounts(vendorId);
       await loadVendors();
       toast.success(`Bank account ${verificationStatus}.`);
@@ -475,8 +486,23 @@ const Verification = () => {
                   <span className="text-xs text-muted-foreground">{documents.length} uploaded</span>
                 </div>
                 {loadingDocs ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex items-center justify-between p-3 border border-border/60 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-8 w-8 rounded" />
+                          <div className="space-y-1">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-3 w-24" />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-6 w-16" />
+                          <Skeleton className="h-8 w-8" />
+                          <Skeleton className="h-8 w-8" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : documents.length > 0 ? (
                   <div className="space-y-2">
@@ -549,8 +575,23 @@ const Verification = () => {
                   <span className="text-xs text-muted-foreground">{bankAccounts.length} added</span>
                 </div>
                 {loadingBanks ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex items-center justify-between p-3 border border-border/60 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-8 w-8 rounded" />
+                          <div className="space-y-1">
+                            <Skeleton className="h-4 w-40" />
+                            <Skeleton className="h-3 w-32" />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-6 w-16" />
+                          <Skeleton className="h-8 w-8" />
+                          <Skeleton className="h-8 w-8" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : bankAccounts.length > 0 ? (
                   <div className="space-y-2">

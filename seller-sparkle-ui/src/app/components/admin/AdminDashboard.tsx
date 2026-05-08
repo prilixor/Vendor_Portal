@@ -3,6 +3,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { StatCard } from "@/app/components/shared/StatCard";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { adminApi, AdminAuditLogDto, VendorDto } from "@/app/services/adminApi";
 import { Building2, Clock, CheckCircle2, ScrollText, ArrowUpRight, Loader2 } from "lucide-react";
@@ -68,8 +69,24 @@ const AdminDashboard = () => {
             </Button>
           </div>
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <li key={i} className="p-4 border border-border/60 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-8 w-8 rounded" />
+                      <div className="space-y-1">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-6 w-16" />
+                      <Skeleton className="h-8 w-8" />
+                    </div>
+                  </div>
+                </li>
+              ))}
             </div>
           ) : (
             <ul className="divide-y divide-border">
@@ -104,8 +121,16 @@ const AdminDashboard = () => {
             <h2 className="font-semibold">Recent audit events (Last 7 days)</h2>
           </div>
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <li key={i} className="p-3 border border-border/60 rounded-lg">
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-3 w-48" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                </li>
+              ))}
             </div>
           ) : (
             <ul className="divide-y divide-border">
