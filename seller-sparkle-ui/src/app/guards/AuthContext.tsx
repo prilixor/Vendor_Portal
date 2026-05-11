@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Role, User } from "@/app/models";
 import { authApi } from "@/app/services/authApi";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 
 interface AuthContextValue {
   user: User | null;
@@ -63,7 +64,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const register = async (email: string, password: string) => {
-    await authApi.registerVendor(email, password);
+    const result = await authApi.registerVendor(email, password);
+    
+    // Set notification preferences: push OFF by default, email ON
+    try {
+      await vendorOnboardingApi.upsertVendorNotificationPreference(result.id, {
+        vendorId: result.id,
+        emailNotificationsEnabled: true,
+        pushNotificationsEnabled: false,
+        newOrderNotifications: true,
+      });
+    } catch (error) {
+      console.error("Failed to set notification preferences:", error);
+    }
+    
     // After registration, auto-login the user (pending banner will show on all pages)
     await login(email, password, "vendor");
   };

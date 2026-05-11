@@ -497,8 +497,8 @@ const Products = () => {
           )
         );
       }
-      toast.success("Media updated");
       setMediaFor(null);
+      toast.success("Media updated");
     } catch (error) {
       const message = getUserFriendlyMessage(error);
       toast.error(message);
@@ -629,7 +629,7 @@ const Products = () => {
         </div>
       )}
 
-      {hasLoaded && !busy && (
+      {hasLoaded && (
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
         {loadError && (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-2 text-sm text-destructive">
@@ -707,7 +707,7 @@ const Products = () => {
                   </td>
                 </tr>
               ))}
-              {hasLoaded && !busy && filtered.length === 0 && (
+              {hasLoaded && filtered.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-3 py-8 text-center text-sm text-muted-foreground sm:px-4">
                     {products.length === 0
@@ -798,7 +798,13 @@ const Products = () => {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)} disabled={busy}>Cancel</Button>
-            <Button onClick={() => void save()} disabled={busy}>Save listing</Button>
+            <Button onClick={() => void save()} disabled={busy}>
+              {busy ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+              ) : (
+                "Save listing"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1154,7 +1160,13 @@ const Products = () => {
             <Button variant="outline" onClick={() => setMediaFor(null)} disabled={busy}>
               <X className="mr-2 h-4 w-4" /> Close
             </Button>
-            <Button onClick={() => void saveMedia()} disabled={busy}>Save changes</Button>
+            <Button onClick={() => void saveMedia()} disabled={busy}>
+              {busy ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+              ) : (
+                "Save changes"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

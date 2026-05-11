@@ -10,7 +10,7 @@ import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { InventoryMovement, InventoryRecord } from "@/app/models";
-import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus } from "lucide-react";
+import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
@@ -317,9 +317,15 @@ const Inventory = () => {
       // Execute all movement additions
       await Promise.all(movements);
 
-      await loadInventory();
-      setEditingRow(null);
-      toast.success("Inventory updated.");
+      // Reload inventory while dialog stays open (showing loading state)
+      try {
+        await loadInventory();
+        setEditingRow(null);
+        toast.success("Inventory updated.");
+      } catch (err) {
+        console.error("Failed to reload inventory after edit:", err);
+        toast.error("Changes saved but failed to refresh inventory. Please reload the page.");
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update inventory.";
       toast.error(message);
@@ -365,9 +371,15 @@ const Inventory = () => {
         notes: movementType === "in" ? "Manual stock add from vendor UI" : "Manual stock remove from vendor UI",
       });
 
-      await loadInventory();
-      setMovementRow(null);
-      toast.success(movementType === "in" ? "Stock added." : "Stock removed.");
+      // Reload inventory while dialog stays open (showing loading state)
+      try {
+        await loadInventory();
+        setMovementRow(null);
+        toast.success(movementType === "in" ? "Stock added." : "Stock removed.");
+      } catch (err) {
+        console.error("Failed to reload inventory after movement:", err);
+        toast.error("Changes saved but failed to refresh inventory. Please reload the page.");
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save movement.";
       toast.error(message);
@@ -461,7 +473,7 @@ const Inventory = () => {
         <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
       )}
 
-      {hasLoaded && !busy && (
+      {hasLoaded && (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <StatCard label="Total" value={totals.total} icon={Boxes} accent="primary" />
@@ -559,7 +571,7 @@ const Inventory = () => {
                   </tr>
                 );
               })}
-              {hasLoaded && !busy && inventory.length === 0 && (
+              {hasLoaded && inventory.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     No listings found to track inventory yet.
@@ -636,7 +648,13 @@ const Inventory = () => {
             <Button variant="outline" onClick={() => setEditingRow(null)} disabled={busy}>
               Cancel
             </Button>
-            <Button onClick={() => void saveEdit()} disabled={busy}>Save stock</Button>
+            <Button onClick={() => void saveEdit()} disabled={busy}>
+              {busy ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+              ) : (
+                "Save stock"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -667,7 +685,13 @@ const Inventory = () => {
             <Button variant="outline" onClick={() => setMovementRow(null)} disabled={busy}>
               Cancel
             </Button>
-            <Button onClick={() => void saveMovement()} disabled={busy}>{movementType === "in" ? "Add Stock" : "Remove Stock"}</Button>
+            <Button onClick={() => void saveMovement()} disabled={busy}>
+              {busy ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {movementType === "in" ? "Adding..." : "Removing..."}</>
+              ) : (
+                movementType === "in" ? "Add Stock" : "Remove Stock"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
