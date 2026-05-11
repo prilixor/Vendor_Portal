@@ -10,7 +10,7 @@ import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/app/components/ui/command";
@@ -82,6 +82,7 @@ const Onboarding = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [previewDocument, setPreviewDocument] = useState<{ url: string; type: string } | null>(null);
+  const [deleteDocConfirmId, setDeleteDocConfirmId] = useState<string | null>(null);
   const [ifscLoading, setIfscLoading] = useState(false);
   const [ifscError, setIfscError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -390,15 +391,20 @@ const Onboarding = () => {
     }
   };
 
-  const removeDoc = async (id: string) => {
-    if (!user) return;
+  const removeDoc = (id: string) => {
+    setDeleteDocConfirmId(id);
+  };
+
+  const confirmRemoveDoc = async () => {
+    if (!user || !deleteDocConfirmId) return;
 
     try {
       setBusy(true);
-      await vendorOnboardingApi.deleteVendorDocument(user.id, id);
+      await vendorOnboardingApi.deleteVendorDocument(user.id, deleteDocConfirmId);
       const latestDocs = await vendorOnboardingApi.getVendorDocuments(user.id);
       setDocuments(mapDocuments(latestDocs));
       toast.success("Document deleted.");
+      setDeleteDocConfirmId(null);
     } catch (error) {
       const message = getUserFriendlyMessage(error);
       toast.error(message);
@@ -936,8 +942,8 @@ const Onboarding = () => {
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => previewDoc(doc)} disabled={busy}>
                                   <Eye className="h-4 w-4 text-muted-foreground" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeDoc(doc.id)} disabled={busy}>
-                                  <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => removeDoc(doc.id)} disabled={busy}>
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
                             </div>
@@ -994,8 +1000,8 @@ const Onboarding = () => {
                                 <Button variant="ghost" size="icon" onClick={() => previewDoc(doc)} disabled={busy}>
                                   <Eye className="h-4 w-4 text-muted-foreground" />
                                 </Button>
-                                <Button variant="ghost" size="icon" onClick={() => removeDoc(doc.id)} disabled={busy}>
-                                  <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => removeDoc(doc.id)} disabled={busy}>
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
                             </td>
@@ -1511,6 +1517,36 @@ const Onboarding = () => {
               )}
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Document Confirmation Dialog */}
+      <Dialog open={!!deleteDocConfirmId} onOpenChange={(open) => !open && setDeleteDocConfirmId(null)}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Document</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this document? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDocConfirmId(null)}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => confirmRemoveDoc()}
+              className="w-full sm:w-auto"
+              disabled={busy}
+            >
+              {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Delete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
