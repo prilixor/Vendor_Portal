@@ -232,7 +232,7 @@ public sealed class ForgotPasswordEndpoint(
             await repository.SaveChangesAsync(ct);
 
             // Send reset link email
-            var resetLink = $"http://localhost:5173/reset-password?token={token}";
+            var resetLink = $"https://vendor-portal-psi-amber.vercel.app/reset-password?token={token}";
             var subject = "Reset Your Password";
             var body = $@"
                 <h2>Password Reset Request</h2>

@@ -53,15 +53,25 @@ const genericMessages = {
  * Extract error code from error response
  */
 function extractErrorCode(error: unknown): string | null {
-  if (error && typeof error === "object") {
-    const err = error as ErrorResponse;
-    if (err.code) return err.code;
-    if (err.detail && typeof err.detail === "string") {
-      // Try to extract code from detail message if it contains error code pattern
-      const match = err.detail.match(/([a-z_]+\.[a-z_]+)/i);
-      if (match) return match[1];
-    }
+  if (!error || typeof error !== "object") return null;
+
+  const err = error as ErrorResponse & Error;
+
+  // Check for code property directly
+  if (err.code) return err.code;
+
+  // Check Error message for bracket format: "message [error.code]"
+  if (err.message && typeof err.message === "string") {
+    const bracketMatch = err.message.match(/\[([a-z_]+\.[a-z_]+)\]$/i);
+    if (bracketMatch) return bracketMatch[1];
   }
+
+  // Check detail property
+  if (err.detail && typeof err.detail === "string") {
+    const match = err.detail.match(/([a-z_]+\.[a-z_]+)/i);
+    if (match) return match[1];
+  }
+
   return null;
 }
 
@@ -70,17 +80,29 @@ function extractErrorCode(error: unknown): string | null {
  * Logs technical error to console and returns user-friendly message
  */
 export function getUserFriendlyMessage(error: unknown): string {
-  // Log technical error for debugging
-  console.error("[Technical Error]", error);
-
   // Check for network errors
   if (error instanceof TypeError && error.message.includes("fetch")) {
     return genericMessages.network;
   }
 
+  // Get the original error message if available
+  let originalMessage = "";
+  if (error instanceof Error) {
+    originalMessage = error.message;
+  } else if (error && typeof error === "object" && "message" in error) {
+    originalMessage = (error as ErrorResponse).message || "";
+  }
+
   // Check for error code in response
   const errorCode = extractErrorCode(error);
+
   if (errorCode && errorMessages[errorCode]) {
+    // If backend message already has useful dynamic content (like "Currently uploaded: 2/5"),
+    // and it's user-friendly (contains spaces, reasonable length), use it instead
+    const cleanMessage = originalMessage.replace(/\[[a-z_]+\.[a-z_]+\]$/i, "").trim();
+    if (cleanMessage.length > 10 && cleanMessage.includes(" ") && !cleanMessage.includes("Exception") && !cleanMessage.includes("Error:")) {
+      return cleanMessage;
+    }
     return errorMessages[errorCode];
   }
 

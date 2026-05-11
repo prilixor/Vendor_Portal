@@ -350,11 +350,18 @@ export interface RegisterPushSubscriptionPayload {
   auth: string;
 }
 
+export enum VendorFileFolderType {
+  Documents = 'Documents',
+  ProductImages = 'ProductImages',
+  ProductDocuments = 'ProductDocuments'
+}
+
 export const vendorOnboardingApi = {
-  uploadVendorFile(vendorId: string, file: File) {
+  uploadVendorFile(vendorId: string, file: File, folderType: VendorFileFolderType = VendorFileFolderType.Documents) {
     const data = new FormData();
     data.append("vendorId", vendorId);
     data.append("file", file);
+    data.append("folderType", folderType);
     return apiClient.postForm<UploadedFileResponse>("/files/upload", data);
   },
 

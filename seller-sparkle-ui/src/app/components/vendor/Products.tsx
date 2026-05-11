@@ -16,7 +16,7 @@ import { ProductListing } from "@/app/models";
 import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
-import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import { vendorOnboardingApi, VendorFileFolderType } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
 type LocalListing = ProductListing & {
@@ -447,7 +447,7 @@ const Products = () => {
       setBusy(true);
       const uploaded = await Promise.all(
         Array.from(files).map(async (file) => {
-          const fileResult = await vendorOnboardingApi.uploadVendorFile(user.id, file);
+          const fileResult = await vendorOnboardingApi.uploadVendorFile(user.id, file, VendorFileFolderType.ProductImages);
           return {
             id: `temp-${Date.now()}-${file.name}`,
             primary: false,
@@ -511,7 +511,7 @@ const Products = () => {
     if (!mediaFor || !user || !docFile) return;
     try {
       setBusy(true);
-      const fileResult = await vendorOnboardingApi.uploadVendorFile(user.id, docFile);
+      const fileResult = await vendorOnboardingApi.uploadVendorFile(user.id, docFile, VendorFileFolderType.ProductDocuments);
       await vendorOnboardingApi.addVendorProductDocument(user.id, mediaFor.id, {
         vendorId: user.id,
         listingId: mediaFor.id,
