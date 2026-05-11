@@ -141,7 +141,7 @@ internal sealed class CreateVendorNotificationCommandHandler(
         };
 
         await repository.AddVendorNotificationAsync(entity, cancellationToken);
-        // Note: SaveChanges is called by the calling handler to avoid DbContext concurrency issues
+        await repository.SaveChangesAsync(cancellationToken);
 
         // Send push notification if enabled
         var preferences = await repository.GetVendorNotificationPreferenceAsync(vendorId, cancellationToken);

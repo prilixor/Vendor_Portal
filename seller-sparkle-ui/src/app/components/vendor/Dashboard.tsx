@@ -7,6 +7,7 @@ import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { Button } from "@/app/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import { toCamelCase } from "@/app/helpers/utils";
 import { Package, CheckCircle2, Boxes, Bell, Plus, ArrowUpRight, Clock, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -199,7 +200,7 @@ const Dashboard = () => {
     void load();
   }, [user]);
 
-  const greetingName = useMemo(() => businessName || user?.name || "Vendor", [businessName, user?.name]);
+  const greetingName = useMemo(() => toCamelCase(businessName || user?.name || "Vendor"), [businessName, user?.name]);
 
   // Show skeleton loading state while data is loading
   if (loading || statusLoading) {
