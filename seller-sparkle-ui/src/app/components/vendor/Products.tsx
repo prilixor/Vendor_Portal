@@ -377,14 +377,16 @@ const Products = () => {
 
   const openMedia = async (p: LocalListing) => {
     if (!user) return;
+    // Open dialog immediately so listing doesn't go blank
+    setMediaFor(p);
+    setTempImages([]);
+    setListingDocuments([]);
     try {
-      setBusy(true);
       const [imagesRes, docsRes] = await Promise.all([
         vendorOnboardingApi.getVendorProductImages(user.id, p.id),
         vendorOnboardingApi.getVendorProductDocuments(user.id, p.id),
       ]);
 
-      setMediaFor(p);
       setTempImages(imagesRes
         .sort((a, b) => a.displayOrder - b.displayOrder)
         .map((img) => ({
@@ -397,8 +399,6 @@ const Products = () => {
     } catch (error) {
       const message = getUserFriendlyMessage(error);
       toast.error(message);
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -497,8 +497,8 @@ const Products = () => {
           )
         );
       }
-      toast.success("Media updated");
       setMediaFor(null);
+      toast.success("Media updated");
     } catch (error) {
       const message = getUserFriendlyMessage(error);
       toast.error(message);
@@ -629,7 +629,7 @@ const Products = () => {
         </div>
       )}
 
-      {hasLoaded && !busy && (
+      {hasLoaded && (
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
         {loadError && (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-2 text-sm text-destructive">
@@ -707,7 +707,7 @@ const Products = () => {
                   </td>
                 </tr>
               ))}
-              {hasLoaded && !busy && filtered.length === 0 && (
+              {hasLoaded && filtered.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-3 py-8 text-center text-sm text-muted-foreground sm:px-4">
                     {products.length === 0
@@ -798,7 +798,13 @@ const Products = () => {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)} disabled={busy}>Cancel</Button>
-            <Button onClick={() => void save()} disabled={busy}>Save listing</Button>
+            <Button onClick={() => void save()} disabled={busy}>
+              {busy ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+              ) : (
+                "Save listing"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1075,31 +1081,66 @@ const Products = () => {
                     <h4 className="text-sm font-medium text-foreground mb-3">Uploaded Documents</h4>
                     <div className="space-y-2">
                       {listingDocuments.map((doc) => (
-                        <div key={doc.id} className="flex items-center justify-between rounded-md border border-border p-3">
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium truncate">{doc.documentType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
-                              <p className="text-xs text-muted-foreground truncate">{doc.fileUrl.split('/').pop()}</p>
+                        <div key={doc.id} className="rounded-md border border-border p-3">
+                          {/* Desktop: horizontal layout */}
+                          <div className="hidden sm:flex items-center justify-between">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                                <FileText className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium truncate">{doc.documentType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+                                <p className="text-xs text-muted-foreground truncate">{doc.fileUrl.split('/').pop()}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => viewListingDoc(doc)}
+                                className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                              >
+                                <Eye className="h-4 w-4 mr-1" /> Preview
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteListingDoc(doc.id)}
+                                className="h-8 px-2 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-1" /> Remove
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => viewListingDoc(doc)}
-                              className="h-8 px-2 text-muted-foreground hover:text-foreground"
-                            >
-                              <Eye className="h-4 w-4 mr-1" /> Preview
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteListingDoc(doc.id)}
-                              className="h-8 px-2 text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4 mr-1" /> Remove
-                            </Button>
+                          {/* Mobile: vertical layout with buttons below */}
+                          <div className="sm:hidden">
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                                <FileText className="h-5 w-5" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium leading-tight">{doc.documentType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5 break-all line-clamp-2">{doc.fileUrl.split('/').pop()}</p>
+                              </div>
+                            </div>
+                            <div className="mt-3 flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => viewListingDoc(doc)}
+                                className="h-8 text-xs flex-1"
+                              >
+                                <Eye className="h-3.5 w-3.5 mr-1" /> Preview
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => deleteListingDoc(doc.id)}
+                                className="h-8 text-xs flex-1 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1119,7 +1160,13 @@ const Products = () => {
             <Button variant="outline" onClick={() => setMediaFor(null)} disabled={busy}>
               <X className="mr-2 h-4 w-4" /> Close
             </Button>
-            <Button onClick={() => void saveMedia()} disabled={busy}>Save changes</Button>
+            <Button onClick={() => void saveMedia()} disabled={busy}>
+              {busy ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+              ) : (
+                "Save changes"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

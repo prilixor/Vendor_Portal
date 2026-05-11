@@ -757,18 +757,7 @@ const VendorDetails = () => {
 
               <h3 className="font-semibold">Documents</h3>
 
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-muted-foreground">{documents.length} uploaded</p>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => vendorId && loadVendorData(vendorId)}
-                  className="h-7 w-7"
-                  aria-label="Refresh documents"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+              <p className="text-xs text-muted-foreground">{documents.length} uploaded</p>
 
             </div>
 
@@ -776,67 +765,125 @@ const VendorDetails = () => {
 
               {documents.map((d) => (
 
-                <div key={d.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-
-                  <div className="flex items-center gap-2">
-
-                    <FileText className="h-4 w-4 text-primary" />
-
-                    <div>
-
-                      <p className="text-sm font-medium">{d.documentType}</p>
-
-                      <p className="text-xs text-muted-foreground">{d.documentNumber || "No number"}</p>
-
+                <div key={d.id} className="rounded-lg border border-border p-3">
+                  {/* Desktop: horizontal layout */}
+                  <div className="hidden sm:flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{d.documentType}</p>
+                        {d.documentNumber && <p className="text-xs text-muted-foreground truncate">{d.documentNumber}</p>}
+                      </div>
                     </div>
-
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <StatusBadge status={d.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} />
-                    {d.verificationStatus !== "approved" && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <StatusBadge status={d.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} />
+                      {d.verificationStatus !== "approved" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => void verifyDocumentItem(d.id, "approved")}
+                          className="h-8 w-8"
+                          aria-label="Approve document"
+                          disabled={itemActionLoadingKey !== null}
+                        >
+                          {itemActionLoadingKey === `doc-${d.id}-approved` ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-success" />
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4 text-success" />
+                          )}
+                        </Button>
+                      )}
+                      {d.verificationStatus !== "rejected" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openItemRejectDialog("doc", d.id)}
+                          className="h-8 w-8"
+                          aria-label="Reject document"
+                          disabled={itemActionLoadingKey !== null}
+                        >
+                          {itemActionLoadingKey === `doc-${d.id}-rejected` ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-destructive" />
+                          )}
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => void verifyDocumentItem(d.id, "approved")}
-                        className="h-7 w-7"
-                        aria-label="Approve document"
-                        disabled={itemActionLoadingKey !== null}
+                        onClick={() => previewDoc(d.fileUrl, d.documentType)}
+                        className="h-8 w-8"
+                        aria-label="Preview document"
                       >
-                        {itemActionLoadingKey === `doc-${d.id}-approved` ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-success" />
-                        ) : (
-                          <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                        )}
+                        <Eye className="h-4 w-4" />
                       </Button>
-                    )}
-                    {d.verificationStatus !== "rejected" && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openItemRejectDialog("doc", d.id)}
-                        className="h-7 w-7"
-                        aria-label="Reject document"
-                        disabled={itemActionLoadingKey !== null}
-                      >
-                        {itemActionLoadingKey === `doc-${d.id}-rejected` ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-destructive" />
-                        ) : (
-                          <XCircle className="h-3.5 w-3.5 text-destructive" />
-                        )}
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => previewDoc(d.fileUrl, d.documentType)}
-                      className="h-7 w-7"
-                      aria-label="Preview document"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </Button>
+                    </div>
                   </div>
-
+                  {/* Mobile: vertical layout with actions below */}
+                  <div className="sm:hidden">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start gap-2">
+                          <p className="text-sm font-medium leading-tight flex-1">{d.documentType}</p>
+                          <StatusBadge status={d.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} className="text-[10px] px-2 py-0.5 shrink-0" />
+                        </div>
+                        {d.documentNumber && <p className="text-xs text-muted-foreground mt-0.5 break-all line-clamp-1">{d.documentNumber}</p>}
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {d.verificationStatus !== "approved" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void verifyDocumentItem(d.id, "approved")}
+                          className="h-8 px-1 text-[10px]"
+                          disabled={itemActionLoadingKey !== null}
+                        >
+                          {itemActionLoadingKey === `doc-${d.id}-approved` ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="h-3 w-3 text-success" />
+                          )}
+                          <span className="ml-1">Approve</span>
+                        </Button>
+                      ) : (
+                        <div />
+                      )}
+                      {d.verificationStatus !== "rejected" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openItemRejectDialog("doc", d.id)}
+                          className="h-8 px-1 text-[10px]"
+                          disabled={itemActionLoadingKey !== null}
+                        >
+                          {itemActionLoadingKey === `doc-${d.id}-rejected` ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <XCircle className="h-3 w-3 text-destructive" />
+                          )}
+                          <span className="ml-1">Reject</span>
+                        </Button>
+                      ) : (
+                        <div />
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => previewDoc(d.fileUrl, d.documentType)}
+                        className="h-8 px-1 text-[10px]"
+                      >
+                        <Eye className="h-3 w-3" />
+                        <span className="ml-1">Preview</span>
+                      </Button>
+                    </div>
+                  </div>
                 </div>
 
               ))}
@@ -870,48 +917,100 @@ const VendorDetails = () => {
                 <div className="space-y-2">
                   {bankAccounts.map((bank) => (
                     <div key={bank.id} className="rounded-lg border border-border p-3">
-                      <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-                        <Detail label="Account holder" value={bank.accountHolderName} />
-                        <Detail label="Bank" value={bank.bankName} />
-                        <Detail label="Account number" value={bank.accountNumber} />
-                        <Detail label="IFSC" value={bank.ifscCode} />
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-between">
-                        <div className="inline-flex items-center gap-2 rounded-md bg-success-soft px-3 py-2 text-xs font-medium text-success">
-                          <ShieldCheck className="h-4 w-4" /> Bank verification {bank.verificationStatus.replace("_", " ")}
+                      {/* Desktop: full details with icon buttons */}
+                      <div className="hidden sm:block">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <Detail label="Account holder" value={bank.accountHolderName} />
+                          <Detail label="Bank" value={bank.bankName} />
+                          <Detail label="Account number" value={bank.accountNumber} />
+                          <Detail label="IFSC" value={bank.ifscCode} />
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="inline-flex items-center gap-2 rounded-md bg-success-soft px-3 py-2 text-xs font-medium text-success">
+                            <ShieldCheck className="h-4 w-4" /> Bank verification {bank.verificationStatus.replace("_", " ")}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {bank.verificationStatus !== "approved" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => void verifyBankItem(bank.id, "approved")}
+                                className="h-8 w-8"
+                                aria-label="Approve bank account"
+                                disabled={itemActionLoadingKey !== null}
+                              >
+                                {itemActionLoadingKey === `bank-${bank.id}-approved` ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-success" />
+                                ) : (
+                                  <CheckCircle2 className="h-4 w-4 text-success" />
+                                )}
+                              </Button>
+                            )}
+                            {bank.verificationStatus !== "rejected" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openItemRejectDialog("bank", bank.id)}
+                                className="h-8 w-8"
+                                aria-label="Reject bank account"
+                                disabled={itemActionLoadingKey !== null}
+                              >
+                                {itemActionLoadingKey === `bank-${bank.id}-rejected` ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                                ) : (
+                                  <XCircle className="h-4 w-4 text-destructive" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Mobile: compact layout with labeled buttons */}
+                      <div className="sm:hidden">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                            <ShieldCheck className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start gap-2">
+                              <p className="text-sm font-medium leading-tight flex-1">{bank.bankName}</p>
+                              <StatusBadge status={bank.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} className="text-[10px] px-2 py-0.5 shrink-0" />
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">{bank.accountHolderName}</p>
+                            <p className="text-xs text-muted-foreground">···{bank.accountNumber.slice(-4)}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
                           {bank.verificationStatus !== "approved" && (
                             <Button
-                              variant="ghost"
-                              size="icon"
+                              variant="outline"
+                              size="sm"
                               onClick={() => void verifyBankItem(bank.id, "approved")}
-                              className="h-7 w-7"
-                              aria-label="Approve bank account"
+                              className="h-8 px-1 text-[10px]"
                               disabled={itemActionLoadingKey !== null}
                             >
                               {itemActionLoadingKey === `bank-${bank.id}-approved` ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin text-success" />
+                                <Loader2 className="h-3 w-3 animate-spin" />
                               ) : (
-                                <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                                <CheckCircle2 className="h-3 w-3 text-success" />
                               )}
+                              <span className="ml-1">Approve</span>
                             </Button>
                           )}
                           {bank.verificationStatus !== "rejected" && (
                             <Button
-                              variant="ghost"
-                              size="icon"
+                              variant="outline"
+                              size="sm"
                               onClick={() => openItemRejectDialog("bank", bank.id)}
-                              className="h-7 w-7"
-                              aria-label="Reject bank account"
+                              className="h-8 px-1 text-[10px]"
                               disabled={itemActionLoadingKey !== null}
                             >
                               {itemActionLoadingKey === `bank-${bank.id}-rejected` ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin text-destructive" />
+                                <Loader2 className="h-3 w-3 animate-spin" />
                               ) : (
-                                <XCircle className="h-3.5 w-3.5 text-destructive" />
+                                <XCircle className="h-3 w-3 text-destructive" />
                               )}
+                              <span className="ml-1">Reject</span>
                             </Button>
                           )}
                         </div>

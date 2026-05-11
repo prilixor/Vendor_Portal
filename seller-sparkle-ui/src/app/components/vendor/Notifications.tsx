@@ -26,7 +26,7 @@ const Notifications = () => {
   const { refreshUnreadCount } = useNotificationContext();
   const [items, setItems] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
-  const [prefs, setPrefs] = useState({ email: true, push: true, orders: true });
+  const [prefs, setPrefs] = useState({ email: true, push: false, orders: true });
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
