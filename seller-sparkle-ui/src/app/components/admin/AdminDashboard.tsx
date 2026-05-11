@@ -53,12 +53,28 @@ const AdminDashboard = () => {
     <div>
       <PageHeader title="Admin overview" description="Monitor platform health, vendor verification queue, and recent activity." />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total vendors" value={total} icon={Building2} accent="primary"  />
-        <StatCard label="Pending verifications" value={pending} icon={Clock} accent="warning" />
-        <StatCard label="Active vendors" value={active} icon={CheckCircle2} accent="success" />
-        <StatCard label="Audit events (7d)" value={recentAuditLogs.length} icon={ScrollText} accent="info" />
-      </div>
+      {loading ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-pulse">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} className="border-border/60 p-4">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-8 w-8 rounded-lg" />
+                <div className="flex-1 space-y-1">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-5 w-8" />
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard label="Total vendors" value={total} icon={Building2} accent="primary"  />
+          <StatCard label="Pending verifications" value={pending} icon={Clock} accent="warning" />
+          <StatCard label="Active vendors" value={active} icon={CheckCircle2} accent="success" />
+          <StatCard label="Audit events (7d)" value={recentAuditLogs.length} icon={ScrollText} accent="info" />
+        </div>
+      )}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
@@ -69,9 +85,9 @@ const AdminDashboard = () => {
             </Button>
           </div>
           {loading ? (
-            <div className="space-y-2">
+            <div className="space-y-2 animate-pulse">
               {[1, 2, 3, 4, 5].map((i) => (
-                <li key={i} className="p-4 border border-border/60 rounded-lg">
+                <div key={i} className="p-4 border border-border/60 rounded-lg">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <Skeleton className="h-8 w-8 rounded" />
@@ -80,12 +96,9 @@ const AdminDashboard = () => {
                         <Skeleton className="h-3 w-24" />
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Skeleton className="h-6 w-16" />
-                      <Skeleton className="h-8 w-8" />
-                    </div>
+                    <Skeleton className="h-8 w-16 rounded" />
                   </div>
-                </li>
+                </div>
               ))}
             </div>
           ) : (
@@ -121,15 +134,15 @@ const AdminDashboard = () => {
             <h2 className="font-semibold">Recent audit events (Last 7 days)</h2>
           </div>
           {loading ? (
-            <div className="space-y-2">
+            <div className="space-y-2 animate-pulse">
               {[1, 2, 3, 4, 5].map((i) => (
-                <li key={i} className="p-3 border border-border/60 rounded-lg">
+                <div key={i} className="p-3 border border-border/60 rounded-lg">
                   <div className="space-y-2">
                     <Skeleton className="h-3 w-24" />
                     <Skeleton className="h-3 w-48" />
                     <Skeleton className="h-3 w-32" />
                   </div>
-                </li>
+                </div>
               ))}
             </div>
           ) : (

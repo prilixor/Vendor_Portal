@@ -412,43 +412,82 @@ const Verification = () => {
             </TabsList>
           </Tabs>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-[700px] text-sm">
-            <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Business</th>
-                <th className="px-4 py-3 font-semibold">Registration Stage</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtered.map((v) => {
-                const profile = vendorProfiles.get(v.id);
-                return (
-                  <tr key={v.id} className="hover:bg-muted/20">
+        {loading ? (
+          <div className="overflow-x-auto rounded-lg border border-border animate-pulse">
+            <table className="w-full min-w-[700px] text-sm">
+              <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-24" /></th>
+                  <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-32" /></th>
+                  <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <tr key={i} className="hover:bg-muted/20">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-soft text-primary">
-                          <Building2 className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium truncate" title={profile?.businessName || v.email}>{profile?.businessName || v.email}</p>
-                          <p className="text-xs text-muted-foreground truncate" title={v.email}>{v.email}</p>
+                        <Skeleton className="h-9 w-9 rounded-lg" />
+                        <div className="min-w-0 space-y-1">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-24" />
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3">{v.registrationStage}</td>
-                    <td className="px-4 py-3"><StatusBadge status={v.accountStatus as "pending" | "approved" | "rejected" | "under_review"} /></td>
+                    <td className="px-4 py-3">
+                      <Skeleton className="h-4 w-24" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Skeleton className="h-6 w-16 rounded" />
+                    </td>
                     <td className="px-4 py-3 text-right">
-                      <Button variant="outline" size="sm" onClick={() => setSelected(v)}>Review</Button>
+                      <Skeleton className="h-8 w-16 rounded" />
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-[700px] text-sm">
+              <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Business</th>
+                  <th className="px-4 py-3 font-semibold">Registration Stage</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtered.map((v) => {
+                  const profile = vendorProfiles.get(v.id);
+                  return (
+                    <tr key={v.id} className="hover:bg-muted/20">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-soft text-primary">
+                            <Building2 className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium truncate" title={profile?.businessName || v.email}>{profile?.businessName || v.email}</p>
+                            <p className="text-xs text-muted-foreground truncate" title={v.email}>{v.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">{v.registrationStage}</td>
+                      <td className="px-4 py-3"><StatusBadge status={v.accountStatus as "pending" | "approved" | "rejected" | "under_review"} /></td>
+                      <td className="px-4 py-3 text-right">
+                        <Button variant="outline" size="sm" onClick={() => setSelected(v)}>Review</Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       {/* Vendor detail */}
@@ -486,7 +525,7 @@ const Verification = () => {
                   <span className="text-xs text-muted-foreground">{documents.length} uploaded</span>
                 </div>
                 {loadingDocs ? (
-                  <div className="space-y-2">
+                  <div className="space-y-2 animate-pulse">
                     {[1, 2, 3].map((i) => (
                       <div key={i} className="flex items-center justify-between p-3 border border-border/60 rounded-lg">
                         <div className="flex items-center gap-3">
@@ -575,7 +614,7 @@ const Verification = () => {
                   <span className="text-xs text-muted-foreground">{bankAccounts.length} added</span>
                 </div>
                 {loadingBanks ? (
-                  <div className="space-y-2">
+                  <div className="space-y-2 animate-pulse">
                     {[1, 2, 3].map((i) => (
                       <div key={i} className="flex items-center justify-between p-3 border border-border/60 rounded-lg">
                         <div className="flex items-center gap-3">
