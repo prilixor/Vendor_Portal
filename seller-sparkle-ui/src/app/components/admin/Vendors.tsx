@@ -73,8 +73,8 @@ const Vendors = () => {
         try {
           const profile = await adminApi.getVendorProfile(v.id);
           profilesMap.set(v.id, profile);
-        } catch (error) {
-          console.error(`Failed to load profile for vendor ${v.id}:`, error);
+        } catch {
+          // Profile not found - vendor hasn't submitted profile yet, this is expected
         }
       }));
 

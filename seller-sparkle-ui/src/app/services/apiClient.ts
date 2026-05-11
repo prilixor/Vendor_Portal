@@ -50,7 +50,21 @@ class ApiClient {
   private async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'An error occurred' }));
-      throw new Error(error.detail || error.title || 'An error occurred');
+      const message = error.detail || error.title || error.message || 'An error occurred';
+      // Look for error code in various fields, but skip URL-like values (RFC links)
+      let code = error.code || error.errorCode || error.errorType;
+      // If code looks like a URL (contains http), search in other fields or message
+      if (!code || code.includes('http') || code.includes('://') || code.startsWith('https')) {
+        // Try to extract from error.message or error.title
+        const sourceText = error.message || error.title || message;
+        const codeMatch = sourceText.match(/(vendors\.[a-z_]+|admins\.[a-z_]+|documents\.[a-z_]+|bank_accounts\.[a-z_]+)/i);
+        if (codeMatch) {
+          code = codeMatch[1];
+        }
+      }
+      // Include code in message so getUserFriendlyMessage can extract it
+      const fullMessage = code ? `${message} [${code}]` : message;
+      throw new Error(fullMessage);
     }
 
     if (response.status === 204) {

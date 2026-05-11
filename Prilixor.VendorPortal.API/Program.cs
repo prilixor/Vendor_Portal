@@ -95,6 +95,12 @@ app.MapPost("/api/files/upload", async (HttpRequest request, IVendorUploadStorag
     var form = await request.ReadFormAsync(cancellationToken);
     var file = form.Files["file"] ?? form.Files.FirstOrDefault();
     var vendorId = (form["vendorId"].ToString() ?? "common").Trim();
+    var folderTypeStr = (form["folderType"].ToString() ?? "Documents").Trim();
+    
+    // Parse folder type
+    var folderType = Enum.TryParse<VendorFileFolderType>(folderTypeStr, true, out var parsed) 
+        ? parsed 
+        : VendorFileFolderType.Documents;
 
     if (file is null || file.Length == 0)
     {
@@ -109,7 +115,8 @@ app.MapPost("/api/files/upload", async (HttpRequest request, IVendorUploadStorag
         file.ContentType,
         readStream,
         publicBase,
-        cancellationToken);
+        cancellationToken,
+        folderType);
 
     var storageKey = persist.StoredReference.StartsWith("http", StringComparison.OrdinalIgnoreCase)
         ? null

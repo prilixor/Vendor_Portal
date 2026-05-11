@@ -19,11 +19,12 @@ internal sealed class VendorUploadStorageService(
         string? contentType,
         Stream stream,
         Uri requestPublicBaseUri,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        VendorFileFolderType folderType = VendorFileFolderType.Documents)
     {
         var extension = Path.GetExtension(originalFileName);
         var storedFileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
-        var relativePath = VendorStoragePaths.RelativeVendorUploadPath(vendorId, storedFileName);
+        var relativePath = VendorStoragePaths.RelativeVendorUploadPath(vendorId, storedFileName, folderType);
 
         var opts = s3Options.Value;
         if (amazonS3 is not null && opts.Enabled && !string.IsNullOrWhiteSpace(opts.BucketName))
@@ -54,12 +55,19 @@ internal sealed class VendorUploadStorageService(
             return new VendorFilePersistResult(relativePath, browserUrl);
         }
 
+        var folderName = folderType switch
+        {
+            VendorFileFolderType.ProductImages => "product-images",
+            VendorFileFolderType.ProductDocuments => "product-documents",
+            _ => "documents"
+        };
         var uploadsRoot = Path.Combine(
             environment.ContentRootPath,
             "wwwroot",
             "uploads",
             "vendors",
-            VendorStoragePaths.SanitizeVendorSegment(vendorId));
+            VendorStoragePaths.SanitizeVendorSegment(vendorId),
+            folderName);
         Directory.CreateDirectory(uploadsRoot);
         var filePath = Path.Combine(uploadsRoot, storedFileName);
 

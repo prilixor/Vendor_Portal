@@ -29,7 +29,7 @@ public static class EmailTemplates
                 <li>Configure your notification preferences</li>
             </ul>
             <div style='text-align: center; margin: 30px 0;'>
-                <a href='https://localhost:5173/vendor' style='background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold;'>Go to Dashboard</a>
+                <a href='https://vendor-portal-psi-amber.vercel.app/vendor' style='background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold;'>Go to Dashboard</a>
             </div>
             <p style='font-size: 14px; color: #666; margin-top: 30px;'>If you have any questions, please contact our support team.</p>
             <p style='font-size: 14px; color: #666;'>Best regards,<br>The Prilixor Team</p>
@@ -150,7 +150,7 @@ public static class EmailTemplates
             <p style='font-size: 16px; margin-bottom: 20px;'>Great news! Your vendor account has been <strong style='color: #10b981;'>reactivated</strong>.</p>
             <p style='font-size: 16px; margin-bottom: 20px;'>You can now resume your activities on the platform and start receiving rental requests again.</p>
             <div style='text-align: center; margin: 30px 0;'>
-                <a href='https://localhost:5173/vendor' style='background: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold;'>Go to Dashboard</a>
+                <a href='https://vendor-portal-psi-amber.vercel.app/vendor' style='background: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold;'>Go to Dashboard</a>
             </div>
             <p style='font-size: 14px; color: #666; margin-top: 30px;'>Best regards,<br>The Prilixor Team</p>
         </div>

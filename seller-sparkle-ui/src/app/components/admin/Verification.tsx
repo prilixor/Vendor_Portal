@@ -116,8 +116,8 @@ const Verification = () => {
     try {
       const docs = await adminApi.getVendorDocuments(vendorId);
       setDocuments(docs);
-    } catch (error) {
-      console.error("Failed to load documents:", error);
+    } catch {
+      // Documents not found - vendor hasn't uploaded yet, this is expected
     } finally {
       setLoadingDocs(false);
     }
@@ -128,8 +128,8 @@ const Verification = () => {
     try {
       const banks = await adminApi.getVendorBankAccounts(vendorId);
       setBankAccounts(banks);
-    } catch (error) {
-      console.error("Failed to load bank accounts:", error);
+    } catch {
+      // Bank accounts not found - vendor hasn't added yet, this is expected
     } finally {
       setLoadingBanks(false);
     }
@@ -139,8 +139,8 @@ const Verification = () => {
     try {
       const profile = await adminApi.getVendorProfile(vendorId);
       setVendorProfile(profile);
-    } catch (error) {
-      console.error("Failed to load vendor profile:", error);
+    } catch {
+      // Profile not found - vendor hasn't submitted profile yet, this is expected
     }
   };
 
@@ -212,6 +212,18 @@ const Verification = () => {
         verificationStatus,
         notes,
       });
+      // Send notification to vendor
+      try {
+        const docTitle = "Document";
+        if (verificationStatus === "approved") {
+          await vendorOnboardingApi.createNotification(vendorId, "Document Approved", `Your ${docTitle} has been approved by the admin.`, "success");
+        } else {
+          const msg = notes ? `Your ${docTitle} has been rejected. Reason: ${notes}` : `Your ${docTitle} has been rejected. Please upload a valid document.`;
+          await vendorOnboardingApi.createNotification(vendorId, "Document Rejected", msg, "error");
+        }
+      } catch (notifyError) {
+        console.error("Failed to send document verification notification:", notifyError);
+      }
       await loadDocuments(vendorId);
       await loadVendors();
       toast.success(`Document ${verificationStatus}.`);
@@ -241,12 +253,16 @@ const Verification = () => {
         notes,
       });
       
-      // Only create notification for approvals (backend handles rejections)
-      if (verificationStatus === "approved") {
-        const title = "Bank Account Verified";
-        const message = "Your bank account has been successfully verified by the admin.";
-        
-        await vendorOnboardingApi.createNotification(vendorId, title, message, "success");
+      // Send notification to vendor
+      try {
+        if (verificationStatus === "approved") {
+          await vendorOnboardingApi.createNotification(vendorId, "Bank Account Verified", "Your bank account has been successfully verified by the admin.", "success");
+        } else {
+          const msg = notes ? `Your bank account has been rejected. Reason: ${notes}` : "Your bank account has been rejected. Please add a valid bank account.";
+          await vendorOnboardingApi.createNotification(vendorId, "Bank Account Rejected", msg, "error");
+        }
+      } catch (notifyError) {
+        console.error("Failed to send bank verification notification:", notifyError);
       }
       
       await loadBankAccounts(vendorId);
@@ -290,13 +306,17 @@ const Verification = () => {
   const approve = async (id: string) => {
     setVerifying(true);
     try {
-      // TODO: Get adminUserId from auth context
       const adminUserId = getAdminUserId() || "";
       await adminApi.approveVendor({ adminUserId, vendorId: id });
-      // Reload vendors to get updated status from backend
+      // Send notification to vendor
+      try {
+        await vendorOnboardingApi.createNotification(id, "Account Approved", "Congratulations! Your vendor account has been approved. You can now start listing products and receiving orders.", "success");
+      } catch (notifyError) {
+        console.error("Failed to send approval notification:", notifyError);
+      }
       await loadVendors();
       setSelected(null);
-      toast.success("Vendor approved");
+      toast.success("Vendor approved successfully");
     } catch (error) {
       const message = getUserFriendlyMessage(error);
       toast.error(message);
@@ -308,14 +328,20 @@ const Verification = () => {
   const reject = async (id: string) => {
     setVerifying(true);
     try {
-      // TODO: Get adminUserId from auth context
       const adminUserId = getAdminUserId() || "";
       await adminApi.rejectVendor({ adminUserId, vendorId: id, reason });
+      // Send notification to vendor
+      try {
+        const message = reason ? `Your vendor application has been rejected. Reason: ${reason}` : "Your vendor application has been rejected. Please contact support for more information.";
+        await vendorOnboardingApi.createNotification(id, "Application Rejected", message, "error");
+      } catch (notifyError) {
+        console.error("Failed to send rejection notification:", notifyError);
+      }
       await loadVendors();
       setSelected(null);
       setReason("");
       setRejectOpen(false);
-      toast.success("Vendor rejected with reason");
+      toast.success("Vendor rejected");
     } catch (error) {
       const message = getUserFriendlyMessage(error);
       toast.error(message);
@@ -329,11 +355,18 @@ const Verification = () => {
     try {
       const adminUserId = getAdminUserId() || "";
       await adminApi.suspendVendor({ adminUserId, vendorId: id, reason });
+      // Send notification to vendor
+      try {
+        const message = reason ? `Your account has been suspended. Reason: ${reason}` : "Your account has been suspended. Please contact support for more information.";
+        await vendorOnboardingApi.createNotification(id, "Account Suspended", message, "warning");
+      } catch (notifyError) {
+        console.error("Failed to send suspension notification:", notifyError);
+      }
       await loadVendors();
       setSelected(null);
       setReason("");
       setRejectOpen(false);
-      toast.success("Vendor suspended successfully");
+      toast.success("Vendor suspended");
     } catch (error) {
       const message = getUserFriendlyMessage(error);
       toast.error(message);
@@ -347,11 +380,18 @@ const Verification = () => {
     try {
       const adminUserId = getAdminUserId() || "";
       await adminApi.banVendor({ adminUserId, vendorId: id, reason });
+      // Send notification to vendor
+      try {
+        const message = reason ? `Your account has been banned. Reason: ${reason}` : "Your account has been banned. Please contact support for more information.";
+        await vendorOnboardingApi.createNotification(id, "Account Banned", message, "error");
+      } catch (notifyError) {
+        console.error("Failed to send ban notification:", notifyError);
+      }
       await loadVendors();
       setSelected(null);
       setReason("");
       setRejectOpen(false);
-      toast.success("Vendor banned successfully");
+      toast.success("Vendor banned");
     } catch (error) {
       const message = getUserFriendlyMessage(error);
       toast.error(message);
@@ -365,11 +405,18 @@ const Verification = () => {
     try {
       const adminUserId = getAdminUserId() || "";
       await adminApi.reactivateVendor({ adminUserId, vendorId: id, reason });
+      // Send notification to vendor
+      try {
+        const message = "Your account has been reactivated. You can now resume your vendor activities.";
+        await vendorOnboardingApi.createNotification(id, "Account Reactivated", message, "success");
+      } catch (notifyError) {
+        console.error("Failed to send reactivation notification:", notifyError);
+      }
       await loadVendors();
       setSelected(null);
       setReason("");
       setRejectOpen(false);
-      toast.success("Vendor reactivated successfully");
+      toast.success("Vendor reactivated");
     } catch (error) {
       const message = getUserFriendlyMessage(error);
       toast.error(message);
