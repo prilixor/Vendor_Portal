@@ -558,7 +558,8 @@ export const vendorOnboardingApi = {
       title,
       message,
       notificationType: type,
-      channel: "system", // Required field - using 'system' as default channel
+      channel: "in_app", // Required field - must be one of: in_app, email, push, sms
+      status: "sent", // Required for notification to appear in inbox
     });
   },
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -21,7 +21,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { BankDetails, BusinessProfile, VendorDocument, VerificationStatus } from "@/app/models";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
-import { cn } from "@/app/helpers/utils";
+import { cn, toCamelCase } from "@/app/helpers/utils";
 
 const steps = [
   { label: "Basic Info", description: "Account" },
@@ -76,6 +76,8 @@ const Onboarding = () => {
   const [documentType, setDocumentType] = useState("GST Certificate");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [bankAccountId, setBankAccountId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRefMobile = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -376,6 +378,9 @@ const Onboarding = () => {
       const latestDocs = await vendorOnboardingApi.getVendorDocuments(user.id);
       setDocuments(mapDocuments(latestDocs));
       setSelectedFile(null);
+      // Reset file input value
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (fileInputRefMobile.current) fileInputRefMobile.current.value = "";
       toast.success("Document uploaded. Awaiting verification.");
     } catch (error) {
       const message = getUserFriendlyMessage(error);
@@ -558,6 +563,51 @@ const Onboarding = () => {
 
   const handleSaveSection = async () => {
     if (editingSection === 1) {
+      // Validate required profile fields
+      if (!profile.businessName.trim()) {
+        toast.error("Please fill in business name");
+        return;
+      }
+      if (!profile.ownerName.trim()) {
+        toast.error("Please fill in owner name");
+        return;
+      }
+      if (!profile.phone.trim()) {
+        toast.error("Please fill in phone number");
+        return;
+      }
+      if (!profile.addressLine1.trim()) {
+        toast.error("Please fill in address line 1");
+        return;
+      }
+      if (!profile.city.trim()) {
+        toast.error("Please fill in city");
+        return;
+      }
+      if (!profile.state.trim()) {
+        toast.error("Please fill in state");
+        return;
+      }
+      if (!profile.postalCode.trim()) {
+        toast.error("Please fill in postal code");
+        return;
+      }
+      // Pincode validation: exactly 6 digits, first digit cannot be 0
+      const pincodeRegex = /^[1-9][0-9]{5}$/;
+      if (!pincodeRegex.test(profile.postalCode.trim())) {
+        toast.error("Pincode must be exactly 6 digits and cannot start with 0");
+        return;
+      }
+      if (!profile.gstNumber.trim()) {
+        toast.error("Please fill in GSTIN");
+        return;
+      }
+      // GSTIN validation: 15 characters (2 state code + 10 PAN + 1 entity number + 1 check character + 1 Z)
+      const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+      if (!gstRegex.test(profile.gstNumber.trim().toUpperCase())) {
+        toast.error("Please enter a valid 15-digit GSTIN");
+        return;
+      }
       await saveProfile();
     } else if (editingSection === 3) {
       // Validate required bank details fields
@@ -727,8 +777,8 @@ const Onboarding = () => {
         // PROFILE VIEW MODE - Admin-style design
         <>
           <PageHeader
-            title={profile.businessName || user?.name || "Vendor"}
-            description={`${profile.ownerName || ""} · ${profile.city || ""}`}
+            title={toCamelCase(editingSection === 1 ? (originalProfile?.businessName || profile.businessName || user?.name || "Vendor") : (profile.businessName || user?.name || "Vendor"))}
+            description={`${toCamelCase(editingSection === 1 ? (originalProfile?.ownerName || profile.ownerName || "") : (profile.ownerName || ""))} · ${editingSection === 1 ? (originalProfile?.city || profile.city || "") : (profile.city || "")}`}
             breadcrumbs={[
               { label: "Vendor", href: "/vendor/dashboard" },
               { label: "Profile" },
@@ -747,8 +797,8 @@ const Onboarding = () => {
                   <Building2 className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-lg font-semibold">{profile.businessName || user?.name}</p>
-                  <p className="text-sm text-muted-foreground">{profile.ownerName || ""} · {user?.email}</p>
+                  <p className="text-lg font-semibold">{toCamelCase(editingSection === 1 ? (originalProfile?.businessName || profile.businessName || user?.name) : (profile.businessName || user?.name))}</p>
+                  <p className="text-sm text-muted-foreground">{toCamelCase(editingSection === 1 ? (originalProfile?.ownerName || profile.ownerName || "") : (profile.ownerName || ""))} · {user?.email}</p>
                 </div>
               </div>
               <StatusBadge status={accountStatus as "pending" | "approved" | "rejected" | "under_review"} />
@@ -820,14 +870,14 @@ const Onboarding = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                    <Detail label="Business" value={profile.businessName || "Not set"} />
-                    <Detail label="Owner" value={profile.ownerName || "Not set"} />
-                    <Detail label="Phone" value={profile.phone || "Not set"} />
-                    <Detail label="GSTIN" value={profile.gstNumber || "Not set"} />
-                    <Detail label="City" value={profile.city || "Not set"} />
-                    <Detail label="State" value={profile.state || "Not set"} />
-                    <Detail className="sm:col-span-2" label="Address" value={`${profile.addressLine1 || ""} ${profile.addressLine2 || ""}`.trim() || "Not set"} />
-                    <Detail label="Pincode" value={profile.postalCode || "Not set"} />
+                    <Detail label="Business" value={toCamelCase(editingSection === 1 ? (originalProfile?.businessName || profile.businessName || "Not set") : (profile.businessName || "Not set"))} />
+                    <Detail label="Owner" value={toCamelCase(editingSection === 1 ? (originalProfile?.ownerName || profile.ownerName || "Not set") : (profile.ownerName || "Not set"))} />
+                    <Detail label="Phone" value={editingSection === 1 ? (originalProfile?.phone || profile.phone || "Not set") : (profile.phone || "Not set")} />
+                    <Detail label="GSTIN" value={editingSection === 1 ? (originalProfile?.gstNumber || profile.gstNumber || "Not set") : (profile.gstNumber || "Not set")} />
+                    <Detail label="City" value={editingSection === 1 ? (originalProfile?.city || profile.city || "Not set") : (profile.city || "Not set")} />
+                    <Detail label="State" value={editingSection === 1 ? (originalProfile?.state || profile.state || "Not set") : (profile.state || "Not set")} />
+                    <Detail className="sm:col-span-2" label="Address" value={`${editingSection === 1 ? (originalProfile?.addressLine1 || profile.addressLine1 || "") : (profile.addressLine1 || "")} ${editingSection === 1 ? (originalProfile?.addressLine2 || profile.addressLine2 || "") : (profile.addressLine2 || "")}`.trim() || "Not set"} />
+                    <Detail label="Pincode" value={editingSection === 1 ? (originalProfile?.postalCode || profile.postalCode || "Not set") : (profile.postalCode || "Not set")} />
                   </div>
                 )}
               </Card>
@@ -856,6 +906,7 @@ const Onboarding = () => {
                     <div className="space-y-1.5">
                       <Label>File</Label>
                       <Input
+                        ref={fileInputRef}
                         type="file"
                         accept=".pdf,.png,.jpg,.jpeg,.webp"
                         onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
@@ -1134,6 +1185,7 @@ const Onboarding = () => {
                 <div className="space-y-1.5">
                   <Label>File</Label>
                   <Input
+                    ref={fileInputRefMobile}
                     type="file"
                     accept=".pdf,.png,.jpg,.jpeg,.webp"
                     onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}

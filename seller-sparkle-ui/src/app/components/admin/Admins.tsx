@@ -6,6 +6,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
 import { FormGrid } from "@/app/components/shared/FormGrid";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { adminApi, AdminUserDto } from "@/app/services/adminApi";
 import { Plus, Shield, Users, Settings, Loader2, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
@@ -87,9 +88,23 @@ const Admins = () => {
 
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
+          <ul className="divide-y divide-border animate-pulse">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <li key={i} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <div className="space-y-1">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-40" />
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
+                  <Skeleton className="h-6 w-24 rounded-full" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+              </li>
+            ))}
+          </ul>
         ) : (
           <ul className="divide-y divide-border">
             {admins.map((a) => {

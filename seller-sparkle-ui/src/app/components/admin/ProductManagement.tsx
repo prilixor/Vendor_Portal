@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/ta
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Switch } from "@/app/components/ui/switch";
 import { FormGrid } from "@/app/components/shared/FormGrid";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { adminApi, ProductCategoryDto, ProductDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest } from "@/app/services/adminApi";
 import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
@@ -447,12 +448,6 @@ const ProductManagement = () => {
       />
 
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
-        {loading && (
-          <div className="mb-4 rounded-lg border border-border bg-muted/30 px-4 py-2 text-sm text-muted-foreground flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading...
-          </div>
-        )}
-
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-4 w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
             <TabsTrigger value="categories" className="text-xs sm:text-sm">
@@ -497,105 +492,193 @@ const ProductManagement = () => {
           </div>
 
           <TabsContent value="categories" className="mt-4">
-            <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
-              <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
-                <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Category Name</th>
-                    <th className="px-4 py-3 font-semibold">Prescription</th>
-                    <th className="px-4 py-3 font-semibold">Deposit</th>
-                    <th className="px-4 py-3 font-semibold">Installation</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredCategories.map((c) => (
-                    <tr key={c.id} className="hover:bg-muted/20">
-                      <td className="px-4 py-3 font-medium">{c.categoryName}</td>
-                      <td className="px-4 py-3">{c.prescriptionRequired ? "Yes" : "No"}</td>
-                      <td className="px-4 py-3">{c.depositRequired ? "Yes" : "No"}</td>
-                      <td className="px-4 py-3">{c.installationRequired ? "Yes" : "No"}</td>
-                      <td className="px-4 py-3">
-                        <Switch
-                          checked={c.isActive}
-                          onCheckedChange={() => toggleCategoryStatus(c.id, c.isActive)}
-                          disabled={loading}
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openCategoryDialog(c)} disabled={loading}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => deleteCategory(c.id)} disabled={loading}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredCategories.length === 0 && (
+            {loading ? (
+              <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0 animate-pulse">
+                <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
+                  <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                        No categories found.
-                      </td>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-32" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-24" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
+                      <th className="px-4 py-3" />
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <tr key={i} className="hover:bg-muted/20">
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-32" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-8" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-8" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-8" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-6 w-12 rounded" />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Skeleton className="h-8 w-8 rounded" />
+                            <Skeleton className="h-8 w-8 rounded" />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
+                <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
+                  <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Category Name</th>
+                      <th className="px-4 py-3 font-semibold">Prescription</th>
+                      <th className="px-4 py-3 font-semibold">Deposit</th>
+                      <th className="px-4 py-3 font-semibold">Installation</th>
+                      <th className="px-4 py-3 font-semibold">Status</th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredCategories.map((c) => (
+                      <tr key={c.id} className="hover:bg-muted/20">
+                        <td className="px-4 py-3 font-medium">{c.categoryName}</td>
+                        <td className="px-4 py-3">{c.prescriptionRequired ? "Yes" : "No"}</td>
+                        <td className="px-4 py-3">{c.depositRequired ? "Yes" : "No"}</td>
+                        <td className="px-4 py-3">{c.installationRequired ? "Yes" : "No"}</td>
+                        <td className="px-4 py-3">
+                          <Switch
+                            checked={c.isActive}
+                            onCheckedChange={() => toggleCategoryStatus(c.id, c.isActive)}
+                            disabled={loading}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => openCategoryDialog(c)} disabled={loading}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => deleteCategory(c.id)} disabled={loading}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredCategories.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                          No categories found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="products" className="mt-4">
-            <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
-              <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
-                <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Product Name</th>
-                    <th className="px-4 py-3 font-semibold">Category</th>
-                    <th className="px-4 py-3 font-semibold">Brand</th>
-                    <th className="px-4 py-3 font-semibold">Model</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredProducts.map((p) => (
-                    <tr key={p.id} className="hover:bg-muted/20">
-                      <td className="px-4 py-3 font-medium">{p.productName}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{getCategoryName(p.categoryId)}</td>
-                      <td className="px-4 py-3">{p.brandName || "-"}</td>
-                      <td className="px-4 py-3">{p.modelName || "-"}</td>
-                      <td className="px-4 py-3">
-                        <Switch
-                          checked={p.isActive}
-                          onCheckedChange={() => toggleProductStatus(p.id, p.isActive)}
-                          disabled={loading}
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openProductDialog(p)} disabled={loading}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => deleteProduct(p.id)} disabled={loading}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredProducts.length === 0 && (
+            {loading ? (
+              <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0 animate-pulse">
+                <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
+                  <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                        No products found.
-                      </td>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-32" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-24" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
+                      <th className="px-4 py-3" />
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <tr key={i} className="hover:bg-muted/20">
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-32" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-24" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-20" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-20" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-6 w-12 rounded" />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Skeleton className="h-8 w-8 rounded" />
+                            <Skeleton className="h-8 w-8 rounded" />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
+                <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
+                  <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Product Name</th>
+                      <th className="px-4 py-3 font-semibold">Category</th>
+                      <th className="px-4 py-3 font-semibold">Brand</th>
+                      <th className="px-4 py-3 font-semibold">Model</th>
+                      <th className="px-4 py-3 font-semibold">Status</th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredProducts.map((p) => (
+                      <tr key={p.id} className="hover:bg-muted/20">
+                        <td className="px-4 py-3 font-medium">{p.productName}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{getCategoryName(p.categoryId)}</td>
+                        <td className="px-4 py-3">{p.brandName || "-"}</td>
+                        <td className="px-4 py-3">{p.modelName || "-"}</td>
+                        <td className="px-4 py-3">
+                          <Switch
+                            checked={p.isActive}
+                            onCheckedChange={() => toggleProductStatus(p.id, p.isActive)}
+                            disabled={loading}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => openProductDialog(p)} disabled={loading}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => deleteProduct(p.id)} disabled={loading}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredProducts.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                          No products found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </Card>
