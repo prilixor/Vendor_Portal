@@ -1391,78 +1391,68 @@ const Products = () => {
 
       {/* Document Preview Dialog */}
       <Dialog open={previewDocument !== null} onOpenChange={(open) => { if (!open) setPreviewDocument(null); }}>
-        <DialogContent className="w-[95vw] max-w-4xl p-0 gap-0 flex flex-col" style={{ maxHeight: '90vh' }}>
-          <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b shrink-0">
-            <DialogTitle className="text-sm sm:text-base">Document Preview - {previewDocument?.type}</DialogTitle>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Document Preview - {previewDocument?.type}</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 min-h-0 overflow-auto bg-muted/30">
-            {previewDocument && (
-              <div className="p-3 sm:p-4">
-                {(() => {
-                  const extension = getFileExtensionFromUrl(previewDocument.url);
-                  const isImage = ["jpg", "jpeg", "png", "gif", "webp"].includes(extension);
-                  const isPdf = extension === "pdf";
+          {previewDocument && (
+            <div className="w-full h-[60vh] flex items-center justify-center bg-muted/30 rounded-lg overflow-hidden relative">
+              {(() => {
+                const extension = getFileExtensionFromUrl(previewDocument.url);
+                const isImage = ["jpg", "jpeg", "png", "gif", "webp"].includes(extension);
+                const isPdf = extension === "pdf";
 
-                  if (isImage) {
-                    return (
-                  <div className="flex items-center justify-center min-h-[40vh]">
-                    <img
-                      src={previewDocument.url}
-                      alt="Document preview"
-                      className="max-w-full max-h-[60vh] object-contain rounded-lg"
-                    />
-                  </div>
-                    );
-                  }
-
-                  if (isPdf) {
-                    return (
-                  <div className="relative w-full" style={{ height: '60vh', minHeight: '300px' }}>
-                    <iframe
-                      src={previewDocument.url}
-                      className="w-full h-full border-0 rounded-lg"
-                      title="PDF Preview"
-                      style={{ maxWidth: '100%' }}
-                    />
-                  </div>
-                    );
-                  }
-
+                if (isImage) {
                   return (
-                  <div className="flex flex-col items-center justify-center min-h-[40vh] text-center p-4">
-                    <FileText className="h-12 w-12 sm:h-16 sm:w-16 mb-4 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">
-                      Preview not available for this file type.
-                    </p>
+                <img
+                  src={previewDocument.url}
+                  alt="Document preview"
+                  className="max-w-full max-h-full object-contain"
+                />
+                  );
+                }
+
+                if (isPdf) {
+                  return (
+                <iframe
+                  src={previewDocument.url}
+                  className="w-full h-full border-0"
+                  title="PDF Preview"
+                />
+                  );
+                }
+
+                return (
+                <div className="text-center p-6">
+                  <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    Preview not available for this file type.
                     <button
                       type="button"
                       onClick={() => void downloadUrl(previewDocument.url)}
-                      className="text-primary hover:underline mt-2 text-sm"
+                      className="text-primary hover:underline ml-2"
                     >
                       Download file
                     </button>
-                  </div>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-          <div className="px-4 sm:px-6 py-3 sm:py-4 border-t bg-background shrink-0">
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end">
-              <Button
-                variant="outline"
-                onClick={() => setPreviewDocument(null)}
-                className="w-full sm:w-auto"
-              >
-                Close
-              </Button>
-              {previewDocument && (
-                <Button onClick={() => void downloadUrl(previewDocument.url)} className="w-full sm:w-auto">
-                  Download
-                </Button>
-              )}
+                  </p>
+                </div>
+                );
+              })()}
             </div>
-          </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setPreviewDocument(null)}
+            >
+              Close
+            </Button>
+            {previewDocument && (
+              <Button onClick={() => void downloadUrl(previewDocument.url)}>
+                Download
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
