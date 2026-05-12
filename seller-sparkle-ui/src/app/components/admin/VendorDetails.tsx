@@ -43,7 +43,16 @@ const normalizeHostedFileUrl = (fileUrl: string): string => {
   if (!apiOrigin) return fileUrl;
 
   try {
-    // Support both absolute and relative paths and pin uploads to current API host.
+    // Keep absolute external URLs (like S3 presigned URLs) untouched.
+    const isAbsolute = /^https?:\/\//i.test(fileUrl);
+    if (isAbsolute) {
+      const absolute = new URL(fileUrl);
+      if (absolute.origin !== apiOrigin) {
+        return fileUrl;
+      }
+    }
+
+    // Support relative/local-hosted paths and pin uploads to current API host.
     const parsed = new URL(fileUrl, apiOrigin);
     if (parsed.pathname.startsWith("/uploads/")) {
       return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
@@ -51,6 +60,29 @@ const normalizeHostedFileUrl = (fileUrl: string): string => {
     return parsed.toString();
   } catch {
     return fileUrl;
+  }
+};
+
+const getFileExtensionFromUrl = (url: string): string => {
+  const fromName = (name: string): string => {
+    const match = name.toLowerCase().match(/\.([a-z0-9]+)$/i);
+    return match?.[1] ?? "";
+  };
+
+  try {
+    const parsed = new URL(url, window.location.origin);
+    const directName = decodeURIComponent(parsed.pathname.split("/").pop() ?? "");
+    const nestedUrl = parsed.searchParams.get("url");
+    if (nestedUrl) {
+      const nested = new URL(nestedUrl, window.location.origin);
+      const nestedName = decodeURIComponent(nested.pathname.split("/").pop() ?? "");
+      return fromName(nestedName) || fromName(directName);
+    }
+    return fromName(directName);
+  } catch {
+    const cleaned = url.split("?")[0]?.split("#")[0] ?? "";
+    const name = cleaned.split("/").pop() ?? "";
+    return fromName(name);
   }
 };
 
@@ -1332,14 +1364,24 @@ const VendorDetails = () => {
           </DialogHeader>
           {previewDocument && (
             <div className="w-full h-[60vh] flex items-center justify-center bg-muted/30 rounded-lg overflow-hidden relative">
-              {previewDocument.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+              {(() => {
+                const extension = getFileExtensionFromUrl(previewDocument.url);
+                const isImage = ["jpg", "jpeg", "png", "gif", "webp"].includes(extension);
+                const isPdf = extension === "pdf";
+
+                if (isImage) {
+                  return (
                 <img
                   src={previewDocument.url}
                   alt="Document preview"
                   className="max-w-full max-h-full object-contain"
                   onLoad={() => setPdfLoading(false)}
                 />
-              ) : previewDocument.url.match(/\.pdf$/i) ? (
+                  );
+                }
+
+                if (isPdf) {
+                  return (
                 <>
                   {pdfLoading && (
                     <div className="absolute inset-0 flex items-center justify-center bg-muted/30">
@@ -1360,7 +1402,10 @@ const VendorDetails = () => {
                     }}
                   />
                 </>
-              ) : (
+                  );
+                }
+
+                return (
                 <div className="text-center p-6">
                   <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
@@ -1374,7 +1419,8 @@ const VendorDetails = () => {
                     </button>
                   </p>
                 </div>
-              )}
+                );
+              })()}
             </div>
           )}
           <DialogFooter className="gap-2">

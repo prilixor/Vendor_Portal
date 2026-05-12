@@ -154,9 +154,11 @@ app.MapGet("/api/files/download", async (
         if (!fullPath.StartsWith(uploadsRoot, StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(fullPath))
             return Results.NotFound();
 
-        var localFileName = Path.GetFileName(fullPath);
-        var localContentType = "application/octet-stream";
-        return Results.File(fullPath, localContentType, localFileName, enableRangeProcessing: true);
+            var localFileName = Path.GetFileName(fullPath);
+            var localContentType = "application/octet-stream";
+            // Prefer inline disposition for previewing in-browser (images, PDFs).
+            request.HttpContext.Response.Headers["Content-Disposition"] = $"inline; filename=\"{localFileName}\"";
+            return Results.File(fullPath, localContentType, enableRangeProcessing: true);
     }
 
     using var httpClient = new HttpClient();
@@ -167,7 +169,9 @@ app.MapGet("/api/files/download", async (
     var remoteContentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
     var remoteFileName = Path.GetFileName(parsed.LocalPath);
     var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-    return Results.File(stream, remoteContentType, remoteFileName, enableRangeProcessing: true);
+    // Allow inline display when embedded in an iframe/img.
+    request.HttpContext.Response.Headers["Content-Disposition"] = $"inline; filename=\"{remoteFileName}\"";
+    return Results.File(stream, remoteContentType, enableRangeProcessing: true);
 });
 
 app.UseFastEndpoints(op =>

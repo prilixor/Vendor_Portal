@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Prilixor.VendorPortal.Infrastructure.Exceptions;
 
 namespace Prilixor.VendorPortal.API.Extensions
 {
@@ -10,10 +11,20 @@ namespace Prilixor.VendorPortal.API.Extensions
             var errorId = Guid.NewGuid().ToString();
             logger.LogError(exception, "An unhandled exception has occurred: {ErrorId}. {ExceptionMessage}", errorId, exception.Message);
 
+            int statusCode = StatusCodes.Status500InternalServerError;
+            string title = "Server error occurred while processing your request.";
+
+            // S3 storage failures should return 503 (Service Unavailable) instead of 500
+            if (exception is S3StorageException)
+            {
+                statusCode = StatusCodes.Status503ServiceUnavailable;
+                title = exception.Message; // Use the custom message for S3 errors
+            }
+
             var problemDetails = new ProblemDetails
             {
-                Title = "Server error occurred while processing your request.",
-                Status = StatusCodes.Status500InternalServerError,
+                Title = title,
+                Status = statusCode,
                 Extensions = new Dictionary<string, object?> { { "ErrorId", errorId } }
             };
 
@@ -22,7 +33,7 @@ namespace Prilixor.VendorPortal.API.Extensions
                 problemDetails.Detail = exception.ToString();
             }
 
-            httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            httpContext.Response.StatusCode = statusCode;
             await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken: cancellationToken);
             return true;
         }

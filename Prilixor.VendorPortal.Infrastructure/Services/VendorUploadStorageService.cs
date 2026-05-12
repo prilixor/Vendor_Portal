@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Options;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Options;
+using Prilixor.VendorPortal.Infrastructure.Exceptions;
 
 namespace Prilixor.VendorPortal.Infrastructure.Services;
 
@@ -29,30 +30,38 @@ internal sealed class VendorUploadStorageService(
         var opts = s3Options.Value;
         if (amazonS3 is not null && opts.Enabled && !string.IsNullOrWhiteSpace(opts.BucketName))
         {
-            var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, VendorStoragePaths.S3VendorUploadKey(vendorId, storedFileName, folderType));
-            await using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms, cancellationToken);
-            ms.Position = 0;
-
-            await amazonS3.PutObjectAsync(new PutObjectRequest
+            try
             {
-                BucketName = opts.BucketName,
-                Key = key,
-                InputStream = ms,
-                ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
-                ServerSideEncryptionMethod = ServerSideEncryptionMethod.AES256
-            }, cancellationToken);
+                var s3RelativeKey = VendorStoragePaths.S3VendorUploadKey(vendorId, storedFileName, folderType);
+                var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, s3RelativeKey);
+                await using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms, cancellationToken);
+                ms.Position = 0;
 
-            var expiryMinutes = Math.Clamp(opts.PresignedUrlExpiryMinutes, 1, 10080);
-            var urlRequest = new GetPreSignedUrlRequest
+                await amazonS3.PutObjectAsync(new PutObjectRequest
+                {
+                    BucketName = opts.BucketName,
+                    Key = key,
+                    InputStream = ms,
+                    ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
+                    ServerSideEncryptionMethod = ServerSideEncryptionMethod.AES256
+                }, cancellationToken);
+
+                var expiryMinutes = Math.Clamp(opts.PresignedUrlExpiryMinutes, 1, 10080);
+                var urlRequest = new GetPreSignedUrlRequest
+                {
+                    BucketName = opts.BucketName,
+                    Key = key,
+                    Verb = HttpVerb.GET,
+                    Expires = DateTime.UtcNow.AddMinutes(expiryMinutes)
+                };
+                var browserUrl = amazonS3.GetPreSignedURL(urlRequest);
+                return new VendorFilePersistResult(s3RelativeKey, browserUrl);
+            }
+            catch (Exception ex)
             {
-                BucketName = opts.BucketName,
-                Key = key,
-                Verb = HttpVerb.GET,
-                Expires = DateTime.UtcNow.AddMinutes(expiryMinutes)
-            };
-            var browserUrl = amazonS3.GetPreSignedURL(urlRequest);
-            return new VendorFilePersistResult(localRelativePath, browserUrl);
+                throw new S3StorageException("S3 upload failed. The file storage service is currently unavailable. Please try again later.", ex);
+            }
         }
 
         var folderName = folderType switch
@@ -99,12 +108,19 @@ internal sealed class VendorUploadStorageService(
             if (amazonS3 is not null && s3Opts.Enabled && !string.IsNullOrWhiteSpace(s3Opts.BucketName) &&
                 Uri.TryCreate(s, UriKind.Absolute, out var absoluteUri))
             {
-                var s3RelativeKey = absoluteUri.AbsolutePath.TrimStart('/', '\\').Replace('\\', '/');
-                while (s3RelativeKey.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
-                    s3RelativeKey = s3RelativeKey["uploads/".Length..];
+                try
+                {
+                    var s3RelativeKey = absoluteUri.AbsolutePath.TrimStart('/', '\\').Replace('\\', '/');
+                    while (s3RelativeKey.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+                        s3RelativeKey = s3RelativeKey["uploads/".Length..];
 
-                var key = VendorStoragePaths.CombineS3Key(s3Opts.KeyPrefix, s3RelativeKey);
-                await amazonS3.DeleteObjectAsync(s3Opts.BucketName, key, cancellationToken);
+                    var key = VendorStoragePaths.CombineS3Key(s3Opts.KeyPrefix, s3RelativeKey);
+                    await amazonS3.DeleteObjectAsync(s3Opts.BucketName, key, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    throw new S3StorageException("S3 deletion failed. The file storage service is currently unavailable. Please try again later.", ex);
+                }
             }
             return;
         }
@@ -112,12 +128,19 @@ internal sealed class VendorUploadStorageService(
         var opts = s3Options.Value;
         if (amazonS3 is not null && opts.Enabled && !string.IsNullOrWhiteSpace(opts.BucketName))
         {
-            var s3RelativeKey = s;
-            while (s3RelativeKey.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
-                s3RelativeKey = s3RelativeKey["uploads/".Length..];
+            try
+            {
+                var s3RelativeKey = s;
+                while (s3RelativeKey.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+                    s3RelativeKey = s3RelativeKey["uploads/".Length..];
 
-            var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, s3RelativeKey);
-            await amazonS3.DeleteObjectAsync(opts.BucketName, key, cancellationToken);
+                var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, s3RelativeKey);
+                await amazonS3.DeleteObjectAsync(opts.BucketName, key, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                throw new S3StorageException("S3 deletion failed. The file storage service is currently unavailable. Please try again later.", ex);
+            }
             return;
         }
 
