@@ -48,9 +48,12 @@ namespace Prilixor.VendorPortal.Infrastructure
             var s3Startup = configuration.GetSection(S3StorageOptions.SectionName).Get<S3StorageOptions>();
             var hasExplicitCredentials = !string.IsNullOrWhiteSpace(s3Startup?.AccessKeyId)
                 && !string.IsNullOrWhiteSpace(s3Startup.SecretAccessKey);
+            var hasAwsEnvCredentials = !string.IsNullOrWhiteSpace(configuration["AWS_ACCESS_KEY_ID"])
+                && !string.IsNullOrWhiteSpace(configuration["AWS_SECRET_ACCESS_KEY"]);
+            var hasAwsProfile = !string.IsNullOrWhiteSpace(configuration["AWS_PROFILE"]);
             var allowAwsClient = s3Startup?.Enabled == true
                 && !string.IsNullOrWhiteSpace(s3Startup.BucketName)
-                && (!environment.IsDevelopment() || hasExplicitCredentials);
+                && (!environment.IsDevelopment() || hasExplicitCredentials || hasAwsEnvCredentials || hasAwsProfile);
 
             if (allowAwsClient)
             {

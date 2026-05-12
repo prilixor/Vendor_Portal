@@ -100,6 +100,29 @@ const Products = () => {
     }
   };
 
+  const getFileExtensionFromUrl = (url: string): string => {
+    const fromName = (name: string): string => {
+      const match = name.toLowerCase().match(/\.([a-z0-9]+)$/i);
+      return match?.[1] ?? "";
+    };
+
+    try {
+      const parsed = new URL(url, window.location.origin);
+      const directName = decodeURIComponent(parsed.pathname.split("/").pop() ?? "");
+      const nestedUrl = parsed.searchParams.get("url");
+      if (nestedUrl) {
+        const nested = new URL(nestedUrl, window.location.origin);
+        const nestedName = decodeURIComponent(nested.pathname.split("/").pop() ?? "");
+        return fromName(nestedName) || fromName(directName);
+      }
+      return fromName(directName);
+    } catch {
+      const cleaned = url.split("?")[0]?.split("#")[0] ?? "";
+      const name = cleaned.split("/").pop() ?? "";
+      return fromName(name);
+    }
+  };
+
   const normalizeHostedFileUrl = (fileUrl: string): string => {
     if (!fileUrl || fileUrl.startsWith("data:")) return fileUrl;
 
@@ -108,6 +131,16 @@ const Products = () => {
 
     try {
       const apiOrigin = new URL(apiBase).origin;
+
+      // Keep absolute external URLs (like S3 presigned URLs) untouched.
+      const isAbsolute = /^https?:\/\//i.test(fileUrl);
+      if (isAbsolute) {
+        const absolute = new URL(fileUrl);
+        if (absolute.origin !== apiOrigin) {
+          return fileUrl;
+        }
+      }
+
       const parsed = new URL(fileUrl, apiOrigin);
       if (parsed.pathname.startsWith("/uploads/")) {
         return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
@@ -435,7 +468,7 @@ const Products = () => {
         .map((img) => ({
           id: img.id,
           primary: img.isPrimary,
-          url: img.imageUrl,
+          url: normalizeHostedFileUrl(img.imageUrl),
           persisted: true,
         })));
       setListingDocuments(docsRes);
@@ -470,7 +503,7 @@ const Products = () => {
         .map((serverImg) => ({
           id: serverImg.id,
           primary: serverImg.isPrimary,
-          url: serverImg.imageUrl,
+          url: normalizeHostedFileUrl(serverImg.imageUrl),
           persisted: true,
         })));
       toast.success("Image deleted");
@@ -494,7 +527,7 @@ const Products = () => {
           return {
             id: `temp-${Date.now()}-${file.name}`,
             primary: false,
-            url: fileResult.fileUrl,
+            url: normalizeHostedFileUrl(fileResult.fileUrl),
             storageKey: fileResult.storageKey ?? undefined,
             persisted: false,
           } satisfies MediaImage;
@@ -519,7 +552,7 @@ const Products = () => {
   };
 
   const reorder = (from: number, to: number) => setTempImages((imgs) => { const c = [...imgs]; const [m] = c.splice(from, 1); c.splice(to, 0, m); return c; });
-  const previewImage = (url: string) => setPreviewUrl(url);
+  const previewImage = (url: string) => setPreviewUrl(normalizeHostedFileUrl(url));
 
   const saveMedia = async () => {
     if (!mediaFor || !user) return;
@@ -1365,7 +1398,13 @@ const Products = () => {
           <div className="flex-1 min-h-0 overflow-auto bg-muted/30">
             {previewDocument && (
               <div className="p-3 sm:p-4">
-                {previewDocument.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                {(() => {
+                  const extension = getFileExtensionFromUrl(previewDocument.url);
+                  const isImage = ["jpg", "jpeg", "png", "gif", "webp"].includes(extension);
+                  const isPdf = extension === "pdf";
+
+                  if (isImage) {
+                    return (
                   <div className="flex items-center justify-center min-h-[40vh]">
                     <img
                       src={previewDocument.url}
@@ -1373,7 +1412,11 @@ const Products = () => {
                       className="max-w-full max-h-[60vh] object-contain rounded-lg"
                     />
                   </div>
-                ) : previewDocument.url.match(/\.pdf$/i) ? (
+                    );
+                  }
+
+                  if (isPdf) {
+                    return (
                   <div className="relative w-full" style={{ height: '60vh', minHeight: '300px' }}>
                     <iframe
                       src={previewDocument.url}
@@ -1382,7 +1425,10 @@ const Products = () => {
                       style={{ maxWidth: '100%' }}
                     />
                   </div>
-                ) : (
+                    );
+                  }
+
+                  return (
                   <div className="flex flex-col items-center justify-center min-h-[40vh] text-center p-4">
                     <FileText className="h-12 w-12 sm:h-16 sm:w-16 mb-4 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">
@@ -1396,7 +1442,8 @@ const Products = () => {
                       Download file
                     </button>
                   </div>
-                )}
+                  );
+                })()}
               </div>
             )}
           </div>

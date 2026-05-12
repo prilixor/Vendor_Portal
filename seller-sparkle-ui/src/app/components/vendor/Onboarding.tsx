@@ -432,7 +432,7 @@ const Onboarding = () => {
       return;
     }
     const openPreview = (doc: VendorDocument) => {
-      const previewUrl = doc.fileUrl;
+      const previewUrl = getPreviewUrl(doc.fileUrl);
       setPdfLoading(true);
       setPreviewDocument({ url: previewUrl, type: doc.type });
     };
@@ -1454,7 +1454,13 @@ const Onboarding = () => {
           <div className="flex-1 min-h-0 overflow-auto bg-muted/30">
             {previewDocument && (
               <div className="p-3 sm:p-4">
-                {previewDocument.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                {(() => {
+                  const extension = getFileExtensionFromUrl(previewDocument.url);
+                  const isImage = ["jpg", "jpeg", "png", "gif", "webp"].includes(extension);
+                  const isPdf = extension === "pdf";
+
+                  if (isImage) {
+                    return (
                   <div className="flex items-center justify-center min-h-[40vh]">
                     <img
                       src={previewDocument.url}
@@ -1463,7 +1469,11 @@ const Onboarding = () => {
                       onLoad={() => setPdfLoading(false)}
                     />
                   </div>
-                ) : previewDocument.url.match(/\.pdf$/i) ? (
+                    );
+                  }
+
+                  if (isPdf) {
+                    return (
                   <div className="relative w-full" style={{ height: '60vh', minHeight: '300px' }}>
                     {pdfLoading && (
                       <div className="absolute inset-0 flex items-center justify-center bg-muted/30 z-10">
@@ -1485,7 +1495,10 @@ const Onboarding = () => {
                       }}
                     />
                   </div>
-                ) : (
+                    );
+                  }
+
+                  return (
                   <div className="flex flex-col items-center justify-center min-h-[40vh] text-center p-4">
                     <FileText className="h-12 w-12 sm:h-16 sm:w-16 mb-4 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">
@@ -1499,7 +1512,8 @@ const Onboarding = () => {
                       Download file
                     </button>
                   </div>
-                )}
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -1596,11 +1610,72 @@ const Detail = ({ label, value, className }: { label: string; value: string; cla
   </div>
 );
 
-const getPreviewUrl = (fileUrl: string): string => {
-  if (!fileUrl.startsWith("data:")) return fileUrl;
+const getApiOrigin = (): string | null => {
+  const configured = import.meta.env.VITE_API_BASE_URL as string | undefined;
+  if (!configured) return null;
+
   try {
-    const [meta, data] = fileUrl.split(",");
-    if (!meta || !data) return fileUrl;
+    return new URL(configured).origin;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeHostedFileUrl = (fileUrl: string): string => {
+  if (!fileUrl || fileUrl.startsWith("data:")) return fileUrl;
+
+  const apiOrigin = getApiOrigin();
+  if (!apiOrigin) return fileUrl;
+
+  try {
+    const isAbsolute = /^https?:\/\//i.test(fileUrl);
+    if (isAbsolute) {
+      const absolute = new URL(fileUrl);
+      if (absolute.origin !== apiOrigin) {
+        return fileUrl;
+      }
+    }
+
+    const parsed = new URL(fileUrl, apiOrigin);
+    if (parsed.pathname.startsWith("/uploads/")) {
+      return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+
+    return parsed.toString();
+  } catch {
+    return fileUrl;
+  }
+};
+
+const getFileExtensionFromUrl = (url: string): string => {
+  const fromName = (name: string): string => {
+    const match = name.toLowerCase().match(/\.([a-z0-9]+)$/i);
+    return match?.[1] ?? "";
+  };
+
+  try {
+    const parsed = new URL(url, window.location.origin);
+    const directName = decodeURIComponent(parsed.pathname.split("/").pop() ?? "");
+    const nestedUrl = parsed.searchParams.get("url");
+    if (nestedUrl) {
+      const nested = new URL(nestedUrl, window.location.origin);
+      const nestedName = decodeURIComponent(nested.pathname.split("/").pop() ?? "");
+      return fromName(nestedName) || fromName(directName);
+    }
+    return fromName(directName);
+  } catch {
+    const cleaned = url.split("?")[0]?.split("#")[0] ?? "";
+    const name = cleaned.split("/").pop() ?? "";
+    return fromName(name);
+  }
+};
+
+const getPreviewUrl = (fileUrl: string): string => {
+  const normalized = normalizeHostedFileUrl(fileUrl);
+  if (!normalized.startsWith("data:")) return normalized;
+  try {
+    const [meta, data] = normalized.split(",");
+    if (!meta || !data) return normalized;
     const mime = meta.match(/data:(.*?);base64/)?.[1] ?? "application/octet-stream";
     const binary = atob(data);
     const bytes = new Uint8Array(binary.length);
@@ -1609,7 +1684,7 @@ const getPreviewUrl = (fileUrl: string): string => {
     }
     return URL.createObjectURL(new Blob([bytes], { type: mime }));
   } catch {
-    return fileUrl;
+    return normalized;
   }
 };
 

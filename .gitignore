@@ -185,3 +185,4 @@ $RECYCLE.BIN/
 .env
 *.env
 appsettings.*.local.json
+**/launchSettings.json
