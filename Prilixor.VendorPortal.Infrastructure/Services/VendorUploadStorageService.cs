@@ -24,12 +24,12 @@ internal sealed class VendorUploadStorageService(
     {
         var extension = Path.GetExtension(originalFileName);
         var storedFileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
-        var relativePath = VendorStoragePaths.RelativeVendorUploadPath(vendorId, storedFileName, folderType);
+        var localRelativePath = VendorStoragePaths.LocalVendorUploadPath(vendorId, storedFileName, folderType);
 
         var opts = s3Options.Value;
         if (amazonS3 is not null && opts.Enabled && !string.IsNullOrWhiteSpace(opts.BucketName))
         {
-            var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, relativePath);
+            var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, VendorStoragePaths.S3VendorUploadKey(vendorId, storedFileName, folderType));
             await using var ms = new MemoryStream();
             await stream.CopyToAsync(ms, cancellationToken);
             ms.Position = 0;
@@ -52,7 +52,7 @@ internal sealed class VendorUploadStorageService(
                 Expires = DateTime.UtcNow.AddMinutes(expiryMinutes)
             };
             var browserUrl = amazonS3.GetPreSignedURL(urlRequest);
-            return new VendorFilePersistResult(relativePath, browserUrl);
+            return new VendorFilePersistResult(localRelativePath, browserUrl);
         }
 
         var folderName = folderType switch
@@ -79,7 +79,7 @@ internal sealed class VendorUploadStorageService(
         var baseUrl = !string.IsNullOrWhiteSpace(assetUrlOptions.Value.PublicApiBaseUrl)
             ? assetUrlOptions.Value.PublicApiBaseUrl.TrimEnd('/')
             : $"{requestPublicBaseUri.Scheme}://{requestPublicBaseUri.Authority}";
-        var absoluteUrl = $"{baseUrl}/{relativePath}";
+        var absoluteUrl = $"{baseUrl}/{localRelativePath}";
         return new VendorFilePersistResult(absoluteUrl, absoluteUrl);
     }
 
@@ -92,14 +92,31 @@ internal sealed class VendorUploadStorageService(
         if (s.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
             s.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
-            TryDeleteLegacyLocalFromAbsoluteUrl(s);
+            if (TryDeleteLegacyLocalFromAbsoluteUrl(s))
+                return;
+
+            var s3Opts = s3Options.Value;
+            if (amazonS3 is not null && s3Opts.Enabled && !string.IsNullOrWhiteSpace(s3Opts.BucketName) &&
+                Uri.TryCreate(s, UriKind.Absolute, out var absoluteUri))
+            {
+                var s3RelativeKey = absoluteUri.AbsolutePath.TrimStart('/', '\\').Replace('\\', '/');
+                while (s3RelativeKey.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+                    s3RelativeKey = s3RelativeKey["uploads/".Length..];
+
+                var key = VendorStoragePaths.CombineS3Key(s3Opts.KeyPrefix, s3RelativeKey);
+                await amazonS3.DeleteObjectAsync(s3Opts.BucketName, key, cancellationToken);
+            }
             return;
         }
 
         var opts = s3Options.Value;
         if (amazonS3 is not null && opts.Enabled && !string.IsNullOrWhiteSpace(opts.BucketName))
         {
-            var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, s);
+            var s3RelativeKey = s;
+            while (s3RelativeKey.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+                s3RelativeKey = s3RelativeKey["uploads/".Length..];
+
+            var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, s3RelativeKey);
             await amazonS3.DeleteObjectAsync(opts.BucketName, key, cancellationToken);
             return;
         }
@@ -123,12 +140,14 @@ internal sealed class VendorUploadStorageService(
             File.Delete(fullPath);
     }
 
-    private void TryDeleteLegacyLocalFromAbsoluteUrl(string absoluteUrl)
+    private bool TryDeleteLegacyLocalFromAbsoluteUrl(string absoluteUrl)
     {
         if (!Uri.TryCreate(absoluteUrl, UriKind.Absolute, out var uri))
-            return;
+            return false;
 
         var relativeFromUri = uri.AbsolutePath.TrimStart('/');
+        var beforeDelete = File.Exists(Path.GetFullPath(Path.Combine(environment.ContentRootPath, "wwwroot", relativeFromUri.Replace('/', Path.DirectorySeparatorChar))));
         TryDeleteLocalRelativePath(relativeFromUri);
+        return beforeDelete;
     }
 }

@@ -25,6 +25,61 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto, VendorWorkingHourDto, VendorProductListingDto } from "@/app/services/adminApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 
+const getApiOrigin = (): string | null => {
+  const configured = import.meta.env.VITE_API_BASE_URL as string | undefined;
+  if (!configured) return null;
+
+  try {
+    return new URL(configured).origin;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeHostedFileUrl = (fileUrl: string): string => {
+  if (!fileUrl || fileUrl.startsWith("data:")) return fileUrl;
+
+  const apiOrigin = getApiOrigin();
+  if (!apiOrigin) return fileUrl;
+
+  try {
+    // Support both absolute and relative paths and pin uploads to current API host.
+    const parsed = new URL(fileUrl, apiOrigin);
+    if (parsed.pathname.startsWith("/uploads/")) {
+      return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+    return parsed.toString();
+  } catch {
+    return fileUrl;
+  }
+};
+
+const downloadUrl = async (url: string) => {
+  try {
+    const token = localStorage.getItem('vendor_portal_token');
+    const headers: HeadersInit = {};
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? '';
+    if (token && (url.startsWith(apiBase) || url.startsWith(window.location.origin))) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) throw new Error('Download failed');
+    const blob = await resp.blob();
+    const parsed = new URL(url, window.location.origin);
+    const filename = decodeURIComponent((parsed.pathname.split('/').pop() || 'file'));
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+  } catch (err) {
+    console.error(err);
+    toast.error('Download failed.');
+  }
+};
+
 const getAdminUserId = () => {
   const adminUser = localStorage.getItem("adminUser");
   if (adminUser) {
@@ -444,8 +499,9 @@ const VendorDetails = () => {
       toast.info("No document URL found.");
       return;
     }
+    const normalizedUrl = normalizeHostedFileUrl(fileUrl);
     setPdfLoading(true);
-    setPreviewDocument({ url: fileUrl, type: documentType });
+    setPreviewDocument({ url: normalizedUrl, type: documentType });
   };
 
   const openItemRejectDialog = (kind: "doc" | "bank", itemId: string) => {
@@ -1309,14 +1365,13 @@ const VendorDetails = () => {
                   <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
                     Preview not available for this file type.
-                    <a
-                      href={previewDocument.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => void downloadUrl(previewDocument.url)}
                       className="text-primary hover:underline ml-2"
                     >
                       Download file
-                    </a>
+                    </button>
                   </p>
                 </div>
               )}
@@ -1333,11 +1388,7 @@ const VendorDetails = () => {
               Close
             </Button>
             {previewDocument && (
-              <Button
-                onClick={() => {
-                  window.open(previewDocument.url, '_blank', 'noopener,noreferrer');
-                }}
-              >
+              <Button onClick={() => void downloadUrl(previewDocument.url)}>
                 Download
               </Button>
             )}
