@@ -16,6 +16,7 @@ import { ProductListing } from "@/app/models";
 import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
+import { apiClient } from "@/app/services/apiClient";
 import { vendorOnboardingApi, VendorFileFolderType } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
@@ -86,6 +87,48 @@ const Products = () => {
   const [deleteImageConfirmId, setDeleteImageConfirmId] = useState<string | null>(null);
   const [previewDocument, setPreviewDocument] = useState<{ id: string; type: string; url: string } | null>(null);
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
+
+  const getFileNameFromUrl = (url?: string) => {
+    if (!url) return "";
+    try {
+      const parsed = new URL(url, window.location.origin);
+      const name = parsed.pathname.split("/").pop() || "";
+      return decodeURIComponent(name);
+    } catch {
+      const raw = (url.split("/").pop() || "").split("?")[0];
+      try { return decodeURIComponent(raw); } catch { return raw; }
+    }
+  };
+
+  const normalizeHostedFileUrl = (fileUrl: string): string => {
+    if (!fileUrl || fileUrl.startsWith("data:")) return fileUrl;
+
+    const apiBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
+    if (!apiBase) return fileUrl;
+
+    try {
+      const apiOrigin = new URL(apiBase).origin;
+      const parsed = new URL(fileUrl, apiOrigin);
+      if (parsed.pathname.startsWith("/uploads/")) {
+        return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+      return parsed.toString();
+    } catch {
+      return fileUrl;
+    }
+  };
+
+  const downloadUrl = async (url?: string) => {
+    if (!url) return;
+    try {
+      const parsed = new URL(url, window.location.origin);
+      const filename = decodeURIComponent((parsed.pathname.split('/').pop() || 'file'));
+      await apiClient.downloadBlob(`/files/download?url=${encodeURIComponent(url)}`, filename);
+    } catch (err) {
+      console.error(err);
+      toast.error('Download failed.');
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -534,7 +577,7 @@ const Products = () => {
   };
 
   const viewListingDoc = (doc: { id: string; documentType: string; fileUrl: string }) => {
-    setPreviewDocument({ id: doc.id, type: doc.documentType, url: doc.fileUrl });
+    setPreviewDocument({ id: doc.id, type: doc.documentType, url: normalizeHostedFileUrl(doc.fileUrl) });
   };
 
   const deleteListingDoc = (documentId: string) => {
@@ -1090,7 +1133,7 @@ const Products = () => {
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="text-sm font-medium truncate">{doc.documentType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
-                                <p className="text-xs text-muted-foreground truncate">{doc.fileUrl.split('/').pop()}</p>
+                                <p className="text-xs text-muted-foreground truncate">{getFileNameFromUrl(doc.fileUrl)}</p>
                               </div>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0 ml-3">
@@ -1120,7 +1163,7 @@ const Products = () => {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium leading-tight">{doc.documentType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5 break-all line-clamp-2">{doc.fileUrl.split('/').pop()}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5 break-words line-clamp-2">{getFileNameFromUrl(doc.fileUrl)}</p>
                               </div>
                             </div>
                             <div className="mt-3 flex items-center gap-2">
@@ -1345,14 +1388,13 @@ const Products = () => {
                     <p className="text-sm text-muted-foreground">
                       Preview not available for this file type.
                     </p>
-                    <a
-                      href={previewDocument.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => void downloadUrl(previewDocument.url)}
                       className="text-primary hover:underline mt-2 text-sm"
                     >
                       Download file
-                    </a>
+                    </button>
                   </div>
                 )}
               </div>
@@ -1368,12 +1410,7 @@ const Products = () => {
                 Close
               </Button>
               {previewDocument && (
-                <Button
-                  onClick={() => {
-                    window.open(previewDocument.url, '_blank', 'noopener,noreferrer');
-                  }}
-                  className="w-full sm:w-auto"
-                >
+                <Button onClick={() => void downloadUrl(previewDocument.url)} className="w-full sm:w-auto">
                   Download
                 </Button>
               )}

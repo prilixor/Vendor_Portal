@@ -59,6 +59,32 @@ const getAdminUserId = () => {
   return null;
 };
 
+const downloadUrl = async (url: string) => {
+  try {
+    const token = localStorage.getItem('vendor_portal_token');
+    const headers: HeadersInit = {};
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? '';
+    if (token && (url.startsWith(apiBase) || url.startsWith(window.location.origin))) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) throw new Error('Download failed');
+    const blob = await resp.blob();
+    const parsed = new URL(url, window.location.origin);
+    const filename = decodeURIComponent((parsed.pathname.split('/').pop() || 'file'));
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+  } catch (err) {
+    console.error(err);
+    toast.error('Download failed.');
+  }
+};
+
 const Verification = () => {
   const [vendors, setVendors] = useState<VendorDto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -992,14 +1018,13 @@ const Verification = () => {
                   <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
                     Preview not available for this file type.
-                    <a
-                      href={previewDocument.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => void downloadUrl(previewDocument.url)}
                       className="text-primary hover:underline ml-2"
                     >
                       Download file
-                    </a>
+                    </button>
                   </p>
                 </div>
               )}
@@ -1016,11 +1041,7 @@ const Verification = () => {
               Close
             </Button>
             {previewDocument && (
-              <Button
-                onClick={() => {
-                  window.open(previewDocument.url, '_blank', 'noopener,noreferrer');
-                }}
-              >
+              <Button onClick={() => void downloadUrl(previewDocument.url)}>
                 Download
               </Button>
             )}

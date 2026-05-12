@@ -13,7 +13,7 @@ using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.ConfigureServices(builder.Configuration);
+builder.Services.ConfigureServices(builder.Configuration, builder.Environment);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddFastEndpoints()
@@ -131,6 +131,43 @@ app.MapPost("/api/files/upload", async (HttpRequest request, IVendorUploadStorag
         contentType = file.ContentType,
         size = file.Length
     });
+});
+
+app.MapGet("/api/files/download", async (
+    HttpRequest request,
+    IWebHostEnvironment environment,
+    string url,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(url))
+        return Results.BadRequest(new { detail = "File url is required." });
+
+    if (!Uri.TryCreate(url, UriKind.RelativeOrAbsolute, out var parsed))
+        return Results.BadRequest(new { detail = "Invalid file url." });
+
+    if (!parsed.IsAbsoluteUri)
+    {
+        var relativePath = parsed.OriginalString.TrimStart('/', '\\').Replace('\\', '/');
+        var uploadsRoot = Path.GetFullPath(Path.Combine(environment.ContentRootPath, "wwwroot"));
+        var combined = Path.Combine(environment.ContentRootPath, "wwwroot", relativePath.Replace('/', Path.DirectorySeparatorChar));
+        var fullPath = Path.GetFullPath(combined);
+        if (!fullPath.StartsWith(uploadsRoot, StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(fullPath))
+            return Results.NotFound();
+
+        var localFileName = Path.GetFileName(fullPath);
+        var localContentType = "application/octet-stream";
+        return Results.File(fullPath, localContentType, localFileName, enableRangeProcessing: true);
+    }
+
+    using var httpClient = new HttpClient();
+    using var response = await httpClient.GetAsync(parsed, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+    if (!response.IsSuccessStatusCode)
+        return Results.StatusCode((int)response.StatusCode);
+
+    var remoteContentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
+    var remoteFileName = Path.GetFileName(parsed.LocalPath);
+    var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+    return Results.File(stream, remoteContentType, remoteFileName, enableRangeProcessing: true);
 });
 
 app.UseFastEndpoints(op =>

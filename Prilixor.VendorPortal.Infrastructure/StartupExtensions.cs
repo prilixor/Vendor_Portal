@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Options;
@@ -15,7 +16,8 @@ namespace Prilixor.VendorPortal.Infrastructure
     public static class StartupExtensions
     {
         public static IServiceCollection ConfigureInfrastructure(this IServiceCollection services,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IHostEnvironment environment)
         {
             services.AddOptions(configuration);
 
@@ -32,19 +34,25 @@ namespace Prilixor.VendorPortal.Infrastructure
             services.AddScoped<IPushNotificationService, WebPushNotificationService>();
             services.Configure<WebPushOptions>(configuration.GetSection(WebPushOptions.SectionName));
 
-            RegisterVendorStorage(services, configuration);
+            RegisterVendorStorage(services, configuration, environment);
 
             return services;
         }
 
-        private static void RegisterVendorStorage(IServiceCollection services, IConfiguration configuration)
+        private static void RegisterVendorStorage(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
         {
             services.Configure<S3StorageOptions>(configuration.GetSection(S3StorageOptions.SectionName));
             services.Configure<VendorPortalAssetUrlOptions>(
                 configuration.GetSection(VendorPortalAssetUrlOptions.SectionName));
 
             var s3Startup = configuration.GetSection(S3StorageOptions.SectionName).Get<S3StorageOptions>();
-            if (s3Startup?.Enabled == true && !string.IsNullOrWhiteSpace(s3Startup.BucketName))
+            var hasExplicitCredentials = !string.IsNullOrWhiteSpace(s3Startup?.AccessKeyId)
+                && !string.IsNullOrWhiteSpace(s3Startup.SecretAccessKey);
+            var allowAwsClient = s3Startup?.Enabled == true
+                && !string.IsNullOrWhiteSpace(s3Startup.BucketName)
+                && (!environment.IsDevelopment() || hasExplicitCredentials);
+
+            if (allowAwsClient)
             {
                 services.AddSingleton<IAmazonS3>(sp =>
                 {

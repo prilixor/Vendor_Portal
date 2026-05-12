@@ -24,7 +24,11 @@ internal sealed class VendorFileUrlResolver(
         var opts = s3Options.Value;
         if (amazonS3 is not null && opts.Enabled && !string.IsNullOrWhiteSpace(opts.BucketName))
         {
-            var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, s);
+            var s3RelativeKey = s;
+            while (s3RelativeKey.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+                s3RelativeKey = s3RelativeKey["uploads/".Length..];
+
+            var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, s3RelativeKey);
             var expiryMinutes = Math.Clamp(opts.PresignedUrlExpiryMinutes, 1, 10080);
             var request = new GetPreSignedUrlRequest
             {

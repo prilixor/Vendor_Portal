@@ -239,12 +239,25 @@ const Onboarding = () => {
     fetchCities();
   }, [selectedStateIso2]);
 
+  const getFileNameFromUrl = (url?: string) => {
+    if (!url) return "";
+    try {
+      // Use URL to parse path, fallback to simple split
+      const parsed = new URL(url, window.location.origin);
+      const name = parsed.pathname.split("/").pop() || "";
+      return decodeURIComponent(name);
+    } catch {
+      const raw = (url.split("/").pop() || "").split("?")[0];
+      try { return decodeURIComponent(raw); } catch { return raw; }
+    }
+  };
+
   const mapDocuments = (docsDto: Awaited<ReturnType<typeof vendorOnboardingApi.getVendorDocuments>>) =>
     docsDto.map((doc) => ({
       id: doc.id,
       vendorId: doc.vendorId,
       type: doc.documentType,
-      fileName: doc.fileUrl.split("/").pop() || doc.documentType,
+      fileName: getFileNameFromUrl(doc.fileUrl) || doc.documentType,
       fileUrl: doc.fileUrl,
       status: mapStatus(doc.verificationStatus),
       rejectionReason: doc.rejectionReason,
@@ -980,9 +993,9 @@ const Onboarding = () => {
                                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-soft text-primary">
                                   <FileText className="h-4 w-4" />
                                 </div>
-                                <div>
+                                <div className="min-w-0">
                                   <p className="font-medium">{doc.type}</p>
-                                  <p className="text-xs text-muted-foreground">{doc.fileName}</p>
+                                  <p className="text-xs text-muted-foreground truncate" title={doc.fileName}>{doc.fileName}</p>
                                 </div>
                               </div>
                             </td>
@@ -1478,14 +1491,13 @@ const Onboarding = () => {
                     <p className="text-sm text-muted-foreground">
                       Preview not available for this file type.
                     </p>
-                    <a
-                      href={previewDocument.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => void downloadUrl(previewDocument.url)}
                       className="text-primary hover:underline mt-2 text-sm"
                     >
                       Download file
-                    </a>
+                    </button>
                   </div>
                 )}
               </div>
@@ -1507,9 +1519,7 @@ const Onboarding = () => {
               </Button>
               {previewDocument && (
                 <Button
-                  onClick={() => {
-                    window.open(previewDocument.url, '_blank', 'noopener,noreferrer');
-                  }}
+                  onClick={() => void downloadUrl(previewDocument.url)}
                   className="w-full sm:w-auto"
                 >
                   Download
@@ -1600,6 +1610,32 @@ const getPreviewUrl = (fileUrl: string): string => {
     return URL.createObjectURL(new Blob([bytes], { type: mime }));
   } catch {
     return fileUrl;
+  }
+};
+
+const downloadUrl = async (url: string) => {
+  try {
+    const token = localStorage.getItem('vendor_portal_token');
+    const headers: HeadersInit = {};
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? '';
+    if (token && (url.startsWith(apiBase) || url.startsWith(window.location.origin))) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) throw new Error('Download failed');
+    const blob = await resp.blob();
+    const parsed = new URL(url, window.location.origin);
+    const filename = decodeURIComponent((parsed.pathname.split('/').pop() || 'file'));
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+  } catch (err) {
+    console.error(err);
+    toast.error('Download failed.');
   }
 };
 

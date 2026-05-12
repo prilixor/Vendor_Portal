@@ -15,11 +15,18 @@ internal static class VendorStoragePaths
         _ => "documents"
     };
 
-    internal static string RelativeVendorUploadPath(string vendorId, string storedFileName, VendorFileFolderType folderType = VendorFileFolderType.Documents)
+    internal static string LocalVendorUploadPath(string vendorId, string storedFileName, VendorFileFolderType folderType = VendorFileFolderType.Documents)
     {
         var segment = SanitizeVendorSegment(vendorId);
         var folder = GetFolderName(folderType);
         return $"uploads/vendors/{segment}/{folder}/{storedFileName}";
+    }
+
+    internal static string S3VendorUploadKey(string vendorId, string storedFileName, VendorFileFolderType folderType = VendorFileFolderType.Documents)
+    {
+        var segment = SanitizeVendorSegment(vendorId);
+        var folder = GetFolderName(folderType);
+        return $"vendors/{segment}/{folder}/{storedFileName}";
     }
 
     internal static string CombineS3Key(string? prefix, string relativeKey)
