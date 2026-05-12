@@ -54,7 +54,11 @@ namespace Prilixor.VendorPortal.Infrastructure
                         RegionEndpoint = RegionEndpoint.GetBySystemName(string.IsNullOrWhiteSpace(opt.Region) ? "us-east-1" : opt.Region)
                     };
                     if (!string.IsNullOrEmpty(opt.AccessKeyId) && !string.IsNullOrEmpty(opt.SecretAccessKey))
+                    {
+                        if (!string.IsNullOrEmpty(opt.SessionToken))
+                            return new AmazonS3Client(opt.AccessKeyId, opt.SecretAccessKey, opt.SessionToken, cfg);
                         return new AmazonS3Client(opt.AccessKeyId, opt.SecretAccessKey, cfg);
+                    }
                     return new AmazonS3Client(cfg);
                 });
             }

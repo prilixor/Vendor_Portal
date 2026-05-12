@@ -21,4 +21,7 @@ public sealed class S3StorageOptions
     public string? AccessKeyId { get; set; }
 
     public string? SecretAccessKey { get; set; }
+
+    /// <summary>Session token for temporary AWS credentials (required when using temporary credentials).</summary>
+    public string? SessionToken { get; set; }
 }
