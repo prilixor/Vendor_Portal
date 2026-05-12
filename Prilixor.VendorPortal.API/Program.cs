@@ -161,17 +161,50 @@ app.MapGet("/api/files/download", async (
             return Results.File(fullPath, localContentType, enableRangeProcessing: true);
     }
 
-    using var httpClient = new HttpClient();
-    using var response = await httpClient.GetAsync(parsed, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-    if (!response.IsSuccessStatusCode)
-        return Results.StatusCode((int)response.StatusCode);
+    try
+    {
+        using var httpClient = new HttpClient();
+        using var response = await httpClient.GetAsync(parsed, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            return Results.Json(new { detail = $"Remote server returned {(int)response.StatusCode} {response.ReasonPhrase}" }, statusCode: (int)response.StatusCode);
 
-    var remoteContentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
-    var remoteFileName = Path.GetFileName(parsed.LocalPath);
-    var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-    // Allow inline display when embedded in an iframe/img.
-    request.HttpContext.Response.Headers["Content-Disposition"] = $"inline; filename=\"{remoteFileName}\"";
-    return Results.File(stream, remoteContentType, enableRangeProcessing: true);
+        var remoteContentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
+        var remoteFileName = Path.GetFileName(parsed.LocalPath);
+
+        // Stream remote response into a temp file and return a FileStream with DeleteOnClose.
+        var ext = Path.GetExtension(remoteFileName);
+        var tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ext);
+        // Create file with DeleteOnClose so it is removed when the response stream is closed.
+        var tempStream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920, FileOptions.DeleteOnClose);
+        try
+        {
+            await response.Content.CopyToAsync(tempStream, cancellationToken);
+            tempStream.Seek(0, SeekOrigin.Begin);
+            // Allow inline display when embedded in an iframe/img.
+            request.HttpContext.Response.Headers["Content-Disposition"] = $"inline; filename=\"{remoteFileName}\"";
+            return Results.File(tempStream, remoteContentType, enableRangeProcessing: true);
+        }
+        catch
+        {
+            // Ensure we dispose tempStream and let DeleteOnClose remove the file if anything goes wrong here.
+            tempStream.Dispose();
+            throw;
+        }
+    }
+    catch (HttpRequestException ex)
+    {
+        Log.Error(ex, "Failed to download remote file: {Url}", url);
+        return Results.Json(new { detail = "Failed to fetch remote file.", error = ex.Message }, statusCode: 502);
+    }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+        return Results.StatusCode(499); // Client Closed Request
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "Unexpected error while proxying file download: {Url}", url);
+        return Results.Json(new { detail = "Unexpected error while fetching remote file." }, statusCode: 500);
+    }
 });
 
 app.UseFastEndpoints(op =>
