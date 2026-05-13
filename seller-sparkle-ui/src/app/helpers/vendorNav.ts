@@ -17,7 +17,6 @@ import {
   Bell,
 
   Settings,
-
 } from "lucide-react";
 
 import type { NavSection } from "@/app/helpers/navigation";
@@ -80,7 +79,6 @@ export const vendorNav: NavSection[] = [
     ],
 
   },
-
 ];
 
 export const getVendorNav = (unreadCount: number): NavSection[] => {
