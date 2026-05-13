@@ -10,6 +10,8 @@ public sealed class RegisterVendorRequest
 {
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+    public string? SupportPhone { get; set; }
+    public string? Phone { get; set; }
 }
 
 public sealed class UpsertVendorProfileRequest : VendorIdRequest
@@ -50,7 +52,7 @@ public sealed class RegisterVendorEndpoint(IMediator mediator)
 
     public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(RegisterVendorRequest req, CancellationToken ct)
     {
-        var result = await mediator.Send(new RegisterVendorCommand(req.Email, req.Password), ct);
+        var result = await mediator.Send(new RegisterVendorCommand(req.Email, req.Password, req.SupportPhone ?? req.Phone ?? string.Empty), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

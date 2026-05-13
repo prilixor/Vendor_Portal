@@ -619,7 +619,12 @@ const Verification = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span>Email Verified: {selected.emailVerified ? "Yes" : "No"}</span>
+                    <span>Email Verified: {selected.isEmailVerified ? "Yes" : "No"}</span>
+                    {selected.verificationTokenExpiryUtc && (
+                      <span className="block text-xs text-muted-foreground mt-1">
+                        Verification link expires: {new Date(selected.verificationTokenExpiryUtc).toLocaleString()}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

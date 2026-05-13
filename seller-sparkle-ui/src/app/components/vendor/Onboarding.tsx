@@ -55,8 +55,6 @@ const defaultBank: BankDetails = {
   status: "pending",
 };
 
-
-
 const Onboarding = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -76,6 +74,8 @@ const Onboarding = () => {
   const [documentType, setDocumentType] = useState("GST Certificate");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [bankAccountId, setBankAccountId] = useState<string | null>(null);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [verificationTokenExpiryUtc, setVerificationTokenExpiryUtc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRefMobile = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -86,7 +86,7 @@ const Onboarding = () => {
   const [ifscLoading, setIfscLoading] = useState(false);
   const [ifscError, setIfscError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
-  
+
   // State and City API state
   const [states, setStates] = useState<{ name: string; iso2: string }[]>([]);
   const [cities, setCities] = useState<string[]>([]);
@@ -345,6 +345,8 @@ const Onboarding = () => {
 
         if (statusRes.status === "fulfilled") {
           setAccountStatus(statusRes.value.accountStatus);
+          setIsEmailVerified(statusRes.value.isEmailVerified);
+          setVerificationTokenExpiryUtc(statusRes.value.verificationTokenExpiryUtc ?? null);
         }
 
         // Switch to profile view if vendor has submitted before
@@ -487,7 +489,40 @@ const Onboarding = () => {
   };
 
   const handleContinue = async () => {
+    if (step === 0) {
+      // Validate phone number in basic info
+      if (!profile.phone.trim()) {
+        toast.error("Phone number is required");
+        return;
+      }
+    }
+
     if (step === 1) {
+      // Validate required profile fields before saving
+      if (!profile.businessName.trim()) {
+        toast.error("Please fill in business name");
+        return;
+      }
+      if (!profile.ownerName.trim()) {
+        toast.error("Please fill in owner name");
+        return;
+      }
+      if (!profile.addressLine1.trim()) {
+        toast.error("Please fill in address line 1");
+        return;
+      }
+      if (!profile.city.trim()) {
+        toast.error("Please fill in city");
+        return;
+      }
+      if (!profile.state.trim()) {
+        toast.error("Please fill in state");
+        return;
+      }
+      if (!profile.postalCode.trim()) {
+        toast.error("Please fill in postal code");
+        return;
+      }
       try {
         setBusy(true);
         await saveProfile();
@@ -591,10 +626,6 @@ const Onboarding = () => {
         toast.error("Please fill in owner name");
         return;
       }
-      if (!profile.phone.trim()) {
-        toast.error("Please fill in phone number");
-        return;
-      }
       if (!profile.addressLine1.trim()) {
         toast.error("Please fill in address line 1");
         return;
@@ -609,12 +640,6 @@ const Onboarding = () => {
       }
       if (!profile.postalCode.trim()) {
         toast.error("Please fill in postal code");
-        return;
-      }
-      // Pincode validation: exactly 6 digits, first digit cannot be 0
-      const pincodeRegex = /^[1-9][0-9]{5}$/;
-      if (!pincodeRegex.test(profile.postalCode.trim())) {
-        toast.error("Pincode must be exactly 6 digits and cannot start with 0");
         return;
       }
       if (!profile.gstNumber.trim()) {
@@ -820,7 +845,13 @@ const Onboarding = () => {
                   <p className="text-sm text-muted-foreground">{toCamelCase(editingSection === 1 ? (originalProfile?.ownerName || profile.ownerName || "") : (profile.ownerName || ""))} · {user?.email}</p>
                 </div>
               </div>
-              <StatusBadge status={accountStatus as "pending" | "approved" | "rejected" | "under_review"} />
+              <div className="flex flex-col items-start gap-2 sm:items-end">
+                <StatusBadge status={accountStatus as "pending" | "approved" | "rejected" | "under_review"} />
+                <div className="text-xs text-muted-foreground">
+                  Email {isEmailVerified ? "verified" : "unverified"}
+                  {!isEmailVerified && verificationTokenExpiryUtc ? ` · Link expires ${new Date(verificationTokenExpiryUtc).toLocaleDateString()}` : ""}
+                </div>
+              </div>
             </div>
           </Card>
 
@@ -844,7 +875,7 @@ const Onboarding = () => {
                     <FormGrid cols={3}>
                       <Field label="Business name" value={profile.businessName} onChange={(v) => updateProfile("businessName", v)} />
                       <Field label="Owner name" value={profile.ownerName} onChange={(v) => updateProfile("ownerName", v)} />
-                      <Field label="Phone" value={profile.phone} onChange={(v) => updateProfile("phone", v)} />
+                      <Field label="Phone" value={profile.phone} onChange={(v) => updateProfile("phone", v)} readonly />
                       <Field label="GST number" value={profile.gstNumber} onChange={(v) => updateProfile("gstNumber", v)} />
                       <StateCityCombobox
                         label="State"
@@ -1119,15 +1150,22 @@ const Onboarding = () => {
                     <Input value={user?.email ?? ""} readOnly className="bg-muted/50" />
                     <p className="text-xs text-muted-foreground">This is the email tied to your account and cannot be changed here.</p>
                   </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label>Username Name</Label>
-                      <Input value={profile.ownerName || user?.name || "Not set"} readOnly className="bg-muted/50" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>User type</Label>
-                      <Input value={user?.role ? `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}` : "Vendor"} readOnly className="bg-muted/50" />
-                    </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="phone">Phone Number *</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={profile.phone}
+                      readOnly
+                      placeholder="Phone from your account"
+                      className="bg-muted/50"
+                    />
+                    <p className="text-xs text-muted-foreground">Phone is synced from your account and cannot be edited here.</p>
+                    {!profile.phone && <p className="text-xs text-destructive">Phone number is required</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>User type</Label>
+                    <Input value={user?.role ? `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}` : "Vendor"} readOnly className="bg-muted/50" />
                   </div>
                 </div>
               )}
@@ -1139,7 +1177,6 @@ const Onboarding = () => {
             <FormGrid cols={2}>
               <Field label="Business name" value={profile.businessName} onChange={(v) => updateProfile("businessName", v)} />
               <Field label="Owner name" value={profile.ownerName} onChange={(v) => updateProfile("ownerName", v)} />
-              <Field label="Phone" value={profile.phone} onChange={(v) => updateProfile("phone", v)} />
               <Field label="GST number" value={profile.gstNumber} onChange={(v) => updateProfile("gstNumber", v)} />
               <Field className="sm:col-span-2" label="Address line 1" value={profile.addressLine1} onChange={(v) => updateProfile("addressLine1", v)} />
               <Field className="sm:col-span-2" label="Address line 2 (optional)" value={profile.addressLine2 ?? ""} onChange={(v) => updateProfile("addressLine2", v)} />

@@ -2,6 +2,37 @@ namespace Prilixor.VendorPortal.Application.Services;
 
 public static class EmailTemplates
 {
+    public static string VendorEmailVerificationRequested(string vendorEmail, string verificationLink, string vendorName = "")
+    {
+        var name = string.IsNullOrWhiteSpace(vendorName) ? vendorEmail : vendorName;
+        return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Verify Your Email</title>
+</head>
+<body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+    <div style='max-width: 600px; margin: 0 auto; padding: 20px;'>
+        <div style='background: linear-gradient(135deg, #2563eb 0%, #0f766e 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;'>
+            <h1 style='color: white; margin: 0; font-size: 28px;'>Verify Your Email</h1>
+        </div>
+        <div style='background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0;'>
+            <p style='font-size: 16px; margin-bottom: 20px;'>Dear {name},</p>
+            <p style='font-size: 16px; margin-bottom: 20px;'>Thanks for registering. Please verify your email address to continue.</p>
+            <div style='text-align: center; margin: 30px 0;'>
+                <a href='{verificationLink}' style='background: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold;'>Verify Email</a>
+            </div>
+            <p style='font-size: 14px; color: #666; margin-top: 20px;'>This link will expire in 24 hours.</p>
+            <p style='font-size: 14px; color: #666;'>If you did not create this account, you can ignore this email.</p>
+            <p style='font-size: 14px; color: #666; margin-top: 30px;'>Best regards,<br>The Prilixor Team</p>
+        </div>
+    </div>
+</body>
+</html>";
+    }
+
     public static string VendorApproved(string vendorEmail, string vendorName = "")
     {
         var name = string.IsNullOrWhiteSpace(vendorName) ? vendorEmail : vendorName;

@@ -109,7 +109,7 @@ const AdminDashboard = () => {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{vendor.email}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {vendor.registrationStage} · {vendor.emailVerified ? "Email verified" : "Email not verified"}
+                        {vendor.registrationStage} · {vendor.isEmailVerified ? "Email verified" : "Email not verified"}
                       </p>
                     </div>
                     <Button

@@ -17,7 +17,8 @@ internal sealed class GetVendorsQueryHandler(IVendorOnboardingRepository reposit
         var result = vendors.Select(v => new VendorDto(
             v.Id.ToString(),
             v.Email,
-            v.EmailVerified,
+            v.IsEmailVerified,
+            v.VerificationTokenExpiryUtc,
             v.AccountStatus,
             v.RegistrationStage,
             v.LastLoginAt

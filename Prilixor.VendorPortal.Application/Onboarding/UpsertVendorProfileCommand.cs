@@ -62,7 +62,7 @@ internal sealed class UpsertVendorProfileCommandHandler(IVendorOnboardingReposit
 
         profile.BusinessName = request.BusinessName;
         profile.OwnerName = request.OwnerName;
-        profile.SupportPhone = request.SupportPhone;
+        profile.SupportPhone = vendor.SupportPhone;
         profile.GstNumber = request.GstNumber;
         profile.AddressLine1 = request.AddressLine1;
         profile.AddressLine2 = request.AddressLine2;

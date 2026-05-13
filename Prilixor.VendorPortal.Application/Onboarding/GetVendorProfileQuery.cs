@@ -16,10 +16,30 @@ internal sealed class GetVendorProfileQueryHandler(IVendorOnboardingRepository r
             return Result.Failure<VendorProfileDto>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
         }
 
+        var vendor = await repository.GetVendorByIdAsync(vendorId, cancellationToken);
+        if (vendor is null)
+        {
+            return Result.Failure<VendorProfileDto>(new Error("vendors.not_found", "Vendor not found.", ErrorCategory.NotFound));
+        }
+
         var profile = await repository.GetVendorProfileAsync(vendorId, cancellationToken);
         if (profile is null)
         {
-            return Result.Failure<VendorProfileDto>(new Error("vendor_profiles.not_found", "Vendor profile not found.", ErrorCategory.NotFound));
+            return Result.Success(new VendorProfileDto(
+                Guid.Empty.ToString(),
+                vendor.Id.ToString(),
+                string.Empty,
+                string.Empty,
+                vendor.SupportPhone,
+                null,
+                string.Empty,
+                null,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                null,
+                null,
+                false));
         }
 
         return Result.Success(new VendorProfileDto(
@@ -27,7 +47,7 @@ internal sealed class GetVendorProfileQueryHandler(IVendorOnboardingRepository r
             profile.VendorId.ToString(),
             profile.BusinessName,
             profile.OwnerName,
-            profile.SupportPhone,
+            vendor.SupportPhone,
             profile.GstNumber,
             profile.AddressLine1,
             profile.AddressLine2,

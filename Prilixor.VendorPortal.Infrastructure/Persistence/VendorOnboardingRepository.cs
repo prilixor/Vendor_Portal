@@ -22,6 +22,20 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
             .FirstOrDefaultAsync(x => x.Email == normalized && !x.IsDeleted, cancellationToken);
     }
 
+    public Task<Vendor?> GetVendorByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
+    {
+        var normalized = new string(phoneNumber.Where(char.IsDigit).ToArray());
+        return dbContext.Vendors
+            .FirstOrDefaultAsync(x => x.SupportPhone == normalized && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task<Vendor?> GetVendorByEmailVerificationTokenAsync(string token, CancellationToken cancellationToken)
+    {
+        var normalized = token.Trim();
+        return dbContext.Vendors
+            .FirstOrDefaultAsync(x => x.EmailVerificationToken == normalized && !x.IsDeleted, cancellationToken);
+    }
+
     public Task<List<Vendor>> GetVendorsAsync(CancellationToken cancellationToken)
     {
         return dbContext.Vendors

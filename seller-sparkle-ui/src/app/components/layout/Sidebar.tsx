@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink } from "@/app/components/shared/NavLink";
-import { useLocation } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom";
 import { ChevronLeft, Sparkles, X } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
 import { NavSection } from "@/app/helpers/navigation";
@@ -109,12 +109,17 @@ export const Sidebar = ({ sections, brandLabel, isOpen, onClose }: SidebarProps)
       </nav>
 
       {/* Footer hint */}
-      {/* {!collapsed && (
+      {!collapsed && (
         <div className="m-3 hidden rounded-xl bg-gradient-soft p-3 text-xs lg:block">
           <p className="font-semibold">Need help?</p>
           <p className="mt-0.5 text-muted-foreground">Check the docs or chat with support.</p>
+          <div className="mt-2.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+            <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">Terms</Link>
+            <span>•</span>
+            <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">Privacy</Link>
+          </div>
         </div>
-      )} */}
+      )}
     </aside>
   );
 };

@@ -1,12 +1,16 @@
 using FluentValidation;
+using System.Linq;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 
 namespace Prilixor.VendorPortal.Application.Onboarding;
 
-public sealed record RegisterVendorCommand(string Email, string Password) : ICommand<VendorDto>;
+public sealed record RegisterVendorCommand(string Email, string Password, string SupportPhone) : ICommand<VendorDto>;
 
 public sealed class RegisterVendorCommandValidator : AbstractValidator<RegisterVendorCommand>
 {
@@ -14,12 +18,19 @@ public sealed class RegisterVendorCommandValidator : AbstractValidator<RegisterV
     {
         RuleFor(x => x.Email).NotEmpty().EmailAddress();
         RuleFor(x => x.Password).NotEmpty().MinimumLength(8);
+        RuleFor(x => x.SupportPhone)
+            .NotEmpty()
+            .Matches("^\\d{10}$")
+            .WithMessage("Support phone must contain exactly 10 digits.");
     }
 }
 
 internal sealed class RegisterVendorCommandHandler(
     IVendorOnboardingRepository repository,
-    IPasswordHasherService passwordHasherService)
+    IPasswordHasherService passwordHasherService,
+    IEmailService emailService,
+    IConfiguration configuration,
+    ILogger<RegisterVendorCommandHandler> logger)
     : ICommandHandler<RegisterVendorCommand, VendorDto>
 {
     public async Task<Result<VendorDto>> Handle(RegisterVendorCommand request, CancellationToken cancellationToken)
@@ -30,11 +41,36 @@ internal sealed class RegisterVendorCommandHandler(
             return Result.Failure<VendorDto>(new Error("vendors.email_exists", "A vendor account already exists for this email.", ErrorCategory.Validation));
         }
 
+        // Validate support phone defensively server-side
+        if (string.IsNullOrWhiteSpace(request.SupportPhone))
+        {
+            return Result.Failure<VendorDto>(new Error("vendors.invalid_support_phone", "Support phone is required.", ErrorCategory.Validation));
+        }
+
+        {
+            var digits = new string(request.SupportPhone.Where(char.IsDigit).ToArray());
+            if (digits.Length != 10)
+            {
+                return Result.Failure<VendorDto>(new Error("vendors.invalid_support_phone", "Support phone must contain exactly 10 digits.", ErrorCategory.Validation));
+            }
+            // normalize to digits-only
+            request = request with { SupportPhone = digits };
+        }
+
+        var existingByPhone = await repository.GetVendorByPhoneAsync(request.SupportPhone, cancellationToken);
+        if (existingByPhone is not null)
+        {
+            return Result.Failure<VendorDto>(new Error("vendors.phone_exists", "A vendor account already exists for this phone number.", ErrorCategory.Validation));
+        }
+
         var vendor = new Vendor
         {
             Email = request.Email.Trim().ToLowerInvariant(),
+            SupportPhone = request.SupportPhone,
             PasswordHash = passwordHasherService.HashPassword(request.Password),
-            EmailVerified = false,
+            IsEmailVerified = false,
+            EmailVerificationToken = VerificationTokenGenerator.GenerateSecureToken(),
+            VerificationTokenExpiryUtc = DateTimeOffset.UtcNow.AddHours(24),
             AccountStatus = "pending",
             RegistrationStage = "email_registered"
         };
@@ -42,10 +78,42 @@ internal sealed class RegisterVendorCommandHandler(
         await repository.AddVendorAsync(vendor, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
 
+        // Create initial vendor profile with support phone if provided
+        if (!string.IsNullOrWhiteSpace(request.SupportPhone))
+        {
+            var profile = new VendorProfile
+            {
+                VendorId = vendor.Id,
+                SupportPhone = vendor.SupportPhone,
+                BusinessName = string.Empty,
+                OwnerName = string.Empty,
+                City = string.Empty,
+                State = string.Empty,
+                PostalCode = string.Empty,
+                AddressLine1 = string.Empty
+            };
+
+            await repository.UpsertVendorProfileAsync(profile, cancellationToken);
+            await repository.SaveChangesAsync(cancellationToken);
+        }
+
+        try
+        {
+            var frontendUrl = configuration["FrontendUrl"] ?? "https://vendor-portal-psi-amber.vercel.app";
+            var verificationLink = $"{frontendUrl}/verify-email?token={Uri.EscapeDataString(vendor.EmailVerificationToken ?? string.Empty)}";
+            var emailBody = EmailTemplates.VendorEmailVerificationRequested(vendor.Email, verificationLink);
+            await emailService.SendEmailAsync(vendor.Email, "Verify Your Email Address", emailBody, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send verification email to vendor {VendorEmail}", vendor.Email);
+        }
+
         return Result.Success(new VendorDto(
             vendor.Id.ToString(),
             vendor.Email,
-            vendor.EmailVerified,
+            vendor.IsEmailVerified,
+            vendor.VerificationTokenExpiryUtc,
             vendor.AccountStatus,
             vendor.RegistrationStage,
             vendor.LastLoginAt));
