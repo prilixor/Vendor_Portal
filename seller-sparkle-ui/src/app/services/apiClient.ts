@@ -52,12 +52,12 @@ class ApiClient {
       const error = await response.json().catch(() => ({ detail: 'An error occurred' }));
       const message = error.detail || error.title || error.message || 'An error occurred';
       // Look for error code in various fields, but skip URL-like values (RFC links)
-      let code = error.code || error.errorCode || error.errorType;
+      let code = error.code || error.errorCode || error.errorType || error.title;
       // If code looks like a URL (contains http), search in other fields or message
       if (!code || code.includes('http') || code.includes('://') || code.startsWith('https')) {
         // Try to extract from error.message or error.title
         const sourceText = error.message || error.title || message;
-        const codeMatch = sourceText.match(/(vendors\.[a-z_]+|admins\.[a-z_]+|documents\.[a-z_]+|bank_accounts\.[a-z_]+)/i);
+        const codeMatch = sourceText.match(/(vendors\.[a-z_]+|admins\.[a-z_]+|documents\.[a-z_]+|bank_accounts\.[a-z_]+|EMAIL_NOT_VERIFIED|auth\.[a-z_]+)/i);
         if (codeMatch) {
           code = codeMatch[1];
         }

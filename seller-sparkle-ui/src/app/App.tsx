@@ -12,6 +12,10 @@ import Login from "@/app/components/auth/Login";
 import Register from "@/app/components/auth/Register";
 import ForgotPassword from "@/app/components/auth/ForgotPassword";
 import ResetPassword from "@/app/components/auth/ResetPassword";
+import VerifyEmailSent from "@/app/components/auth/VerifyEmailSent";
+import VerifyEmail from "@/app/components/auth/VerifyEmail";
+import TermsAndConditions from "@/app/components/legal/TermsAndConditions";
+import PrivacyPolicy from "@/app/components/legal/PrivacyPolicy";
 
 import VendorDashboard from "@/app/components/vendor/Dashboard";
 import Onboarding from "@/app/components/vendor/Onboarding";
@@ -50,6 +54,10 @@ const App = () => (
             <Route path="/admin/register" element={<AdminRegister />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/verify-email-sent" element={<VerifyEmailSent />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
 
             <Route path="/vendor" element={<AppShell variant="vendor" />}>
               <Route index element={<VendorDashboard />} />

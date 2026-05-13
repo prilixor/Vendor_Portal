@@ -5,6 +5,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
+import { authApi } from "@/app/services/authApi";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 
@@ -15,11 +16,16 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
   const validate = () => {
     const e: typeof errors = {};
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) e.email = "Enter a valid email address";
+    const isEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+    const phoneDigits = email.replace(/\D/g, "");
+    const isPhone = phoneDigits.length === 10;
+    if (!isEmail && !isPhone) e.email = "Enter a valid email address or phone number";
     if (password.length < 8) e.password = "Password must be at least 8 characters";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -31,6 +37,7 @@ const Login = () => {
     setLoading(true);
     try {
       await login(email, password, "vendor");
+      setNeedsVerification(false);
       // Clear any admin user data from previous session
       localStorage.removeItem("adminUser");
       toast.success("Welcome back, Vendor!");
@@ -38,9 +45,33 @@ const Login = () => {
       window.location.href = "/vendor";
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sign in failed. Please try again.";
-      toast.error(message);
+      if (message.includes("EMAIL_NOT_VERIFIED")) {
+        setNeedsVerification(true);
+        toast.error("Please verify your email before logging in.");
+      } else {
+        toast.error(message);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resendVerification = async () => {
+    const candidateEmail = email.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(candidateEmail)) {
+      toast.error("Enter your email address to resend the verification link.");
+      return;
+    }
+
+    setResendLoading(true);
+    try {
+      await authApi.resendVerification(candidateEmail);
+      toast.success("Verification link has been resent.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to resend verification link.";
+      toast.error(message);
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -48,13 +79,13 @@ const Login = () => {
     <AuthLayout title="Welcome back" subtitle="Sign in to continue to your workspace.">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">Email or Phone Number</Label>
           <Input
             id="email"
-            type="email"
+            type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@company.com"
+            placeholder="you@company.com or 9876543210"
             aria-invalid={!!errors.email}
             className={errors.email ? "border-destructive focus-visible:ring-destructive" : ""}
           />
@@ -91,6 +122,15 @@ const Login = () => {
         <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>
           {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in…</> : "Sign in"}
         </Button>
+
+        {needsVerification && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-3">
+            <p>Please verify your email before logging in.</p>
+            <Button type="button" variant="outline" className="w-full" onClick={() => void resendVerification()} disabled={resendLoading}>
+              {resendLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resending…</> : "Resend Verification Email"}
+            </Button>
+          </div>
+        )}
       </form>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">

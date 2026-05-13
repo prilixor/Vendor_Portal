@@ -112,7 +112,8 @@ internal sealed class ReactivateVendorCommandHandler(
         return Result.Success(new VendorDto(
             vendor.Id.ToString(),
             vendor.Email,
-            vendor.EmailVerified,
+            vendor.IsEmailVerified,
+            vendor.VerificationTokenExpiryUtc,
             vendor.AccountStatus,
             vendor.RegistrationStage,
             vendor.LastLoginAt));

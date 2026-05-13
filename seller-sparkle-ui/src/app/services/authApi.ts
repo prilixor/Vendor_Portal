@@ -20,6 +20,7 @@ export interface LoginResponse {
 export interface RegisterVendorRequest {
   email: string;
   password: string;
+  supportPhone: string;
 }
 
 export interface RegisterVendorResponse {
@@ -59,6 +60,16 @@ export interface ResetPasswordResponse {
   message: string;
 }
 
+export interface VerifyEmailResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface ResendVerificationResponse {
+  success: boolean;
+  message: string;
+}
+
 export const authApi = {
   async login(email: string, password: string, role: Role): Promise<{ token: string; user: User }> {
     const response = await apiClient.post<LoginResponse>('/auth/login', {
@@ -80,11 +91,20 @@ export const authApi = {
     };
   },
 
-  async registerVendor(email: string, password: string): Promise<RegisterVendorResponse> {
+  async registerVendor(email: string, password: string, supportPhone: string): Promise<RegisterVendorResponse> {
     return apiClient.post<RegisterVendorResponse>('/vendors/register', {
       email,
       password,
+      supportPhone,
     });
+  },
+
+  async verifyEmail(token: string): Promise<VerifyEmailResponse> {
+    return apiClient.get<VerifyEmailResponse>(`/auth/verify-email?token=${encodeURIComponent(token)}`);
+  },
+
+  async resendVerification(email: string): Promise<ResendVerificationResponse> {
+    return apiClient.post<ResendVerificationResponse>('/auth/resend-verification', { email });
   },
 
   async changePassword(payload: ChangePasswordPayload): Promise<ChangePasswordResponse> {

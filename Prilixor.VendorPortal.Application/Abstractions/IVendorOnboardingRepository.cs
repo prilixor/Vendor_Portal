@@ -7,6 +7,8 @@ public interface IVendorOnboardingRepository
 {
     Task<Vendor?> GetVendorByIdAsync(Guid vendorId, CancellationToken cancellationToken);
     Task<Vendor?> GetVendorByEmailAsync(string email, CancellationToken cancellationToken);
+    Task<Vendor?> GetVendorByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
+    Task<Vendor?> GetVendorByEmailVerificationTokenAsync(string token, CancellationToken cancellationToken);
     Task<List<Vendor>> GetVendorsAsync(CancellationToken cancellationToken);
     Task AddVendorAsync(Vendor vendor, CancellationToken cancellationToken);
     Task UpdateVendorAsync(Vendor vendor, CancellationToken cancellationToken);

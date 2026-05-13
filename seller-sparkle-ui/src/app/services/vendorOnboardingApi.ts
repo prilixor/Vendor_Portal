@@ -20,7 +20,8 @@ export interface VendorProfileApiDto {
 export interface VendorStatusDto {
   id: string;
   email: string;
-  emailVerified: boolean;
+  isEmailVerified: boolean;
+  verificationTokenExpiryUtc?: string | null;
   accountStatus: string;
   registrationStage: string;
   lastLoginAt?: string;

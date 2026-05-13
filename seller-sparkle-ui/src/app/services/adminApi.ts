@@ -4,7 +4,8 @@ import { apiClient } from './apiClient';
 export interface VendorDto {
   id: string;
   email: string;
-  emailVerified: boolean;
+  isEmailVerified: boolean;
+  verificationTokenExpiryUtc?: string | null;
   accountStatus: string;
   registrationStage: string;
   lastLoginAt?: string;

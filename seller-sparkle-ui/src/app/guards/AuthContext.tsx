@@ -7,7 +7,7 @@ interface AuthContextValue {
   user: User | null;
   isHydrating: boolean;
   login: (email: string, password: string, role: Role) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, phone: string) => Promise<{ id: string; email: string }>;
   logout: () => void;
   switchRole: (role: Role) => void;
 }
@@ -63,8 +63,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Vendors can now navigate freely - the pending banner will show on all pages
   };
 
-  const register = async (email: string, password: string) => {
-    const result = await authApi.registerVendor(email, password);
+  const register = async (email: string, password: string, phone: string) => {
+    const result = await authApi.registerVendor(email, password, phone);
     
     // Set notification preferences: push OFF by default, email ON
     try {
@@ -77,9 +77,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error("Failed to set notification preferences:", error);
     }
-    
-    // After registration, auto-login the user (pending banner will show on all pages)
-    await login(email, password, "vendor");
+
+    return result;
   };
 
   const logout = () => {

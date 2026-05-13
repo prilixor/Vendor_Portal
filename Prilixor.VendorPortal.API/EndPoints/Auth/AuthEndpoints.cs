@@ -1,9 +1,12 @@
+using System.Collections.Concurrent;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.IdentityModel.Tokens;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Auth;
 using Prilixor.VendorPortal.Domain.Options;
+using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.VendorPortal.Infrastructure.Persistence;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -21,6 +24,20 @@ public sealed class LoginRequest
 public sealed record AuthUserDto(string Id, string Email, string Name, string Role);
 
 public sealed record LoginResponse(string Token, AuthUserDto User);
+
+public sealed class VerifyEmailRequest
+{
+    public string Token { get; set; } = string.Empty;
+}
+
+public sealed record VerifyEmailResponse(bool Success, string Message);
+
+public sealed class ResendVerificationRequest
+{
+    public string Email { get; set; } = string.Empty;
+}
+
+public sealed record ResendVerificationResponse(bool Success, string Message);
 
 public sealed class ChangePasswordRequest
 {
@@ -61,10 +78,11 @@ public sealed class LoginEndpoint(
 
     public override async Task<Results<Ok<LoginResponse>, ProblemHttpResult>> ExecuteAsync(LoginRequest req, CancellationToken ct)
     {
-        var email = (req.Email ?? string.Empty).Trim().ToLowerInvariant();
+        var identifier = (req.Email ?? string.Empty).Trim();
+        var email = identifier.ToLowerInvariant();
         var role = (req.Role ?? "vendor").Trim().ToLowerInvariant();
 
-        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(req.Password))
+        if (string.IsNullOrWhiteSpace(identifier) || string.IsNullOrWhiteSpace(req.Password))
         {
             return TypedResults.Problem(title: "auth.invalid_credentials", detail: "Email and password are required.", statusCode: 400);
         }
@@ -90,15 +108,30 @@ public sealed class LoginEndpoint(
         }
         else
         {
-            var vendor = await repository.GetVendorByEmailAsync(email, ct);
+            Vendor? vendor;
+            if (identifier.Contains('@'))
+            {
+                vendor = await repository.GetVendorByEmailAsync(identifier, ct);
+            }
+            else
+            {
+                vendor = await repository.GetVendorByPhoneAsync(identifier, ct);
+            }
+
             if (vendor is null || vendor.IsDeleted || !passwordHasher.VerifyPassword(req.Password, vendor.PasswordHash))
             {
                 return TypedResults.Problem(title: "auth.invalid_credentials", detail: "Invalid email or password.", statusCode: 401);
             }
 
+            if (!vendor.IsEmailVerified)
+            {
+                return TypedResults.Problem(title: "EMAIL_NOT_VERIFIED", detail: "Please verify your email before logging in.", statusCode: 403);
+            }
+
             userId = vendor.Id.ToString();
             var profile = await repository.GetVendorProfileAsync(vendor.Id, ct);
-            name = profile?.OwnerName ?? email;
+            name = profile?.OwnerName ?? vendor.Email;
+            email = vendor.Email;
         }
 
         var jwt = configuration.GetSection("JwtOptions").Get<JwtOptions>() ?? new JwtOptions();
@@ -129,6 +162,106 @@ public sealed class LoginEndpoint(
         var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
         return TypedResults.Ok(new LoginResponse(tokenString, new AuthUserDto(userId, email, name, role)));
+    }
+}
+
+public sealed class VerifyEmailEndpoint(
+    IVendorOnboardingRepository repository)
+    : Endpoint<VerifyEmailRequest, Results<Ok<VerifyEmailResponse>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("auth/verify-email");
+        AllowAnonymous();
+    }
+
+    public override async Task<Results<Ok<VerifyEmailResponse>, ProblemHttpResult>> ExecuteAsync(VerifyEmailRequest req, CancellationToken ct)
+    {
+        var token = (req.Token ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return TypedResults.Problem(title: "auth.invalid_token", detail: "Token is required.", statusCode: 400);
+        }
+
+        var vendor = await repository.GetVendorByEmailVerificationTokenAsync(token, ct);
+        if (vendor is null)
+        {
+            return TypedResults.Problem(title: "auth.invalid_token", detail: "Invalid verification token.", statusCode: 400);
+        }
+
+        if (vendor.VerificationTokenExpiryUtc is null || vendor.VerificationTokenExpiryUtc < DateTimeOffset.UtcNow)
+        {
+            return TypedResults.Problem(title: "auth.token_expired", detail: "Verification link has expired.", statusCode: 400);
+        }
+
+        vendor.IsEmailVerified = true;
+        vendor.EmailVerificationToken = null;
+        vendor.VerificationTokenExpiryUtc = null;
+        await repository.UpdateVendorAsync(vendor, ct);
+        await repository.SaveChangesAsync(ct);
+
+        return TypedResults.Ok(new VerifyEmailResponse(true, "Email verified successfully."));
+    }
+}
+
+public sealed class ResendVerificationEndpoint(
+    IConfiguration configuration,
+    IVendorOnboardingRepository repository,
+    IEmailService emailService,
+    ILogger<ResendVerificationEndpoint> logger)
+    : Endpoint<ResendVerificationRequest, Results<Ok<ResendVerificationResponse>, ProblemHttpResult>>
+{
+    private static readonly ConcurrentDictionary<string, DateTimeOffset> LastSent = new();
+
+    public override void Configure()
+    {
+        Post("auth/resend-verification");
+        AllowAnonymous();
+    }
+
+    public override async Task<Results<Ok<ResendVerificationResponse>, ProblemHttpResult>> ExecuteAsync(ResendVerificationRequest req, CancellationToken ct)
+    {
+        var email = (req.Email ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return TypedResults.Problem(title: "auth.invalid_email", detail: "Email is required.", statusCode: 400);
+        }
+
+        if (LastSent.TryGetValue(email, out var lastSentAt) && lastSentAt.AddMinutes(1) > DateTimeOffset.UtcNow)
+        {
+            return TypedResults.Problem(title: "auth.resend_cooldown", detail: "Please wait a minute before requesting another verification email.", statusCode: 429);
+        }
+
+        var vendor = await repository.GetVendorByEmailAsync(email, ct);
+        if (vendor is null || vendor.IsDeleted)
+        {
+            return TypedResults.Problem(title: "auth.user_not_found", detail: "User not found.", statusCode: 404);
+        }
+
+        if (vendor.IsEmailVerified)
+        {
+            return TypedResults.Ok(new ResendVerificationResponse(true, "Email is already verified."));
+        }
+
+        vendor.EmailVerificationToken = VerificationTokenGenerator.GenerateSecureToken();
+        vendor.VerificationTokenExpiryUtc = DateTimeOffset.UtcNow.AddHours(24);
+        await repository.UpdateVendorAsync(vendor, ct);
+        await repository.SaveChangesAsync(ct);
+
+        try
+        {
+            var frontendUrl = configuration["FrontendUrl"] ?? "https://vendor-portal-psi-amber.vercel.app";
+            var verificationLink = $"{frontendUrl}/verify-email?token={Uri.EscapeDataString(vendor.EmailVerificationToken)}";
+            var body = EmailTemplates.VendorEmailVerificationRequested(vendor.Email, verificationLink, vendor.Profile?.OwnerName ?? string.Empty);
+            await emailService.SendEmailAsync(vendor.Email, "Verify Your Email Address", body, ct);
+            LastSent[email] = DateTimeOffset.UtcNow;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to resend verification email to {Email}", email);
+        }
+
+        return TypedResults.Ok(new ResendVerificationResponse(true, "Verification email sent."));
     }
 }
 

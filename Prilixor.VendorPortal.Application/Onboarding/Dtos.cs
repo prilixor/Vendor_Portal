@@ -3,7 +3,8 @@ namespace Prilixor.VendorPortal.Application.Onboarding;
 public sealed record VendorDto(
     string Id,
     string Email,
-    bool EmailVerified,
+    bool IsEmailVerified,
+    DateTimeOffset? VerificationTokenExpiryUtc,
     string AccountStatus,
     string RegistrationStage,
     DateTimeOffset? LastLoginAt);
