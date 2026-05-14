@@ -12,7 +12,7 @@ import { Plus, Shield, Users, Settings, Loader2, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { toast } from "sonner";
-import { formatDistanceToNow } from "date-fns";
+import { safeFormatDistance } from "@/app/utils/dateUtils";
 
 const roleConfig = {
   super_admin: { label: "Super admin", icon: Shield, cls: "bg-primary-soft text-primary" },
@@ -130,7 +130,7 @@ const Admins = () => {
                     </span>
                     {a.lastLoginAt && (
                       <span className="hidden text-xs text-muted-foreground sm:inline">
-                        Last login {formatDistanceToNow(new Date(a.lastLoginAt), { addSuffix: true })}
+                        Last login {safeFormatDistance(a.lastLoginAt)}
                       </span>
                     )}
                   </div>

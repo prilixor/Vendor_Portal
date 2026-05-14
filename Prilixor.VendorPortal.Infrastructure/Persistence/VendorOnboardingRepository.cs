@@ -1,6 +1,7 @@
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.VendorPortal.Domain.Auth;
+using Prilixor.VendorPortal.Domain.Support;
 using Prilixor.Shared.Abstractions.DI;
 using Microsoft.EntityFrameworkCore;
 
@@ -39,6 +40,7 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
     public Task<List<Vendor>> GetVendorsAsync(CancellationToken cancellationToken)
     {
         return dbContext.Vendors
+            .Include(x => x.Documents)
             .Where(x => !x.IsDeleted)
             .ToListAsync(cancellationToken);
     }
@@ -594,6 +596,55 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
             resetToken.UsedAt = DateTimeOffset.UtcNow;
             dbContext.PasswordResetTokens.Update(resetToken);
         }
+    }
+
+    public async Task AddSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken)
+    {
+        await dbContext.SupportTickets.AddAsync(ticket, cancellationToken);
+    }
+
+    public Task<SupportTicket?> GetSupportTicketByIdAsync(Guid ticketId, CancellationToken cancellationToken)
+    {
+        return dbContext.SupportTickets
+            .Include(x => x.Messages)
+            .Include(x => x.Vendor)
+            .FirstOrDefaultAsync(x => x.Id == ticketId && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task<List<SupportTicket>> GetSupportTicketsByVendorIdAsync(Guid vendorId, CancellationToken cancellationToken)
+    {
+        return dbContext.SupportTickets
+            .Where(x => x.VendorId == vendorId && !x.IsDeleted)
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<List<SupportTicket>> GetSupportTicketsAsync(CancellationToken cancellationToken)
+    {
+        return dbContext.SupportTickets
+            .Include(x => x.Vendor)
+            .Where(x => !x.IsDeleted)
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task UpdateSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken)
+    {
+        dbContext.SupportTickets.Update(ticket);
+        await Task.CompletedTask;
+    }
+
+    public async Task AddSupportMessageAsync(SupportMessage message, CancellationToken cancellationToken)
+    {
+        await dbContext.SupportMessages.AddAsync(message, cancellationToken);
+    }
+
+    public Task<List<SupportMessage>> GetSupportMessagesByTicketIdAsync(Guid ticketId, CancellationToken cancellationToken)
+    {
+        return dbContext.SupportMessages
+            .Where(x => x.TicketId == ticketId && !x.IsDeleted)
+            .OrderBy(x => x.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
     }
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken)

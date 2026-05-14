@@ -117,6 +117,8 @@ export const Sidebar = ({ sections, brandLabel, isOpen, onClose }: SidebarProps)
             <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">Terms</Link>
             <span>•</span>
             <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">Privacy</Link>
+            <span>•</span>
+            <Link to="/contact-us" className="hover:text-primary hover:underline transition-colors">Contact</Link>
           </div>
         </div>
       )}

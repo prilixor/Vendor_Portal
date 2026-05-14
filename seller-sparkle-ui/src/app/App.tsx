@@ -14,6 +14,7 @@ import ForgotPassword from "@/app/components/auth/ForgotPassword";
 import ResetPassword from "@/app/components/auth/ResetPassword";
 import VerifyEmailSent from "@/app/components/auth/VerifyEmailSent";
 import VerifyEmail from "@/app/components/auth/VerifyEmail";
+import ContactUs from "@/app/components/common/ContactUs";
 import TermsAndConditions from "@/app/components/legal/TermsAndConditions";
 import PrivacyPolicy from "@/app/components/legal/PrivacyPolicy";
 
@@ -36,6 +37,7 @@ import Admins from "@/app/components/admin/Admins";
 import AuditLogs from "@/app/components/admin/AuditLogs";
 import AdminRegister from "@/app/components/admin/AdminRegister";
 import AdminLogin from "@/app/components/admin/AdminLogin";
+import SupportManagement from "@/app/components/admin/SupportManagement";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +60,7 @@ const App = () => (
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/contact-us" element={<ContactUs />} />
 
             <Route path="/vendor" element={<AppShell variant="vendor" />}>
               <Route index element={<VendorDashboard />} />
@@ -80,6 +83,7 @@ const App = () => (
               <Route path="products" element={<ProductManagement />} />
               <Route path="admins" element={<Admins />} />
               <Route path="audit-logs" element={<AuditLogs />} />
+              <Route path="support" element={<SupportManagement />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

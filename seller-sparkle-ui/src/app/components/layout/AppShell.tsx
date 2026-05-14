@@ -7,6 +7,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { NotificationProvider, useNotificationContext } from "@/app/contexts/NotificationContext";
 import { PendingApprovalBanner } from "@/app/components/vendor/PendingApprovalBanner";
+import { SupportChat } from "@/app/components/support/SupportChat";
 
 interface AppShellProps {
 
@@ -172,6 +173,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
               <Outlet />
             </div>
           </main>
+          {variant === "vendor" && user && <SupportChat vendorId={user.id} />}
         </NotificationProvider>
       </div>
 

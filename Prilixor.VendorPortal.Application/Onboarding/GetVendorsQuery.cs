@@ -1,4 +1,5 @@
 using Prilixor.Shared.Abstractions.CQRS;
+using Prilixor.Shared.Extensions;
 using Prilixor.Shared.Models;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Onboarding;
@@ -14,14 +15,18 @@ internal sealed class GetVendorsQueryHandler(IVendorOnboardingRepository reposit
     public async Task<Result<List<VendorDto>>> Handle(GetVendorsQuery request, CancellationToken cancellationToken)
     {
         var vendors = await repository.GetVendorsAsync(cancellationToken);
+        
         var result = vendors.Select(v => new VendorDto(
+
             v.Id.ToString(),
             v.Email,
             v.IsEmailVerified,
-            v.VerificationTokenExpiryUtc,
+            v.VerificationTokenExpiryUtc.ToSafeDateTimeOffset(),
             v.AccountStatus,
             v.RegistrationStage,
-            v.LastLoginAt
+            v.LastLoginAt.ToSafeDateTimeOffset(),
+            v.TermsAcceptedAt.ToSafeDateTimeOffset(),
+            v.CreatedOnUtc.ToSafeDateTimeOffset()
         )).ToList();
 
         return Result.Success(result);

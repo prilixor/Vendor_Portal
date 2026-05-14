@@ -7,14 +7,16 @@ public sealed record VendorDto(
     DateTimeOffset? VerificationTokenExpiryUtc,
     string AccountStatus,
     string RegistrationStage,
-    DateTimeOffset? LastLoginAt);
+    DateTimeOffset? LastLoginAt,
+    DateTimeOffset? TermsAcceptedAt,
+    DateTimeOffset? CreatedAt);
 
 public sealed record VendorProfileDto(
     string Id,
     string VendorId,
     string BusinessName,
     string OwnerName,
-    string SupportPhone,
+    string? SupportPhone,
     string? GstNumber,
     string AddressLine1,
     string? AddressLine2,

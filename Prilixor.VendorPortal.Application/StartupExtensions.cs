@@ -2,6 +2,7 @@ using FluentValidation;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Behaviours;
 using Prilixor.VendorPortal.Application.Services;
+using Prilixor.VendorPortal.Domain.Options;
 using Mapster;
 using MediatR;
 using Microsoft.Extensions.Configuration;
@@ -28,7 +29,7 @@ namespace Prilixor.VendorPortal.Application
             services.AddHttpContextAccessor();
 
             // Configure SMTP options
-            services.Configure<SmtpOptions>(configuration.GetSection("SmtpOptions"));
+            services.Configure<Domain.Options.SmtpOptions>(configuration.GetSection("SmtpOptions"));
             services.AddTransient<IEmailService, SmtpEmailService>();
 
             return services;

@@ -4,6 +4,7 @@ using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
+using Prilixor.Shared.Extensions;
 
 namespace Prilixor.VendorPortal.Application.Onboarding;
 
@@ -58,7 +59,7 @@ internal sealed class RegisterAdminUserCommandHandler(
             entity.FullName,
             entity.Role,
             entity.IsActive,
-            entity.LastLoginAt));
+            entity.LastLoginAt.ToSafeDateTimeOffset()));
     }
 }
 
@@ -76,7 +77,7 @@ internal sealed class GetAdminUsersQueryHandler(IVendorOnboardingRepository repo
             x.FullName,
             x.Role,
             x.IsActive,
-            x.LastLoginAt)).ToList();
+            x.LastLoginAt.ToSafeDateTimeOffset())).ToList();
 
         return Result.Success(result);
     }
@@ -137,7 +138,8 @@ internal sealed class AddAdminAuditLogCommandHandler(IVendorOnboardingRepository
             EntityId = entityId,
             OldValue = request.OldValue,
             NewValue = request.NewValue,
-            Notes = request.Notes
+            Notes = request.Notes,
+            CreatedOnUtc = DateTime.UtcNow
         };
 
         await repository.AddAdminAuditLogAsync(entity, cancellationToken);
@@ -154,18 +156,7 @@ internal sealed class AddAdminAuditLogCommandHandler(IVendorOnboardingRepository
             entity.OldValue,
             entity.NewValue,
             entity.Notes,
-            ToSafeCreatedAt(entity.CreatedOnUtc)));
-    }
-
-    private static DateTimeOffset ToSafeCreatedAt(DateTime createdOnUtc)
-    {
-        if (createdOnUtc <= DateTime.MinValue.AddDays(1))
-        {
-            return DateTimeOffset.UtcNow;
-        }
-
-        var utc = DateTime.SpecifyKind(createdOnUtc, DateTimeKind.Utc);
-        return new DateTimeOffset(utc, TimeSpan.Zero);
+            entity.CreatedOnUtc.ToSafeDateTimeOffset()));
     }
 }
 
@@ -199,20 +190,9 @@ internal sealed class GetAdminAuditLogsQueryHandler(IVendorOnboardingRepository 
             x.OldValue,
             x.NewValue,
             x.Notes,
-            ToSafeCreatedAt(x.CreatedOnUtc))).ToList();
+            x.CreatedOnUtc.ToSafeDateTimeOffset())).ToList();
 
         return Result.Success(result);
-    }
-
-    private static DateTimeOffset ToSafeCreatedAt(DateTime createdOnUtc)
-    {
-        if (createdOnUtc <= DateTime.MinValue.AddDays(1))
-        {
-            return DateTimeOffset.UtcNow;
-        }
-
-        var utc = DateTime.SpecifyKind(createdOnUtc, DateTimeKind.Utc);
-        return new DateTimeOffset(utc, TimeSpan.Zero);
     }
 }
 
@@ -297,7 +277,8 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
             EntityId = bankAccount.Id,
             OldValue = System.Text.Json.JsonSerializer.Serialize(oldStatus),
             NewValue = System.Text.Json.JsonSerializer.Serialize(request.VerificationStatus),
-            Notes = request.Notes
+            Notes = request.Notes,
+            CreatedOnUtc = DateTime.UtcNow
         };
 
         await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
@@ -440,7 +421,8 @@ internal sealed class VerifyVendorDocumentCommandHandler(
             EntityId = document.Id,
             OldValue = System.Text.Json.JsonSerializer.Serialize(oldStatus),
             NewValue = System.Text.Json.JsonSerializer.Serialize(request.VerificationStatus),
-            Notes = request.Notes
+            Notes = request.Notes,
+            CreatedOnUtc = DateTime.UtcNow
         };
         await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);

@@ -7,7 +7,7 @@ public class VendorProfile : AuditableEntity<Guid>, ISoftDelete
     public Guid VendorId { get; set; }
     public string BusinessName { get; set; } = string.Empty;
     public string OwnerName { get; set; } = string.Empty;
-    public string SupportPhone { get; set; } = string.Empty;
+    public string? SupportPhone { get; set; }
     public string? GstNumber { get; set; }
     public string AddressLine1 { get; set; } = string.Empty;
     public string? AddressLine2 { get; set; }

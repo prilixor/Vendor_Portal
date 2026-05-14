@@ -169,7 +169,7 @@ const dayLabel: Record<number, string> = {
 };
 
 
-const vendorTabs = ["profile", "docs", "bank", "areas", "hours", "products"] as const;
+const vendorTabs = ["profile", "docs", "bank", "areas", "products"] as const;
 
 type VendorTab = (typeof vendorTabs)[number];
 
@@ -209,7 +209,7 @@ const VendorDetails = () => {
 
   const [serviceAreas, setServiceAreas] = useState<VendorServiceAreaDto[]>([]);
 
-  const [workingHours, setWorkingHours] = useState<VendorWorkingHourDto[]>([]);
+
 
   const [productListings, setProductListings] = useState<VendorProductListingDto[]>([]);
   const [previewDocument, setPreviewDocument] = useState<{ url: string; type: string } | null>(null);
@@ -251,7 +251,7 @@ const VendorDetails = () => {
 
       // Fetch all vendor details in parallel
 
-      const [profileData, docsData, bankData, areasData, hoursData, listingsData] = await Promise.all([
+      const [profileData, docsData, bankData, areasData, listingsData] = await Promise.all([
 
         adminApi.getVendorProfile(id).catch(() => null),
 
@@ -260,8 +260,6 @@ const VendorDetails = () => {
         adminApi.getVendorBankAccounts(id).catch(() => []),
 
         adminApi.getVendorServiceAreas(id).catch(() => []),
-
-        adminApi.getVendorWorkingHours(id).catch(() => []),
 
         adminApi.getVendorProductListings(id).catch(() => []),
 
@@ -277,7 +275,7 @@ const VendorDetails = () => {
 
       setServiceAreas(areasData);
 
-      setWorkingHours(hoursData);
+
 
       setProductListings(listingsData);
 
@@ -412,7 +410,7 @@ const VendorDetails = () => {
 
 
 
-  const activeDays = workingHours.filter((d) => d.isOpen).length;
+
 
   const queryTab = searchParams.get("tab");
 
@@ -789,8 +787,6 @@ const VendorDetails = () => {
 
           <TabsTrigger value="areas">Areas</TabsTrigger>
 
-          <TabsTrigger value="hours">Hours</TabsTrigger>
-
           <TabsTrigger value="products">Products</TabsTrigger>
 
         </TabsList>
@@ -1146,62 +1142,6 @@ const VendorDetails = () => {
               {serviceAreas.length === 0 && (
 
                 <div className="col-span-full py-8 text-center text-muted-foreground text-sm">No service areas defined</div>
-
-              )}
-
-            </div>
-
-          </Card>
-
-        </TabsContent>
-
-
-
-        <TabsContent value="hours">
-
-          <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
-
-            <div className="mb-4 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-
-              Open on {activeDays} of 7 days
-
-            </div>
-
-            <div className="space-y-2">
-
-              {workingHours
-                .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
-                .map((h) => (
-
-                <div key={h.id} className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
-
-                  <span className="font-medium">{dayLabel[h.dayOfWeek] || `Day ${h.dayOfWeek}`}</span>
-
-                  {h.isOpen ? (
-
-                    <span className="inline-flex items-center gap-1 text-muted-foreground">
-
-                      <Clock3 className="h-3.5 w-3.5" /> {h.openTime} - {h.closeTime}
-
-                    </span>
-
-                  ) : (
-
-                    <span className="inline-flex items-center gap-1 text-muted-foreground">
-
-                      <CircleOff className="h-3.5 w-3.5" /> Closed
-
-                    </span>
-
-                  )}
-
-                </div>
-
-              ))}
-
-              {workingHours.length === 0 && (
-
-                <div className="py-8 text-center text-muted-foreground text-sm">No working hours defined</div>
 
               )}
 

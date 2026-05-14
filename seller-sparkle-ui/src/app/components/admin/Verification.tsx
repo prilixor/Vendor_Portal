@@ -7,12 +7,13 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
-import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw, FileText, Eye, Building, AlertCircle } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw, FileText, Eye, Building, AlertCircle, Calendar } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { Textarea } from "@/app/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { safeFormatDate } from "@/app/utils/dateUtils";
 import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto } from "@/app/services/adminApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
@@ -356,9 +357,17 @@ const Verification = () => {
 
   const filtered = vendors.filter((v) => {
     const hasProfile = vendorProfiles.has(v.id);
+    
+    // Check if the vendor has progressed past the initial registration stages.
+    // If they have uploaded a document, their stage is usually documents_pending or later.
+    const isReadyForVerification = 
+      v.registrationStage !== "email_registered" && 
+      v.registrationStage !== "profile_pending";
+
     const m = filter === "all" || v.accountStatus === filter;
     const s = !search || v.email.toLowerCase().includes(search.toLowerCase());
-    return hasProfile && m && s;
+    
+    return hasProfile && isReadyForVerification && m && s;
   });
 
   const approve = async (id: string) => {
@@ -620,11 +629,6 @@ const Verification = () => {
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span>Email Verified: {selected.isEmailVerified ? "Yes" : "No"}</span>
-                    {selected.verificationTokenExpiryUtc && (
-                      <span className="block text-xs text-muted-foreground mt-1">
-                        Verification link expires: {new Date(selected.verificationTokenExpiryUtc).toLocaleString()}
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>

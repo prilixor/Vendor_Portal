@@ -5,6 +5,7 @@ import {
   ScrollText,
   Building2,
   Package,
+  MessageSquare,
 } from "lucide-react";
 import type { NavSection } from "@/app/helpers/navigation";
 
@@ -31,6 +32,7 @@ export const adminNav: NavSection[] = [
     items: [
       { label: "Admin Users", to: "/admin/admins", icon: Users },
       { label: "Audit Logs", to: "/admin/audit-logs", icon: ScrollText },
+      { label: "Support", to: "/admin/support", icon: MessageSquare },
     ],
   },
 ];
