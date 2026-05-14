@@ -242,6 +242,6 @@ public sealed class GetPushSubscriptionEndpoint(IMediator mediator)
         CancellationToken ct)
     {
         var result = await mediator.Send(new GetPushSubscriptionQuery(req.VendorId), ct);
-        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+        return result.IsSuccess ? TypedResults.Ok<VendorPushSubscriptionDto?>(result.Value) : result.ToErrorResponse();
     }
 }

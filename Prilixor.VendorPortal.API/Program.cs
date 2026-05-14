@@ -2,6 +2,7 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Prilixor.VendorPortal.API.Extensions;
+using Prilixor.VendorPortal.API.EndPoints.Support;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Options;
 using Microsoft.AspNetCore.Http.Json;
@@ -211,5 +212,7 @@ app.UseFastEndpoints(op =>
 {
     op.Endpoints.RoutePrefix = "api";
 }).UseSwaggerGen();
+
+app.MapSupportEndpoints();
 
 app.Run();

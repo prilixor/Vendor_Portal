@@ -7,6 +7,7 @@ using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Prilixor.Shared.Extensions;
 
 namespace Prilixor.VendorPortal.Application.Onboarding;
 
@@ -72,7 +73,8 @@ internal sealed class RegisterVendorCommandHandler(
             EmailVerificationToken = VerificationTokenGenerator.GenerateSecureToken(),
             VerificationTokenExpiryUtc = DateTimeOffset.UtcNow.AddHours(24),
             AccountStatus = "pending",
-            RegistrationStage = "email_registered"
+            RegistrationStage = "email_registered",
+            TermsAcceptedAt = DateTimeOffset.UtcNow
         };
 
         await repository.AddVendorAsync(vendor, cancellationToken);
@@ -113,9 +115,11 @@ internal sealed class RegisterVendorCommandHandler(
             vendor.Id.ToString(),
             vendor.Email,
             vendor.IsEmailVerified,
-            vendor.VerificationTokenExpiryUtc,
+            vendor.VerificationTokenExpiryUtc.ToSafeDateTimeOffset(),
             vendor.AccountStatus,
             vendor.RegistrationStage,
-            vendor.LastLoginAt));
+            vendor.LastLoginAt.ToSafeDateTimeOffset(),
+            vendor.TermsAcceptedAt.ToSafeDateTimeOffset(),
+            vendor.CreatedOnUtc.ToSafeDateTimeOffset()));
     }
 }

@@ -133,8 +133,8 @@ const TermsAndConditions = () => {
                     Questions about these terms? Our team is here to assist.
                   </p>
                 </div>
-                <Button className="w-full text-xs h-9 font-semibold shadow-sm hover:shadow-md transition-all duration-200 bg-primary text-primary-foreground" size="sm">
-                  Contact Support
+                <Button asChild className="w-full text-xs h-9 font-semibold shadow-sm hover:shadow-md transition-all duration-200 bg-primary text-primary-foreground" size="sm">
+                  <Link to="/contact-us">Contact Support</Link>
                 </Button>
               </div>
             </div>

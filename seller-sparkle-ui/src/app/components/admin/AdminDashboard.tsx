@@ -8,6 +8,7 @@ import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { adminApi, AdminAuditLogDto, VendorDto } from "@/app/services/adminApi";
 import { Building2, Clock, CheckCircle2, ScrollText, ArrowUpRight, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { safeFormatDistance } from "@/app/utils/dateUtils";
 import { toast } from "sonner";
 
 const AdminDashboard = () => {

@@ -34,6 +34,14 @@ namespace Prilixor.VendorPortal.Infrastructure
             services.AddScoped<IPushNotificationService, WebPushNotificationService>();
             services.Configure<WebPushOptions>(configuration.GetSection(WebPushOptions.SectionName));
 
+            // Configure Groq AI Support
+            services.Configure<GroqOptions>(configuration.GetSection(GroqOptions.SectionName));
+            services.AddHttpClient("Groq", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+            services.AddScoped<IAiSupportService, GroqSupportService>();
+
             RegisterVendorStorage(services, configuration, environment);
 
             return services;

@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { adminApi, AdminAuditLogDto, AdminUserDto } from "@/app/services/adminApi";
 import { Search, ArrowRight, Loader2 } from "lucide-react";
-import { format } from "date-fns";
+import { safeFormatDate, safeFormatDistance } from "@/app/utils/dateUtils";
 import { toast } from "sonner";
 
 const AuditLogs = () => {
@@ -168,5 +168,3 @@ const ChangeDisplay = ({ log }: { log: AdminAuditLogDto }) => {
 };
 
 export default AuditLogs;
-
-

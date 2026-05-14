@@ -7,6 +7,7 @@ using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using System.Text.Json;
+using Prilixor.Shared.Extensions;
 
 namespace Prilixor.VendorPortal.Application.Onboarding;
 
@@ -112,9 +113,11 @@ internal sealed class BanVendorCommandHandler(
             vendor.Id.ToString(),
             vendor.Email,
             vendor.IsEmailVerified,
-            vendor.VerificationTokenExpiryUtc,
+            vendor.VerificationTokenExpiryUtc.ToSafeDateTimeOffset(),
             vendor.AccountStatus,
             vendor.RegistrationStage,
-            vendor.LastLoginAt));
+            vendor.LastLoginAt.ToSafeDateTimeOffset(),
+            vendor.TermsAcceptedAt.ToSafeDateTimeOffset(),
+            vendor.CreatedOnUtc.ToSafeDateTimeOffset()));
     }
 }

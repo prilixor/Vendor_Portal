@@ -1,5 +1,6 @@
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.VendorPortal.Domain.Auth;
+using Prilixor.VendorPortal.Domain.Support;
 
 namespace Prilixor.VendorPortal.Application.Abstractions;
 
@@ -102,6 +103,15 @@ public interface IVendorOnboardingRepository
     Task<PasswordResetToken?> GetPasswordResetTokenAsync(string token, CancellationToken cancellationToken);
     Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken);
     Task MarkPasswordResetTokenAsUsedAsync(string token, CancellationToken cancellationToken);
+
+    Task AddSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken);
+    Task<SupportTicket?> GetSupportTicketByIdAsync(Guid ticketId, CancellationToken cancellationToken);
+    Task<List<SupportTicket>> GetSupportTicketsByVendorIdAsync(Guid vendorId, CancellationToken cancellationToken);
+    Task<List<SupportTicket>> GetSupportTicketsAsync(CancellationToken cancellationToken);
+    Task UpdateSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken);
+
+    Task AddSupportMessageAsync(SupportMessage message, CancellationToken cancellationToken);
+    Task<List<SupportMessage>> GetSupportMessagesByTicketIdAsync(Guid ticketId, CancellationToken cancellationToken);
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

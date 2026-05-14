@@ -1,5 +1,6 @@
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.VendorPortal.Domain.Auth;
+using Prilixor.VendorPortal.Domain.Support;
 using Prilixor.Shared.Abstractions.DB;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,6 +30,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
     public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
+    public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,7 +44,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id).HasColumnName("id");
             entity.Property(x => x.Email).HasColumnName("email");
-            entity.Property(x => x.SupportPhone).HasColumnName("support_phone");
+            entity.Property(x => x.SupportPhone).HasColumnName("support_phone").IsRequired(false);
             entity.Property(x => x.PasswordHash).HasColumnName("password_hash");
             entity.Property(x => x.IsEmailVerified).HasColumnName("email_verified");
             entity.Property(x => x.EmailVerificationToken).HasColumnName("email_verification_token");
@@ -51,6 +54,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(x => x.LastLoginAt).HasColumnName("last_login_at");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.TermsAcceptedAt).HasColumnName("terms_accepted_at");
             entity.Ignore(x => x.CreatedBy);
             entity.Ignore(x => x.ModifiedBy);
             entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
@@ -517,5 +521,76 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(x => x.UsedAt).HasColumnName("used_at");
             entity.Property(x => x.CreatedAt).HasColumnName("created_at");
         });
+
+        modelBuilder.Entity<SupportTicket>(entity =>
+        {
+            entity.ToTable("support_tickets");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.VendorId).HasColumnName("vendor_id");
+            entity.Property(x => x.TicketNumber).HasColumnName("ticket_number");
+            entity.Property(x => x.Category).HasColumnName("category");
+            entity.Property(x => x.Subject).HasColumnName("subject");
+            entity.Property(x => x.Status).HasColumnName("status");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.Ignore(x => x.CreatedBy);
+            entity.Ignore(x => x.ModifiedBy);
+
+            entity.HasOne(x => x.Vendor)
+                .WithMany()
+                .HasForeignKey(x => x.VendorId);
+        });
+
+        modelBuilder.Entity<SupportMessage>(entity =>
+        {
+            entity.ToTable("support_messages");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.TicketId).HasColumnName("ticket_id");
+            entity.Property(x => x.SenderId).HasColumnName("sender_id");
+            entity.Property(x => x.SenderType).HasColumnName("sender_type");
+            entity.Property(x => x.Message).HasColumnName("message");
+            entity.Property(x => x.AttachmentUrls).HasColumnName("attachment_urls");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.Ignore(x => x.CreatedBy);
+            entity.Ignore(x => x.ModifiedBy);
+
+            entity.HasOne(x => x.Ticket)
+                .WithMany(x => x.Messages)
+                .HasForeignKey(x => x.TicketId);
+        });
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        var entries = ChangeTracker
+            .Entries()
+            .Where(e => e.Entity is IAuditable && (e.State == EntityState.Added || e.State == EntityState.Modified));
+
+        foreach (var entityEntry in entries)
+        {
+            var auditable = (IAuditable)entityEntry.Entity;
+            if (entityEntry.State == EntityState.Added)
+            {
+                if (auditable.CreatedOnUtc == default)
+                {
+                    auditable.CreatedOnUtc = DateTime.UtcNow;
+                }
+            }
+            else
+            {
+                auditable.ModifiedOnUtc = DateTime.UtcNow;
+            }
+        }
+
+        return base.SaveChangesAsync(cancellationToken);
     }
 }

@@ -183,6 +183,15 @@ $RECYCLE.BIN/
 
 # Environment files
 .env
+.env.development
+.env.production
 *.env
+
+# Local app settings
+**/appsettings.Development.json
+**/appsettings.Production.json
+**/appsettings.Local.json
 appsettings.*.local.json
+
+# Launch settings
 **/launchSettings.json

@@ -1,6 +1,7 @@
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
+using Prilixor.Shared.Extensions;
 
 namespace Prilixor.VendorPortal.Application.Onboarding;
 
@@ -26,9 +27,11 @@ internal sealed class GetVendorByIdQueryHandler(IVendorOnboardingRepository repo
             vendor.Id.ToString(),
             vendor.Email,
             vendor.IsEmailVerified,
-            vendor.VerificationTokenExpiryUtc,
+            vendor.VerificationTokenExpiryUtc.ToSafeDateTimeOffset(),
             vendor.AccountStatus,
             vendor.RegistrationStage,
-            vendor.LastLoginAt));
+            vendor.LastLoginAt.ToSafeDateTimeOffset(),
+            vendor.TermsAcceptedAt.ToSafeDateTimeOffset(),
+            vendor.CreatedOnUtc.ToSafeDateTimeOffset()));
     }
 }

@@ -9,6 +9,7 @@ export interface VendorDto {
   accountStatus: string;
   registrationStage: string;
   lastLoginAt?: string;
+  createdAt: string;
 }
 
 export interface VendorProfileDto {
