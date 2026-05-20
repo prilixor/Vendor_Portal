@@ -1,13 +1,13 @@
 using System.Collections.Concurrent;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Auth;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Domain.Vendors;
-using Prilixor.VendorPortal.Infrastructure.Persistence;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -67,6 +67,7 @@ public sealed record ResetPasswordResponse(bool Success, string Message);
 public sealed class LoginEndpoint(
     IConfiguration configuration,
     IVendorOnboardingRepository repository,
+    ICustomerRepository customerRepository,
     IPasswordHasherService passwordHasher)
     : Endpoint<LoginRequest, Results<Ok<LoginResponse>, ProblemHttpResult>>
 {
@@ -87,9 +88,9 @@ public sealed class LoginEndpoint(
             return TypedResults.Problem(title: "auth.invalid_credentials", detail: "Email and password are required.", statusCode: 400);
         }
 
-        if (role != "vendor" && role != "admin" && role != "super_admin" && role != "verifier" && role != "operations_admin")
+        if (role != "vendor" && role != "customer" && role != "admin" && role != "super_admin" && role != "verifier" && role != "operations_admin")
         {
-            return TypedResults.Problem(title: "auth.invalid_role", detail: "Role must be 'vendor', 'admin', 'super_admin', 'verifier', or 'operations_admin'.", statusCode: 400);
+            return TypedResults.Problem(title: "auth.invalid_role", detail: "Role must be 'vendor', 'customer', 'admin', 'super_admin', 'verifier', or 'operations_admin'.", statusCode: 400);
         }
 
         string userId;
@@ -105,6 +106,26 @@ public sealed class LoginEndpoint(
 
             userId = admin.Id.ToString();
             name = admin.FullName;
+        }
+        else if (role == "customer")
+        {
+            var customer = await customerRepository.GetCustomerByEmailAsync(email, ct);
+            if (customer is null || customer.IsDeleted || !passwordHasher.VerifyPassword(req.Password, customer.PasswordHash))
+            {
+                return TypedResults.Problem(title: "auth.invalid_credentials", detail: "Invalid email or password.", statusCode: 401);
+            }
+
+            if (!customer.IsEmailVerified)
+            {
+                return TypedResults.Problem(title: "EMAIL_NOT_VERIFIED", detail: "Please verify your email before logging in.", statusCode: 403);
+            }
+
+            userId = customer.Id.ToString();
+            name = string.IsNullOrWhiteSpace(customer.FullName) ? customer.Email : customer.FullName;
+            email = customer.Email;
+            customer.LastLoginAt = DateTimeOffset.UtcNow;
+            await customerRepository.UpdateCustomerAsync(customer, ct);
+            await customerRepository.SaveChangesAsync(ct);
         }
         else
         {
@@ -267,6 +288,7 @@ public sealed class ResendVerificationEndpoint(
 
 public sealed class ChangePasswordEndpoint(
     IVendorOnboardingRepository repository,
+    ICustomerRepository customerRepository,
     IPasswordHasherService passwordHasher)
     : Endpoint<ChangePasswordRequest, Results<Ok<ChangePasswordResponse>, ProblemHttpResult>>
 {
@@ -308,7 +330,21 @@ public sealed class ChangePasswordEndpoint(
         var vendor = await repository.GetVendorByEmailAsync(email, ct);
         if (vendor is null || vendor.IsDeleted)
         {
-            return TypedResults.Problem(title: "auth.user_not_found", detail: "User not found.", statusCode: 404);
+            var customer = await customerRepository.GetCustomerByEmailAsync(email, ct);
+            if (customer is null || customer.IsDeleted)
+            {
+                return TypedResults.Problem(title: "auth.user_not_found", detail: "User not found.", statusCode: 404);
+            }
+
+            if (!passwordHasher.VerifyPassword(req.CurrentPassword, customer.PasswordHash))
+            {
+                return TypedResults.Problem(title: "auth.invalid_password", detail: "Current password is incorrect.", statusCode: 400);
+            }
+
+            customer.PasswordHash = passwordHasher.HashPassword(req.NewPassword);
+            await customerRepository.UpdateCustomerAsync(customer, ct);
+            await customerRepository.SaveChangesAsync(ct);
+            return TypedResults.Ok(new ChangePasswordResponse(true, "Password updated successfully.", DateTimeOffset.UtcNow));
         }
 
         if (!passwordHasher.VerifyPassword(req.CurrentPassword, vendor.PasswordHash))
@@ -325,7 +361,9 @@ public sealed class ChangePasswordEndpoint(
 
 public sealed class ForgotPasswordEndpoint(
     IVendorOnboardingRepository repository,
-    IEmailService emailService)
+    ICustomerRepository customerRepository,
+    IEmailService emailService,
+    IConfiguration configuration)
     : Endpoint<ForgotPasswordRequest, Results<Ok<ForgotPasswordResponse>, ProblemHttpResult>>
 {
     public override void Configure()
@@ -343,11 +381,12 @@ public sealed class ForgotPasswordEndpoint(
             return TypedResults.Problem(title: "auth.invalid_email", detail: "Email is required.", statusCode: 400);
         }
 
-        // Check if email exists in vendors or admin_users
+        // Check if email exists in vendors, admin_users, or customers
         var vendor = await repository.GetVendorByEmailAsync(email, ct);
         var admin = await repository.GetAdminUserByEmailAsync(email, ct);
+        var customer = await customerRepository.GetCustomerByEmailAsync(email, ct);
 
-        if (vendor != null || admin != null)
+        if (vendor != null || admin != null || customer != null)
         {
             // Generate secure token
             var token = Guid.NewGuid().ToString();
@@ -364,8 +403,9 @@ public sealed class ForgotPasswordEndpoint(
             await repository.AddPasswordResetTokenAsync(resetToken, ct);
             await repository.SaveChangesAsync(ct);
 
-            // Send reset link email
-            var resetLink = $"https://vendor-portal-psi-amber.vercel.app/reset-password?token={token}";
+            // Send reset link email (FrontendUrl in appsettings / env — must match deployed SPA host)
+            var frontendBase = configuration["FrontendUrl"]?.Trim().TrimEnd('/') ?? "https://vendor-portal-psi-amber.vercel.app";
+            var resetLink = $"{frontendBase}/reset-password?token={Uri.EscapeDataString(token)}";
             var subject = "Reset Your Password";
             var body = $@"
                 <h2>Password Reset Request</h2>
@@ -393,6 +433,7 @@ public sealed class ForgotPasswordEndpoint(
 
 public sealed class ResetPasswordEndpoint(
     IVendorOnboardingRepository repository,
+    ICustomerRepository customerRepository,
     IPasswordHasherService passwordHasher)
     : Endpoint<ResetPasswordRequest, Results<Ok<ResetPasswordResponse>, ProblemHttpResult>>
 {
@@ -461,7 +502,15 @@ public sealed class ResetPasswordEndpoint(
         }
         else
         {
-            return TypedResults.Problem(title: "auth.user_not_found", detail: "User not found.", statusCode: 404);
+            var customer = await customerRepository.GetCustomerByEmailAsync(resetToken.Email, ct);
+            if (customer is null || customer.IsDeleted)
+            {
+                return TypedResults.Problem(title: "auth.user_not_found", detail: "User not found.", statusCode: 404);
+            }
+
+            customer.PasswordHash = passwordHasher.HashPassword(req.NewPassword);
+            await customerRepository.UpdateCustomerAsync(customer, ct);
+            await customerRepository.SaveChangesAsync(ct);
         }
 
         // Mark token as used

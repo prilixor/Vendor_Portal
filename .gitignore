@@ -185,6 +185,8 @@ $RECYCLE.BIN/
 .env
 .env.development
 .env.production
+.env.local
+.env.development.local
 *.env
 
 # Local app settings

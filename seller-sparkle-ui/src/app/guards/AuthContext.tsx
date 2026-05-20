@@ -8,6 +8,7 @@ interface AuthContextValue {
   isHydrating: boolean;
   login: (email: string, password: string, role: Role) => Promise<void>;
   register: (email: string, password: string, phone: string) => Promise<{ id: string; email: string }>;
+  registerCustomer: (email: string, password: string, fullName: string, phone?: string) => Promise<{ id: string; email: string; fullName: string }>;
   logout: () => void;
   switchRole: (role: Role) => void;
 }
@@ -81,6 +82,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return result;
   };
 
+  const registerCustomer = async (email: string, password: string, fullName: string, phone?: string) => {
+    return authApi.registerCustomer(email, password, fullName, phone);
+  };
+
   const logout = () => {
     authApi.logout();
     persist(null);
@@ -100,7 +105,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isHydrating, login, register, logout, switchRole }}>
+    <AuthContext.Provider value={{ user, isHydrating, login, register, registerCustomer, logout, switchRole }}>
       {children}
     </AuthContext.Provider>
   );

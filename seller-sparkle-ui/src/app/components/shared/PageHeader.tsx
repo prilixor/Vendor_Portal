@@ -7,9 +7,17 @@ interface PageHeaderProps {
   description?: string;
   actions?: ReactNode;
   breadcrumbs?: { label: string; href?: string }[];
+  /** When false, breadcrumb row is omitted (e.g. Lovable-style settings). Default true. */
+  showBreadcrumbs?: boolean;
 }
 
-export const PageHeader = ({ title, description, actions, breadcrumbs }: PageHeaderProps) => {
+export const PageHeader = ({
+  title,
+  description,
+  actions,
+  breadcrumbs,
+  showBreadcrumbs = true,
+}: PageHeaderProps) => {
   const location = useLocation();
   const auto =
     breadcrumbs ??
@@ -23,6 +31,7 @@ export const PageHeader = ({ title, description, actions, breadcrumbs }: PageHea
 
   return (
     <div className="mb-6 animate-fade-in">
+      {showBreadcrumbs ? (
       <nav className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
         <Link to="/" className="flex items-center gap-1 hover:text-foreground transition-colors">
           <Home className="h-3.5 w-3.5" />
@@ -38,6 +47,7 @@ export const PageHeader = ({ title, description, actions, breadcrumbs }: PageHea
           </div>
         ))}
       </nav>
+      ) : null}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>

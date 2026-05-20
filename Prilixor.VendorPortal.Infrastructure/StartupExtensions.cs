@@ -30,6 +30,18 @@ namespace Prilixor.VendorPortal.Infrastructure
                 cfg.EnableDetailedErrors(databaseOptions?.EnableDetailedErrors ?? false);
             });
 
+            var customerPortalCs = configuration.GetConnectionString("CustomerPortalConnection");
+            if (string.IsNullOrWhiteSpace(customerPortalCs))
+            {
+                customerPortalCs = configuration.GetConnectionString("DefaultConnection");
+            }
+
+            services.AddDbContext<CustomerPortalDbContext>(cfg =>
+            {
+                cfg.UseNpgsql(customerPortalCs);
+                cfg.EnableDetailedErrors(databaseOptions?.EnableDetailedErrors ?? false);
+            });
+
             services.AddScoped<IEmailService, SmtpEmailService>();
             services.AddScoped<IPushNotificationService, WebPushNotificationService>();
             services.Configure<WebPushOptions>(configuration.GetSection(WebPushOptions.SectionName));

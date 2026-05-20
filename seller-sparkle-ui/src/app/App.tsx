@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/app/components/ui/sonner";
 import { Toaster } from "@/app/components/ui/toaster";
 import { TooltipProvider } from "@/app/components/ui/tooltip";
 import { AuthProvider } from "@/app/guards/AuthContext";
+import { CartProvider } from "@/app/contexts/CartContext";
 import { AppShell } from "@/app/components/layout/AppShell";
 
 import Index from "@/app/components/common/Index";
@@ -39,6 +40,21 @@ import AdminRegister from "@/app/components/admin/AdminRegister";
 import AdminLogin from "@/app/components/admin/AdminLogin";
 import SupportManagement from "@/app/components/admin/SupportManagement";
 
+import CustomerBrowse from "@/app/components/customer/CustomerBrowse";
+import CustomerListingDetail from "@/app/components/customer/CustomerListingDetail";
+import CustomerCart from "@/app/components/customer/CustomerCart";
+import CustomerCheckout from "@/app/components/customer/CustomerCheckout";
+import CustomerOrders from "@/app/components/customer/CustomerOrders";
+import CustomerOrderDetail from "@/app/components/customer/CustomerOrderDetail";
+import CustomerAddresses from "@/app/components/customer/CustomerAddresses";
+import CustomerSettings from "@/app/components/customer/CustomerSettings";
+import CustomerDashboard from "@/app/components/customer/CustomerDashboard";
+import CustomerHomeRedirect from "@/app/components/customer/CustomerHomeRedirect";
+import CustomerNotifications from "@/app/components/customer/CustomerNotifications";
+import CustomerSupport from "@/app/components/customer/CustomerSupport";
+import CustomerLogin from "@/app/components/customer/CustomerLogin";
+import CustomerRegister from "@/app/components/customer/CustomerRegister";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -48,7 +64,8 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
+          <CartProvider>
+            <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -86,8 +103,28 @@ const App = () => (
               <Route path="support" element={<SupportManagement />} />
             </Route>
 
+            <Route path="/customer/login" element={<CustomerLogin />} />
+            <Route path="/customer/register" element={<CustomerRegister />} />
+
+            <Route path="/customer" element={<AppShell variant="customer" />}>
+              <Route index element={<CustomerHomeRedirect />} />
+              <Route path="dashboard" element={<CustomerDashboard />} />
+              <Route path="browse" element={<CustomerBrowse />} />
+              <Route path="browse/:listingId" element={<CustomerListingDetail />} />
+              <Route path="cart" element={<CustomerCart />} />
+              <Route path="checkout" element={<CustomerCheckout />} />
+              <Route path="orders" element={<CustomerOrders />} />
+              <Route path="orders/:orderId" element={<CustomerOrderDetail />} />
+              <Route path="addresses" element={<CustomerAddresses />} />
+              <Route path="notifications" element={<CustomerNotifications />} />
+              <Route path="support" element={<CustomerSupport />} />
+              <Route path="settings" element={<CustomerSettings />} />
+              <Route path="profile" element={<Navigate to="/customer/settings" replace />} />
+            </Route>
+
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </CartProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

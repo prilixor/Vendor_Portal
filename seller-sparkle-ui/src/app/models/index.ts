@@ -1,4 +1,4 @@
-export type Role = "vendor" | "admin" | "super_admin" | "verifier" | "operations_admin";
+export type Role = "vendor" | "customer" | "admin" | "super_admin" | "verifier" | "operations_admin";
 
 export type VerificationStatus = "pending" | "approved" | "rejected" | "under_review";
 

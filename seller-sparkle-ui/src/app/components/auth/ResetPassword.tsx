@@ -73,7 +73,10 @@ const ResetPassword = () => {
             You can now sign in with your new password.
           </p>
           <Button asChild className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11">
-            <Link to="/login">Sign In</Link>
+            <Link to="/customer/login">Customer sign in</Link>
+          </Button>
+          <Button variant="outline" asChild className="w-full">
+            <Link to="/login">Vendor sign in</Link>
           </Button>
         </div>
       </AuthLayout>

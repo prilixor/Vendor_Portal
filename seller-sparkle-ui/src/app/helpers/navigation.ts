@@ -14,4 +14,5 @@ export interface NavSection {
 
 export { adminNav } from "@/app/helpers/adminNav";
 export { vendorNav } from "@/app/helpers/vendorNav";
+export { customerNav } from "@/app/helpers/customerNav";
 

@@ -4,7 +4,7 @@ import { User, Role } from '@/app/models';
 export interface LoginRequest {
   email: string;
   password: string;
-  role: 'vendor' | 'admin' | 'super_admin' | 'verifier' | 'operations_admin';
+  role: 'vendor' | 'customer' | 'admin' | 'super_admin' | 'verifier' | 'operations_admin';
 }
 
 export interface LoginResponse {
@@ -96,6 +96,15 @@ export const authApi = {
       email,
       password,
       supportPhone,
+    });
+  },
+
+  async registerCustomer(email: string, password: string, fullName: string, phone?: string): Promise<RegisterCustomerResponse> {
+    return apiClient.post<RegisterCustomerResponse>('/customers/register', {
+      email,
+      password,
+      fullName,
+      phone: phone?.trim() || undefined,
     });
   },
 

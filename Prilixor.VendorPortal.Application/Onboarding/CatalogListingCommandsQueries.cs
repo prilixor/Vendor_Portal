@@ -389,6 +389,16 @@ internal sealed class AddVendorProductImageCommandHandler(
             return Result.Failure<VendorProductImageDto>(new Error("vendors.listing.not_found", "Vendor listing not found.", ErrorCategory.NotFound));
         }
 
+        if (request.IsPrimary)
+        {
+            var existingImages = await repository.GetVendorProductImagesAsync(listingId, cancellationToken);
+            foreach (var img in existingImages.Where(i => i.IsPrimary))
+            {
+                img.IsPrimary = false;
+                await repository.UpdateVendorProductImageAsync(img, cancellationToken);
+            }
+        }
+
         var entity = new VendorProductImage
         {
             VendorProductListingId = listingId,

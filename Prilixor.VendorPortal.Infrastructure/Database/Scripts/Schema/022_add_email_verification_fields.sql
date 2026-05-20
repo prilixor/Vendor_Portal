@@ -4,7 +4,8 @@
 -- Add the email verification token and expiry columns if they don't exist
 alter table if exists public.vendors
 add column if not exists email_verification_token text null,
-add column if not exists verification_token_expiry_utc timestamptz null;
+add column if not exists verification_token_expiry_utc timestamptz null,
+add column if not exists terms_accepted_at timestamptz null;
 
 -- Create index on email_verification_token for faster lookups
 create index if not exists ix_vendors_email_verification_token on public.vendors(email_verification_token) 

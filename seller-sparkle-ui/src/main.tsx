@@ -8,11 +8,10 @@ if (savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-s
   document.documentElement.classList.add("dark");
 }
 
-// Register service worker for push notifications
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .catch(err => console.error('SW registration failed:', err));
+// Push notifications only in production — avoids stale cached bundles during local dev (localhost).
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => console.error("SW registration failed:", err));
   });
 }
 

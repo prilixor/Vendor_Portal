@@ -584,6 +584,11 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
                 {
                     auditable.CreatedOnUtc = DateTime.UtcNow;
                 }
+
+                if (auditable.ModifiedOnUtc is null)
+                {
+                    auditable.ModifiedOnUtc = DateTime.UtcNow;
+                }
             }
             else
             {

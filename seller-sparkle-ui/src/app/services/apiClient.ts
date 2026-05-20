@@ -1,4 +1,25 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://localhost:7257/api";
+function resolveApiBaseUrl(): string {
+  const explicit = import.meta.env.VITE_API_BASE_URL?.trim();
+  if (explicit) {
+    const brokenHttpOnTlsPort =
+      /^http:\/\/localhost:5001\b/i.test(explicit) ||
+      /^http:\/\/127\.0\.0\.1:5001\b/i.test(explicit);
+    if (import.meta.env.DEV && brokenHttpOnTlsPort) {
+      console.warn(
+        "[apiClient] VITE_API_BASE_URL uses http on port 5001 (HTTPS port). Using dev proxy /api instead.",
+      );
+      return "/api";
+    }
+    return explicit.replace(/\/+$/, "");
+  }
+  // Dev + no override: same-origin `/api` → Vite proxies to ASP.NET (avoids http→HTTPS:5001 ERR_EMPTY_RESPONSE).
+  if (import.meta.env.DEV) {
+    return "/api";
+  }
+  return "https://localhost:5001/api".replace(/\/+$/, "");
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 const TOKEN_KEY = 'vendor_portal_token';
 
@@ -57,7 +78,7 @@ class ApiClient {
       if (!code || code.includes('http') || code.includes('://') || code.startsWith('https')) {
         // Try to extract from error.message or error.title
         const sourceText = error.message || error.title || message;
-        const codeMatch = sourceText.match(/(vendors\.[a-z_]+|admins\.[a-z_]+|documents\.[a-z_]+|bank_accounts\.[a-z_]+|EMAIL_NOT_VERIFIED|auth\.[a-z_]+)/i);
+        const codeMatch = sourceText.match(/(vendors\.[a-z_]+|customers\.[a-z_]+|admins\.[a-z_]+|documents\.[a-z_]+|bank_accounts\.[a-z_]+|EMAIL_NOT_VERIFIED|auth\.[a-z_]+)/i);
         if (codeMatch) {
           code = codeMatch[1];
         }
@@ -160,7 +181,7 @@ class ApiClient {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await fetch(this.buildUrl(endpoint.startsWith("/") ? endpoint : `/${endpoint}`), {
       method: "GET",
       headers,
     });

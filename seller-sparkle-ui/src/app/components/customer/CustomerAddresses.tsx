@@ -1,0 +1,147 @@
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { customerApi } from "@/app/services/customerApi";
+import { Button } from "@/app/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader } from "@/app/components/ui/card";
+import { Input } from "@/app/components/ui/input";
+import { Label } from "@/app/components/ui/label";
+import { Switch } from "@/app/components/ui/switch";
+import { Skeleton } from "@/app/components/ui/skeleton";
+import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
+
+const CustomerAddresses = () => {
+  const queryClient = useQueryClient();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["customer-addresses"],
+    queryFn: () => customerApi.getAddresses(),
+  });
+
+  const [label, setLabel] = useState("");
+  const [line1, setLine1] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [postal, setPostal] = useState("");
+  const [setDefault, setSetDefault] = useState(false);
+
+  const addMut = useMutation({
+    mutationFn: () =>
+      customerApi.addAddress({
+        label: label.trim() || undefined,
+        line1: line1.trim(),
+        city: city.trim(),
+        state: state.trim(),
+        postal: postal.trim(),
+        setAsDefault: setDefault,
+      }),
+    onSuccess: () => {
+      toast.success("Address saved.");
+      setLabel("");
+      setLine1("");
+      setCity("");
+      setState("");
+      setPostal("");
+      setSetDefault(false);
+      queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const delMut = useMutation({
+    mutationFn: (id: string) => customerApi.deleteAddress(id),
+    onSuccess: () => {
+      toast.success("Address removed.");
+      queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  if (error) {
+    return <p className="text-sm text-destructive">{error instanceof Error ? error.message : "Failed to load."}</p>;
+  }
+
+  return (
+    <div className="space-y-10">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Addresses</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Used for rental delivery at checkout.</p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <p className="font-medium">Saved</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {isLoading && <Skeleton className="h-24 w-full" />}
+            {!isLoading && data?.length === 0 && (
+              <p className="text-sm text-muted-foreground">No addresses yet.</p>
+            )}
+            {(data ?? []).map((a) => (
+              <div key={a.id} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                <div className="text-sm">
+                  {a.label && <p className="font-medium">{a.label}</p>}
+                  <p>{a.line1}</p>
+                  <p className="text-muted-foreground">
+                    {a.city}, {a.state} {a.postal}
+                  </p>
+                  {a.isDefault && <p className="mt-1 text-xs font-medium text-primary">Default</p>}
+                </div>
+                <Button variant="ghost" size="icon" className="text-destructive shrink-0" onClick={() => delMut.mutate(a.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <p className="font-medium">Add address</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="addr-label">Label (optional)</Label>
+              <Input id="addr-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Home" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="addr-line1">Address line</Label>
+              <Input id="addr-line1" value={line1} onChange={(e) => setLine1(e.target.value)} placeholder="Street, building" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="addr-city">City</Label>
+                <Input id="addr-city" value={city} onChange={(e) => setCity(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="addr-state">State</Label>
+                <Input id="addr-state" value={state} onChange={(e) => setState(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="addr-postal">Postal code</Label>
+              <Input id="addr-postal" value={postal} onChange={(e) => setPostal(e.target.value)} />
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Switch id="addr-def" checked={setDefault} onCheckedChange={setSetDefault} />
+              <Label htmlFor="addr-def" className="text-sm font-normal">
+                Set as default
+              </Label>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button
+              className="w-full bg-gradient-primary hover:opacity-95 shadow-glow"
+              disabled={addMut.isPending || !line1.trim() || !city.trim() || !state.trim() || !postal.trim()}
+              onClick={() => addMut.mutate()}
+            >
+              Save address
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default CustomerAddresses;

@@ -138,6 +138,11 @@ const Login = () => {
         <Link to="/register" className="font-semibold text-primary hover:underline">Create an account</Link>
       </p>
 
+      <p className="mt-4 text-center text-xs text-muted-foreground">
+        Looking to rent?{" "}
+        <Link to="/customer/login" className="font-medium text-primary hover:underline">Customer sign in</Link>
+      </p>
+
     </AuthLayout>
   );
 };

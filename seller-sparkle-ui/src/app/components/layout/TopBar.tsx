@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Bell, LogOut, Sun, Moon, ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -16,9 +16,10 @@ import { useNotificationContext } from "@/app/contexts/NotificationContext";
 
 interface TopBarProps {
   onMenuClick?: () => void;
+  variant?: "vendor" | "admin" | "customer";
 }
 
-export const TopBar = ({ onMenuClick }: TopBarProps) => {
+export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
   const { unreadCount } = useNotificationContext();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -32,11 +33,19 @@ export const TopBar = ({ onMenuClick }: TopBarProps) => {
     localStorage.setItem("theme", dark ? "dark" : "light");
   }, [dark]);
 
-  const initials = (user?.name ?? "U").split(" ").map((n) => n[0]).slice(0, 2).join("");
+  const initials = (user?.name ?? "U")
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("");
+
+  const loginHref =
+    variant === "admin" ? "/admin/login" : variant === "customer" ? "/customer/login" : "/login";
+
+  const showVendorBell = variant === "vendor" && user?.role === "vendor";
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border bg-background/80 px-4 backdrop-blur-xl sm:px-6">
-      {/* Hamburger menu - only visible on mobile */}
       {onMenuClick && (
         <Button variant="ghost" size="icon" onClick={onMenuClick} className="lg:hidden" aria-label="Menu">
           <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -49,7 +58,18 @@ export const TopBar = ({ onMenuClick }: TopBarProps) => {
           {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
 
-{user?.role !== "admin" && (
+        {variant === "customer" && !user && (
+          <>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/customer/login">Sign in</Link>
+            </Button>
+            <Button size="sm" className="bg-gradient-primary hover:opacity-95 shadow-glow" asChild>
+              <Link to="/customer/register">Register</Link>
+            </Button>
+          </>
+        )}
+
+        {showVendorBell && (
           <Button
             variant="ghost"
             size="icon"
@@ -60,49 +80,49 @@ export const TopBar = ({ onMenuClick }: TopBarProps) => {
             <Bell className="h-4 w-4" />
             {unreadCount > 0 && (
               <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-                {unreadCount > 99 ? '99+' : unreadCount}
+                {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
           </Button>
         )}
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-muted transition-colors">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-gradient-primary text-xs font-semibold text-primary-foreground">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden text-left sm:block">
-                <p className="text-xs font-semibold leading-tight">{user?.name}</p>
-                <p className="text-[11px] capitalize text-muted-foreground leading-tight">{user?.role}</p>
-              </div>
-              <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground sm:block" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>
-              <div>
-                <p className="text-sm font-semibold">{user?.name}</p>
-                <p className="text-xs font-normal text-muted-foreground">{user?.email}</p>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => {
-                logout();
-                navigate("/login");
-              }}
-              className="text-destructive focus:text-destructive"
-            >
-              <LogOut className="mr-2 h-4 w-4" /> Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {!(variant === "customer" && !user) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-muted transition-colors">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-gradient-primary text-xs font-semibold text-primary-foreground">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="hidden text-left sm:block">
+                  <p className="text-xs font-semibold leading-tight">{user?.name}</p>
+                  <p className="text-[11px] capitalize text-muted-foreground leading-tight">{user?.role}</p>
+                </div>
+                <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground sm:block" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
+                <div>
+                  <p className="text-sm font-semibold">{user?.name}</p>
+                  <p className="text-xs font-normal text-muted-foreground">{user?.email}</p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => {
+                  logout();
+                  navigate(loginHref);
+                }}
+                className="text-destructive focus:text-destructive"
+              >
+                <LogOut className="mr-2 h-4 w-4" /> Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </header>
   );
 };
-
-

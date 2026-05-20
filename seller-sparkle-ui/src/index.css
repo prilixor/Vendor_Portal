@@ -161,6 +161,22 @@
   }
 }
 
+/*
+  Listing detail gallery: show full image inside frame (may letterbox).
+  Unlayered CSS wins over Tailwind Preflight img { height: auto; max-width: 100% }.
+*/
+img.customer-catalog-media-img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: contain !important;
+  object-position: center;
+}
+
 /* Leaflet defaults use high z-index values (200-700),
    which can overlap Radix dialogs/popovers in this app. */
 .leaflet-container {

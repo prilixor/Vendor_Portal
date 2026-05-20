@@ -9,16 +9,23 @@ import { Badge } from "@/app/components/ui/badge";
 interface SidebarProps {
   sections: NavSection[];
   brandLabel: string;
+  /** When set, replaces the default "Vendor Portal" primary sidebar title. */
+  brandHeading?: string;
   isOpen?: boolean;
   onClose?: () => void;
 }
 
-export const Sidebar = ({ sections, brandLabel, isOpen, onClose }: SidebarProps) => {
+export const Sidebar = ({ sections, brandLabel, brandHeading, isOpen, onClose }: SidebarProps) => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
 
   const isActive = (to: string) =>
-    to === location.pathname || (to !== "/vendor" && to !== "/admin" && location.pathname.startsWith(to));
+    to === location.pathname ||
+    (to !== "/vendor" &&
+      to !== "/admin" &&
+      to !== "/customer/browse" &&
+      to !== "/customer/dashboard" &&
+      location.pathname.startsWith(to));
 
   return (
     <aside
@@ -44,7 +51,7 @@ export const Sidebar = ({ sections, brandLabel, isOpen, onClose }: SidebarProps)
           </div>
           {!collapsed && (
             <div className="overflow-hidden">
-              <p className="truncate text-sm font-bold leading-tight">Vendor Portal</p>
+              <p className="truncate text-sm font-bold leading-tight">{brandHeading ?? "Vendor Portal"}</p>
               <p className="truncate text-[11px] text-muted-foreground">{brandLabel}</p>
             </div>
           )}
@@ -74,7 +81,12 @@ export const Sidebar = ({ sections, brandLabel, isOpen, onClose }: SidebarProps)
                   <li key={item.to}>
                     <NavLink
                       to={item.to}
-                      end={item.to === "/vendor" || item.to === "/admin"}
+                      end={
+                        item.to === "/vendor" ||
+                        item.to === "/admin" ||
+                        item.to === "/customer/dashboard" ||
+                        item.to === "/customer/browse"
+                      }
                       onClick={() => onClose?.()}
                       className={cn(
                         "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
