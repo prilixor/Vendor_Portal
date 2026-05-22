@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Prilixor.VendorPortal.Infrastructure.Persistence;
 
-public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+public class ApplicationDbContext(DbContextOptions options)
     : DbContext(options)
 {
     public DbSet<Vendor> Vendors => Set<Vendor>();

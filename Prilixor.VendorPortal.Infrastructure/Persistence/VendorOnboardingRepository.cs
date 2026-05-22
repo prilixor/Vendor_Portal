@@ -7,7 +7,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Prilixor.VendorPortal.Infrastructure.Persistence;
 
-public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
+public sealed class VendorOnboardingRepository(
+    ApplicationDbContext dbContext,
+    AdminPortalDbContext adminDbContext,
+    CommonPortalDbContext commonDbContext)
     : IVendorOnboardingRepository, IScopedService
 {
     public Task<Vendor?> GetVendorByIdAsync(Guid vendorId, CancellationToken cancellationToken)
@@ -222,77 +225,162 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
             .ToListAsync(cancellationToken);
     }
 
-    public Task<ProductCategory?> GetProductCategoryByIdAsync(Guid categoryId, CancellationToken cancellationToken)
+    public async Task<ProductCategory?> GetProductCategoryByIdAsync(Guid categoryId, CancellationToken cancellationToken)
     {
-        return dbContext.ProductCategories
+        var category = await commonDbContext.ProductCategories
+            .FirstOrDefaultAsync(x => x.Id == categoryId && !x.IsDeleted, cancellationToken);
+
+        if (category is not null)
+        {
+            return category;
+        }
+
+        return await dbContext.ProductCategories
             .FirstOrDefaultAsync(x => x.Id == categoryId && !x.IsDeleted, cancellationToken);
     }
 
     public async Task AddProductCategoryAsync(ProductCategory category, CancellationToken cancellationToken)
     {
-        await dbContext.ProductCategories.AddAsync(category, cancellationToken);
+        await commonDbContext.ProductCategories.AddAsync(category, cancellationToken);
+
+        var legacyCategory = await dbContext.ProductCategories
+            .FirstOrDefaultAsync(x => x.Id == category.Id, cancellationToken);
+        if (legacyCategory is null)
+        {
+            await dbContext.ProductCategories.AddAsync(CloneCategory(category), cancellationToken);
+            return;
+        }
+
+        CopyCategoryValues(category, legacyCategory);
+        dbContext.ProductCategories.Update(legacyCategory);
     }
 
-    public Task UpdateProductCategoryAsync(ProductCategory category, CancellationToken cancellationToken)
+    public async Task UpdateProductCategoryAsync(ProductCategory category, CancellationToken cancellationToken)
     {
-        dbContext.ProductCategories.Update(category);
-        return Task.CompletedTask;
+        commonDbContext.ProductCategories.Update(category);
+
+        var legacyCategory = await dbContext.ProductCategories
+            .FirstOrDefaultAsync(x => x.Id == category.Id, cancellationToken);
+        if (legacyCategory is null)
+        {
+            await dbContext.ProductCategories.AddAsync(CloneCategory(category), cancellationToken);
+            return;
+        }
+
+        CopyCategoryValues(category, legacyCategory);
+        dbContext.ProductCategories.Update(legacyCategory);
     }
 
     public async Task DeleteProductCategoryAsync(Guid categoryId, CancellationToken cancellationToken)
     {
-        var category = await dbContext.ProductCategories
+        var category = await commonDbContext.ProductCategories
             .FirstOrDefaultAsync(x => x.Id == categoryId && !x.IsDeleted, cancellationToken);
-        
-        if (category != null)
+
+        if (category is not null)
         {
             category.IsDeleted = true;
             category.DeletedAt = DateTimeOffset.UtcNow;
-            dbContext.ProductCategories.Update(category);
+            commonDbContext.ProductCategories.Update(category);
+        }
+
+        var legacyCategory = await dbContext.ProductCategories
+            .FirstOrDefaultAsync(x => x.Id == categoryId && !x.IsDeleted, cancellationToken);
+        if (legacyCategory is not null)
+        {
+            legacyCategory.IsDeleted = true;
+            legacyCategory.DeletedAt = DateTimeOffset.UtcNow;
+            dbContext.ProductCategories.Update(legacyCategory);
         }
     }
 
-    public Task<List<ProductCategory>> GetProductCategoriesAsync(CancellationToken cancellationToken)
+    public async Task<List<ProductCategory>> GetProductCategoriesAsync(CancellationToken cancellationToken)
     {
-        return dbContext.ProductCategories
+        var categories = await commonDbContext.ProductCategories
+            .Where(x => !x.IsDeleted)
+            .OrderBy(x => x.CategoryName)
+            .ToListAsync(cancellationToken);
+
+        if (categories.Count > 0)
+        {
+            return categories;
+        }
+
+        return await dbContext.ProductCategories
             .Where(x => !x.IsDeleted)
             .OrderBy(x => x.CategoryName)
             .ToListAsync(cancellationToken);
     }
 
-    public Task<Product?> GetProductByIdAsync(Guid productId, CancellationToken cancellationToken)
+    public async Task<Product?> GetProductByIdAsync(Guid productId, CancellationToken cancellationToken)
     {
-        return dbContext.Products
+        var product = await commonDbContext.Products
+            .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
+        if (product is not null)
+        {
+            return product;
+        }
+
+        return await dbContext.Products
             .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
     }
 
     public async Task AddProductAsync(Product product, CancellationToken cancellationToken)
     {
-        await dbContext.Products.AddAsync(product, cancellationToken);
+        await commonDbContext.Products.AddAsync(product, cancellationToken);
+
+        var legacyProduct = await dbContext.Products
+            .FirstOrDefaultAsync(x => x.Id == product.Id, cancellationToken);
+        if (legacyProduct is null)
+        {
+            await dbContext.Products.AddAsync(CloneProduct(product), cancellationToken);
+            return;
+        }
+
+        CopyProductValues(product, legacyProduct);
+        dbContext.Products.Update(legacyProduct);
     }
 
-    public Task UpdateProductAsync(Product product, CancellationToken cancellationToken)
+    public async Task UpdateProductAsync(Product product, CancellationToken cancellationToken)
     {
-        dbContext.Products.Update(product);
-        return Task.CompletedTask;
+        commonDbContext.Products.Update(product);
+
+        var legacyProduct = await dbContext.Products
+            .FirstOrDefaultAsync(x => x.Id == product.Id, cancellationToken);
+        if (legacyProduct is null)
+        {
+            await dbContext.Products.AddAsync(CloneProduct(product), cancellationToken);
+            return;
+        }
+
+        CopyProductValues(product, legacyProduct);
+        dbContext.Products.Update(legacyProduct);
     }
 
     public async Task DeleteProductAsync(Guid productId, CancellationToken cancellationToken)
     {
-        var product = await dbContext.Products
+        var product = await commonDbContext.Products
             .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
-        
-        if (product != null)
+
+        if (product is not null)
         {
             product.IsDeleted = true;
             product.DeletedAt = DateTimeOffset.UtcNow;
-            dbContext.Products.Update(product);
+            commonDbContext.Products.Update(product);
+        }
+
+        var legacyProduct = await dbContext.Products
+            .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
+        if (legacyProduct is not null)
+        {
+            legacyProduct.IsDeleted = true;
+            legacyProduct.DeletedAt = DateTimeOffset.UtcNow;
+            dbContext.Products.Update(legacyProduct);
         }
     }
 
-    public Task<List<Product>> GetProductsAsync(Guid? categoryId, CancellationToken cancellationToken)
+    public async Task<List<Product>> GetProductsAsync(Guid? categoryId, CancellationToken cancellationToken)
     {
-        var query = dbContext.Products
+        var query = commonDbContext.Products
             .Where(x => !x.IsDeleted)
             .AsQueryable();
 
@@ -301,7 +389,21 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
             query = query.Where(x => x.CategoryId == categoryId.Value);
         }
 
-        return query.OrderBy(x => x.ProductName).ToListAsync(cancellationToken);
+        var products = await query.OrderBy(x => x.ProductName).ToListAsync(cancellationToken);
+        if (products.Count > 0)
+        {
+            return products;
+        }
+
+        var legacyQuery = dbContext.Products
+            .Where(x => !x.IsDeleted)
+            .AsQueryable();
+        if (categoryId.HasValue)
+        {
+            legacyQuery = legacyQuery.Where(x => x.CategoryId == categoryId.Value);
+        }
+
+        return await legacyQuery.OrderBy(x => x.ProductName).ToListAsync(cancellationToken);
     }
 
     public Task<VendorProductListing?> GetVendorProductListingByIdAsync(Guid vendorId, Guid listingId, CancellationToken cancellationToken)
@@ -528,25 +630,25 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
 
     public Task<AdminUser?> GetAdminUserByIdAsync(Guid adminUserId, CancellationToken cancellationToken)
     {
-        return dbContext.AdminUsers
+        return adminDbContext.AdminUsers
             .FirstOrDefaultAsync(x => x.Id == adminUserId && !x.IsDeleted, cancellationToken);
     }
 
     public Task<AdminUser?> GetAdminUserByEmailAsync(string email, CancellationToken cancellationToken)
     {
         var normalized = email.Trim().ToLowerInvariant();
-        return dbContext.AdminUsers
+        return adminDbContext.AdminUsers
             .FirstOrDefaultAsync(x => x.Email == normalized && !x.IsDeleted, cancellationToken);
     }
 
     public async Task AddAdminUserAsync(AdminUser adminUser, CancellationToken cancellationToken)
     {
-        await dbContext.AdminUsers.AddAsync(adminUser, cancellationToken);
+        await adminDbContext.AdminUsers.AddAsync(adminUser, cancellationToken);
     }
 
     public Task<List<AdminUser>> GetAdminUsersAsync(CancellationToken cancellationToken)
     {
-        return dbContext.AdminUsers
+        return adminDbContext.AdminUsers
             .Where(x => !x.IsDeleted)
             .OrderBy(x => x.FullName)
             .ToListAsync(cancellationToken);
@@ -554,12 +656,12 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
 
     public async Task AddAdminAuditLogAsync(AdminAuditLog auditLog, CancellationToken cancellationToken)
     {
-        await dbContext.AdminAuditLogs.AddAsync(auditLog, cancellationToken);
+        await adminDbContext.AdminAuditLogs.AddAsync(auditLog, cancellationToken);
     }
 
     public Task<List<AdminAuditLog>> GetAdminAuditLogsAsync(Guid? adminId, CancellationToken cancellationToken)
     {
-        var query = dbContext.AdminAuditLogs
+        var query = adminDbContext.AdminAuditLogs
             .Include(x => x.AdminUser)
             .Where(x => !x.IsDeleted)
             .AsQueryable();
@@ -576,25 +678,25 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
 
     public Task<PasswordResetToken?> GetPasswordResetTokenAsync(string token, CancellationToken cancellationToken)
     {
-        return dbContext.PasswordResetTokens
+        return adminDbContext.PasswordResetTokens
             .FirstOrDefaultAsync(x => x.Token == token, cancellationToken);
     }
 
     public async Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken)
     {
-        await dbContext.PasswordResetTokens.AddAsync(token, cancellationToken);
+        await adminDbContext.PasswordResetTokens.AddAsync(token, cancellationToken);
     }
 
     public async Task MarkPasswordResetTokenAsUsedAsync(string token, CancellationToken cancellationToken)
     {
-        var resetToken = await dbContext.PasswordResetTokens
+        var resetToken = await adminDbContext.PasswordResetTokens
             .FirstOrDefaultAsync(x => x.Token == token, cancellationToken);
         
         if (resetToken != null)
         {
             resetToken.IsUsed = true;
             resetToken.UsedAt = DateTimeOffset.UtcNow;
-            dbContext.PasswordResetTokens.Update(resetToken);
+            adminDbContext.PasswordResetTokens.Update(resetToken);
         }
     }
 
@@ -647,8 +749,75 @@ public sealed class VendorOnboardingRepository(ApplicationDbContext dbContext)
             .ToListAsync(cancellationToken);
     }
 
-    public Task<int> SaveChangesAsync(CancellationToken cancellationToken)
+    public async Task<int> SaveChangesAsync(CancellationToken cancellationToken)
     {
-        return dbContext.SaveChangesAsync(cancellationToken);
+        var primaryChanges = await dbContext.SaveChangesAsync(cancellationToken);
+        var adminChanges = await adminDbContext.SaveChangesAsync(cancellationToken);
+        var commonChanges = await commonDbContext.SaveChangesAsync(cancellationToken);
+        return primaryChanges + adminChanges + commonChanges;
+    }
+
+    private static ProductCategory CloneCategory(ProductCategory source) =>
+        new()
+        {
+            Id = source.Id,
+            CategoryName = source.CategoryName,
+            PrescriptionRequired = source.PrescriptionRequired,
+            DepositRequired = source.DepositRequired,
+            InstallationRequired = source.InstallationRequired,
+            IsActive = source.IsActive,
+            CreatedOnUtc = source.CreatedOnUtc,
+            ModifiedOnUtc = source.ModifiedOnUtc,
+            IsDeleted = source.IsDeleted,
+            DeletedAt = source.DeletedAt,
+            DeletedBy = source.DeletedBy,
+        };
+
+    private static void CopyCategoryValues(ProductCategory source, ProductCategory destination)
+    {
+        destination.CategoryName = source.CategoryName;
+        destination.PrescriptionRequired = source.PrescriptionRequired;
+        destination.DepositRequired = source.DepositRequired;
+        destination.InstallationRequired = source.InstallationRequired;
+        destination.IsActive = source.IsActive;
+        destination.CreatedOnUtc = source.CreatedOnUtc;
+        destination.ModifiedOnUtc = source.ModifiedOnUtc;
+        destination.IsDeleted = source.IsDeleted;
+        destination.DeletedAt = source.DeletedAt;
+        destination.DeletedBy = source.DeletedBy;
+    }
+
+    private static Product CloneProduct(Product source) =>
+        new()
+        {
+            Id = source.Id,
+            CategoryId = source.CategoryId,
+            ProductName = source.ProductName,
+            BrandName = source.BrandName,
+            ModelName = source.ModelName,
+            ShortDescription = source.ShortDescription,
+            LongDescription = source.LongDescription,
+            IsActive = source.IsActive,
+            CreatedOnUtc = source.CreatedOnUtc,
+            ModifiedOnUtc = source.ModifiedOnUtc,
+            IsDeleted = source.IsDeleted,
+            DeletedAt = source.DeletedAt,
+            DeletedBy = source.DeletedBy,
+        };
+
+    private static void CopyProductValues(Product source, Product destination)
+    {
+        destination.CategoryId = source.CategoryId;
+        destination.ProductName = source.ProductName;
+        destination.BrandName = source.BrandName;
+        destination.ModelName = source.ModelName;
+        destination.ShortDescription = source.ShortDescription;
+        destination.LongDescription = source.LongDescription;
+        destination.IsActive = source.IsActive;
+        destination.CreatedOnUtc = source.CreatedOnUtc;
+        destination.ModifiedOnUtc = source.ModifiedOnUtc;
+        destination.IsDeleted = source.IsDeleted;
+        destination.DeletedAt = source.DeletedAt;
+        destination.DeletedBy = source.DeletedBy;
     }
 }

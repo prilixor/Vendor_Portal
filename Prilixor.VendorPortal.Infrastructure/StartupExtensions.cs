@@ -24,18 +24,34 @@ namespace Prilixor.VendorPortal.Infrastructure
             var databaseOptions = configuration.GetSection(nameof(ApplicationOptions.DataBaseOptions))
                 .Get<DataBaseOptions>();
 
+            var vendorPortalCs = ResolveConnectionString(configuration, "VendorPortalConnection");
             services.AddDbContext<ApplicationDbContext>(cfg =>
             {
-                cfg.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
+                cfg.UseNpgsql(vendorPortalCs);
                 cfg.EnableDetailedErrors(databaseOptions?.EnableDetailedErrors ?? false);
             });
 
-            var customerPortalCs = configuration.GetConnectionString("CustomerPortalConnection");
-            if (string.IsNullOrWhiteSpace(customerPortalCs))
+            var adminPortalCs = ResolveConnectionString(configuration, "AdminPortalConnection");
+            services.AddDbContext<AdminPortalDbContext>(cfg =>
             {
-                customerPortalCs = configuration.GetConnectionString("DefaultConnection");
-            }
+                cfg.UseNpgsql(adminPortalCs);
+                cfg.EnableDetailedErrors(databaseOptions?.EnableDetailedErrors ?? false);
+            });
 
+            services.AddDbContext<VendorPortalDbContext>(cfg =>
+            {
+                cfg.UseNpgsql(vendorPortalCs);
+                cfg.EnableDetailedErrors(databaseOptions?.EnableDetailedErrors ?? false);
+            });
+
+            var commonPortalCs = ResolveConnectionString(configuration, "CommonPortalConnection");
+            services.AddDbContext<CommonPortalDbContext>(cfg =>
+            {
+                cfg.UseNpgsql(commonPortalCs);
+                cfg.EnableDetailedErrors(databaseOptions?.EnableDetailedErrors ?? false);
+            });
+
+            var customerPortalCs = ResolveConnectionString(configuration, "CustomerPortalConnection");
             services.AddDbContext<CustomerPortalDbContext>(cfg =>
             {
                 cfg.UseNpgsql(customerPortalCs);
@@ -57,6 +73,17 @@ namespace Prilixor.VendorPortal.Infrastructure
             RegisterVendorStorage(services, configuration, environment);
 
             return services;
+        }
+
+        private static string? ResolveConnectionString(IConfiguration configuration, string key)
+        {
+            var cs = configuration.GetConnectionString(key);
+            if (!string.IsNullOrWhiteSpace(cs))
+            {
+                return cs;
+            }
+
+            return configuration.GetConnectionString("DefaultConnection");
         }
 
         private static void RegisterVendorStorage(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
