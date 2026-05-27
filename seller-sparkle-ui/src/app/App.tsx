@@ -54,6 +54,7 @@ import CustomerNotifications from "@/app/components/customer/CustomerNotificatio
 import CustomerSupport from "@/app/components/customer/CustomerSupport";
 import CustomerLogin from "@/app/components/customer/CustomerLogin";
 import CustomerRegister from "@/app/components/customer/CustomerRegister";
+import CustomerExpirations from "@/app/components/customer/CustomerExpirations";
 
 const queryClient = new QueryClient();
 
@@ -115,6 +116,7 @@ const App = () => (
               <Route path="checkout" element={<CustomerCheckout />} />
               <Route path="orders" element={<CustomerOrders />} />
               <Route path="orders/:orderId" element={<CustomerOrderDetail />} />
+              <Route path="expirations" element={<CustomerExpirations />} />
               <Route path="addresses" element={<CustomerAddresses />} />
               <Route path="notifications" element={<CustomerNotifications />} />
               <Route path="support" element={<CustomerSupport />} />

@@ -34,6 +34,13 @@ public sealed class CreateProductRequest
     public string? ModelName { get; set; }
     public string? ShortDescription { get; set; }
     public string? LongDescription { get; set; }
+    public decimal DailyRent { get; set; }
+    public decimal MonthlyRent { get; set; }
+    public decimal SecurityDeposit { get; set; }
+    public decimal? BuyPrice { get; set; }
+    public decimal GstPercent { get; set; } = 18m;
+    public bool IsRentEnabled { get; set; } = true;
+    public bool IsBuyEnabled { get; set; } = true;
     public bool IsActive { get; set; } = true;
 }
 
@@ -46,7 +53,39 @@ public sealed class UpdateProductRequest
     public string? ModelName { get; set; }
     public string? ShortDescription { get; set; }
     public string? LongDescription { get; set; }
+    public decimal DailyRent { get; set; }
+    public decimal MonthlyRent { get; set; }
+    public decimal SecurityDeposit { get; set; }
+    public decimal? BuyPrice { get; set; }
+    public decimal GstPercent { get; set; } = 18m;
+    public bool IsRentEnabled { get; set; } = true;
+    public bool IsBuyEnabled { get; set; } = true;
     public bool IsActive { get; set; }
+}
+
+public sealed class AddProductImageRequest
+{
+    public string ProductId { get; set; } = string.Empty;
+    public string ImageUrl { get; set; } = string.Empty;
+    public int DisplayOrder { get; set; } = 1;
+    public bool IsPrimary { get; set; }
+}
+
+public sealed class ProductImagesRequest
+{
+    public string ProductId { get; set; } = string.Empty;
+}
+
+public sealed class DeleteProductImageRequest
+{
+    public string ProductId { get; set; } = string.Empty;
+    public string ImageId { get; set; } = string.Empty;
+}
+
+public sealed class SetPrimaryProductImageRequest
+{
+    public string ProductId { get; set; } = string.Empty;
+    public string ImageId { get; set; } = string.Empty;
 }
 
 // Category Endpoints
@@ -179,6 +218,13 @@ public sealed class CreateProductEndpoint(IMediator mediator)
             req.ModelName,
             req.ShortDescription,
             req.LongDescription,
+            req.DailyRent,
+            req.MonthlyRent,
+            req.SecurityDeposit,
+            req.BuyPrice,
+            req.GstPercent,
+            req.IsRentEnabled,
+            req.IsBuyEnabled,
             req.IsActive), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
@@ -205,6 +251,13 @@ public sealed class UpdateProductEndpoint(IMediator mediator)
             req.ModelName,
             req.ShortDescription,
             req.LongDescription,
+            req.DailyRent,
+            req.MonthlyRent,
+            req.SecurityDeposit,
+            req.BuyPrice,
+            req.GstPercent,
+            req.IsRentEnabled,
+            req.IsBuyEnabled,
             req.IsActive), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
@@ -230,6 +283,85 @@ public sealed class DeleteProductEndpoint(IMediator mediator)
         }
 
         var result = await mediator.Send(new DeleteProductCommand(id), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
+    }
+}
+
+public sealed class AddProductImageEndpoint(IMediator mediator)
+    : Endpoint<AddProductImageRequest, Results<Ok<ProductImageDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("catalog/products/{productId}/images");
+        Group<AdminApiGroup>();
+        AllowAnonymous();
+    }
+
+    public override async Task<Results<Ok<ProductImageDto>, ProblemHttpResult>> ExecuteAsync(AddProductImageRequest req, CancellationToken ct)
+    {
+        req.ProductId = Route<string>("productId") ?? req.ProductId;
+        var result = await mediator.Send(new AddProductImageCommand(
+            req.ProductId,
+            req.ImageUrl,
+            req.DisplayOrder,
+            req.IsPrimary), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetProductImagesEndpoint(IMediator mediator)
+    : Endpoint<ProductImagesRequest, Results<Ok<List<ProductImageDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/products/{productId}/images");
+        Group<AdminApiGroup>();
+        AllowAnonymous();
+    }
+
+    public override async Task<Results<Ok<List<ProductImageDto>>, ProblemHttpResult>> ExecuteAsync(ProductImagesRequest req, CancellationToken ct)
+    {
+        req.ProductId = Route<string>("productId") ?? req.ProductId;
+        var result = await mediator.Send(new GetProductImagesQuery(req.ProductId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class DeleteProductImageEndpoint(IMediator mediator)
+    : Endpoint<DeleteProductImageRequest, Results<NoContent, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Delete("catalog/products/{productId}/images/{imageId}");
+        Group<AdminApiGroup>();
+        AllowAnonymous();
+    }
+
+    public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(DeleteProductImageRequest req, CancellationToken ct)
+    {
+        req.ProductId = Route<string>("productId") ?? req.ProductId;
+        req.ImageId = Route<string>("imageId") ?? req.ImageId;
+        var result = await mediator.Send(new DeleteProductImageCommand(req.ProductId, req.ImageId), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
+    }
+}
+
+public sealed class SetPrimaryProductImageEndpoint(IMediator mediator)
+    : Endpoint<SetPrimaryProductImageRequest, Results<NoContent, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("catalog/products/{productId}/images/{imageId}/primary");
+        Group<AdminApiGroup>();
+        AllowAnonymous();
+    }
+
+    public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(SetPrimaryProductImageRequest req, CancellationToken ct)
+    {
+        req.ProductId = Route<string>("productId") ?? req.ProductId;
+        req.ImageId = Route<string>("imageId") ?? req.ImageId;
+        var result = await mediator.Send(new SetPrimaryProductImageCommand(req.ProductId, req.ImageId), ct);
         return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
     }
 }

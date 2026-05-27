@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { customerApi } from "@/app/services/customerApi";
@@ -20,8 +20,6 @@ import { cn } from "@/app/helpers/utils";
 
 type DeliveryChoice = "standard" | "express" | "vendor_pickup";
 
-const EXPRESS_DELIVERY_FEE_INR = 19;
-
 function formatAddressOption(a: { label?: string | null; line1: string; city: string }): string {
   const tail = `${a.line1}, ${a.city}`;
   return a.label?.trim() ? `${a.label.trim()} — ${tail}` : tail;
@@ -40,13 +38,35 @@ const CustomerCheckout = () => {
   });
 
   const totalDeposit = useMemo(
-    () => lines.reduce((sum, l) => sum + l.securityDeposit * l.quantity, 0),
+    () => lines.reduce((sum, l) => sum + (l.orderType === "buy" ? 0 : l.securityDeposit * l.quantity), 0),
     [lines],
   );
 
-  const expressFee = deliveryChoice === "express" ? EXPRESS_DELIVERY_FEE_INR : 0;
-  const serviceFee = 0;
-  const grandTotal = totalEstimatedRent + totalDeposit + serviceFee + expressFee;
+  const quotePayload = useMemo(
+    () => ({
+      deliveryOption: deliveryChoice,
+      customerAddressId: addressId || undefined,
+      lines: lines.map((l) => ({
+        listingId: l.listingId,
+        quantity: l.quantity,
+        rentalDays: l.rentalDays,
+        orderType: l.orderType,
+      })),
+    }),
+    [addressId, deliveryChoice, lines],
+  );
+
+  const { data: quote, isFetching: quoteLoading } = useQuery({
+    queryKey: ["customer-order-quote", addressId, deliveryChoice, lines],
+    queryFn: () => customerApi.quoteOrders(quotePayload),
+    enabled: lines.length > 0,
+  });
+
+  const expressFee = quote?.expressFeeAmount ?? 0;
+  const distanceFee = quote?.distanceFeeAmount ?? 0;
+  const serviceFee = quote?.serviceFeeAmount ?? 0;
+  const gstAmount = quote?.gstAmount ?? 0;
+  const grandTotal = quote?.totalAmount ?? (totalEstimatedRent + totalDeposit + serviceFee + gstAmount);
 
   const placeMutation = useMutation({
     mutationFn: () =>
@@ -57,16 +77,36 @@ const CustomerCheckout = () => {
           listingId: l.listingId,
           quantity: l.quantity,
           rentalDays: l.rentalDays,
+          orderType: l.orderType,
         })),
       }),
-    onSuccess: (orders) => {
-      toast.success(`Placed ${orders.length} order(s).`);
-      clear();
-      queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
-      navigate("/customer/orders");
+    onSuccess: (result) => {
+      const placedCount = result.placedOrders.length;
+      const failedCount = result.failedLines.length;
+      if (placedCount > 0 && failedCount > 0) {
+        toast.success(`Placed ${placedCount} order(s), ${failedCount} failed.`);
+      } else if (placedCount > 0) {
+        toast.success(`Placed ${placedCount} order(s).`);
+      } else {
+        toast.error(`No orders placed. ${failedCount} line(s) failed.`);
+      }
+
+      if (placedCount > 0) {
+        clear();
+        queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+        navigate("/customer/orders");
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  useEffect(() => {
+    if (!quote?.buySuggestions?.length) return;
+    const suggestion = quote.buySuggestions[0];
+    toast.message(
+      `Buy suggestion for "${suggestion.listingTitle}": save ₹${suggestion.savingsAmount.toFixed(0)} if you buy.`,
+    );
+  }, [quote?.buySuggestions]);
 
   if (lines.length === 0) {
     return (
@@ -155,7 +195,7 @@ const CustomerCheckout = () => {
                     <span className="text-sm font-medium">Express (next-day)</span>
                   </div>
                   <span className="shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
-                    + ₹{EXPRESS_DELIVERY_FEE_INR}
+                    Dynamic
                   </span>
                 </label>
                 <label
@@ -196,14 +236,14 @@ const CustomerCheckout = () => {
               ))}
             </div>
 
-            <div className="space-y-2.5 border-t pt-4 text-sm">
+              <div className="space-y-2.5 border-t pt-4 text-sm">
               <div className="flex justify-between gap-4 text-muted-foreground">
                 <span>Subtotal</span>
-                <span className="tabular-nums text-foreground">₹{totalEstimatedRent.toFixed(0)}</span>
+                  <span className="tabular-nums text-foreground">₹{(quote?.subtotalAmount ?? totalEstimatedRent).toFixed(0)}</span>
               </div>
               <div className="flex justify-between gap-4 text-muted-foreground">
                 <span>Deposit</span>
-                <span className="tabular-nums text-foreground">₹{totalDeposit.toFixed(0)}</span>
+                  <span className="tabular-nums text-foreground">₹{(quote?.depositAmount ?? totalDeposit).toFixed(0)}</span>
               </div>
               {expressFee > 0 ? (
                 <div className="flex justify-between gap-4 text-muted-foreground">
@@ -211,14 +251,39 @@ const CustomerCheckout = () => {
                   <span className="tabular-nums text-foreground">₹{expressFee.toFixed(0)}</span>
                 </div>
               ) : null}
+                {distanceFee > 0 ? (
+                  <div className="flex justify-between gap-4 text-muted-foreground">
+                    <span>Distance delivery fee</span>
+                    <span className="tabular-nums text-foreground">₹{distanceFee.toFixed(0)}</span>
+                  </div>
+                ) : null}
               <div className="flex justify-between gap-4 text-muted-foreground">
                 <span>Service fee</span>
                 <span className="tabular-nums text-foreground">₹{serviceFee.toFixed(0)}</span>
               </div>
+              {gstAmount > 0 ? (
+                <div className="flex justify-between gap-4 text-muted-foreground">
+                  <span>GST</span>
+                  <span className="tabular-nums text-foreground">₹{gstAmount.toFixed(0)}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-4 border-t pt-3 text-base font-bold">
                 <span>Total</span>
                 <span className="tabular-nums">₹{grandTotal.toFixed(0)}</span>
               </div>
+                {quoteLoading && (
+                  <p className="text-xs text-muted-foreground">Updating distance-based charges…</p>
+                )}
+                {quote?.buySuggestions?.length ? (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900">
+                    {quote.buySuggestions.map((s) => (
+                      <p key={s.listingId} className="leading-relaxed">
+                        <span className="font-medium">{s.listingTitle}:</span> Rent ₹{s.rentAmount.toFixed(0)} is higher than
+                        Buy ₹{s.buyAmount.toFixed(0)} (save ₹{s.savingsAmount.toFixed(0)}).
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
             </div>
 
             <Button

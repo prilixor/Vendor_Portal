@@ -107,6 +107,13 @@ export interface ProductApiDto {
   modelName?: string;
   shortDescription?: string;
   longDescription?: string;
+  dailyRent: number;
+  monthlyRent: number;
+  securityDeposit: number;
+  buyPrice?: number;
+  gstPercent: number;
+  isRentEnabled: boolean;
+  isBuyEnabled: boolean;
   isActive: boolean;
 }
 
@@ -259,9 +266,6 @@ export interface UpsertVendorProductListingPayload {
   vendorId: string;
   productId: string;
   listingTitle: string;
-  dailyRent: number;
-  monthlyRent: number;
-  securityDeposit: number;
   availableQuantity: number;
   listingStatus: string;
 }
@@ -573,26 +577,10 @@ export const vendorOnboardingApi = {
 
   // CountryStateCity API methods
   getIndianStates() {
-    return fetch("https://api.countrystatecity.in/v1/countries/IN/states", {
-      method: 'GET',
-      headers: {
-        'X-CSCAPI-KEY': import.meta.env.VITE_CSC_API_KEY || '',
-      },
-    }).then(response => {
-      if (!response.ok) throw new Error('Failed to fetch states');
-      return response.json() as Promise<{ name: string; iso2: string }[]>;
-    });
+    return apiClient.get<{ name: string; iso2: string }[]>("/vendors/locations/states");
   },
 
   getCitiesByState(stateIso2: string) {
-    return fetch(`https://api.countrystatecity.in/v1/countries/IN/states/${stateIso2}/cities`, {
-      method: 'GET',
-      headers: {
-        'X-CSCAPI-KEY': import.meta.env.VITE_CSC_API_KEY || '',
-      },
-    }).then(response => {
-      if (!response.ok) throw new Error('Failed to fetch cities');
-      return response.json() as Promise<{ name: string }[]>;
-    });
+    return apiClient.get<{ name: string }[]>(`/vendors/locations/states/${encodeURIComponent(stateIso2)}/cities`);
   },
 };

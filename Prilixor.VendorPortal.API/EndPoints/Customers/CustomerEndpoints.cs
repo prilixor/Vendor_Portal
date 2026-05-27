@@ -66,7 +66,14 @@ public sealed class GetCustomerCatalogEndpoint(IMediator mediator)
 
     public override async Task<Results<Ok<List<CustomerCatalogListingDto>>, ProblemHttpResult>> ExecuteAsync(GetCustomerCatalogRequest req, CancellationToken ct)
     {
-        var result = await mediator.Send(new GetCustomerCatalogListingsQuery(req.Category, req.Search), ct);
+        Guid? customerId = null;
+        var subject = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(subject, out var parsedCustomerId))
+        {
+            customerId = parsedCustomerId;
+        }
+
+        var result = await mediator.Send(new GetCustomerCatalogListingsQuery(req.Category, req.Search, customerId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -109,6 +116,8 @@ public sealed class CustomerListingDetailResponse
     public bool PrescriptionRequired { get; set; }
     public bool DepositRequired { get; set; }
     public string ListingStatus { get; set; } = string.Empty;
+    public int AvailableQuantity { get; set; }
+    public string AvailabilityStatus { get; set; } = "available";
     public string Description { get; set; } = string.Empty;
     public List<string> ImageUrls { get; set; } = [];
 }
@@ -141,6 +150,10 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
             return TypedResults.Problem(title: "customers.listing_not_found", detail: "Listing not found.", statusCode: 404);
 
         var hint = string.IsNullOrWhiteSpace(agg.CategoryName) ? "Service area on request" : $"{agg.CategoryName} · rentals";
+        var availableQuantity = Math.Max(0, agg.InventoryAvailable);
+        var availabilityStatus = availableQuantity <= 0
+            ? "out_of_stock"
+            : (availableQuantity <= 3 ? "low_stock" : "available");
 
         var res = new CustomerListingDetailResponse
         {
@@ -156,6 +169,8 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
             PrescriptionRequired = agg.CategoryPrescriptionRequired,
             DepositRequired = agg.CategoryDepositRequired,
             ListingStatus = agg.ListingStatus,
+            AvailableQuantity = availableQuantity,
+            AvailabilityStatus = availabilityStatus,
             Description = agg.Description,
             ImageUrls = agg.ImageUrls.Count > 0 ? agg.ImageUrls : [],
         };
@@ -246,6 +261,8 @@ public sealed class AddCustomerAddressRequest
     public string City { get; set; } = string.Empty;
     public string State { get; set; } = string.Empty;
     public string Postal { get; set; } = string.Empty;
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
     public bool SetAsDefault { get; set; }
 }
 
@@ -274,6 +291,8 @@ public sealed class AddCustomerAddressEndpoint(IMediator mediator)
             req.City,
             req.State,
             req.Postal,
+            req.Latitude,
+            req.Longitude,
             req.SetAsDefault), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
@@ -316,6 +335,7 @@ public sealed class CartLineDto
     public Guid ListingId { get; set; }
     public int Quantity { get; set; }
     public int RentalDays { get; set; }
+    public string OrderType { get; set; } = "rent";
 }
 
 public sealed class PlaceCustomerOrdersRequest
@@ -325,8 +345,42 @@ public sealed class PlaceCustomerOrdersRequest
     public List<CartLineDto> Lines { get; set; } = [];
 }
 
+public sealed class CustomerOrderExpirationsRequest
+{
+    public int WithinDays { get; set; } = 7;
+}
+
+public sealed class QuoteCustomerOrdersEndpoint(IMediator mediator)
+    : Endpoint<PlaceCustomerOrdersRequest, Results<Ok<CustomerOrderQuoteDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/orders/quote");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerOrderQuoteDto>, ProblemHttpResult>> ExecuteAsync(PlaceCustomerOrdersRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var lines = req.Lines.ConvertAll(l => new CartLineRequest(l.ListingId, l.Quantity, l.RentalDays, l.OrderType));
+        var result = await mediator.Send(new QuoteCustomerOrdersCommand(
+            customerId,
+            req.CustomerAddressId,
+            req.DeliveryOption,
+            lines), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class PlaceCustomerOrdersEndpoint(IMediator mediator)
-    : Endpoint<PlaceCustomerOrdersRequest, Results<Ok<List<CustomerOrderDto>>, ProblemHttpResult>>
+    : Endpoint<PlaceCustomerOrdersRequest, Results<Ok<PlaceCustomerOrdersResultDto>, ProblemHttpResult>>
 {
     public override void Configure()
     {
@@ -338,12 +392,12 @@ public sealed class PlaceCustomerOrdersEndpoint(IMediator mediator)
         Options(x => x.WithTags("Customers"));
     }
 
-    public override async Task<Results<Ok<List<CustomerOrderDto>>, ProblemHttpResult>> ExecuteAsync(PlaceCustomerOrdersRequest req, CancellationToken ct)
+    public override async Task<Results<Ok<PlaceCustomerOrdersResultDto>, ProblemHttpResult>> ExecuteAsync(PlaceCustomerOrdersRequest req, CancellationToken ct)
     {
         if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
 
-        var lines = req.Lines.ConvertAll(l => new CartLineRequest(l.ListingId, l.Quantity, l.RentalDays));
+        var lines = req.Lines.ConvertAll(l => new CartLineRequest(l.ListingId, l.Quantity, l.RentalDays, l.OrderType));
         var result = await mediator.Send(new PlaceCustomerOrdersCommand(
             customerId,
             req.CustomerAddressId,
@@ -373,6 +427,29 @@ public sealed class GetCustomerOrdersEndpoint(IMediator mediator)
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
 
         var result = await mediator.Send(new GetCustomerOrdersQuery(customerId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetCustomerOrderExpirationsEndpoint(IMediator mediator)
+    : Endpoint<CustomerOrderExpirationsRequest, Results<Ok<List<ExpiringOrderDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("me/orders/expirations");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<List<ExpiringOrderDto>>, ProblemHttpResult>> ExecuteAsync(CustomerOrderExpirationsRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var result = await mediator.Send(new GetCustomerOrderExpirationsQuery(customerId, req.WithinDays), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

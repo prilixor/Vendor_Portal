@@ -100,7 +100,21 @@ public sealed record ProductDto(
     string? ModelName,
     string? ShortDescription,
     string? LongDescription,
+    decimal DailyRent,
+    decimal MonthlyRent,
+    decimal SecurityDeposit,
+    decimal? BuyPrice,
+    decimal GstPercent,
+    bool IsRentEnabled,
+    bool IsBuyEnabled,
     bool IsActive);
+
+public sealed record ProductImageDto(
+    string Id,
+    string ProductId,
+    string ImageUrl,
+    int DisplayOrder,
+    bool IsPrimary);
 
 public sealed record VendorProductListingDto(
     string Id,

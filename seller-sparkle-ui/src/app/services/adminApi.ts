@@ -242,7 +242,37 @@ export interface ProductDto {
   modelName?: string;
   shortDescription?: string;
   longDescription?: string;
+  dailyRent: number;
+  monthlyRent: number;
+  securityDeposit: number;
+  buyPrice?: number;
+  gstPercent: number;
+  isRentEnabled: boolean;
+  isBuyEnabled: boolean;
   isActive: boolean;
+}
+
+export interface ProductImageDto {
+  id: string;
+  productId: string;
+  imageUrl: string;
+  displayOrder: number;
+  isPrimary: boolean;
+}
+
+export interface AddProductImageRequest {
+  imageUrl: string;
+  displayOrder: number;
+  isPrimary: boolean;
+}
+
+export interface UploadedFileResponse {
+  fileUrl: string;
+  storageKey?: string | null;
+  fileName?: string;
+  originalFileName?: string;
+  contentType?: string;
+  size?: number;
 }
 
 export interface CreateProductCategoryRequest {
@@ -269,6 +299,13 @@ export interface CreateProductRequest {
   modelName?: string;
   shortDescription?: string;
   longDescription?: string;
+  dailyRent: number;
+  monthlyRent: number;
+  securityDeposit: number;
+  buyPrice?: number;
+  gstPercent: number;
+  isRentEnabled: boolean;
+  isBuyEnabled: boolean;
   isActive: boolean;
 }
 
@@ -280,6 +317,13 @@ export interface UpdateProductRequest {
   modelName?: string;
   shortDescription?: string;
   longDescription?: string;
+  dailyRent: number;
+  monthlyRent: number;
+  securityDeposit: number;
+  buyPrice?: number;
+  gstPercent: number;
+  isRentEnabled: boolean;
+  isBuyEnabled: boolean;
   isActive: boolean;
 }
 
@@ -428,6 +472,36 @@ export const adminApi = {
 
   async deleteProduct(id: string): Promise<void> {
     return apiClient.delete<void>(`/admin/catalog/products/${id}`);
+  },
+
+  async uploadProductImageFile(file: File): Promise<UploadedFileResponse> {
+    const data = new FormData();
+    data.append("vendorId", "common");
+    data.append("file", file);
+    data.append("folderType", "ProductImages");
+    return apiClient.postForm<UploadedFileResponse>("/files/upload", data);
+  },
+
+  async getProductImages(productId: string): Promise<ProductImageDto[]> {
+    return apiClient.get<ProductImageDto[]>(`/admin/catalog/products/${productId}/images`);
+  },
+
+  async addProductImage(productId: string, data: AddProductImageRequest): Promise<ProductImageDto> {
+    return apiClient.post<ProductImageDto>(`/admin/catalog/products/${productId}/images`, {
+      productId,
+      ...data,
+    });
+  },
+
+  async deleteProductImage(productId: string, imageId: string): Promise<void> {
+    return apiClient.delete<void>(`/admin/catalog/products/${productId}/images/${imageId}`);
+  },
+
+  async setPrimaryProductImage(productId: string, imageId: string): Promise<void> {
+    return apiClient.patch<void>(`/admin/catalog/products/${productId}/images/${imageId}/primary`, {
+      productId,
+      imageId,
+    });
   },
 
   async uploadCatalogExcel(file: File): Promise<ExcelUploadResponseDto> {

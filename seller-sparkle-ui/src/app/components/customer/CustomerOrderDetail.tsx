@@ -202,8 +202,6 @@ const CustomerOrderDetail = () => {
                   <h1 className="text-2xl font-bold tracking-tight tabular-nums sm:text-3xl">{data.orderNumber}</h1>
                   <p className="text-sm text-muted-foreground">
                     {data.listingTitle}
-                    <span className="text-muted-foreground/80"> · </span>
-                    {data.vendorName}
                   </p>
                   <Link
                     to={browseListingTo}

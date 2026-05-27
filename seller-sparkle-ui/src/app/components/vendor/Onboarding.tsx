@@ -196,7 +196,8 @@ const Onboarding = () => {
         setStates(response);
       } catch (error) {
         console.error("Failed to fetch states:", error);
-        setStatesError("Failed to load states. Please try again.");
+        const message = getUserFriendlyMessage(error);
+        setStatesError(message || "Failed to load states.");
       } finally {
         setStatesLoading(false);
       }
@@ -230,7 +231,8 @@ const Onboarding = () => {
         setCities(response.map((city) => city.name));
       } catch (error) {
         console.error("Failed to fetch cities:", error);
-        setCitiesError("Failed to load cities. Please try again.");
+        const message = getUserFriendlyMessage(error);
+        setCitiesError(message || "Failed to load cities.");
       } finally {
         setCitiesLoading(false);
       }
@@ -902,6 +904,11 @@ const Onboarding = () => {
                       <Field className="sm:col-span-2" label="Address line 2 (optional)" value={profile.addressLine2 ?? ""} onChange={(v) => updateProfile("addressLine2", v)} />
                       <Field label="Postal code" value={profile.postalCode} onChange={(v) => updateProfile("postalCode", v)} />
                     </FormGrid>
+                    {(statesError || citiesError) && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        {citiesError ?? statesError}
+                      </p>
+                    )}
                     <div className="space-y-2 pt-2">
                       <Label>Pin your business location</Label>
                       <MapPicker
@@ -1203,6 +1210,11 @@ const Onboarding = () => {
               />
               <Field label="Postal code" value={profile.postalCode} onChange={(v) => updateProfile("postalCode", v)} />
             </FormGrid>
+            {(statesError || citiesError) && (
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                {citiesError ?? statesError}
+              </p>
+            )}
             <div className="space-y-2 pt-2">
               <Label>Pin your business location</Label>
               <MapPicker

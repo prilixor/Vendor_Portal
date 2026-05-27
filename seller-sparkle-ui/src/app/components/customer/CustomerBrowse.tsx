@@ -1,16 +1,19 @@
 import { useState, useEffect, useMemo, type MouseEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Heart, Search } from "lucide-react";
+import { Heart, ImageOff, Search } from "lucide-react";
 import { customerApi } from "@/app/services/customerApi";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/app/components/ui/card";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Badge } from "@/app/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { cn } from "@/app/helpers/utils";
+import { useAuth } from "@/app/guards/AuthContext";
 
 const WISHLIST_STORAGE_KEY = "prilixor.customer.wishlistIds";
+type AvailabilityFilter = "all" | "available" | "low_stock" | "out_of_stock";
 
 function readWishlist(): Set<string> {
   try {
@@ -28,18 +31,64 @@ function writeWishlist(ids: Set<string>) {
   localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify([...ids]));
 }
 
-function isListingAvailable(status: string) {
-  const s = status.toLowerCase();
-  return s === "active" || s === "approved";
+function availabilityBadge(
+  status: string,
+  qty: number,
+  totalAcrossVendors: number,
+  listingStatus: string,
+): { label: string; className: string } {
+  const s = status.trim().toLowerCase();
+  const ls = listingStatus.trim().toLowerCase();
+  if (ls !== "active" && ls !== "approved") {
+    return {
+      label: "Unavailable",
+      className: "pointer-events-none absolute left-3 top-3 border-0 bg-muted text-foreground hover:bg-muted",
+    };
+  }
+  if (qty <= 0 && totalAcrossVendors > 0) {
+    return {
+      label: "Out at this vendor",
+      className: "pointer-events-none absolute left-3 top-3 border-0 bg-orange-600 text-white hover:bg-orange-600",
+    };
+  }
+  if (s === "out_of_stock" || qty <= 0) {
+    return {
+      label: "Out of stock",
+      className: "pointer-events-none absolute left-3 top-3 border-0 bg-destructive text-white hover:bg-destructive",
+    };
+  }
+  if (qty === 1) {
+    return {
+      label: "Only 1 left",
+      className: "pointer-events-none absolute left-3 top-3 border-0 bg-amber-700 text-white hover:bg-amber-700",
+    };
+  }
+  if (s === "low_stock" || qty <= 3) {
+    return {
+      label: "Limited stock",
+      className: "pointer-events-none absolute left-3 top-3 border-0 bg-amber-600 text-white hover:bg-amber-600",
+    };
+  }
+  return {
+    label: "Available",
+    className: "pointer-events-none absolute left-3 top-3 border-0 bg-emerald-600 text-white hover:bg-emerald-600",
+  };
 }
 
 /** Fits the whole image inside a fixed aspect-ratio frame (letterboxing on sides or top/bottom). */
 function BrowseCardImage({ src }: { src: string }) {
   const [failed, setFailed] = useState(false);
   if (!src.trim() || failed) {
+    const subtitle = !src.trim() ? "Image will be updated soon" : "Image currently unavailable";
     return (
-      <div className="flex h-full w-full items-center justify-center bg-muted text-xs text-muted-foreground">
-        No image
+      <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 text-slate-500 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 dark:text-slate-300">
+        <div className="absolute -top-8 -right-8 h-28 w-28 rounded-full bg-white/40 blur-2xl dark:bg-white/10" />
+        <div className="absolute -bottom-8 -left-8 h-28 w-28 rounded-full bg-white/40 blur-2xl dark:bg-white/10" />
+        <div className="relative flex flex-col items-center gap-2 rounded-md border border-white/60 bg-white/55 px-4 py-3 text-center shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-black/20">
+          <ImageOff className="h-5 w-5" />
+          <p className="text-xs font-medium text-slate-600 dark:text-slate-200">No product image</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-300">{subtitle}</p>
+        </div>
       </div>
     );
   }
@@ -59,7 +108,10 @@ const CustomerBrowse = () => {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState<string | undefined>(undefined);
   const [appliedCat, setAppliedCat] = useState<string | undefined>(undefined);
+  const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>("all");
   const [wishlist, setWishlist] = useState<Set<string>>(readWishlist);
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -79,7 +131,34 @@ const CustomerBrowse = () => {
     queryFn: () => customerApi.getCatalogListings(appliedCat, debouncedSearch),
   });
 
+  const { data: addresses = [] } = useQuery({
+    queryKey: ["customer-addresses", user?.id],
+    queryFn: () => customerApi.getAddresses(),
+    enabled: user?.role === "customer",
+  });
+
+  useEffect(() => {
+    if (user?.role !== "customer") {
+      setShowLocationPrompt(false);
+      return;
+    }
+
+    const hasGeoAddress = addresses.some((a) => typeof a.latitude === "number" && typeof a.longitude === "number");
+    setShowLocationPrompt(!hasGeoAddress);
+  }, [addresses, user?.role]);
+
   const categoryPills = useMemo(() => ["All", ...categories.map((c) => c.categoryName)], [categories]);
+  const availabilityPills: Array<{ id: AvailabilityFilter; label: string }> = [
+    { id: "all", label: "All stock" },
+    { id: "available", label: "Available" },
+    { id: "low_stock", label: "Low stock" },
+    { id: "out_of_stock", label: "Out of stock" },
+  ];
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    if (availabilityFilter === "all") return data;
+    return data.filter((item) => item.availabilityStatus.toLowerCase() === availabilityFilter);
+  }, [data, availabilityFilter]);
 
   const toggleWishlist = (id: string, e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -140,6 +219,26 @@ const CustomerBrowse = () => {
         </div>
       </div>
 
+      <div className="-mx-1 overflow-x-auto px-1 sm:-mx-2 sm:px-2">
+        <div className="flex min-h-9 gap-2 pb-1">
+          {availabilityPills.map((pill) => (
+            <button
+              key={pill.id}
+              type="button"
+              onClick={() => setAvailabilityFilter(pill.id)}
+              className={cn(
+                "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                availabilityFilter === pill.id
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-background hover:bg-accent",
+              )}
+            >
+              {pill.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {error && (
         <p className="text-sm text-destructive">
           {error instanceof Error ? error.message : "Could not load catalog."}
@@ -164,25 +263,48 @@ const CustomerBrowse = () => {
           ))}
 
         {!isLoading &&
-          data?.map((item) => (
+          filteredData.map((item) => (
             <Card
               key={item.id}
               className="group overflow-hidden border-border/80 p-0 shadow-sm transition hover:shadow-md"
             >
               <div className="relative">
-                <Link
-                  to={`/customer/browse/${item.id}`}
-                  className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <div className="relative aspect-[4/3] w-full min-w-0 overflow-hidden rounded-t-lg bg-muted">
-                    <BrowseCardImage src={item.primaryImageUrl ?? ""} />
-                    {isListingAvailable(item.listingStatus) && (
-                      <Badge className="pointer-events-none absolute left-3 top-3 border-0 bg-emerald-600 text-white hover:bg-emerald-600">
-                        Available
-                      </Badge>
-                    )}
-                  </div>
-                </Link>
+                {(() => {
+                  const ls = item.listingStatus.trim().toLowerCase();
+                  const isBrowsable = ls === "active" || ls === "approved";
+                  return isBrowsable ? (
+                    <Link
+                      to={`/customer/browse/${item.id}`}
+                      className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      <div className="relative aspect-[4/3] w-full min-w-0 overflow-hidden rounded-t-lg bg-muted">
+                        <BrowseCardImage src={item.primaryImageUrl ?? ""} />
+                        {(() => {
+                          const badge = availabilityBadge(
+                            item.availabilityStatus,
+                            item.availableQuantity,
+                            item.productTotalAvailableQuantity,
+                            item.listingStatus,
+                          );
+                          return <Badge className={badge.className}>{badge.label}</Badge>;
+                        })()}
+                      </div>
+                    </Link>
+                  ) : (
+                    <div className="relative aspect-[4/3] w-full min-w-0 overflow-hidden rounded-t-lg bg-muted">
+                      <BrowseCardImage src={item.primaryImageUrl ?? ""} />
+                      {(() => {
+                        const badge = availabilityBadge(
+                          item.availabilityStatus,
+                          item.availableQuantity,
+                          item.productTotalAvailableQuantity,
+                          item.listingStatus,
+                        );
+                        return <Badge className={badge.className}>{badge.label}</Badge>;
+                      })()}
+                    </div>
+                  );
+                })()}
                 <button
                   type="button"
                   aria-label={wishlist.has(item.id) ? "Remove from wishlist" : "Save to wishlist"}
@@ -199,16 +321,22 @@ const CustomerBrowse = () => {
               </div>
 
               <CardHeader className="space-y-1 px-4 pb-2 pt-4">
-                <Link
-                  to={`/customer/browse/${item.id}`}
-                  className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <p className="line-clamp-2 font-semibold leading-snug">{item.title}</p>
-                  <p className="text-xs text-muted-foreground">{item.vendorName}</p>
-                </Link>
+                {(() => {
+                  const ls = item.listingStatus.trim().toLowerCase();
+                  const isBrowsable = ls === "active" || ls === "approved";
+                  return isBrowsable ? (
+                    <Link
+                      to={`/customer/browse/${item.id}`}
+                      className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <p className="line-clamp-2 font-semibold leading-snug">{item.title}</p>
+                    </Link>
+                  ) : (
+                    <p className="line-clamp-2 font-semibold leading-snug">{item.title}</p>
+                  );
+                })()}
               </CardHeader>
               <CardContent className="space-y-3 px-4 pb-4 pt-0">
-                <p className="text-xs text-muted-foreground line-clamp-1">{item.serviceAreaHint}</p>
                 <div className="flex flex-wrap gap-1.5">
                   <Badge variant="secondary" className="font-normal tabular-nums">
                     ₹{item.dailyRent.toFixed(0)}/day
@@ -224,17 +352,46 @@ const CustomerBrowse = () => {
                 </div>
               </CardContent>
               <CardFooter className="border-t bg-muted/30 px-4 pb-4 pt-3">
-                <Button variant="outline" size="sm" className="w-full" asChild>
-                  <Link to={`/customer/browse/${item.id}`}>View details</Link>
-                </Button>
+                {(() => {
+                  const ls = item.listingStatus.trim().toLowerCase();
+                  const isBrowsable = ls === "active" || ls === "approved";
+                  return isBrowsable ? (
+                    <Button variant="outline" size="sm" className="w-full" asChild>
+                      <Link to={`/customer/browse/${item.id}`}>View details</Link>
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" className="w-full" disabled>
+                      Not available yet
+                    </Button>
+                  );
+                })()}
               </CardFooter>
             </Card>
           ))}
       </div>
 
-      {!isLoading && data?.length === 0 && (
+      {!isLoading && filteredData.length === 0 && (
         <p className="text-sm text-muted-foreground">No listings match your filters.</p>
       )}
+
+      <Dialog open={showLocationPrompt} onOpenChange={setShowLocationPrompt}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set location first</DialogTitle>
+            <DialogDescription>
+              Add your address with map location to see nearest available products first and get correct delivery charges.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLocationPrompt(false)}>
+              Later
+            </Button>
+            <Button asChild>
+              <Link to="/customer/addresses">Set address now</Link>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

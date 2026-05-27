@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/app/components/ui/switch";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Skeleton } from "@/app/components/ui/skeleton";
-import { adminApi, ProductCategoryDto, ProductDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest } from "@/app/services/adminApi";
+import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest } from "@/app/services/adminApi";
 import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -50,8 +50,20 @@ const ProductManagement = () => {
     modelName: "",
     shortDescription: "",
     longDescription: "",
+    dailyRent: 0,
+    monthlyRent: 0,
+    securityDeposit: 0,
+    buyPrice: undefined,
+    gstPercent: 18,
+    isRentEnabled: true,
+    isBuyEnabled: true,
     isActive: true,
   });
+  const [productImages, setProductImages] = useState<ProductImageDto[]>([]);
+  const [productImagesLoading, setProductImagesLoading] = useState(false);
+  const [newImageUrl, setNewImageUrl] = useState("");
+  const [newImageIsPrimary, setNewImageIsPrimary] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   
   // Excel upload state
   const [excelDialogOpen, setExcelDialogOpen] = useState(false);
@@ -169,6 +181,13 @@ const ProductManagement = () => {
         modelName: product.modelName,
         shortDescription: product.shortDescription,
         longDescription: product.longDescription,
+        dailyRent: product.dailyRent,
+        monthlyRent: product.monthlyRent,
+        securityDeposit: product.securityDeposit,
+        buyPrice: product.buyPrice,
+        gstPercent: product.gstPercent,
+        isRentEnabled: product.isRentEnabled,
+        isBuyEnabled: product.isBuyEnabled,
         isActive: action === 'activate',
       });
 
@@ -253,6 +272,23 @@ const ProductManagement = () => {
     }
   };
 
+  const loadProductImages = async (productId: string, silent = false) => {
+    try {
+      setProductImagesLoading(true);
+      const images = await adminApi.getProductImages(productId);
+      setProductImages(images);
+      setNewImageIsPrimary(images.length === 0);
+    } catch (error) {
+      if (!silent) {
+        const message = error instanceof Error ? error.message : "Failed to load product images.";
+        toast.error(message);
+      }
+      setProductImages([]);
+    } finally {
+      setProductImagesLoading(false);
+    }
+  };
+
   const openProductDialog = (product?: ProductDto) => {
     if (product) {
       setEditingProduct(product);
@@ -263,8 +299,16 @@ const ProductManagement = () => {
         modelName: product.modelName,
         shortDescription: product.shortDescription,
         longDescription: product.longDescription,
+        dailyRent: product.dailyRent,
+        monthlyRent: product.monthlyRent,
+        securityDeposit: product.securityDeposit,
+        buyPrice: product.buyPrice,
+        gstPercent: product.gstPercent,
+        isRentEnabled: product.isRentEnabled,
+        isBuyEnabled: product.isBuyEnabled,
         isActive: product.isActive,
       });
+      void loadProductImages(product.id, true);
     } else {
       setEditingProduct(null);
       setProductForm({
@@ -274,10 +318,99 @@ const ProductManagement = () => {
         modelName: "",
         shortDescription: "",
         longDescription: "",
+        dailyRent: 0,
+        monthlyRent: 0,
+        securityDeposit: 0,
+        buyPrice: undefined,
+        gstPercent: 18,
+        isRentEnabled: true,
+        isBuyEnabled: true,
         isActive: true,
       });
+      setProductImages([]);
+      setNewImageUrl("");
+      setNewImageIsPrimary(false);
     }
     setProductDialogOpen(true);
+  };
+
+  const addProductImageFromValue = async (imageRef: string) => {
+    if (!editingProduct) {
+      toast.error("Save product first, then add images.");
+      return;
+    }
+
+    const normalized = imageRef.trim();
+    if (!normalized) {
+      toast.error("Please enter image URL or upload an image.");
+      return;
+    }
+
+    try {
+      setProductImagesLoading(true);
+      await adminApi.addProductImage(editingProduct.id, {
+        imageUrl: normalized,
+        displayOrder: Math.max(1, productImages.length + 1),
+        isPrimary: newImageIsPrimary || productImages.length === 0,
+      });
+      setNewImageUrl("");
+      await loadProductImages(editingProduct.id);
+      toast.success("Product image added");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to add product image.";
+      toast.error(message);
+    } finally {
+      setProductImagesLoading(false);
+    }
+  };
+
+  const handleProductImageUpload = async (file?: File) => {
+    if (!file) return;
+    if (!editingProduct) {
+      toast.error("Save product first, then upload images.");
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
+      const upload = await adminApi.uploadProductImageFile(file);
+      await addProductImageFromValue(upload.storageKey?.trim() || upload.fileUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to upload image.";
+      toast.error(message);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const deleteProductImage = async (imageId: string) => {
+    if (!editingProduct) return;
+    try {
+      setProductImagesLoading(true);
+      await adminApi.deleteProductImage(editingProduct.id, imageId);
+      await loadProductImages(editingProduct.id);
+      toast.success("Product image deleted");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete product image.";
+      toast.error(message);
+    } finally {
+      setProductImagesLoading(false);
+    }
+  };
+
+  const setPrimaryProductImage = async (imageId: string) => {
+    if (!editingProduct) return;
+    try {
+      setProductImagesLoading(true);
+      await adminApi.setPrimaryProductImage(editingProduct.id, imageId);
+      await loadProductImages(editingProduct.id);
+      toast.success("Primary image updated");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to set primary image.";
+      toast.error(message);
+    } finally {
+      setProductImagesLoading(false);
+    }
   };
 
   const saveProduct = async () => {
@@ -384,7 +517,7 @@ const ProductManagement = () => {
 
       // Products sheet - headers only
       const productsHeaders = [
-        ["category_name", "product_name", "brand_name", "model_name", "short_description", "long_description", "is_active"]
+        ["category_name", "product_name", "brand_name", "model_name", "short_description", "long_description", "daily_rent", "monthly_rent", "security_deposit", "buy_price", "gst_percent", "is_rent_enabled", "is_buy_enabled", "is_active"]
       ];
       const productsWs = XLSX.utils.aoa_to_sheet(productsHeaders);
       XLSX.utils.book_append_sheet(wb, productsWs, "Products");
@@ -597,6 +730,8 @@ const ProductManagement = () => {
                       <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>
                       <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>
                       <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-12" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
@@ -614,6 +749,12 @@ const ProductManagement = () => {
                         </td>
                         <td className="px-4 py-3">
                           <Skeleton className="h-4 w-20" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-6 w-12 rounded" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-12" />
                         </td>
                         <td className="px-4 py-3">
                           <Skeleton className="h-6 w-12 rounded" />
@@ -638,6 +779,8 @@ const ProductManagement = () => {
                       <th className="px-4 py-3 font-semibold">Category</th>
                       <th className="px-4 py-3 font-semibold">Brand</th>
                       <th className="px-4 py-3 font-semibold">Model</th>
+                      <th className="px-4 py-3 font-semibold">Daily</th>
+                      <th className="px-4 py-3 font-semibold">GST %</th>
                       <th className="px-4 py-3 font-semibold">Status</th>
                       <th className="px-4 py-3" />
                     </tr>
@@ -649,6 +792,8 @@ const ProductManagement = () => {
                         <td className="px-4 py-3 text-muted-foreground">{getCategoryName(p.categoryId)}</td>
                         <td className="px-4 py-3">{p.brandName || "-"}</td>
                         <td className="px-4 py-3">{p.modelName || "-"}</td>
+                        <td className="px-4 py-3">₹{p.dailyRent.toFixed(0)}</td>
+                        <td className="px-4 py-3">{p.gstPercent.toFixed(0)}%</td>
                         <td className="px-4 py-3">
                           <Switch
                             checked={p.isActive}
@@ -670,7 +815,7 @@ const ProductManagement = () => {
                     ))}
                     {filteredProducts.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                        <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
                           No products found.
                         </td>
                       </tr>
@@ -1060,6 +1205,64 @@ const ProductManagement = () => {
                   placeholder="Detailed product description"
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label>Daily Rent (INR)</Label>
+                <Input
+                  type="number"
+                  value={productForm.dailyRent}
+                  onChange={(e) => setProductForm({ ...productForm, dailyRent: Number(e.target.value) || 0 })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Monthly Rent (INR)</Label>
+                <Input
+                  type="number"
+                  value={productForm.monthlyRent}
+                  onChange={(e) => setProductForm({ ...productForm, monthlyRent: Number(e.target.value) || 0 })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Security Deposit (INR)</Label>
+                <Input
+                  type="number"
+                  value={productForm.securityDeposit}
+                  onChange={(e) => setProductForm({ ...productForm, securityDeposit: Number(e.target.value) || 0 })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Buy Price (INR, optional)</Label>
+                <Input
+                  type="number"
+                  value={productForm.buyPrice ?? ""}
+                  onChange={(e) => setProductForm({ ...productForm, buyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>GST %</Label>
+                <Input
+                  type="number"
+                  value={productForm.gstPercent}
+                  onChange={(e) => setProductForm({ ...productForm, gstPercent: Number(e.target.value) || 0 })}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isRentEnabled"
+                  checked={productForm.isRentEnabled}
+                  onChange={(e) => setProductForm({ ...productForm, isRentEnabled: e.target.checked })}
+                />
+                <Label htmlFor="isRentEnabled">Rent Enabled</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isBuyEnabled"
+                  checked={productForm.isBuyEnabled}
+                  onChange={(e) => setProductForm({ ...productForm, isBuyEnabled: e.target.checked })}
+                />
+                <Label htmlFor="isBuyEnabled">Buy Enabled</Label>
+              </div>
               <div className="flex items-center gap-2 sm:col-span-2">
                 <input
                   type="checkbox"
@@ -1068,6 +1271,116 @@ const ProductManagement = () => {
                   onChange={(e) => setProductForm({ ...productForm, isActive: e.target.checked })}
                 />
                 <Label htmlFor="productActive">Active</Label>
+              </div>
+
+              <div className="space-y-3 sm:col-span-2 rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-sm font-semibold">Product Images</Label>
+                  {!editingProduct && (
+                    <span className="text-xs text-muted-foreground">Save product first to add images</span>
+                  )}
+                </div>
+
+                {editingProduct ? (
+                  <>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        disabled={uploadingImage || productImagesLoading}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          void handleProductImageUpload(file);
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        Upload image
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+                      <Input
+                        value={newImageUrl}
+                        onChange={(e) => setNewImageUrl(e.target.value)}
+                        placeholder="Paste image URL or storage key"
+                        disabled={uploadingImage || productImagesLoading}
+                      />
+                      <label className="flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={newImageIsPrimary}
+                          onChange={(e) => setNewImageIsPrimary(e.target.checked)}
+                          disabled={uploadingImage || productImagesLoading}
+                        />
+                        Primary
+                      </label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void addProductImageFromValue(newImageUrl)}
+                        disabled={uploadingImage || productImagesLoading}
+                      >
+                        Add
+                      </Button>
+                    </div>
+
+                    {productImagesLoading ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    ) : productImages.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No product images added yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {productImages.map((img, index) => (
+                          <div key={img.id} className="flex items-center gap-3 rounded-md border border-border p-2">
+                            <img
+                              src={img.imageUrl}
+                              alt=""
+                              className="h-12 w-12 rounded object-cover bg-muted"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).style.display = "none";
+                              }}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs">{img.imageUrl}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                Order: {img.displayOrder} {img.isPrimary ? "• Primary" : ""}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {!img.isPrimary && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => void setPrimaryProductImage(img.id)}
+                                  disabled={uploadingImage || productImagesLoading}
+                                >
+                                  Set primary
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => void deleteProductImage(img.id)}
+                                disabled={uploadingImage || productImagesLoading}
+                                aria-label={`Delete image ${index + 1}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Create the product first, then reopen to manage images.</p>
+                )}
               </div>
             </FormGrid>
             <div className="h-5" />

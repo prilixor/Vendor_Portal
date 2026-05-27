@@ -406,6 +406,32 @@ public sealed class VendorOnboardingRepository(
         return await legacyQuery.OrderBy(x => x.ProductName).ToListAsync(cancellationToken);
     }
 
+    public async Task AddProductImageAsync(ProductImage image, CancellationToken cancellationToken)
+    {
+        await commonDbContext.ProductImages.AddAsync(image, cancellationToken);
+    }
+
+    public Task<ProductImage?> GetProductImageByIdAsync(Guid productId, Guid imageId, CancellationToken cancellationToken)
+    {
+        return commonDbContext.ProductImages
+            .FirstOrDefaultAsync(x => x.Id == imageId && x.ProductId == productId && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task UpdateProductImageAsync(ProductImage image, CancellationToken cancellationToken)
+    {
+        commonDbContext.ProductImages.Update(image);
+        return Task.CompletedTask;
+    }
+
+    public Task<List<ProductImage>> GetProductImagesAsync(Guid productId, CancellationToken cancellationToken)
+    {
+        return commonDbContext.ProductImages
+            .Where(x => x.ProductId == productId && !x.IsDeleted)
+            .OrderByDescending(x => x.IsPrimary)
+            .ThenBy(x => x.DisplayOrder)
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<VendorProductListing?> GetVendorProductListingByIdAsync(Guid vendorId, Guid listingId, CancellationToken cancellationToken)
     {
         return dbContext.VendorProductListings

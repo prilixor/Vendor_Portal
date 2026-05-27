@@ -76,6 +76,13 @@ public sealed record CreateProductCommand(
     string? ModelName,
     string? ShortDescription,
     string? LongDescription,
+    decimal DailyRent,
+    decimal MonthlyRent,
+    decimal SecurityDeposit,
+    decimal? BuyPrice,
+    decimal GstPercent,
+    bool IsRentEnabled,
+    bool IsBuyEnabled,
     bool IsActive) : ICommand<ProductDto>;
 
 public sealed class CreateProductCommandValidator : AbstractValidator<CreateProductCommand>
@@ -84,6 +91,11 @@ public sealed class CreateProductCommandValidator : AbstractValidator<CreateProd
     {
         RuleFor(x => x.CategoryId).NotEmpty();
         RuleFor(x => x.ProductName).NotEmpty().MaximumLength(255);
+        RuleFor(x => x.DailyRent).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.MonthlyRent).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.SecurityDeposit).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.BuyPrice).GreaterThanOrEqualTo(0).When(x => x.BuyPrice.HasValue);
+        RuleFor(x => x.GstPercent).GreaterThanOrEqualTo(0).LessThanOrEqualTo(100);
     }
 }
 
@@ -111,6 +123,13 @@ internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository re
             ModelName = request.ModelName,
             ShortDescription = request.ShortDescription,
             LongDescription = request.LongDescription,
+            DailyRent = request.DailyRent,
+            MonthlyRent = request.MonthlyRent,
+            SecurityDeposit = request.SecurityDeposit,
+            BuyPrice = request.BuyPrice,
+            GstPercent = request.GstPercent,
+            IsRentEnabled = request.IsRentEnabled,
+            IsBuyEnabled = request.IsBuyEnabled,
             IsActive = request.IsActive
         };
 
@@ -125,6 +144,13 @@ internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository re
             entity.ModelName,
             entity.ShortDescription,
             entity.LongDescription,
+            entity.DailyRent,
+            entity.MonthlyRent,
+            entity.SecurityDeposit,
+            entity.BuyPrice,
+            entity.GstPercent,
+            entity.IsRentEnabled,
+            entity.IsBuyEnabled,
             entity.IsActive));
     }
 }
@@ -156,9 +182,176 @@ internal sealed class GetProductsQueryHandler(IVendorOnboardingRepository reposi
             x.ModelName,
             x.ShortDescription,
             x.LongDescription,
+            x.DailyRent,
+            x.MonthlyRent,
+            x.SecurityDeposit,
+            x.BuyPrice,
+            x.GstPercent,
+            x.IsRentEnabled,
+            x.IsBuyEnabled,
             x.IsActive)).ToList();
 
         return Result.Success(result);
+    }
+}
+
+public sealed record AddProductImageCommand(
+    string ProductId,
+    string ImageUrl,
+    int DisplayOrder,
+    bool IsPrimary) : ICommand<ProductImageDto>;
+
+public sealed class AddProductImageCommandValidator : AbstractValidator<AddProductImageCommand>
+{
+    public AddProductImageCommandValidator()
+    {
+        RuleFor(x => x.ProductId).NotEmpty();
+        RuleFor(x => x.ImageUrl).NotEmpty();
+        RuleFor(x => x.DisplayOrder).GreaterThan(0);
+    }
+}
+
+internal sealed class AddProductImageCommandHandler(
+    IVendorOnboardingRepository repository,
+    IVendorFileUrlResolver fileUrlResolver)
+    : ICommandHandler<AddProductImageCommand, ProductImageDto>
+{
+    public async Task<Result<ProductImageDto>> Handle(AddProductImageCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.ProductId, out var productId))
+        {
+            return Result.Failure<ProductImageDto>(new Error("products.invalid_id", "Product id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var product = await repository.GetProductByIdAsync(productId, cancellationToken);
+        if (product is null)
+        {
+            return Result.Failure<ProductImageDto>(new Error("products.not_found", "Product not found.", ErrorCategory.NotFound));
+        }
+
+        if (request.IsPrimary)
+        {
+            var existingImages = await repository.GetProductImagesAsync(productId, cancellationToken);
+            foreach (var img in existingImages.Where(i => i.IsPrimary))
+            {
+                img.IsPrimary = false;
+                await repository.UpdateProductImageAsync(img, cancellationToken);
+            }
+        }
+
+        var entity = new ProductImage
+        {
+            ProductId = productId,
+            ImageUrl = request.ImageUrl,
+            DisplayOrder = request.DisplayOrder,
+            IsPrimary = request.IsPrimary
+        };
+
+        await repository.AddProductImageAsync(entity, cancellationToken);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return Result.Success(new ProductImageDto(
+            entity.Id.ToString(),
+            entity.ProductId.ToString(),
+            fileUrlResolver.Resolve(entity.ImageUrl),
+            entity.DisplayOrder,
+            entity.IsPrimary));
+    }
+}
+
+public sealed record GetProductImagesQuery(string ProductId) : IQuery<List<ProductImageDto>>;
+
+internal sealed class GetProductImagesQueryHandler(
+    IVendorOnboardingRepository repository,
+    IVendorFileUrlResolver fileUrlResolver)
+    : IQueryHandler<GetProductImagesQuery, List<ProductImageDto>>
+{
+    public async Task<Result<List<ProductImageDto>>> Handle(GetProductImagesQuery request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.ProductId, out var productId))
+        {
+            return Result.Failure<List<ProductImageDto>>(new Error("products.invalid_id", "Product id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var product = await repository.GetProductByIdAsync(productId, cancellationToken);
+        if (product is null)
+        {
+            return Result.Failure<List<ProductImageDto>>(new Error("products.not_found", "Product not found.", ErrorCategory.NotFound));
+        }
+
+        var rows = await repository.GetProductImagesAsync(productId, cancellationToken);
+        var result = rows.Select(x => new ProductImageDto(
+            x.Id.ToString(),
+            x.ProductId.ToString(),
+            fileUrlResolver.Resolve(x.ImageUrl),
+            x.DisplayOrder,
+            x.IsPrimary)).ToList();
+
+        return Result.Success(result);
+    }
+}
+
+public sealed record DeleteProductImageCommand(string ProductId, string ImageId) : ICommand;
+
+public sealed class DeleteProductImageCommandValidator : AbstractValidator<DeleteProductImageCommand>
+{
+    public DeleteProductImageCommandValidator()
+    {
+        RuleFor(x => x.ProductId).NotEmpty();
+        RuleFor(x => x.ImageId).NotEmpty();
+    }
+}
+
+internal sealed class DeleteProductImageCommandHandler(
+    IVendorOnboardingRepository repository,
+    IVendorUploadStorageService uploadStorage)
+    : ICommandHandler<DeleteProductImageCommand>
+{
+    public async Task<Result> Handle(DeleteProductImageCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.ProductId, out var productId)
+            || !Guid.TryParse(request.ImageId, out var imageId))
+        {
+            return Result.Failure(new Error("products.image.invalid_id", "Product/image id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var product = await repository.GetProductByIdAsync(productId, cancellationToken);
+        if (product is null)
+        {
+            return Result.Failure(new Error("products.not_found", "Product not found.", ErrorCategory.NotFound));
+        }
+
+        var image = await repository.GetProductImageByIdAsync(productId, imageId, cancellationToken);
+        if (image is null)
+        {
+            return Result.Failure(new Error("products.image.not_found", "Product image not found.", ErrorCategory.NotFound));
+        }
+
+        await uploadStorage.DeleteStoredFileAsync(image.ImageUrl, cancellationToken);
+
+        var wasPrimary = image.IsPrimary;
+        image.IsDeleted = true;
+        image.DeletedAt = DateTimeOffset.UtcNow;
+        image.IsPrimary = false;
+        await repository.UpdateProductImageAsync(image, cancellationToken);
+
+        if (wasPrimary)
+        {
+            var remaining = await repository.GetProductImagesAsync(productId, cancellationToken);
+            var fallback = remaining
+                .Where(x => x.Id != imageId)
+                .OrderBy(x => x.DisplayOrder)
+                .FirstOrDefault();
+
+            if (fallback is not null && !fallback.IsPrimary)
+            {
+                fallback.IsPrimary = true;
+                await repository.UpdateProductImageAsync(fallback, cancellationToken);
+            }
+        }
+
+        await repository.SaveChangesAsync(cancellationToken);
+        return Result.Success();
     }
 }
 
@@ -167,9 +360,6 @@ public sealed record UpsertVendorProductListingCommand(
     string? ListingId,
     string ProductId,
     string ListingTitle,
-    decimal DailyRent,
-    decimal MonthlyRent,
-    decimal SecurityDeposit,
     int AvailableQuantity,
     string ListingStatus) : ICommand<VendorProductListingDto>;
 
@@ -192,9 +382,6 @@ public sealed class UpsertVendorProductListingCommandValidator : AbstractValidat
         RuleFor(x => x.VendorId).NotEmpty();
         RuleFor(x => x.ProductId).NotEmpty();
         RuleFor(x => x.ListingTitle).NotEmpty().MaximumLength(255);
-        RuleFor(x => x.DailyRent).GreaterThanOrEqualTo(0);
-        RuleFor(x => x.MonthlyRent).GreaterThanOrEqualTo(0);
-        RuleFor(x => x.SecurityDeposit).GreaterThanOrEqualTo(0);
         RuleFor(x => x.AvailableQuantity).GreaterThanOrEqualTo(0);
         RuleFor(x => x.ListingStatus)
             .NotEmpty()
@@ -255,9 +442,9 @@ internal sealed class UpsertVendorProductListingCommandHandler(IVendorOnboarding
         }
 
         entity.ListingTitle = request.ListingTitle;
-        entity.DailyRent = request.DailyRent;
-        entity.MonthlyRent = request.MonthlyRent;
-        entity.SecurityDeposit = request.SecurityDeposit;
+        entity.DailyRent = product.DailyRent;
+        entity.MonthlyRent = product.MonthlyRent;
+        entity.SecurityDeposit = product.SecurityDeposit;
         entity.AvailableQuantity = request.AvailableQuantity;
         var normalizedListingStatus = request.ListingStatus.Trim().ToLowerInvariant();
         if (normalizedListingStatus == "active")
@@ -518,6 +705,58 @@ internal sealed class DeleteVendorProductImageCommandHandler(
     }
 }
 
+public sealed record SetPrimaryProductImageCommand(string ProductId, string ImageId) : ICommand;
+
+public sealed class SetPrimaryProductImageCommandValidator : AbstractValidator<SetPrimaryProductImageCommand>
+{
+    public SetPrimaryProductImageCommandValidator()
+    {
+        RuleFor(x => x.ProductId).NotEmpty();
+        RuleFor(x => x.ImageId).NotEmpty();
+    }
+}
+
+internal sealed class SetPrimaryProductImageCommandHandler(IVendorOnboardingRepository repository)
+    : ICommandHandler<SetPrimaryProductImageCommand>
+{
+    public async Task<Result> Handle(SetPrimaryProductImageCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.ProductId, out var productId)
+            || !Guid.TryParse(request.ImageId, out var imageId))
+        {
+            return Result.Failure(new Error("products.image.invalid_id", "Product/image id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var product = await repository.GetProductByIdAsync(productId, cancellationToken);
+        if (product is null)
+        {
+            return Result.Failure(new Error("products.not_found", "Product not found.", ErrorCategory.NotFound));
+        }
+
+        var image = await repository.GetProductImageByIdAsync(productId, imageId, cancellationToken);
+        if (image is null)
+        {
+            return Result.Failure(new Error("products.image.not_found", "Product image not found.", ErrorCategory.NotFound));
+        }
+
+        var existing = await repository.GetProductImagesAsync(productId, cancellationToken);
+        foreach (var row in existing.Where(x => x.IsPrimary && x.Id != imageId))
+        {
+            row.IsPrimary = false;
+            await repository.UpdateProductImageAsync(row, cancellationToken);
+        }
+
+        if (!image.IsPrimary)
+        {
+            image.IsPrimary = true;
+            await repository.UpdateProductImageAsync(image, cancellationToken);
+        }
+
+        await repository.SaveChangesAsync(cancellationToken);
+        return Result.Success();
+    }
+}
+
 public sealed record AddVendorProductDocumentCommand(
     string VendorId,
     string ListingId,
@@ -758,6 +997,13 @@ public sealed record UpdateProductCommand(
     string? ModelName,
     string? ShortDescription,
     string? LongDescription,
+    decimal DailyRent,
+    decimal MonthlyRent,
+    decimal SecurityDeposit,
+    decimal? BuyPrice,
+    decimal GstPercent,
+    bool IsRentEnabled,
+    bool IsBuyEnabled,
     bool IsActive) : ICommand<ProductDto>;
 
 public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProductCommand>
@@ -767,6 +1013,11 @@ public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProd
         RuleFor(x => x.Id).NotEmpty();
         RuleFor(x => x.CategoryId).NotEmpty();
         RuleFor(x => x.ProductName).NotEmpty().MaximumLength(255);
+        RuleFor(x => x.DailyRent).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.MonthlyRent).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.SecurityDeposit).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.BuyPrice).GreaterThanOrEqualTo(0).When(x => x.BuyPrice.HasValue);
+        RuleFor(x => x.GstPercent).GreaterThanOrEqualTo(0).LessThanOrEqualTo(100);
     }
 }
 
@@ -803,6 +1054,13 @@ internal sealed class UpdateProductCommandHandler(IVendorOnboardingRepository re
         entity.ModelName = request.ModelName;
         entity.ShortDescription = request.ShortDescription;
         entity.LongDescription = request.LongDescription;
+        entity.DailyRent = request.DailyRent;
+        entity.MonthlyRent = request.MonthlyRent;
+        entity.SecurityDeposit = request.SecurityDeposit;
+        entity.BuyPrice = request.BuyPrice;
+        entity.GstPercent = request.GstPercent;
+        entity.IsRentEnabled = request.IsRentEnabled;
+        entity.IsBuyEnabled = request.IsBuyEnabled;
         entity.IsActive = request.IsActive;
 
         await repository.UpdateProductAsync(entity, cancellationToken);
@@ -816,6 +1074,13 @@ internal sealed class UpdateProductCommandHandler(IVendorOnboardingRepository re
             entity.ModelName,
             entity.ShortDescription,
             entity.LongDescription,
+            entity.DailyRent,
+            entity.MonthlyRent,
+            entity.SecurityDeposit,
+            entity.BuyPrice,
+            entity.GstPercent,
+            entity.IsRentEnabled,
+            entity.IsBuyEnabled,
             entity.IsActive));
     }
 }
@@ -967,7 +1232,14 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                             var modelName = productsSheet.Cells[row, 4].Text?.Trim();
                             var shortDescription = productsSheet.Cells[row, 5].Text?.Trim();
                             var longDescription = productsSheet.Cells[row, 6].Text?.Trim();
-                            var isActiveText = productsSheet.Cells[row, 7].Text?.Trim();
+                            var dailyRentText = productsSheet.Cells[row, 7].Text?.Trim();
+                            var monthlyRentText = productsSheet.Cells[row, 8].Text?.Trim();
+                            var securityDepositText = productsSheet.Cells[row, 9].Text?.Trim();
+                            var buyPriceText = productsSheet.Cells[row, 10].Text?.Trim();
+                            var gstPercentText = productsSheet.Cells[row, 11].Text?.Trim();
+                            var isRentEnabledText = productsSheet.Cells[row, 12].Text?.Trim();
+                            var isBuyEnabledText = productsSheet.Cells[row, 13].Text?.Trim();
+                            var isActiveText = productsSheet.Cells[row, 14].Text?.Trim();
 
                             // Validate required fields
                             if (string.IsNullOrEmpty(categoryName))
@@ -991,6 +1263,14 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
 
                             // Parse boolean field
                             bool isActive = string.IsNullOrEmpty(isActiveText) || isActiveText?.ToLower() == "true" || isActiveText?.ToLower() == "yes" || isActiveText == "1";
+                            bool isRentEnabled = string.IsNullOrEmpty(isRentEnabledText) || isRentEnabledText?.ToLower() == "true" || isRentEnabledText?.ToLower() == "yes" || isRentEnabledText == "1";
+                            bool isBuyEnabled = string.IsNullOrEmpty(isBuyEnabledText) || isBuyEnabledText?.ToLower() == "true" || isBuyEnabledText?.ToLower() == "yes" || isBuyEnabledText == "1";
+                            if (!decimal.TryParse(dailyRentText, out var dailyRent)) dailyRent = 0m;
+                            if (!decimal.TryParse(monthlyRentText, out var monthlyRent)) monthlyRent = 0m;
+                            if (!decimal.TryParse(securityDepositText, out var securityDeposit)) securityDeposit = 0m;
+                            decimal? buyPrice = null;
+                            if (decimal.TryParse(buyPriceText, out var buyPriceParsed)) buyPrice = buyPriceParsed;
+                            if (!decimal.TryParse(gstPercentText, out var gstPercent)) gstPercent = 18m;
 
                             // Create product
                             var product = new Product
@@ -1001,6 +1281,13 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                                 ModelName = string.IsNullOrEmpty(modelName) ? null : modelName,
                                 ShortDescription = string.IsNullOrEmpty(shortDescription) ? null : shortDescription,
                                 LongDescription = string.IsNullOrEmpty(longDescription) ? null : longDescription,
+                                DailyRent = Math.Max(0m, dailyRent),
+                                MonthlyRent = Math.Max(0m, monthlyRent),
+                                SecurityDeposit = Math.Max(0m, securityDeposit),
+                                BuyPrice = buyPrice is > 0m ? buyPrice : null,
+                                GstPercent = Math.Clamp(gstPercent, 0m, 100m),
+                                IsRentEnabled = isRentEnabled,
+                                IsBuyEnabled = isBuyEnabled,
                                 IsActive = isActive
                             };
 
@@ -1086,10 +1373,17 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
             productsSheet.Cells[1, 4].Value = "model_name";
             productsSheet.Cells[1, 5].Value = "short_description";
             productsSheet.Cells[1, 6].Value = "long_description";
-            productsSheet.Cells[1, 7].Value = "is_active";
+            productsSheet.Cells[1, 7].Value = "daily_rent";
+            productsSheet.Cells[1, 8].Value = "monthly_rent";
+            productsSheet.Cells[1, 9].Value = "security_deposit";
+            productsSheet.Cells[1, 10].Value = "buy_price";
+            productsSheet.Cells[1, 11].Value = "gst_percent";
+            productsSheet.Cells[1, 12].Value = "is_rent_enabled";
+            productsSheet.Cells[1, 13].Value = "is_buy_enabled";
+            productsSheet.Cells[1, 14].Value = "is_active";
 
             // Style header row
-            using (var headerRange = productsSheet.Cells[1, 1, 1, 7])
+            using (var headerRange = productsSheet.Cells[1, 1, 1, 14])
             {
                 headerRange.Style.Font.Bold = true;
                 headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
@@ -1109,12 +1403,19 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
                 productsSheet.Cells[row, 4].Value = product.ModelName;
                 productsSheet.Cells[row, 5].Value = product.ShortDescription;
                 productsSheet.Cells[row, 6].Value = product.LongDescription;
-                productsSheet.Cells[row, 7].Value = product.IsActive;
+                productsSheet.Cells[row, 7].Value = product.DailyRent;
+                productsSheet.Cells[row, 8].Value = product.MonthlyRent;
+                productsSheet.Cells[row, 9].Value = product.SecurityDeposit;
+                productsSheet.Cells[row, 10].Value = product.BuyPrice;
+                productsSheet.Cells[row, 11].Value = product.GstPercent;
+                productsSheet.Cells[row, 12].Value = product.IsRentEnabled;
+                productsSheet.Cells[row, 13].Value = product.IsBuyEnabled;
+                productsSheet.Cells[row, 14].Value = product.IsActive;
                 row++;
             }
 
             // Auto-fit columns
-            productsSheet.Cells[1, 1, 1, 7].AutoFitColumns();
+            productsSheet.Cells[1, 1, 1, 14].AutoFitColumns();
 
             // Save to byte array
             var excelData = package.GetAsByteArray();

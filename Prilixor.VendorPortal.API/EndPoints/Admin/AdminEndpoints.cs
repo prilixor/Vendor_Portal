@@ -2,6 +2,7 @@ using FastEndpoints;
 using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Prilixor.VendorPortal.API.Extensions;
+using Prilixor.VendorPortal.Application.Customers;
 using Prilixor.VendorPortal.Application.Onboarding;
 
 namespace Prilixor.VendorPortal.API.EndPoints.Vendors;
@@ -28,6 +29,11 @@ public sealed class AddAdminAuditLogRequest : AdminUserIdRequest
 public sealed class GetAdminAuditLogsRequest
 {
     public string? AdminUserId { get; set; }
+}
+
+public sealed class GetAdminOrderExpirationsRequest
+{
+    public int WithinDays { get; set; } = 7;
 }
 
 public sealed class VerifyVendorBankAccountRequest : AdminUserIdRequest
@@ -366,6 +372,22 @@ public sealed class ReactivateVendorEndpoint(IMediator mediator)
             req.AdminUserId,
             req.Reason), ct);
 
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminOrderExpirationsEndpoint(IMediator mediator)
+    : Endpoint<GetAdminOrderExpirationsRequest, Results<Ok<List<ExpiringOrderDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("orders/expirations");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<List<ExpiringOrderDto>>, ProblemHttpResult>> ExecuteAsync(GetAdminOrderExpirationsRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetAdminOrderExpirationsQuery(req.WithinDays), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

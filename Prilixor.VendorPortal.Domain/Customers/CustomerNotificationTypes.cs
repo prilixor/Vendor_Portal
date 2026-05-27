@@ -17,4 +17,7 @@ public static class CustomerNotificationTypes
 
     /// <summary>Order cancelled (e.g. customer cancelled while pending).</summary>
     public const string OrderCancelled = "order_cancelled";
+
+    /// <summary>Rental item will expire soon.</summary>
+    public const string OrderExpiringSoon = "order_expiring_soon";
 }

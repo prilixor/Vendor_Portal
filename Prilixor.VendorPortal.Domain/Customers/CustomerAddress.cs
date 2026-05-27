@@ -10,6 +10,8 @@ public class CustomerAddress : AuditableEntity<Guid>, ISoftDelete
     public string City { get; set; } = string.Empty;
     public string State { get; set; } = string.Empty;
     public string Postal { get; set; } = string.Empty;
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
     public bool IsDefault { get; set; }
 
     public bool IsDeleted { get; set; }

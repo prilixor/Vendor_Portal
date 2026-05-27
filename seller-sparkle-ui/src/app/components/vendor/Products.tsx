@@ -23,6 +23,10 @@ import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 type LocalListing = ProductListing & {
   productId: string;
   categoryId: string;
+  buyPrice?: number;
+  gstPercent?: number;
+  isRentEnabled?: boolean;
+  isBuyEnabled?: boolean;
 };
 
 type CatalogCategory = {
@@ -34,6 +38,13 @@ type CatalogProduct = {
   id: string;
   categoryId: string;
   name: string;
+  dailyRent: number;
+  monthlyRent: number;
+  securityDeposit: number;
+  buyPrice?: number;
+  gstPercent: number;
+  isRentEnabled: boolean;
+  isBuyEnabled: boolean;
 };
 
 const normalizeListingStatus = (status: string): ProductListing["status"] => {
@@ -53,6 +64,10 @@ const blankListing = (category?: CatalogCategory, product?: CatalogProduct): Loc
   dailyRent: 0,
   monthlyRent: 0,
   securityDeposit: 0,
+  buyPrice: product?.buyPrice,
+  gstPercent: product?.gstPercent ?? 18,
+  isRentEnabled: product?.isRentEnabled ?? true,
+  isBuyEnabled: product?.isBuyEnabled ?? true,
   quantity: 1,
   status: "inactive",
   images: [],
@@ -207,9 +222,6 @@ const Products = () => {
         listingId: listing.id,
         productId: listing.productId,
         listingTitle: listing.title,
-        dailyRent: listing.dailyRent,
-        monthlyRent: listing.monthlyRent,
-        securityDeposit: listing.securityDeposit,
         availableQuantity: listing.quantity,
         listingStatus: newStatus,
       });
@@ -258,7 +270,18 @@ const Products = () => {
     ]);
 
     const mappedCategories: CatalogCategory[] = categoriesRes.map((c) => ({ id: c.id, name: c.categoryName }));
-    const mappedProducts: CatalogProduct[] = productsRes.map((p) => ({ id: p.id, categoryId: p.categoryId, name: p.productName }));
+    const mappedProducts: CatalogProduct[] = productsRes.map((p) => ({
+      id: p.id,
+      categoryId: p.categoryId,
+      name: p.productName,
+      dailyRent: p.dailyRent,
+      monthlyRent: p.monthlyRent,
+      securityDeposit: p.securityDeposit,
+      buyPrice: p.buyPrice,
+      gstPercent: p.gstPercent,
+      isRentEnabled: p.isRentEnabled,
+      isBuyEnabled: p.isBuyEnabled,
+    }));
     const byProductId = new Map(mappedProducts.map((p) => [p.id, p]));
     const byCategoryId = new Map(mappedCategories.map((c) => [c.id, c]));
 
@@ -275,9 +298,13 @@ const Products = () => {
           category: category?.name ?? "Unknown",
           productName: product?.name ?? "Unknown",
           title: l.listingTitle,
-          dailyRent: l.dailyRent,
-          monthlyRent: l.monthlyRent,
-          securityDeposit: l.securityDeposit,
+          dailyRent: product?.dailyRent ?? l.dailyRent,
+          monthlyRent: product?.monthlyRent ?? l.monthlyRent,
+          securityDeposit: product?.securityDeposit ?? l.securityDeposit,
+          buyPrice: product?.buyPrice,
+          gstPercent: product?.gstPercent ?? 18,
+          isRentEnabled: product?.isRentEnabled ?? true,
+          isBuyEnabled: product?.isBuyEnabled ?? true,
           quantity: l.availableQuantity,
           status: normalizeListingStatus(l.listingStatus),
           images: [],
@@ -343,9 +370,6 @@ const Products = () => {
           listingId: editing.id,
           productId: editing.productId,
           listingTitle: editing.title,
-          dailyRent: editing.dailyRent,
-          monthlyRent: editing.monthlyRent,
-          securityDeposit: editing.securityDeposit,
           availableQuantity: editing.quantity,
           listingStatus: editing.status,
         });
@@ -354,9 +378,6 @@ const Products = () => {
           vendorId: user.id,
           productId: editing.productId,
           listingTitle: editing.title,
-          dailyRent: editing.dailyRent,
-          monthlyRent: editing.monthlyRent,
-          securityDeposit: editing.securityDeposit,
           availableQuantity: editing.quantity,
           listingStatus: editing.status,
         });
@@ -639,7 +660,7 @@ const Products = () => {
     <div>
       <PageHeader
         title="Products"
-        description="Manage your rental catalog. Add new listings, set pricing, and control availability."
+        description="Manage your rental catalog. Add new listings and control availability. Pricing is admin-managed."
         actions={
           <TooltipProvider>
             <Tooltip>
@@ -734,8 +755,7 @@ const Products = () => {
               <tr>
                 <th className="px-3 py-3 font-semibold sm:px-4">Listing</th>
                 <th className="px-3 py-3 font-semibold sm:px-4">Category</th>
-                <th className="px-3 py-3 font-semibold text-right sm:px-4">Daily</th>
-                <th className="px-3 py-3 font-semibold text-right sm:px-4">Monthly</th>
+                <th className="px-3 py-3 font-semibold text-right sm:px-4">Rent (Admin)</th>
                 <th className="px-3 py-3 font-semibold text-right sm:px-4">Deposit</th>
                 <th className="px-3 py-3 font-semibold text-right sm:px-4">Qty</th>
                 <th className="px-3 py-3 font-semibold sm:px-4">Status</th>
@@ -757,9 +777,12 @@ const Products = () => {
                     </div>
                   </td>
                   <td className="px-3 py-3 text-muted-foreground sm:px-4">{p.category}</td>
-                  <td className="px-3 py-3 text-right font-mono sm:px-4">₹{p.dailyRent}</td>
-                  <td className="px-3 py-3 text-right font-mono sm:px-4">₹{p.monthlyRent.toLocaleString()}</td>
-                  <td className="px-3 py-3 text-right font-mono sm:px-4">₹{p.securityDeposit.toLocaleString()}</td>
+                  <td className="px-3 py-3 text-right font-mono sm:px-4">
+                    ₹{p.dailyRent}/d
+                  </td>
+                  <td className="px-3 py-3 text-right font-mono sm:px-4">
+                    ₹{p.securityDeposit}
+                  </td>
                   <td className="px-3 py-3 text-right sm:px-4">{p.quantity}</td>
                   <td className="px-3 py-3 sm:px-4">
                     <Switch
@@ -785,7 +808,7 @@ const Products = () => {
               ))}
               {hasLoaded && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-sm text-muted-foreground sm:px-4">
+                  <td colSpan={7} className="px-3 py-8 text-center text-sm text-muted-foreground sm:px-4">
                     {products.length === 0
                       ? "No listings created yet."
                       : "No listings match your current search/filter."}
@@ -825,6 +848,13 @@ const Products = () => {
                       ...editing,
                       productId: v,
                       productName: selected?.name ?? "",
+                      dailyRent: selected?.dailyRent ?? 0,
+                      monthlyRent: selected?.monthlyRent ?? 0,
+                      securityDeposit: selected?.securityDeposit ?? 0,
+                      buyPrice: selected?.buyPrice,
+                      gstPercent: selected?.gstPercent ?? 18,
+                      isRentEnabled: selected?.isRentEnabled ?? true,
+                      isBuyEnabled: selected?.isBuyEnabled ?? true,
                     });
                   }}>
                     <SelectTrigger className="pl-1"><SelectValue placeholder="Choose product" className="text-left min-w-0" /></SelectTrigger>
@@ -843,16 +873,28 @@ const Products = () => {
                 <Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} placeholder="E.g. Sony A7 III — Daily Rental" />
               </div>
               <div className="space-y-1.5">
-                <Label>Daily rent (₹)</Label>
-                <Input type="number" value={editing.dailyRent} onChange={(e) => setEditing({ ...editing, dailyRent: Number(e.target.value) })} />
+                <Label>Daily rent (Admin-set)</Label>
+                <Input value={`₹${editing.dailyRent}`} readOnly />
               </div>
               <div className="space-y-1.5">
-                <Label>Monthly rent (₹)</Label>
-                <Input type="number" value={editing.monthlyRent} onChange={(e) => setEditing({ ...editing, monthlyRent: Number(e.target.value) })} />
+                <Label>Monthly rent (Admin-set)</Label>
+                <Input value={`₹${editing.monthlyRent}`} readOnly />
               </div>
               <div className="space-y-1.5">
-                <Label>Security deposit (₹)</Label>
-                <Input type="number" value={editing.securityDeposit} onChange={(e) => setEditing({ ...editing, securityDeposit: Number(e.target.value) })} />
+                <Label>Security deposit (Admin-set)</Label>
+                <Input value={`₹${editing.securityDeposit}`} readOnly />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Buy price (Admin-set)</Label>
+                <Input value={editing.buyPrice ? `₹${editing.buyPrice}` : "Not enabled"} readOnly />
+              </div>
+              <div className="space-y-1.5">
+                <Label>GST % (Admin-set)</Label>
+                <Input value={`${editing.gstPercent ?? 18}%`} readOnly />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Modes (Admin-set)</Label>
+                <Input value={`${editing.isRentEnabled ? "Rent" : ""}${editing.isRentEnabled && editing.isBuyEnabled ? " + " : ""}${editing.isBuyEnabled ? "Buy" : ""}${!editing.isRentEnabled && !editing.isBuyEnabled ? "Unavailable" : ""}`} readOnly />
               </div>
               <div className="space-y-1.5">
                 <Label>Quantity</Label>

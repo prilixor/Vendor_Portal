@@ -18,6 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureServices(builder.Configuration, builder.Environment);
 
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddHttpClient();
 builder.Services.AddFastEndpoints()
     .SwaggerDocument();
 

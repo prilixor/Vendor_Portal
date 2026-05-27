@@ -178,7 +178,6 @@ const CustomerOrders = () => {
                 <TableRow className="border-b hover:bg-transparent">
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Listing</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vendor</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dates</TableHead>
                   <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -199,7 +198,6 @@ const CustomerOrders = () => {
                       </Link>
                     </TableCell>
                     <TableCell className="max-w-[220px] truncate">{o.listingTitle}</TableCell>
-                    <TableCell className="text-muted-foreground">{o.vendorName}</TableCell>
                     <TableCell>
                       <span
                         className={cn(

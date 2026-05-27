@@ -10,11 +10,15 @@ public class CustomerRentalOrder : AuditableEntity<Guid>, ISoftDelete
     public Guid? CustomerAddressId { get; set; }
     public int Quantity { get; set; }
     public int RentalDays { get; set; }
+    public string OrderType { get; set; } = "rent";
     public string DeliveryOption { get; set; } = "standard";
     public string Status { get; set; } = "pending";
     public decimal SubtotalAmount { get; set; }
     public decimal DepositAmount { get; set; }
     public decimal ServiceFeeAmount { get; set; }
+    public decimal DistanceFeeAmount { get; set; }
+    public decimal ExpressFeeAmount { get; set; }
+    public decimal GstAmount { get; set; }
     public decimal TotalAmount { get; set; }
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }

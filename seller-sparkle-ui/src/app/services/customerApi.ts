@@ -13,6 +13,9 @@ export interface CustomerCatalogListingApi {
   prescriptionRequired: boolean;
   depositRequired: boolean;
   listingStatus: string;
+  availableQuantity: number;
+  productTotalAvailableQuantity: number;
+  availabilityStatus: "available" | "low_stock" | "out_of_stock" | string;
   primaryImageUrl?: string | null;
 }
 
@@ -38,6 +41,8 @@ export interface CustomerListingDetailApi {
   prescriptionRequired: boolean;
   depositRequired: boolean;
   listingStatus: string;
+  availableQuantity: number;
+  availabilityStatus: "available" | "low_stock" | "out_of_stock" | string;
   description: string;
   imageUrls: string[];
 }
@@ -56,7 +61,26 @@ export interface CustomerAddressApi {
   city: string;
   state: string;
   postal: string;
+  latitude?: number | null;
+  longitude?: number | null;
   isDefault: boolean;
+}
+
+export interface CustomerOrderQuoteApi {
+  subtotalAmount: number;
+  depositAmount: number;
+  serviceFeeAmount: number;
+  distanceFeeAmount: number;
+  expressFeeAmount: number;
+  gstAmount: number;
+  totalAmount: number;
+  buySuggestions: Array<{
+    listingId: string;
+    listingTitle: string;
+    rentAmount: number;
+    buyAmount: number;
+    savingsAmount: number;
+  }>;
 }
 
 export interface CustomerOrderApi {
@@ -70,6 +94,11 @@ export interface CustomerOrderApi {
   endDate?: string | null;
   totalAmount: number;
   depositAmount: number;
+  serviceFeeAmount: number;
+  distanceFeeAmount: number;
+  expressFeeAmount: number;
+  gstAmount: number;
+  orderType: string;
   quantity: number;
   rentalDays: number;
   listingPrimaryImageUrl?: string | null;
@@ -79,6 +108,19 @@ export interface CartLinePayload {
   listingId: string;
   quantity: number;
   rentalDays: number;
+  orderType?: "rent" | "buy";
+}
+
+export interface PlaceCustomerOrdersResultApi {
+  placedOrders: CustomerOrderApi[];
+  failedLines: Array<{
+    listingId: string;
+    quantity: number;
+    rentalDays: number;
+    orderType: string;
+    reasonCode: string;
+    message: string;
+  }>;
 }
 
 export interface CustomerNotificationApi {
@@ -93,6 +135,27 @@ export interface CustomerNotificationApi {
 
 export interface CustomerNotificationsMarkAllReadApi {
   updatedCount: number;
+}
+
+export interface ExpiringOrderApi {
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  vendorName: string;
+  listingTitle: string;
+  status: string;
+  orderType: string;
+  endDate: string;
+  daysLeft: number;
+}
+
+export interface IndianStateLookupApi {
+  name: string;
+  iso2: string;
+}
+
+export interface IndianCityLookupApi {
+  name: string;
 }
 
 function catalogQuery(category?: string, search?: string): string {
@@ -134,6 +197,8 @@ export const customerApi = {
     city: string;
     state: string;
     postal: string;
+    latitude?: number;
+    longitude?: number;
     setAsDefault: boolean;
   }): Promise<CustomerAddressApi> {
     return apiClient.post<CustomerAddressApi>("/customers/me/addresses", payload);
@@ -155,14 +220,32 @@ export const customerApi = {
     customerAddressId?: string | null;
     deliveryOption: string;
     lines: CartLinePayload[];
-  }): Promise<CustomerOrderApi[]> {
-    return apiClient.post<CustomerOrderApi[]>("/customers/me/orders", {
+  }): Promise<PlaceCustomerOrdersResultApi> {
+    return apiClient.post<PlaceCustomerOrdersResultApi>("/customers/me/orders", {
       customerAddressId: payload.customerAddressId ?? undefined,
       deliveryOption: payload.deliveryOption,
       lines: payload.lines.map((l) => ({
         listingId: l.listingId,
         quantity: l.quantity,
         rentalDays: l.rentalDays,
+        orderType: l.orderType ?? "rent",
+      })),
+    });
+  },
+
+  quoteOrders(payload: {
+    customerAddressId?: string | null;
+    deliveryOption: string;
+    lines: CartLinePayload[];
+  }): Promise<CustomerOrderQuoteApi> {
+    return apiClient.post<CustomerOrderQuoteApi>("/customers/me/orders/quote", {
+      customerAddressId: payload.customerAddressId ?? undefined,
+      deliveryOption: payload.deliveryOption,
+      lines: payload.lines.map((l) => ({
+        listingId: l.listingId,
+        quantity: l.quantity,
+        rentalDays: l.rentalDays,
+        orderType: l.orderType ?? "rent",
       })),
     });
   },
@@ -175,6 +258,10 @@ export const customerApi = {
     return apiClient.get<CustomerNotificationApi[]>("/customers/me/notifications");
   },
 
+  getOrderExpirations(withinDays = 7): Promise<ExpiringOrderApi[]> {
+    return apiClient.get<ExpiringOrderApi[]>(`/customers/me/orders/expirations?withinDays=${withinDays}`);
+  },
+
   markNotificationRead(notificationId: string): Promise<CustomerNotificationApi> {
     return apiClient.patch<CustomerNotificationApi>(
       `/customers/me/notifications/${encodeURIComponent(notificationId)}/read`,
@@ -184,5 +271,15 @@ export const customerApi = {
 
   markAllNotificationsRead(): Promise<CustomerNotificationsMarkAllReadApi> {
     return apiClient.patch<CustomerNotificationsMarkAllReadApi>("/customers/me/notifications/read-all");
+  },
+
+  getIndianStates(): Promise<IndianStateLookupApi[]> {
+    return apiClient.get<IndianStateLookupApi[]>("/vendors/locations/states");
+  },
+
+  getCitiesByState(stateIso2: string): Promise<IndianCityLookupApi[]> {
+    return apiClient.get<IndianCityLookupApi[]>(
+      `/vendors/locations/states/${encodeURIComponent(stateIso2)}/cities`,
+    );
   },
 };

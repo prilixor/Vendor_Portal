@@ -1,7 +1,9 @@
 using FluentValidation;
+using Microsoft.Extensions.Options;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Customers;
+using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
@@ -112,7 +114,16 @@ internal sealed class UpdateCustomerProfileCommandHandler(ICustomerRepository cu
     }
 }
 
-public sealed record CustomerAddressDto(Guid Id, string? Label, string Line1, string City, string State, string Postal, bool IsDefault);
+public sealed record CustomerAddressDto(
+    Guid Id,
+    string? Label,
+    string Line1,
+    string City,
+    string State,
+    string Postal,
+    decimal? Latitude,
+    decimal? Longitude,
+    bool IsDefault);
 
 public sealed record GetCustomerAddressesQuery(Guid CustomerId) : IQuery<List<CustomerAddressDto>>;
 
@@ -123,11 +134,20 @@ internal sealed class GetCustomerAddressesQueryHandler(ICustomerRepository custo
     {
         var list = await customers.GetCustomerAddressesAsync(request.CustomerId, cancellationToken);
         return Result.Success(list.ConvertAll(a =>
-            new CustomerAddressDto(a.Id, a.Label, a.Line1, a.City, a.State, a.Postal, a.IsDefault)));
+            new CustomerAddressDto(a.Id, a.Label, a.Line1, a.City, a.State, a.Postal, a.Latitude, a.Longitude, a.IsDefault)));
     }
 }
 
-public sealed record AddCustomerAddressCommand(Guid CustomerId, string? Label, string Line1, string City, string State, string Postal, bool SetAsDefault)
+public sealed record AddCustomerAddressCommand(
+    Guid CustomerId,
+    string? Label,
+    string Line1,
+    string City,
+    string State,
+    string Postal,
+    decimal? Latitude,
+    decimal? Longitude,
+    bool SetAsDefault)
     : ICommand<CustomerAddressDto>;
 
 public sealed class AddCustomerAddressCommandValidator : AbstractValidator<AddCustomerAddressCommand>
@@ -138,6 +158,8 @@ public sealed class AddCustomerAddressCommandValidator : AbstractValidator<AddCu
         RuleFor(x => x.City).NotEmpty().MaximumLength(120);
         RuleFor(x => x.State).NotEmpty().MaximumLength(120);
         RuleFor(x => x.Postal).NotEmpty().MaximumLength(30);
+        RuleFor(x => x.Latitude).InclusiveBetween(-90m, 90m).When(x => x.Latitude.HasValue);
+        RuleFor(x => x.Longitude).InclusiveBetween(-180m, 180m).When(x => x.Longitude.HasValue);
     }
 }
 
@@ -168,13 +190,24 @@ internal sealed class AddCustomerAddressCommandHandler(ICustomerRepository custo
             City = request.City.Trim(),
             State = request.State.Trim(),
             Postal = request.Postal.Trim(),
+            Latitude = request.Latitude,
+            Longitude = request.Longitude,
             IsDefault = request.SetAsDefault,
         };
 
         await customers.AddCustomerAddressAsync(addr, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(new CustomerAddressDto(addr.Id, addr.Label, addr.Line1, addr.City, addr.State, addr.Postal, addr.IsDefault));
+        return Result.Success(new CustomerAddressDto(
+            addr.Id,
+            addr.Label,
+            addr.Line1,
+            addr.City,
+            addr.State,
+            addr.Postal,
+            addr.Latitude,
+            addr.Longitude,
+            addr.IsDefault));
     }
 }
 
@@ -198,25 +231,48 @@ internal sealed class DeleteCustomerAddressCommandHandler(ICustomerRepository cu
     }
 }
 
-public sealed record GetCustomerCatalogListingsQuery(string? Category, string? Search) : IQuery<List<CustomerCatalogListingDto>>;
+public sealed record GetCustomerCatalogListingsQuery(string? Category, string? Search, Guid? CustomerId = null) : IQuery<List<CustomerCatalogListingDto>>;
 
 internal sealed class GetCustomerCatalogListingsQueryHandler(ICustomerRepository customers)
     : IQueryHandler<GetCustomerCatalogListingsQuery, List<CustomerCatalogListingDto>>
 {
     public async Task<Result<List<CustomerCatalogListingDto>>> Handle(GetCustomerCatalogListingsQuery request, CancellationToken cancellationToken)
     {
-        var list = await customers.GetPublicCatalogListingsAsync(request.Category, request.Search, cancellationToken);
+        var list = await customers.GetPublicCatalogListingsAsync(request.Category, request.Search, request.CustomerId, cancellationToken);
         return Result.Success(list);
     }
 }
 
-public sealed record CartLineRequest(Guid ListingId, int Quantity, int RentalDays);
+public sealed record CartLineRequest(Guid ListingId, int Quantity, int RentalDays, string OrderType = "rent");
+
+public sealed record CustomerOrderQuoteDto(
+    decimal SubtotalAmount,
+    decimal DepositAmount,
+    decimal ServiceFeeAmount,
+    decimal DistanceFeeAmount,
+    decimal ExpressFeeAmount,
+    decimal GstAmount,
+    decimal TotalAmount,
+    List<CustomerBuySuggestionDto> BuySuggestions);
+
+public sealed record CustomerBuySuggestionDto(
+    Guid ListingId,
+    string ListingTitle,
+    decimal RentAmount,
+    decimal BuyAmount,
+    decimal SavingsAmount);
+
+public sealed record QuoteCustomerOrdersCommand(
+    Guid CustomerId,
+    Guid? CustomerAddressId,
+    string DeliveryOption,
+    IReadOnlyList<CartLineRequest> Lines) : IQuery<CustomerOrderQuoteDto>;
 
 public sealed record PlaceCustomerOrdersCommand(
     Guid CustomerId,
     Guid? CustomerAddressId,
     string DeliveryOption,
-    IReadOnlyList<CartLineRequest> Lines) : ICommand<List<CustomerOrderDto>>;
+    IReadOnlyList<CartLineRequest> Lines) : ICommand<PlaceCustomerOrdersResultDto>;
 
 public sealed class PlaceCustomerOrdersCommandValidator : AbstractValidator<PlaceCustomerOrdersCommand>
 {
@@ -228,10 +284,25 @@ public sealed class PlaceCustomerOrdersCommandValidator : AbstractValidator<Plac
         {
             l.RuleFor(x => x.ListingId).NotEmpty();
             l.RuleFor(x => x.Quantity).GreaterThan(0);
-            l.RuleFor(x => x.RentalDays).GreaterThan(0).LessThanOrEqualTo(366);
+            l.RuleFor(x => x.RentalDays).GreaterThanOrEqualTo(0).LessThanOrEqualTo(366);
+            l.RuleFor(x => x.OrderType).NotEmpty().Must(x =>
+                string.Equals(x, "rent", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x, "buy", StringComparison.OrdinalIgnoreCase));
         });
     }
 }
+
+public sealed record FailedCustomerOrderLineDto(
+    Guid ListingId,
+    int Quantity,
+    int RentalDays,
+    string OrderType,
+    string ReasonCode,
+    string Message);
+
+public sealed record PlaceCustomerOrdersResultDto(
+    List<CustomerOrderDto> PlacedOrders,
+    List<FailedCustomerOrderLineDto> FailedLines);
 
 public sealed record CustomerOrderDto(
     Guid Id,
@@ -244,64 +315,498 @@ public sealed record CustomerOrderDto(
     DateOnly? EndDate,
     decimal TotalAmount,
     decimal DepositAmount,
+    decimal ServiceFeeAmount,
+    decimal DistanceFeeAmount,
+    decimal ExpressFeeAmount,
+    decimal GstAmount,
+    string OrderType,
     int Quantity,
     int RentalDays,
     string? ListingPrimaryImageUrl);
 
-internal sealed class PlaceCustomerOrdersCommandHandler(
-    ICustomerRepository customers,
-    IVendorOnboardingRepository vendors)
-    : ICommandHandler<PlaceCustomerOrdersCommand, List<CustomerOrderDto>>
+internal static class CustomerOrderPricingRules
 {
-    public async Task<Result<List<CustomerOrderDto>>> Handle(PlaceCustomerOrdersCommand request, CancellationToken cancellationToken)
+    public static string NormalizeDeliveryOption(string? option) =>
+        string.IsNullOrWhiteSpace(option) ? "standard" : option.Trim().ToLowerInvariant();
+
+    public static string NormalizeOrderType(string? orderType) =>
+        string.Equals(orderType?.Trim(), "buy", StringComparison.OrdinalIgnoreCase) ? "buy" : "rent";
+
+    public static bool RequiresAddress(string deliveryOption) =>
+        !string.Equals(deliveryOption, "vendor_pickup", StringComparison.OrdinalIgnoreCase);
+
+    public static decimal CalculateExpressFee(string deliveryOption, CustomerPricingOptions options) =>
+        string.Equals(deliveryOption, "express", StringComparison.OrdinalIgnoreCase) ? options.ExpressDeliveryFeePerLine : 0m;
+
+    public static decimal CalculateDistanceFee(
+        decimal distanceKm,
+        CustomerPricingOptions options)
+    {
+        if (distanceKm <= options.FreeDistanceKm)
+            return 0m;
+
+        var extra = distanceKm - options.FreeDistanceKm;
+        if (extra <= 0m)
+            return 0m;
+
+        var extraKm = Math.Ceiling((double)extra);
+        return decimal.Round((decimal)extraKm * options.DistanceFeePerKm, 2, MidpointRounding.AwayFromZero);
+    }
+
+    public static decimal CalculateGst(decimal taxableAmount, decimal? gstPercent, CustomerPricingOptions options)
+    {
+        var effectiveGst = gstPercent ?? options.GstPercent;
+        if (taxableAmount <= 0 || effectiveGst <= 0)
+            return 0m;
+
+        return decimal.Round((taxableAmount * effectiveGst) / 100m, 2, MidpointRounding.AwayFromZero);
+    }
+
+    public static decimal CalculateLineSubtotal(
+        string orderType,
+        VendorProductListingAggregate aggregate,
+        CartLineRequest line,
+        CustomerPricingOptions options)
+    {
+        if (string.Equals(orderType, "buy", StringComparison.OrdinalIgnoreCase))
+        {
+            var unitBuyPrice = aggregate.BuyPrice ?? (aggregate.DailyRent * options.BuyPriceMultiplierFromDailyRent);
+            return unitBuyPrice * line.Quantity;
+        }
+
+        return aggregate.DailyRent * line.RentalDays * line.Quantity;
+    }
+
+    public static decimal CalculateDistanceKm(decimal lat1, decimal lon1, decimal lat2, decimal lon2)
+    {
+        const double earthRadiusKm = 6371d;
+        static double ToRadians(decimal angle) => (double)angle * Math.PI / 180d;
+
+        var dLat = ToRadians(lat2 - lat1);
+        var dLon = ToRadians(lon2 - lon1);
+        var a =
+            Math.Sin(dLat / 2d) * Math.Sin(dLat / 2d) +
+            Math.Cos(ToRadians(lat1)) * Math.Cos(ToRadians(lat2)) *
+            Math.Sin(dLon / 2d) * Math.Sin(dLon / 2d);
+        var c = 2d * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1d - a));
+        return decimal.Round((decimal)(earthRadiusKm * c), 2, MidpointRounding.AwayFromZero);
+    }
+
+    public static DeliveryDistanceResult ResolveDeliveryDistance(
+        decimal customerLat,
+        decimal customerLng,
+        VendorProductListingAggregate aggregate,
+        List<VendorServiceArea> vendorServiceAreas,
+        CustomerPricingOptions options)
+    {
+        var activeAreas = vendorServiceAreas
+            .Where(a => a.IsActive && !a.IsDeleted)
+            .ToList();
+
+        if (activeAreas.Count > 0)
+        {
+            var withinAreaDistances = activeAreas
+                .Select(area =>
+                {
+                    var distanceKm = CalculateDistanceKm(
+                        customerLat,
+                        customerLng,
+                        area.CenterLatitude,
+                        area.CenterLongitude);
+                    return new { distanceKm, area.ServiceRadiusKm };
+                })
+                .Where(x => !options.EnforceVendorServiceRadius || x.distanceKm <= x.ServiceRadiusKm)
+                .Select(x => x.distanceKm)
+                .OrderBy(x => x)
+                .ToList();
+
+            if (withinAreaDistances.Count > 0)
+            {
+                return DeliveryDistanceResult.Success(withinAreaDistances[0]);
+            }
+
+            if (options.EnforceVendorServiceRadius)
+            {
+                return DeliveryDistanceResult.Fail(
+                    "customers.out_of_service_area",
+                    "Selected address is outside vendor service area.");
+            }
+        }
+
+        if (aggregate.VendorLatitude.HasValue && aggregate.VendorLongitude.HasValue)
+        {
+            var distanceKm = CalculateDistanceKm(
+                customerLat,
+                customerLng,
+                aggregate.VendorLatitude.Value,
+                aggregate.VendorLongitude.Value);
+
+            if (options.EnforceVendorServiceRadius && distanceKm > options.DefaultServiceRadiusKm)
+            {
+                return DeliveryDistanceResult.Fail(
+                    "customers.out_of_service_area",
+                    "Selected address is outside vendor service area.");
+            }
+
+            return DeliveryDistanceResult.Success(distanceKm);
+        }
+
+        return DeliveryDistanceResult.Fail(
+            "customers.vendor_location_missing",
+            "Vendor delivery location is not configured.");
+    }
+}
+
+internal sealed record DeliveryDistanceResult(bool IsSuccess, decimal DistanceKm, string? ErrorCode, string? ErrorMessage)
+{
+    public static DeliveryDistanceResult Success(decimal distanceKm) => new(true, distanceKm, null, null);
+    public static DeliveryDistanceResult Fail(string errorCode, string errorMessage) => new(false, 0m, errorCode, errorMessage);
+}
+
+internal sealed class QuoteCustomerOrdersCommandHandler(
+    ICustomerRepository customers,
+    IVendorOnboardingRepository vendors,
+    IOptions<CustomerPricingOptions> pricingOptions)
+    : IQueryHandler<QuoteCustomerOrdersCommand, CustomerOrderQuoteDto>
+{
+    public async Task<Result<CustomerOrderQuoteDto>> Handle(QuoteCustomerOrdersCommand request, CancellationToken cancellationToken)
     {
         var customer = await customers.GetCustomerByIdAsync(request.CustomerId, cancellationToken);
         if (customer is null || customer.IsDeleted)
-            return Result.Failure<List<CustomerOrderDto>>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
+            return Result.Failure<CustomerOrderQuoteDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
 
+        var deliveryOption = CustomerOrderPricingRules.NormalizeDeliveryOption(request.DeliveryOption);
+        CustomerAddress? address = null;
         if (request.CustomerAddressId is { } aid)
         {
-            var addr = await customers.GetCustomerAddressByIdAsync(request.CustomerId, aid, cancellationToken);
-            if (addr is null)
-                return Result.Failure<List<CustomerOrderDto>>(new Error("customers.address_not_found", "Address not found.", ErrorCategory.Validation));
+            address = await customers.GetCustomerAddressByIdAsync(request.CustomerId, aid, cancellationToken);
+            if (address is null)
+                return Result.Failure<CustomerOrderQuoteDto>(new Error("customers.address_not_found", "Address not found.", ErrorCategory.Validation));
+        }
+        else if (CustomerOrderPricingRules.RequiresAddress(deliveryOption))
+        {
+            return Result.Failure<CustomerOrderQuoteDto>(new Error("customers.address_required", "Please select a delivery address.", ErrorCategory.Validation));
         }
 
-        const decimal serviceFeePerLine = 12m;
-        var dtos = new List<CustomerOrderDto>();
+        if (CustomerOrderPricingRules.RequiresAddress(deliveryOption) &&
+            (!address?.Latitude.HasValue ?? true || !address.Longitude.HasValue))
+        {
+            return Result.Failure<CustomerOrderQuoteDto>(new Error(
+                "customers.address_pin_required",
+                "Selected address is missing map location. Please add an address with a pinned map location.",
+                ErrorCategory.Validation));
+        }
+
+        var options = pricingOptions.Value;
+        decimal subtotalAmount = 0m;
+        decimal depositAmount = 0m;
+        decimal serviceFeeAmount = 0m;
+        decimal distanceFeeAmount = 0m;
+        decimal expressFeeAmount = 0m;
+        decimal gstAmount = 0m;
+        var buySuggestions = new List<CustomerBuySuggestionDto>();
+        var vendorAreasByVendorId = new Dictionary<Guid, List<VendorServiceArea>>();
 
         foreach (var line in request.Lines)
         {
+            var orderType = CustomerOrderPricingRules.NormalizeOrderType(line.OrderType);
+            if (orderType == "rent" && line.RentalDays <= 0)
+            {
+                return Result.Failure<CustomerOrderQuoteDto>(new Error(
+                    "customers.rental_days_required",
+                    "Rental days must be greater than zero for rent orders.",
+                    ErrorCategory.Validation));
+            }
+
             var agg = await customers.GetListingForCustomerAsync(line.ListingId, cancellationToken);
             if (agg is null)
-                return Result.Failure<List<CustomerOrderDto>>(new Error("customers.listing_not_found", "Listing not found.", ErrorCategory.NotFound));
+                return Result.Failure<CustomerOrderQuoteDto>(new Error("customers.listing_not_found", "Listing not found.", ErrorCategory.NotFound));
+
+            if (orderType == "buy" && !agg.IsBuyEnabled)
+            {
+                return Result.Failure<CustomerOrderQuoteDto>(new Error(
+                    "customers.buy_not_enabled",
+                    $"Buy is not enabled for \"{agg.ListingTitle}\".",
+                    ErrorCategory.Validation));
+            }
+            if (orderType == "rent" && !agg.IsRentEnabled)
+            {
+                return Result.Failure<CustomerOrderQuoteDto>(new Error(
+                    "customers.rent_not_enabled",
+                    $"Rent is not enabled for \"{agg.ListingTitle}\".",
+                    ErrorCategory.Validation));
+            }
 
             if (!CustomerCatalogListingStatus.IsVisibleOnPublicCatalog(agg.ListingStatus))
-                return Result.Failure<List<CustomerOrderDto>>(new Error("customers.listing_unavailable", "Listing is not available.", ErrorCategory.Validation));
+                return Result.Failure<CustomerOrderQuoteDto>(new Error("customers.listing_unavailable", "Listing is not available.", ErrorCategory.Validation));
 
             if (!string.Equals(agg.VendorAccountStatus, "active", StringComparison.OrdinalIgnoreCase))
-                return Result.Failure<List<CustomerOrderDto>>(new Error("customers.vendor_inactive", "Vendor is not accepting rentals.", ErrorCategory.Validation));
+                return Result.Failure<CustomerOrderQuoteDto>(new Error("customers.vendor_inactive", "Vendor is not accepting rentals.", ErrorCategory.Validation));
 
             var trackedListing = await vendors.GetVendorProductListingByIdAsync(agg.VendorId, agg.ListingId, cancellationToken);
             if (trackedListing is null)
-                return Result.Failure<List<CustomerOrderDto>>(new Error("customers.listing_not_found", "Listing not found.", ErrorCategory.NotFound));
+                return Result.Failure<CustomerOrderQuoteDto>(new Error("customers.listing_not_found", "Listing not found.", ErrorCategory.NotFound));
 
             var inventory = await vendors.GetVendorInventoryByListingIdAsync(agg.ListingId, cancellationToken);
             var available = inventory?.AvailableQuantity ?? trackedListing.AvailableQuantity;
             if (available < line.Quantity)
-                return Result.Failure<List<CustomerOrderDto>>(new Error(
+                return Result.Failure<CustomerOrderQuoteDto>(new Error(
                     "customers.insufficient_stock",
                     $"Not enough availability for \"{trackedListing.ListingTitle}\".",
                     ErrorCategory.Validation));
 
             var depositPerUnit = agg.CategoryDepositRequired ? agg.SecurityDeposit : 0m;
-            var subtotal = agg.DailyRent * line.RentalDays * line.Quantity;
-            var deposit = depositPerUnit * line.Quantity;
-            var fees = serviceFeePerLine;
-            var total = subtotal + deposit + fees;
+            var lineSubtotal = CustomerOrderPricingRules.CalculateLineSubtotal(orderType, agg, line, options);
+            if (orderType == "rent")
+            {
+                var equivalentBuyAmount = decimal.Round(
+                    (agg.BuyPrice ?? (agg.DailyRent * options.BuyPriceMultiplierFromDailyRent)) * line.Quantity,
+                    2,
+                    MidpointRounding.AwayFromZero);
+                if (lineSubtotal > equivalentBuyAmount)
+                {
+                    buySuggestions.Add(new CustomerBuySuggestionDto(
+                        agg.ListingId,
+                        trackedListing.ListingTitle,
+                        decimal.Round(lineSubtotal, 2, MidpointRounding.AwayFromZero),
+                        equivalentBuyAmount,
+                        decimal.Round(lineSubtotal - equivalentBuyAmount, 2, MidpointRounding.AwayFromZero)));
+                }
+            }
+            var lineDeposit = orderType == "buy" ? 0m : depositPerUnit * line.Quantity;
+            var lineExpressFee = CustomerOrderPricingRules.CalculateExpressFee(deliveryOption, options);
+            decimal lineDistanceFee = 0m;
+
+            if (CustomerOrderPricingRules.RequiresAddress(deliveryOption))
+            {
+                if (!vendorAreasByVendorId.TryGetValue(agg.VendorId, out var vendorAreas))
+                {
+                    vendorAreas = await vendors.GetVendorServiceAreasAsync(agg.VendorId, cancellationToken);
+                    vendorAreasByVendorId[agg.VendorId] = vendorAreas;
+                }
+
+                var distanceResult = CustomerOrderPricingRules.ResolveDeliveryDistance(
+                    address!.Latitude!.Value,
+                    address.Longitude!.Value,
+                    agg,
+                    vendorAreas,
+                    options);
+                if (!distanceResult.IsSuccess)
+                {
+                    return Result.Failure<CustomerOrderQuoteDto>(new Error(
+                        distanceResult.ErrorCode ?? "customers.delivery_distance_error",
+                        distanceResult.ErrorMessage ?? "Unable to validate delivery distance.",
+                        ErrorCategory.Validation));
+                }
+
+                lineDistanceFee = CustomerOrderPricingRules.CalculateDistanceFee(distanceResult.DistanceKm, options);
+            }
+            var lineServiceFee = options.BaseServiceFeePerLine + lineExpressFee + lineDistanceFee;
+            var lineGst = CustomerOrderPricingRules.CalculateGst(lineSubtotal + lineServiceFee, agg.GstPercent, options);
+
+            subtotalAmount += lineSubtotal;
+            depositAmount += lineDeposit;
+            serviceFeeAmount += lineServiceFee;
+            distanceFeeAmount += lineDistanceFee;
+            expressFeeAmount += lineExpressFee;
+            gstAmount += lineGst;
+        }
+
+        return Result.Success(new CustomerOrderQuoteDto(
+            decimal.Round(subtotalAmount, 2, MidpointRounding.AwayFromZero),
+            decimal.Round(depositAmount, 2, MidpointRounding.AwayFromZero),
+            decimal.Round(serviceFeeAmount, 2, MidpointRounding.AwayFromZero),
+            decimal.Round(distanceFeeAmount, 2, MidpointRounding.AwayFromZero),
+            decimal.Round(expressFeeAmount, 2, MidpointRounding.AwayFromZero),
+            decimal.Round(gstAmount, 2, MidpointRounding.AwayFromZero),
+            decimal.Round(subtotalAmount + depositAmount + serviceFeeAmount + gstAmount, 2, MidpointRounding.AwayFromZero),
+            buySuggestions));
+    }
+}
+
+internal sealed class PlaceCustomerOrdersCommandHandler(
+    ICustomerRepository customers,
+    IVendorOnboardingRepository vendors,
+    IOptions<CustomerPricingOptions> pricingOptions)
+    : ICommandHandler<PlaceCustomerOrdersCommand, PlaceCustomerOrdersResultDto>
+{
+    public async Task<Result<PlaceCustomerOrdersResultDto>> Handle(PlaceCustomerOrdersCommand request, CancellationToken cancellationToken)
+    {
+        var customer = await customers.GetCustomerByIdAsync(request.CustomerId, cancellationToken);
+        if (customer is null || customer.IsDeleted)
+            return Result.Failure<PlaceCustomerOrdersResultDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
+
+        var deliveryOption = CustomerOrderPricingRules.NormalizeDeliveryOption(request.DeliveryOption);
+        CustomerAddress? address = null;
+        if (request.CustomerAddressId is { } aid)
+        {
+            address = await customers.GetCustomerAddressByIdAsync(request.CustomerId, aid, cancellationToken);
+            if (address is null)
+                return Result.Failure<PlaceCustomerOrdersResultDto>(new Error("customers.address_not_found", "Address not found.", ErrorCategory.Validation));
+        }
+        else if (CustomerOrderPricingRules.RequiresAddress(deliveryOption))
+        {
+            return Result.Failure<PlaceCustomerOrdersResultDto>(new Error("customers.address_required", "Please select a delivery address.", ErrorCategory.Validation));
+        }
+
+        if (CustomerOrderPricingRules.RequiresAddress(deliveryOption) &&
+            (!address?.Latitude.HasValue ?? true || !address.Longitude.HasValue))
+        {
+            return Result.Failure<PlaceCustomerOrdersResultDto>(new Error(
+                "customers.address_pin_required",
+                "Selected address is missing map location. Please add an address with a pinned map location.",
+                ErrorCategory.Validation));
+        }
+
+        var options = pricingOptions.Value;
+        var placed = new List<CustomerOrderDto>();
+        var failed = new List<FailedCustomerOrderLineDto>();
+        var vendorAreasByVendorId = new Dictionary<Guid, List<VendorServiceArea>>();
+
+        foreach (var line in request.Lines)
+        {
+            var orderType = CustomerOrderPricingRules.NormalizeOrderType(line.OrderType);
+            if (orderType == "rent" && line.RentalDays <= 0)
+            {
+                failed.Add(new FailedCustomerOrderLineDto(
+                    line.ListingId,
+                    line.Quantity,
+                    line.RentalDays,
+                    orderType,
+                    "customers.rental_days_required",
+                    "Rental days must be greater than zero for rent orders."));
+                continue;
+            }
+
+            var agg = await customers.GetListingForCustomerAsync(line.ListingId, cancellationToken);
+            if (agg is null)
+            {
+                failed.Add(new FailedCustomerOrderLineDto(
+                    line.ListingId,
+                    line.Quantity,
+                    line.RentalDays,
+                    orderType,
+                    "customers.listing_not_found",
+                    "Listing not found."));
+                continue;
+            }
+
+            if (orderType == "buy" && !agg.IsBuyEnabled)
+            {
+                failed.Add(new FailedCustomerOrderLineDto(
+                    line.ListingId,
+                    line.Quantity,
+                    line.RentalDays,
+                    orderType,
+                    "customers.buy_not_enabled",
+                    $"Buy is not enabled for \"{agg.ListingTitle}\"."));
+                continue;
+            }
+            if (orderType == "rent" && !agg.IsRentEnabled)
+            {
+                failed.Add(new FailedCustomerOrderLineDto(
+                    line.ListingId,
+                    line.Quantity,
+                    line.RentalDays,
+                    orderType,
+                    "customers.rent_not_enabled",
+                    $"Rent is not enabled for \"{agg.ListingTitle}\"."));
+                continue;
+            }
+
+            if (!CustomerCatalogListingStatus.IsVisibleOnPublicCatalog(agg.ListingStatus))
+            {
+                failed.Add(new FailedCustomerOrderLineDto(
+                    line.ListingId,
+                    line.Quantity,
+                    line.RentalDays,
+                    orderType,
+                    "customers.listing_unavailable",
+                    "Listing is not available."));
+                continue;
+            }
+
+            if (!string.Equals(agg.VendorAccountStatus, "active", StringComparison.OrdinalIgnoreCase))
+            {
+                failed.Add(new FailedCustomerOrderLineDto(
+                    line.ListingId,
+                    line.Quantity,
+                    line.RentalDays,
+                    orderType,
+                    "customers.vendor_inactive",
+                    "Vendor is not accepting orders."));
+                continue;
+            }
+
+            var trackedListing = await vendors.GetVendorProductListingByIdAsync(agg.VendorId, agg.ListingId, cancellationToken);
+            if (trackedListing is null)
+            {
+                failed.Add(new FailedCustomerOrderLineDto(
+                    line.ListingId,
+                    line.Quantity,
+                    line.RentalDays,
+                    orderType,
+                    "customers.listing_not_found",
+                    "Listing not found."));
+                continue;
+            }
+
+            var inventory = await vendors.GetVendorInventoryByListingIdAsync(agg.ListingId, cancellationToken);
+            var available = inventory?.AvailableQuantity ?? trackedListing.AvailableQuantity;
+            if (available < line.Quantity)
+            {
+                failed.Add(new FailedCustomerOrderLineDto(
+                    line.ListingId,
+                    line.Quantity,
+                    line.RentalDays,
+                    orderType,
+                    "customers.insufficient_stock",
+                    $"Not enough availability for \"{trackedListing.ListingTitle}\"."));
+                continue;
+            }
+
+            var depositPerUnit = agg.CategoryDepositRequired ? agg.SecurityDeposit : 0m;
+            var subtotal = CustomerOrderPricingRules.CalculateLineSubtotal(orderType, agg, line, options);
+            var deposit = orderType == "buy" ? 0m : depositPerUnit * line.Quantity;
+            var expressFee = CustomerOrderPricingRules.CalculateExpressFee(deliveryOption, options);
+
+            decimal distanceFee = 0m;
+            if (CustomerOrderPricingRules.RequiresAddress(deliveryOption))
+            {
+                if (!vendorAreasByVendorId.TryGetValue(agg.VendorId, out var vendorAreas))
+                {
+                    vendorAreas = await vendors.GetVendorServiceAreasAsync(agg.VendorId, cancellationToken);
+                    vendorAreasByVendorId[agg.VendorId] = vendorAreas;
+                }
+
+                var distanceResult = CustomerOrderPricingRules.ResolveDeliveryDistance(
+                    address!.Latitude!.Value,
+                    address.Longitude!.Value,
+                    agg,
+                    vendorAreas,
+                    options);
+                if (!distanceResult.IsSuccess)
+                {
+                    failed.Add(new FailedCustomerOrderLineDto(
+                        line.ListingId,
+                        line.Quantity,
+                        line.RentalDays,
+                        orderType,
+                        distanceResult.ErrorCode ?? "customers.delivery_distance_error",
+                        distanceResult.ErrorMessage ?? "Unable to validate delivery distance."));
+                    continue;
+                }
+
+                distanceFee = CustomerOrderPricingRules.CalculateDistanceFee(distanceResult.DistanceKm, options);
+            }
+
+            var fees = options.BaseServiceFeePerLine + expressFee + distanceFee;
+            var gstAmount = CustomerOrderPricingRules.CalculateGst(subtotal + fees, agg.GstPercent, options);
+            var total = subtotal + deposit + fees + gstAmount;
 
             var orderNumber = await GenerateUniqueOrderNumber(customers, cancellationToken);
             var start = DateOnly.FromDateTime(DateTime.UtcNow.Date);
-            var end = start.AddDays(line.RentalDays);
+            var end = orderType == "buy" ? start : start.AddDays(line.RentalDays);
 
             var order = new CustomerRentalOrder
             {
@@ -310,12 +815,16 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 VendorProductListingId = agg.ListingId,
                 CustomerAddressId = request.CustomerAddressId,
                 Quantity = line.Quantity,
-                RentalDays = line.RentalDays,
-                DeliveryOption = string.IsNullOrWhiteSpace(request.DeliveryOption) ? "standard" : request.DeliveryOption.Trim(),
-                Status = "pending",
+                RentalDays = orderType == "buy" ? 0 : line.RentalDays,
+                OrderType = orderType,
+                DeliveryOption = deliveryOption,
+                Status = "awaiting_vendor_acceptance",
                 SubtotalAmount = subtotal,
                 DepositAmount = deposit,
                 ServiceFeeAmount = fees,
+                DistanceFeeAmount = distanceFee,
+                ExpressFeeAmount = expressFee,
+                GstAmount = gstAmount,
                 TotalAmount = total,
                 StartDate = start,
                 EndDate = end,
@@ -324,48 +833,112 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
             await customers.AddCustomerRentalOrderAsync(order, cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
 
+            var candidateListings = await customers.GetCandidateListingsByProductIdAsync(agg.ProductId, cancellationToken);
+            var eligibleCandidates = new List<(VendorProductListingAggregate Candidate, decimal DistanceKm)>();
+            foreach (var candidate in candidateListings.Where(c => c.VendorId != Guid.Empty))
+            {
+                var candidateListing = await vendors.GetVendorProductListingByIdAsync(candidate.VendorId, candidate.ListingId, cancellationToken);
+                if (candidateListing is null)
+                    continue;
+
+                var candidateInventory = await vendors.GetVendorInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
+                var candidateAvailable = candidateInventory?.AvailableQuantity ?? candidateListing.AvailableQuantity;
+                if (candidateAvailable < line.Quantity)
+                    continue;
+
+                decimal distanceKm = 0m;
+                if (CustomerOrderPricingRules.RequiresAddress(deliveryOption))
+                {
+                    if (!vendorAreasByVendorId.TryGetValue(candidate.VendorId, out var vendorAreas))
+                    {
+                        vendorAreas = await vendors.GetVendorServiceAreasAsync(candidate.VendorId, cancellationToken);
+                        vendorAreasByVendorId[candidate.VendorId] = vendorAreas;
+                    }
+
+                    var candidateDistance = CustomerOrderPricingRules.ResolveDeliveryDistance(
+                        address!.Latitude!.Value,
+                        address.Longitude!.Value,
+                        candidate,
+                        vendorAreas,
+                        options);
+                    if (!candidateDistance.IsSuccess)
+                        continue;
+
+                    distanceKm = candidateDistance.DistanceKm;
+                }
+
+                eligibleCandidates.Add((candidate, distanceKm));
+            }
+
+            var ranked = eligibleCandidates
+                .OrderBy(x => x.DistanceKm)
+                .ThenByDescending(x => x.Candidate.InventoryAvailable)
+                .Take(Math.Max(1, options.MaxDispatchVendorsPerLine))
+                .ToList();
+
+            var now = DateTimeOffset.UtcNow;
+            for (var i = 0; i < ranked.Count; i++)
+            {
+                var candidate = ranked[i].Candidate;
+                var offer = new CustomerOrderVendorOffer
+                {
+                    CustomerRentalOrderId = order.Id,
+                    VendorId = candidate.VendorId,
+                    VendorProductListingId = candidate.ListingId,
+                    OfferRank = i + 1,
+                    Status = "pending",
+                    ExpiresAt = now.AddMinutes((double)Math.Max(1m, options.DispatchOfferTtlMinutes)),
+                };
+                await customers.AddCustomerOrderVendorOfferAsync(offer, cancellationToken);
+            }
+            await customers.SaveChangesAsync(cancellationToken);
+
+            if (ranked.Count == 0)
+            {
+                order.Status = "dispatch_failed";
+                await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+                await customers.SaveChangesAsync(cancellationToken);
+
+                failed.Add(new FailedCustomerOrderLineDto(
+                    line.ListingId,
+                    line.Quantity,
+                    line.RentalDays,
+                    orderType,
+                    "customers.dispatch_no_vendor",
+                    "No eligible vendor available right now."));
+                continue;
+            }
+
+            var topVendor = ranked[0].Candidate;
             await customers.AddCustomerNotificationAsync(
                 new CustomerNotification
                 {
                     Id = Guid.NewGuid(),
                     CustomerId = request.CustomerId,
                     Title = $"Order {order.OrderNumber} submitted",
-                    Body = $"Your rental request for \"{trackedListing.ListingTitle}\" is pending vendor confirmation.",
+                    Body = $"Your {orderType} request for \"{trackedListing.ListingTitle}\" is awaiting vendor acceptance.",
                     NotificationType = "order_pending",
                     RelatedOrderId = order.Id,
                 },
                 cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
 
-            if (inventory is not null)
+            await vendors.AddVendorNotificationAsync(new VendorNotification
             {
-                inventory.AvailableQuantity -= line.Quantity;
-                inventory.ReservedQuantity += line.Quantity;
-                await vendors.UpsertVendorInventoryAsync(inventory, cancellationToken);
-
-                var movement = new VendorInventoryMovement
-                {
-                    VendorInventoryId = inventory.Id,
-                    MovementType = "reserved",
-                    Quantity = line.Quantity,
-                    ReferenceType = "customer_rental_order",
-                    ReferenceId = order.Id,
-                    Notes = $"Customer order {order.OrderNumber}",
-                    EventAt = DateTimeOffset.UtcNow,
-                };
-                await vendors.AddVendorInventoryMovementAsync(movement, cancellationToken);
-            }
-            else
-            {
-                trackedListing.AvailableQuantity -= line.Quantity;
-                await vendors.UpdateVendorProductListingAsync(trackedListing, cancellationToken);
-            }
+                VendorId = topVendor.VendorId,
+                NotificationType = "dispatch_offer",
+                Title = $"New order request {order.OrderNumber}",
+                Message = $"You have a new {orderType} request for \"{trackedListing.ListingTitle}\".",
+                Channel = "in_app",
+                Status = "sent",
+                SentAt = DateTimeOffset.UtcNow
+            }, cancellationToken);
 
             await vendors.SaveChangesAsync(cancellationToken);
 
             var vendorDisplay = string.IsNullOrWhiteSpace(agg.VendorBusinessName) ? "Vendor" : agg.VendorBusinessName!;
             var primaryImg = agg.ImageUrls.Count > 0 ? agg.ImageUrls[0] : null;
-            dtos.Add(new CustomerOrderDto(
+            placed.Add(new CustomerOrderDto(
                 order.Id,
                 order.OrderNumber,
                 order.VendorProductListingId,
@@ -376,12 +949,17 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 order.EndDate,
                 order.TotalAmount,
                 order.DepositAmount,
+                order.ServiceFeeAmount,
+                order.DistanceFeeAmount,
+                order.ExpressFeeAmount,
+                order.GstAmount,
+                order.OrderType,
                 order.Quantity,
                 order.RentalDays,
                 primaryImg));
         }
 
-        return Result.Success(dtos);
+        return Result.Success(new PlaceCustomerOrdersResultDto(placed, failed));
     }
 
     private static async Task<string> GenerateUniqueOrderNumber(ICustomerRepository customers, CancellationToken cancellationToken)
@@ -424,6 +1002,11 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
                 o.EndDate,
                 o.TotalAmount,
                 o.DepositAmount,
+                o.ServiceFeeAmount,
+                o.DistanceFeeAmount,
+                o.ExpressFeeAmount,
+                o.GstAmount,
+                o.OrderType,
                 o.Quantity,
                 o.RentalDays,
                 row.ListingPrimaryImageUrl));
@@ -459,6 +1042,11 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
             o.EndDate,
             o.TotalAmount,
             o.DepositAmount,
+            o.ServiceFeeAmount,
+            o.DistanceFeeAmount,
+            o.ExpressFeeAmount,
+            o.GstAmount,
+            o.OrderType,
             o.Quantity,
             o.RentalDays,
             row.ListingPrimaryImageUrl));
@@ -470,10 +1058,12 @@ internal static class CustomerOrderStatusMapper
     public static string ToDisplay(string status) => status.ToLowerInvariant() switch
     {
         "pending" => "Pending",
+        "awaiting_vendor_acceptance" => "Awaiting vendor acceptance",
         "confirmed" => "Confirmed",
         "in_transit" => "In transit",
         "active" => "Active",
         "returned" => "Returned",
+        "dispatch_failed" => "Dispatch failed",
         "cancelled" => "Cancelled",
         _ => status
     };
@@ -492,38 +1082,44 @@ internal sealed class CancelCustomerOrderCommandHandler(ICustomerRepository cust
             return Result.Failure<CustomerOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
 
         var o = row.Order;
-        if (!string.Equals(o.Status, "pending", StringComparison.OrdinalIgnoreCase))
+        var isCancellable =
+            string.Equals(o.Status, "pending", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(o.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase);
+        if (!isCancellable)
             return Result.Failure<CustomerOrderDto>(new Error("customers.order_not_cancellable", "Only pending orders can be cancelled.", ErrorCategory.Validation));
 
         var agg = await customers.GetListingForCustomerAsync(o.VendorProductListingId, cancellationToken);
         if (agg is null)
             return Result.Failure<CustomerOrderDto>(new Error("customers.listing_not_found", "Listing not found.", ErrorCategory.NotFound));
 
-        var inventory = await vendors.GetVendorInventoryByListingIdAsync(o.VendorProductListingId, cancellationToken);
-        if (inventory is not null)
+        if (!string.Equals(o.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase))
         {
-            inventory.AvailableQuantity += o.Quantity;
-            inventory.ReservedQuantity = Math.Max(0, inventory.ReservedQuantity - o.Quantity);
-            await vendors.UpsertVendorInventoryAsync(inventory, cancellationToken);
-            var movement = new VendorInventoryMovement
+            var inventory = await vendors.GetVendorInventoryByListingIdAsync(o.VendorProductListingId, cancellationToken);
+            if (inventory is not null)
             {
-                VendorInventoryId = inventory.Id,
-                MovementType = "reservation_released",
-                Quantity = o.Quantity,
-                ReferenceType = "customer_rental_order",
-                ReferenceId = o.Id,
-                Notes = $"Cancellation {o.OrderNumber}",
-                EventAt = DateTimeOffset.UtcNow,
-            };
-            await vendors.AddVendorInventoryMovementAsync(movement, cancellationToken);
-        }
-        else
-        {
-            var listing = await vendors.GetVendorProductListingByIdAsync(agg.VendorId, o.VendorProductListingId, cancellationToken);
-            if (listing is not null)
+                inventory.AvailableQuantity += o.Quantity;
+                inventory.ReservedQuantity = Math.Max(0, inventory.ReservedQuantity - o.Quantity);
+                await vendors.UpsertVendorInventoryAsync(inventory, cancellationToken);
+                var movement = new VendorInventoryMovement
+                {
+                    VendorInventoryId = inventory.Id,
+                    MovementType = "reservation_released",
+                    Quantity = o.Quantity,
+                    ReferenceType = "customer_rental_order",
+                    ReferenceId = o.Id,
+                    Notes = $"Cancellation {o.OrderNumber}",
+                    EventAt = DateTimeOffset.UtcNow,
+                };
+                await vendors.AddVendorInventoryMovementAsync(movement, cancellationToken);
+            }
+            else
             {
-                listing.AvailableQuantity += o.Quantity;
-                await vendors.UpdateVendorProductListingAsync(listing, cancellationToken);
+                var listing = await vendors.GetVendorProductListingByIdAsync(agg.VendorId, o.VendorProductListingId, cancellationToken);
+                if (listing is not null)
+                {
+                    listing.AvailableQuantity += o.Quantity;
+                    await vendors.UpdateVendorProductListingAsync(listing, cancellationToken);
+                }
             }
         }
 
@@ -559,6 +1155,11 @@ internal sealed class CancelCustomerOrderCommandHandler(ICustomerRepository cust
             o.EndDate,
             o.TotalAmount,
             o.DepositAmount,
+            o.ServiceFeeAmount,
+            o.DistanceFeeAmount,
+            o.ExpressFeeAmount,
+            o.GstAmount,
+            o.OrderType,
             o.Quantity,
             o.RentalDays,
             row.ListingPrimaryImageUrl));

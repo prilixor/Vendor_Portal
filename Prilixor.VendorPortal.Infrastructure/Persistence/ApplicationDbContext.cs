@@ -6,9 +6,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Prilixor.VendorPortal.Infrastructure.Persistence;
 
-public class ApplicationDbContext(DbContextOptions options)
-    : DbContext(options)
+public class ApplicationDbContext : DbContext
 {
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+        : base(options)
+    {
+    }
+
+    protected ApplicationDbContext(DbContextOptions options)
+        : base(options)
+    {
+    }
+
     public DbSet<Vendor> Vendors => Set<Vendor>();
     public DbSet<VendorProfile> VendorProfiles => Set<VendorProfile>();
     public DbSet<VendorDocument> VendorDocuments => Set<VendorDocument>();
@@ -19,6 +28,7 @@ public class ApplicationDbContext(DbContextOptions options)
     public DbSet<VendorBankAccount> VendorBankAccounts => Set<VendorBankAccount>();
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductImage> ProductImages => Set<ProductImage>();
     public DbSet<VendorProductListing> VendorProductListings => Set<VendorProductListing>();
     public DbSet<VendorProductImage> VendorProductImages => Set<VendorProductImage>();
     public DbSet<VendorProductDocument> VendorProductDocuments => Set<VendorProductDocument>();
@@ -266,6 +276,13 @@ public class ApplicationDbContext(DbContextOptions options)
             entity.Property(x => x.ModelName).HasColumnName("model_name");
             entity.Property(x => x.ShortDescription).HasColumnName("short_description");
             entity.Property(x => x.LongDescription).HasColumnName("long_description");
+            entity.Property(x => x.DailyRent).HasColumnName("daily_rent");
+            entity.Property(x => x.MonthlyRent).HasColumnName("monthly_rent");
+            entity.Property(x => x.SecurityDeposit).HasColumnName("security_deposit");
+            entity.Property(x => x.BuyPrice).HasColumnName("buy_price");
+            entity.Property(x => x.GstPercent).HasColumnName("gst_percent");
+            entity.Property(x => x.IsRentEnabled).HasColumnName("is_rent_enabled");
+            entity.Property(x => x.IsBuyEnabled).HasColumnName("is_buy_enabled");
             entity.Property(x => x.IsActive).HasColumnName("is_active");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
@@ -276,6 +293,30 @@ public class ApplicationDbContext(DbContextOptions options)
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
             entity.HasMany(x => x.VendorProductListings)
                 .WithOne(x => x.Product)
+                .HasForeignKey(x => x.ProductId);
+            entity.HasMany(x => x.ProductImages)
+                .WithOne(x => x.Product)
+                .HasForeignKey(x => x.ProductId);
+        });
+
+        modelBuilder.Entity<ProductImage>(entity =>
+        {
+            entity.ToTable("product_images");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.ProductId).HasColumnName("product_id");
+            entity.Property(x => x.ImageUrl).HasColumnName("image_url");
+            entity.Property(x => x.DisplayOrder).HasColumnName("display_order");
+            entity.Property(x => x.IsPrimary).HasColumnName("is_primary");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.HasOne(x => x.Product)
+                .WithMany(x => x.ProductImages)
                 .HasForeignKey(x => x.ProductId);
         });
 

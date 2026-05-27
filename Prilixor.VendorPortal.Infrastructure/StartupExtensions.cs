@@ -149,6 +149,9 @@ namespace Prilixor.VendorPortal.Infrastructure
             services.Configure<SmtpOptions>(
                 configuration.GetSection(nameof(SmtpOptions)));
 
+            services.Configure<CustomerPricingOptions>(
+                configuration.GetSection(CustomerPricingOptions.SectionName));
+
             return services;
         }
     }

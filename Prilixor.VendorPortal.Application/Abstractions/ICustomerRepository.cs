@@ -15,15 +15,26 @@ public interface ICustomerRepository
     Task AddCustomerAddressAsync(CustomerAddress address, CancellationToken cancellationToken);
     Task UpdateCustomerAddressAsync(CustomerAddress address, CancellationToken cancellationToken);
 
-    Task<List<CustomerCatalogListingDto>> GetPublicCatalogListingsAsync(string? categoryFilter, string? search, CancellationToken cancellationToken);
+    Task<List<CustomerCatalogListingDto>> GetPublicCatalogListingsAsync(string? categoryFilter, string? search, Guid? customerId, CancellationToken cancellationToken);
     Task<VendorProductListingAggregate?> GetListingForCustomerAsync(Guid listingId, CancellationToken cancellationToken);
+    Task<List<VendorProductListingAggregate>> GetCandidateListingsByProductIdAsync(Guid productId, CancellationToken cancellationToken);
 
     Task AddCustomerRentalOrderAsync(CustomerRentalOrder order, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderWithListing>> GetCustomerOrdersAsync(Guid customerId, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetCustomerOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetCustomerOrderByNumberAsync(Guid customerId, string orderNumber, CancellationToken cancellationToken);
+    Task<CustomerRentalOrderWithListing?> GetCustomerOrderByIdAsync(Guid orderId, CancellationToken cancellationToken);
+    Task<CustomerRentalOrder?> GetCustomerOrderEntityByIdAsync(Guid orderId, CancellationToken cancellationToken);
     Task<bool> OrderNumberExistsAsync(string orderNumber, CancellationToken cancellationToken);
     Task UpdateCustomerRentalOrderAsync(CustomerRentalOrder order, CancellationToken cancellationToken);
+    Task AddCustomerOrderVendorOfferAsync(CustomerOrderVendorOffer offer, CancellationToken cancellationToken);
+    Task<List<CustomerOrderVendorOffer>> GetCustomerOrderVendorOffersAsync(Guid customerOrderId, CancellationToken cancellationToken);
+    Task<CustomerOrderVendorOffer?> GetCustomerOrderVendorOfferAsync(Guid customerOrderId, Guid vendorId, CancellationToken cancellationToken);
+    Task<List<CustomerOrderVendorOffer>> GetPendingVendorOffersAsync(Guid vendorId, CancellationToken cancellationToken);
+    Task UpdateCustomerOrderVendorOfferAsync(CustomerOrderVendorOffer offer, CancellationToken cancellationToken);
+    Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForCustomerAsync(Guid customerId, DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
+    Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForVendorAsync(Guid vendorId, DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
+    Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForAdminAsync(DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
 
     Task<List<CustomerNotification>> GetCustomerNotificationsAsync(Guid customerId, CancellationToken cancellationToken);
     Task<CustomerNotification?> GetCustomerNotificationByIdAsync(Guid customerId, Guid notificationId, CancellationToken cancellationToken);
@@ -53,20 +64,30 @@ public sealed record CustomerCatalogListingDto(
     bool PrescriptionRequired,
     bool DepositRequired,
     string ListingStatus,
+    int AvailableQuantity,
+    int ProductTotalAvailableQuantity,
+    string AvailabilityStatus,
     string? PrimaryImageUrl);
 
 /// <summary>Listing + vendor + product loaded for checkout validation.</summary>
 public sealed class VendorProductListingAggregate
 {
     public Guid ListingId { get; init; }
+    public Guid ProductId { get; init; }
     public Guid VendorId { get; init; }
     public string VendorAccountStatus { get; init; } = string.Empty;
     public string? VendorBusinessName { get; init; }
+    public decimal? VendorLatitude { get; init; }
+    public decimal? VendorLongitude { get; init; }
     public string ListingTitle { get; init; } = string.Empty;
     public string ListingStatus { get; init; } = string.Empty;
     public decimal DailyRent { get; init; }
     public decimal MonthlyRent { get; init; }
     public decimal SecurityDeposit { get; init; }
+    public decimal? BuyPrice { get; init; }
+    public decimal GstPercent { get; init; }
+    public bool IsRentEnabled { get; init; }
+    public bool IsBuyEnabled { get; init; }
     public int ListingAvailableQuantity { get; init; }
     public bool CategoryPrescriptionRequired { get; init; }
     public bool CategoryDepositRequired { get; init; }
@@ -80,3 +101,16 @@ public sealed class VendorProductListingAggregate
     public int InventoryRented { get; init; }
     public int InventoryBlocked { get; init; }
 }
+
+public sealed record ExpiringOrderAggregate(
+    Guid OrderId,
+    string OrderNumber,
+    Guid CustomerId,
+    string CustomerName,
+    Guid VendorId,
+    string VendorName,
+    Guid ListingId,
+    string ListingTitle,
+    string Status,
+    string OrderType,
+    DateOnly EndDate);

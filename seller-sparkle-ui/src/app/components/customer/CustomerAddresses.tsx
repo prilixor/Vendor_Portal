@@ -7,6 +7,14 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Switch } from "@/app/components/ui/switch";
 import { Skeleton } from "@/app/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/app/components/ui/select";
+import { MapPicker } from "@/app/components/shared/MapPicker";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 
@@ -22,7 +30,31 @@ const CustomerAddresses = () => {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [postal, setPostal] = useState("");
+  const [latitude, setLatitude] = useState(23.0225);
+  const [longitude, setLongitude] = useState(72.5714);
   const [setDefault, setSetDefault] = useState(false);
+  const [selectedStateIso2, setSelectedStateIso2] = useState<string>("");
+
+  const {
+    data: states = [],
+    isLoading: statesLoading,
+    error: statesError,
+  } = useQuery({
+    queryKey: ["lookup-indian-states"],
+    queryFn: () => customerApi.getIndianStates(),
+  });
+
+  const {
+    data: cityRows = [],
+    isLoading: citiesLoading,
+    error: citiesError,
+  } = useQuery({
+    queryKey: ["lookup-indian-cities", selectedStateIso2],
+    queryFn: () => customerApi.getCitiesByState(selectedStateIso2),
+    enabled: selectedStateIso2.trim().length > 0,
+  });
+
+  const cities = cityRows.map((x) => x.name);
 
   const addMut = useMutation({
     mutationFn: () =>
@@ -32,6 +64,8 @@ const CustomerAddresses = () => {
         city: city.trim(),
         state: state.trim(),
         postal: postal.trim(),
+        latitude,
+        longitude,
         setAsDefault: setDefault,
       }),
     onSuccess: () => {
@@ -40,7 +74,10 @@ const CustomerAddresses = () => {
       setLine1("");
       setCity("");
       setState("");
+      setSelectedStateIso2("");
       setPostal("");
+      setLatitude(23.0225);
+      setLongitude(72.5714);
       setSetDefault(false);
       queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
     },
@@ -85,6 +122,11 @@ const CustomerAddresses = () => {
                   <p className="text-muted-foreground">
                     {a.city}, {a.state} {a.postal}
                   </p>
+                  {typeof a.latitude === "number" && typeof a.longitude === "number" && (
+                    <p className="text-xs text-muted-foreground">
+                      Pinned: {a.latitude.toFixed(4)}, {a.longitude.toFixed(4)}
+                    </p>
+                  )}
                   {a.isDefault && <p className="mt-1 text-xs font-medium text-primary">Default</p>}
                 </div>
                 <Button variant="ghost" size="icon" className="text-destructive shrink-0" onClick={() => delMut.mutate(a.id)}>
@@ -111,16 +153,86 @@ const CustomerAddresses = () => {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="addr-city">City</Label>
-                <Input id="addr-city" value={city} onChange={(e) => setCity(e.target.value)} />
+                <Select
+                  value={city || "none"}
+                  onValueChange={(value) => setCity(value === "none" ? "" : value)}
+                  disabled={!selectedStateIso2 || citiesLoading}
+                >
+                  <SelectTrigger id="addr-city">
+                    <SelectValue
+                      placeholder={
+                        citiesLoading
+                          ? "Loading cities..."
+                          : selectedStateIso2
+                            ? "Select city"
+                            : "Select state first"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {cities.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="addr-state">State</Label>
-                <Input id="addr-state" value={state} onChange={(e) => setState(e.target.value)} />
+                <Select
+                  value={selectedStateIso2 || "none"}
+                  onValueChange={(value) => {
+                    const iso2 = value === "none" ? "" : value;
+                    setSelectedStateIso2(iso2);
+                    const selected = states.find((s) => s.iso2 === iso2);
+                    setState(selected?.name ?? "");
+                    setCity("");
+                  }}
+                  disabled={statesLoading}
+                >
+                  <SelectTrigger id="addr-state">
+                    <SelectValue placeholder={statesLoading ? "Loading states..." : "Select state"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {states.map((s) => (
+                      <SelectItem key={s.iso2} value={s.iso2}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
+            {(statesError || citiesError) && (
+              <p className="text-xs text-destructive">
+                {statesError instanceof Error
+                  ? statesError.message
+                  : citiesError instanceof Error
+                    ? citiesError.message
+                    : "Failed to load states/cities."}
+              </p>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="addr-postal">Postal code</Label>
               <Input id="addr-postal" value={postal} onChange={(e) => setPostal(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Pin delivery location</Label>
+              <MapPicker
+                latitude={latitude}
+                longitude={longitude}
+                onChange={(lat, lng) => {
+                  setLatitude(lat);
+                  setLongitude(lng);
+                }}
+                height="h-56"
+              />
+              <p className="text-xs text-muted-foreground">
+                Delivery distance fees use this pinned location.
+              </p>
             </div>
             <div className="flex items-center gap-2 pt-1">
               <Switch id="addr-def" checked={setDefault} onCheckedChange={setSetDefault} />

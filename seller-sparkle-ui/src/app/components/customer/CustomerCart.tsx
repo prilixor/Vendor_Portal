@@ -6,6 +6,7 @@ import type { CartLine } from "@/app/contexts/CartContext";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { QuantityStepper } from "@/app/components/ui/quantity-stepper";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { cn } from "@/app/helpers/utils";
 
 function CartThumb({ url }: { url?: string | null }) {
@@ -32,14 +33,19 @@ function CartLineCard({
   line,
   onUpdateQty,
   onUpdateDays,
+  onUpdateOrderType,
   onRemove,
 }: {
   line: CartLine;
   onUpdateQty: (listingId: string, qty: number) => void;
   onUpdateDays: (listingId: string, days: number) => void;
+  onUpdateOrderType: (listingId: string, orderType: "rent" | "buy") => void;
   onRemove: (listingId: string) => void;
 }) {
-  const lineRent = line.dailyRent * line.quantity * line.rentalDays;
+  const lineRent =
+    line.orderType === "buy"
+      ? line.dailyRent * 30 * line.quantity
+      : line.dailyRent * line.quantity * line.rentalDays;
   const listingTo = `/customer/browse/${encodeURIComponent(line.listingId)}`;
 
   return (
@@ -67,10 +73,10 @@ function CartLineCard({
               >
                 {line.title}
               </Link>
-              <p className="text-sm text-muted-foreground">{line.vendorName}</p>
               <p className="text-xs text-muted-foreground tabular-nums">
-                ₹{line.dailyRent.toFixed(0)} / day · {line.rentalDays} days · deposit ₹
-                {line.securityDeposit.toFixed(0)}
+                ₹{line.dailyRent.toFixed(0)} / day ·{" "}
+                {line.orderType === "buy" ? "Buy mode" : `${line.rentalDays} days`} ·
+                {line.orderType === "buy" ? " no deposit" : ` deposit ₹${line.securityDeposit.toFixed(0)}`}
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">
@@ -95,13 +101,27 @@ function CartLineCard({
               max={999}
               onChange={(qty) => onUpdateQty(line.listingId, qty)}
             />
-            <QuantityStepper
-              label="Days"
-              value={line.rentalDays}
-              min={1}
-              max={366}
-              onChange={(days) => onUpdateDays(line.listingId, days)}
-            />
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Type</p>
+              <Select value={line.orderType} onValueChange={(v) => onUpdateOrderType(line.listingId, v as "rent" | "buy")}>
+                <SelectTrigger className="h-9 w-[120px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rent">Rent</SelectItem>
+                  <SelectItem value="buy">Buy</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {line.orderType === "rent" ? (
+              <QuantityStepper
+                label="Days"
+                value={line.rentalDays}
+                min={1}
+                max={366}
+                onChange={(days) => onUpdateDays(line.listingId, days)}
+              />
+            ) : null}
           </div>
         </div>
       </div>
@@ -113,7 +133,7 @@ const CustomerCart = () => {
   const { lines, updateLine, removeLine, totalEstimatedRent } = useCart();
 
   const totalDeposit = useMemo(
-    () => lines.reduce((sum, l) => sum + l.securityDeposit * l.quantity, 0),
+    () => lines.reduce((sum, l) => sum + (l.orderType === "buy" ? 0 : l.securityDeposit * l.quantity), 0),
     [lines],
   );
 
@@ -142,6 +162,7 @@ const CustomerCart = () => {
                 line={line}
                 onUpdateQty={(listingId, qty) => updateLine(listingId, { quantity: qty })}
                 onUpdateDays={(listingId, rentalDays) => updateLine(listingId, { rentalDays })}
+                onUpdateOrderType={(listingId, orderType) => updateLine(listingId, { orderType })}
                 onRemove={removeLine}
               />
             ))}

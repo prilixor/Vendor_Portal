@@ -12,12 +12,13 @@ export interface CartLine {
   primaryImageUrl?: string | null;
   quantity: number;
   rentalDays: number;
+  orderType: "rent" | "buy";
 }
 
 interface CartContextValue {
   lines: CartLine[];
   addLine: (line: Omit<CartLine, "quantity" | "rentalDays"> & { quantity?: number; rentalDays?: number }) => void;
-  updateLine: (listingId: string, patch: Partial<Pick<CartLine, "quantity" | "rentalDays">>) => void;
+  updateLine: (listingId: string, patch: Partial<Pick<CartLine, "quantity" | "rentalDays" | "orderType">>) => void;
   removeLine: (listingId: string) => void;
   clear: () => void;
   totalEstimatedRent: number;
@@ -30,7 +31,12 @@ function loadCart(): CartLine[] {
     const raw = localStorage.getItem(CART_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as CartLine[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((l) => ({
+      ...l,
+      orderType: l.orderType === "buy" ? "buy" : "rent",
+      rentalDays: l.orderType === "buy" ? 0 : Math.max(1, l.rentalDays || 1),
+    }));
   } catch {
     return [];
   }
@@ -45,7 +51,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   const addLine = useCallback((line: Omit<CartLine, "quantity" | "rentalDays"> & { quantity?: number; rentalDays?: number }) => {
     const qty = line.quantity ?? 1;
-    const days = line.rentalDays ?? 7;
+    const orderType = line.orderType ?? "rent";
+    const days = orderType === "buy" ? 0 : (line.rentalDays ?? 7);
     setLines((prev) => {
       const ix = prev.findIndex((l) => l.listingId === line.listingId);
       if (ix >= 0) {
@@ -60,6 +67,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           monthlyRent: line.monthlyRent,
           securityDeposit: line.securityDeposit,
           primaryImageUrl: line.primaryImageUrl,
+          orderType,
         };
         return next;
       }
@@ -75,14 +83,24 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           primaryImageUrl: line.primaryImageUrl,
           quantity: qty,
           rentalDays: days,
+          orderType,
         },
       ];
     });
   }, []);
 
-  const updateLine = useCallback((listingId: string, patch: Partial<Pick<CartLine, "quantity" | "rentalDays">>) => {
+  const updateLine = useCallback((listingId: string, patch: Partial<Pick<CartLine, "quantity" | "rentalDays" | "orderType">>) => {
     setLines((prev) =>
-      prev.map((l) => (l.listingId === listingId ? { ...l, ...patch } : l)),
+      prev.map((l) => {
+        if (l.listingId !== listingId) return l;
+        const next = { ...l, ...patch };
+        if (next.orderType === "buy") {
+          next.rentalDays = 0;
+        } else if (next.rentalDays <= 0) {
+          next.rentalDays = 1;
+        }
+        return next;
+      }),
     );
   }, []);
 
@@ -93,7 +111,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const clear = useCallback(() => setLines([]), []);
 
   const totalEstimatedRent = useMemo(
-    () => lines.reduce((sum, l) => sum + l.dailyRent * l.quantity * l.rentalDays, 0),
+    () =>
+      lines.reduce(
+        (sum, l) =>
+          sum +
+          (l.orderType === "buy" ? l.dailyRent * 30 * l.quantity : l.dailyRent * l.quantity * l.rentalDays),
+        0,
+      ),
     [lines],
   );
 

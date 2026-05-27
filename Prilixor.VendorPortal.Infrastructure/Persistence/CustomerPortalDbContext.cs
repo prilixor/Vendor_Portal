@@ -13,6 +13,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerAddress> CustomerAddresses => Set<CustomerAddress>();
     public DbSet<CustomerRentalOrder> CustomerRentalOrders => Set<CustomerRentalOrder>();
+    public DbSet<CustomerOrderVendorOffer> CustomerOrderVendorOffers => Set<CustomerOrderVendorOffer>();
     public DbSet<CustomerNotification> CustomerNotifications => Set<CustomerNotification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -51,6 +52,8 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.City).HasColumnName("city");
             entity.Property(x => x.State).HasColumnName("state");
             entity.Property(x => x.Postal).HasColumnName("postal");
+            entity.Property(x => x.Latitude).HasColumnName("latitude");
+            entity.Property(x => x.Longitude).HasColumnName("longitude");
             entity.Property(x => x.IsDefault).HasColumnName("is_default");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
@@ -73,11 +76,15 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.CustomerAddressId).HasColumnName("customer_address_id");
             entity.Property(x => x.Quantity).HasColumnName("quantity");
             entity.Property(x => x.RentalDays).HasColumnName("rental_days");
+            entity.Property(x => x.OrderType).HasColumnName("order_type");
             entity.Property(x => x.DeliveryOption).HasColumnName("delivery_option");
             entity.Property(x => x.Status).HasColumnName("status");
             entity.Property(x => x.SubtotalAmount).HasColumnName("subtotal_amount");
             entity.Property(x => x.DepositAmount).HasColumnName("deposit_amount");
             entity.Property(x => x.ServiceFeeAmount).HasColumnName("service_fee_amount");
+            entity.Property(x => x.DistanceFeeAmount).HasColumnName("distance_fee_amount");
+            entity.Property(x => x.ExpressFeeAmount).HasColumnName("express_fee_amount");
+            entity.Property(x => x.GstAmount).HasColumnName("gst_amount");
             entity.Property(x => x.TotalAmount).HasColumnName("total_amount");
             entity.Property(x => x.StartDate).HasColumnName("start_date");
             entity.Property(x => x.EndDate).HasColumnName("end_date");
@@ -95,6 +102,30 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.HasOne(x => x.Customer)
                 .WithMany(x => x.Orders)
                 .HasForeignKey(x => x.CustomerId);
+        });
+
+        modelBuilder.Entity<CustomerOrderVendorOffer>(entity =>
+        {
+            entity.ToTable("customer_order_vendor_offers");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CustomerRentalOrderId).HasColumnName("customer_rental_order_id");
+            entity.Property(x => x.VendorId).HasColumnName("vendor_id");
+            entity.Property(x => x.VendorProductListingId).HasColumnName("vendor_product_listing_id");
+            entity.Property(x => x.OfferRank).HasColumnName("offer_rank");
+            entity.Property(x => x.Status).HasColumnName("status");
+            entity.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(x => x.RespondedAt).HasColumnName("responded_at");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.HasOne(x => x.CustomerRentalOrder)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerRentalOrderId);
         });
 
         modelBuilder.Entity<CustomerNotification>(entity =>

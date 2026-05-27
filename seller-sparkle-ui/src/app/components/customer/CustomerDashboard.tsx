@@ -6,7 +6,7 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { useAuth } from "@/app/guards/AuthContext";
-import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
+import { customerApi, type CustomerCatalogListingApi, type CustomerOrderApi } from "@/app/services/customerApi";
 
 function currencyInr(n: number): string {
   return `₹${n.toFixed(0)}`;
@@ -41,6 +41,10 @@ const CustomerDashboard = () => {
     queryKey: ["customer-orders"],
     queryFn: () => customerApi.getOrders(),
   });
+  const { data: catalog = [], isLoading: catalogLoading } = useQuery({
+    queryKey: ["customer-catalog-stock-dashboard"],
+    queryFn: () => customerApi.getCatalogListings(),
+  });
 
   const list = orders ?? [];
   const activeRentals = list.filter((o) => norm(o.status) === "active").length;
@@ -51,6 +55,8 @@ const CustomerDashboard = () => {
   }).length;
 
   const activityRows = buildActivityRows(list);
+  const inStockListings = countListingsByAvailability(catalog, (s) => s === "available" || s === "low_stock");
+  const outOfStockListings = countListingsByAvailability(catalog, (s) => s === "out_of_stock");
 
   return (
     <div className="space-y-6">
@@ -75,7 +81,7 @@ const CustomerDashboard = () => {
         <p className="text-sm text-destructive">{error instanceof Error ? error.message : "Could not load orders."}</p>
       )}
 
-      {isLoading ? (
+      {isLoading || catalogLoading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
@@ -89,7 +95,11 @@ const CustomerDashboard = () => {
             value={upcomingDeliveries}
             hint="Across pending, confirmed, and in transit"
           />
-          <StatCard label="Open support tickets" value={0} hint="Use Support for help — avg. response varies by channel" />
+          <StatCard
+            label="Browse availability"
+            value={inStockListings}
+            hint={`${outOfStockListings} listings currently out of stock`}
+          />
         </div>
       )}
 
@@ -143,6 +153,16 @@ function buildActivityRows(orders: CustomerOrderApi[]): { icon: typeof Package; 
     title: `${o.status}: ${o.orderNumber} · ${o.listingTitle}`,
     at: "Recently",
   }));
+}
+
+function countListingsByAvailability(
+  rows: CustomerCatalogListingApi[],
+  predicate: (status: string) => boolean,
+): number {
+  return rows.reduce((count, row) => {
+    const status = row.availabilityStatus.trim().toLowerCase();
+    return count + (predicate(status) ? 1 : 0);
+  }, 0);
 }
 
 export default CustomerDashboard;

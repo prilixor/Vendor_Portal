@@ -55,6 +55,10 @@ public interface IVendorOnboardingRepository
     Task UpdateProductAsync(Product product, CancellationToken cancellationToken);
     Task DeleteProductAsync(Guid productId, CancellationToken cancellationToken);
     Task<List<Product>> GetProductsAsync(Guid? categoryId, CancellationToken cancellationToken);
+    Task AddProductImageAsync(ProductImage image, CancellationToken cancellationToken);
+    Task<ProductImage?> GetProductImageByIdAsync(Guid productId, Guid imageId, CancellationToken cancellationToken);
+    Task UpdateProductImageAsync(ProductImage image, CancellationToken cancellationToken);
+    Task<List<ProductImage>> GetProductImagesAsync(Guid productId, CancellationToken cancellationToken);
 
     Task<VendorProductListing?> GetVendorProductListingByIdAsync(Guid vendorId, Guid listingId, CancellationToken cancellationToken);
     Task<VendorProductListing?> GetVendorProductListingByVendorProductAsync(Guid vendorId, Guid productId, CancellationToken cancellationToken);

@@ -35,9 +35,6 @@ public class UpsertVendorProductListingRequest : VendorIdRequest
 {
     public string ProductId { get; set; } = string.Empty;
     public string ListingTitle { get; set; } = string.Empty;
-    public decimal DailyRent { get; set; }
-    public decimal MonthlyRent { get; set; }
-    public decimal SecurityDeposit { get; set; }
     public int AvailableQuantity { get; set; }
     public string ListingStatus { get; set; } = "draft";
 }
@@ -140,6 +137,13 @@ public sealed class CreateProductEndpoint(IMediator mediator)
             req.ModelName,
             req.ShortDescription,
             req.LongDescription,
+            0m,
+            0m,
+            0m,
+            null,
+            18m,
+            true,
+            true,
             req.IsActive), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
@@ -178,9 +182,6 @@ public sealed class CreateVendorProductListingEndpoint(IMediator mediator)
             null,
             req.ProductId,
             req.ListingTitle,
-            req.DailyRent,
-            req.MonthlyRent,
-            req.SecurityDeposit,
             req.AvailableQuantity,
             req.ListingStatus), ct);
 
@@ -204,9 +205,6 @@ public sealed class UpdateVendorProductListingEndpoint(IMediator mediator)
             req.ListingId,
             req.ProductId,
             req.ListingTitle,
-            req.DailyRent,
-            req.MonthlyRent,
-            req.SecurityDeposit,
             req.AvailableQuantity,
             req.ListingStatus), ct);
 
