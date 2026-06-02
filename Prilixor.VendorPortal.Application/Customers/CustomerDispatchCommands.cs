@@ -23,6 +23,298 @@ public sealed record VendorDispatchOfferDto(
     DateOnly? StartDate,
     DateOnly? EndDate);
 
+public sealed record VendorOrderDto(
+    Guid OrderId,
+    string OrderNumber,
+    string Status,
+    string OrderType,
+    int Quantity,
+    int RentalDays,
+    decimal TotalAmount,
+    DateOnly? StartDate,
+    DateOnly? EndDate,
+    Guid ListingId,
+    string ListingTitle,
+    string? ListingPrimaryImageUrl,
+    string CustomerName,
+    string? CustomerCity,
+    string? CustomerState);
+
+public sealed record GetVendorOrdersQuery(string VendorId, string? Status) : IQuery<List<VendorOrderDto>>;
+
+internal sealed class GetVendorOrdersQueryHandler(ICustomerRepository customers)
+    : IQueryHandler<GetVendorOrdersQuery, List<VendorOrderDto>>
+{
+    public async Task<Result<List<VendorOrderDto>>> Handle(GetVendorOrdersQuery request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.VendorId, out var vendorId))
+            return Result.Failure<List<VendorOrderDto>>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
+
+        var rows = await customers.GetVendorOrdersAsync(vendorId, request.Status, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        var changed = false;
+        foreach (var row in rows)
+        {
+            changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, row.Order.Id, now, cancellationToken);
+        }
+
+        if (changed)
+        {
+            await customers.SaveChangesAsync(cancellationToken);
+            rows = await customers.GetVendorOrdersAsync(vendorId, request.Status, cancellationToken);
+        }
+
+        var result = rows
+            .Select(VendorOrderMapper.ToVendorOrderDto)
+            .OrderByDescending(x => x.OrderNumber)
+            .ToList();
+        return Result.Success(result);
+    }
+}
+
+public sealed record GetVendorOrderByIdQuery(string VendorId, Guid OrderId) : IQuery<VendorOrderDto>;
+
+internal sealed class GetVendorOrderByIdQueryHandler(ICustomerRepository customers)
+    : IQueryHandler<GetVendorOrderByIdQuery, VendorOrderDto>
+{
+    public async Task<Result<VendorOrderDto>> Handle(GetVendorOrderByIdQuery request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.VendorId, out var vendorId))
+            return Result.Failure<VendorOrderDto>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
+
+        var changed = await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, request.OrderId, DateTimeOffset.UtcNow, cancellationToken);
+        if (changed)
+            await customers.SaveChangesAsync(cancellationToken);
+
+        var row = await customers.GetVendorOrderAsync(vendorId, request.OrderId, cancellationToken);
+        if (row is null)
+            return Result.Failure<VendorOrderDto>(new Error("vendors.order_not_found", "Order not found for vendor.", ErrorCategory.NotFound));
+
+        return Result.Success(VendorOrderMapper.ToVendorOrderDto(row));
+    }
+}
+
+public sealed record UpdateVendorOrderStatusCommand(string VendorId, Guid OrderId, string Status) : ICommand<CustomerOrderDto>;
+
+internal sealed class UpdateVendorOrderStatusCommandHandler(
+    ICustomerRepository customers,
+    IVendorOnboardingRepository vendors)
+    : ICommandHandler<UpdateVendorOrderStatusCommand, CustomerOrderDto>
+{
+    public async Task<Result<CustomerOrderDto>> Handle(UpdateVendorOrderStatusCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.VendorId, out var vendorId))
+            return Result.Failure<CustomerOrderDto>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
+
+        var order = await customers.GetCustomerOrderEntityByIdAsync(request.OrderId, cancellationToken);
+        if (order is null || order.IsDeleted)
+            return Result.Failure<CustomerOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
+
+        var listing = await vendors.GetVendorProductListingByIdAsync(vendorId, order.VendorProductListingId, cancellationToken);
+        if (listing is null)
+            return Result.Failure<CustomerOrderDto>(new Error("vendors.order_not_owned", "This order is not assigned to the vendor.", ErrorCategory.Validation));
+
+        var current = order.Status.Trim().ToLowerInvariant();
+        var target = request.Status.Trim().ToLowerInvariant();
+        if (current == target)
+            return await VendorRespondDispatchOfferCommandHandler.BuildOrderDto(customers, order.Id, cancellationToken);
+
+        if (!IsValidVendorStatusTransition(order, current, target))
+            return Result.Failure<CustomerOrderDto>(new Error("vendors.order.invalid_transition", $"Cannot move order from {current} to {target}.", ErrorCategory.Validation));
+
+        var inventory = await vendors.GetVendorInventoryByListingIdAsync(listing.Id, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+
+        if (target == "active")
+        {
+            if (inventory is not null)
+            {
+                if (order.OrderType == "buy")
+                {
+                    // For a buyout order, the item is permanently sold and removed.
+                    // We must reduce the total quantity.
+                    inventory.TotalQuantity = Math.Max(0, inventory.TotalQuantity - order.Quantity);
+                    
+                    // We also need to reduce the sum of the individual buckets (Available, Reserved, etc.)
+                    // by the exact amount the order quantity represents to satisfy chk_vendor_inventory_bucket_sum.
+                    int quantityToReduce = order.Quantity;
+                    
+                    // 1. Reduce from ReservedQuantity first (since it was reserved)
+                    int fromReserved = Math.Min(inventory.ReservedQuantity, quantityToReduce);
+                    inventory.ReservedQuantity -= fromReserved;
+                    quantityToReduce -= fromReserved;
+                    
+                    // 2. Reduce from AvailableQuantity if needed
+                    if (quantityToReduce > 0)
+                    {
+                        int fromAvailable = Math.Min(inventory.AvailableQuantity, quantityToReduce);
+                        inventory.AvailableQuantity -= fromAvailable;
+                        quantityToReduce -= fromAvailable;
+                    }
+                    
+                    // 3. Reduce from RentedQuantity if needed
+                    if (quantityToReduce > 0)
+                    {
+                        int fromRented = Math.Min(inventory.RentedQuantity, quantityToReduce);
+                        inventory.RentedQuantity -= fromRented;
+                        quantityToReduce -= fromRented;
+                    }
+                    
+                    // 4. Reduce from BlockedQuantity if needed
+                    if (quantityToReduce > 0)
+                    {
+                        int fromBlocked = Math.Min(inventory.BlockedQuantity, quantityToReduce);
+                        inventory.BlockedQuantity -= fromBlocked;
+                        quantityToReduce -= fromBlocked;
+                    }
+                }
+                else
+                {
+                    inventory.ReservedQuantity = Math.Max(0, inventory.ReservedQuantity - order.Quantity);
+                    inventory.RentedQuantity += order.Quantity;
+                }
+
+                await vendors.UpsertVendorInventoryAsync(inventory, cancellationToken);
+                await vendors.AddVendorInventoryMovementAsync(
+                    new VendorInventoryMovement
+                    {
+                        VendorInventoryId = inventory.Id,
+                        // Keep movement types aligned with DB check constraint.
+                        MovementType = order.OrderType == "buy" ? "stock_removed" : "rented",
+                        Quantity = order.Quantity,
+                        ReferenceType = "customer_rental_order",
+                        ReferenceId = order.Id,
+                        Notes = $"Order {order.OrderNumber} moved to active",
+                        EventAt = now,
+                    },
+                    cancellationToken);
+            }
+        }
+        else if (target == "returned")
+        {
+            if (inventory is not null)
+            {
+                inventory.RentedQuantity = Math.Max(0, inventory.RentedQuantity - order.Quantity);
+                inventory.AvailableQuantity += order.Quantity;
+                await vendors.UpsertVendorInventoryAsync(inventory, cancellationToken);
+                await vendors.AddVendorInventoryMovementAsync(
+                    new VendorInventoryMovement
+                    {
+                        VendorInventoryId = inventory.Id,
+                        MovementType = "returned",
+                        Quantity = order.Quantity,
+                        ReferenceType = "customer_rental_order",
+                        ReferenceId = order.Id,
+                        Notes = $"Order {order.OrderNumber} marked returned",
+                        EventAt = now,
+                    },
+                    cancellationToken);
+            }
+            else
+            {
+                listing.AvailableQuantity += order.Quantity;
+                await vendors.UpdateVendorProductListingAsync(listing, cancellationToken);
+            }
+        }
+
+        order.Status = target;
+        await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+        await customers.AddCustomerNotificationAsync(
+            new CustomerNotification
+            {
+                Id = Guid.NewGuid(),
+                CustomerId = order.CustomerId,
+                RelatedOrderId = order.Id,
+                NotificationType = "order_status_updated",
+                Title = $"Order {order.OrderNumber} updated",
+                Body = target switch
+                {
+                    "in_transit" => "Your order is now out for delivery.",
+                    "active" => order.OrderType == "buy" ? "Your purchase is delivered." : "Your rental order has been delivered and is now active.",
+                    "returned" => "Return completed for your rental order.",
+                    _ => "Order status has been updated."
+                },
+            },
+            cancellationToken);
+
+        await customers.SaveChangesAsync(cancellationToken);
+        await vendors.SaveChangesAsync(cancellationToken);
+        return await VendorRespondDispatchOfferCommandHandler.BuildOrderDto(customers, order.Id, cancellationToken);
+    }
+
+    private static bool IsValidVendorStatusTransition(CustomerRentalOrder order, string current, string target) =>
+        (current, target) switch
+        {
+            ("confirmed", "in_transit") => true,
+            ("in_transit", "active") => true,
+            ("active", "returned") => !string.Equals(order.OrderType, "buy", StringComparison.OrdinalIgnoreCase),
+            _ => false,
+        };
+}
+
+internal static class VendorOrderMapper
+{
+    public static VendorOrderDto ToVendorOrderDto(CustomerRentalOrderWithListing row)
+    {
+        var o = row.Order;
+        return new VendorOrderDto(
+            o.Id,
+            o.OrderNumber,
+            CustomerOrderStatusMapper.ToDisplay(o.Status),
+            o.OrderType,
+            o.Quantity,
+            o.RentalDays,
+            o.TotalAmount,
+            o.StartDate,
+            o.EndDate,
+            o.VendorProductListingId,
+            row.Listing?.ListingTitle ?? "Listing unavailable",
+            row.ListingPrimaryImageUrl,
+            row.Order.Customer?.FullName ?? "Customer",
+            row.Order.CustomerAddress?.City,
+            row.Order.CustomerAddress?.State);
+    }
+}
+
+internal static class DispatchStateReconciler
+{
+    public static async Task<bool> ReconcileAwaitingOrderAsync(
+        ICustomerRepository customers,
+        Guid orderId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var order = await customers.GetCustomerOrderEntityByIdAsync(orderId, cancellationToken);
+        if (order is null || order.IsDeleted)
+            return false;
+
+        if (!string.Equals(order.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var offers = await customers.GetCustomerOrderVendorOffersAsync(order.Id, cancellationToken);
+        var changed = false;
+
+        foreach (var expired in offers.Where(x => x.Status == "pending" && x.ExpiresAt <= now))
+        {
+            expired.Status = "expired";
+            expired.RespondedAt = now;
+            await customers.UpdateCustomerOrderVendorOfferAsync(expired, cancellationToken);
+            changed = true;
+        }
+
+        var hasActivePending = offers.Any(x => x.Status == "pending" && x.ExpiresAt > now);
+        var hasAccepted = offers.Any(x => x.Status == "accepted");
+        if (!hasActivePending && !hasAccepted)
+        {
+            order.Status = "dispatch_failed";
+            await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+            changed = true;
+        }
+
+        return changed;
+    }
+}
+
 public sealed record GetVendorPendingDispatchOffersQuery(string VendorId) : IQuery<List<VendorDispatchOfferDto>>;
 
 internal sealed class GetVendorPendingDispatchOffersQueryHandler(
@@ -38,6 +330,7 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
         var offers = await customers.GetPendingVendorOffersAsync(vendorId, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var result = new List<VendorDispatchOfferDto>();
+        var changed = false;
 
         foreach (var offer in offers)
         {
@@ -46,6 +339,7 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
                 offer.Status = "expired";
                 offer.RespondedAt = now;
                 await customers.UpdateCustomerOrderVendorOfferAsync(offer, cancellationToken);
+                changed = true;
                 continue;
             }
 
@@ -70,9 +364,12 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
                 order.TotalAmount,
                 order.StartDate,
                 order.EndDate));
+
+            changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, order.Id, now, cancellationToken);
         }
 
-        await customers.SaveChangesAsync(cancellationToken);
+        if (changed)
+            await customers.SaveChangesAsync(cancellationToken);
         return Result.Success(result.OrderBy(x => x.ExpiresAt).ToList());
     }
 }
@@ -305,7 +602,8 @@ internal sealed class VendorCancelAssignedOrderCommandHandler(
                 new VendorInventoryMovement
                 {
                     VendorInventoryId = inventory.Id,
-                    MovementType = "released",
+                    // DB allows reservation_released (not released).
+                    MovementType = "reservation_released",
                     Quantity = order.Quantity,
                     ReferenceType = "customer_rental_order",
                     ReferenceId = order.Id,

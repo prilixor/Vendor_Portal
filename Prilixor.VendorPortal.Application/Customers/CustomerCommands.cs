@@ -388,6 +388,7 @@ internal static class CustomerOrderPricingRules
             Math.Sin(dLat / 2d) * Math.Sin(dLat / 2d) +
             Math.Cos(ToRadians(lat1)) * Math.Cos(ToRadians(lat2)) *
             Math.Sin(dLon / 2d) * Math.Sin(dLon / 2d);
+        a = Math.Max(0d, Math.Min(1d, a));
         var c = 2d * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1d - a));
         return decimal.Round((decimal)(earthRadiusKm * c), 2, MidpointRounding.AwayFromZero);
     }
@@ -662,6 +663,8 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
         var placed = new List<CustomerOrderDto>();
         var failed = new List<FailedCustomerOrderLineDto>();
         var vendorAreasByVendorId = new Dictionary<Guid, List<VendorServiceArea>>();
+        var baseOrderNumber = await GenerateUniqueOrderNumber(customers, cancellationToken);
+        var lineIndex = 0;
 
         foreach (var line in request.Lines)
         {
@@ -804,7 +807,8 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
             var gstAmount = CustomerOrderPricingRules.CalculateGst(subtotal + fees, agg.GstPercent, options);
             var total = subtotal + deposit + fees + gstAmount;
 
-            var orderNumber = await GenerateUniqueOrderNumber(customers, cancellationToken);
+            var orderNumber = $"{baseOrderNumber}-{lineIndex + 1:D2}";
+            lineIndex++;
             var start = DateOnly.FromDateTime(DateTime.UtcNow.Date);
             var end = orderType == "buy" ? start : start.AddDays(line.RentalDays);
 
@@ -984,6 +988,19 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
     public async Task<Result<List<CustomerOrderDto>>> Handle(GetCustomerOrdersQuery request, CancellationToken cancellationToken)
     {
         var rows = await customers.GetCustomerOrdersAsync(request.CustomerId, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        var changed = false;
+        foreach (var row in rows)
+        {
+            changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, row.Order.Id, now, cancellationToken);
+        }
+
+        if (changed)
+        {
+            await customers.SaveChangesAsync(cancellationToken);
+            rows = await customers.GetCustomerOrdersAsync(request.CustomerId, cancellationToken);
+        }
+
         var list = new List<CustomerOrderDto>();
         foreach (var row in rows)
         {
@@ -1023,6 +1040,10 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
 {
     public async Task<Result<CustomerOrderDto>> Handle(GetCustomerOrderDetailQuery request, CancellationToken cancellationToken)
     {
+        var changed = await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, request.OrderId, DateTimeOffset.UtcNow, cancellationToken);
+        if (changed)
+            await customers.SaveChangesAsync(cancellationToken);
+
         var row = await customers.GetCustomerOrderAsync(request.CustomerId, request.OrderId, cancellationToken);
         if (row is null)
             return Result.Failure<CustomerOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));

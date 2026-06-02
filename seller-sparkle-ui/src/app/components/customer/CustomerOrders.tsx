@@ -19,6 +19,7 @@ const STATUS_FILTERS = [
   "In transit",
   "Active",
   "Returned",
+  "Dispatch failed",
   "Cancelled",
 ] as const;
 
@@ -41,7 +42,7 @@ function formatDateRange(start?: string | null, end?: string | null): string {
 }
 
 function orderStatusBadgeClass(status: string): string {
-  const s = status.toLowerCase();
+  const s = status.toLowerCase().replace(/_/g, " ");
   if (s === "pending") {
     return "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200";
   }
@@ -60,7 +61,34 @@ function orderStatusBadgeClass(status: string): string {
   if (s === "cancelled" || s === "canceled") {
     return "bg-muted text-muted-foreground";
   }
+  if (s.includes("dispatch failed")) {
+    return "bg-destructive/15 text-destructive dark:bg-destructive/20 dark:text-destructive";
+  }
   return "bg-muted text-foreground";
+}
+
+function matchesStatusFilter(status: string, filter: StatusFilter): boolean {
+  if (filter === "All") return true;
+
+  const s = status.trim().toLowerCase().replace(/_/g, " ");
+  if (filter === "Pending") {
+    return s === "pending" || s === "awaiting vendor acceptance";
+  }
+  if (filter === "In transit") {
+    return s.includes("transit");
+  }
+  if (filter === "Cancelled") {
+    return s === "cancelled" || s === "canceled";
+  }
+  if (filter === "Dispatch failed") {
+    return s === "dispatch failed";
+  }
+  return s === filter.toLowerCase();
+}
+
+function isCustomerOrderCancellable(status: string): boolean {
+  const s = status.trim().toLowerCase();
+  return s === "pending" || s === "awaiting vendor acceptance";
 }
 
 const CustomerOrders = () => {
@@ -105,11 +133,28 @@ const CustomerOrders = () => {
           o.id.toLowerCase().includes(q),
       );
     }
-    if (appliedFilter !== "All") {
-      list = list.filter((o) => o.status.toLowerCase() === appliedFilter.toLowerCase());
-    }
+    list = list.filter((o) => matchesStatusFilter(o.status, appliedFilter));
     return list;
   }, [data, debouncedSearch, appliedFilter]);
+
+  const statusCounts = useMemo(() => {
+    let searchable = data ?? [];
+    const q = debouncedSearch.toLowerCase();
+    if (q) {
+      searchable = searchable.filter(
+        (o) =>
+          o.orderNumber.toLowerCase().includes(q) ||
+          o.listingTitle.toLowerCase().includes(q) ||
+          o.vendorName.toLowerCase().includes(q) ||
+          o.id.toLowerCase().includes(q),
+      );
+    }
+
+    return STATUS_FILTERS.reduce<Record<StatusFilter, number>>((acc, filter) => {
+      acc[filter] = filter === "All" ? searchable.length : searchable.filter((o) => matchesStatusFilter(o.status, filter)).length;
+      return acc;
+    }, {} as Record<StatusFilter, number>);
+  }, [data, debouncedSearch]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -156,12 +201,17 @@ const CustomerOrders = () => {
                     : "border-border bg-background hover:bg-accent",
                 )}
               >
-                {label}
+                {label} ({statusCounts[label] ?? 0})
               </button>
             );
           })}
         </div>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Status note: <span className="font-medium">Cancelled</span> means customer cancelled the request.
+        {" "}
+        <span className="font-medium">Dispatch failed</span> means no replacement vendor was available.
+      </p>
 
       {isLoading ? (
         <div className="space-y-3 rounded-xl border border-border/80 bg-card p-4">
@@ -172,64 +222,109 @@ const CustomerOrders = () => {
       ) : (
         <>
           {filtered.length > 0 ? (
-            <div className="overflow-hidden rounded-xl border border-border/80 bg-card">
-              <Table>
-              <TableHeader>
-                <TableRow className="border-b hover:bg-transparent">
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Listing</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dates</TableHead>
-                  <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Total
-                  </TableHead>
-                  <TableHead className="sr-only">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pageSlice.map((o: CustomerOrderApi) => (
-                  <TableRow key={o.id} className="border-b border-border/60">
-                    <TableCell className="font-medium">
-                      <Link
-                        to={`/customer/orders/${encodeURIComponent(o.id)}`}
-                        className="text-foreground underline-offset-4 hover:underline"
-                      >
-                        {o.orderNumber}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="max-w-[220px] truncate">{o.listingTitle}</TableCell>
-                    <TableCell>
-                      <span
-                        className={cn(
-                          "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium",
-                          orderStatusBadgeClass(o.status),
-                        )}
-                      >
-                        {o.status}
-                      </span>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums text-xs sm:text-sm">
-                      {formatDateRange(o.startDate, o.endDate)}
-                    </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">₹{o.totalAmount.toFixed(0)}</TableCell>
-                    <TableCell className="text-right">
-                      {o.status.toLowerCase() === "pending" ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          disabled={cancelMut.isPending}
-                          onClick={() => cancelMut.mutate(o.id)}
-                        >
-                          Cancel
-                        </Button>
-                      ) : null}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+            <div className="space-y-6">
+              {(() => {
+                // Group the pageSlice items by their baseOrderNumber prefix
+                const groups: Array<{
+                  baseOrderNumber: string;
+                  items: CustomerOrderApi[];
+                  date: string;
+                  totalAmount: number;
+                  isCancellable: boolean;
+                }> = [];
+
+                pageSlice.forEach((o: CustomerOrderApi) => {
+                  const baseNum = o.orderNumber.split('-').slice(0, 3).join('-');
+                  let g = groups.find((x) => x.baseOrderNumber === baseNum);
+                  if (!g) {
+                    g = {
+                      baseOrderNumber: baseNum,
+                      items: [],
+                      date: o.startDate || "",
+                      totalAmount: 0,
+                      isCancellable: false,
+                    };
+                    groups.push(g);
+                  }
+                  g.items.push(o);
+                  g.totalAmount += o.totalAmount;
+                  g.isCancellable = g.isCancellable || isCustomerOrderCancellable(o.status);
+                });
+
+                return groups.map((group) => (
+                  <div key={group.baseOrderNumber} className="overflow-hidden rounded-xl border border-border/80 bg-card p-6 shadow-sm transition-all hover:border-border/100">
+                    {/* Group Header */}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-4 mb-4">
+                      <div>
+                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Order Group</div>
+                        <div className="text-base font-bold text-foreground mt-0.5">{group.baseOrderNumber}</div>
+                      </div>
+                      <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Placed On:</span>{" "}
+                          <span className="font-semibold text-foreground">{formatOrderDate(group.date)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Total Paid:</span>{" "}
+                          <span className="font-semibold text-foreground">₹{group.totalAmount.toFixed(0)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Group Items */}
+                    <div className="space-y-4">
+                      {group.items.map((o) => (
+                        <div key={o.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg bg-accent/30 border border-border/40 hover:bg-accent/50 transition-colors">
+                          <div className="flex items-center gap-4">
+                            {o.primaryImageUrl ? (
+                              <img src={o.primaryImageUrl} alt={o.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border/60 bg-muted" />
+                            ) : (
+                              <div className="h-12 w-12 rounded-lg bg-muted border border-border/60 flex items-center justify-center text-xs text-muted-foreground">No Img</div>
+                            )}
+                            <div>
+                              <Link
+                                to={`/customer/orders/${encodeURIComponent(o.id)}`}
+                                className="text-sm font-semibold text-foreground hover:underline"
+                              >
+                                {o.listingTitle}
+                              </Link>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {o.vendorName} · {formatDateRange(o.startDate, o.endDate)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between sm:justify-end gap-6 mt-3 sm:mt-0">
+                            <span
+                              className={cn(
+                                "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium",
+                                orderStatusBadgeClass(o.status),
+                              )}
+                            >
+                              {o.status}
+                            </span>
+                            <span className="font-semibold tabular-nums text-sm text-foreground sm:w-20 sm:text-right">₹{o.totalAmount.toFixed(0)}</span>
+                            <div className="flex items-center gap-2">
+                              {isCustomerOrderCancellable(o.status) ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  disabled={cancelMut.isPending}
+                                  onClick={() => cancelMut.mutate(o.id)}
+                                >
+                                  Cancel
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
           ) : null}
 
           {filtered.length === 0 && (

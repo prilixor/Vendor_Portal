@@ -219,14 +219,60 @@ public sealed class CustomerRepository(
             .Take(500)
             .ToList();
 
+        CustomerAddress? sortingAddress = null;
+        if (customerId.HasValue)
+        {
+            sortingAddress = await customerDb.CustomerAddresses
+                .AsNoTracking()
+                .Where(a =>
+                    a.CustomerId == customerId.Value &&
+                    !a.IsDeleted &&
+                    a.Latitude.HasValue &&
+                    a.Longitude.HasValue)
+                .OrderByDescending(a => a.IsDefault)
+                .ThenByDescending(a => a.CreatedOnUtc)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
         var productAvailability = filteredRows
             .GroupBy(r => r.ProductId)
             .ToDictionary(
                 g => g.Key,
                 g => g.Sum(x => Math.Max(0, x.Inventory?.AvailableQuantity ?? x.AvailableQuantity)));
 
+        var representativeRows = filteredRows
+            .GroupBy(r => r.ProductId)
+            .Select(g =>
+            {
+                IOrderedEnumerable<VendorProductListing> ordered;
+                if (sortingAddress is not null)
+                {
+                    ordered = g
+                        .OrderBy(r =>
+                        {
+                            if (r.Vendor?.Profile?.Latitude is not decimal vendorLat || r.Vendor.Profile?.Longitude is not decimal vendorLng)
+                                return decimal.MaxValue;
+                            return CalculateDistanceKm(
+                                sortingAddress.Latitude!.Value,
+                                sortingAddress.Longitude!.Value,
+                                vendorLat,
+                                vendorLng);
+                        })
+                        .ThenByDescending(r => Math.Max(0, r.Inventory?.AvailableQuantity ?? r.AvailableQuantity))
+                        .ThenByDescending(r => r.CreatedOnUtc);
+                }
+                else
+                {
+                    ordered = g
+                        .OrderByDescending(r => Math.Max(0, r.Inventory?.AvailableQuantity ?? r.AvailableQuantity))
+                        .ThenByDescending(r => r.CreatedOnUtc);
+                }
 
-        var listingDtos = filteredRows.Select(l =>
+                return ordered.First();
+            })
+            .ToList();
+
+        var listingDtos = representativeRows.Select(l =>
 
         {
 
@@ -309,21 +355,6 @@ public sealed class CustomerRepository(
                 ResolvePrimaryProductImageUrl(p.ProductImages)))
             .ToList();
 
-        CustomerAddress? sortingAddress = null;
-        if (customerId.HasValue)
-        {
-            sortingAddress = await customerDb.CustomerAddresses
-                .AsNoTracking()
-                .Where(a =>
-                    a.CustomerId == customerId.Value &&
-                    !a.IsDeleted &&
-                    a.Latitude.HasValue &&
-                    a.Longitude.HasValue)
-                .OrderByDescending(a => a.IsDefault)
-                .ThenByDescending(a => a.CreatedOnUtc)
-                .FirstOrDefaultAsync(cancellationToken);
-        }
-
         var listingDistanceMap = new Dictionary<Guid, decimal>();
         if (sortingAddress is not null)
         {
@@ -374,6 +405,7 @@ public sealed class CustomerRepository(
             Math.Sin(dLat / 2d) * Math.Sin(dLat / 2d) +
             Math.Cos(ToRadians(lat1)) * Math.Cos(ToRadians(lat2)) *
             Math.Sin(dLon / 2d) * Math.Sin(dLon / 2d);
+        a = Math.Max(0d, Math.Min(1d, a));
         var c = 2d * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1d - a));
         return decimal.Round((decimal)(earthRadiusKm * c), 2, MidpointRounding.AwayFromZero);
     }
@@ -529,6 +561,115 @@ public sealed class CustomerRepository(
 
 
 
+    public async Task<List<CustomerRentalOrderWithListing>> GetVendorOrdersAsync(Guid vendorId, string? status, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var query = customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Include(o => o.Customer)
+            .Include(o => o.CustomerAddress)
+            .Where(o => !o.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var normalized = status.Trim().ToLowerInvariant();
+            query = query.Where(o => o.Status.ToLower() == normalized);
+        }
+
+        var orders = await query
+            .OrderByDescending(o => o.CreatedOnUtc)
+            .Take(1000)
+            .ToListAsync(cancellationToken);
+
+        var pendingOffers = await customerDb.CustomerOrderVendorOffers
+            .AsNoTracking()
+            .Where(x =>
+                x.VendorId == vendorId &&
+                x.Status == "pending" &&
+                !x.IsDeleted &&
+                x.ExpiresAt > now)
+            .OrderBy(x => x.OfferRank)
+            .ToListAsync(cancellationToken);
+
+        var pendingByOrder = pendingOffers
+            .GroupBy(x => x.CustomerRentalOrderId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var listingIds = orders
+            .Select(o => o.VendorProductListingId)
+            .Concat(pendingOffers.Select(x => x.VendorProductListingId))
+            .Distinct()
+            .ToList();
+
+        var map = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
+        return orders
+            .Select(o =>
+            {
+                var isAwaiting = string.Equals(o.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase);
+                if (isAwaiting)
+                {
+                    if (!pendingByOrder.TryGetValue(o.Id, out var pendingOffer))
+                        return null;
+
+                    var pendingListing = map.GetValueOrDefault(pendingOffer.VendorProductListingId) ?? map.GetValueOrDefault(o.VendorProductListingId);
+                    var pendingImg = ResolvePrimaryListingImageUrl(pendingListing?.Images ?? []);
+                    return new CustomerRentalOrderWithListing(o, pendingListing, pendingImg);
+                }
+
+                var listing = map.GetValueOrDefault(o.VendorProductListingId);
+                if (listing is null || listing.VendorId != vendorId)
+                    return null;
+
+                var img = ResolvePrimaryListingImageUrl(listing.Images);
+                return new CustomerRentalOrderWithListing(o, listing, img);
+            })
+            .Where(x => x is not null)
+            .Select(x => x!)
+            .ToList();
+    }
+
+    public async Task<CustomerRentalOrderWithListing?> GetVendorOrderAsync(Guid vendorId, Guid orderId, CancellationToken cancellationToken)
+    {
+        var order = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Include(o => o.Customer)
+            .Include(o => o.CustomerAddress)
+            .FirstOrDefaultAsync(o => o.Id == orderId && !o.IsDeleted, cancellationToken);
+
+        if (order is null)
+            return null;
+
+        VendorProductListing? listing;
+        if (string.Equals(order.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase))
+        {
+            var pendingOffer = await customerDb.CustomerOrderVendorOffers
+                .AsNoTracking()
+                .Where(x =>
+                    x.CustomerRentalOrderId == order.Id &&
+                    x.VendorId == vendorId &&
+                    x.Status == "pending" &&
+                    !x.IsDeleted &&
+                    x.ExpiresAt > DateTimeOffset.UtcNow)
+                .OrderBy(x => x.OfferRank)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (pendingOffer is null)
+                return null;
+
+            listing = await LoadListingWithVendorAsync(pendingOffer.VendorProductListingId, cancellationToken)
+                ?? await LoadListingWithVendorAsync(order.VendorProductListingId, cancellationToken);
+        }
+        else
+        {
+            listing = await LoadListingWithVendorAsync(order.VendorProductListingId, cancellationToken);
+            if (listing is null || listing.VendorId != vendorId)
+                return null;
+        }
+
+        var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
+        return new CustomerRentalOrderWithListing(order, listing, img);
+    }
+
     public Task<bool> OrderNumberExistsAsync(string orderNumber, CancellationToken cancellationToken) =>
 
         customerDb.CustomerRentalOrders.AnyAsync(o => o.OrderNumber == orderNumber, cancellationToken);
@@ -548,6 +689,26 @@ public sealed class CustomerRepository(
         var listing = await LoadListingWithVendorAsync(order.VendorProductListingId, cancellationToken);
         var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
         return new CustomerRentalOrderWithListing(order, listing, img);
+    }
+
+    public async Task<List<CustomerRentalOrderWithListing>> GetAllCustomerOrdersForAdminAsync(CancellationToken cancellationToken)
+    {
+        var orders = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Include(o => o.Customer)
+            .Where(o => !o.IsDeleted)
+            .OrderByDescending(o => o.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+
+        var listingIds = orders.ConvertAll(o => o.VendorProductListingId);
+        var map = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
+
+        return orders.ConvertAll(o =>
+        {
+            var listing = map.GetValueOrDefault(o.VendorProductListingId);
+            var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
+            return new CustomerRentalOrderWithListing(o, listing, img);
+        });
     }
 
 

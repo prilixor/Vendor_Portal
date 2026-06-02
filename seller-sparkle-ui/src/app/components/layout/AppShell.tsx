@@ -112,6 +112,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
       )}
 
       <Sidebar
+        variant={variant}
         sections={sections}
         brandHeading={variant === "customer" ? "Customer Portal" : undefined}
         brandLabel={brandLabel}

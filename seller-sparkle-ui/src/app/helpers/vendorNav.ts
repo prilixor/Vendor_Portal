@@ -13,6 +13,9 @@ import {
   Package,
 
   Boxes,
+  ClipboardList,
+  ShoppingBag,
+  TimerReset,
 
   Bell,
 
@@ -63,6 +66,20 @@ export const vendorNav: NavSection[] = [
       { label: "Products", to: "/vendor/products", icon: Package },
 
       { label: "Inventory", to: "/vendor/inventory", icon: Boxes },
+
+    ],
+
+  },
+
+  {
+
+    title: "Orders",
+
+    items: [
+
+      { label: "Order Requests", to: "/vendor/order-requests", icon: ClipboardList },
+      { label: "Orders", to: "/vendor/orders", icon: ShoppingBag },
+      { label: "Expirations", to: "/vendor/expirations", icon: TimerReset },
 
     ],
 

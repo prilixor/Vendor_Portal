@@ -16,6 +16,17 @@ public sealed class VendorOrderExpirationsRequest : VendorIdRequest
     public int WithinDays { get; set; } = 7;
 }
 
+public sealed class VendorOrdersRequest : VendorIdRequest
+{
+    public string? Status { get; set; }
+}
+
+public sealed class VendorUpdateOrderStatusRequest : VendorIdRequest
+{
+    public Guid OrderId { get; set; }
+    public string Status { get; set; } = string.Empty;
+}
+
 public sealed class GetVendorPendingDispatchOffersEndpoint(IMediator mediator)
     : Endpoint<VendorIdRequest, Results<Ok<List<VendorDispatchOfferDto>>, ProblemHttpResult>>
 {
@@ -28,6 +39,54 @@ public sealed class GetVendorPendingDispatchOffersEndpoint(IMediator mediator)
     public override async Task<Results<Ok<List<VendorDispatchOfferDto>>, ProblemHttpResult>> ExecuteAsync(VendorIdRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new GetVendorPendingDispatchOffersQuery(req.VendorId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetVendorOrdersEndpoint(IMediator mediator)
+    : Endpoint<VendorOrdersRequest, Results<Ok<List<VendorOrderDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/orders");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<List<VendorOrderDto>>, ProblemHttpResult>> ExecuteAsync(VendorOrdersRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetVendorOrdersQuery(req.VendorId, req.Status), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetVendorOrderByIdEndpoint(IMediator mediator)
+    : Endpoint<VendorDispatchOrderRequest, Results<Ok<VendorOrderDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/orders/{orderId}");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorOrderDto>, ProblemHttpResult>> ExecuteAsync(VendorDispatchOrderRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetVendorOrderByIdQuery(req.VendorId, req.OrderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class VendorUpdateOrderStatusEndpoint(IMediator mediator)
+    : Endpoint<VendorUpdateOrderStatusRequest, Results<Ok<CustomerOrderDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("{vendorId}/orders/{orderId}/status");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<CustomerOrderDto>, ProblemHttpResult>> ExecuteAsync(VendorUpdateOrderStatusRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new UpdateVendorOrderStatusCommand(req.VendorId, req.OrderId, req.Status), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

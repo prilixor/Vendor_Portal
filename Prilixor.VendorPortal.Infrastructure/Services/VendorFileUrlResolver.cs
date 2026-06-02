@@ -24,25 +24,32 @@ internal sealed class VendorFileUrlResolver(
         var opts = s3Options.Value;
         if (amazonS3 is not null && opts.Enabled && !string.IsNullOrWhiteSpace(opts.BucketName))
         {
-            var s3RelativeKey = s;
-            while (s3RelativeKey.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
-                s3RelativeKey = s3RelativeKey["uploads/".Length..];
-
-            var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, s3RelativeKey);
-            var expiryMinutes = Math.Clamp(opts.PresignedUrlExpiryMinutes, 1, 10080);
-            var request = new GetPreSignedUrlRequest
+            try
             {
-                BucketName = opts.BucketName,
-                Key = key,
-                Verb = HttpVerb.GET,
-                Expires = DateTime.UtcNow.AddMinutes(expiryMinutes)
-            };
-            return amazonS3.GetPreSignedURL(request);
+                var s3RelativeKey = s;
+                while (s3RelativeKey.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+                    s3RelativeKey = s3RelativeKey["uploads/".Length..];
+
+                var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, s3RelativeKey);
+                var expiryMinutes = Math.Clamp(opts.PresignedUrlExpiryMinutes, 1, 10080);
+                var request = new GetPreSignedUrlRequest
+                {
+                    BucketName = opts.BucketName,
+                    Key = key,
+                    Verb = HttpVerb.GET,
+                    Expires = DateTime.UtcNow.AddMinutes(expiryMinutes)
+                };
+                return amazonS3.GetPreSignedURL(request);
+            }
+            catch (Exception)
+            {
+                // Fall back to local URL resolution if S3 configuration or signing fails
+            }
         }
 
         var baseUrl = assetUrlOptions.Value.PublicApiBaseUrl?.TrimEnd('/') ?? string.Empty;
         if (!string.IsNullOrEmpty(baseUrl))
             return $"{baseUrl}/{s.TrimStart('/')}";
-        return "/" + s.TrimStart('/');
+        return "/api/" + s.TrimStart('/');
     }
 }

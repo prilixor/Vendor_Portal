@@ -12,11 +12,7 @@ function resolveApiBaseUrl(): string {
     }
     return explicit.replace(/\/+$/, "");
   }
-  // Dev + no override: same-origin `/api` → Vite proxies to ASP.NET (avoids http→HTTPS:5001 ERR_EMPTY_RESPONSE).
-  if (import.meta.env.DEV) {
-    return "/api";
-  }
-  return "https://localhost:5001/api".replace(/\/+$/, "");
+  return "/api";
 }
 
 const API_BASE_URL = resolveApiBaseUrl();

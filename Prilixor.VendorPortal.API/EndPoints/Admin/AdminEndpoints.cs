@@ -391,3 +391,20 @@ public sealed class GetAdminOrderExpirationsEndpoint(IMediator mediator)
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
+
+public sealed class GetAdminOrdersEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<List<AdminOrderDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("orders");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<List<AdminOrderDto>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetAdminAllOrdersQuery(), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+

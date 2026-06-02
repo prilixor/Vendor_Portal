@@ -341,6 +341,26 @@ export interface ExcelUploadResponseDto {
   productsCreated: number;
 }
 
+export interface AdminOrderDto {
+  orderId: string;
+  orderNumber: string;
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  vendorName: string;
+  listingTitle: string;
+  status: string;
+  orderType: string;
+  quantity: number;
+  rentalDays: number;
+  totalAmount: number;
+  depositAmount: number;
+  createdOnUtc: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  primaryImageUrl?: string | null;
+}
+
 export const adminApi = {
   // Vendors
   async getVendors(): Promise<VendorDto[]> {
@@ -513,5 +533,9 @@ export const adminApi = {
   async downloadCatalogExcel(): Promise<void> {
     const filename = `catalog_export_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "_")}.xlsx`;
     return apiClient.downloadBlob('/admin/catalog/download-excel', filename);
+  },
+
+  async getAdminOrders(): Promise<AdminOrderDto[]> {
+    return apiClient.get<AdminOrderDto[]>('/admin/orders');
   },
 };

@@ -8,6 +8,7 @@ interface StatCardProps {
   icon: LucideIcon;
   trend?: { value: string; positive?: boolean };
   accent?: "primary" | "success" | "warning" | "info";
+  onClick?: () => void;
 }
 
 const accents = {
@@ -17,22 +18,34 @@ const accents = {
   info: "bg-info-soft text-info",
 };
 
-export const StatCard = ({ label, value, icon: Icon, trend, accent = "primary" }: StatCardProps) => (
-  <Card className="p-5 border-border/60 shadow-sm hover:shadow-elegant transition-all hover:-translate-y-0.5">
-    <div className="flex items-start justify-between">
-      <div>
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <p className="mt-2 text-3xl font-bold tracking-tight">{value}</p>
-        {trend && (
-          <p className={cn("mt-1 text-xs font-medium", trend.positive ? "text-success" : "text-destructive")}>
-            {trend.positive ? "▲" : "▼"} {trend.value}
-          </p>
-        )}
+export const StatCard = ({ label, value, icon: Icon, trend, accent = "primary", onClick }: StatCardProps) => (
+  <Card
+    className={cn(
+      "p-5 border-border/60 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-elegant",
+      onClick && "cursor-pointer focus-within:ring-2 focus-within:ring-primary/30",
+    )}
+  >
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className={cn("w-full text-left", !onClick && "cursor-default")}
+    >
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">{label}</p>
+          <p className="mt-2 text-3xl font-bold tracking-tight">{value}</p>
+          {trend && (
+            <p className={cn("mt-1 text-xs font-medium", trend.positive ? "text-success" : "text-destructive")}>
+              {trend.positive ? "▲" : "▼"} {trend.value}
+            </p>
+          )}
+        </div>
+        <div className={cn("flex h-11 w-11 items-center justify-center rounded-xl", accents[accent])}>
+          <Icon className="h-5 w-5" />
+        </div>
       </div>
-      <div className={cn("flex h-11 w-11 items-center justify-center rounded-xl", accents[accent])}>
-        <Icon className="h-5 w-5" />
-      </div>
-    </div>
+    </button>
   </Card>
 );
 

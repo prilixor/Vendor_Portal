@@ -26,6 +26,10 @@ import WorkingHours from "@/app/components/vendor/WorkingHours";
 import Availability from "@/app/components/vendor/Availability";
 import Products from "@/app/components/vendor/Products";
 import Inventory from "@/app/components/vendor/Inventory";
+import VendorOrderRequests from "@/app/components/vendor/VendorOrderRequests";
+import VendorOrders from "@/app/components/vendor/VendorOrders";
+import VendorOrderDetail from "@/app/components/vendor/VendorOrderDetail";
+import VendorExpirations from "@/app/components/vendor/VendorExpirations";
 import Notifications from "@/app/components/vendor/Notifications";
 import Settings from "@/app/components/vendor/Settings";
 
@@ -39,6 +43,8 @@ import AuditLogs from "@/app/components/admin/AuditLogs";
 import AdminRegister from "@/app/components/admin/AdminRegister";
 import AdminLogin from "@/app/components/admin/AdminLogin";
 import SupportManagement from "@/app/components/admin/SupportManagement";
+import AdminOrders from "@/app/components/admin/AdminOrders";
+import { AdminNotifications } from "@/app/components/admin/AdminNotifications";
 
 import CustomerBrowse from "@/app/components/customer/CustomerBrowse";
 import CustomerListingDetail from "@/app/components/customer/CustomerListingDetail";
@@ -89,6 +95,10 @@ const App = () => (
               {/* <Route path="availability" element={<Availability />} /> */}
               <Route path="products" element={<Products />} />
               <Route path="inventory" element={<Inventory />} />
+              <Route path="order-requests" element={<VendorOrderRequests />} />
+              <Route path="orders" element={<VendorOrders />} />
+              <Route path="orders/:orderId" element={<VendorOrderDetail />} />
+              <Route path="expirations" element={<VendorExpirations />} />
               <Route path="notifications" element={<Notifications />} />
               <Route path="settings" element={<Settings />} />
             </Route>
@@ -102,6 +112,8 @@ const App = () => (
               <Route path="admins" element={<Admins />} />
               <Route path="audit-logs" element={<AuditLogs />} />
               <Route path="support" element={<SupportManagement />} />
+              <Route path="orders" element={<AdminOrders />} />
+              <Route path="notifications" element={<AdminNotifications />} />
             </Route>
 
             <Route path="/customer/login" element={<CustomerLogin />} />

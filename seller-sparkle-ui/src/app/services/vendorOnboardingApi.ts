@@ -336,6 +336,54 @@ export interface VendorNotificationDto {
   readAt?: string;
 }
 
+export interface VendorDispatchOfferApiDto {
+  offerId: string;
+  orderId: string;
+  orderNumber: string;
+  listingId: string;
+  listingTitle: string;
+  orderType: string;
+  quantity: number;
+  rentalDays: number;
+  expiresAt: string;
+  status: string;
+  totalAmount: number;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface VendorOrderApiDto {
+  orderId: string;
+  orderNumber: string;
+  status: string;
+  orderType: string;
+  quantity: number;
+  rentalDays: number;
+  totalAmount: number;
+  startDate?: string;
+  endDate?: string;
+  listingId: string;
+  listingTitle: string;
+  listingPrimaryImageUrl?: string;
+  customerName: string;
+  customerCity?: string;
+  customerState?: string;
+}
+
+export interface VendorExpiringOrderApiDto {
+  orderId: string;
+  orderNumber: string;
+  listingTitle: string;
+  vendorName: string;
+  customerName: string;
+  status: string;
+  orderType: string;
+  endDate: string;
+  daysLeft: number;
+  /** Backward-compatible fallback if an older response shape is still returned. */
+  daysUntilEnd?: number;
+}
+
 export interface MarkAllNotificationsReadResponse {
   updatedCount: number;
 }
@@ -545,6 +593,39 @@ export const vendorOnboardingApi = {
 
   getVendorStatus(vendorId: string) {
     return apiClient.get<VendorStatusDto>(`/vendors/${vendorId}`);
+  },
+
+  getVendorDispatchOffers(vendorId: string) {
+    return apiClient.get<VendorDispatchOfferApiDto[]>(`/vendors/${vendorId}/dispatch/offers`);
+  },
+
+  acceptVendorDispatchOrder(vendorId: string, orderId: string) {
+    return apiClient.patch(`/vendors/${vendorId}/dispatch/orders/${orderId}/accept`, {});
+  },
+
+  rejectVendorDispatchOrder(vendorId: string, orderId: string) {
+    return apiClient.patch(`/vendors/${vendorId}/dispatch/orders/${orderId}/reject`, {});
+  },
+
+  cancelAssignedVendorOrder(vendorId: string, orderId: string) {
+    return apiClient.patch(`/vendors/${vendorId}/dispatch/orders/${orderId}/cancel`, {});
+  },
+
+  getVendorOrders(vendorId: string, status?: string) {
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
+    return apiClient.get<VendorOrderApiDto[]>(`/vendors/${vendorId}/orders${query}`);
+  },
+
+  getVendorOrder(vendorId: string, orderId: string) {
+    return apiClient.get<VendorOrderApiDto>(`/vendors/${vendorId}/orders/${orderId}`);
+  },
+
+  updateVendorOrderStatus(vendorId: string, orderId: string, status: string) {
+    return apiClient.patch(`/vendors/${vendorId}/orders/${orderId}/status`, { status });
+  },
+
+  getVendorOrderExpirations(vendorId: string, withinDays = 7) {
+    return apiClient.get<VendorExpiringOrderApiDto[]>(`/vendors/${vendorId}/orders/expirations?withinDays=${withinDays}`);
   },
 
   // Push subscription methods

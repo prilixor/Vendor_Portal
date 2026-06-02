@@ -80,6 +80,18 @@ builder.Services.Configure<JsonOptions>(o =>
 
 var app = builder.Build();
 
+app.Use(async (context, next) =>
+{
+    if (context.Request.PathBase.HasValue && context.Request.PathBase.Value.StartsWith("/api", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Request.Path = context.Request.PathBase + context.Request.Path;
+        context.Request.PathBase = "";
+    }
+    await next();
+});
+
+app.UseRouting();
+
 app.UseExceptionHandler();
 
 if (!app.Environment.IsDevelopment())
@@ -93,6 +105,26 @@ app.UseAuthentication()
     .UseAuthorization();
 
 app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    RequestPath = "/api"
+});
+
+var uploadsVendorsPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "uploads", "vendors");
+Directory.CreateDirectory(uploadsVendorsPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsVendorsPath),
+    RequestPath = "/api/vendors"
+});
+
+var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "uploads");
+Directory.CreateDirectory(uploadsPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+    RequestPath = "/api/uploads"
+});
 
 app.MapPost("/api/files/upload", async (HttpRequest request, IVendorUploadStorageService storage, CancellationToken cancellationToken) =>
 {
@@ -157,6 +189,10 @@ app.MapGet("/api/files/download", async (
     if (!parsed.IsAbsoluteUri)
     {
         var relativePath = parsed.OriginalString.TrimStart('/', '\\').Replace('\\', '/');
+        if (relativePath.StartsWith("api/", StringComparison.OrdinalIgnoreCase))
+        {
+            relativePath = relativePath["api/".Length..];
+        }
         var uploadsRoot = Path.GetFullPath(Path.Combine(environment.ContentRootPath, "wwwroot"));
         var combined = Path.Combine(environment.ContentRootPath, "wwwroot", relativePath.Replace('/', Path.DirectorySeparatorChar));
         var fullPath = Path.GetFullPath(combined);

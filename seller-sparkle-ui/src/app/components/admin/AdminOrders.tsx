@@ -1,0 +1,517 @@
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
+import { PageHeader } from "@/app/components/shared/PageHeader";
+import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
+import { Button } from "@/app/components/ui/button";
+import { Badge } from "@/app/components/ui/badge";
+import { Input } from "@/app/components/ui/input";
+import { Skeleton } from "@/app/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
+import {
+  Search,
+  RefreshCw,
+  ShoppingBag,
+  TrendingUp,
+  RotateCcw,
+  AlertCircle,
+  Truck,
+  User,
+  Building,
+  Calendar,
+  DollarSign,
+  ChevronRight,
+  Check,
+} from "lucide-react";
+import { cn } from "@/app/helpers/utils";
+
+const PAGE_SIZE = 8;
+
+const statusTabs = [
+  { id: "all", label: "All" },
+  { id: "pending", label: "Pending" },
+  { id: "confirmed", label: "Confirmed" },
+  { id: "in_transit", label: "In Transit" },
+  { id: "active", label: "Active" },
+  { id: "returned", label: "Returned" },
+  { id: "cancelled", label: "Cancelled" },
+  { id: "dispatch_failed", label: "Dispatch Failed" },
+] as const;
+
+function matchesAdminStatus(status: string, tabId: (typeof statusTabs)[number]["id"]): boolean {
+  if (tabId === "all") return true;
+  const s = status.trim().toLowerCase().replace(/_/g, " ");
+  if (tabId === "pending") return s === "pending" || s === "awaiting vendor acceptance";
+  if (tabId === "in_transit") return s.includes("transit");
+  if (tabId === "dispatch_failed") return s === "dispatch failed";
+  if (tabId === "cancelled") return s === "cancelled" || s === "canceled";
+  return s === tabId.replace(/_/g, " ");
+}
+
+function orderStatusBadgeClass(status: string): string {
+  const s = status.toLowerCase().replace(/_/g, " ");
+  if (s === "pending" || s.includes("awaiting")) {
+    return "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200";
+  }
+  if (s === "confirmed") {
+    return "bg-sky-100 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200";
+  }
+  if (s.includes("transit")) {
+    return "bg-violet-100 text-violet-900 dark:bg-violet-950/40 dark:text-violet-200";
+  }
+  if (s === "active") {
+    return "bg-emerald-600 text-white dark:bg-emerald-600 dark:text-white";
+  }
+  if (s === "returned") {
+    return "bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-200";
+  }
+  if (s === "cancelled" || s === "canceled") {
+    return "bg-muted text-muted-foreground";
+  }
+  if (s.includes("dispatch failed")) {
+    return "bg-destructive/15 text-destructive dark:bg-destructive/20 dark:text-destructive";
+  }
+  return "bg-muted text-foreground";
+}
+
+const TIMELINE_STEPS = [
+  { key: "placed", label: "Order Placed" },
+  { key: "confirmed", label: "Vendor Confirmed" },
+  { key: "out", label: "Out for Delivery" },
+  { key: "delivered", label: "Delivered" },
+  { key: "active", label: "Rental Active" },
+  { key: "returned", label: "Returned" },
+] as const;
+
+function getTimelineProgress(status: string): {
+  cancelled: boolean;
+  completedThrough: number;
+  currentIndex: number | null;
+} {
+  const raw = status.toLowerCase().trim();
+  const compact = raw.replace(/\s+/g, "_");
+  if (compact === "cancelled" || compact === "canceled") {
+    return { cancelled: true, completedThrough: -1, currentIndex: null };
+  }
+  if (compact === "dispatch_failed" || raw.includes("dispatch failed")) {
+    return { cancelled: false, completedThrough: 0, currentIndex: null };
+  }
+  if (compact === "pending" || compact.includes("awaiting")) {
+    return { cancelled: false, completedThrough: 0, currentIndex: 1 };
+  }
+  if (compact === "confirmed") {
+    return { cancelled: false, completedThrough: 1, currentIndex: 2 };
+  }
+  if (compact === "in_transit" || raw.includes("transit")) {
+    return { cancelled: false, completedThrough: 2, currentIndex: 3 };
+  }
+  if (compact === "active") {
+    return { cancelled: false, completedThrough: 3, currentIndex: 4 };
+  }
+  if (compact === "returned") {
+    return { cancelled: false, completedThrough: 5, currentIndex: null };
+  }
+  return { cancelled: false, completedThrough: 0, currentIndex: 1 };
+}
+
+export const AdminOrders = () => {
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<(typeof statusTabs)[number]["id"]>("all");
+  const [page, setPage] = useState(1);
+  const [selectedOrder, setSelectedOrder] = useState<AdminOrderDto | null>(null);
+
+  const { data: orders = [], isLoading, error, refetch, isFetching } = useQuery({
+    queryKey: ["admin-orders"],
+    queryFn: () => adminApi.getAdminOrders(),
+  });
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, activeTab]);
+
+  // Statistics Computations
+  const stats = useMemo(() => {
+    const totalCount = orders.length;
+    const revenue = orders.reduce((sum, o) => sum + o.totalAmount, 0);
+    const active = orders.filter((o) => {
+      const s = o.status.toLowerCase().replace(/_/g, " ");
+      return s === "active";
+    }).length;
+    const returned = orders.filter((o) => {
+      const s = o.status.toLowerCase().replace(/_/g, " ");
+      return s === "returned";
+    }).length;
+    const failed = orders.filter((o) => {
+      const s = o.status.toLowerCase().replace(/_/g, " ");
+      return s.includes("dispatch failed");
+    }).length;
+
+    return { totalCount, revenue, active, returned, failed };
+  }, [orders]);
+
+  // Filtering Logic
+  const filtered = useMemo(() => {
+    let list = orders;
+    const q = debouncedSearch.toLowerCase();
+    if (q) {
+      list = list.filter(
+        (o) =>
+          o.orderNumber.toLowerCase().includes(q) ||
+          o.listingTitle.toLowerCase().includes(q) ||
+          o.customerName.toLowerCase().includes(q) ||
+          o.customerEmail.toLowerCase().includes(q) ||
+          o.vendorName.toLowerCase().includes(q) ||
+          o.orderId.toLowerCase().includes(q)
+      );
+    }
+    return list.filter((o) => matchesAdminStatus(o.status, activeTab));
+  }, [orders, debouncedSearch, activeTab]);
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageSlice = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage]
+  );
+
+  // Grouping by Base Order Number
+  const groupedOrders = useMemo(() => {
+    const groups: Array<{
+      baseOrderNumber: string;
+      items: AdminOrderDto[];
+      date: string;
+      customerName: string;
+      customerEmail: string;
+      totalAmount: number;
+    }> = [];
+
+    pageSlice.forEach((order) => {
+      const baseNum = order.orderNumber.split("-").slice(0, 3).join("-");
+      let g = groups.find((x) => x.baseOrderNumber === baseNum);
+      if (!g) {
+        g = {
+          baseOrderNumber: baseNum,
+          items: [],
+          date: order.createdOnUtc,
+          customerName: order.customerName,
+          customerEmail: order.customerEmail,
+          totalAmount: 0,
+        };
+        groups.push(g);
+      }
+      g.items.push(order);
+      g.totalAmount += order.totalAmount;
+    });
+
+    return groups;
+  }, [pageSlice]);
+
+  const timelineInfo = useMemo(() => {
+    if (!selectedOrder) return null;
+    return getTimelineProgress(selectedOrder.status);
+  }, [selectedOrder]);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Customer Orders Tracking"
+        description="Comprehensive dashboard to check status transitions, split orders, and vendor fulfillment statistics."
+        actions={
+          <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching || isLoading}>
+            <RefreshCw className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")} />
+            Refresh
+          </Button>
+        }
+      />
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <Card className="border-border/60 bg-card/60 backdrop-blur-md">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
+                <ShoppingBag className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Items Ordered</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight">{stats.totalCount}</h3>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/60 bg-card/60 backdrop-blur-md">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="rounded-lg bg-emerald-500/10 text-emerald-500 p-2.5">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Platform Revenue</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight">₹{stats.revenue.toFixed(0)}</h3>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/60 bg-card/60 backdrop-blur-md">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="rounded-lg bg-indigo-500/10 text-indigo-500 p-2.5">
+                <Truck className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Rentals</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight">{stats.active}</h3>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/60 bg-card/60 backdrop-blur-md">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="rounded-lg bg-slate-500/10 text-slate-500 p-2.5">
+                <RotateCcw className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Completed Rentals</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight">{stats.returned}</h3>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/60 bg-card/60 backdrop-blur-md">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="rounded-lg bg-destructive/10 text-destructive p-2.5">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Dispatch Failed</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight text-destructive">{stats.failed}</h3>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Filter & List Container */}
+      <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
+        <div className="relative max-w-2xl mb-6">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by order prefix, item, customer, or vendor..."
+            className="pl-9"
+            aria-label="Search orders"
+          />
+        </div>
+
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+          <TabsList className="mb-6 h-auto w-full flex-wrap justify-start bg-muted/40 p-1">
+            {statusTabs.map((tab) => (
+              <TabsTrigger key={tab.id} value={tab.id} className="text-xs">
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+
+        {isLoading ? (
+          <div className="space-y-4">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <div key={idx} className="rounded-xl border border-border/80 bg-accent/10 p-6 space-y-3">
+                <Skeleton className="h-6 w-1/4" />
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-12 w-full rounded-lg" />
+              </div>
+            ))}
+          </div>
+        ) : groupedOrders.length === 0 ? (
+          <p className="py-12 text-center text-sm text-muted-foreground">No customer orders found matching current criteria.</p>
+        ) : (
+          <div className="space-y-4">
+            {groupedOrders.map((group) => (
+              <div key={group.baseOrderNumber} className="rounded-xl border border-border/80 bg-card p-6 shadow-sm hover:border-border/100 transition-all">
+                {/* Transaction Group Header */}
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b border-border/60 pb-4 mb-4">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Order Group</span>
+                    <h4 className="text-base font-bold text-foreground">{group.baseOrderNumber}</h4>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-muted-foreground md:flex md:gap-6">
+                    <p>Customer: <span className="font-semibold text-foreground">{group.customerName}</span></p>
+                    <p>Email: <span className="font-semibold text-foreground">{group.customerEmail}</span></p>
+                    <p>Placed: <span className="font-semibold text-foreground">{new Date(group.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span></p>
+                    <p>Combined Total: <span className="font-bold text-primary">₹{group.totalAmount.toFixed(0)}</span></p>
+                  </div>
+                </div>
+
+                {/* Sub items within order group */}
+                <div className="space-y-3">
+                  {group.items.map((item) => (
+                    <div key={item.orderId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3.5 rounded-lg bg-accent/20 border border-border/40 hover:bg-accent/40 transition-colors">
+                      <div className="flex items-center gap-4">
+                        {item.primaryImageUrl ? (
+                          <img src={item.primaryImageUrl} alt={item.listingTitle} className="h-10 w-10 rounded-md object-cover border border-border bg-muted" />
+                        ) : (
+                          <div className="h-10 w-10 rounded-md bg-muted border border-border flex items-center justify-center text-[10px] text-muted-foreground">No Img</div>
+                        )}
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{item.listingTitle}</p>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
+                            <p className="flex items-center gap-1"><Building className="h-3.5 w-3.5 shrink-0" /> {item.vendorName}</p>
+                            <p>Qty: {item.quantity}</p>
+                            <p>{item.orderType === "rent" ? `${item.rentalDays} days rental` : "Buyout"}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-6 mt-3 sm:mt-0 pt-2 border-t border-border/20 sm:border-none sm:pt-0">
+                        <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderStatusBadgeClass(item.status))} variant="outline">
+                          {item.status.toUpperCase()}
+                        </Badge>
+                        <span className="font-semibold tabular-nums text-sm text-foreground sm:w-20 sm:text-right">₹{item.totalAmount.toFixed(0)}</span>
+                        <Button size="sm" variant="ghost" className="h-8 text-xs font-semibold px-2 hover:bg-accent" onClick={() => setSelectedOrder(item)}>
+                          View Tracking
+                          <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {/* Pagination Controls */}
+            {filtered.length > 0 && (
+              <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Page {safePage} of {totalPages} · {filtered.length} order item{filtered.length !== 1 ? "s" : ""}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 px-3 text-xs"
+                    disabled={safePage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 px-3 text-xs"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* Dynamic Detail & Tracking Timeline Dialog */}
+      <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
+        <DialogContent className="max-w-2xl border border-border/80 bg-background/95 backdrop-blur-xl shadow-2xl">
+          {selectedOrder && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold flex items-center justify-between">
+                  <span>Order Tracking: {selectedOrder.orderNumber}</span>
+                  <Badge className={cn("text-[10px] font-semibold", orderStatusBadgeClass(selectedOrder.status))} variant="outline">
+                    {selectedOrder.status.toUpperCase()}
+                  </Badge>
+                </DialogTitle>
+                <DialogDescription>
+                  Tracking and metadata lifecycle overview for the selected item transaction.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-6 my-4">
+                {/* Meta details */}
+                <div className="grid grid-cols-2 gap-4 rounded-lg bg-accent/25 p-4 border border-border/40 text-xs">
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground font-semibold flex items-center gap-1"><User className="h-3.5 w-3.5" /> Customer Name</p>
+                    <p className="font-semibold text-foreground">{selectedOrder.customerName}</p>
+                    <p className="text-[10px] text-muted-foreground">{selectedOrder.customerEmail}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground font-semibold flex items-center gap-1"><Building className="h-3.5 w-3.5" /> Assigned Vendor</p>
+                    <p className="font-semibold text-foreground">{selectedOrder.vendorName}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground font-semibold flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Rental Terms</p>
+                    <p className="font-medium text-foreground">{selectedOrder.orderType === "rent" ? `${selectedOrder.rentalDays} days rental` : "Direct Buyout"}</p>
+                    {selectedOrder.startDate && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {new Date(selectedOrder.startDate).toLocaleDateString()} → {selectedOrder.endDate ? new Date(selectedOrder.endDate).toLocaleDateString() : ""}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground font-semibold flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> Financial Summary</p>
+                    <p className="font-bold text-foreground">₹{selectedOrder.totalAmount.toFixed(0)} total</p>
+                    <p className="text-[10px] text-muted-foreground">+ ₹{selectedOrder.depositAmount.toFixed(0)} deposit amount</p>
+                  </div>
+                </div>
+
+                {/* Progress Timeline */}
+                <div className="space-y-3">
+                  <h5 className="text-sm font-bold text-foreground">Timeline Lifecycle Log</h5>
+                  {timelineInfo?.cancelled ? (
+                    <p className="text-sm text-destructive font-semibold">This order item was cancelled.</p>
+                  ) : (
+                    <ol className="relative border-l border-border ml-3.5 mt-2 space-y-6">
+                      {TIMELINE_STEPS.map((step, i) => {
+                        const isDone = i <= timelineInfo!.completedThrough;
+                        const isCurrent = timelineInfo!.currentIndex === i;
+                        const isUpcoming = !isDone && !isCurrent;
+
+                        return (
+                          <li key={step.key} className="relative pl-6 last:pb-0">
+                            <span className={cn(
+                              "absolute -left-[11px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full border text-[9px] font-bold transition-all",
+                              isDone && "bg-foreground text-background border-foreground",
+                              isCurrent && "bg-background text-foreground border-foreground shadow-sm animate-pulse",
+                              isUpcoming && "bg-muted text-muted-foreground border-border"
+                            )}>
+                              {isDone ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+                            </span>
+                            <div>
+                              <p className={cn("text-xs font-semibold leading-tight", isUpcoming ? "text-muted-foreground" : "text-foreground")}>
+                                {step.label}
+                              </p>
+                              {isCurrent && <span className="text-[10px] text-muted-foreground font-medium">In Progress / Pending Action</span>}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default AdminOrders;

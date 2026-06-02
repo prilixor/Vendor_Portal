@@ -179,3 +179,57 @@ file static class ExpiringOrderMapper
     public static int DaysLeft(this ExpiringOrderAggregate row, DateOnly fromDate) =>
         Math.Max(0, row.EndDate.DayNumber - fromDate.DayNumber);
 }
+
+public sealed record AdminOrderDto(
+    Guid OrderId,
+    string OrderNumber,
+    Guid CustomerId,
+    string CustomerName,
+    string CustomerEmail,
+    string VendorName,
+    string ListingTitle,
+    string Status,
+    string OrderType,
+    int Quantity,
+    int RentalDays,
+    decimal TotalAmount,
+    decimal DepositAmount,
+    DateTimeOffset CreatedOnUtc,
+    DateOnly? StartDate,
+    DateOnly? EndDate,
+    string? PrimaryImageUrl);
+
+public sealed record GetAdminAllOrdersQuery() : IQuery<List<AdminOrderDto>>;
+
+internal sealed class GetAdminAllOrdersQueryHandler(
+    ICustomerRepository customers)
+    : IQueryHandler<GetAdminAllOrdersQuery, List<AdminOrderDto>>
+{
+    public async Task<Result<List<AdminOrderDto>>> Handle(GetAdminAllOrdersQuery request, CancellationToken cancellationToken)
+    {
+        var rows = await customers.GetAllCustomerOrdersForAdminAsync(cancellationToken);
+        
+        var list = rows.Select(r => new AdminOrderDto(
+            r.Order.Id,
+            r.Order.OrderNumber,
+            r.Order.CustomerId,
+            r.Order.Customer?.FullName ?? "Customer",
+            r.Order.Customer?.Email ?? "customer@example.com",
+            r.Listing?.Vendor?.Profile?.BusinessName ?? r.Listing?.Vendor?.Email ?? "Vendor",
+            r.Listing?.ListingTitle ?? "Deleted Product",
+            r.Order.Status,
+            r.Order.OrderType,
+            r.Order.Quantity,
+            r.Order.RentalDays,
+            r.Order.TotalAmount,
+            r.Order.DepositAmount,
+            r.Order.CreatedOnUtc,
+            r.Order.StartDate,
+            r.Order.EndDate,
+            r.ListingPrimaryImageUrl
+        )).ToList();
+
+        return Result.Success(list);
+    }
+}
+

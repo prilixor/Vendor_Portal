@@ -1,12 +1,18 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { NavLink } from "@/app/components/shared/NavLink";
 import { useLocation, Link } from "react-router-dom";
 import { ChevronLeft, Sparkles, X } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
 import { NavSection } from "@/app/helpers/navigation";
 import { Badge } from "@/app/components/ui/badge";
+import { useAuth } from "@/app/guards/AuthContext";
+import { useCart } from "@/app/contexts/CartContext";
+import { useQuery } from "@tanstack/react-query";
+import { customerApi } from "@/app/services/customerApi";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 
 interface SidebarProps {
+  variant?: "vendor" | "admin" | "customer";
   sections: NavSection[];
   brandLabel: string;
   /** When set, replaces the default "Vendor Portal" primary sidebar title. */
@@ -15,9 +21,62 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
-export const Sidebar = ({ sections, brandLabel, brandHeading, isOpen, onClose }: SidebarProps) => {
+export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading, isOpen, onClose }: SidebarProps) => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
+
+  // 1. Get Cart Count (for Customer variant)
+  const { lines } = useCart();
+  const cartCount = useMemo(() => {
+    return lines.reduce((acc, l) => acc + l.quantity, 0);
+  }, [lines]);
+
+  // 2. Get Unread Customer Notifications (for Customer variant)
+  const { data: customerNotifications = [] } = useQuery({
+    queryKey: ["customer-notifications"],
+    queryFn: () => customerApi.getNotifications(),
+    enabled: variant === "customer" && !!user,
+    refetchInterval: 30000, // refresh every 30 seconds
+  });
+  const unreadCustomerCount = useMemo(() => {
+    return customerNotifications.filter((n) => !n.readAt).length;
+  }, [customerNotifications]);
+
+  // 3. Get Unread Vendor Notifications (for Vendor variant)
+  const { data: unreadVendorCount = 0 } = useQuery({
+    queryKey: ["vendor-unread-notifications", user?.id],
+    queryFn: () => vendorOnboardingApi.getUnreadNotificationCount(user!.id),
+    enabled: variant === "vendor" && !!user?.id,
+    refetchInterval: 30000,
+  });
+
+  // Inject badges dynamically based on the current navigation item
+  const dynamicSections = useMemo(() => {
+    return sections.map((section) => ({
+      ...section,
+      items: section.items.map((item) => {
+        let badgeValue: string | undefined = undefined;
+
+        if (variant === "customer") {
+          if (item.label === "Cart" && cartCount > 0) {
+            badgeValue = cartCount.toString();
+          } else if (item.label === "Notifications" && unreadCustomerCount > 0) {
+            badgeValue = unreadCustomerCount.toString();
+          }
+        } else if (variant === "vendor") {
+          if (item.label === "Notifications" && unreadVendorCount > 0) {
+            badgeValue = unreadVendorCount.toString();
+          }
+        }
+
+        return {
+          ...item,
+          badge: badgeValue || item.badge,
+        };
+      }),
+    }));
+  }, [sections, variant, cartCount, unreadCustomerCount, unreadVendorCount]);
 
   const isActive = (to: string) =>
     to === location.pathname ||
@@ -67,7 +126,7 @@ export const Sidebar = ({ sections, brandLabel, brandHeading, isOpen, onClose }:
 
       {/* Sections */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
-        {sections.map((section) => (
+        {dynamicSections.map((section) => (
           <div key={section.title}>
             {!collapsed && (
               <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">

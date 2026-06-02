@@ -6,13 +6,19 @@ import {
   Building2,
   Package,
   MessageSquare,
+  ShoppingBag,
+  Bell,
 } from "lucide-react";
 import type { NavSection } from "@/app/helpers/navigation";
 
 export const adminNav: NavSection[] = [
   {
     title: "Overview",
-    items: [{ label: "Dashboard", to: "/admin", icon: LayoutDashboard }],
+    items: [
+      { label: "Dashboard", to: "/admin", icon: LayoutDashboard },
+      { label: "Notifications", to: "/admin/notifications", icon: Bell },
+      { label: "Orders", to: "/admin/orders", icon: ShoppingBag },
+    ],
   },
   {
     title: "Vendors",

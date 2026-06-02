@@ -8,7 +8,7 @@ import { Button } from "@/app/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { toCamelCase } from "@/app/helpers/utils";
-import { Package, CheckCircle2, Boxes, Bell, Plus, ArrowUpRight, Clock, Sparkles } from "lucide-react";
+import { Package, CheckCircle2, Boxes, Bell, Plus, ArrowUpRight, Clock, Sparkles, ClipboardList, Truck, TimerReset, ShoppingBag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
@@ -90,6 +90,10 @@ const Dashboard = () => {
   const [activeListings, setActiveListings] = useState(0);
   const [inventoryUnits, setInventoryUnits] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [confirmedOrdersCount, setConfirmedOrdersCount] = useState(0);
+  const [inTransitOrdersCount, setInTransitOrdersCount] = useState(0);
+  const [dueReturnsCount, setDueReturnsCount] = useState(0);
 
   const [recentActivity, setRecentActivity] = useState<DashboardNotification[]>([]);
   const [topListings, setTopListings] = useState<TopListingRow[]>([]);
@@ -101,7 +105,7 @@ const Dashboard = () => {
       setLoading(true);
 
       try {
-        const [profileRes, docsRes, banksRes, listingsRes, notificationsRes, productsRes, categoriesRes] = await Promise.allSettled([
+        const [profileRes, docsRes, banksRes, listingsRes, notificationsRes, productsRes, categoriesRes, offersRes, confirmedRes, inTransitRes, expirationsRes] = await Promise.allSettled([
           vendorOnboardingApi.getVendorProfile(user.id),
           vendorOnboardingApi.getVendorDocuments(user.id),
           vendorOnboardingApi.getVendorBankAccounts(user.id),
@@ -109,6 +113,10 @@ const Dashboard = () => {
           vendorOnboardingApi.getVendorNotifications(user.id),
           vendorOnboardingApi.getProducts(),
           vendorOnboardingApi.getProductCategories(),
+          vendorOnboardingApi.getVendorDispatchOffers(user.id),
+          vendorOnboardingApi.getVendorOrders(user.id, "confirmed"),
+          vendorOnboardingApi.getVendorOrders(user.id, "in_transit"),
+          vendorOnboardingApi.getVendorOrderExpirations(user.id, 7),
         ]);
 
         if (profileRes.status === "fulfilled") {
@@ -157,6 +165,11 @@ const Dashboard = () => {
           .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         setUnreadNotifications(mappedNotifications.filter((n) => !n.read).length);
         setRecentActivity(mappedNotifications.slice(0, 5));
+
+        setPendingRequestsCount(offersRes.status === "fulfilled" ? offersRes.value.length : 0);
+        setConfirmedOrdersCount(confirmedRes.status === "fulfilled" ? confirmedRes.value.length : 0);
+        setInTransitOrdersCount(inTransitRes.status === "fulfilled" ? inTransitRes.value.length : 0);
+        setDueReturnsCount(expirationsRes.status === "fulfilled" ? expirationsRes.value.length : 0);
 
         const inventoryResponses = await Promise.allSettled(
           listings.map((l) => vendorOnboardingApi.getVendorInventory(user.id, l.id))
@@ -373,6 +386,38 @@ const Dashboard = () => {
         <StatCard label="Notifications" value={loading ? "..." : unreadNotifications} icon={Bell} accent="warning" />
       </div>
 
+      {/* Order operations snapshot */}
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Pending requests"
+          value={loading ? "..." : pendingRequestsCount}
+          icon={ClipboardList}
+          accent="warning"
+          onClick={() => navigate("/vendor/order-requests")}
+        />
+        <StatCard
+          label="Confirmed orders"
+          value={loading ? "..." : confirmedOrdersCount}
+          icon={ShoppingBag}
+          accent="primary"
+          onClick={() => navigate("/vendor/orders?status=confirmed")}
+        />
+        <StatCard
+          label="In transit"
+          value={loading ? "..." : inTransitOrdersCount}
+          icon={Truck}
+          accent="info"
+          onClick={() => navigate("/vendor/orders?status=in_transit")}
+        />
+        <StatCard
+          label="Due in 7 days"
+          value={loading ? "..." : dueReturnsCount}
+          icon={TimerReset}
+          accent="success"
+          onClick={() => navigate("/vendor/expirations")}
+        />
+      </div>
+
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Recent activity */}
         <Card className="lg:col-span-2 p-4 sm:p-6 lg:p-8 border-border/60">
@@ -414,6 +459,8 @@ const Dashboard = () => {
               { label: "Add new product", to: "/vendor/products" },
               //{ label: "Update working hours", to: "/vendor/working-hours" },
               { label: "Add service area", to: "/vendor/service-areas" },
+              { label: "Review order requests", to: "/vendor/order-requests" },
+              { label: "Manage live orders", to: "/vendor/orders" },
               { label: "Review documents", to: "/vendor/onboarding" },
               { label: "Notification preferences", to: "/vendor/notifications" },
             ].map((a) => (

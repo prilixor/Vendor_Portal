@@ -1,6 +1,6 @@
 import { useNavigate, Link } from "react-router-dom";
-import { Bell, LogOut, Sun, Moon, ChevronDown } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bell, LogOut, Sun, Moon, ChevronDown, ShoppingCart } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/app/guards/AuthContext";
 import { Button } from "@/app/components/ui/button";
 import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
@@ -13,6 +13,10 @@ import {
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
 import { useNotificationContext } from "@/app/contexts/NotificationContext";
+import { useCart } from "@/app/contexts/CartContext";
+import { useQuery } from "@tanstack/react-query";
+import { customerApi } from "@/app/services/customerApi";
+import { adminApi } from "@/app/services/adminApi";
 
 interface TopBarProps {
   onMenuClick?: () => void;
@@ -27,6 +31,37 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
     const saved = localStorage.getItem("theme");
     return saved === "dark";
   });
+
+  // 1. Get Cart Count (for Customer top bar)
+  const { lines } = useCart();
+  const cartCount = useMemo(() => {
+    return lines.reduce((acc, l) => acc + l.quantity, 0);
+  }, [lines]);
+
+  // 2. Get Unread Customer Notifications (for Customer top bar)
+  const { data: customerNotifications = [] } = useQuery({
+    queryKey: ["customer-notifications"],
+    queryFn: () => customerApi.getNotifications(),
+    enabled: variant === "customer" && !!user,
+    refetchInterval: 30000, // every 30 seconds
+  });
+  const unreadCustomerCount = useMemo(() => {
+    return customerNotifications.filter((n) => !n.readAt).length;
+  }, [customerNotifications]);
+
+  // 3. Get Unread Admin Order Alerts (for Admin top bar)
+  const { data: adminOrders = [] } = useQuery({
+    queryKey: ["admin-orders"],
+    queryFn: () => adminApi.getAdminOrders(),
+    enabled: variant === "admin" && !!user,
+    refetchInterval: 30000, // every 30 seconds
+  });
+  const unreadAdminCount = useMemo(() => {
+    return adminOrders.filter((o) => {
+      const s = o.status.toLowerCase().replace(/_/g, " ");
+      return s.includes("dispatch failed");
+    }).length;
+  }, [adminOrders]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -57,6 +92,59 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
         <Button variant="ghost" size="icon" onClick={() => setDark((v) => !v)} aria-label="Toggle theme">
           {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
+
+        {variant === "admin" && user && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/admin/notifications")}
+            aria-label="Notifications"
+            className="relative"
+          >
+            <Bell className="h-4 w-4" />
+            {unreadAdminCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground shadow-glow animate-pulse">
+                {unreadAdminCount > 99 ? "99+" : unreadAdminCount}
+              </span>
+            )}
+          </Button>
+        )}
+
+        {variant === "customer" && user && (
+          <>
+            {/* Customer Notifications Icon with Badge */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/customer/notifications")}
+              aria-label="Notifications"
+              className="relative"
+            >
+              <Bell className="h-4 w-4" />
+              {unreadCustomerCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+                  {unreadCustomerCount > 99 ? "99+" : unreadCustomerCount}
+                </span>
+              )}
+            </Button>
+
+            {/* Customer Cart Icon with Badge */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/customer/cart")}
+              aria-label="Shopping Cart"
+              className="relative"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              {cartCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shadow-glow">
+                  {cartCount > 99 ? "99+" : cartCount}
+                </span>
+              )}
+            </Button>
+          </>
+        )}
 
         {variant === "customer" && !user && (
           <>
