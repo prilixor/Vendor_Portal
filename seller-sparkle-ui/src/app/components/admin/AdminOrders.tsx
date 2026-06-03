@@ -23,6 +23,7 @@ import {
   DollarSign,
   ChevronRight,
   Check,
+  Package,
 } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
 
@@ -75,22 +76,43 @@ function orderStatusBadgeClass(status: string): string {
   return "bg-muted text-foreground";
 }
 
-const TIMELINE_STEPS = [
-  { key: "placed", label: "Order Placed" },
-  { key: "confirmed", label: "Vendor Confirmed" },
-  { key: "out", label: "Out for Delivery" },
-  { key: "delivered", label: "Delivered" },
-  { key: "active", label: "Rental Active" },
-  { key: "returned", label: "Returned" },
-] as const;
+function orderTypeBadgeClass(orderType: string): string {
+  const t = orderType.toLowerCase().trim();
+  if (t === "buy") {
+    return "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900";
+  }
+  return "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900";
+}
 
-function getTimelineProgress(status: string): {
+const getTimelineSteps = (orderType?: string) => {
+  const isBuy = orderType?.toLowerCase() === "buy";
+  if (isBuy) {
+    return [
+      { key: "placed", label: "Order Placed" },
+      { key: "confirmed", label: "Vendor Confirmed" },
+      { key: "out", label: "Out for Delivery" },
+      { key: "active", label: "Delivered & Purchased" },
+    ];
+  }
+  return [
+    { key: "placed", label: "Order Placed" },
+    { key: "confirmed", label: "Vendor Confirmed" },
+    { key: "out", label: "Out for Delivery" },
+    { key: "delivered", label: "Delivered" },
+    { key: "active", label: "Rental Active" },
+    { key: "returned", label: "Returned" },
+  ];
+};
+
+function getTimelineProgress(status: string, orderType?: string): {
   cancelled: boolean;
   completedThrough: number;
   currentIndex: number | null;
 } {
   const raw = status.toLowerCase().trim();
   const compact = raw.replace(/\s+/g, "_");
+  const isBuy = orderType?.toLowerCase() === "buy";
+
   if (compact === "cancelled" || compact === "canceled") {
     return { cancelled: true, completedThrough: -1, currentIndex: null };
   }
@@ -107,7 +129,9 @@ function getTimelineProgress(status: string): {
     return { cancelled: false, completedThrough: 2, currentIndex: 3 };
   }
   if (compact === "active") {
-    return { cancelled: false, completedThrough: 3, currentIndex: 4 };
+    return isBuy
+      ? { cancelled: false, completedThrough: 3, currentIndex: null }
+      : { cancelled: false, completedThrough: 3, currentIndex: 4 };
   }
   if (compact === "returned") {
     return { cancelled: false, completedThrough: 5, currentIndex: null };
@@ -174,6 +198,26 @@ export const AdminOrders = () => {
     return list.filter((o) => matchesAdminStatus(o.status, activeTab));
   }, [orders, debouncedSearch, activeTab]);
 
+  const statusCounts = useMemo(() => {
+    let searchable = orders;
+    const q = debouncedSearch.toLowerCase();
+    if (q) {
+      searchable = searchable.filter(
+        (o) =>
+          o.orderNumber.toLowerCase().includes(q) ||
+          o.listingTitle.toLowerCase().includes(q) ||
+          o.customerName.toLowerCase().includes(q) ||
+          o.customerEmail.toLowerCase().includes(q) ||
+          o.vendorName.toLowerCase().includes(q) ||
+          o.orderId.toLowerCase().includes(q)
+      );
+    }
+    return statusTabs.reduce<Record<(typeof statusTabs)[number]["id"], number>>((acc, tab) => {
+      acc[tab.id] = tab.id === "all" ? searchable.length : searchable.filter((o) => matchesAdminStatus(o.status, tab.id)).length;
+      return acc;
+    }, {} as Record<(typeof statusTabs)[number]["id"], number>);
+  }, [orders, debouncedSearch]);
+
   // Pagination
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -216,7 +260,7 @@ export const AdminOrders = () => {
 
   const timelineInfo = useMemo(() => {
     if (!selectedOrder) return null;
-    return getTimelineProgress(selectedOrder.status);
+    return getTimelineProgress(selectedOrder.status, selectedOrder.orderType);
   }, [selectedOrder]);
 
   return (
@@ -322,7 +366,7 @@ export const AdminOrders = () => {
           <TabsList className="mb-6 h-auto w-full flex-wrap justify-start bg-muted/40 p-1">
             {statusTabs.map((tab) => (
               <TabsTrigger key={tab.id} value={tab.id} className="text-xs">
-                {tab.label}
+                {tab.label} ({statusCounts[tab.id] ?? 0})
               </TabsTrigger>
             ))}
           </TabsList>
@@ -361,31 +405,43 @@ export const AdminOrders = () => {
                 {/* Sub items within order group */}
                 <div className="space-y-3">
                   {group.items.map((item) => (
-                    <div key={item.orderId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3.5 rounded-lg bg-accent/20 border border-border/40 hover:bg-accent/40 transition-colors">
-                      <div className="flex items-center gap-4">
+                    <div key={item.orderId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/10 hover:border-border transition-all duration-300 shadow-sm gap-4">
+                      <div className="flex items-center gap-4 flex-1">
                         {item.primaryImageUrl ? (
-                          <img src={item.primaryImageUrl} alt={item.listingTitle} className="h-10 w-10 rounded-md object-cover border border-border bg-muted" />
+                          <img src={item.primaryImageUrl} alt={item.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" />
                         ) : (
-                          <div className="h-10 w-10 rounded-md bg-muted border border-border flex items-center justify-center text-[10px] text-muted-foreground">No Img</div>
+                          <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">
+                            <Package className="h-5 w-5 opacity-60" />
+                          </div>
                         )}
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{item.listingTitle}</p>
-                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
-                            <p className="flex items-center gap-1"><Building className="h-3.5 w-3.5 shrink-0" /> {item.vendorName}</p>
-                            <p>Qty: {item.quantity}</p>
-                            <p>{item.orderType === "rent" ? `${item.rentalDays} days rental` : "Buyout"}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{item.listingTitle}</p>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1">
+                            <span className="flex items-center gap-1"><Building className="h-3.5 w-3.5 shrink-0 opacity-60" /> {item.vendorName}</span>
+                            <span>Qty: <strong className="text-foreground font-medium">{item.quantity}</strong></span>
+                            <span>{item.orderType === "rent" ? `${item.rentalDays} days rental` : "Buyout"}</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between sm:justify-end gap-6 mt-3 sm:mt-0 pt-2 border-t border-border/20 sm:border-none sm:pt-0">
-                        <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderStatusBadgeClass(item.status))} variant="outline">
-                          {item.status.toUpperCase()}
-                        </Badge>
+                      <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pt-3 sm:pt-0 border-t border-border/20 sm:border-none">
+                        <div className="flex items-center gap-2">
+                          <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(item.orderType))} variant="outline">
+                            {item.orderType.toUpperCase()}
+                          </Badge>
+                          <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderStatusBadgeClass(item.status))} variant="outline">
+                            {item.status.toUpperCase()}
+                          </Badge>
+                        </div>
                         <span className="font-semibold tabular-nums text-sm text-foreground sm:w-20 sm:text-right">₹{item.totalAmount.toFixed(0)}</span>
-                        <Button size="sm" variant="ghost" className="h-8 text-xs font-semibold px-2 hover:bg-accent" onClick={() => setSelectedOrder(item)}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-xs font-semibold px-2 hover:bg-accent text-primary transition-colors flex items-center gap-1 group/btn"
+                          onClick={() => setSelectedOrder(item)}
+                        >
                           View Tracking
-                          <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                          <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-0.5" />
                         </Button>
                       </div>
                     </div>
@@ -478,7 +534,7 @@ export const AdminOrders = () => {
                     <p className="text-sm text-destructive font-semibold">This order item was cancelled.</p>
                   ) : (
                     <ol className="relative border-l border-border ml-3.5 mt-2 space-y-6">
-                      {TIMELINE_STEPS.map((step, i) => {
+                      {getTimelineSteps(selectedOrder.orderType).map((step, i) => {
                         const isDone = i <= timelineInfo!.completedThrough;
                         const isCurrent = timelineInfo!.currentIndex === i;
                         const isUpcoming = !isDone && !isCurrent;
@@ -492,6 +548,7 @@ export const AdminOrders = () => {
                               isUpcoming && "bg-muted text-muted-foreground border-border"
                             )}>
                               {isDone ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+                              {isCurrent ? <span className="h-1.5 w-1.5 rounded-full bg-foreground" aria-hidden /> : null}
                             </span>
                             <div>
                               <p className={cn("text-xs font-semibold leading-tight", isUpcoming ? "text-muted-foreground" : "text-foreground")}>

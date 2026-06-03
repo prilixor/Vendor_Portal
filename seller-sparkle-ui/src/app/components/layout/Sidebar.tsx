@@ -10,6 +10,7 @@ import { useCart } from "@/app/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import { useNotificationContext } from "@/app/contexts/NotificationContext";
 
 interface SidebarProps {
   variant?: "vendor" | "admin" | "customer";
@@ -44,12 +45,7 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
   }, [customerNotifications]);
 
   // 3. Get Unread Vendor Notifications (for Vendor variant)
-  const { data: unreadVendorCount = 0 } = useQuery({
-    queryKey: ["vendor-unread-notifications", user?.id],
-    queryFn: () => vendorOnboardingApi.getUnreadNotificationCount(user!.id),
-    enabled: variant === "vendor" && !!user?.id,
-    refetchInterval: 30000,
-  });
+  const { unreadCount: unreadVendorCount } = useNotificationContext();
 
   // Inject badges dynamically based on the current navigation item
   const dynamicSections = useMemo(() => {

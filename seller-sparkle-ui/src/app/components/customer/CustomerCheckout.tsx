@@ -31,11 +31,22 @@ const CustomerCheckout = () => {
   const { lines, totalEstimatedRent, clear } = useCart();
   const [addressId, setAddressId] = useState<string>("");
   const [deliveryChoice, setDeliveryChoice] = useState<DeliveryChoice>("standard");
+  const [hasInitializedAddress, setHasInitializedAddress] = useState(false);
 
   const { data: addresses } = useQuery({
     queryKey: ["customer-addresses"],
     queryFn: () => customerApi.getAddresses(),
   });
+
+  useEffect(() => {
+    if (addresses && !hasInitializedAddress) {
+      const defaultAddr = addresses.find((a) => a.isDefault);
+      if (defaultAddr) {
+        setAddressId(defaultAddr.id);
+      }
+      setHasInitializedAddress(true);
+    }
+  }, [addresses, hasInitializedAddress]);
 
   const totalDeposit = useMemo(
     () => lines.reduce((sum, l) => sum + (l.orderType === "buy" ? 0 : l.securityDeposit * l.quantity), 0),

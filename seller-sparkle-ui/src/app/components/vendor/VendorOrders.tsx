@@ -9,8 +9,9 @@ import { Skeleton } from "@/app/components/ui/skeleton";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, Search, Package, User } from "lucide-react";
 import { Input } from "@/app/components/ui/input";
+import { cn } from "@/app/helpers/utils";
 
 const PAGE_SIZE = 8;
 
@@ -33,6 +34,40 @@ function matchesVendorStatus(status: string, tabId: (typeof statusTabs)[number][
   if (tabId === "dispatch_failed") return s === "dispatch failed";
   if (tabId === "cancelled") return s === "cancelled" || s === "canceled";
   return s === tabId.replace(/_/g, " ");
+}
+
+function orderStatusBadgeClass(status: string): string {
+  const s = status.toLowerCase().replace(/_/g, " ");
+  if (s === "pending" || s.includes("awaiting")) {
+    return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900";
+  }
+  if (s === "confirmed") {
+    return "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900";
+  }
+  if (s.includes("transit")) {
+    return "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900";
+  }
+  if (s === "active") {
+    return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900";
+  }
+  if (s === "returned") {
+    return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-800";
+  }
+  if (s === "cancelled" || s === "canceled") {
+    return "bg-muted text-muted-foreground border-border";
+  }
+  if (s.includes("dispatch failed")) {
+    return "bg-destructive/10 text-destructive border-destructive/20 dark:bg-destructive/20 dark:text-destructive dark:border-destructive/80";
+  }
+  return "bg-muted text-foreground border-border";
+}
+
+function orderTypeBadgeClass(orderType: string): string {
+  const t = orderType.toLowerCase().trim();
+  if (t === "buy") {
+    return "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900";
+  }
+  return "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900";
 }
 
 const VendorOrders = () => {
@@ -108,7 +143,14 @@ const VendorOrders = () => {
 
   const sortedOrders = useMemo(
     () =>
-      [...filteredOrders].sort((a, b) => b.orderNumber.localeCompare(a.orderNumber, undefined, { numeric: true })),
+      [...filteredOrders].sort((a, b) => {
+        const timeA = new Date(a.createdAtUtc).getTime();
+        const timeB = new Date(b.createdAtUtc).getTime();
+        if (timeA !== timeB) {
+          return timeB - timeA;
+        }
+        return b.orderNumber.localeCompare(a.orderNumber, undefined, { numeric: true });
+      }),
     [filteredOrders],
   );
 
@@ -236,29 +278,61 @@ const VendorOrders = () => {
                       <p className="text-sm font-bold text-foreground">{group.baseOrderNumber}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">Consolidated Fulfillment</p>
                     </div>
+                    {group.items[0]?.createdAtUtc && (
+                      <div className="text-right sm:text-right">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Ordered on: <span className="font-semibold text-foreground">{new Date(group.items[0].createdAtUtc).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Items List */}
                   <div className="space-y-4">
                     {group.items.map((order) => (
-                      <div key={order.orderId} className="flex flex-col md:flex-row md:items-center md:justify-between p-4 rounded-lg bg-accent/30 border border-border/40 hover:bg-accent/50 transition-colors">
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold text-foreground">{order.listingTitle}</p>
-                          <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
-                            <p>Customer: <span className="font-medium text-foreground">{order.customerName}</span></p>
-                            <p>Qty: <span className="font-medium text-foreground">{order.quantity}</span></p>
-                            <p>Total: <span className="font-medium text-foreground">₹{order.totalAmount.toFixed(0)}</span></p>
-                            <p>Location: <span className="font-medium text-foreground">{order.customerCity ?? "-"}, {order.customerState ?? "-"}</span></p>
+                      <div key={order.orderId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/10 hover:border-border transition-all duration-300 shadow-sm gap-4">
+                        <div className="flex items-center gap-4 flex-1">
+                          {order.listingPrimaryImageUrl ? (
+                            <img
+                              src={order.listingPrimaryImageUrl}
+                              alt={order.listingTitle}
+                              className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm"
+                            />
+                          ) : (
+                            <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">
+                              <Package className="h-5 w-5 opacity-60" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{order.listingTitle}</p>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <User className="h-3.5 w-3.5 opacity-60 shrink-0" /> {order.customerName}
+                              </span>
+                              <span>Qty: <strong className="text-foreground font-medium">{order.quantity}</strong></span>
+                              <span>Total: <strong className="text-foreground font-semibold">₹{order.totalAmount.toFixed(0)}</strong></span>
+                              <span>Location: {order.customerCity ?? "-"}, {order.customerState ?? "-"}</span>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="mt-3 md:mt-0 flex items-center justify-between md:justify-end gap-4 border-t border-border/20 md:border-none pt-2 md:pt-0">
+                        <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pt-3 sm:pt-0 border-t border-border/20 sm:border-none">
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline">{order.orderType.toUpperCase()}</Badge>
-                            <Badge variant="secondary">{order.status}</Badge>
+                            <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(order.orderType))} variant="outline">
+                              {order.orderType.toUpperCase()}
+                            </Badge>
+                            <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderStatusBadgeClass(order.status))} variant="outline">
+                              {order.status.replace(/_/g, " ")}
+                            </Badge>
                           </div>
-                          <Button size="sm" variant="outline" className="h-8 text-xs border-border/80 font-medium" onClick={() => navigate(`/vendor/orders/${order.orderId}`)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 text-xs font-semibold px-2 hover:bg-accent text-primary transition-colors flex items-center gap-1 group/btn"
+                            onClick={() => navigate(`/vendor/orders/${order.orderId}`)}
+                          >
                             View details
+                            <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-0.5" />
                           </Button>
                         </div>
                       </div>

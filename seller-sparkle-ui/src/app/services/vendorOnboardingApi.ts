@@ -368,6 +368,7 @@ export interface VendorOrderApiDto {
   customerName: string;
   customerCity?: string;
   customerState?: string;
+  createdAtUtc: string;
 }
 
 export interface VendorExpiringOrderApiDto {

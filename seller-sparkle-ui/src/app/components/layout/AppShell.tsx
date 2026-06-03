@@ -103,25 +103,25 @@ export const AppShell = ({ variant }: AppShellProps) => {
         : "Vendor Workspace";
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
-      {mobileSidebarOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50 lg:hidden"
-          onClick={() => setMobileSidebarOpen(false)}
+    <NotificationProvider vendorId={variant === "vendor" ? user?.id : undefined}>
+      <div className="flex min-h-screen w-full bg-background">
+        {mobileSidebarOpen && (
+          <div
+            className="fixed inset-0 z-50 bg-black/50 lg:hidden"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+        )}
+
+        <Sidebar
+          variant={variant}
+          sections={sections}
+          brandHeading={variant === "customer" ? "Customer Portal" : undefined}
+          brandLabel={brandLabel}
+          isOpen={mobileSidebarOpen}
+          onClose={() => setMobileSidebarOpen(false)}
         />
-      )}
 
-      <Sidebar
-        variant={variant}
-        sections={sections}
-        brandHeading={variant === "customer" ? "Customer Portal" : undefined}
-        brandLabel={brandLabel}
-        isOpen={mobileSidebarOpen}
-        onClose={() => setMobileSidebarOpen(false)}
-      />
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <NotificationProvider vendorId={variant === "vendor" ? user?.id : undefined}>
+        <div className="flex min-w-0 flex-1 flex-col">
           <TopBar variant={variant} onMenuClick={() => setMobileSidebarOpen(true)} />
           <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-7xl">
@@ -132,8 +132,8 @@ export const AppShell = ({ variant }: AppShellProps) => {
             </div>
           </main>
           {variant === "vendor" && user && <SupportChat vendorId={user.id} />}
-        </NotificationProvider>
+        </div>
       </div>
-    </div>
+    </NotificationProvider>
   );
 };

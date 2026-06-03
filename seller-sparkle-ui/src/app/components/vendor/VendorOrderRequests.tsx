@@ -8,6 +8,15 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorDispatchOfferApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 import { Clock3, RefreshCw } from "lucide-react";
+import { cn } from "@/app/helpers/utils";
+
+function orderTypeBadgeClass(orderType: string): string {
+  const t = orderType.toLowerCase().trim();
+  if (t === "buy") {
+    return "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900";
+  }
+  return "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900";
+}
 
 const VendorOrderRequests = () => {
   const { user } = useAuth();
@@ -159,7 +168,7 @@ const VendorOrderRequests = () => {
                                 <span>Qty: <span className="font-medium text-foreground">{offer.quantity}</span></span>
                                 <span>Days: <span className="font-medium text-foreground">{offer.rentalDays}</span></span>
                                 <span>Total: <span className="font-medium text-foreground">₹{offer.totalAmount.toFixed(0)}</span></span>
-                                <span>Type: <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">{offer.orderType}</Badge></span>
+                                <span>Type: <Badge className={cn("text-[10px] px-1.5 py-0 capitalize", orderTypeBadgeClass(offer.orderType))} variant="outline">{offer.orderType}</Badge></span>
                               </div>
                             </div>
 

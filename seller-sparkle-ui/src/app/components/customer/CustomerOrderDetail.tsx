@@ -47,23 +47,36 @@ function isCustomerOrderCancellable(status: string): boolean {
   return s === "pending" || s === "awaiting vendor acceptance";
 }
 
-const TIMELINE_STEPS = [
-  { key: "placed", label: "Order Placed" },
-  { key: "confirmed", label: "Vendor Confirmed" },
-  { key: "out", label: "Out for Delivery" },
-  { key: "delivered", label: "Delivered" },
-  { key: "active", label: "Rental Active" },
-  { key: "returned", label: "Returned" },
-] as const;
+const getTimelineSteps = (orderType?: string) => {
+  const isBuy = orderType?.toLowerCase() === "buy";
+  if (isBuy) {
+    return [
+      { key: "placed", label: "Order Placed" },
+      { key: "confirmed", label: "Vendor Confirmed" },
+      { key: "out", label: "Out for Delivery" },
+      { key: "active", label: "Delivered & Purchased" },
+    ];
+  }
+  return [
+    { key: "placed", label: "Order Placed" },
+    { key: "confirmed", label: "Vendor Confirmed" },
+    { key: "out", label: "Out for Delivery" },
+    { key: "delivered", label: "Delivered" },
+    { key: "active", label: "Rental Active" },
+    { key: "returned", label: "Returned" },
+  ];
+};
 
 /** Last step index fully completed (inclusive). `currentIndex` is the active step if any. */
-function getTimelineProgress(status: string): {
+function getTimelineProgress(status: string, orderType?: string): {
   cancelled: boolean;
   completedThrough: number;
   currentIndex: number | null;
 } {
   const raw = status.toLowerCase().trim();
   const compact = raw.replace(/\s+/g, "_");
+  const isBuy = orderType?.toLowerCase() === "buy";
+
   if (compact === "cancelled" || compact === "canceled") {
     return { cancelled: true, completedThrough: -1, currentIndex: null };
   }
@@ -80,7 +93,9 @@ function getTimelineProgress(status: string): {
     return { cancelled: false, completedThrough: 2, currentIndex: 3 };
   }
   if (compact === "active") {
-    return { cancelled: false, completedThrough: 3, currentIndex: 4 };
+    return isBuy
+      ? { cancelled: false, completedThrough: 3, currentIndex: null }
+      : { cancelled: false, completedThrough: 3, currentIndex: 4 };
   }
   if (compact === "returned") {
     return { cancelled: false, completedThrough: 5, currentIndex: null };
@@ -88,8 +103,8 @@ function getTimelineProgress(status: string): {
   return { cancelled: false, completedThrough: 0, currentIndex: 1 };
 }
 
-function OrderTimeline({ status }: { status: string }) {
-  const { cancelled, completedThrough, currentIndex } = getTimelineProgress(status);
+function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
+  const { cancelled, completedThrough, currentIndex } = getTimelineProgress(status, orderType);
 
   if (cancelled) {
     return (
@@ -99,17 +114,20 @@ function OrderTimeline({ status }: { status: string }) {
     );
   }
 
+  const steps = getTimelineSteps(orderType);
+  const isRentalActiveCurrent = currentIndex !== null && steps[currentIndex]?.key === "active" && orderType?.toLowerCase() !== "buy";
+
   return (
     <ol className="relative space-y-0">
-      {TIMELINE_STEPS.map((step, i) => {
+      {steps.map((step, i) => {
         const isDone = i <= completedThrough;
         const isCurrent = currentIndex === i;
         const isUpcoming = !isDone && !isCurrent;
-        const isRentalActiveCurrent = isCurrent && step.key === "active";
+        const isRentalActiveCurrentStep = isRentalActiveCurrent && step.key === "active";
 
         return (
           <li key={step.key} className="relative flex gap-4 pb-8 last:pb-0">
-            {i < TIMELINE_STEPS.length - 1 ? (
+            {i < steps.length - 1 ? (
               <div
                 className={cn(
                   "absolute left-[17px] top-9 h-[calc(100%-0.5rem)] w-px",
@@ -124,7 +142,7 @@ function OrderTimeline({ status }: { status: string }) {
                   "flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-medium transition-colors",
                   isDone && "border-foreground bg-foreground text-background",
                   isCurrent && "border-foreground bg-background text-foreground shadow-sm",
-                  isRentalActiveCurrent && "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-500 dark:bg-emerald-500",
+                  isRentalActiveCurrentStep && "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-500 dark:bg-emerald-500",
                   isUpcoming && "border-border bg-muted text-muted-foreground",
                 )}
               >
@@ -136,13 +154,13 @@ function OrderTimeline({ status }: { status: string }) {
               <p
                 className={cn(
                   "font-medium leading-tight",
-                  isRentalActiveCurrent && "text-emerald-700 dark:text-emerald-300",
+                  isRentalActiveCurrentStep && "text-emerald-700 dark:text-emerald-300",
                   isUpcoming ? "text-muted-foreground" : "text-foreground",
                 )}
               >
                 {step.label}
               </p>
-              {isCurrent && step.key === "active" ? (
+              {isCurrent && step.key === "active" && orderType?.toLowerCase() !== "buy" ? (
                 <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Rental is currently active</p>
               ) : null}
               {isCurrent && step.key !== "active" ? (
@@ -291,7 +309,7 @@ const CustomerOrderDetail = () => {
                   <div>
                     <p className="text-sm font-semibold text-foreground">{item.listingTitle}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {item.vendorName} · Qty: {item.quantity}
+                      Qty: {item.quantity}
                     </p>
                   </div>
                 </div>
@@ -327,7 +345,7 @@ const CustomerOrderDetail = () => {
           </Button>
         </CardHeader>
         <CardContent className="pt-2">
-          <OrderTimeline status={activeItem.status} />
+          <OrderTimeline status={activeItem.status} orderType={activeItem.orderType} />
         </CardContent>
       </Card>
 

@@ -38,7 +38,8 @@ public sealed record VendorOrderDto(
     string? ListingPrimaryImageUrl,
     string CustomerName,
     string? CustomerCity,
-    string? CustomerState);
+    string? CustomerState,
+    DateTime CreatedAtUtc);
 
 public sealed record GetVendorOrdersQuery(string VendorId, string? Status) : IQuery<List<VendorOrderDto>>;
 
@@ -272,7 +273,8 @@ internal static class VendorOrderMapper
             row.ListingPrimaryImageUrl,
             row.Order.Customer?.FullName ?? "Customer",
             row.Order.CustomerAddress?.City,
-            row.Order.CustomerAddress?.State);
+            row.Order.CustomerAddress?.State,
+            o.CreatedOnUtc);
     }
 }
 

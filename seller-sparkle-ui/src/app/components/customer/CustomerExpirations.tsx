@@ -54,7 +54,6 @@ const CustomerExpirations = () => {
                   Order <span className="font-medium text-foreground">{x.orderNumber}</span> ({x.orderType})
                 </p>
                 <p>Ends on {new Date(x.endDate).toLocaleDateString()}</p>
-                <p>Vendor: {x.vendorName}</p>
               </CardContent>
             </Card>
           ))}

@@ -10,14 +10,25 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 
-const TIMELINE_STEPS = [
-  { key: "placed", label: "Order Placed" },
-  { key: "confirmed", label: "Vendor Confirmed" },
-  { key: "out", label: "Out for Delivery" },
-  { key: "delivered", label: "Delivered" },
-  { key: "active", label: "Rental Active" },
-  { key: "returned", label: "Returned" },
-] as const;
+const getTimelineSteps = (orderType?: string) => {
+  const isBuy = orderType?.toLowerCase() === "buy";
+  if (isBuy) {
+    return [
+      { key: "placed", label: "Order Placed" },
+      { key: "confirmed", label: "Vendor Confirmed" },
+      { key: "out", label: "Out for Delivery" },
+      { key: "active", label: "Delivered & Purchased" },
+    ];
+  }
+  return [
+    { key: "placed", label: "Order Placed" },
+    { key: "confirmed", label: "Vendor Confirmed" },
+    { key: "out", label: "Out for Delivery" },
+    { key: "delivered", label: "Delivered" },
+    { key: "active", label: "Rental Active" },
+    { key: "returned", label: "Returned" },
+  ];
+};
 
 function formatDetailDate(value?: string): string {
   if (!value?.trim()) return "—";
@@ -26,28 +37,36 @@ function formatDetailDate(value?: string): string {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-function timelineProgress(status: string): { completedThrough: number; currentIndex: number | null } {
+function timelineProgress(status: string, orderType?: string): { completedThrough: number; currentIndex: number | null } {
   const raw = status.toLowerCase().trim();
   const compact = raw.replace(/\s+/g, "_");
+  const isBuy = orderType?.toLowerCase() === "buy";
+
   if (compact === "pending") return { completedThrough: 0, currentIndex: 1 };
   if (compact === "confirmed") return { completedThrough: 1, currentIndex: 2 };
   if (compact === "in_transit" || raw.includes("transit")) return { completedThrough: 2, currentIndex: 3 };
-  if (compact === "active") return { completedThrough: 4, currentIndex: null };
+  if (compact === "active") {
+    return isBuy
+      ? { completedThrough: 3, currentIndex: null }
+      : { completedThrough: 4, currentIndex: null };
+  }
   if (compact === "returned") return { completedThrough: 5, currentIndex: null };
   return { completedThrough: 0, currentIndex: 1 };
 }
 
-function OrderTimeline({ status }: { status: string }) {
-  const { completedThrough, currentIndex } = timelineProgress(status);
+function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
+  const { completedThrough, currentIndex } = timelineProgress(status, orderType);
+  const steps = getTimelineSteps(orderType);
+
   return (
     <ol className="relative space-y-0">
-      {TIMELINE_STEPS.map((step, i) => {
+      {steps.map((step, i) => {
         const isDone = i <= completedThrough;
         const isCurrent = currentIndex === i;
         const isUpcoming = !isDone && !isCurrent;
         return (
           <li key={step.key} className="relative flex gap-4 pb-8 last:pb-0">
-            {i < TIMELINE_STEPS.length - 1 ? (
+            {i < steps.length - 1 ? (
               <div
                 className={cn(
                   "absolute left-[17px] top-9 h-[calc(100%-0.5rem)] w-px",
@@ -74,7 +93,7 @@ function OrderTimeline({ status }: { status: string }) {
                 {step.label}
               </p>
               {isCurrent ? <p className="mt-1 text-xs text-muted-foreground">In progress</p> : null}
-              {!isCurrent && step.key === "active" && status.trim().toLowerCase() === "active" ? (
+              {!isCurrent && step.key === "active" && status.trim().toLowerCase() === "active" && orderType?.toLowerCase() !== "buy" ? (
                 <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Current status</p>
               ) : null}
             </div>
@@ -226,7 +245,7 @@ const VendorOrderDetail = () => {
               <p className="text-lg font-semibold">Order timeline</p>
             </CardHeader>
             <CardContent className="pt-2">
-              <OrderTimeline status={order.status} />
+              <OrderTimeline status={order.status} orderType={order.orderType} />
             </CardContent>
           </Card>
 

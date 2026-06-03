@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Package } from "lucide-react";
 import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -9,6 +9,7 @@ import { Skeleton } from "@/app/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
 import { cn } from "@/app/helpers/utils";
+import { Badge } from "@/app/components/ui/badge";
 
 const PAGE_SIZE = 8;
 
@@ -65,6 +66,14 @@ function orderStatusBadgeClass(status: string): string {
     return "bg-destructive/15 text-destructive dark:bg-destructive/20 dark:text-destructive";
   }
   return "bg-muted text-foreground";
+}
+
+function orderTypeBadgeClass(orderType: string): string {
+  const t = orderType.toLowerCase().trim();
+  if (t === "buy") {
+    return "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900";
+  }
+  return "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900";
 }
 
 function matchesStatusFilter(status: string, filter: StatusFilter): boolean {
@@ -274,48 +283,63 @@ const CustomerOrders = () => {
                     {/* Group Items */}
                     <div className="space-y-4">
                       {group.items.map((o) => (
-                        <div key={o.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg bg-accent/30 border border-border/40 hover:bg-accent/50 transition-colors">
-                          <div className="flex items-center gap-4">
+                        <div key={o.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/10 hover:border-border transition-all duration-300 shadow-sm gap-4">
+                          <div className="flex items-center gap-4 flex-1">
                             {o.primaryImageUrl ? (
-                              <img src={o.primaryImageUrl} alt={o.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border/60 bg-muted" />
+                              <img src={o.primaryImageUrl} alt={o.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" />
                             ) : (
-                              <div className="h-12 w-12 rounded-lg bg-muted border border-border/60 flex items-center justify-center text-xs text-muted-foreground">No Img</div>
+                              <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">
+                                <Package className="h-5 w-5 opacity-60" />
+                              </div>
                             )}
-                            <div>
+                            <div className="flex-1 min-w-0">
                               <Link
                                 to={`/customer/orders/${encodeURIComponent(o.id)}`}
-                                className="text-sm font-semibold text-foreground hover:underline"
+                                className="text-sm font-semibold text-foreground hover:underline block truncate"
                               >
                                 {o.listingTitle}
                               </Link>
-                              <div className="text-xs text-muted-foreground mt-0.5">
-                                {o.vendorName} · {formatDateRange(o.startDate, o.endDate)}
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1">
+                                <span>Vendor: <strong className="text-foreground font-medium">{o.vendorName}</strong></span>
+                                <span>Period: {formatDateRange(o.startDate, o.endDate)}</span>
+                                <span>Qty: <strong className="text-foreground font-medium">{o.quantity}</strong></span>
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between sm:justify-end gap-6 mt-3 sm:mt-0">
-                            <span
-                              className={cn(
-                                "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium",
-                                orderStatusBadgeClass(o.status),
-                              )}
-                            >
-                              {o.status}
-                            </span>
-                            <span className="font-semibold tabular-nums text-sm text-foreground sm:w-20 sm:text-right">₹{o.totalAmount.toFixed(0)}</span>
+                          <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pt-3 sm:pt-0 border-t border-border/20 sm:border-none">
                             <div className="flex items-center gap-2">
+                              <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(o.orderType))} variant="outline">
+                                {o.orderType.toUpperCase()}
+                              </Badge>
+                              <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderStatusBadgeClass(o.status))} variant="outline">
+                                {o.status.replace(/_/g, " ")}
+                              </Badge>
+                            </div>
+                            <span className="font-semibold tabular-nums text-sm text-foreground sm:w-20 sm:text-right">₹{o.totalAmount.toFixed(0)}</span>
+                            <div className="flex items-center gap-1">
                               {isCustomerOrderCancellable(o.status) ? (
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  className="h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive font-semibold px-2"
                                   disabled={cancelMut.isPending}
                                   onClick={() => cancelMut.mutate(o.id)}
                                 >
                                   Cancel
                                 </Button>
                               ) : null}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                asChild
+                                className="h-8 text-xs font-semibold px-2 hover:bg-accent text-primary transition-colors flex items-center gap-1 group/btn"
+                              >
+                                <Link to={`/customer/orders/${encodeURIComponent(o.id)}`}>
+                                  Details
+                                  <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-0.5" />
+                                </Link>
+                              </Button>
                             </div>
                           </div>
                         </div>

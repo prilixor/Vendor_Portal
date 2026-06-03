@@ -290,7 +290,7 @@ export const AdminNotifications = () => {
                         {/* Timestamp */}
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 sm:text-right">
                           <Clock className="h-3.5 w-3.5" />
-                          <span>{new Date(log.timestamp).toLocaleString()}</span>
+                          <span>{new Date(log.createdAt).toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
