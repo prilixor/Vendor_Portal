@@ -1151,6 +1151,15 @@ public sealed class CustomerRepository(
     public Task<string?> GetVendorBusinessNameAsync(Guid vendorId, CancellationToken cancellationToken) =>
         vendorDb.VendorProfiles.Where(p => p.VendorId == vendorId).Select(p => p.BusinessName).FirstOrDefaultAsync(cancellationToken);
 
+    public Task<bool> HasActiveOrdersForListingAsync(Guid listingId, CancellationToken cancellationToken)
+    {
+        var activeStatuses = new[] { "pending", "awaiting_vendor_acceptance", "confirmed", "in_transit", "active" };
+        return customerDb.CustomerRentalOrders
+            .AnyAsync(o => o.VendorProductListingId == listingId 
+                           && activeStatuses.Contains(o.Status) 
+                           && !o.IsDeleted, 
+                       cancellationToken);
+    }
 }
 
 

@@ -58,6 +58,8 @@ public interface ICustomerRepository
     Task AddChatMessageAsync(ChatMessage message, CancellationToken cancellationToken);
     Task<string?> GetVendorBusinessNameAsync(Guid vendorId, CancellationToken cancellationToken);
 
+    Task<bool> HasActiveOrdersForListingAsync(Guid listingId, CancellationToken cancellationToken);
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }
 

@@ -489,7 +489,9 @@ public sealed class DeleteVendorProductListingCommandValidator : AbstractValidat
     }
 }
 
-internal sealed class DeleteVendorProductListingCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class DeleteVendorProductListingCommandHandler(
+    IVendorOnboardingRepository repository,
+    ICustomerRepository customerRepository)
     : ICommandHandler<DeleteVendorProductListingCommand>
 {
     public async Task<Result> Handle(DeleteVendorProductListingCommand request, CancellationToken cancellationToken)
@@ -504,6 +506,15 @@ internal sealed class DeleteVendorProductListingCommandHandler(IVendorOnboarding
         if (listing is null)
         {
             return Result.Failure(new Error("vendors.listing.not_found", "Vendor listing not found.", ErrorCategory.NotFound));
+        }
+
+        // Check if there are active customer rental orders for this listing
+        if (await customerRepository.HasActiveOrdersForListingAsync(listingId, cancellationToken))
+        {
+            return Result.Failure(new Error(
+                "vendors.listing.active_orders",
+                "Cannot delete listing because there are active or pending customer rental orders associated with it. Please complete or cancel those orders first.",
+                ErrorCategory.Validation));
         }
 
         await repository.DeleteVendorProductListingAsync(vendorId, listingId, cancellationToken);
