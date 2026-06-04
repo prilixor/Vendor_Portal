@@ -595,3 +595,66 @@ public sealed class MarkAllCustomerNotificationsReadEndpoint(IMediator mediator)
         return TypedResults.Ok(new CustomerNotificationsMarkAllReadResponse { UpdatedCount = result.Value });
     }
 }
+
+public sealed class GetCustomerNotificationPreferenceEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<CustomerNotificationPreferenceDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("me/notification-preferences");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerNotificationPreferenceDto>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var result = await mediator.Send(new GetCustomerNotificationPreferenceQuery(customerId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class UpdateCustomerNotificationPreferenceRequest
+{
+    public bool OrderStatusUpdatesEnabled { get; set; }
+    public bool ExpirationRemindersEnabled { get; set; }
+    public bool DepositRefundsEnabled { get; set; }
+    public bool DirectMessagesEnabled { get; set; }
+    public bool MarketingEmailsEnabled { get; set; }
+}
+
+public sealed class UpdateCustomerNotificationPreferenceEndpoint(IMediator mediator)
+    : Endpoint<UpdateCustomerNotificationPreferenceRequest, Results<Ok<CustomerNotificationPreferenceDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Put("me/notification-preferences");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerNotificationPreferenceDto>, ProblemHttpResult>> ExecuteAsync(UpdateCustomerNotificationPreferenceRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var result = await mediator.Send(new UpsertCustomerNotificationPreferenceCommand(
+            customerId,
+            req.OrderStatusUpdatesEnabled,
+            req.ExpirationRemindersEnabled,
+            req.DepositRefundsEnabled,
+            req.DirectMessagesEnabled,
+            req.MarketingEmailsEnabled), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+

@@ -44,6 +44,20 @@ public interface ICustomerRepository
     Task AddCustomerNotificationAsync(CustomerNotification notification, CancellationToken cancellationToken);
     Task<int> MarkAllCustomerNotificationsReadAsync(Guid customerId, CancellationToken cancellationToken);
 
+    Task<CustomerNotificationPreference?> GetCustomerNotificationPreferenceAsync(Guid customerId, CancellationToken cancellationToken);
+    Task AddCustomerNotificationPreferenceAsync(CustomerNotificationPreference preference, CancellationToken cancellationToken);
+    Task UpdateCustomerNotificationPreferenceAsync(CustomerNotificationPreference preference, CancellationToken cancellationToken);
+
+    Task<List<ChatSession>> GetCustomerChatSessionsAsync(Guid customerId, CancellationToken cancellationToken);
+    Task<List<ChatSession>> GetVendorChatSessionsAsync(Guid vendorId, CancellationToken cancellationToken);
+    Task<ChatSession?> GetChatSessionAsync(Guid customerId, Guid vendorId, Guid? orderId, CancellationToken cancellationToken);
+    Task<ChatSession?> GetChatSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken);
+    Task AddChatSessionAsync(ChatSession session, CancellationToken cancellationToken);
+    Task UpdateChatSessionAsync(ChatSession session, CancellationToken cancellationToken);
+    Task<List<ChatMessage>> GetChatMessagesAsync(Guid sessionId, CancellationToken cancellationToken);
+    Task AddChatMessageAsync(ChatMessage message, CancellationToken cancellationToken);
+    Task<string?> GetVendorBusinessNameAsync(Guid vendorId, CancellationToken cancellationToken);
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }
 

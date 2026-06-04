@@ -9,56 +9,8 @@ import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { useAuth } from "@/app/guards/AuthContext";
 import { authApi } from "@/app/services/authApi";
-import { customerApi } from "@/app/services/customerApi";
+import { customerApi, type CustomerNotificationPreferenceApi } from "@/app/services/customerApi";
 import { toast } from "sonner";
-
-/**
- * Mirrors my-rentals-hub `src/routes/customer._app.settings.tsx` (Lovable).
- * Wired to Vendor Portal APIs: profile GET/PUT, change-password, prefs in localStorage.
- */
-
-const PREFS_STORAGE_KEY = "prilixor.customer.notification_prefs.v1";
-
-type CustomerPrefs = {
-  emailUpdates: boolean;
-  pushUpdates: boolean;
-  marketing: boolean;
-};
-
-const defaultPrefs: CustomerPrefs = {
-  emailUpdates: true,
-  pushUpdates: false,
-  marketing: false,
-};
-
-function loadPrefs(): CustomerPrefs {
-  try {
-    const raw = localStorage.getItem(PREFS_STORAGE_KEY);
-    if (!raw) return { ...defaultPrefs };
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return {
-      emailUpdates: typeof parsed.emailUpdates === "boolean" ? parsed.emailUpdates : defaultPrefs.emailUpdates,
-      pushUpdates:
-        typeof parsed.pushUpdates === "boolean"
-          ? parsed.pushUpdates
-          : typeof parsed.pushNotifications === "boolean"
-            ? parsed.pushNotifications
-            : defaultPrefs.pushUpdates,
-      marketing:
-        typeof parsed.marketing === "boolean"
-          ? parsed.marketing
-          : typeof parsed.marketingEmails === "boolean"
-            ? parsed.marketingEmails
-            : defaultPrefs.marketing,
-    };
-  } catch {
-    return { ...defaultPrefs };
-  }
-}
-
-function savePrefs(p: CustomerPrefs) {
-  localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(p));
-}
 
 const CustomerSettings = () => {
   const { user } = useAuth();
@@ -69,18 +21,13 @@ const CustomerSettings = () => {
     queryFn: () => customerApi.getProfile(),
   });
 
+  const { data: dbPrefs, isLoading: loadingPrefs } = useQuery({
+    queryKey: ["customer-preferences"],
+    queryFn: () => customerApi.getNotificationPreferences(),
+  });
+
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-
-  const [prefs, setPrefs] = useState<CustomerPrefs>(defaultPrefs);
-
-  useEffect(() => {
-    setPrefs(loadPrefs());
-  }, []);
 
   useEffect(() => {
     if (data) {
@@ -89,9 +36,32 @@ const CustomerSettings = () => {
     }
   }, [data]);
 
-  const persistPrefs = (next: CustomerPrefs) => {
-    setPrefs(next);
-    savePrefs(next);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const updatePrefsMut = useMutation({
+    mutationFn: (next: Omit<CustomerNotificationPreferenceApi, "customerId">) =>
+      customerApi.updateNotificationPreferences(next),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["customer-preferences"], updated);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to update preferences.");
+    },
+  });
+
+  const togglePref = (key: keyof Omit<CustomerNotificationPreferenceApi, "customerId">, value: boolean) => {
+    if (!dbPrefs) return;
+    const next = {
+      orderStatusUpdatesEnabled: dbPrefs.orderStatusUpdatesEnabled,
+      expirationRemindersEnabled: dbPrefs.expirationRemindersEnabled,
+      depositRefundsEnabled: dbPrefs.depositRefundsEnabled,
+      directMessagesEnabled: dbPrefs.directMessagesEnabled,
+      marketingEmailsEnabled: dbPrefs.marketingEmailsEnabled,
+      [key]: value,
+    };
+    updatePrefsMut.mutate(next);
   };
 
   const saveProfileMut = useMutation({
@@ -257,24 +227,48 @@ const CustomerSettings = () => {
         <TabsContent value="preferences" className="mt-4">
           <Card>
             <CardContent className="space-y-3 p-5">
-              <PrefRow
-                title="Email updates"
-                desc="Order status, delivery, and returns."
-                checked={prefs.emailUpdates}
-                onChange={(v) => persistPrefs({ ...prefs, emailUpdates: v })}
-              />
-              <PrefRow
-                title="Push notifications"
-                desc="Real-time alerts on your devices."
-                checked={prefs.pushUpdates}
-                onChange={(v) => persistPrefs({ ...prefs, pushUpdates: v })}
-              />
-              <PrefRow
-                title="Marketing emails"
-                desc="Occasional updates about new vendors and offers."
-                checked={prefs.marketing}
-                onChange={(v) => persistPrefs({ ...prefs, marketing: v })}
-              />
+              {loadingPrefs || !dbPrefs ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-14 w-full" />
+                  <Skeleton className="h-14 w-full" />
+                  <Skeleton className="h-14 w-full" />
+                  <Skeleton className="h-14 w-full" />
+                  <Skeleton className="h-14 w-full" />
+                </div>
+              ) : (
+                <>
+                  <PrefRow
+                    title="Order Status Updates"
+                    desc="Get real-time updates on your orders, deliveries, and returns."
+                    checked={dbPrefs.orderStatusUpdatesEnabled}
+                    onChange={(v) => togglePref("orderStatusUpdatesEnabled", v)}
+                  />
+                  <PrefRow
+                    title="Expiration Reminders"
+                    desc="Receive alerts when your rental period is about to end."
+                    checked={dbPrefs.expirationRemindersEnabled}
+                    onChange={(v) => togglePref("expirationRemindersEnabled", v)}
+                  />
+                  <PrefRow
+                    title="Deposit & Refund Alerts"
+                    desc="Get notified when your security deposits are refunded."
+                    checked={dbPrefs.depositRefundsEnabled}
+                    onChange={(v) => togglePref("depositRefundsEnabled", v)}
+                  />
+                  <PrefRow
+                    title="Direct Messages"
+                    desc="Allow vendors to contact you directly regarding your rentals."
+                    checked={dbPrefs.directMessagesEnabled}
+                    onChange={(v) => togglePref("directMessagesEnabled", v)}
+                  />
+                  <PrefRow
+                    title="Marketing Emails"
+                    desc="Receive occasional newsletters and promotional offers."
+                    checked={dbPrefs.marketingEmailsEnabled}
+                    onChange={(v) => togglePref("marketingEmailsEnabled", v)}
+                  />
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

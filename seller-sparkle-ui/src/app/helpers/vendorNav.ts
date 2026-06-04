@@ -20,6 +20,7 @@ import {
   Bell,
 
   Settings,
+  MessageSquare,
 } from "lucide-react";
 
 import type { NavSection } from "@/app/helpers/navigation";
@@ -91,6 +92,7 @@ export const vendorNav: NavSection[] = [
 
     items: [
       { label: "Notifications", to: "/vendor/notifications", icon: Bell },
+      { label: "Chats", to: "/vendor/chats", icon: MessageSquare },
       { label: "Settings", to: "/vendor/settings", icon: Settings },
 
     ],

@@ -32,6 +32,7 @@ import VendorOrderDetail from "@/app/components/vendor/VendorOrderDetail";
 import VendorExpirations from "@/app/components/vendor/VendorExpirations";
 import Notifications from "@/app/components/vendor/Notifications";
 import Settings from "@/app/components/vendor/Settings";
+import VendorChats from "@/app/components/vendor/VendorChats";
 
 import AdminDashboard from "@/app/components/admin/AdminDashboard";
 import Verification from "@/app/components/admin/Verification";
@@ -101,6 +102,7 @@ const App = () => (
               <Route path="expirations" element={<VendorExpirations />} />
               <Route path="notifications" element={<Notifications />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="chats" element={<VendorChats />} />
             </Route>
 
             <Route path="/admin" element={<AppShell variant="admin" />}>

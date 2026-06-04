@@ -15,6 +15,9 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
     public DbSet<CustomerRentalOrder> CustomerRentalOrders => Set<CustomerRentalOrder>();
     public DbSet<CustomerOrderVendorOffer> CustomerOrderVendorOffers => Set<CustomerOrderVendorOffer>();
     public DbSet<CustomerNotification> CustomerNotifications => Set<CustomerNotification>();
+    public DbSet<CustomerNotificationPreference> CustomerNotificationPreferences => Set<CustomerNotificationPreference>();
+    public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -149,6 +152,79 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.HasOne(x => x.Customer)
                 .WithMany(x => x.Notifications)
                 .HasForeignKey(x => x.CustomerId);
+        });
+
+        modelBuilder.Entity<CustomerNotificationPreference>(entity =>
+        {
+            entity.ToTable("customer_notification_preferences");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CustomerId).HasColumnName("customer_id");
+            entity.Property(x => x.OrderStatusUpdatesEnabled).HasColumnName("order_status_updates_enabled");
+            entity.Property(x => x.ExpirationRemindersEnabled).HasColumnName("expiration_reminders_enabled");
+            entity.Property(x => x.DepositRefundsEnabled).HasColumnName("deposit_refunds_enabled");
+            entity.Property(x => x.DirectMessagesEnabled).HasColumnName("direct_messages_enabled");
+            entity.Property(x => x.MarketingEmailsEnabled).HasColumnName("marketing_emails_enabled");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Ignore(x => x.CreatedBy);
+            entity.Ignore(x => x.ModifiedBy);
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.HasOne(x => x.Customer)
+                .WithOne()
+                .HasForeignKey<CustomerNotificationPreference>(x => x.CustomerId);
+        });
+
+        modelBuilder.Entity<ChatSession>(entity =>
+        {
+            entity.ToTable("chat_sessions");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CustomerId).HasColumnName("customer_id");
+            entity.Property(x => x.VendorId).HasColumnName("vendor_id");
+            entity.Property(x => x.OrderId).HasColumnName("order_id").IsRequired(false);
+            entity.Property(x => x.Subject).HasColumnName("subject");
+            entity.Property(x => x.LastMessageAt).HasColumnName("last_message_at");
+            entity.Property(x => x.IsClosed).HasColumnName("is_closed");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Ignore(x => x.CreatedBy);
+            entity.Ignore(x => x.ModifiedBy);
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.Ignore(x => x.Vendor);
+            entity.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId);
+            entity.HasOne(x => x.Order)
+                .WithMany()
+                .HasForeignKey(x => x.OrderId)
+                .IsRequired(false);
+        });
+
+        modelBuilder.Entity<ChatMessage>(entity =>
+        {
+            entity.ToTable("chat_messages");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.ChatSessionId).HasColumnName("chat_session_id");
+            entity.Property(x => x.SenderType).HasColumnName("sender_type");
+            entity.Property(x => x.MessageText).HasColumnName("message_text");
+            entity.Property(x => x.SentAt).HasColumnName("sent_at");
+            entity.Property(x => x.IsRead).HasColumnName("is_read");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Ignore(x => x.CreatedBy);
+            entity.Ignore(x => x.ModifiedBy);
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.HasOne(x => x.ChatSession)
+                .WithMany(x => x.Messages)
+                .HasForeignKey(x => x.ChatSessionId);
         });
     }
 

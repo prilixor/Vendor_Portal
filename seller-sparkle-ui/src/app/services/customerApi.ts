@@ -89,6 +89,7 @@ export interface CustomerOrderApi {
   listingId: string;
   listingTitle: string;
   vendorName: string;
+  vendorId: string;
   status: string;
   startDate?: string | null;
   endDate?: string | null;
@@ -282,4 +283,21 @@ export const customerApi = {
       `/vendors/locations/states/${encodeURIComponent(stateIso2)}/cities`,
     );
   },
+
+  getNotificationPreferences(): Promise<CustomerNotificationPreferenceApi> {
+    return apiClient.get<CustomerNotificationPreferenceApi>("/customers/me/notification-preferences");
+  },
+
+  updateNotificationPreferences(prefs: Omit<CustomerNotificationPreferenceApi, "customerId">): Promise<CustomerNotificationPreferenceApi> {
+    return apiClient.put<CustomerNotificationPreferenceApi>("/customers/me/notification-preferences", prefs);
+  },
 };
+
+export interface CustomerNotificationPreferenceApi {
+  customerId: string;
+  orderStatusUpdatesEnabled: boolean;
+  expirationRemindersEnabled: boolean;
+  depositRefundsEnabled: boolean;
+  directMessagesEnabled: boolean;
+  marketingEmailsEnabled: boolean;
+}

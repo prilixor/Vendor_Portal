@@ -1,11 +1,14 @@
 import { useParams, Link } from "react-router-dom";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Headset } from "lucide-react";
+import { Check, Headset, MessageCircle } from "lucide-react";
 import { customerApi } from "@/app/services/customerApi";
+import { chatApi } from "@/app/services/chatApi";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Skeleton } from "@/app/components/ui/skeleton";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/app/components/ui/sheet";
+import { Input } from "@/app/components/ui/input";
 import { toast } from "sonner";
 import { cn } from "@/app/helpers/utils";
 
@@ -179,6 +182,11 @@ const CustomerOrderDetail = () => {
   const queryClient = useQueryClient();
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [newMessageText, setNewMessageText] = useState("");
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   // Fetch current selected item details
   const currentItemId = selectedItemId || orderId;
 
@@ -202,6 +210,51 @@ const CustomerOrderDetail = () => {
       queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
     },
     onError: (err: Error) => toast.error(err.message),
+  });
+
+  const { data: chatSessions } = useQuery({
+    queryKey: ["customer-chat-sessions"],
+    queryFn: () => chatApi.getCustomerSessions(),
+    enabled: isChatOpen,
+  });
+
+  const activeSession = useMemo(() => {
+    if (!chatSessions || !data) return null;
+    return chatSessions.find((s) => s.vendorId === data.vendorId && s.orderId === data.id) || null;
+  }, [chatSessions, data]);
+
+  const { data: messages } = useQuery({
+    queryKey: ["chat-messages", activeSession?.id],
+    queryFn: () => chatApi.getCustomerMessages(activeSession!.id),
+    enabled: !!activeSession?.id && isChatOpen,
+    refetchInterval: 5000,
+  });
+
+  useEffect(() => {
+    if (isChatOpen && messages) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isChatOpen]);
+
+  const createSessionMut = useMutation({
+    mutationFn: () => chatApi.createCustomerSession({
+      vendorId: data!.vendorId,
+      orderId: data!.id,
+      subject: `Chat regarding order ${data!.orderNumber}: ${data!.listingTitle}`
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customer-chat-sessions"] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to start chat session.")
+  });
+
+  const sendMessageMut = useMutation({
+    mutationFn: (text: string) => chatApi.sendCustomerMessage(activeSession!.id, text),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", activeSession?.id] });
+      setNewMessageText("");
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to send message.")
   });
 
   // Find all items belonging to the same order group prefix
@@ -385,6 +438,12 @@ const CustomerOrderDetail = () => {
             Contact support
           </Link>
         </Button>
+
+        <Button variant="outline" onClick={() => setIsChatOpen(true)}>
+          <MessageCircle className="mr-2 h-4 w-4" />
+          Chat with Vendor
+        </Button>
+
         {isCustomerOrderCancellable(activeItem.status) && (
           <Button
             variant="destructive"
@@ -395,6 +454,86 @@ const CustomerOrderDetail = () => {
           </Button>
         )}
       </div>
+
+      <Sheet open={isChatOpen} onOpenChange={setIsChatOpen}>
+        <SheetContent className="flex flex-col h-full sm:max-w-md p-0">
+          <SheetHeader className="p-6 border-b">
+            <SheetTitle>Chat about this Order</SheetTitle>
+            <SheetDescription className="text-xs">
+              Order: {activeItem.orderNumber} • {activeItem.listingTitle}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {!activeSession ? (
+              <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
+                <MessageCircle className="h-10 w-10 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-semibold">No active conversation</p>
+                  <p className="text-xs text-muted-foreground">Start a direct chat with the vendor regarding this item.</p>
+                </div>
+                <Button
+                  onClick={() => createSessionMut.mutate()}
+                  disabled={createSessionMut.isPending}
+                >
+                  {createSessionMut.isPending ? "Starting chat..." : "Start Chat"}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {messages && messages.length > 0 ? (
+                  messages.map((msg) => {
+                    const isMe = msg.senderType === "Customer";
+                    return (
+                      <div
+                        key={msg.id}
+                        className={cn(
+                          "flex flex-col max-w-[85%] rounded-lg p-3 text-sm shadow-sm",
+                          isMe
+                            ? "bg-primary text-primary-foreground ml-auto rounded-tr-none"
+                            : "bg-muted text-muted-foreground mr-auto rounded-tl-none border"
+                        )}
+                      >
+                        <p className="break-words font-medium leading-relaxed">{msg.messageText}</p>
+                        <span className="text-[10px] opacity-75 mt-1.5 self-end font-semibold">
+                          {new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-xs text-center text-muted-foreground py-12">
+                    Send a message to start the conversation.
+                  </p>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
+          {activeSession && (
+            <div className="p-4 border-t bg-background sticky bottom-0">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newMessageText.trim()) return;
+                  sendMessageMut.mutate(newMessageText.trim());
+                }}
+                className="flex items-center gap-2"
+              >
+                <Input
+                  placeholder="Type a message..."
+                  value={newMessageText}
+                  onChange={(e) => setNewMessageText(e.target.value)}
+                  disabled={sendMessageMut.isPending}
+                  className="flex-1"
+                />
+                <Button type="submit" size="sm" disabled={sendMessageMut.isPending || !newMessageText.trim()}>
+                  Send
+                </Button>
+              </form>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

@@ -1103,6 +1103,54 @@ public sealed class CustomerRepository(
     private string? ResolvePrimaryProductImageUrl(IEnumerable<ProductImage> images) =>
         ResolveOrderedDistinctProductImageUrls(images).FirstOrDefault();
 
+    public Task<CustomerNotificationPreference?> GetCustomerNotificationPreferenceAsync(Guid customerId, CancellationToken cancellationToken) =>
+        customerDb.CustomerNotificationPreferences.FirstOrDefaultAsync(p => p.CustomerId == customerId && !p.IsDeleted, cancellationToken);
+
+    public async Task AddCustomerNotificationPreferenceAsync(CustomerNotificationPreference preference, CancellationToken cancellationToken) =>
+        await customerDb.CustomerNotificationPreferences.AddAsync(preference, cancellationToken);
+
+    public Task UpdateCustomerNotificationPreferenceAsync(CustomerNotificationPreference preference, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerNotificationPreferences.Update(preference);
+        return Task.CompletedTask;
+    }
+
+    public Task<List<ChatSession>> GetCustomerChatSessionsAsync(Guid customerId, CancellationToken cancellationToken) =>
+        customerDb.ChatSessions.Where(s => s.CustomerId == customerId && !s.IsDeleted).OrderByDescending(s => s.LastMessageAt).ToListAsync(cancellationToken);
+
+    public Task<List<ChatSession>> GetVendorChatSessionsAsync(Guid vendorId, CancellationToken cancellationToken) =>
+        customerDb.ChatSessions.Where(s => s.VendorId == vendorId && !s.IsDeleted).OrderByDescending(s => s.LastMessageAt).ToListAsync(cancellationToken);
+
+    public Task<ChatSession?> GetChatSessionAsync(Guid customerId, Guid vendorId, Guid? orderId, CancellationToken cancellationToken)
+    {
+        if (orderId.HasValue)
+        {
+            return customerDb.ChatSessions.FirstOrDefaultAsync(s => s.CustomerId == customerId && s.VendorId == vendorId && s.OrderId == orderId && !s.IsDeleted, cancellationToken);
+        }
+        return customerDb.ChatSessions.FirstOrDefaultAsync(s => s.CustomerId == customerId && s.VendorId == vendorId && s.OrderId == null && !s.IsDeleted, cancellationToken);
+    }
+
+    public Task<ChatSession?> GetChatSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        customerDb.ChatSessions.FirstOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted, cancellationToken);
+
+    public async Task AddChatSessionAsync(ChatSession session, CancellationToken cancellationToken) =>
+        await customerDb.ChatSessions.AddAsync(session, cancellationToken);
+
+    public Task UpdateChatSessionAsync(ChatSession session, CancellationToken cancellationToken)
+    {
+        customerDb.ChatSessions.Update(session);
+        return Task.CompletedTask;
+    }
+
+    public Task<List<ChatMessage>> GetChatMessagesAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        customerDb.ChatMessages.Where(m => m.ChatSessionId == sessionId && !m.IsDeleted).OrderBy(m => m.SentAt).ToListAsync(cancellationToken);
+
+    public async Task AddChatMessageAsync(ChatMessage message, CancellationToken cancellationToken) =>
+        await customerDb.ChatMessages.AddAsync(message, cancellationToken);
+
+    public Task<string?> GetVendorBusinessNameAsync(Guid vendorId, CancellationToken cancellationToken) =>
+        vendorDb.VendorProfiles.Where(p => p.VendorId == vendorId).Select(p => p.BusinessName).FirstOrDefaultAsync(cancellationToken);
+
 }
 
 

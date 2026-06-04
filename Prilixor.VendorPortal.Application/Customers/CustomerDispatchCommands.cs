@@ -552,6 +552,7 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
             o.VendorProductListingId,
             title,
             vendorName ?? "Vendor",
+            listing?.VendorId ?? Guid.Empty,
             CustomerOrderStatusMapper.ToDisplay(o.Status),
             o.StartDate,
             o.EndDate,
