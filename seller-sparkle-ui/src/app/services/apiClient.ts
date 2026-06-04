@@ -74,7 +74,7 @@ class ApiClient {
       if (!code || code.includes('http') || code.includes('://') || code.startsWith('https')) {
         // Try to extract from error.message or error.title
         const sourceText = error.message || error.title || message;
-        const codeMatch = sourceText.match(/(vendors\.[a-z_]+|customers\.[a-z_]+|admins\.[a-z_]+|documents\.[a-z_]+|bank_accounts\.[a-z_]+|EMAIL_NOT_VERIFIED|auth\.[a-z_]+)/i);
+        const codeMatch = sourceText.match(/(vendors\.[a-z_]+(?:\.[a-z_]+)*|customers\.[a-z_]+(?:\.[a-z_]+)*|admins\.[a-z_]+(?:\.[a-z_]+)*|documents\.[a-z_]+(?:\.[a-z_]+)*|bank_accounts\.[a-z_]+(?:\.[a-z_]+)*|EMAIL_NOT_VERIFIED|auth\.[a-z_]+(?:\.[a-z_]+)*)/i);
         if (codeMatch) {
           code = codeMatch[1];
         }

@@ -20,6 +20,9 @@ const errorMessages: Record<string, string> = {
   "vendors.no_bank_account": "Vendor must upload at least one bank account before approval.",
   "vendors.bank_account_not_approved": "At least one bank account must be approved before vendor can be approved.",
 
+  // Vendor listing/product errors
+  "vendors.listing.active_orders": "Cannot delete listing because there are active or pending customer rental orders associated with it. Please complete or cancel those orders first.",
+
   // Admin errors
   "admins.invalid_id": "Invalid admin ID provided.",
   "admins.not_found": "Admin not found.",
@@ -62,13 +65,13 @@ function extractErrorCode(error: unknown): string | null {
 
   // Check Error message for bracket format: "message [error.code]"
   if (err.message && typeof err.message === "string") {
-    const bracketMatch = err.message.match(/\[([a-z_]+\.[a-z_]+)\]$/i);
+    const bracketMatch = err.message.match(/\[([a-z_]+(?:\.[a-z_]+)+)\]$/i);
     if (bracketMatch) return bracketMatch[1];
   }
 
   // Check detail property
   if (err.detail && typeof err.detail === "string") {
-    const match = err.detail.match(/([a-z_]+\.[a-z_]+)/i);
+    const match = err.detail.match(/([a-z_]+(?:\.[a-z_]+)+)/i);
     if (match) return match[1];
   }
 
@@ -99,7 +102,7 @@ export function getUserFriendlyMessage(error: unknown): string {
   if (errorCode && errorMessages[errorCode]) {
     // If backend message already has useful dynamic content (like "Currently uploaded: 2/5"),
     // and it's user-friendly (contains spaces, reasonable length), use it instead
-    const cleanMessage = originalMessage.replace(/\[[a-z_]+\.[a-z_]+\]$/i, "").trim();
+    const cleanMessage = originalMessage.replace(/\[[a-z_]+(?:\.[a-z_]+)+\]$/i, "").trim();
     if (cleanMessage.length > 10 && cleanMessage.includes(" ") && !cleanMessage.includes("Exception") && !cleanMessage.includes("Error:")) {
       return cleanMessage;
     }
