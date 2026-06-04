@@ -94,7 +94,15 @@ internal sealed class GetVendorInventoryQueryHandler(IVendorOnboardingRepository
         var entity = await repository.GetVendorInventoryByListingIdAsync(listingId, cancellationToken);
         if (entity is null)
         {
-            return Result.Failure<VendorInventoryDto>(new Error("vendors.inventory.not_found", "Vendor inventory not found.", ErrorCategory.NotFound));
+            // Instead of failing with NotFound, return a default inventory record matching the listing's available quantity
+            return Result.Success(new VendorInventoryDto(
+                Guid.Empty.ToString(),
+                listingId.ToString(),
+                listing.AvailableQuantity,
+                listing.AvailableQuantity,
+                0,
+                0,
+                0));
         }
 
         return Result.Success(new VendorInventoryDto(
