@@ -131,21 +131,27 @@ const CustomerBrowse = () => {
     queryFn: () => customerApi.getCatalogListings(appliedCat, debouncedSearch),
   });
 
-  const { data: addresses = [] } = useQuery({
+  const { data: addresses = [], isLoading: addressesLoading } = useQuery({
     queryKey: ["customer-addresses", user?.id],
     queryFn: () => customerApi.getAddresses(),
     enabled: user?.role === "customer",
   });
 
   useEffect(() => {
-    if (user?.role !== "customer") {
-      setShowLocationPrompt(false);
+    if (user?.role !== "customer" || addressesLoading) {
       return;
     }
 
     const hasGeoAddress = addresses.some((a) => typeof a.latitude === "number" && typeof a.longitude === "number");
-    setShowLocationPrompt(!hasGeoAddress);
-  }, [addresses, user?.role]);
+    const isDismissed = sessionStorage.getItem("locationPromptDismissed") === "true";
+    
+    setShowLocationPrompt(!hasGeoAddress && !isDismissed);
+  }, [addresses, user?.role, addressesLoading]);
+
+  const handleDismissPrompt = () => {
+    sessionStorage.setItem("locationPromptDismissed", "true");
+    setShowLocationPrompt(false);
+  };
 
   const categoryPills = useMemo(() => ["All", ...categories.map((c) => c.categoryName)], [categories]);
   const availabilityPills: Array<{ id: AvailabilityFilter; label: string }> = [
@@ -374,7 +380,7 @@ const CustomerBrowse = () => {
         <p className="text-sm text-muted-foreground">No listings match your filters.</p>
       )}
 
-      <Dialog open={showLocationPrompt} onOpenChange={setShowLocationPrompt}>
+      <Dialog open={showLocationPrompt} onOpenChange={(open) => !open && handleDismissPrompt()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Set location first</DialogTitle>
@@ -383,7 +389,7 @@ const CustomerBrowse = () => {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowLocationPrompt(false)}>
+            <Button variant="outline" onClick={handleDismissPrompt}>
               Later
             </Button>
             <Button asChild>

@@ -23,6 +23,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>d4cacd9b-a380-4964-a17c-1ff85195c88a</UserSecretsId>
+    <!-- Publish a web.config configured for IIS out-of-process hosting (matches the live deployment). -->
+    <AspNetCoreHostingModel>OutOfProcess</AspNetCoreHostingModel>
   </PropertyGroup>
 
 </Project>

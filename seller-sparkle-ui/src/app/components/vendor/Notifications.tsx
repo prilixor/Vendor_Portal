@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -13,6 +14,7 @@ import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { toast } from "sonner";
 import { useNotificationContext } from "@/app/contexts/NotificationContext";
+import { getVendorRoute } from "@/app/helpers/vendorNav";
 
 const typeIcons = {
   info: { icon: Info, cls: "bg-info-soft text-info" },
@@ -22,6 +24,7 @@ const typeIcons = {
 };
 
 const Notifications = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { refreshUnreadCount } = useNotificationContext();
   const [items, setItems] = useState<Notification[]>([]);
@@ -53,6 +56,7 @@ const Notifications = () => {
       type: mapType(n.notificationType),
       read: n.status.trim().toLowerCase() === "read" || !!n.readAt,
       timestamp: n.sentAt ?? n.readAt ?? new Date().toISOString(),
+      notificationType: n.notificationType,
     }));
 
   const loadNotificationData = async () => {
@@ -257,7 +261,15 @@ const Notifications = () => {
                 <li
                   key={n.id}
                   className={`flex cursor-pointer items-start gap-3 p-4 transition-colors hover:bg-muted/30 ${!n.read ? "bg-primary-soft/30" : ""}`}
-                  onClick={() => toggleRead(n.id)}
+                  onClick={() => {
+                    if (!n.read) {
+                      void toggleRead(n.id);
+                    }
+                    const route = getVendorRoute(n.notificationType, n.title);
+                    if (route) {
+                      navigate(route);
+                    }
+                  }}
                 >
                   <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${cls}`}>
                     <Icon className="h-4 w-4" />

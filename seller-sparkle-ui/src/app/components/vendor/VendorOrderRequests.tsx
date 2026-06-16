@@ -20,28 +20,35 @@ function orderTypeBadgeClass(orderType: string): string {
 
 const VendorOrderRequests = () => {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [offers, setOffers] = useState<VendorDispatchOfferApiDto[]>([]);
   const [workingOrderId, setWorkingOrderId] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
 
-  const loadOffers = async () => {
+  const loadOffers = async (isBackground = false) => {
     if (!user) return;
     try {
-      setLoading(true);
+      if (!isBackground) setRefreshing(true);
       const rows = await vendorOnboardingApi.getVendorDispatchOffers(user.id);
       setOffers(rows);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load order requests.";
       toast.error(message);
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    void loadOffers();
-    const timer = window.setInterval(() => void loadOffers(), 20000);
-    return () => window.clearInterval(timer);
+    void loadOffers(false);
+    const timer = window.setInterval(() => void loadOffers(true), 20000);
+    const ticker = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      window.clearInterval(timer);
+      window.clearInterval(ticker);
+    };
   }, [user?.id]);
 
   const sortedOffers = useMemo(
@@ -73,7 +80,7 @@ const VendorOrderRequests = () => {
   };
 
   const formatExpiresIn = (iso: string) => {
-    const ms = new Date(iso).getTime() - Date.now();
+    const ms = new Date(iso).getTime() - now;
     if (ms <= 0) return "Expired";
     const min = Math.ceil(ms / 60000);
     return `${min} min left`;
@@ -85,15 +92,15 @@ const VendorOrderRequests = () => {
         title="Order Requests"
         description="Accept or reject incoming dispatch requests from customers."
         actions={
-          <Button variant="outline" onClick={() => void loadOffers()} disabled={loading}>
-            <RefreshCw className="mr-2 h-4 w-4" />
+          <Button variant="outline" onClick={() => void loadOffers(false)} disabled={initialLoading || refreshing}>
+            <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />
             Refresh
           </Button>
         }
       />
 
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
-        {loading ? (
+        {initialLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, idx) => (
               <div key={idx} className="rounded-lg border border-border p-4">
@@ -138,7 +145,7 @@ const VendorOrderRequests = () => {
               });
 
               return groups.map((group) => {
-                const expired = new Date(group.expiresAt).getTime() <= Date.now();
+                const expired = new Date(group.expiresAt).getTime() <= now;
                 return (
                   <div key={group.baseOrderNumber} className="rounded-xl border border-border/80 bg-card p-6 shadow-sm hover:border-border/100 transition-all">
                     {/* Group Header */}
@@ -158,7 +165,7 @@ const VendorOrderRequests = () => {
                     {/* Items List */}
                     <div className="space-y-3">
                       {group.items.map((offer) => {
-                        const itemExpired = new Date(offer.expiresAt).getTime() <= Date.now();
+                        const itemExpired = new Date(offer.expiresAt).getTime() <= now;
                         const status = offer.status.trim().toLowerCase();
                         return (
                           <div key={offer.offerId} className="flex flex-col md:flex-row md:items-center md:justify-between p-3 rounded-lg bg-accent/30 border border-border/40 hover:bg-accent/50 transition-colors">
@@ -177,23 +184,23 @@ const VendorOrderRequests = () => {
                                 {status.replaceAll("_", " ")}
                               </span>
                               <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
-                                  onClick={() => void handleOfferAction(offer.orderId, "accept")}
-                                  disabled={itemExpired || workingOrderId === offer.orderId}
-                                >
-                                  Accept
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive font-medium border-border/80"
-                                  onClick={() => void handleOfferAction(offer.orderId, "reject")}
-                                  disabled={itemExpired || workingOrderId === offer.orderId}
-                                >
-                                  Reject
-                                </Button>
+                                  <Button
+                                    size="sm"
+                                    className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                                    onClick={() => void handleOfferAction(offer.orderId, "accept")}
+                                    disabled={itemExpired || workingOrderId === offer.orderId || status !== "pending"}
+                                  >
+                                    Accept
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive font-medium border-border/80"
+                                    onClick={() => void handleOfferAction(offer.orderId, "reject")}
+                                    disabled={itemExpired || workingOrderId === offer.orderId || status !== "pending"}
+                                  >
+                                    Reject
+                                  </Button>
                               </div>
                             </div>
                           </div>

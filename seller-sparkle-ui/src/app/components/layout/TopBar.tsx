@@ -49,19 +49,28 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
     return customerNotifications.filter((n) => !n.readAt).length;
   }, [customerNotifications]);
 
-  // 3. Get Unread Admin Order Alerts (for Admin top bar)
   const { data: adminOrders = [] } = useQuery({
     queryKey: ["admin-orders"],
     queryFn: () => adminApi.getAdminOrders(),
     enabled: variant === "admin" && !!user,
     refetchInterval: 30000, // every 30 seconds
   });
+
+  const { data: adminVendors = [] } = useQuery({
+    queryKey: ["admin-vendors"],
+    queryFn: () => adminApi.getVendors(),
+    enabled: variant === "admin" && !!user,
+    refetchInterval: 30000, // every 30 seconds
+  });
+
   const unreadAdminCount = useMemo(() => {
-    return adminOrders.filter((o) => {
+    const criticalOrders = adminOrders.filter((o) => {
       const s = o.status.toLowerCase().replace(/_/g, " ");
-      return s.includes("dispatch failed");
+      return s.includes("dispatch failed") || s.includes("cancelled");
     }).length;
-  }, [adminOrders]);
+    const pendingVendors = adminVendors.filter((v) => v.accountStatus === "pending").length;
+    return criticalOrders + pendingVendors;
+  }, [adminOrders, adminVendors]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);

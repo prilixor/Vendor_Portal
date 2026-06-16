@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { adminApi } from "@/app/services/adminApi";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card, CardContent } from "@/app/components/ui/card";
@@ -28,7 +28,31 @@ import { cn } from "@/app/helpers/utils";
 
 export const AdminNotifications = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<"all" | "orders" | "vendors" | "logs">("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = (searchParams.get("tab") as "all" | "orders" | "vendors" | "logs") ?? "all";
+  const [activeTab, setActiveTab] = useState<"all" | "orders" | "vendors" | "logs">(
+    ["all", "orders", "vendors", "logs"].includes(initialTab) ? initialTab : "all"
+  );
+
+  useEffect(() => {
+    const t = searchParams.get("tab") as "all" | "orders" | "vendors" | "logs";
+    if (t && ["all", "orders", "vendors", "logs"].includes(t)) {
+      setActiveTab(t);
+    } else if (!t) {
+      setActiveTab("all");
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (v: string) => {
+    const val = v as "all" | "orders" | "vendors" | "logs";
+    setActiveTab(val);
+    if (val === "all") {
+      searchParams.delete("tab");
+    } else {
+      searchParams.set("tab", val);
+    }
+    setSearchParams(searchParams, { replace: true });
+  };
 
   // Fetch all orders to extract critical notifications
   const { data: orders = [], isLoading: isLoadingOrders, refetch: refetchOrders, isFetching: isFetchingOrders } = useQuery({
@@ -160,7 +184,7 @@ export const AdminNotifications = () => {
         }
       />
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="h-auto w-full flex-wrap justify-start bg-muted/40 p-1 mb-6">
           <TabsTrigger value="all" className="text-xs">
             All Alerts ({counts.all})

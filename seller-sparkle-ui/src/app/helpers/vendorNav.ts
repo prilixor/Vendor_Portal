@@ -115,5 +115,53 @@ export const getVendorNav = (unreadCount: number): NavSection[] => {
   }));
 };
 
+export const getVendorRoute = (notificationType?: string, title?: string): string | null => {
+  const type = notificationType?.trim().toLowerCase() ?? "";
+  
+  if (type === "dispatch_offer" || type === "new_order" || type.includes("order_request")) {
+    return "/vendor/order-requests";
+  }
+  
+  if (type === "order_confirmed" || type === "order_status_updated" || type.startsWith("order_")) {
+    return "/vendor/orders";
+  }
+  
+  if (type.startsWith("listing_") || type.includes("product")) {
+    return "/vendor/products";
+  }
+  
+  if (type.startsWith("stock_") || type === "low_stock" || type === "out_of_stock") {
+    return "/vendor/inventory";
+  }
+  
+  if (
+    type.startsWith("vendor_") ||
+    type.startsWith("document_") ||
+    type.startsWith("bank_")
+  ) {
+    return "/vendor/onboarding";
+  }
+  
+  // Fallback to title matching
+  const t = title?.toLowerCase() ?? "";
+  if (t.includes("order request") || t.includes("dispatch offer")) {
+    return "/vendor/order-requests";
+  }
+  if (t.includes("order") || t.includes("rental")) {
+    return "/vendor/orders";
+  }
+  if (t.includes("listing") || t.includes("product")) {
+    return "/vendor/products";
+  }
+  if (t.includes("stock") || t.includes("inventory")) {
+    return "/vendor/inventory";
+  }
+  if (t.includes("document") || t.includes("bank") || t.includes("verification") || t.includes("approved")) {
+    return "/vendor/onboarding";
+  }
+  
+  return null;
+};
+
 
 

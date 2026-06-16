@@ -70,10 +70,34 @@ const AdminDashboard = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Total vendors" value={total} icon={Building2} accent="primary"  />
-          <StatCard label="Pending verifications" value={pending} icon={Clock} accent="warning" />
-          <StatCard label="Active vendors" value={active} icon={CheckCircle2} accent="success" />
-          <StatCard label="Audit events (7d)" value={recentAuditLogs.length} icon={ScrollText} accent="info" />
+          <StatCard 
+            label="Total vendors" 
+            value={total} 
+            icon={Building2} 
+            accent="primary" 
+            onClick={() => navigate("/admin/vendors")}
+          />
+          <StatCard 
+            label="Pending verifications" 
+            value={pending} 
+            icon={Clock} 
+            accent="warning" 
+            onClick={() => navigate("/admin/verification?status=pending")}
+          />
+          <StatCard 
+            label="Active vendors" 
+            value={active} 
+            icon={CheckCircle2} 
+            accent="success" 
+            onClick={() => navigate("/admin/verification?status=active")}
+          />
+          <StatCard 
+            label="Audit events (7d)" 
+            value={recentAuditLogs.length} 
+            icon={ScrollText} 
+            accent="info" 
+            onClick={() => navigate("/admin/notifications?tab=logs")}
+          />
         </div>
       )}
 

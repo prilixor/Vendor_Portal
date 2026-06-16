@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { CheckCheck } from "lucide-react";
@@ -19,7 +19,30 @@ function relativeTime(iso: string): string {
   return formatDistanceToNow(d, { addSuffix: true });
 }
 
+const getCustomerRoute = (notificationType?: string, title?: string): string | null => {
+  const type = notificationType?.trim().toLowerCase() ?? "";
+  
+  if (type.startsWith("order_") || type.includes("order") || type === "order_expiring_soon") {
+    return "/customer/orders";
+  }
+  if (type === "welcome" || type === "general") {
+    return "/customer/dashboard";
+  }
+  
+  // Fallback to title matching
+  const t = title?.toLowerCase() ?? "";
+  if (t.includes("order") || t.includes("rental") || t.includes("placed") || t.includes("expired") || t.includes("expiring")) {
+    return "/customer/orders";
+  }
+  if (t.includes("welcome") || t.includes("dashboard")) {
+    return "/customer/dashboard";
+  }
+  
+  return null;
+};
+
 const CustomerNotifications = () => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const { data: notifications = [], isLoading, isError, error, refetch, isFetching } = useQuery({
@@ -57,6 +80,14 @@ const CustomerNotifications = () => {
   const handleRowActivate = (n: CustomerNotificationApi) => {
     if (!n.readAt) {
       markReadMutation.mutate(n.id);
+    }
+    if (n.relatedOrderId) {
+      navigate(`/customer/orders/${encodeURIComponent(n.relatedOrderId)}`);
+    } else {
+      const route = getCustomerRoute(n.notificationType, n.title);
+      if (route) {
+        navigate(route);
+      }
     }
   };
 

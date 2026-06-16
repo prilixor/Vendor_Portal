@@ -205,6 +205,19 @@ export const customerApi = {
     return apiClient.post<CustomerAddressApi>("/customers/me/addresses", payload);
   },
 
+  updateAddress(addressId: string, payload: {
+    label?: string;
+    line1: string;
+    city: string;
+    state: string;
+    postal: string;
+    latitude?: number;
+    longitude?: number;
+    setAsDefault: boolean;
+  }): Promise<CustomerAddressApi> {
+    return apiClient.put<CustomerAddressApi>(`/customers/me/addresses/${encodeURIComponent(addressId)}`, payload);
+  },
+
   deleteAddress(addressId: string): Promise<void> {
     return apiClient.delete(`/customers/me/addresses/${encodeURIComponent(addressId)}`);
   },

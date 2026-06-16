@@ -102,6 +102,10 @@ const CustomerListingDetail = () => {
       toast.error("Quantity and rental days must be positive.");
       return;
     }
+    if (qty > data.availableQuantity) {
+      toast.error(`Only ${data.availableQuantity} unit(s) available in stock.`);
+      return;
+    }
     addLine({
       listingId: data.id,
       title: data.title,
@@ -236,7 +240,7 @@ const CustomerListingDetail = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <QuantityStepper label="Qty" value={qty} min={1} max={999} onChange={setQty} />
+              <QuantityStepper label="Qty" value={qty} min={1} max={Math.max(1, data.availableQuantity)} onChange={setQty} />
               {orderType === "rent" ? (
                 <QuantityStepper
                   label="Days"

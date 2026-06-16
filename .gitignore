@@ -203,3 +203,14 @@ publish_release.zip
 
 # Launch settings
 **/launchSettings.json
+
+# Custom build artifacts and compiled UI assets
+publish_api/
+publish_api.zip
+Prilixor.VendorPortal.API/wwwroot/assets/
+Prilixor.VendorPortal.API/wwwroot/*.js
+Prilixor.VendorPortal.API/wwwroot/*.css
+Prilixor.VendorPortal.API/wwwroot/*.html
+Prilixor.VendorPortal.API/wwwroot/*.ico
+Prilixor.VendorPortal.API/wwwroot/*.svg
+Prilixor.VendorPortal.API/wwwroot/*.txt

@@ -2,6 +2,17 @@ import { createRoot } from "react-dom/client";
 import App from "./app/App";
 import "./index.css";
 import "leaflet/dist/leaflet.css";
+import { toast } from "sonner";
+import { getUserFriendlyMessage } from "./app/utils/errorMessages";
+
+// Globally intercept toast.error to ensure no raw backend error codes leak to the UI
+const originalToastError = toast.error;
+toast.error = (message: string | React.ReactNode, data?: any) => {
+  if (typeof message === "string") {
+    return originalToastError(getUserFriendlyMessage(new Error(message)), data);
+  }
+  return originalToastError(message, data);
+};
 
 const savedTheme = localStorage.getItem("theme");
 if (savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches)) {

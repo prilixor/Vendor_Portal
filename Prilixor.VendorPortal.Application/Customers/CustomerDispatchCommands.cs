@@ -336,13 +336,12 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
 
         foreach (var offer in offers)
         {
-            if (offer.ExpiresAt <= now)
+            if (offer.Status == "pending" && offer.ExpiresAt <= now)
             {
                 offer.Status = "expired";
                 offer.RespondedAt = now;
                 await customers.UpdateCustomerOrderVendorOfferAsync(offer, cancellationToken);
                 changed = true;
-                continue;
             }
 
             var order = await customers.GetCustomerOrderEntityByIdAsync(offer.CustomerRentalOrderId, cancellationToken);

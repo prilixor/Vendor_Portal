@@ -740,11 +740,16 @@ public sealed class CustomerRepository(
                 !x.IsDeleted,
                 cancellationToken);
 
-    public Task<List<CustomerOrderVendorOffer>> GetPendingVendorOffersAsync(Guid vendorId, CancellationToken cancellationToken) =>
-        customerDb.CustomerOrderVendorOffers
-            .Where(x => x.VendorId == vendorId && x.Status == "pending" && !x.IsDeleted)
+    public Task<List<CustomerOrderVendorOffer>> GetPendingVendorOffersAsync(Guid vendorId, CancellationToken cancellationToken)
+    {
+        var recent = DateTime.UtcNow.AddHours(-24);
+        return customerDb.CustomerOrderVendorOffers
+            .Where(x => x.VendorId == vendorId && !x.IsDeleted &&
+                        (x.Status == "pending" || 
+                        ((x.Status == "expired" || x.Status == "missed" || x.Status == "rejected") && x.CreatedOnUtc >= recent)))
             .OrderByDescending(x => x.CreatedOnUtc)
             .ToListAsync(cancellationToken);
+    }
 
     public Task UpdateCustomerOrderVendorOfferAsync(CustomerOrderVendorOffer offer, CancellationToken cancellationToken)
     {

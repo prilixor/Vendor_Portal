@@ -13,6 +13,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+try
+{
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.ConfigureServices(builder.Configuration, builder.Environment);
@@ -110,21 +113,41 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/api"
 });
 
-var uploadsVendorsPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "uploads", "vendors");
-Directory.CreateDirectory(uploadsVendorsPath);
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsVendorsPath),
-    RequestPath = "/api/vendors"
-});
-
 var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "uploads");
-Directory.CreateDirectory(uploadsPath);
-app.UseStaticFiles(new StaticFileOptions
+var uploadsVendorsPath = Path.Combine(uploadsPath, "vendors");
+
+// Best-effort creation of local upload folders. Under IIS the app pool identity may not
+// have write access to the content root; if so we log and continue instead of crashing the
+// whole app at startup (uploads still work through the configured storage provider, e.g. S3).
+try
 {
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
-    RequestPath = "/api/uploads"
-});
+    Directory.CreateDirectory(uploadsPath);
+    Directory.CreateDirectory(uploadsVendorsPath);
+}
+catch (Exception ex)
+{
+    Log.Warning(ex,
+        "Could not create local upload directories under {ContentRoot}. Local static file serving for uploads will be skipped; ensure the app pool identity has write access or rely on the configured storage provider.",
+        builder.Environment.ContentRootPath);
+}
+
+if (Directory.Exists(uploadsVendorsPath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsVendorsPath),
+        RequestPath = "/api/vendors"
+    });
+}
+
+if (Directory.Exists(uploadsPath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+        RequestPath = "/api/uploads"
+    });
+}
 
 app.MapPost("/api/files/upload", async (HttpRequest request, IVendorUploadStorageService storage, CancellationToken cancellationToken) =>
 {
@@ -260,3 +283,21 @@ app.UseFastEndpoints(op =>
 app.MapSupportEndpoints();
 
 app.Run();
+
+}
+catch (Exception ex)
+{
+    // Record any fatal startup exception to a file next to the app so failures under IIS
+    // (which otherwise surface only as opaque 500.30 / 502.5 pages) can be diagnosed.
+    try
+    {
+        var fatalPath = Path.Combine(AppContext.BaseDirectory, "FATAL_STARTUP_ERROR.txt");
+        File.WriteAllText(fatalPath, DateTimeOffset.UtcNow.ToString("o") + Environment.NewLine + ex);
+    }
+    catch
+    {
+        // Ignore secondary failures while recording the fatal error.
+    }
+
+    throw;
+}

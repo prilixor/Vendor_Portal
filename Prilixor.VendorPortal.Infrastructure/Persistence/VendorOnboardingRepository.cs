@@ -608,6 +608,7 @@ public sealed class VendorOnboardingRepository(
         return dbContext.VendorNotifications
             .Where(x => x.VendorId == vendorId && !x.IsDeleted)
             .OrderByDescending(x => x.SentAt)
+            .ThenByDescending(x => x.CreatedOnUtc)
             .ToListAsync(cancellationToken);
     }
 

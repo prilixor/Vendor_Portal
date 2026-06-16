@@ -1,8 +1,11 @@
 import { Outlet, Navigate, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
-import { vendorNav, adminNav, customerNav } from "@/app/helpers/navigation";
+import { vendorNav, customerNav } from "@/app/helpers/navigation";
+import { getAdminNav } from "@/app/helpers/adminNav";
+import { adminApi } from "@/app/services/adminApi";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { NotificationProvider } from "@/app/contexts/NotificationContext";
@@ -72,6 +75,40 @@ export const AppShell = ({ variant }: AppShellProps) => {
     }
   }, [variant, user]);
 
+  useEffect(() => {
+    if (variant === "admin") {
+      document.title = "Admin Portal — Prilixor";
+    } else if (variant === "customer") {
+      document.title = "Customer Portal — Prilixor";
+    } else {
+      document.title = "Vendor Portal — Manage Your Marketplace Business";
+    }
+  }, [variant]);
+
+  const { data: adminOrders = [] } = useQuery({
+    queryKey: ["admin-orders"],
+    queryFn: () => adminApi.getAdminOrders(),
+    enabled: variant === "admin" && !!user,
+    refetchInterval: 30000,
+  });
+
+  const { data: adminVendors = [] } = useQuery({
+    queryKey: ["admin-vendors"],
+    queryFn: () => adminApi.getVendors(),
+    enabled: variant === "admin" && !!user,
+    refetchInterval: 30000,
+  });
+
+  const unreadAdminCount = useMemo(() => {
+    const criticalOrders = (adminOrders || []).filter((o) => {
+      if (!o || !o.status) return false;
+      const s = o.status.toLowerCase().replace(/_/g, " ");
+      return s.includes("dispatch failed") || s.includes("cancelled");
+    }).length;
+    const pendingVendors = (adminVendors || []).filter((v) => v && v.accountStatus === "pending").length;
+    return criticalOrders + pendingVendors;
+  }, [adminOrders, adminVendors]);
+
   if (isHydrating) return <div className="min-h-screen w-full bg-background" />;
 
   if (variant === "admin" && (!user || user.role !== "admin")) {
@@ -94,7 +131,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
   const isPending = accountStatus === "pending";
 
   const sections =
-    variant === "admin" ? adminNav : variant === "customer" ? customerNav : vendorNav;
+    variant === "admin" ? getAdminNav(unreadAdminCount) : variant === "customer" ? customerNav : vendorNav;
   const brandLabel =
     variant === "admin"
       ? "Admin Console"
@@ -115,7 +152,13 @@ export const AppShell = ({ variant }: AppShellProps) => {
         <Sidebar
           variant={variant}
           sections={sections}
-          brandHeading={variant === "customer" ? "Customer Portal" : undefined}
+          brandHeading={
+            variant === "customer"
+              ? "Customer Portal"
+              : variant === "admin"
+                ? "Admin Portal"
+                : undefined
+          }
           brandLabel={brandLabel}
           isOpen={mobileSidebarOpen}
           onClose={() => setMobileSidebarOpen(false)}

@@ -53,7 +53,7 @@ const AdminLogin = () => {
   };
 
   return (
-    <AuthLayout title="Admin Sign In" subtitle="Access the admin dashboard and manage vendors.">
+    <AuthLayout title="Admin Sign In" subtitle="Access the admin dashboard and manage vendors." portalType="admin">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>

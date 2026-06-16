@@ -16,9 +16,9 @@ function norm(s: string): string {
   return s.trim().toLowerCase();
 }
 
-function StatCard({ label, value, hint }: { label: string; value: number; hint: string }) {
-  return (
-    <Card>
+function StatCard({ label, value, hint, to }: { label: string; value: number; hint: string; to?: string }) {
+  const content = (
+    <Card className={to ? "transition-colors hover:bg-muted/50" : ""}>
       <CardContent className="p-5">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">{label}</p>
@@ -31,6 +31,15 @@ function StatCard({ label, value, hint }: { label: string; value: number; hint: 
       </CardContent>
     </Card>
   );
+
+  if (to) {
+    return (
+      <Link to={to} className="block hover:no-underline">
+        {content}
+      </Link>
+    );
+  }
+  return content;
 }
 
 const CustomerDashboard = () => {
@@ -89,16 +98,23 @@ const CustomerDashboard = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard label="Active rentals" value={activeRentals} hint={`${currencyInr(activeTotal)} in flight`} />
+          <StatCard 
+            label="Active rentals" 
+            value={activeRentals} 
+            hint={`${currencyInr(activeTotal)} in flight`} 
+            to="/customer/orders?status=Active"
+          />
           <StatCard
             label="Upcoming deliveries"
             value={upcomingDeliveries}
             hint="Across pending, confirmed, and in transit"
+            to="/customer/orders?status=Confirmed"
           />
           <StatCard
             label="Browse availability"
             value={inStockListings}
             hint={`${outOfStockListings} listings currently out of stock`}
+            to="/customer/browse"
           />
         </div>
       )}

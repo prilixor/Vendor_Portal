@@ -16,7 +16,7 @@ import {
 } from "@/app/components/ui/select";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
+import { Trash2, Edit2 } from "lucide-react";
 
 const CustomerAddresses = () => {
   const queryClient = useQueryClient();
@@ -34,6 +34,7 @@ const CustomerAddresses = () => {
   const [longitude, setLongitude] = useState(72.5714);
   const [setDefault, setSetDefault] = useState(false);
   const [selectedStateIso2, setSelectedStateIso2] = useState<string>("");
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
 
   const {
     data: states = [],
@@ -70,6 +71,35 @@ const CustomerAddresses = () => {
       }),
     onSuccess: () => {
       toast.success("Address saved.");
+      setLabel("");
+      setLine1("");
+      setCity("");
+      setState("");
+      setSelectedStateIso2("");
+      setPostal("");
+      setLatitude(23.0225);
+      setLongitude(72.5714);
+      setSetDefault(false);
+      queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const editMut = useMutation({
+    mutationFn: () =>
+      customerApi.updateAddress(editingAddressId!, {
+        label: label.trim() || undefined,
+        line1: line1.trim(),
+        city: city.trim(),
+        state: state.trim(),
+        postal: postal.trim(),
+        latitude,
+        longitude,
+        setAsDefault: setDefault,
+      }),
+    onSuccess: () => {
+      toast.success("Address updated.");
+      setEditingAddressId(null);
       setLabel("");
       setLine1("");
       setCity("");
@@ -129,9 +159,27 @@ const CustomerAddresses = () => {
                   )}
                   {a.isDefault && <p className="mt-1 text-xs font-medium text-primary">Default</p>}
                 </div>
-                <Button variant="ghost" size="icon" className="text-destructive shrink-0" onClick={() => delMut.mutate(a.id)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex flex-col gap-1 shrink-0">
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" onClick={() => {
+                    setEditingAddressId(a.id);
+                    setLabel(a.label || "");
+                    setLine1(a.line1);
+                    setCity(a.city);
+                    setState(a.state);
+                    const stateObj = states.find((s) => s.name === a.state);
+                    setSelectedStateIso2(stateObj?.iso2 || "");
+                    setPostal(a.postal);
+                    setLatitude(a.latitude ?? 23.0225);
+                    setLongitude(a.longitude ?? 72.5714);
+                    setSetDefault(a.isDefault);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}>
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="text-destructive" onClick={() => delMut.mutate(a.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             ))}
           </CardContent>
@@ -139,7 +187,7 @@ const CustomerAddresses = () => {
 
         <Card>
           <CardHeader>
-            <p className="font-medium">Add address</p>
+            <p className="font-medium">{editingAddressId ? "Edit address" : "Add address"}</p>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1.5">
@@ -241,13 +289,34 @@ const CustomerAddresses = () => {
               </Label>
             </div>
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex gap-2">
+            {editingAddressId && (
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={editMut.isPending}
+                onClick={() => {
+                  setEditingAddressId(null);
+                  setLabel("");
+                  setLine1("");
+                  setCity("");
+                  setState("");
+                  setSelectedStateIso2("");
+                  setPostal("");
+                  setLatitude(23.0225);
+                  setLongitude(72.5714);
+                  setSetDefault(false);
+                }}
+              >
+                Cancel
+              </Button>
+            )}
             <Button
               className="w-full bg-gradient-primary hover:opacity-95 shadow-glow"
-              disabled={addMut.isPending || !line1.trim() || !city.trim() || !state.trim() || !postal.trim()}
-              onClick={() => addMut.mutate()}
+              disabled={(editingAddressId ? editMut.isPending : addMut.isPending) || !line1.trim() || !city.trim() || !state.trim() || !postal.trim()}
+              onClick={() => editingAddressId ? editMut.mutate() : addMut.mutate()}
             >
-              Save address
+              {editingAddressId ? "Update address" : "Save address"}
             </Button>
           </CardFooter>
         </Card>

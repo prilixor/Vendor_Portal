@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Search, Package } from "lucide-react";
 import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
@@ -102,10 +102,34 @@ function isCustomerOrderCancellable(status: string): boolean {
 
 const CustomerOrders = () => {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialStatus = searchParams.get("status") as StatusFilter;
+  
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [appliedFilter, setAppliedFilter] = useState<StatusFilter>("All");
   const [page, setPage] = useState(1);
+  const [appliedFilter, setAppliedFilter] = useState<StatusFilter>(
+    initialStatus && STATUS_FILTERS.includes(initialStatus) ? initialStatus : "All"
+  );
+
+  useEffect(() => {
+    const s = searchParams.get("status") as StatusFilter;
+    if (s && STATUS_FILTERS.includes(s)) {
+      setAppliedFilter(s);
+    } else if (!s) {
+      setAppliedFilter("All");
+    }
+  }, [searchParams]);
+
+  const handleFilterChange = (label: StatusFilter) => {
+    setAppliedFilter(label);
+    if (label === "All") {
+      searchParams.delete("status");
+    } else {
+      searchParams.set("status", label);
+    }
+    setSearchParams(searchParams, { replace: true });
+  };
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);

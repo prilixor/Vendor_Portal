@@ -67,10 +67,11 @@ const CustomerCheckout = () => {
     [addressId, deliveryChoice, lines],
   );
 
-  const { data: quote, isFetching: quoteLoading } = useQuery({
+  const { data: quote, isFetching: quoteLoading, error: quoteError } = useQuery({
     queryKey: ["customer-order-quote", addressId, deliveryChoice, lines],
     queryFn: () => customerApi.quoteOrders(quotePayload),
     enabled: lines.length > 0,
+    retry: false,
   });
 
   const expressFee = quote?.expressFeeAmount ?? 0;
@@ -95,11 +96,13 @@ const CustomerCheckout = () => {
       const placedCount = result.placedOrders.length;
       const failedCount = result.failedLines.length;
       if (placedCount > 0 && failedCount > 0) {
-        toast.success(`Placed ${placedCount} order(s), ${failedCount} failed.`);
+        const failedDetails = result.failedLines.map((l) => l.message).join(", ");
+        toast.success(`Placed ${placedCount} order(s). Failed lines: ${failedDetails}`);
       } else if (placedCount > 0) {
         toast.success(`Placed ${placedCount} order(s).`);
       } else {
-        toast.error(`No orders placed. ${failedCount} line(s) failed.`);
+        const failedDetails = result.failedLines.map((l) => l.message).join(", ");
+        toast.error(`No orders placed. Reason: ${failedDetails}`);
       }
 
       if (placedCount > 0) {
@@ -138,6 +141,18 @@ const CustomerCheckout = () => {
           Confirm delivery details and place your rental request.
         </p>
       </div>
+
+      {quoteError && (
+        <div className="rounded-xl border border-destructive/50 bg-destructive/5 p-4 text-sm text-destructive shadow-sm">
+          <p className="font-bold flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+            Unable to place order: Stock or Validation issue
+          </p>
+          <p className="mt-1 text-muted-foreground ml-4">
+            {quoteError instanceof Error ? quoteError.message : "A validation error occurred. Please review your cart."}
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,380px)] lg:items-start">
         <div className="space-y-6">
@@ -300,7 +315,7 @@ const CustomerCheckout = () => {
             <Button
               className="w-full bg-foreground text-background hover:bg-foreground/90"
               size="lg"
-              disabled={placeMutation.isPending}
+              disabled={placeMutation.isPending || !!quoteError || quoteLoading}
               onClick={() => placeMutation.mutate()}
             >
               {placeMutation.isPending ? (

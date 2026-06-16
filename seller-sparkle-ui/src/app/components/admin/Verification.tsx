@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -121,8 +121,32 @@ const downloadUrl = async (url: string) => {
 const Verification = () => {
   const [vendors, setVendors] = useState<VendorDto[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialFilter = (searchParams.get("status") as "all" | "pending" | "active" | "rejected" | "suspended" | "banned") ?? "all";
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "pending" | "active" | "rejected" | "suspended" | "banned">("all");
+  const [filter, setFilter] = useState<"all" | "pending" | "active" | "rejected" | "suspended" | "banned">(
+    ["all", "pending", "active", "rejected", "suspended", "banned"].includes(initialFilter) ? initialFilter : "all"
+  );
+
+  useEffect(() => {
+    const s = searchParams.get("status") as "all" | "pending" | "active" | "rejected" | "suspended" | "banned";
+    if (s && ["all", "pending", "active", "rejected", "suspended", "banned"].includes(s)) {
+      setFilter(s);
+    } else if (!s) {
+      setFilter("all");
+    }
+  }, [searchParams]);
+
+  const handleFilterChange = (v: string) => {
+    const val = v as "all" | "pending" | "active" | "rejected" | "suspended" | "banned";
+    setFilter(val);
+    if (val === "all") {
+      searchParams.delete("status");
+    } else {
+      searchParams.set("status", val);
+    }
+    setSearchParams(searchParams, { replace: true });
+  };
   const [selected, setSelected] = useState<VendorDto | null>(null);
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -515,7 +539,7 @@ const Verification = () => {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search vendors…" className="pl-9" />
           </div>
-          <Tabs value={filter} onValueChange={(v: any) => setFilter(v)}>
+          <Tabs value={filter} onValueChange={handleFilterChange}>
             <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-lg p-1">
               <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="pending">Pending</TabsTrigger>

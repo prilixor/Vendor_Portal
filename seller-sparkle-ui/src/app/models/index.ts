@@ -119,6 +119,7 @@ export interface Notification {
   type: "info" | "success" | "warning" | "error";
   read: boolean;
   timestamp: string;
+  notificationType?: string;
 }
 
 export interface Vendor {

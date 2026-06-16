@@ -589,6 +589,15 @@ const Onboarding = () => {
   const submit = async () => {
     if (!user) return;
 
+    // Validate bank details before final submission
+    if (!bank.accountHolderName.trim()) { toast.error("Please fill in account holder name"); return; }
+    if (!bank.accountNumber.trim()) { toast.error("Please fill in account number"); return; }
+    if (!bank.confirmAccountNumber.trim()) { toast.error("Please fill in confirm account number"); return; }
+    if (bank.accountNumber !== bank.confirmAccountNumber) { toast.error("Account numbers do not match"); return; }
+    if (!bank.ifscCode.trim()) { toast.error("Please fill in IFSC code"); return; }
+    if (!bank.bankName.trim()) { toast.error("Please enter a valid IFSC code to auto-fill bank name"); return; }
+    if (!bank.branchName.trim()) { toast.error("Please enter a valid IFSC code to auto-fill branch name"); return; }
+
     try {
       setBusy(true);
       await saveProfile();

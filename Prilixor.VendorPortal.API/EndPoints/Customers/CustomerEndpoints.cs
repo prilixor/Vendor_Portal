@@ -299,6 +299,56 @@ public sealed class AddCustomerAddressEndpoint(IMediator mediator)
     }
 }
 
+public sealed class UpdateCustomerAddressRequest
+{
+    public string AddressId { get; set; } = string.Empty;
+    public string? Label { get; set; }
+    public string Line1 { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+    public string State { get; set; } = string.Empty;
+    public string Postal { get; set; } = string.Empty;
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
+    public bool SetAsDefault { get; set; }
+}
+
+public sealed class UpdateCustomerAddressEndpoint(IMediator mediator)
+    : Endpoint<UpdateCustomerAddressRequest, Results<Ok<CustomerAddressDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Put("me/addresses/{AddressId}");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerAddressDto>, ProblemHttpResult>> ExecuteAsync(UpdateCustomerAddressRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.AddressId, out var addressId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid address id.", statusCode: 400);
+
+        var result = await mediator.Send(new UpdateCustomerAddressCommand(
+            customerId,
+            addressId,
+            req.Label,
+            req.Line1,
+            req.City,
+            req.State,
+            req.Postal,
+            req.Latitude,
+            req.Longitude,
+            req.SetAsDefault), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class DeleteCustomerAddressRequest
 {
     public string AddressId { get; set; } = string.Empty;

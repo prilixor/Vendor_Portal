@@ -96,13 +96,15 @@ export function getUserFriendlyMessage(error: unknown): string {
     originalMessage = (error as ErrorResponse).message || "";
   }
 
+  // Clean the original message by removing any [error.code] brackets globally
+  const cleanMessage = originalMessage.replace(/\s*\[[a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+\]\s*/g, "").trim();
+
   // Check for error code in response
   const errorCode = extractErrorCode(error);
 
   if (errorCode && errorMessages[errorCode]) {
     // If backend message already has useful dynamic content (like "Currently uploaded: 2/5"),
     // and it's user-friendly (contains spaces, reasonable length), use it instead
-    const cleanMessage = originalMessage.replace(/\[[a-z_]+(?:\.[a-z_]+)+\]$/i, "").trim();
     if (cleanMessage.length > 10 && cleanMessage.includes(" ") && !cleanMessage.includes("Exception") && !cleanMessage.includes("Error:")) {
       return cleanMessage;
     }
@@ -117,6 +119,11 @@ export function getUserFriendlyMessage(error: unknown): string {
         return message;
       }
     }
+  }
+
+  // Fallback to the clean message if it's descriptive enough
+  if (cleanMessage && cleanMessage.length > 5 && !cleanMessage.includes("Exception") && !cleanMessage.includes("Error:")) {
+    return cleanMessage;
   }
 
   // Return generic message based on error type

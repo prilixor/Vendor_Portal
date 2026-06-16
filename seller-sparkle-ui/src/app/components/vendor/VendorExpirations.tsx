@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -10,6 +11,7 @@ import { toast } from "sonner";
 
 const VendorExpirations = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [withinDays, setWithinDays] = useState(7);
   const [rows, setRows] = useState<VendorExpiringOrderApiDto[]>([]);
@@ -73,7 +75,11 @@ const VendorExpirations = () => {
         ) : (
           <div className="space-y-3">
             {rows.map((row) => (
-              <div key={row.orderId} className="rounded-lg border border-border p-4">
+              <div 
+                key={row.orderId} 
+                className="rounded-lg border border-border p-4 cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                onClick={() => navigate(`/vendor/orders/${row.orderId}`)}
+              >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="font-semibold">{row.orderNumber}</p>

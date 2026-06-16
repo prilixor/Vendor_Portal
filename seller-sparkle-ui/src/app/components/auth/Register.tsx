@@ -62,7 +62,10 @@ const Register = () => {
       toast.success("Verification link has been sent to your email.");
       navigate("/verify-email-sent");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Registration failed.";
+      let message = error instanceof Error ? error.message : "Registration failed.";
+      if (message.toLowerCase().includes("already exists") || message.toLowerCase().includes("in use") || message.toLowerCase().includes("taken")) {
+        message = "Registration failed. If an account with this email or phone number exists, please try logging in.";
+      }
       toast.error(message);
     } finally {
       setLoading(false);

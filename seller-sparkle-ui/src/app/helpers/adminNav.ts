@@ -43,3 +43,17 @@ export const adminNav: NavSection[] = [
   },
 ];
 
+export const getAdminNav = (unreadCount: number): NavSection[] => {
+  return adminNav.map(section => ({
+    ...section,
+    items: section.items.map(item => {
+      if (item.label === "Notifications" && unreadCount > 0) {
+        return {
+          ...item,
+          badge: unreadCount.toString(),
+        };
+      }
+      return item;
+    }),
+  }));
+};

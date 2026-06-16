@@ -8,6 +8,8 @@ import { Card, CardContent } from "@/app/components/ui/card";
 import { QuantityStepper } from "@/app/components/ui/quantity-stepper";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { cn } from "@/app/helpers/utils";
+import { useQuery } from "@tanstack/react-query";
+import { customerApi } from "@/app/services/customerApi";
 
 function CartThumb({ url }: { url?: string | null }) {
   const [failed, setFailed] = useState(false);
@@ -31,17 +33,20 @@ function CartThumb({ url }: { url?: string | null }) {
 
 function CartLineCard({
   line,
+  availableQuantity,
   onUpdateQty,
   onUpdateDays,
   onUpdateOrderType,
   onRemove,
 }: {
   line: CartLine;
+  availableQuantity?: number;
   onUpdateQty: (listingId: string, qty: number) => void;
   onUpdateDays: (listingId: string, days: number) => void;
   onUpdateOrderType: (listingId: string, orderType: "rent" | "buy") => void;
   onRemove: (listingId: string) => void;
 }) {
+  const isOverStock = availableQuantity !== undefined && line.quantity > availableQuantity;
   const lineRent =
     line.orderType === "buy"
       ? line.dailyRent * 30 * line.quantity
@@ -98,7 +103,7 @@ function CartLineCard({
               label="Qty"
               value={line.quantity}
               min={1}
-              max={999}
+              max={availableQuantity ?? 999}
               onChange={(qty) => onUpdateQty(line.listingId, qty)}
             />
             <div className="space-y-2">
@@ -123,6 +128,11 @@ function CartLineCard({
               />
             ) : null}
           </div>
+          {isOverStock && (
+            <p className="text-xs font-semibold text-destructive mt-2 animate-pulse">
+              Only {availableQuantity} unit(s) available in stock. Please reduce quantity to proceed.
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -131,6 +141,24 @@ function CartLineCard({
 
 const CustomerCart = () => {
   const { lines, updateLine, removeLine, totalEstimatedRent } = useCart();
+
+  const { data: listings } = useQuery({
+    queryKey: ["customer-catalog-listings"],
+    queryFn: () => customerApi.getCatalogListings(),
+  });
+
+  const availabilityMap = useMemo(() => {
+    if (!listings) return new Map<string, number>();
+    return new Map(listings.map((l) => [l.id, l.availableQuantity]));
+  }, [listings]);
+
+  const hasStockIssues = useMemo(() => {
+    if (!listings) return false;
+    return lines.some((l) => {
+      const avail = availabilityMap.get(l.listingId);
+      return avail !== undefined && l.quantity > avail;
+    });
+  }, [lines, listings, availabilityMap]);
 
   const totalDeposit = useMemo(
     () => lines.reduce((sum, l) => sum + (l.orderType === "buy" ? 0 : l.securityDeposit * l.quantity), 0),
@@ -160,6 +188,7 @@ const CustomerCart = () => {
               <CartLineCard
                 key={line.listingId}
                 line={line}
+                availableQuantity={availabilityMap.get(line.listingId)}
                 onUpdateQty={(listingId, qty) => updateLine(listingId, { quantity: qty })}
                 onUpdateDays={(listingId, rentalDays) => updateLine(listingId, { rentalDays })}
                 onUpdateOrderType={(listingId, orderType) => updateLine(listingId, { orderType })}
@@ -192,9 +221,15 @@ const CustomerCart = () => {
                   Total reflects estimated rent. Deposit may be collected separately per vendor policy.
                 </p>
               </div>
-              <Button className="w-full bg-foreground text-background hover:bg-foreground/90" asChild size="lg">
-                <Link to="/customer/checkout">Proceed to checkout</Link>
-              </Button>
+              {hasStockIssues ? (
+                <Button className="w-full bg-foreground text-background opacity-50 cursor-not-allowed" disabled size="lg">
+                  Proceed to checkout
+                </Button>
+              ) : (
+                <Button className="w-full bg-foreground text-background hover:bg-foreground/90" asChild size="lg">
+                  <Link to="/customer/checkout">Proceed to checkout</Link>
+                </Button>
+              )}
             </CardContent>
           </Card>
         </div>

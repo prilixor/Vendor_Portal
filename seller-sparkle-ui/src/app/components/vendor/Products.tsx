@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -76,11 +77,37 @@ const blankListing = (category?: CatalogCategory, product?: CatalogProduct): Loc
 
 const Products = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialFilter = (searchParams.get("status") as "all" | "active" | "inactive") ?? "all";
+  
   const [products, setProducts] = useState<LocalListing[]>([]);
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
+  const [filter, setFilter] = useState<"all" | "active" | "inactive">(
+    ["all", "active", "inactive"].includes(initialFilter) ? initialFilter : "all"
+  );
+
+  useEffect(() => {
+    const s = searchParams.get("status") as "all" | "active" | "inactive";
+    if (s && ["all", "active", "inactive"].includes(s)) {
+      setFilter(s);
+    } else if (!s) {
+      setFilter("all");
+    }
+  }, [searchParams]);
+
+  const handleFilterChange = (v: string) => {
+    const val = v as "all" | "active" | "inactive";
+    setFilter(val);
+    if (val === "all") {
+      searchParams.delete("status");
+    } else {
+      searchParams.set("status", val);
+    }
+    setSearchParams(searchParams, { replace: true });
+  };
+
   const [editing, setEditing] = useState<LocalListing | null>(null);
   const [mediaFor, setMediaFor] = useState<LocalListing | null>(null);
   const [tempImages, setTempImages] = useState<MediaImage[]>([]);
@@ -741,7 +768,7 @@ const Products = () => {
               <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search listings…" className="w-full pl-9" />
             </div>
           </div>
-          <Tabs value={filter} onValueChange={(v) => setFilter(v as "all" | "active" | "inactive")}>
+          <Tabs value={filter} onValueChange={handleFilterChange}>
             <TabsList className="w-full sm:w-auto">
               <TabsTrigger value="all" className="flex-1 sm:flex-none">All <span className="ml-1.5 text-xs text-muted-foreground">({products.length})</span></TabsTrigger>
               <TabsTrigger value="active" className="flex-1 sm:flex-none">Active</TabsTrigger>

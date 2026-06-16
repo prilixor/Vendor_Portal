@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import type { VerificationStatus } from "@/app/models";
+import { getVendorRoute } from "@/app/helpers/vendorNav";
 
 type DashboardNotification = {
   id: string;
@@ -21,6 +22,7 @@ type DashboardNotification = {
   timestamp: string;
   type: "info" | "success" | "warning" | "error";
   read: boolean;
+  notificationType?: string;
 };
 
 type TopListingRow = {
@@ -161,6 +163,7 @@ const Dashboard = () => {
             timestamp: n.sentAt ?? n.readAt ?? new Date().toISOString(),
             type: mapNotificationType(n.notificationType),
             read: n.status.trim().toLowerCase() === "read" || !!n.readAt,
+            notificationType: n.notificationType,
           }))
           .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         setUnreadNotifications(mappedNotifications.filter((n) => !n.read).length);
@@ -380,10 +383,34 @@ const Dashboard = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total listings" value={loading ? "..." : totalListings} icon={Package} accent="primary" />
-        <StatCard label="Active listings" value={loading ? "..." : activeListings} icon={CheckCircle2} accent="success" />
-        <StatCard label="Inventory units" value={loading ? "..." : inventoryUnits} icon={Boxes} accent="info" />
-        <StatCard label="Notifications" value={loading ? "..." : unreadNotifications} icon={Bell} accent="warning" />
+        <StatCard 
+          label="Total listings" 
+          value={loading ? "..." : totalListings} 
+          icon={Package} 
+          accent="primary" 
+          onClick={() => navigate("/vendor/products")}
+        />
+        <StatCard 
+          label="Active listings" 
+          value={loading ? "..." : activeListings} 
+          icon={CheckCircle2} 
+          accent="success" 
+          onClick={() => navigate("/vendor/products?status=active")}
+        />
+        <StatCard 
+          label="Inventory units" 
+          value={loading ? "..." : inventoryUnits} 
+          icon={Boxes} 
+          accent="info" 
+          onClick={() => navigate("/vendor/inventory")}
+        />
+        <StatCard 
+          label="Notifications" 
+          value={loading ? "..." : unreadNotifications} 
+          icon={Bell} 
+          accent="warning" 
+          onClick={() => navigate("/vendor/notifications")}
+        />
       </div>
 
       {/* Order operations snapshot */}
@@ -429,7 +456,16 @@ const Dashboard = () => {
           </div>
           <ul className="divide-y divide-border">
             {recentActivity.map((n) => (
-              <li key={n.id} className="flex items-start gap-3 py-3">
+              <li
+                key={n.id}
+                className="flex cursor-pointer items-start gap-3 py-3 transition-colors hover:bg-muted/30 rounded px-2 -mx-2"
+                onClick={() => {
+                  const route = getVendorRoute(n.notificationType, n.title);
+                  if (route) {
+                    navigate(route);
+                  }
+                }}
+              >
                 <div className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
                   n.type === "success" ? "bg-success" :
                   n.type === "warning" ? "bg-warning" :

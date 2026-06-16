@@ -44,8 +44,11 @@ const Login = () => {
       // Use window.location.href to force full page reload
       window.location.href = "/vendor";
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Sign in failed. Please try again.";
-      if (message.includes("EMAIL_NOT_VERIFIED")) {
+      let message = error instanceof Error ? error.message : "Sign in failed. Please try again.";
+      const rawMessage = message;
+      message = message.replace(/\n?\[.*?\]/g, "").trim();
+      
+      if (rawMessage.includes("EMAIL_NOT_VERIFIED")) {
         setNeedsVerification(true);
         toast.error("Please verify your email before logging in.");
       } else {
@@ -68,7 +71,8 @@ const Login = () => {
       await authApi.resendVerification(candidateEmail);
       toast.success("Verification link has been resent.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to resend verification link.";
+      let message = error instanceof Error ? error.message : "Failed to resend verification link.";
+      message = message.replace(/\n?\[.*?\]/g, "").trim();
       toast.error(message);
     } finally {
       setResendLoading(false);
@@ -76,7 +80,7 @@ const Login = () => {
   };
 
   return (
-    <AuthLayout title="Welcome back" subtitle="Sign in to continue to your workspace.">
+    <AuthLayout title="Vendor sign in" subtitle="Access your workspace and manage your listings." portalType="vendor">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="email">Email or Phone Number</Label>

@@ -86,7 +86,10 @@ const AdminRegister = () => {
       toast.success("Admin account created successfully!");
       navigate("/admin/login");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Registration failed.";
+      let message = error instanceof Error ? error.message : "Registration failed.";
+      if (message.toLowerCase().includes("already exists") || message.toLowerCase().includes("email already in use")) {
+        message = "Registration failed. If an account with this email exists, please try logging in.";
+      }
       toast.error(message);
     } finally {
       setLoading(false);
@@ -94,7 +97,7 @@ const AdminRegister = () => {
   };
 
   return (
-    <AuthLayout title="Create admin account" subtitle="Add a new administrator to the system.">
+    <AuthLayout title="Create admin account" subtitle="Add a new administrator to the system." portalType="admin">
       <form onSubmit={submit} className="space-y-4">
         <Field
           id="fullName"

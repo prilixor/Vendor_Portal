@@ -211,6 +211,80 @@ internal sealed class AddCustomerAddressCommandHandler(ICustomerRepository custo
     }
 }
 
+public sealed record UpdateCustomerAddressCommand(
+    Guid CustomerId,
+    Guid AddressId,
+    string? Label,
+    string Line1,
+    string City,
+    string State,
+    string Postal,
+    decimal? Latitude,
+    decimal? Longitude,
+    bool SetAsDefault)
+    : ICommand<CustomerAddressDto>;
+
+public sealed class UpdateCustomerAddressCommandValidator : AbstractValidator<UpdateCustomerAddressCommand>
+{
+    public UpdateCustomerAddressCommandValidator()
+    {
+        RuleFor(x => x.Line1).NotEmpty().MaximumLength(500);
+        RuleFor(x => x.City).NotEmpty().MaximumLength(120);
+        RuleFor(x => x.State).NotEmpty().MaximumLength(120);
+        RuleFor(x => x.Postal).NotEmpty().MaximumLength(30);
+        RuleFor(x => x.Latitude).InclusiveBetween(-90m, 90m).When(x => x.Latitude.HasValue);
+        RuleFor(x => x.Longitude).InclusiveBetween(-180m, 180m).When(x => x.Longitude.HasValue);
+    }
+}
+
+internal sealed class UpdateCustomerAddressCommandHandler(ICustomerRepository customers)
+    : ICommandHandler<UpdateCustomerAddressCommand, CustomerAddressDto>
+{
+    public async Task<Result<CustomerAddressDto>> Handle(UpdateCustomerAddressCommand request, CancellationToken cancellationToken)
+    {
+        var c = await customers.GetCustomerByIdAsync(request.CustomerId, cancellationToken);
+        if (c is null || c.IsDeleted)
+            return Result.Failure<CustomerAddressDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
+
+        var addr = await customers.GetCustomerAddressByIdAsync(request.CustomerId, request.AddressId, cancellationToken);
+        if (addr is null)
+            return Result.Failure<CustomerAddressDto>(new Error("customers.address_not_found", "Address not found.", ErrorCategory.NotFound));
+
+        if (request.SetAsDefault)
+        {
+            var existing = await customers.GetCustomerAddressesAsync(request.CustomerId, cancellationToken);
+            foreach (var a in existing.Where(x => x.IsDefault && x.Id != request.AddressId))
+            {
+                a.IsDefault = false;
+                await customers.UpdateCustomerAddressAsync(a, cancellationToken);
+            }
+        }
+
+        addr.Label = string.IsNullOrWhiteSpace(request.Label) ? null : request.Label.Trim();
+        addr.Line1 = request.Line1.Trim();
+        addr.City = request.City.Trim();
+        addr.State = request.State.Trim();
+        addr.Postal = request.Postal.Trim();
+        addr.Latitude = request.Latitude;
+        addr.Longitude = request.Longitude;
+        addr.IsDefault = request.SetAsDefault;
+
+        await customers.UpdateCustomerAddressAsync(addr, cancellationToken);
+        await customers.SaveChangesAsync(cancellationToken);
+
+        return Result.Success(new CustomerAddressDto(
+            addr.Id,
+            addr.Label,
+            addr.Line1,
+            addr.City,
+            addr.State,
+            addr.Postal,
+            addr.Latitude,
+            addr.Longitude,
+            addr.IsDefault));
+    }
+}
+
 public sealed record DeleteCustomerAddressCommand(Guid CustomerId, Guid AddressId) : ICommand;
 
 internal sealed class DeleteCustomerAddressCommandHandler(ICustomerRepository customers)

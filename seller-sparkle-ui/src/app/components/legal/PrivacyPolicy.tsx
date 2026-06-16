@@ -1,18 +1,25 @@
-import { Link } from "react-router-dom";
-import { ShieldCheck, Lock, Eye, Database, Globe, ChevronRight } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft, ShieldCheck, Lock, Eye, Database, Globe, ChevronRight } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
 
 const PrivacyPolicy = () => {
+  const navigate = useNavigate();
+
   return (
     <div className="min-h-screen bg-background selection:bg-primary/10">
       {/* Refined Minimal Header */}
       <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-14 items-center justify-between px-4 lg:px-8">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary shadow-sm">
-              <ShieldCheck className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-sm font-bold tracking-tight">Vendor Portal</span>
+          <div className="flex items-center gap-4">
+            <button onClick={() => navigate(-1)} className="flex shrink-0 h-8 w-8 items-center justify-center rounded-full hover:bg-muted text-muted-foreground transition-colors" aria-label="Go back">
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <Link to="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary shadow-sm">
+                <ShieldCheck className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-sm font-bold tracking-tight">Vendor Portal</span>
+            </Link>
           </div>
           <div className="flex items-center gap-4">
              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Privacy Standards</span>

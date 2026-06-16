@@ -38,7 +38,10 @@ const CustomerRegister = () => {
       toast.success("Welcome! Your account is ready.");
       window.location.href = "/customer/dashboard";
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Registration failed.";
+      let message = error instanceof Error ? error.message : "Registration failed.";
+      if (message.toLowerCase().includes("already exists") || message.toLowerCase().includes("in use") || message.toLowerCase().includes("taken")) {
+        message = "Registration failed. If an account with this email or phone number exists, please try logging in.";
+      }
       toast.error(message);
     } finally {
       setLoading(false);
@@ -46,7 +49,7 @@ const CustomerRegister = () => {
   };
 
   return (
-    <AuthLayout title="Create customer account" subtitle="Rent equipment from verified vendors in one place.">
+    <AuthLayout title="Create customer account" subtitle="Rent equipment from verified vendors in one place." portalType="customer">
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="fullName">Full name</Label>

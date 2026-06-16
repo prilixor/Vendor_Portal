@@ -46,7 +46,7 @@ const CustomerLogin = () => {
   };
 
   return (
-    <AuthLayout title="Customer sign in" subtitle="Browse rentals and manage your orders.">
+    <AuthLayout title="Customer sign in" subtitle="Browse rentals and manage your orders." portalType="customer">
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>
