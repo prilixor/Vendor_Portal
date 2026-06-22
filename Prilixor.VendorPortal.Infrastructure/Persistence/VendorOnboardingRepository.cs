@@ -441,7 +441,7 @@ public sealed class VendorOnboardingRepository(
     public Task<VendorProductListing?> GetVendorProductListingByVendorProductAsync(Guid vendorId, Guid productId, CancellationToken cancellationToken)
     {
         return dbContext.VendorProductListings
-            .FirstOrDefaultAsync(x => x.VendorId == vendorId && x.ProductId == productId && !x.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(x => x.VendorId == vendorId && x.ProductId == productId, cancellationToken);
     }
 
     public async Task AddVendorProductListingAsync(VendorProductListing listing, CancellationToken cancellationToken)

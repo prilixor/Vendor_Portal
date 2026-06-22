@@ -536,7 +536,8 @@ internal sealed class VerifyVendorListingCommandHandler(IVendorOnboardingReposit
             listing.MonthlyRent,
             listing.SecurityDeposit,
             listing.AvailableQuantity,
-            listing.ListingStatus));
+            listing.ListingStatus,
+            0));
     }
 }
 

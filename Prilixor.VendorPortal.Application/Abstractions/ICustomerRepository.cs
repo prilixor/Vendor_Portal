@@ -60,6 +60,14 @@ public interface ICustomerRepository
 
     Task<bool> HasActiveOrdersForListingAsync(Guid listingId, CancellationToken cancellationToken);
 
+    Task<List<CustomerFavorite>> GetCustomerFavoritesAsync(Guid customerId, CancellationToken cancellationToken);
+    Task<CustomerFavorite?> GetCustomerFavoriteAsync(Guid customerId, Guid vendorProductListingId, CancellationToken cancellationToken);
+    Task AddCustomerFavoriteAsync(CustomerFavorite favorite, CancellationToken cancellationToken);
+    Task RemoveCustomerFavoriteAsync(CustomerFavorite favorite, CancellationToken cancellationToken);
+    Task<List<Guid>> GetCustomersByFavoriteListingAsync(Guid vendorProductListingId, CancellationToken cancellationToken);
+    Task<Dictionary<Guid, int>> GetFavoriteCountsByListingsAsync(List<Guid> listingIds, CancellationToken cancellationToken);
+    Task<Dictionary<Guid, int>> GetFavoriteCountsByProductsAsync(CancellationToken cancellationToken);
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }
 

@@ -81,6 +81,7 @@ export interface VendorProductListingDto {
   securityDeposit: number;
   availableQuantity: number;
   listingStatus: string;
+  favoriteCount: number;
 }
 
 export interface AdminUserDto {
@@ -172,6 +173,7 @@ export interface VendorProductListingDto {
   securityDeposit: number;
   availableQuantity: number;
   listingStatus: string;
+  favoriteCount: number;
 }
 
 export interface VerifyVendorListingRequest {
@@ -250,6 +252,7 @@ export interface ProductDto {
   isRentEnabled: boolean;
   isBuyEnabled: boolean;
   isActive: boolean;
+  favoriteCount: number;
 }
 
 export interface ProductImageDto {

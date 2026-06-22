@@ -8,6 +8,7 @@ import {
   LifeBuoy,
   Settings,
   Clock3,
+  Heart,
 } from "lucide-react";
 import type { NavSection } from "@/app/helpers/navigation";
 
@@ -19,7 +20,9 @@ export const customerNav: NavSection[] = [
   },
   {
     title: "Shop",
-    items: [{ label: "Browse", to: "/customer/browse", icon: Store }],
+    items: [
+      { label: "Browse", to: "/customer/browse", icon: Store },
+    ],
   },
   {
     title: "Orders",

@@ -54,7 +54,7 @@ const VendorOrderRequests = () => {
   const sortedOffers = useMemo(
     () =>
       [...offers].sort(
-        (a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime(),
+        (a, b) => new Date(b.expiresAt).getTime() - new Date(a.expiresAt).getTime(),
       ),
     [offers],
   );

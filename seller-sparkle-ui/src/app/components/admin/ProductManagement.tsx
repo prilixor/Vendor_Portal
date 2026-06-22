@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Switch } from "@/app/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest } from "@/app/services/adminApi";
@@ -28,6 +29,7 @@ const ProductManagement = () => {
   const [activeTab, setActiveTab] = useState("categories");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   
   // Category dialog state
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
@@ -114,7 +116,8 @@ const ProductManagement = () => {
       p.brandName?.toLowerCase().includes(search.toLowerCase()) ||
       p.modelName?.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? p.isActive : !p.isActive);
-    return matchesSearch && matchesStatus;
+    const matchesFavorites = !showFavoritesOnly || p.favoriteCount > 0;
+    return matchesSearch && matchesStatus && matchesFavorites;
   });
 
   const getCategoryName = (categoryId: string) => {
@@ -606,6 +609,12 @@ const ProductManagement = () => {
               />
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              {activeTab === "products" && (
+                <div className="flex items-center space-x-2 mr-2">
+                  <Switch id="favorites-only" checked={showFavoritesOnly} onCheckedChange={setShowFavoritesOnly} />
+                  <Label htmlFor="favorites-only" className="text-sm cursor-pointer whitespace-nowrap">Favorites Only</Label>
+                </div>
+              )}
               <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "active" | "inactive")}>
                 <SelectTrigger className="w-full sm:w-[150px]">
                   <SelectValue />
@@ -732,6 +741,7 @@ const ProductManagement = () => {
                       <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
                       <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-12" /></th>
                       <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
+                      <th className="px-4 py-3 font-semibold text-center"><Skeleton className="h-3 w-12 mx-auto" /></th>
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
@@ -759,6 +769,9 @@ const ProductManagement = () => {
                         <td className="px-4 py-3">
                           <Skeleton className="h-6 w-12 rounded" />
                         </td>
+                        <td className="px-4 py-3 text-center">
+                          <Skeleton className="h-6 w-12 rounded mx-auto" />
+                        </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex justify-end gap-1">
                             <Skeleton className="h-8 w-8 rounded" />
@@ -782,6 +795,7 @@ const ProductManagement = () => {
                       <th className="px-4 py-3 font-semibold">Daily</th>
                       <th className="px-4 py-3 font-semibold">GST %</th>
                       <th className="px-4 py-3 font-semibold">Status</th>
+                      <th className="px-4 py-3 font-semibold text-center">Favorites</th>
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
@@ -800,6 +814,24 @@ const ProductManagement = () => {
                             onCheckedChange={() => toggleProductStatus(p.id, p.isActive)}
                             disabled={loading}
                           />
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {p.favoriteCount > 0 ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="inline-flex items-center justify-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+                                    ❤️ {p.favoriteCount}
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p>Favorited by {p.favoriteCount} {p.favoriteCount === 1 ? 'customer' : 'customers'}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex justify-end gap-1">

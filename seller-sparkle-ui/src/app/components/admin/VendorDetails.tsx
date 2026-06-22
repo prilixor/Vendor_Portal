@@ -10,6 +10,10 @@ import { Skeleton } from "@/app/components/ui/skeleton";
 
 import { Button } from "@/app/components/ui/button";
 
+import { Switch } from "@/app/components/ui/switch";
+
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
@@ -19,6 +23,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/app/components/ui/label";
 
 import { Textarea } from "@/app/components/ui/textarea";
+
+import { Badge } from "@/app/components/ui/badge";
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 
@@ -212,6 +218,8 @@ const VendorDetails = () => {
 
 
   const [productListings, setProductListings] = useState<VendorProductListingDto[]>([]);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [inventoryMap, setInventoryMap] = useState<Record<string, any>>({});
   const [previewDocument, setPreviewDocument] = useState<{ url: string; type: string } | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
 
@@ -277,7 +285,22 @@ const VendorDetails = () => {
 
 
 
-      setProductListings(listingsData);
+      const sortedListings = listingsData.sort((a, b) => a.listingTitle.localeCompare(b.listingTitle));
+      setProductListings(sortedListings);
+
+      // Fetch inventory for each listing
+      const inventoryData: Record<string, any> = {};
+      await Promise.all(
+        sortedListings.map(async (l) => {
+          try {
+            const inv = await vendorOnboardingApi.getVendorInventory(id, l.id);
+            if (inv) inventoryData[l.id] = inv;
+          } catch {
+            // ignore if no inventory
+          }
+        })
+      );
+      setInventoryMap(inventoryData);
 
     } catch (error) {
       const message = getUserFriendlyMessage(error);
@@ -1157,17 +1180,20 @@ const VendorDetails = () => {
 
           <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
 
-            <div className="mb-4 flex items-center justify-between">
-
+            <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <h3 className="font-semibold">Listings</h3>
-
-              <p className="text-xs text-muted-foreground">{productListings.length} total</p>
-
+              <div className="flex items-center gap-4">
+                <div className="flex items-center space-x-2">
+                  <Switch id="vendor-favorites-only" checked={showFavoritesOnly} onCheckedChange={setShowFavoritesOnly} />
+                  <Label htmlFor="vendor-favorites-only" className="text-sm cursor-pointer whitespace-nowrap">Favorites Only</Label>
+                </div>
+                <p className="text-xs text-muted-foreground">{productListings.filter(p => !showFavoritesOnly || p.favoriteCount > 0).length} total</p>
+              </div>
             </div>
 
             <div className="space-y-2">
 
-              {productListings.map((p) => (
+              {productListings.filter(p => !showFavoritesOnly || p.favoriteCount > 0).map((p) => (
 
                 <div key={p.id} className="flex items-center justify-between rounded-lg border border-border p-3">
 
@@ -1176,26 +1202,53 @@ const VendorDetails = () => {
                     <Package className="h-4 w-4 text-primary" />
 
                     <div>
-
-                      <p className="text-sm font-medium">{p.listingTitle}</p>
-
-                      <p className="text-xs text-muted-foreground">Daily: ₹{p.dailyRent}</p>
-
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium">{p.listingTitle}</p>
+                        {p.listingStatus === "active" || p.listingStatus === "approved" ? (
+                          <Badge variant="outline" className="border-success text-success bg-success/10 text-[10px] h-4 px-1.5 py-0 font-medium leading-none">Active</Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-muted-foreground/30 text-muted-foreground bg-muted/50 text-[10px] h-4 px-1.5 py-0 font-medium leading-none">
+                            {p.listingStatus ? p.listingStatus.charAt(0).toUpperCase() + p.listingStatus.slice(1).replace('_', ' ') : "Inactive"}
+                          </Badge>
+                        )}
+                        {p.favoriteCount > 0 && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-block cursor-default">
+                                  <Badge variant="outline" className="border-rose-200 text-rose-600 bg-rose-50 text-[10px] h-4 px-1.5 py-0 font-medium leading-none dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400">
+                                    ❤️ {p.favoriteCount}
+                                  </Badge>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                <p>Favorited by {p.favoriteCount} {p.favoriteCount === 1 ? 'customer' : 'customers'}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">Daily: ₹{p.dailyRent}</p>
                     </div>
 
                   </div>
 
-                  <p className="text-sm font-mono">Qty {p.availableQuantity}</p>
+                  <div className="text-right">
+                    <p className="text-sm font-mono font-medium">Qty {inventoryMap[p.id]?.totalQuantity ?? p.availableQuantity}</p>
+                    {inventoryMap[p.id] && (
+                      <p className="text-[10px] text-muted-foreground">{inventoryMap[p.id].availableQuantity} available</p>
+                    )}
+                  </div>
 
                 </div>
 
               ))}
 
-              {productListings.length === 0 && (
+              {productListings.filter(p => !showFavoritesOnly || p.favoriteCount > 0).length === 0 && (
 
                 <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
 
-                  No listings published yet.
+                  No listings found.
 
                 </div>
 

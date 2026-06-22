@@ -134,12 +134,16 @@ export const getVendorRoute = (notificationType?: string, title?: string): strin
     return "/vendor/inventory";
   }
   
-  if (
-    type.startsWith("vendor_") ||
-    type.startsWith("document_") ||
-    type.startsWith("bank_")
-  ) {
-    return "/vendor/onboarding";
+  if (type.startsWith("document_")) {
+    return "/vendor/onboarding?tab=docs";
+  }
+  
+  if (type.startsWith("bank_")) {
+    return "/vendor/onboarding?tab=bank";
+  }
+
+  if (type.startsWith("vendor_")) {
+    return "/vendor/onboarding?tab=profile";
   }
   
   // Fallback to title matching
@@ -156,8 +160,14 @@ export const getVendorRoute = (notificationType?: string, title?: string): strin
   if (t.includes("stock") || t.includes("inventory")) {
     return "/vendor/inventory";
   }
-  if (t.includes("document") || t.includes("bank") || t.includes("verification") || t.includes("approved")) {
-    return "/vendor/onboarding";
+  if (t.includes("document") || t.includes("docs") || t.includes("verification") || t.includes("approved")) {
+    return "/vendor/onboarding?tab=docs";
+  }
+  if (t.includes("bank")) {
+    return "/vendor/onboarding?tab=bank";
+  }
+  if (t.includes("profile")) {
+    return "/vendor/onboarding?tab=profile";
   }
   
   return null;

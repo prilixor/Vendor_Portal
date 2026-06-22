@@ -18,6 +18,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
     public DbSet<CustomerNotificationPreference> CustomerNotificationPreferences => Set<CustomerNotificationPreference>();
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<CustomerFavorite> CustomerFavorites => Set<CustomerFavorite>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -42,6 +43,21 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
             entity.HasMany(x => x.Addresses).WithOne(x => x.Customer).HasForeignKey(x => x.CustomerId);
+        });
+
+        modelBuilder.Entity<CustomerFavorite>(entity =>
+        {
+            entity.ToTable("customer_favorites");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CustomerId).HasColumnName("customer_id");
+            entity.Property(x => x.VendorProductListingId).HasColumnName("vendor_product_listing_id");
+            entity.Property(x => x.AddedAtUtc).HasColumnName("added_at_utc");
+            entity.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId);
+            // VendorProductListing is in another DbContext/database technically, so we ignore the navigation or map it loosely.
+            entity.Ignore(x => x.VendorProductListing);
         });
 
         modelBuilder.Entity<CustomerAddress>(entity =>

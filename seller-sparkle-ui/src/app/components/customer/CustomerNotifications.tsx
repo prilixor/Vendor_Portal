@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
@@ -49,6 +49,13 @@ const CustomerNotifications = () => {
     queryKey: customerNotificationsQueryKey,
     queryFn: () => customerApi.getNotifications(),
   });
+
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 15;
+
+  const sortedNotifications = useMemo(() => {
+    return [...notifications].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [notifications]);
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.readAt).length, [notifications]);
 
@@ -140,10 +147,10 @@ const CustomerNotifications = () => {
           </ul>
         ) : (
           <ul className="divide-y divide-border">
-            {notifications.length === 0 ? (
+            {sortedNotifications.length === 0 ? (
               <li className="px-5 py-12 text-center text-sm text-muted-foreground">No notifications yet.</li>
             ) : (
-              notifications.map((n) => {
+              sortedNotifications.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((n) => {
                 const unread = !n.readAt;
                 const label = relativeTime(n.createdAt);
                 const typeBadge = customerNotificationTypeBadgeLabel(n.notificationType);
@@ -203,6 +210,18 @@ const CustomerNotifications = () => {
           </ul>
         )}
       </Card>
+
+      {sortedNotifications.length > PAGE_SIZE && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-4">
+          <p className="text-sm text-muted-foreground">
+            Page {page} of {Math.max(1, Math.ceil(sortedNotifications.length / PAGE_SIZE))} &middot; {sortedNotifications.length} items
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
+            <Button variant="outline" size="sm" disabled={page >= Math.max(1, Math.ceil(sortedNotifications.length / PAGE_SIZE))} onClick={() => setPage(p => p + 1)}>Next</Button>
+          </div>
+        </div>
+      )}
 
       {isFetching && !isLoading ? (
         <p className="text-center text-xs text-muted-foreground">Updating…</p>

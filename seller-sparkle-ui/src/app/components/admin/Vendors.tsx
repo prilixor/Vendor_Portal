@@ -12,13 +12,14 @@ import { adminApi, VendorDto, VendorProfileDto } from "@/app/services/adminApi";
 
 import { Building2, ArrowRight, Loader2 } from "lucide-react";
 
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { toast } from "sonner";
 
 
 
 const Vendors = () => {
+  const navigate = useNavigate();
 
   const [vendors, setVendors] = useState<VendorDto[]>([]);
 
@@ -153,7 +154,7 @@ const Vendors = () => {
           {vendors.map((v) => {
             const profile = vendorProfiles.get(v.id);
             return (
-              <Link key={v.id} to={`/admin/vendors/${v.id}`} className="group">
+              <div key={v.id} className="group cursor-pointer" onClick={() => navigate(`/admin/vendors/${v.id}`)}>
 
                 <Card className="border-border/60 p-4 sm:p-5 lg:p-6 transition-all hover:-translate-y-0.5 hover:shadow-elegant">
 
@@ -185,7 +186,13 @@ const Vendors = () => {
 
                 <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border pt-3 text-center text-xs">
 
-                  <div>
+                  <div
+                    className="hover:bg-accent/50 rounded-lg p-1.5 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/admin/vendors/${v.id}?tab=docs`);
+                    }}
+                  >
 
                     <p className="text-lg font-bold">{documentCounts[v.id] ?? 0}</p>
 
@@ -193,7 +200,13 @@ const Vendors = () => {
 
                   </div>
 
-                  <div>
+                  <div
+                    className="hover:bg-accent/50 rounded-lg p-1.5 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/admin/vendors/${v.id}?tab=products`);
+                    }}
+                  >
 
                     <p className="text-lg font-bold">{listingCounts[v.id] ?? 0}</p>
 
@@ -208,10 +221,9 @@ const Vendors = () => {
                   View details <ArrowRight className="ml-1 h-3.5 w-3.5" />
 
                 </div>
-
               </Card>
 
-            </Link>
+            </div>
 
             );
           })}

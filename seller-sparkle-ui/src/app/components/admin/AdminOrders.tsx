@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -142,7 +143,19 @@ function getTimelineProgress(status: string, orderType?: string): {
 export const AdminOrders = () => {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<(typeof statusTabs)[number]["id"]>("all");
+  const [searchParams] = useSearchParams();
+  const urlTab = searchParams.get("tab") as (typeof statusTabs)[number]["id"];
+  const isValidTab = statusTabs.some(t => t.id === urlTab);
+  
+  const [activeTab, setActiveTab] = useState<(typeof statusTabs)[number]["id"]>(
+    isValidTab ? urlTab : "all"
+  );
+
+  useEffect(() => {
+    if (urlTab && isValidTab && urlTab !== activeTab) {
+      setActiveTab(urlTab);
+    }
+  }, [urlTab]);
   const [page, setPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrderDto | null>(null);
 

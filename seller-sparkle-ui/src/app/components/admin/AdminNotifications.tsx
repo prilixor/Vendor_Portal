@@ -43,9 +43,13 @@ export const AdminNotifications = () => {
     }
   }, [searchParams]);
 
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 15;
+
   const handleTabChange = (v: string) => {
     const val = v as "all" | "orders" | "vendors" | "logs";
     setActiveTab(val);
+    setPage(1); // Reset pagination on tab change
     if (val === "all") {
       searchParams.delete("tab");
     } else {
@@ -102,8 +106,9 @@ export const AdminNotifications = () => {
           vendorName: o.vendorName,
           amount: o.totalAmount,
         },
-        link: "/admin/orders",
-      }));
+        link: "/admin/orders?tab=dispatch_failed",
+      }))
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [orders]);
 
   // Process pending vendor verification alerts
@@ -116,15 +121,20 @@ export const AdminNotifications = () => {
         title: "Vendor Onboarding Pending Approval",
         description: `New vendor "${v.companyName || v.fullName}" has submitted document details and requires validation.`,
         status: v.accountStatus,
-        timestamp: new Date().toISOString(), // Standard placeholder
+        timestamp: (v as any).createdAt || new Date().toISOString(),
         meta: {
           name: v.fullName,
           company: v.companyName,
           email: v.email,
         },
-        link: `/admin/vendors/${v.id}`,
-      }));
+        link: `/admin/vendors/${v.id}?tab=docs`,
+      }))
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [vendors]);
+
+  const sortedLogs = useMemo(() => {
+    return [...logs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [logs]);
 
   // Combine Alerts
   const allAlerts = useMemo(() => {
@@ -169,6 +179,22 @@ export const AdminNotifications = () => {
       return "bg-amber-100 text-amber-950 dark:bg-amber-950/40 dark:text-amber-200 border-amber-500/20";
     }
     return "bg-muted text-muted-foreground border-border/40";
+  };
+
+  const renderPagination = (totalItems: number) => {
+    const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+    if (totalItems <= PAGE_SIZE) return null;
+    return (
+      <div className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between border-t border-border/40 mt-6">
+        <p className="text-sm text-muted-foreground">
+          Page {page} of {totalPages} &middot; {totalItems} items
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -224,9 +250,14 @@ export const AdminNotifications = () => {
                 <p className="mt-1 text-sm text-muted-foreground">No urgent dispatch failures or onboarding requests awaiting approval.</p>
               </Card>
             ) : (
-              allAlerts.map((alert) => (
-                <AlertCard key={alert.id} alert={alert} navigate={navigate} />
-              ))
+              <div>
+                {allAlerts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((alert) => (
+                  <div key={alert.id} className="mb-4 last:mb-0">
+                    <AlertCard alert={alert} navigate={navigate} />
+                  </div>
+                ))}
+                {renderPagination(allAlerts.length)}
+              </div>
             )
           )}
 
@@ -241,9 +272,14 @@ export const AdminNotifications = () => {
                 <p className="mt-1 text-sm text-muted-foreground">All orders have been successfully confirmed or dispatched to vendors.</p>
               </Card>
             ) : (
-              criticalOrders.map((alert) => (
-                <AlertCard key={alert.id} alert={alert} navigate={navigate} />
-              ))
+              <div>
+                {criticalOrders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((alert) => (
+                  <div key={alert.id} className="mb-4 last:mb-0">
+                    <AlertCard alert={alert} navigate={navigate} />
+                  </div>
+                ))}
+                {renderPagination(criticalOrders.length)}
+              </div>
             )
           )}
 
@@ -258,15 +294,20 @@ export const AdminNotifications = () => {
                 <p className="mt-1 text-sm text-muted-foreground">All registered vendors have been fully processed and verified.</p>
               </Card>
             ) : (
-              pendingVendors.map((alert) => (
-                <AlertCard key={alert.id} alert={alert} navigate={navigate} />
-              ))
+              <div>
+                {pendingVendors.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((alert) => (
+                  <div key={alert.id} className="mb-4 last:mb-0">
+                    <AlertCard alert={alert} navigate={navigate} />
+                  </div>
+                ))}
+                {renderPagination(pendingVendors.length)}
+              </div>
             )
           )}
 
           {/* TAB: SYSTEM ACTIVITY STREAM */}
           {activeTab === "logs" && (
-            logs.length === 0 ? (
+            sortedLogs.length === 0 ? (
               <Card className="border-border/60 p-12 text-center">
                 <p className="text-sm text-muted-foreground">No recent system activity logs recorded.</p>
               </Card>
@@ -276,7 +317,7 @@ export const AdminNotifications = () => {
                   <ScrollText className="h-5 w-5 text-primary" /> Live Audit Log Feed
                 </h3>
                 <div className="relative border-l border-border pl-6 ml-3 mt-2 space-y-6">
-                  {logs.slice(0, 40).map((log) => (
+                  {sortedLogs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((log) => (
                     <div key={log.id} className="relative group hover:bg-accent/10 p-3 rounded-lg border border-transparent hover:border-border/40 transition-colors">
                       {/* Left icon marker */}
                       <span className="absolute -left-[37px] top-4 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background shadow-sm transition-all group-hover:scale-105">
@@ -320,6 +361,7 @@ export const AdminNotifications = () => {
                     </div>
                   ))}
                 </div>
+                {renderPagination(sortedLogs.length)}
               </Card>
             )
           )}

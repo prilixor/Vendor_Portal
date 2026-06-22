@@ -29,7 +29,7 @@ public sealed class UpsertVendorInventoryCommandValidator : AbstractValidator<Up
     }
 }
 
-internal sealed class UpsertVendorInventoryCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class UpsertVendorInventoryCommandHandler(IVendorOnboardingRepository repository, ICustomerRepository customerRepository)
     : ICommandHandler<UpsertVendorInventoryCommand, VendorInventoryDto>
 {
     public async Task<Result<VendorInventoryDto>> Handle(UpsertVendorInventoryCommand request, CancellationToken cancellationToken)
@@ -53,6 +53,9 @@ internal sealed class UpsertVendorInventoryCommandHandler(IVendorOnboardingRepos
         var entity = await repository.GetVendorInventoryByListingIdAsync(listingId, cancellationToken)
             ?? new VendorInventory { VendorProductListingId = listingId };
 
+        var wasOutOfStock = entity.AvailableQuantity <= 0;
+        var isNowAvailable = request.AvailableQuantity > 0;
+
         entity.TotalQuantity = request.TotalQuantity;
         entity.AvailableQuantity = request.AvailableQuantity;
         entity.ReservedQuantity = request.ReservedQuantity;
@@ -60,6 +63,31 @@ internal sealed class UpsertVendorInventoryCommandHandler(IVendorOnboardingRepos
         entity.BlockedQuantity = request.BlockedQuantity;
 
         await repository.UpsertVendorInventoryAsync(entity, cancellationToken);
+
+        // Keep the listing's static quantity column in sync with the total inventory
+        if (listing.AvailableQuantity != request.TotalQuantity)
+        {
+            listing.AvailableQuantity = request.TotalQuantity;
+            await repository.UpdateVendorProductListingAsync(listing, cancellationToken);
+        }
+
+        if (wasOutOfStock && isNowAvailable)
+        {
+            var customerIds = await customerRepository.GetCustomersByFavoriteListingAsync(listingId, cancellationToken);
+            foreach (var cid in customerIds)
+            {
+                var notification = new Prilixor.VendorPortal.Domain.Customers.CustomerNotification
+                {
+                    CustomerId = cid,
+                    NotificationType = "back_in_stock",
+                    Title = "A favorite item is back in stock!",
+                    Body = $"Good news! {listing.ListingTitle} from your favorites is now available to rent."
+                };
+                await customerRepository.AddCustomerNotificationAsync(notification, cancellationToken);
+            }
+            await customerRepository.SaveChangesAsync(cancellationToken);
+        }
+
         await repository.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new VendorInventoryDto(

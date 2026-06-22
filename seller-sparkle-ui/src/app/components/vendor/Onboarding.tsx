@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -70,7 +70,15 @@ const Onboarding = () => {
   const [editingSection, setEditingSection] = useState<number | null>(null);
   const [originalProfile, setOriginalProfile] = useState<BusinessProfile | null>(null);
   const [originalBank, setOriginalBank] = useState<BankDetails | null>(null);
-  const [activeTab, setActiveTab] = useState("profile");
+  const [searchParams] = useSearchParams();
+  const urlTab = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState(urlTab || "profile");
+
+  useEffect(() => {
+    if (urlTab && urlTab !== activeTab) {
+      setActiveTab(urlTab);
+    }
+  }, [urlTab]);
   const [documentType, setDocumentType] = useState("GST Certificate");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [bankAccountId, setBankAccountId] = useState<string | null>(null);
@@ -835,7 +843,7 @@ const Onboarding = () => {
             title={toCamelCase(editingSection === 1 ? (originalProfile?.businessName || profile.businessName || user?.name || "Vendor") : (profile.businessName || user?.name || "Vendor"))}
             description={`${toCamelCase(editingSection === 1 ? (originalProfile?.ownerName || profile.ownerName || "") : (profile.ownerName || ""))} · ${editingSection === 1 ? (originalProfile?.city || profile.city || "") : (profile.city || "")}`}
             breadcrumbs={[
-              { label: "Vendor", href: "/vendor/dashboard" },
+              { label: "Vendor", href: "/vendor" },
               { label: "Profile" },
             ]}
             actions={

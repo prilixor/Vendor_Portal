@@ -304,7 +304,26 @@ export const customerApi = {
   updateNotificationPreferences(prefs: Omit<CustomerNotificationPreferenceApi, "customerId">): Promise<CustomerNotificationPreferenceApi> {
     return apiClient.put<CustomerNotificationPreferenceApi>("/customers/me/notification-preferences", prefs);
   },
+
+  getFavorites(): Promise<CustomerFavoriteApi[]> {
+    return apiClient.get<CustomerFavoriteApi[]>("/customers/me/favorites");
+  },
+
+  addFavorite(listingId: string): Promise<CustomerFavoriteApi> {
+    return apiClient.post<CustomerFavoriteApi>("/customers/me/favorites", { vendorProductListingId: listingId });
+  },
+
+  removeFavorite(listingId: string): Promise<void> {
+    return apiClient.delete(`/customers/me/favorites/${encodeURIComponent(listingId)}`);
+  },
 };
+
+export interface CustomerFavoriteApi {
+  id: string;
+  customerId: string;
+  vendorProductListingId: string;
+  addedAtUtc: string;
+}
 
 export interface CustomerNotificationPreferenceApi {
   customerId: string;

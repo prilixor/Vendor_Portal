@@ -28,6 +28,7 @@ type LocalListing = ProductListing & {
   gstPercent?: number;
   isRentEnabled?: boolean;
   isBuyEnabled?: boolean;
+  favoriteCount?: number;
 };
 
 type CatalogCategory = {
@@ -129,6 +130,7 @@ const Products = () => {
   const [deleteImageConfirmId, setDeleteImageConfirmId] = useState<string | null>(null);
   const [previewDocument, setPreviewDocument] = useState<{ id: string; type: string; url: string } | null>(null);
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
   const getFileNameFromUrl = (url?: string) => {
     if (!url) return "";
@@ -224,7 +226,8 @@ const Products = () => {
   const filtered = products.filter((p) => {
     const m = (filter === "all" || p.status === filter);
     const s = !search || p.title.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase());
-    return m && s;
+    const f = !showFavoritesOnly || (p.favoriteCount && p.favoriteCount > 0);
+    return m && s && f;
   });
 
   const toggleListingStatus = async (listing: LocalListing) => {
@@ -296,6 +299,17 @@ const Products = () => {
       vendorOnboardingApi.getVendorProductListings(user.id),
     ]);
 
+    const inventories = await Promise.all(
+      listingsRes.map(async (l) => {
+        try {
+          return await vendorOnboardingApi.getVendorInventory(user.id, l.id);
+        } catch {
+          return null;
+        }
+      })
+    );
+    const inventoryMap = new Map(inventories.filter(i => i !== null).map(i => [i!.vendorProductListingId, i]));
+
     const mappedCategories: CatalogCategory[] = categoriesRes.map((c) => ({ id: c.id, name: c.categoryName }));
     const mappedProducts: CatalogProduct[] = productsRes.map((p) => ({
       id: p.id,
@@ -332,9 +346,10 @@ const Products = () => {
           gstPercent: product?.gstPercent ?? 18,
           isRentEnabled: product?.isRentEnabled ?? true,
           isBuyEnabled: product?.isBuyEnabled ?? true,
-          quantity: l.availableQuantity,
+          quantity: inventoryMap.get(l.id)?.totalQuantity ?? l.availableQuantity,
           status: normalizeListingStatus(l.listingStatus),
           images: [],
+          favoriteCount: l.favoriteCount ?? 0,
           createdAt: new Date().toISOString(),
         };
       })
@@ -768,13 +783,19 @@ const Products = () => {
               <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search listings…" className="w-full pl-9" />
             </div>
           </div>
-          <Tabs value={filter} onValueChange={handleFilterChange}>
-            <TabsList className="w-full sm:w-auto">
-              <TabsTrigger value="all" className="flex-1 sm:flex-none">All <span className="ml-1.5 text-xs text-muted-foreground">({products.length})</span></TabsTrigger>
-              <TabsTrigger value="active" className="flex-1 sm:flex-none">Active</TabsTrigger>
-              <TabsTrigger value="inactive" className="flex-1 sm:flex-none">Inactive</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center space-x-2">
+              <Switch id="vendor-favorites-only" checked={showFavoritesOnly} onCheckedChange={setShowFavoritesOnly} />
+              <Label htmlFor="vendor-favorites-only" className="text-sm cursor-pointer whitespace-nowrap">Favorites Only</Label>
+            </div>
+            <Tabs value={filter} onValueChange={handleFilterChange}>
+              <TabsList className="w-full sm:w-auto">
+                <TabsTrigger value="all" className="flex-1 sm:flex-none">All <span className="ml-1.5 text-xs text-muted-foreground">({products.length})</span></TabsTrigger>
+                <TabsTrigger value="active" className="flex-1 sm:flex-none">Active</TabsTrigger>
+                <TabsTrigger value="inactive" className="flex-1 sm:flex-none">Inactive</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full min-w-[600px] text-sm">
@@ -798,7 +819,23 @@ const Products = () => {
                         <ImageIcon className="h-4 w-4 text-primary" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium truncate">{p.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium truncate">{p.title}</p>
+                          {(p.favoriteCount ?? 0) > 0 && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full font-medium cursor-default">
+                                    ❤️ {p.favoriteCount}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p>Favorited by {p.favoriteCount} {p.favoriteCount === 1 ? 'customer' : 'customers'}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground truncate">{p.productName}</p>
                       </div>
                     </div>
@@ -856,9 +893,9 @@ const Products = () => {
             <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
               <FormGrid cols={2}>
               <div className="space-y-1.5">
-                <Label>Category</Label>
+                <Label>Category {editing.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(Cannot be changed)</span>}</Label>
                 <div className="flex items-center gap-2">
-                  <Select value={editing.categoryId} onValueChange={onCategoryChange}>
+                  <Select value={editing.categoryId} onValueChange={onCategoryChange} disabled={!!editing.id}>
                     <SelectTrigger className="pl-1"><SelectValue className="text-left min-w-0" /></SelectTrigger>
                     <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                   </Select>
@@ -867,9 +904,9 @@ const Products = () => {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Product (from catalog)</Label>
+                <Label>Product (from catalog) {editing.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(Cannot be changed)</span>}</Label>
                 <div className="flex items-center gap-2">
-                  <Select value={editing.productId} onValueChange={(v) => {
+                  <Select value={editing.productId} disabled={!!editing.id} onValueChange={(v) => {
                     const selected = catalogProducts.find((p) => p.id === v);
                     setEditing({
                       ...editing,
@@ -924,8 +961,17 @@ const Products = () => {
                 <Input value={`${editing.isRentEnabled ? "Rent" : ""}${editing.isRentEnabled && editing.isBuyEnabled ? " + " : ""}${editing.isBuyEnabled ? "Buy" : ""}${!editing.isRentEnabled && !editing.isBuyEnabled ? "Unavailable" : ""}`} readOnly />
               </div>
               <div className="space-y-1.5">
-                <Label>Quantity</Label>
-                <Input type="number" value={editing.quantity} onChange={(e) => setEditing({ ...editing, quantity: Number(e.target.value) })} />
+                <Label>
+                  Quantity
+                  {editing.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(Manage via Inventory)</span>}
+                </Label>
+                <Input 
+                  type="number" 
+                  value={editing.quantity} 
+                  readOnly={!!editing.id} 
+                  className={editing.id ? "bg-muted/50" : ""}
+                  onChange={(e) => setEditing({ ...editing, quantity: Number(e.target.value) })} 
+                />
               </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <Label>Status</Label>

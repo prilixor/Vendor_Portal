@@ -266,6 +266,17 @@ const CustomerListingDetail = () => {
                 <ShoppingCart className="mr-2 h-4 w-4" />
                 {canAddToCart ? "Add to cart" : "Out of stock"}
               </Button>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => {
+                  customerApi.addFavorite(data.id)
+                    .then(() => toast.success("Added to favorites"))
+                    .catch(() => toast.error("Failed to add favorite"));
+                }}
+              >
+                Favorite ❤️
+              </Button>
               <Button variant="outline" asChild>
                 <Link to="/customer/cart">View cart</Link>
               </Button>

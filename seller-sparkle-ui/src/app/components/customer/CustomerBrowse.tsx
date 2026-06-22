@@ -12,26 +12,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { cn } from "@/app/helpers/utils";
 import { useAuth } from "@/app/guards/AuthContext";
 
-const WISHLIST_STORAGE_KEY = "prilixor.customer.wishlistIds";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+
 type AvailabilityFilter = "all" | "available" | "low_stock" | "out_of_stock";
 
-function readWishlist(): Set<string> {
-  try {
-    const raw = localStorage.getItem(WISHLIST_STORAGE_KEY);
-    if (!raw) return new Set();
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((x): x is string => typeof x === "string"));
-  } catch {
-    return new Set();
-  }
-}
-
-function writeWishlist(ids: Set<string>) {
-  localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify([...ids]));
-}
-
-function availabilityBadge(
+export function availabilityBadge(
   status: string,
   qty: number,
   totalAcrossVendors: number,
@@ -76,7 +62,7 @@ function availabilityBadge(
 }
 
 /** Fits the whole image inside a fixed aspect-ratio frame (letterboxing on sides or top/bottom). */
-function BrowseCardImage({ src }: { src: string }) {
+export function BrowseCardImage({ src }: { src: string }) {
   const [failed, setFailed] = useState(false);
   if (!src.trim() || failed) {
     const subtitle = !src.trim() ? "Image will be updated soon" : "Image currently unavailable";
@@ -109,9 +95,61 @@ const CustomerBrowse = () => {
   const [debouncedSearch, setDebouncedSearch] = useState<string | undefined>(undefined);
   const [appliedCat, setAppliedCat] = useState<string | undefined>(undefined);
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>("all");
-  const [wishlist, setWishlist] = useState<Set<string>>(readWishlist);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const { data: favoritesData = [] } = useQuery({
+    queryKey: ["customer-favorites"],
+    queryFn: () => customerApi.getFavorites(),
+    enabled: user?.role === "customer",
+  });
+
+  const wishlist = useMemo(() => new Set(favoritesData.map(f => f.vendorProductListingId)), [favoritesData]);
+
+  const addFavoriteMutation = useMutation({
+    mutationFn: (listingId: string) => customerApi.addFavorite(listingId),
+    onMutate: async (listingId) => {
+      await queryClient.cancelQueries({ queryKey: ["customer-favorites"] });
+      const previous = queryClient.getQueryData<any[]>(["customer-favorites"]);
+      queryClient.setQueryData<any[]>(["customer-favorites"], (old = []) => {
+        if (old.some(f => f.vendorProductListingId === listingId)) return old;
+        return [...old, { id: "temp-" + listingId, vendorProductListingId: listingId }];
+      });
+      return { previous };
+    },
+    onError: (err, newTodo, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["customer-favorites"], context.previous);
+      }
+      toast.error("Failed to add favorite");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["customer-favorites"] });
+    },
+  });
+
+  const removeFavoriteMutation = useMutation({
+    mutationFn: (listingId: string) => customerApi.removeFavorite(listingId),
+    onMutate: async (listingId) => {
+      await queryClient.cancelQueries({ queryKey: ["customer-favorites"] });
+      const previous = queryClient.getQueryData<any[]>(["customer-favorites"]);
+      queryClient.setQueryData<any[]>(["customer-favorites"], (old = []) => 
+        old.filter(f => f.vendorProductListingId !== listingId)
+      );
+      return { previous };
+    },
+    onError: (err, newTodo, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["customer-favorites"], context.previous);
+      }
+      toast.error("Failed to remove favorite");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["customer-favorites"] });
+    },
+  });
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -162,20 +200,28 @@ const CustomerBrowse = () => {
   ];
   const filteredData = useMemo(() => {
     if (!data) return [];
-    if (availabilityFilter === "all") return data;
-    return data.filter((item) => item.availabilityStatus.toLowerCase() === availabilityFilter);
-  }, [data, availabilityFilter]);
+    let result = data;
+    if (availabilityFilter !== "all") {
+      result = result.filter((item) => item.availabilityStatus.toLowerCase() === availabilityFilter);
+    }
+    if (showFavoritesOnly) {
+      result = result.filter((item) => wishlist.has(item.id));
+    }
+    return result;
+  }, [data, availabilityFilter, showFavoritesOnly, wishlist]);
 
   const toggleWishlist = (id: string, e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    setWishlist((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      writeWishlist(next);
-      return next;
-    });
+    if (!user) {
+      toast.error("Please log in to save favorites.");
+      return;
+    }
+    if (wishlist.has(id)) {
+      removeFavoriteMutation.mutate(id);
+    } else {
+      addFavoriteMutation.mutate(id);
+    }
   };
 
   const pillSelected = (label: string) =>
@@ -227,6 +273,28 @@ const CustomerBrowse = () => {
 
       <div className="-mx-1 overflow-x-auto px-1 sm:-mx-2 sm:px-2">
         <div className="flex min-h-9 gap-2 pb-1">
+          <button
+            type="button"
+            onClick={() => {
+              if (!user) {
+                toast.error("Please log in to see your saved items.");
+                return;
+              }
+              setShowFavoritesOnly(!showFavoritesOnly);
+            }}
+            className={cn(
+              "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5",
+              showFavoritesOnly
+                ? "border-destructive bg-destructive text-destructive-foreground"
+                : "border-border bg-background hover:bg-accent text-foreground",
+            )}
+          >
+            <Heart className={cn("h-3.5 w-3.5", showFavoritesOnly ? "fill-current text-current" : "text-destructive")} />
+            Saved
+          </button>
+          
+          <div className="w-px h-6 bg-border mx-1 self-center shrink-0" />
+
           {availabilityPills.map((pill) => (
             <button
               key={pill.id}
@@ -311,19 +379,21 @@ const CustomerBrowse = () => {
                     </div>
                   );
                 })()}
-                <button
-                  type="button"
-                  aria-label={wishlist.has(item.id) ? "Remove from wishlist" : "Save to wishlist"}
-                  onClick={(e) => toggleWishlist(item.id, e)}
-                  className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/90 shadow-sm backdrop-blur-sm transition-colors hover:bg-background"
-                >
-                  <Heart
-                    className={cn(
-                      "h-4 w-4",
-                      wishlist.has(item.id) ? "fill-destructive text-destructive" : "text-muted-foreground",
-                    )}
-                  />
-                </button>
+                {item.listingStatus !== "product_only" && (
+                  <button
+                    type="button"
+                    aria-label={wishlist.has(item.id) ? "Remove from wishlist" : "Save to wishlist"}
+                    onClick={(e) => toggleWishlist(item.id, e)}
+                    className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/90 shadow-sm backdrop-blur-sm transition-colors hover:bg-background"
+                  >
+                    <Heart
+                      className={cn(
+                        "h-4 w-4",
+                        wishlist.has(item.id) ? "fill-destructive text-destructive" : "text-muted-foreground",
+                      )}
+                    />
+                  </button>
+                )}
               </div>
 
               <CardHeader className="space-y-1 px-4 pb-2 pt-4">

@@ -151,13 +151,16 @@ internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository re
             entity.GstPercent,
             entity.IsRentEnabled,
             entity.IsBuyEnabled,
-            entity.IsActive));
+            entity.IsActive,
+            0));
     }
 }
 
 public sealed record GetProductsQuery(string? CategoryId) : IQuery<List<ProductDto>>;
 
-internal sealed class GetProductsQueryHandler(IVendorOnboardingRepository repository)
+internal sealed class GetProductsQueryHandler(
+    IVendorOnboardingRepository repository,
+    ICustomerRepository customerRepository)
     : IQueryHandler<GetProductsQuery, List<ProductDto>>
 {
     public async Task<Result<List<ProductDto>>> Handle(GetProductsQuery request, CancellationToken cancellationToken)
@@ -174,6 +177,14 @@ internal sealed class GetProductsQueryHandler(IVendorOnboardingRepository reposi
         }
 
         var rows = await repository.GetProductsAsync(categoryId, cancellationToken);
+
+        var productIds = rows.Select(x => x.Id).ToList();
+        var favoriteCounts = new Dictionary<Guid, int>();
+        if (productIds.Any())
+        {
+            favoriteCounts = await customerRepository.GetFavoriteCountsByProductsAsync(cancellationToken);
+        }
+
         var result = rows.Select(x => new ProductDto(
             x.Id.ToString(),
             x.CategoryId.ToString(),
@@ -189,7 +200,8 @@ internal sealed class GetProductsQueryHandler(IVendorOnboardingRepository reposi
             x.GstPercent,
             x.IsRentEnabled,
             x.IsBuyEnabled,
-            x.IsActive)).ToList();
+            x.IsActive,
+            favoriteCounts.GetValueOrDefault(x.Id, 0))).ToList();
 
         return Result.Success(result);
     }
@@ -391,7 +403,9 @@ public sealed class UpsertVendorProductListingCommandValidator : AbstractValidat
     }
 }
 
-internal sealed class UpsertVendorProductListingCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class UpsertVendorProductListingCommandHandler(
+    IVendorOnboardingRepository repository,
+    ICustomerRepository customerRepository)
     : ICommandHandler<UpsertVendorProductListingCommand, VendorProductListingDto>
 {
     public async Task<Result<VendorProductListingDto>> Handle(UpsertVendorProductListingCommand request, CancellationToken cancellationToken)
@@ -437,9 +451,27 @@ internal sealed class UpsertVendorProductListingCommandHandler(IVendorOnboarding
         }
         else
         {
-            entity = await repository.GetVendorProductListingByVendorProductAsync(vendorId, productId, cancellationToken)
-                ?? new VendorProductListing { VendorId = vendorId, ProductId = productId };
+            var existing = await repository.GetVendorProductListingByVendorProductAsync(vendorId, productId, cancellationToken);
+            if (existing is not null && !existing.IsDeleted)
+            {
+                return Result.Failure<VendorProductListingDto>(new Error(
+                    "vendors.listing.duplicate",
+                    "You already have an active listing for this product.",
+                    ErrorCategory.Validation));
+            }
+
+            entity = existing ?? new VendorProductListing { VendorId = vendorId, ProductId = productId };
+
+            if (entity.IsDeleted)
+            {
+                entity.IsDeleted = false;
+                entity.DeletedAt = null;
+                entity.DeletedBy = null;
+            }
         }
+
+        var wasOutOfStock = entity.Id != Guid.Empty && entity.AvailableQuantity <= 0;
+        var isNowAvailable = request.AvailableQuantity > 0;
 
         entity.ListingTitle = request.ListingTitle;
         entity.DailyRent = product.DailyRent;
@@ -463,7 +495,29 @@ internal sealed class UpsertVendorProductListingCommandHandler(IVendorOnboarding
             await repository.UpdateVendorProductListingAsync(entity, cancellationToken);
         }
 
+        if (wasOutOfStock && isNowAvailable && entity.Id != Guid.Empty)
+        {
+            var customerIds = await customerRepository.GetCustomersByFavoriteListingAsync(entity.Id, cancellationToken);
+            foreach (var cid in customerIds)
+            {
+                var notification = new Prilixor.VendorPortal.Domain.Customers.CustomerNotification
+                {
+                    CustomerId = cid,
+                    NotificationType = "back_in_stock",
+                    Title = "A favorite item is back in stock!",
+                    Body = $"Good news! {entity.ListingTitle} from your favorites is now available to rent."
+                };
+                await customerRepository.AddCustomerNotificationAsync(notification, cancellationToken);
+            }
+            if (customerIds.Any())
+            {
+                await customerRepository.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         await repository.SaveChangesAsync(cancellationToken);
+        
+        var favoriteCounts = await customerRepository.GetFavoriteCountsByProductsAsync(cancellationToken);
 
         return Result.Success(new VendorProductListingDto(
             entity.Id.ToString(),
@@ -474,7 +528,8 @@ internal sealed class UpsertVendorProductListingCommandHandler(IVendorOnboarding
             entity.MonthlyRent,
             entity.SecurityDeposit,
             entity.AvailableQuantity,
-            entity.ListingStatus));
+            entity.ListingStatus,
+            favoriteCounts.GetValueOrDefault(entity.ProductId, 0)));
     }
 }
 
@@ -525,7 +580,9 @@ internal sealed class DeleteVendorProductListingCommandHandler(
 
 public sealed record GetVendorProductListingsQuery(string VendorId) : IQuery<List<VendorProductListingDto>>;
 
-internal sealed class GetVendorProductListingsQueryHandler(IVendorOnboardingRepository repository)
+internal sealed class GetVendorProductListingsQueryHandler(
+    IVendorOnboardingRepository repository,
+    ICustomerRepository customerRepository)
     : IQueryHandler<GetVendorProductListingsQuery, List<VendorProductListingDto>>
 {
     public async Task<Result<List<VendorProductListingDto>>> Handle(GetVendorProductListingsQuery request, CancellationToken cancellationToken)
@@ -536,6 +593,14 @@ internal sealed class GetVendorProductListingsQueryHandler(IVendorOnboardingRepo
         }
 
         var rows = await repository.GetVendorProductListingsAsync(vendorId, cancellationToken);
+        
+        var listingIds = rows.Select(x => x.Id).ToList();
+        var favoriteCounts = new Dictionary<Guid, int>();
+        if (listingIds.Any())
+        {
+            favoriteCounts = await customerRepository.GetFavoriteCountsByProductsAsync(cancellationToken);
+        }
+
         var result = rows.Select(x => new VendorProductListingDto(
             x.Id.ToString(),
             x.VendorId.ToString(),
@@ -545,7 +610,8 @@ internal sealed class GetVendorProductListingsQueryHandler(IVendorOnboardingRepo
             x.MonthlyRent,
             x.SecurityDeposit,
             x.AvailableQuantity,
-            x.ListingStatus)).ToList();
+            x.ListingStatus,
+            favoriteCounts.GetValueOrDefault(x.ProductId, 0))).ToList();
 
         return Result.Success(result);
     }
@@ -1092,7 +1158,8 @@ internal sealed class UpdateProductCommandHandler(IVendorOnboardingRepository re
             entity.GstPercent,
             entity.IsRentEnabled,
             entity.IsBuyEnabled,
-            entity.IsActive));
+            entity.IsActive,
+            0));
     }
 }
 

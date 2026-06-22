@@ -107,7 +107,8 @@ public sealed record ProductDto(
     decimal GstPercent,
     bool IsRentEnabled,
     bool IsBuyEnabled,
-    bool IsActive);
+    bool IsActive,
+    int FavoriteCount = 0);
 
 public sealed record ProductImageDto(
     string Id,
@@ -125,7 +126,8 @@ public sealed record VendorProductListingDto(
     decimal MonthlyRent,
     decimal SecurityDeposit,
     int AvailableQuantity,
-    string ListingStatus);
+    string ListingStatus,
+    int FavoriteCount = 0);
 
 public sealed record VendorProductImageDto(
     string Id,

@@ -34,8 +34,14 @@ const Notifications = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
 
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 15;
+
   const filtered = useMemo(
-    () => (filter === "unread" ? items.filter((i) => !i.read) : items),
+    () => {
+      const result = filter === "unread" ? items.filter((i) => !i.read) : [...items];
+      return result.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    },
     [filter, items]
   );
 
@@ -247,7 +253,7 @@ const Notifications = () => {
         <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
           <div className="flex items-center justify-between border-b border-border pb-4">
             <h2 className="font-semibold">Inbox</h2>
-            <Tabs value={filter} onValueChange={(v: string) => setFilter(v as "all" | "unread")}>
+            <Tabs value={filter} onValueChange={(v: string) => { setFilter(v as "all" | "unread"); setPage(1); }}>
               <TabsList>
                 <TabsTrigger value="all">All</TabsTrigger>
                 <TabsTrigger value="unread">Unread</TabsTrigger>
@@ -255,7 +261,7 @@ const Notifications = () => {
             </Tabs>
           </div>
           <ul className="divide-y divide-border">
-            {filtered.map((n) => {
+            {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((n) => {
               const { icon: Icon, cls } = typeIcons[n.type];
               return (
                 <li
@@ -309,6 +315,18 @@ const Notifications = () => {
               </li>
             )}
           </ul>
+
+          {filtered.length > PAGE_SIZE && (
+            <div className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between border-t border-border/40 mt-6">
+              <p className="text-sm text-muted-foreground">
+                Page {page} of {Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))} &middot; {filtered.length} items
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
+                <Button variant="outline" size="sm" disabled={page >= Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))} onClick={() => setPage(p => p + 1)}>Next</Button>
+              </div>
+            </div>
+          )}
         </Card>
 
         <Card className="border-border/60 p-4 sm:p-6 lg:p-8 h-fit">

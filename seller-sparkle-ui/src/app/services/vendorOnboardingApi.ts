@@ -127,6 +127,7 @@ export interface VendorProductListingApiDto {
   securityDeposit: number;
   availableQuantity: number;
   listingStatus: string;
+  favoriteCount: number;
 }
 
 export interface VendorProductImageApiDto {

@@ -1156,6 +1156,79 @@ public sealed class CustomerRepository(
     public Task<string?> GetVendorBusinessNameAsync(Guid vendorId, CancellationToken cancellationToken) =>
         vendorDb.VendorProfiles.Where(p => p.VendorId == vendorId).Select(p => p.BusinessName).FirstOrDefaultAsync(cancellationToken);
 
+    public Task<List<CustomerFavorite>> GetCustomerFavoritesAsync(Guid customerId, CancellationToken cancellationToken) =>
+        customerDb.CustomerFavorites
+            .Where(f => f.CustomerId == customerId)
+            .OrderByDescending(f => f.AddedAtUtc)
+            .ToListAsync(cancellationToken);
+
+    public Task<CustomerFavorite?> GetCustomerFavoriteAsync(Guid customerId, Guid vendorProductListingId, CancellationToken cancellationToken) =>
+        customerDb.CustomerFavorites
+            .FirstOrDefaultAsync(f => f.CustomerId == customerId && f.VendorProductListingId == vendorProductListingId, cancellationToken);
+
+    public async Task AddCustomerFavoriteAsync(CustomerFavorite favorite, CancellationToken cancellationToken) =>
+        await customerDb.CustomerFavorites.AddAsync(favorite, cancellationToken);
+
+    public Task RemoveCustomerFavoriteAsync(CustomerFavorite favorite, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerFavorites.Remove(favorite);
+        return Task.CompletedTask;
+    }
+
+    public Task<List<Guid>> GetCustomersByFavoriteListingAsync(Guid vendorProductListingId, CancellationToken cancellationToken) =>
+        customerDb.CustomerFavorites
+            .Where(f => f.VendorProductListingId == vendorProductListingId)
+            .Select(f => f.CustomerId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+    public async Task<Dictionary<Guid, int>> GetFavoriteCountsByListingsAsync(List<Guid> listingIds, CancellationToken cancellationToken)
+    {
+        var counts = await customerDb.CustomerFavorites
+            .Where(f => listingIds.Contains(f.VendorProductListingId))
+            .GroupBy(f => f.VendorProductListingId)
+            .Select(g => new { ListingId = g.Key, Count = g.Select(x => x.CustomerId).Distinct().Count() })
+            .ToDictionaryAsync(x => x.ListingId, x => x.Count, cancellationToken);
+            
+        return counts;
+    }
+
+    public async Task<Dictionary<Guid, int>> GetFavoriteCountsByProductsAsync(CancellationToken cancellationToken)
+    {
+        var listingFavorites = await customerDb.CustomerFavorites
+            .GroupBy(f => f.VendorProductListingId)
+            .Select(g => new { ListingId = g.Key, Count = g.Select(x => x.CustomerId).Distinct().Count() })
+            .ToListAsync(cancellationToken);
+
+        var listingIds = listingFavorites.Select(x => x.ListingId).ToList();
+        if (listingIds.Count == 0) return new Dictionary<Guid, int>();
+
+        var listingToProduct = await vendorDb.VendorProductListings
+            .Where(l => listingIds.Contains(l.Id))
+            .Select(l => new { l.Id, l.ProductId })
+            .ToListAsync(cancellationToken);
+
+        var productMap = listingToProduct.ToDictionary(x => x.Id, x => x.ProductId);
+
+        var result = new Dictionary<Guid, int>();
+        foreach (var lf in listingFavorites)
+        {
+            if (productMap.TryGetValue(lf.ListingId, out var productId))
+            {
+                if (result.ContainsKey(productId))
+                {
+                    result[productId] += lf.Count;
+                }
+                else
+                {
+                    result[productId] = lf.Count;
+                }
+            }
+        }
+
+        return result;
+    }
+
     public Task<bool> HasActiveOrdersForListingAsync(Guid listingId, CancellationToken cancellationToken)
     {
         var activeStatuses = new[] { "pending", "awaiting_vendor_acceptance", "confirmed", "in_transit", "active" };

@@ -88,7 +88,12 @@ class ApiClient {
       return undefined as T;
     }
 
-    return response.json();
+    const text = await response.text();
+    if (!text) {
+      return undefined as T;
+    }
+    
+    return JSON.parse(text);
   }
 
   private buildUrl(endpoint: string): string {

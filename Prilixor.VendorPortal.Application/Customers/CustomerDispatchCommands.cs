@@ -128,6 +128,17 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
 
         if (target == "active")
         {
+            if (order.OrderType == "rent")
+            {
+                order.StartDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+                order.EndDate = order.StartDate.Value.AddDays(order.RentalDays);
+            }
+            else if (order.OrderType == "buy")
+            {
+                order.StartDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+                order.EndDate = order.StartDate;
+            }
+
             if (inventory is not null)
             {
                 if (order.OrderType == "buy")
