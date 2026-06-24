@@ -216,6 +216,38 @@ export const AdminOrders = () => {
     },
   });
 
+  const reassignMutation = useMutation({
+    mutationFn: () =>
+      adminApi.reassignVendorOrder({
+        adminUserId: user?.id || "",
+        orderId: selectedOrder?.orderId || "",
+      }),
+    onSuccess: (updatedOrder) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      setSelectedOrder(updatedOrder);
+      setStatusUpdateLocal(updatedOrder.status);
+    },
+    onError: (error) => {
+      console.error("Failed to reassign order", error);
+    },
+  });
+
+  const cancelRefundMutation = useMutation({
+    mutationFn: () =>
+      adminApi.forceCancelRefundOrder({
+        adminUserId: user?.id || "",
+        orderId: selectedOrder?.orderId || "",
+      }),
+    onSuccess: (updatedOrder) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      setSelectedOrder(updatedOrder);
+      setStatusUpdateLocal(updatedOrder.status);
+    },
+    onError: (error) => {
+      console.error("Failed to force cancel and refund", error);
+    },
+  });
+
   const { data: orders = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["admin-orders"],
     queryFn: () => adminApi.getAdminOrders(),
@@ -637,6 +669,48 @@ export const AdminOrders = () => {
                 {/* Admin Status Update Action */}
                 <div className="space-y-3 pt-4 border-t border-border/40 pb-4">
                   <h5 className="text-sm font-bold text-foreground">Admin Actions</h5>
+
+                  {selectedOrder.status === "dispatch_failed" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                      <Button
+                        variant="default"
+                        className="w-full text-xs shadow-sm"
+                        disabled={reassignMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm("Are you sure you want to reassign this order to a new vendor?")) {
+                            reassignMutation.mutate();
+                          }
+                        }}
+                      >
+                        {reassignMutation.isPending ? "Reassigning..." : "Reassign to new Vendor"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full text-xs shadow-sm"
+                        disabled={updateStatusMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm("Override status to In-Transit?")) {
+                            updateStatusMutation.mutate("in_transit");
+                          }
+                        }}
+                      >
+                        Override to In-Transit
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        className="w-full text-xs shadow-sm"
+                        disabled={cancelRefundMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm("Are you sure you want to force cancel and refund this order?")) {
+                            cancelRefundMutation.mutate();
+                          }
+                        }}
+                      >
+                        {cancelRefundMutation.isPending ? "Cancelling..." : "Force Cancel & Refund"}
+                      </Button>
+                    </div>
+                  )}
+
                   <div className="flex flex-col sm:flex-row sm:items-end gap-4 bg-accent/20 p-4 rounded-lg border border-border/40">
                     <div className="flex-1">
                       <p className="text-xs font-semibold text-muted-foreground mb-1">Force Status Update</p>

@@ -434,3 +434,44 @@ public sealed class UpdateAdminOrderStatusEndpoint(IMediator mediator)
     }
 }
 
+public sealed class AdminReassignVendorOrderRequest : AdminUserIdRequest
+{
+    public Guid OrderId { get; set; }
+}
+
+public sealed class AdminReassignVendorOrderEndpoint(IMediator mediator)
+    : Endpoint<AdminReassignVendorOrderRequest, Results<Ok<AdminOrderDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("orders/{orderId}/reassign");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<AdminOrderDto>, ProblemHttpResult>> ExecuteAsync(AdminReassignVendorOrderRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new AdminReassignVendorOrderCommand(req.AdminUserId, req.OrderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class AdminForceCancelRefundOrderRequest : AdminUserIdRequest
+{
+    public Guid OrderId { get; set; }
+}
+
+public sealed class AdminForceCancelRefundOrderEndpoint(IMediator mediator)
+    : Endpoint<AdminForceCancelRefundOrderRequest, Results<Ok<AdminOrderDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("orders/{orderId}/cancel-refund");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<AdminOrderDto>, ProblemHttpResult>> ExecuteAsync(AdminForceCancelRefundOrderRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new AdminForceCancelRefundOrderCommand(req.AdminUserId, req.OrderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}

@@ -370,6 +370,15 @@ export interface UpdateAdminOrderStatusRequest {
   status: string;
 }
 
+export interface AdminReassignVendorOrderRequest {
+  adminUserId: string;
+  orderId: string;
+}
+
+export interface AdminForceCancelRefundOrderRequest {
+  adminUserId: string;
+  orderId: string;
+}
 
 export const adminApi = {
   // Vendors
@@ -551,5 +560,13 @@ export const adminApi = {
 
   async updateAdminOrderStatus(data: UpdateAdminOrderStatusRequest): Promise<AdminOrderDto> {
     return apiClient.patch<AdminOrderDto>(`/admin/orders/${data.orderId}/status`, data);
+  },
+
+  async reassignVendorOrder(data: AdminReassignVendorOrderRequest): Promise<AdminOrderDto> {
+    return apiClient.post<AdminOrderDto>(`/admin/orders/${data.orderId}/reassign`, data);
+  },
+
+  async forceCancelRefundOrder(data: AdminForceCancelRefundOrderRequest): Promise<AdminOrderDto> {
+    return apiClient.post<AdminOrderDto>(`/admin/orders/${data.orderId}/cancel-refund`, data);
   },
 };

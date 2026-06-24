@@ -834,3 +834,177 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
         ));
     }
 }
+
+public sealed record AdminReassignVendorOrderCommand(string AdminId, Guid OrderId) : ICommand<AdminOrderDto>;
+
+internal sealed class AdminReassignVendorOrderCommandHandler(
+    ICustomerRepository customers,
+    IVendorOnboardingRepository vendors,
+    Microsoft.Extensions.Options.IOptions<Prilixor.VendorPortal.Domain.Options.CustomerPricingOptions> pricingOptions)
+    : ICommandHandler<AdminReassignVendorOrderCommand, AdminOrderDto>
+{
+    public async Task<Result<AdminOrderDto>> Handle(AdminReassignVendorOrderCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.AdminId, out var adminUserId))
+            return Result.Failure<AdminOrderDto>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
+
+        var orderRow = await customers.GetCustomerOrderByIdAsync(request.OrderId, cancellationToken);
+        if (orderRow is null)
+            return Result.Failure<AdminOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
+
+        var order = orderRow.Order;
+        
+        if (order.Status != "dispatch_failed" && order.Status != "confirmed")
+            return Result.Failure<AdminOrderDto>(new Error("admin.invalid_order_status", "Only dispatch_failed or confirmed orders can be reassigned.", ErrorCategory.Validation));
+
+        var oldVendorId = orderRow.Listing?.VendorId;
+        order.Status = "awaiting_vendor_acceptance";
+        
+        var agg = await customers.GetListingForCustomerAsync(order.VendorProductListingId, cancellationToken);
+        if (agg is null)
+            return Result.Failure<AdminOrderDto>(new Error("customers.listing_not_found", "Original listing not found.", ErrorCategory.NotFound));
+
+        var options = pricingOptions.Value;
+        var vendorAreasByVendorId = new Dictionary<Guid, List<VendorServiceArea>>();
+        CustomerAddress? address = null;
+        if (order.CustomerAddressId.HasValue)
+            address = await customers.GetCustomerAddressByIdAsync(order.CustomerId, order.CustomerAddressId.Value, cancellationToken);
+
+        var candidateListings = await customers.GetCandidateListingsByProductIdAsync(agg.ProductId, cancellationToken);
+        var eligibleCandidates = new List<(VendorProductListingAggregate Candidate, decimal DistanceKm)>();
+        foreach (var candidate in candidateListings.Where(c => c.VendorId != Guid.Empty && c.VendorId != oldVendorId))
+        {
+            var candidateListing = await vendors.GetVendorProductListingByIdAsync(candidate.VendorId, candidate.ListingId, cancellationToken);
+            if (candidateListing is null) continue;
+
+            var candidateInventory = await vendors.GetVendorInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
+            var candidateAvailable = candidateInventory?.AvailableQuantity ?? candidateListing.AvailableQuantity;
+            if (candidateAvailable < order.Quantity) continue;
+
+            decimal distanceKm = 0m;
+            if (address is not null && address.Latitude.HasValue && address.Longitude.HasValue)
+            {
+                var vendorAreas = await vendors.GetVendorServiceAreasAsync(candidate.VendorId, cancellationToken);
+                var candidateDistance = CustomerOrderPricingRules.ResolveDeliveryDistance(
+                    address.Latitude.Value, address.Longitude.Value, candidate, vendorAreas, options);
+                if (!candidateDistance.IsSuccess) continue;
+                distanceKm = candidateDistance.DistanceKm;
+            }
+            eligibleCandidates.Add((candidate, distanceKm));
+        }
+
+        var ranked = eligibleCandidates
+            .OrderBy(x => x.DistanceKm)
+            .ThenByDescending(x => x.Candidate.InventoryAvailable)
+            .Take(Math.Max(1, options.MaxDispatchVendorsPerLine))
+            .ToList();
+
+        var now = DateTimeOffset.UtcNow;
+        
+        for (var i = 0; i < ranked.Count; i++)
+        {
+            var candidate = ranked[i].Candidate;
+            var offer = new CustomerOrderVendorOffer
+            {
+                CustomerRentalOrderId = order.Id,
+                VendorId = candidate.VendorId,
+                VendorProductListingId = candidate.ListingId,
+                OfferRank = i + 1,
+                Status = "pending",
+                ExpiresAt = now.AddMinutes((double)Math.Max(1m, options.DispatchOfferTtlMinutes)),
+            };
+            await customers.AddCustomerOrderVendorOfferAsync(offer, cancellationToken);
+        }
+
+        if (ranked.Count == 0)
+        {
+            order.Status = "dispatch_failed";
+            await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+            await customers.SaveChangesAsync(cancellationToken);
+            return Result.Failure<AdminOrderDto>(new Error("admin.reassign.no_vendor", "No other eligible vendors available right now.", ErrorCategory.Validation));
+        }
+
+        await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+        
+        var auditLog = new AdminAuditLog
+        {
+            AdminId = adminUserId,
+            ActionType = "ADMIN_REASSIGN_VENDOR",
+            EntityType = "CustomerRentalOrder",
+            EntityId = order.Id,
+            Notes = "Admin reassigned order to new vendors."
+        };
+        await vendors.AddAdminAuditLogAsync(auditLog, cancellationToken);
+
+        await customers.SaveChangesAsync(cancellationToken);
+        await vendors.SaveChangesAsync(cancellationToken);
+
+        return await BuildOrderDto(customers, order.Id, cancellationToken);
+    }
+    
+    private static async Task<Result<AdminOrderDto>> BuildOrderDto(ICustomerRepository customers, Guid orderId, CancellationToken cancellationToken)
+    {
+        var row = await customers.GetCustomerOrderByIdAsync(orderId, cancellationToken);
+        if (row is null) return Result.Failure<AdminOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
+        var o = row.Order;
+        var listing = row.Listing;
+        return Result.Success(new AdminOrderDto(
+            o.Id, o.OrderNumber, o.CustomerId, o.Customer?.FullName ?? "Customer", o.Customer?.Email ?? "customer@example.com",
+            listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor", listing?.ListingTitle ?? "Deleted Product",
+            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl
+        ));
+    }
+}
+
+public sealed record AdminForceCancelRefundOrderCommand(string AdminId, Guid OrderId) : ICommand<AdminOrderDto>;
+
+internal sealed class AdminForceCancelRefundOrderCommandHandler(
+    ICustomerRepository customers,
+    IVendorOnboardingRepository vendors)
+    : ICommandHandler<AdminForceCancelRefundOrderCommand, AdminOrderDto>
+{
+    public async Task<Result<AdminOrderDto>> Handle(AdminForceCancelRefundOrderCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.AdminId, out var adminUserId))
+            return Result.Failure<AdminOrderDto>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
+
+        var row = await customers.GetCustomerOrderByIdAsync(request.OrderId, cancellationToken);
+        if (row is null)
+            return Result.Failure<AdminOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
+
+        var o = row.Order;
+        if (o.Status == "cancelled" || o.Status == "returned")
+            return Result.Failure<AdminOrderDto>(new Error("admin.invalid_order_status", "Order is already cancelled or returned.", ErrorCategory.Validation));
+
+        o.Status = "cancelled";
+        await customers.UpdateCustomerRentalOrderAsync(o, cancellationToken);
+
+        var auditLog = new AdminAuditLog
+        {
+            AdminId = adminUserId,
+            ActionType = "ADMIN_FORCE_CANCEL_REFUND",
+            EntityType = "CustomerRentalOrder",
+            EntityId = o.Id,
+            Notes = "Admin force cancelled the order and initiated refund."
+        };
+        await vendors.AddAdminAuditLogAsync(auditLog, cancellationToken);
+
+        await customers.SaveChangesAsync(cancellationToken);
+        await vendors.SaveChangesAsync(cancellationToken);
+
+        return await BuildOrderDto(customers, o.Id, cancellationToken);
+    }
+    
+    private static async Task<Result<AdminOrderDto>> BuildOrderDto(ICustomerRepository customers, Guid orderId, CancellationToken cancellationToken)
+    {
+        var row = await customers.GetCustomerOrderByIdAsync(orderId, cancellationToken);
+        if (row is null) return Result.Failure<AdminOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
+        var o = row.Order;
+        var listing = row.Listing;
+        return Result.Success(new AdminOrderDto(
+            o.Id, o.OrderNumber, o.CustomerId, o.Customer?.FullName ?? "Customer", o.Customer?.Email ?? "customer@example.com",
+            listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor", listing?.ListingTitle ?? "Deleted Product",
+            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl
+        ));
+    }
+}
