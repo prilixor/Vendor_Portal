@@ -359,6 +359,18 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
             if (order is null)
                 continue;
 
+            if (!string.Equals(order.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase))
+            {
+                if (offer.Status == "pending")
+                {
+                    offer.Status = "expired";
+                    offer.RespondedAt = now;
+                    await customers.UpdateCustomerOrderVendorOfferAsync(offer, cancellationToken);
+                    changed = true;
+                }
+                continue;
+            }
+
             var listing = await vendors.GetVendorProductListingByIdAsync(vendorId, offer.VendorProductListingId, cancellationToken);
             var title = listing?.ListingTitle ?? "Listing";
 

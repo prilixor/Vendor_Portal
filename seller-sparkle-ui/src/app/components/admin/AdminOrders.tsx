@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
@@ -10,6 +10,8 @@ import { Input } from "@/app/components/ui/input";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { useAuth } from "@/app/guards/AuthContext";
 import {
   Search,
   RefreshCw,
@@ -140,6 +142,34 @@ function getTimelineProgress(status: string, orderType?: string): {
   return { cancelled: false, completedThrough: 0, currentIndex: 1 };
 }
 
+function getAvailableStatuses(currentStatus: string, orderType?: string): string[] {
+  const s = currentStatus.toLowerCase().trim().replace(/\s+/g, "_");
+  const isBuy = orderType?.toLowerCase() === "buy";
+  
+  if (s === "pending" || s.includes("awaiting")) {
+    return ["pending", "confirmed", "cancelled"];
+  }
+  if (s === "confirmed") {
+    return ["confirmed", "in_transit", "cancelled", "dispatch_failed"];
+  }
+  if (s === "in_transit" || s.includes("transit")) {
+    return ["in_transit", "active", "dispatch_failed", "returned"];
+  }
+  if (s === "active") {
+    return isBuy ? ["active"] : ["active", "returned"];
+  }
+  if (s === "returned") {
+    return ["returned"];
+  }
+  if (s === "cancelled" || s === "canceled") {
+    return ["cancelled"];
+  }
+  if (s === "dispatch_failed" || s.includes("dispatch failed")) {
+    return ["dispatch_failed", "cancelled"];
+  }
+  return ["pending", "confirmed", "in_transit", "active", "returned", "cancelled", "dispatch_failed"];
+}
+
 export const AdminOrders = () => {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -158,6 +188,33 @@ export const AdminOrders = () => {
   }, [urlTab]);
   const [page, setPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrderDto | null>(null);
+  const [statusUpdateLocal, setStatusUpdateLocal] = useState<string>("");
+
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (selectedOrder) {
+      setStatusUpdateLocal(selectedOrder.status);
+    }
+  }, [selectedOrder]);
+
+  const updateStatusMutation = useMutation({
+    mutationFn: (newStatus: string) =>
+      adminApi.updateAdminOrderStatus({
+        adminUserId: user?.id || "",
+        orderId: selectedOrder?.orderId || "",
+        status: newStatus,
+      }),
+    onSuccess: (updatedOrder) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      setSelectedOrder(updatedOrder);
+      setStatusUpdateLocal(updatedOrder.status);
+    },
+    onError: (error) => {
+      console.error("Failed to update status", error);
+    },
+  });
 
   const { data: orders = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["admin-orders"],
@@ -495,26 +552,27 @@ export const AdminOrders = () => {
         )}
       </Card>
 
-      {/* Dynamic Detail & Tracking Timeline Dialog */}
       <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-        <DialogContent className="max-w-2xl border border-border/80 bg-background/95 backdrop-blur-xl shadow-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-border/80 bg-background/95 backdrop-blur-xl shadow-2xl">
           {selectedOrder && (
             <>
-              <DialogHeader>
-                <DialogTitle className="text-xl font-bold flex items-center justify-between">
-                  <span>Order Tracking: {selectedOrder.orderNumber}</span>
-                  <Badge className={cn("text-[10px] font-semibold", orderStatusBadgeClass(selectedOrder.status))} variant="outline">
-                    {selectedOrder.status.toUpperCase()}
-                  </Badge>
-                </DialogTitle>
-                <DialogDescription>
-                  Tracking and metadata lifecycle overview for the selected item transaction.
-                </DialogDescription>
-              </DialogHeader>
+              <div className="shrink-0 pt-2">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-bold flex items-center justify-between pr-6">
+                    <span>Order Tracking: {selectedOrder.orderNumber}</span>
+                    <Badge className={cn("text-[10px] font-semibold", orderStatusBadgeClass(selectedOrder.status))} variant="outline">
+                      {selectedOrder.status.toUpperCase()}
+                    </Badge>
+                  </DialogTitle>
+                  <DialogDescription>
+                    Tracking and metadata lifecycle overview for the selected item transaction.
+                  </DialogDescription>
+                </DialogHeader>
+              </div>
 
-              <div className="space-y-6 my-4">
+              <div className="flex-1 overflow-y-auto space-y-6 pb-6 pr-2">
                 {/* Meta details */}
-                <div className="grid grid-cols-2 gap-4 rounded-lg bg-accent/25 p-4 border border-border/40 text-xs">
+                <div className="grid grid-cols-2 gap-4 rounded-lg bg-accent/25 p-4 border border-border/40 text-xs mt-4">
                   <div className="space-y-1">
                     <p className="text-muted-foreground font-semibold flex items-center gap-1"><User className="h-3.5 w-3.5" /> Customer Name</p>
                     <p className="font-semibold text-foreground">{selectedOrder.customerName}</p>
@@ -574,6 +632,37 @@ export const AdminOrders = () => {
                       })}
                     </ol>
                   )}
+                </div>
+
+                {/* Admin Status Update Action */}
+                <div className="space-y-3 pt-4 border-t border-border/40 pb-4">
+                  <h5 className="text-sm font-bold text-foreground">Admin Actions</h5>
+                  <div className="flex flex-col sm:flex-row sm:items-end gap-4 bg-accent/20 p-4 rounded-lg border border-border/40">
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">Force Status Update</p>
+                      <Select value={statusUpdateLocal} onValueChange={setStatusUpdateLocal}>
+                        <SelectTrigger className="w-[180px] h-8 text-xs bg-background">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {statusTabs
+                            .filter(t => t.id !== "all" && getAvailableStatuses(selectedOrder.status, selectedOrder.orderType).includes(t.id))
+                            .map(t => (
+                            <SelectItem key={t.id} value={t.id} className="text-xs">
+                              {t.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      onClick={() => updateStatusMutation.mutate(statusUpdateLocal)}
+                      disabled={!statusUpdateLocal || statusUpdateLocal === selectedOrder.status || updateStatusMutation.isPending}
+                    >
+                      {updateStatusMutation.isPending ? "Updating..." : "Update Status"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </>

@@ -53,9 +53,14 @@ const VendorOrderRequests = () => {
 
   const sortedOffers = useMemo(
     () =>
-      [...offers].sort(
-        (a, b) => new Date(b.expiresAt).getTime() - new Date(a.expiresAt).getTime(),
-      ),
+      offers
+        .filter((offer) => {
+          const s = offer.status.trim().toLowerCase();
+          return s === "pending" || s.includes("awaiting");
+        })
+        .sort(
+          (a, b) => new Date(b.expiresAt).getTime() - new Date(a.expiresAt).getTime(),
+        ),
     [offers],
   );
 

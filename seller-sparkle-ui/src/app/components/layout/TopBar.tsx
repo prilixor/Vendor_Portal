@@ -119,7 +119,7 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
           </Button>
         )}
 
-        {variant === "customer" && user && (
+        {variant === "customer" && user?.role === "customer" && (
           <>
             {/* Customer Notifications Icon with Badge */}
             <Button
@@ -155,7 +155,7 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
           </>
         )}
 
-        {variant === "customer" && !user && (
+        {variant === "customer" && user?.role !== "customer" && (
           <>
             <Button variant="outline" size="sm" asChild>
               <Link to="/customer/login">Sign in</Link>
@@ -183,7 +183,7 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
           </Button>
         )}
 
-        {!(variant === "customer" && !user) && (
+        {user && user.role === variant && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-muted transition-colors">

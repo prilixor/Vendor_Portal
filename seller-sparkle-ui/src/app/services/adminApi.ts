@@ -364,6 +364,13 @@ export interface AdminOrderDto {
   primaryImageUrl?: string | null;
 }
 
+export interface UpdateAdminOrderStatusRequest {
+  adminUserId: string;
+  orderId: string;
+  status: string;
+}
+
+
 export const adminApi = {
   // Vendors
   async getVendors(): Promise<VendorDto[]> {
@@ -540,5 +547,9 @@ export const adminApi = {
 
   async getAdminOrders(): Promise<AdminOrderDto[]> {
     return apiClient.get<AdminOrderDto[]>('/admin/orders');
+  },
+
+  async updateAdminOrderStatus(data: UpdateAdminOrderStatusRequest): Promise<AdminOrderDto> {
+    return apiClient.patch<AdminOrderDto>(`/admin/orders/${data.orderId}/status`, data);
   },
 };

@@ -5,6 +5,8 @@ using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Prilixor.Shared.Extensions;
+using Prilixor.VendorPortal.Application.Customers;
+using Prilixor.VendorPortal.Domain.Customers;
 
 namespace Prilixor.VendorPortal.Application.Onboarding;
 
@@ -619,5 +621,216 @@ internal static class AdminNotificationMessageBuilder
         }
 
         return $"{baseMessage} Reason: {notes.Trim()}";
+    }
+}
+
+public sealed record UpdateAdminOrderStatusCommand(string AdminId, Guid OrderId, string Status) : ICommand<AdminOrderDto>;
+
+public sealed class UpdateAdminOrderStatusCommandValidator : AbstractValidator<UpdateAdminOrderStatusCommand>
+{
+    public UpdateAdminOrderStatusCommandValidator()
+    {
+        RuleFor(x => x.AdminId).NotEmpty();
+        RuleFor(x => x.OrderId).NotEmpty();
+        RuleFor(x => x.Status).NotEmpty();
+    }
+}
+
+internal sealed class UpdateAdminOrderStatusCommandHandler(
+    ICustomerRepository customers,
+    IVendorOnboardingRepository vendors)
+    : ICommandHandler<UpdateAdminOrderStatusCommand, AdminOrderDto>
+{
+    public async Task<Result<AdminOrderDto>> Handle(UpdateAdminOrderStatusCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.AdminId, out var adminUserId))
+        {
+            return Result.Failure<AdminOrderDto>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var adminUser = await vendors.GetAdminUserByIdAsync(adminUserId, cancellationToken);
+        if (adminUser is null || !adminUser.IsActive)
+        {
+            return Result.Failure<AdminOrderDto>(new Error("admin.not_found", "Active admin user not found.", ErrorCategory.NotFound));
+        }
+
+        var order = await customers.GetCustomerOrderEntityByIdAsync(request.OrderId, cancellationToken);
+        if (order is null || order.IsDeleted)
+            return Result.Failure<AdminOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
+
+        var current = order.Status.Trim().ToLowerInvariant();
+        var target = request.Status.Trim().ToLowerInvariant();
+        
+        if (current == target)
+            return await BuildOrderDto(customers, order.Id, cancellationToken);
+
+        var listing = await customers.GetListingForCustomerAsync(order.VendorProductListingId, cancellationToken);
+        if (listing is null)
+            return Result.Failure<AdminOrderDto>(new Error("vendors.listing.not_found", "Vendor listing not found.", ErrorCategory.NotFound));
+
+        var inventory = await vendors.GetVendorInventoryByListingIdAsync(listing.ListingId, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+
+        if (target == "active")
+        {
+            if (order.OrderType == "rent")
+            {
+                order.StartDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+                order.EndDate = order.StartDate.Value.AddDays(order.RentalDays);
+            }
+            else if (order.OrderType == "buy")
+            {
+                order.StartDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+                order.EndDate = order.StartDate;
+            }
+
+            if (inventory is not null)
+            {
+                if (order.OrderType == "buy")
+                {
+                    inventory.TotalQuantity = Math.Max(0, inventory.TotalQuantity - order.Quantity);
+                    int quantityToReduce = order.Quantity;
+                    
+                    int fromReserved = Math.Min(inventory.ReservedQuantity, quantityToReduce);
+                    inventory.ReservedQuantity -= fromReserved;
+                    quantityToReduce -= fromReserved;
+                    
+                    if (quantityToReduce > 0)
+                    {
+                        int fromAvailable = Math.Min(inventory.AvailableQuantity, quantityToReduce);
+                        inventory.AvailableQuantity -= fromAvailable;
+                        quantityToReduce -= fromAvailable;
+                    }
+                    if (quantityToReduce > 0)
+                    {
+                        int fromRented = Math.Min(inventory.RentedQuantity, quantityToReduce);
+                        inventory.RentedQuantity -= fromRented;
+                        quantityToReduce -= fromRented;
+                    }
+                    if (quantityToReduce > 0)
+                    {
+                        int fromBlocked = Math.Min(inventory.BlockedQuantity, quantityToReduce);
+                        inventory.BlockedQuantity -= fromBlocked;
+                        quantityToReduce -= fromBlocked;
+                    }
+                }
+                else
+                {
+                    inventory.ReservedQuantity = Math.Max(0, inventory.ReservedQuantity - order.Quantity);
+                    inventory.RentedQuantity += order.Quantity;
+                }
+
+                await vendors.UpsertVendorInventoryAsync(inventory, cancellationToken);
+                await vendors.AddVendorInventoryMovementAsync(
+                    new VendorInventoryMovement
+                    {
+                        VendorInventoryId = inventory.Id,
+                        MovementType = order.OrderType == "buy" ? "stock_removed" : "rented",
+                        Quantity = order.Quantity,
+                        ReferenceType = "customer_rental_order",
+                        ReferenceId = order.Id,
+                        Notes = $"Order {order.OrderNumber} moved to active by Admin",
+                        EventAt = now,
+                    },
+                    cancellationToken);
+            }
+        }
+        else if (target == "returned")
+        {
+            if (inventory is not null)
+            {
+                inventory.RentedQuantity = Math.Max(0, inventory.RentedQuantity - order.Quantity);
+                inventory.AvailableQuantity += order.Quantity;
+                await vendors.UpsertVendorInventoryAsync(inventory, cancellationToken);
+                await vendors.AddVendorInventoryMovementAsync(
+                    new VendorInventoryMovement
+                    {
+                        VendorInventoryId = inventory.Id,
+                        MovementType = "returned",
+                        Quantity = order.Quantity,
+                        ReferenceType = "customer_rental_order",
+                        ReferenceId = order.Id,
+                        Notes = $"Order {order.OrderNumber} marked returned by Admin",
+                        EventAt = now,
+                    },
+                    cancellationToken);
+            }
+            else
+            {
+                var productListing = await vendors.GetVendorProductListingByIdAsync(listing.VendorId, listing.ListingId, cancellationToken);
+                if (productListing is not null)
+                {
+                    productListing.AvailableQuantity += order.Quantity;
+                    await vendors.UpdateVendorProductListingAsync(productListing, cancellationToken);
+                }
+            }
+        }
+
+        order.Status = target;
+        await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+        await customers.AddCustomerNotificationAsync(
+            new CustomerNotification
+            {
+                Id = Guid.NewGuid(),
+                CustomerId = order.CustomerId,
+                RelatedOrderId = order.Id,
+                NotificationType = "order_status_updated",
+                Title = $"Order {order.OrderNumber} updated",
+                Body = target switch
+                {
+                    "in_transit" => "Your order is now out for delivery.",
+                    "active" => order.OrderType == "buy" ? "Your purchase is delivered." : "Your rental order has been delivered and is now active.",
+                    "returned" => "Return completed for your rental order.",
+                    _ => "Order status has been updated."
+                },
+            },
+            cancellationToken);
+
+        var auditLog = new AdminAuditLog
+        {
+            AdminId = adminUserId,
+            ActionType = "ADMIN_UPDATE_ORDER_STATUS",
+            EntityType = "CustomerRentalOrder",
+            EntityId = order.Id,
+            OldValue = System.Text.Json.JsonSerializer.Serialize(current),
+            NewValue = System.Text.Json.JsonSerializer.Serialize(target),
+            Notes = "Admin forcibly updated order status"
+        };
+        await vendors.AddAdminAuditLogAsync(auditLog, cancellationToken);
+
+        await customers.SaveChangesAsync(cancellationToken);
+        await vendors.SaveChangesAsync(cancellationToken);
+
+        return await BuildOrderDto(customers, order.Id, cancellationToken);
+    }
+
+    private static async Task<Result<AdminOrderDto>> BuildOrderDto(ICustomerRepository customers, Guid orderId, CancellationToken cancellationToken)
+    {
+        var row = await customers.GetCustomerOrderByIdAsync(orderId, cancellationToken);
+        if (row is null)
+            return Result.Failure<AdminOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
+
+        var o = row.Order;
+        var listing = row.Listing;
+        
+        return Result.Success(new AdminOrderDto(
+            o.Id,
+            o.OrderNumber,
+            o.CustomerId,
+            o.Customer?.FullName ?? "Customer",
+            o.Customer?.Email ?? "customer@example.com",
+            listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor",
+            listing?.ListingTitle ?? "Deleted Product",
+            o.Status,
+            o.OrderType,
+            o.Quantity,
+            o.RentalDays,
+            o.TotalAmount,
+            o.DepositAmount,
+            o.CreatedOnUtc,
+            o.StartDate,
+            o.EndDate,
+            row.ListingPrimaryImageUrl
+        ));
     }
 }

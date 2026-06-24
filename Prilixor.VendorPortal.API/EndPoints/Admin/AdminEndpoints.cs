@@ -408,3 +408,29 @@ public sealed class GetAdminOrdersEndpoint(IMediator mediator)
     }
 }
 
+public sealed class UpdateAdminOrderStatusRequest : AdminUserIdRequest
+{
+    public Guid OrderId { get; set; }
+    public string Status { get; set; } = string.Empty;
+}
+
+public sealed class UpdateAdminOrderStatusEndpoint(IMediator mediator)
+    : Endpoint<UpdateAdminOrderStatusRequest, Results<Ok<AdminOrderDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("orders/{orderId}/status");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<AdminOrderDto>, ProblemHttpResult>> ExecuteAsync(UpdateAdminOrderStatusRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new UpdateAdminOrderStatusCommand(
+            req.AdminUserId,
+            req.OrderId,
+            req.Status), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
