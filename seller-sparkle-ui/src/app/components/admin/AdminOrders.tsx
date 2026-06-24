@@ -10,8 +10,21 @@ import { Input } from "@/app/components/ui/input";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/app/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { useAuth } from "@/app/guards/AuthContext";
+import { toast } from "sonner";
+import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import {
   Search,
   RefreshCw,
@@ -213,6 +226,7 @@ export const AdminOrders = () => {
     },
     onError: (error) => {
       console.error("Failed to update status", error);
+      toast.error(getUserFriendlyMessage(error) || "Failed to update status");
     },
   });
 
@@ -229,6 +243,7 @@ export const AdminOrders = () => {
     },
     onError: (error) => {
       console.error("Failed to reassign order", error);
+      toast.error(getUserFriendlyMessage(error) || "Failed to reassign order");
     },
   });
 
@@ -245,6 +260,7 @@ export const AdminOrders = () => {
     },
     onError: (error) => {
       console.error("Failed to force cancel and refund", error);
+      toast.error(getUserFriendlyMessage(error) || "Failed to force cancel and refund");
     },
   });
 
@@ -496,9 +512,9 @@ export const AdminOrders = () => {
                     <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Order Group</span>
                     <h4 className="text-base font-bold text-foreground">{group.baseOrderNumber}</h4>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-muted-foreground md:flex md:gap-6">
-                    <p>Customer: <span className="font-semibold text-foreground">{group.customerName}</span></p>
-                    <p>Email: <span className="font-semibold text-foreground">{group.customerEmail}</span></p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs text-muted-foreground md:flex md:gap-6">
+                    <p>Customer: <span className="font-semibold text-foreground truncate block sm:inline">{group.customerName}</span></p>
+                    <p>Email: <span className="font-semibold text-foreground break-all sm:break-normal">{group.customerEmail}</span></p>
                     <p>Placed: <span className="font-semibold text-foreground">{new Date(group.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span></p>
                     <p>Combined Total: <span className="font-bold text-primary">₹{group.totalAmount.toFixed(0)}</span></p>
                   </div>
@@ -526,8 +542,8 @@ export const AdminOrders = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pt-3 sm:pt-0 border-t border-border/20 sm:border-none">
-                        <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 shrink-0 pt-3 sm:pt-0 border-t border-border/20 sm:border-none w-full sm:w-auto mt-2 sm:mt-0">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(item.orderType))} variant="outline">
                             {item.orderType.toUpperCase()}
                           </Badge>
@@ -535,8 +551,9 @@ export const AdminOrders = () => {
                             {item.status.toUpperCase()}
                           </Badge>
                         </div>
-                        <span className="font-semibold tabular-nums text-sm text-foreground sm:w-20 sm:text-right">₹{item.totalAmount.toFixed(0)}</span>
-                        <Button
+                        <div className="flex items-center gap-3">
+                          <span className="font-semibold tabular-nums text-sm text-foreground sm:w-20 sm:text-right">₹{item.totalAmount.toFixed(0)}</span>
+                          <Button
                           size="sm"
                           variant="ghost"
                           className="h-8 text-xs font-semibold px-2 hover:bg-accent text-primary transition-colors flex items-center gap-1 group/btn"
@@ -545,6 +562,7 @@ export const AdminOrders = () => {
                           View Tracking
                           <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-0.5" />
                         </Button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -604,7 +622,7 @@ export const AdminOrders = () => {
 
               <div className="flex-1 overflow-y-auto space-y-6 pb-6 pr-2">
                 {/* Meta details */}
-                <div className="grid grid-cols-2 gap-4 rounded-lg bg-accent/25 p-4 border border-border/40 text-xs mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg bg-accent/25 p-4 border border-border/40 text-xs mt-4">
                   <div className="space-y-1">
                     <p className="text-muted-foreground font-semibold flex items-center gap-1"><User className="h-3.5 w-3.5" /> Customer Name</p>
                     <p className="font-semibold text-foreground">{selectedOrder.customerName}</p>
@@ -672,42 +690,77 @@ export const AdminOrders = () => {
 
                   {selectedOrder.status === "dispatch_failed" && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                      <Button
-                        variant="default"
-                        className="w-full text-xs shadow-sm"
-                        disabled={reassignMutation.isPending}
-                        onClick={() => {
-                          if (window.confirm("Are you sure you want to reassign this order to a new vendor?")) {
-                            reassignMutation.mutate();
-                          }
-                        }}
-                      >
-                        {reassignMutation.isPending ? "Reassigning..." : "Reassign to new Vendor"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="w-full text-xs shadow-sm"
-                        disabled={updateStatusMutation.isPending}
-                        onClick={() => {
-                          if (window.confirm("Override status to In-Transit?")) {
-                            updateStatusMutation.mutate("in_transit");
-                          }
-                        }}
-                      >
-                        Override to In-Transit
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        className="w-full text-xs shadow-sm"
-                        disabled={cancelRefundMutation.isPending}
-                        onClick={() => {
-                          if (window.confirm("Are you sure you want to force cancel and refund this order?")) {
-                            cancelRefundMutation.mutate();
-                          }
-                        }}
-                      >
-                        {cancelRefundMutation.isPending ? "Cancelling..." : "Force Cancel & Refund"}
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="default"
+                            className="w-full text-xs shadow-sm h-auto whitespace-normal py-2"
+                            disabled={reassignMutation.isPending}
+                          >
+                            {reassignMutation.isPending ? "Reassigning..." : "Reassign to new Vendor"}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="z-[9999]">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Reassign Order?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to reassign this order to a new vendor? The system will automatically locate and dispatch an offer to the next eligible vendor in the area.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => reassignMutation.mutate()}>Reassign</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full text-xs shadow-sm h-auto whitespace-normal py-2"
+                            disabled={updateStatusMutation.isPending}
+                          >
+                            Override to In-Transit
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="z-[9999]">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Override Status?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to forcefully override the status of this item to In-Transit? This will bypass standard vendor dispatch workflows.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => updateStatusMutation.mutate("in_transit")}>Override</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="destructive"
+                            className="w-full text-xs shadow-sm h-auto whitespace-normal py-2"
+                            disabled={cancelRefundMutation.isPending}
+                          >
+                            {cancelRefundMutation.isPending ? "Cancelling..." : "Force Cancel & Refund"}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="z-[9999]">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Force Cancel & Refund?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to forcefully cancel this order and issue a full refund to the customer? This action is permanent and cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Keep Order</AlertDialogCancel>
+                            <AlertDialogAction className="bg-destructive hover:bg-destructive/90 text-destructive-foreground" onClick={() => cancelRefundMutation.mutate()}>Force Cancel</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   )}
 

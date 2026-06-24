@@ -85,7 +85,7 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-50 flex flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-300 ease-out lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 flex h-[100dvh] flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-300 ease-out lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         collapsed ? "lg:w-[72px]" : "lg:w-[260px] w-[260px]"
       )}
