@@ -13,6 +13,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerAddress> CustomerAddresses => Set<CustomerAddress>();
     public DbSet<CustomerRentalOrder> CustomerRentalOrders => Set<CustomerRentalOrder>();
+    public DbSet<CustomerRentalOrderAsset> CustomerRentalOrderAssets => Set<CustomerRentalOrderAsset>();
     public DbSet<CustomerOrderVendorOffer> CustomerOrderVendorOffers => Set<CustomerOrderVendorOffer>();
     public DbSet<CustomerNotification> CustomerNotifications => Set<CustomerNotification>();
     public DbSet<CustomerNotificationPreference> CustomerNotificationPreferences => Set<CustomerNotificationPreference>();
@@ -145,6 +146,21 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.HasOne(x => x.CustomerRentalOrder)
                 .WithMany()
                 .HasForeignKey(x => x.CustomerRentalOrderId);
+        });
+
+        modelBuilder.Entity<CustomerRentalOrderAsset>(entity =>
+        {
+            entity.ToTable("customer_rental_order_assets");
+            entity.HasKey(x => new { x.CustomerRentalOrderId, x.VendorProductAssetId });
+            entity.Property(x => x.CustomerRentalOrderId).HasColumnName("customer_rental_order_id");
+            entity.Property(x => x.VendorProductAssetId).HasColumnName("vendor_product_asset_id");
+            
+            entity.HasOne(x => x.CustomerRentalOrder)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerRentalOrderId);
+
+            // VendorProductAsset is in ApplicationDbContext, ignore cross-context navigation.
+            entity.Ignore(x => x.VendorProductAsset);
         });
 
         modelBuilder.Entity<CustomerNotification>(entity =>

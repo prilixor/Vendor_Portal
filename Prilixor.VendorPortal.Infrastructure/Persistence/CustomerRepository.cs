@@ -712,6 +712,38 @@ public sealed class CustomerRepository(
     }
 
 
+    public async Task AddCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken)
+    {
+        await customerDb.CustomerRentalOrderAssets.AddAsync(asset, cancellationToken);
+    }
+
+    public Task<List<CustomerRentalOrderAsset>> GetCustomerRentalOrderAssetsAsync(Guid customerOrderId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerRentalOrderAssets
+            .Where(x => x.CustomerRentalOrderId == customerOrderId)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task RemoveCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerRentalOrderAssets.Remove(asset);
+        return Task.CompletedTask;
+    }
+
+    public async Task<CustomerRentalOrderWithListing?> GetActiveCustomerOrderForAssetAsync(Guid assetId, CancellationToken cancellationToken)
+    {
+        var orderAsset = await customerDb.CustomerRentalOrderAssets
+            .Include(a => a.CustomerRentalOrder)
+                .ThenInclude(o => o.Customer)
+            .FirstOrDefaultAsync(a => a.VendorProductAssetId == assetId && !a.CustomerRentalOrder.IsDeleted && a.CustomerRentalOrder.Status == "active", cancellationToken);
+
+        if (orderAsset is null || orderAsset.CustomerRentalOrder is null) return null;
+
+        var order = orderAsset.CustomerRentalOrder;
+        var listing = await LoadListingWithVendorAsync(order.VendorProductListingId, cancellationToken);
+        var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
+        return new CustomerRentalOrderWithListing(order, listing, img);
+    }
 
     public Task UpdateCustomerRentalOrderAsync(CustomerRentalOrder order, CancellationToken cancellationToken)
 

@@ -642,6 +642,10 @@ export const AdminOrders = () => {
                     )}
                   </div>
                   <div className="space-y-1">
+                    <p className="text-muted-foreground font-semibold flex items-center gap-1"><Package className="h-3.5 w-3.5" /> Order Quantity</p>
+                    <p className="font-bold text-foreground">{selectedOrder.quantity} item{selectedOrder.quantity !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="space-y-1">
                     <p className="text-muted-foreground font-semibold flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> Financial Summary</p>
                     <p className="font-bold text-foreground">₹{selectedOrder.totalAmount.toFixed(0)} total</p>
                     <p className="text-[10px] text-muted-foreground">+ ₹{selectedOrder.depositAmount.toFixed(0)} deposit amount</p>

@@ -42,7 +42,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
-
+    public DbSet<VendorProductAsset> VendorProductAssets => Set<VendorProductAsset>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Ignore<List<IDomainEvent>>()
@@ -437,6 +437,30 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
             entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+        });
+
+        modelBuilder.Entity<VendorProductAsset>(entity =>
+        {
+            entity.ToTable("vendor_product_assets");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.VendorProductListingId).HasColumnName("vendor_product_listing_id");
+            entity.Property(x => x.AssetTag).HasColumnName("asset_tag");
+            entity.Property(x => x.Status).HasColumnName("status");
+            entity.Property(x => x.Condition).HasColumnName("condition");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            
+            entity.HasIndex(x => new { x.VendorProductListingId, x.AssetTag }).IsUnique();
+            
+            entity.HasOne(x => x.VendorProductListing)
+                .WithMany()
+                .HasForeignKey(x => x.VendorProductListingId);
         });
 
         modelBuilder.Entity<VendorNotificationPreference>(entity =>

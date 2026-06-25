@@ -10,10 +10,10 @@ import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { InventoryMovement, InventoryRecord } from "@/app/models";
-import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2 } from "lucide-react";
+import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2, Barcode, Trash2, Search } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "@/app/guards/AuthContext";
-import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import { vendorOnboardingApi, type VendorProductAssetApiDto, type TrackedAssetDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 
 const movementMeta: Record<string, { label: string; icon: any; cls: string }> = {
@@ -44,6 +44,19 @@ const Inventory = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
+
+  const [assetRow, setAssetRow] = useState<InventoryRecord | null>(null);
+  const [assets, setAssets] = useState<VendorProductAssetApiDto[]>([]);
+  const [assetSearchQuery, setAssetSearchQuery] = useState("");
+  const [newAssetTag, setNewAssetTag] = useState("");
+  const [newAssetCondition, setNewAssetCondition] = useState("");
+  const [assetsLoading, setAssetsLoading] = useState(false);
+
+  const [trackAssetDialogOpen, setTrackAssetDialogOpen] = useState(false);
+  const [trackAssetTag, setTrackAssetTag] = useState("");
+  const [trackedAssetResult, setTrackedAssetResult] = useState<TrackedAssetDto | null>(null);
+  const [trackAssetLoading, setTrackAssetLoading] = useState(false);
+  const [trackAssetError, setTrackAssetError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -388,9 +401,97 @@ const Inventory = () => {
     }
   };
 
+  const openAssets = async (row: InventoryRecord) => {
+    setAssetRow(row);
+    setAssetsLoading(true);
+    setNewAssetTag("");
+    setNewAssetCondition("");
+    try {
+      if (!user) return;
+      const data = await vendorOnboardingApi.getVendorProductAssets(user.id, row.productId);
+      setAssets(data);
+    } catch (err) {
+      toast.error("Failed to load serial numbers");
+    } finally {
+      setAssetsLoading(false);
+    }
+  };
+
+  const handleAddAsset = async () => {
+    if (!assetRow || !user || !newAssetTag.trim()) return;
+    try {
+      setAssetsLoading(true);
+      await vendorOnboardingApi.addVendorProductAsset(user.id, assetRow.productId, {
+        vendorId: user.id,
+        listingId: assetRow.productId,
+        assetTag: newAssetTag.trim(),
+        status: "Available",
+        condition: newAssetCondition.trim() || undefined
+      });
+      toast.success("Serial number added");
+      setNewAssetTag("");
+      setNewAssetCondition("");
+      const data = await vendorOnboardingApi.getVendorProductAssets(user.id, assetRow.productId);
+      setAssets(data);
+    } catch (err: any) {
+      const message = err?.message || "Failed to add serial number";
+      toast.error(message);
+    } finally {
+      setAssetsLoading(false);
+    }
+  };
+
+  const handleDeleteAsset = async (assetId: string) => {
+    if (!assetRow || !user) return;
+    try {
+      setAssetsLoading(true);
+      await vendorOnboardingApi.deleteVendorProductAsset(user.id, assetRow.productId, assetId);
+      toast.success("Serial number removed");
+      const data = await vendorOnboardingApi.getVendorProductAssets(user.id, assetRow.productId);
+      setAssets(data);
+    } catch (err) {
+      toast.error("Failed to remove serial number");
+    } finally {
+      setAssetsLoading(false);
+    }
+  };
+
+  const handleTrackAsset = async () => {
+    if (!user || !trackAssetTag.trim()) return;
+    try {
+      setTrackAssetLoading(true);
+      setTrackAssetError(null);
+      setTrackedAssetResult(null);
+      const result = await vendorOnboardingApi.trackVendorProductAsset(user.id, trackAssetTag.trim());
+      setTrackedAssetResult(result);
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        setTrackAssetError("Serial number not found.");
+      } else {
+        setTrackAssetError("Failed to track serial number.");
+      }
+    } finally {
+      setTrackAssetLoading(false);
+    }
+  };
+
   return (
     <div>
-      <PageHeader title="Inventory" description="Track stock levels and movements across all your products." />
+      <PageHeader 
+        title="Inventory" 
+        description="Track stock levels and movements across all your products."
+        actions={
+          <Button onClick={() => {
+            setTrackAssetDialogOpen(true);
+            setTrackAssetTag("");
+            setTrackedAssetResult(null);
+            setTrackAssetError(null);
+          }}>
+            <Search className="mr-2 h-4 w-4" />
+            Track Serial Number
+          </Button>
+        }
+      />
 
       {!hasLoaded && busy && (
         <div className="space-y-6 animate-pulse">
@@ -554,6 +655,20 @@ const Inventory = () => {
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span className="inline-block">
+                                <Button variant="ghost" size="icon" onClick={() => openAssets(row)} aria-label={`Manage serial numbers for ${row.productName}`} disabled={busy || isPending}>
+                                  <Barcode className="h-4 w-4" />
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            {isPending && (
+                              <TooltipContent side="top">
+                                <p>Available once your account is approved</p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-block">
                                 <Button variant="ghost" size="icon" onClick={() => openEdit(row)} aria-label={`Edit ${row.productName} stock`} disabled={busy || isPending}>
                                   <Pencil className="h-4 w-4" />
                                 </Button>
@@ -693,6 +808,150 @@ const Inventory = () => {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!assetRow} onOpenChange={(open) => !open && setAssetRow(null)}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-hidden flex flex-col sm:max-w-xl p-0 gap-0">
+          <DialogHeader className="p-6 pb-4 border-b border-border bg-muted/30">
+            <DialogTitle>Serial Numbers - {assetRow?.productName}</DialogTitle>
+          </DialogHeader>
+          
+          <div className="p-4 border-b border-border bg-background sticky top-0 z-10">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search serial numbers..." 
+                className="pl-9" 
+                value={assetSearchQuery}
+                onChange={(e) => setAssetSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-muted/10">
+            {assetsLoading && assets.length === 0 ? (
+              <div className="flex justify-center p-8"><Loader2 className="animate-spin text-muted-foreground h-6 w-6" /></div>
+            ) : (
+              <div className="space-y-2">
+                {assets.filter(a => a.assetTag.toLowerCase().includes(assetSearchQuery.toLowerCase())).map(asset => (
+                  <div key={asset.id} className="flex items-center justify-between p-3 border border-border bg-card rounded-md text-sm shadow-sm transition-all hover:shadow-md">
+                    <div>
+                      <p className="font-semibold">{asset.assetTag}</p>
+                      <p className="text-xs text-muted-foreground">{asset.condition || "No condition specified"}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider ${asset.status === 'Available' ? 'bg-success-soft text-success' : 'bg-muted text-muted-foreground'}`}>
+                        {asset.status}
+                      </span>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive-soft hover:text-destructive transition-colors" onClick={() => void handleDeleteAsset(asset.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {assets.length > 0 && assets.filter(a => a.assetTag.toLowerCase().includes(assetSearchQuery.toLowerCase())).length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-sm bg-card rounded-md border border-dashed border-border">
+                    No serial numbers match your search.
+                  </div>
+                )}
+                {assets.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-sm bg-card rounded-md border border-dashed border-border">
+                    No serial numbers registered yet.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+            
+          <div className="p-4 border-t border-border bg-card shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] z-10">
+            <p className="font-medium text-sm mb-3">Register new serial number</p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input placeholder="Serial Number / Tag" value={newAssetTag} onChange={(e) => setNewAssetTag(e.target.value)} />
+              <Input placeholder="Condition (Optional)" value={newAssetCondition} onChange={(e) => setNewAssetCondition(e.target.value)} />
+              <Button onClick={() => void handleAddAsset()} disabled={assetsLoading || !newAssetTag.trim()}>Add</Button>
+            </div>
+          </div>
+
+          <DialogFooter className="p-4 border-t border-border bg-muted/30 sm:justify-between">
+            <p className="text-xs text-muted-foreground self-center hidden sm:block">
+              {assets.length} total items
+            </p>
+            <Button variant="outline" onClick={() => setAssetRow(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={trackAssetDialogOpen} onOpenChange={setTrackAssetDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Track Serial Number</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Enter Serial Number / Tag"
+                value={trackAssetTag}
+                onChange={(e) => setTrackAssetTag(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleTrackAsset();
+                }}
+              />
+              <Button onClick={() => void handleTrackAsset()} disabled={trackAssetLoading || !trackAssetTag.trim()}>
+                {trackAssetLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              </Button>
+            </div>
+            
+            {trackAssetError && (
+              <div className="rounded-md bg-destructive-soft p-3 text-sm text-destructive border border-destructive/30">
+                {trackAssetError}
+              </div>
+            )}
+            
+            {trackedAssetResult && (
+              <div className="rounded-md border border-border p-4 space-y-3 bg-muted/20">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Product</p>
+                  <p className="font-medium text-foreground">{trackedAssetResult.productName}</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Status</p>
+                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider ${trackedAssetResult.status === 'Available' ? 'bg-success-soft text-success' : 'bg-info-soft text-info'}`}>
+                      {trackedAssetResult.status}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Condition</p>
+                    <p className="text-sm">{trackedAssetResult.condition || "-"}</p>
+                  </div>
+                </div>
+
+                {trackedAssetResult.currentOrderId && (
+                  <div className="pt-3 border-t border-border mt-3 space-y-3">
+                    <p className="text-sm font-semibold">Current Rental Info</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Order #</p>
+                        <p className="text-sm font-medium">{trackedAssetResult.currentOrderNumber}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Customer</p>
+                        <p className="text-sm font-medium">{trackedAssetResult.currentCustomerName}</p>
+                      </div>
+                      {trackedAssetResult.dueDate && (
+                        <div className="col-span-2">
+                          <p className="text-xs text-muted-foreground">Due Date</p>
+                          <p className="text-sm font-medium">{format(new Date(trackedAssetResult.dueDate), "MMM d, yyyy")}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
         </>

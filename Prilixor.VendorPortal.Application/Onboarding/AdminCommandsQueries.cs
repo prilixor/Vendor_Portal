@@ -624,7 +624,7 @@ internal static class AdminNotificationMessageBuilder
     }
 }
 
-public sealed record UpdateAdminOrderStatusCommand(string AdminId, Guid OrderId, string Status) : ICommand<AdminOrderDto>;
+public sealed record UpdateAdminOrderStatusCommand(string AdminId, Guid OrderId, string Status, List<string>? AssetTags = null) : ICommand<AdminOrderDto>;
 
 public sealed class UpdateAdminOrderStatusCommandValidator : AbstractValidator<UpdateAdminOrderStatusCommand>
 {
@@ -670,6 +670,61 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
 
         var inventory = await vendors.GetVendorInventoryByListingIdAsync(listing.ListingId, cancellationToken);
         var now = DateTimeOffset.UtcNow;
+
+        if (target == "in_transit" || target == "active")
+        {
+            var assignedAssets = await customers.GetCustomerRentalOrderAssetsAsync(order.Id, cancellationToken);
+            if (request.AssetTags is { Count: > 0 } && !assignedAssets.Any())
+            {
+                if (request.AssetTags.Count != order.Quantity)
+                {
+                    return Result.Failure<AdminOrderDto>(new Error("admin.order.asset_count_mismatch", $"Expected {order.Quantity} asset tags, got {request.AssetTags.Count}.", ErrorCategory.Validation));
+                }
+
+                if (request.AssetTags.Distinct().Count() != request.AssetTags.Count)
+                {
+                    return Result.Failure<AdminOrderDto>(new Error("admin.order.asset_duplicate", "Duplicate asset tags provided in the request.", ErrorCategory.Validation));
+                }
+
+                foreach (var tag in request.AssetTags)
+                {
+                    var asset = await vendors.GetVendorProductAssetByTagGlobalAsync(listing.VendorId, tag, cancellationToken);
+                    if (asset is not null && asset.VendorProductListingId != listing.ListingId)
+                    {
+                        return Result.Failure<AdminOrderDto>(new Error("admin.order.asset_duplicate_global", $"Asset tag {tag} already belongs to another product ({asset.VendorProductListing?.ListingTitle ?? "Unknown"}).", ErrorCategory.Validation));
+                    }
+
+                    if (asset is null)
+                    {
+                        asset = new VendorProductAsset
+                        {
+                            VendorProductListingId = listing.ListingId,
+                            AssetTag = tag,
+                            Status = "available",
+                            Condition = "Good",
+                            CreatedBy = listing.VendorId
+                        };
+                        await vendors.AddVendorProductAssetAsync(asset, cancellationToken);
+                        await vendors.SaveChangesAsync(cancellationToken);
+                    }
+
+                    if (asset.Status == "rented" || asset.Status == "sold")
+                    {
+                        return Result.Failure<AdminOrderDto>(new Error("admin.order.asset_unavailable", $"Asset {tag} is currently {asset.Status}.", ErrorCategory.Validation));
+                    }
+
+                    asset.Status = order.OrderType == "buy" ? "sold" : "rented";
+                    await vendors.UpdateVendorProductAssetAsync(asset, cancellationToken);
+
+                    var orderAsset = new CustomerRentalOrderAsset
+                    {
+                        CustomerRentalOrderId = order.Id,
+                        VendorProductAssetId = asset.Id
+                    };
+                    await customers.AddCustomerRentalOrderAssetAsync(orderAsset, cancellationToken);
+                }
+            }
+        }
 
         if (target == "active")
         {
@@ -734,6 +789,7 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
                     },
                     cancellationToken);
             }
+
         }
         else if (target == "returned")
         {
@@ -762,6 +818,17 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
                 {
                     productListing.AvailableQuantity += order.Quantity;
                     await vendors.UpdateVendorProductListingAsync(productListing, cancellationToken);
+                }
+            }
+
+            var assignedAssets = await customers.GetCustomerRentalOrderAssetsAsync(order.Id, cancellationToken);
+            foreach (var orderAsset in assignedAssets)
+            {
+                var asset = await vendors.GetVendorProductAssetByIdAsync(orderAsset.VendorProductAssetId, cancellationToken);
+                if (asset is not null)
+                {
+                    asset.Status = "available";
+                    await vendors.UpdateVendorProductAssetAsync(asset, cancellationToken);
                 }
             }
         }

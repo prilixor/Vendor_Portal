@@ -556,6 +556,46 @@ public sealed class VendorOnboardingRepository(
         dbContext.VendorInventory.Update(inventory);
     }
 
+    public async Task AddVendorProductAssetAsync(VendorProductAsset asset, CancellationToken cancellationToken)
+    {
+        await dbContext.VendorProductAssets.AddAsync(asset, cancellationToken);
+    }
+
+    public Task<VendorProductAsset?> GetVendorProductAssetByIdAsync(Guid assetId, CancellationToken cancellationToken)
+    {
+        return dbContext.VendorProductAssets
+            .FirstOrDefaultAsync(x => x.Id == assetId && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task<VendorProductAsset?> GetVendorProductAssetByTagAsync(Guid listingId, string assetTag, CancellationToken cancellationToken)
+    {
+        var normalized = assetTag.Trim().ToLowerInvariant();
+        return dbContext.VendorProductAssets
+            .FirstOrDefaultAsync(x => x.VendorProductListingId == listingId && x.AssetTag.ToLower() == normalized && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task<VendorProductAsset?> GetVendorProductAssetByTagGlobalAsync(Guid vendorId, string assetTag, CancellationToken cancellationToken)
+    {
+        var normalized = assetTag.Trim().ToLowerInvariant();
+        return dbContext.VendorProductAssets
+            .Include(x => x.VendorProductListing)
+            .FirstOrDefaultAsync(x => x.CreatedBy == vendorId && x.AssetTag.ToLower() == normalized && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task<List<VendorProductAsset>> GetVendorProductAssetsAsync(Guid listingId, CancellationToken cancellationToken)
+    {
+        return dbContext.VendorProductAssets
+            .Where(x => x.VendorProductListingId == listingId && !x.IsDeleted)
+            .OrderBy(x => x.AssetTag)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task UpdateVendorProductAssetAsync(VendorProductAsset asset, CancellationToken cancellationToken)
+    {
+        dbContext.VendorProductAssets.Update(asset);
+        return Task.CompletedTask;
+    }
+
     public async Task AddVendorInventoryMovementAsync(VendorInventoryMovement movement, CancellationToken cancellationToken)
     {
         await dbContext.VendorInventoryMovements.AddAsync(movement, cancellationToken);

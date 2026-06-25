@@ -6,8 +6,10 @@ import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Skeleton } from "@/app/components/ui/skeleton";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
-import { vendorOnboardingApi, type VendorOrderApiDto } from "@/app/services/vendorOnboardingApi";
+import { vendorOnboardingApi, type VendorOrderApiDto, type VendorProductAssetApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 
 const getTimelineSteps = (orderType?: string) => {
@@ -112,6 +114,11 @@ const VendorOrderDetail = () => {
   const [updating, setUpdating] = useState(false);
   const [order, setOrder] = useState<VendorOrderApiDto | null>(null);
 
+  const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
+  const [dispatchAssetTags, setDispatchAssetTags] = useState<string[]>([]);
+  const [availableAssets, setAvailableAssets] = useState<VendorProductAssetApiDto[]>([]);
+  const [loadingAssets, setLoadingAssets] = useState(false);
+
   const loadOrder = async () => {
     if (!user || !orderId) return;
     try {
@@ -131,11 +138,29 @@ const VendorOrderDetail = () => {
   }, [user?.id, orderId]);
 
   const handleStatusChange = async (status: "in_transit" | "active" | "returned") => {
+    if (status === "in_transit" && !dispatchDialogOpen) {
+      setDispatchDialogOpen(true);
+      setDispatchAssetTags(new Array(order!.quantity).fill(""));
+      
+      try {
+        setLoadingAssets(true);
+        const data = await vendorOnboardingApi.getVendorProductAssets(user!.id, order!.listingId);
+        setAvailableAssets(data.filter(a => a.status.toLowerCase() === 'available'));
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoadingAssets(false);
+      }
+      return;
+    }
+
     if (!user || !orderId) return;
     try {
       setUpdating(true);
-      await vendorOnboardingApi.updateVendorOrderStatus(user.id, orderId, status);
+      const assetTagsToSubmit = (status === "in_transit" || status === "active") ? dispatchAssetTags.filter(t => t.trim() !== "") : undefined;
+      await vendorOnboardingApi.updateVendorOrderStatus(user.id, orderId, status, assetTagsToSubmit);
       toast.success("Order status updated.");
+      setDispatchDialogOpen(false);
       await loadOrder();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update status.";
@@ -306,6 +331,54 @@ const VendorOrderDetail = () => {
           </div>
         </>
       )}
+
+      <Dialog open={dispatchDialogOpen} onOpenChange={setDispatchDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Dispatch Details</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              Please enter the serial numbers or asset tags for the {order?.quantity} items being dispatched. 
+              You can select from pre-registered available stock or type new ones.
+            </p>
+            {loadingAssets ? (
+                <p className="text-sm">Loading available stock...</p>
+            ) : (
+                <div className="space-y-3">
+                  {dispatchAssetTags.map((tag, idx) => (
+                    <div key={idx} className="space-y-1.5">
+                      <Label>Item {idx + 1} Serial Number (Optional)</Label>
+                      <input 
+                        type="text" 
+                        list={`available-assets-${order?.listingId}`} 
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder="Enter or select serial number..."
+                        value={tag}
+                        onChange={(e) => {
+                            const newTags = [...dispatchAssetTags];
+                            newTags[idx] = e.target.value;
+                            setDispatchAssetTags(newTags);
+                        }}
+                      />
+                    </div>
+                  ))}
+                  <datalist id={`available-assets-${order?.listingId}`}>
+                    {availableAssets.map(a => (
+                        <option key={a.id} value={a.assetTag} />
+                    ))}
+                  </datalist>
+                </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDispatchDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => void handleStatusChange("in_transit")} disabled={updating}>
+                Confirm Dispatch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

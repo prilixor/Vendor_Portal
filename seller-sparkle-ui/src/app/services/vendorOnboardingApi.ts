@@ -158,6 +158,35 @@ export interface VendorInventoryApiDto {
   blockedQuantity: number;
 }
 
+export interface VendorProductAssetApiDto {
+  id: string;
+  vendorProductListingId: string;
+  assetTag: string;
+  status: string;
+  condition?: string;
+  createdAt: string;
+}
+
+export interface TrackedAssetDto {
+  assetId: string;
+  assetTag: string;
+  status: string;
+  condition?: string;
+  productName: string;
+  currentOrderId?: string;
+  currentOrderNumber?: string;
+  currentCustomerName?: string;
+  dueDate?: string;
+}
+
+export interface UpsertVendorProductAssetPayload {
+  vendorId: string;
+  listingId: string;
+  assetTag: string;
+  status: string;
+  condition?: string;
+}
+
 export interface VendorInventoryMovementApiDto {
   id: string;
   vendorInventoryId: string;
@@ -569,6 +598,26 @@ export const vendorOnboardingApi = {
     return apiClient.get<VendorInventoryMovementApiDto[]>(`/vendors/${vendorId}/listings/${listingId}/inventory/movements`);
   },
 
+  getVendorProductAssets(vendorId: string, listingId: string) {
+    return apiClient.get<VendorProductAssetApiDto[]>(`/vendors/${vendorId}/listings/${listingId}/assets`);
+  },
+
+  addVendorProductAsset(vendorId: string, listingId: string, payload: UpsertVendorProductAssetPayload) {
+    return apiClient.post<VendorProductAssetApiDto>(`/vendors/${vendorId}/listings/${listingId}/assets`, payload);
+  },
+
+  updateVendorProductAsset(vendorId: string, listingId: string, assetId: string, payload: UpsertVendorProductAssetPayload) {
+    return apiClient.put<VendorProductAssetApiDto>(`/vendors/${vendorId}/listings/${listingId}/assets/${assetId}`, payload);
+  },
+
+  deleteVendorProductAsset(vendorId: string, listingId: string, assetId: string) {
+    return apiClient.delete<void>(`/vendors/${vendorId}/listings/${listingId}/assets/${assetId}`);
+  },
+
+  trackVendorProductAsset(vendorId: string, assetTag: string) {
+    return apiClient.get<TrackedAssetDto>(`/vendors/${vendorId}/inventory/assets/track?tag=${encodeURIComponent(assetTag)}`);
+  },
+
   upsertVendorNotificationPreference(vendorId: string, payload: UpsertVendorNotificationPreferencePayload) {
     return apiClient.put<VendorNotificationPreferenceDto>(`/vendors/${vendorId}/notification-preferences`, payload);
   },
@@ -622,8 +671,8 @@ export const vendorOnboardingApi = {
     return apiClient.get<VendorOrderApiDto>(`/vendors/${vendorId}/orders/${orderId}`);
   },
 
-  updateVendorOrderStatus(vendorId: string, orderId: string, status: string) {
-    return apiClient.patch(`/vendors/${vendorId}/orders/${orderId}/status`, { status });
+  updateVendorOrderStatus(vendorId: string, orderId: string, status: string, assetTags?: string[]) {
+    return apiClient.patch(`/vendors/${vendorId}/orders/${orderId}/status`, { status, assetTags });
   },
 
   getVendorOrderExpirations(vendorId: string, withinDays = 7) {

@@ -25,6 +25,7 @@ public sealed class VendorUpdateOrderStatusRequest : VendorIdRequest
 {
     public Guid OrderId { get; set; }
     public string Status { get; set; } = string.Empty;
+    public List<string>? AssetTags { get; set; }
 }
 
 public sealed class GetVendorPendingDispatchOffersEndpoint(IMediator mediator)
@@ -86,7 +87,7 @@ public sealed class VendorUpdateOrderStatusEndpoint(IMediator mediator)
 
     public override async Task<Results<Ok<CustomerOrderDto>, ProblemHttpResult>> ExecuteAsync(VendorUpdateOrderStatusRequest req, CancellationToken ct)
     {
-        var result = await mediator.Send(new UpdateVendorOrderStatusCommand(req.VendorId, req.OrderId, req.Status), ct);
+        var result = await mediator.Send(new UpdateVendorOrderStatusCommand(req.VendorId, req.OrderId, req.Status, req.AssetTags), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

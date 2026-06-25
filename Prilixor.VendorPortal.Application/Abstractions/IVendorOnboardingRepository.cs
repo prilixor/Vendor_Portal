@@ -80,6 +80,12 @@ public interface IVendorOnboardingRepository
     Task<VendorInventory?> GetVendorInventoryByListingIdAsync(Guid listingId, CancellationToken cancellationToken);
     Task UpsertVendorInventoryAsync(VendorInventory inventory, CancellationToken cancellationToken);
 
+    Task AddVendorProductAssetAsync(VendorProductAsset asset, CancellationToken cancellationToken);
+    Task<VendorProductAsset?> GetVendorProductAssetByIdAsync(Guid assetId, CancellationToken cancellationToken);
+    Task<VendorProductAsset?> GetVendorProductAssetByTagAsync(Guid listingId, string assetTag, CancellationToken cancellationToken);
+    Task<VendorProductAsset?> GetVendorProductAssetByTagGlobalAsync(Guid vendorId, string assetTag, CancellationToken cancellationToken);
+    Task<List<VendorProductAsset>> GetVendorProductAssetsAsync(Guid listingId, CancellationToken cancellationToken);
+    Task UpdateVendorProductAssetAsync(VendorProductAsset asset, CancellationToken cancellationToken);
     Task AddVendorInventoryMovementAsync(VendorInventoryMovement movement, CancellationToken cancellationToken);
     Task<List<VendorInventoryMovement>> GetVendorInventoryMovementsAsync(Guid inventoryId, CancellationToken cancellationToken);
 

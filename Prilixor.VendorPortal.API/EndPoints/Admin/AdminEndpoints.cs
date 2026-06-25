@@ -412,6 +412,7 @@ public sealed class UpdateAdminOrderStatusRequest : AdminUserIdRequest
 {
     public Guid OrderId { get; set; }
     public string Status { get; set; } = string.Empty;
+    public List<string>? AssetTags { get; set; }
 }
 
 public sealed class UpdateAdminOrderStatusEndpoint(IMediator mediator)
@@ -428,7 +429,8 @@ public sealed class UpdateAdminOrderStatusEndpoint(IMediator mediator)
         var result = await mediator.Send(new UpdateAdminOrderStatusCommand(
             req.AdminUserId,
             req.OrderId,
-            req.Status), ct);
+            req.Status,
+            req.AssetTags), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
