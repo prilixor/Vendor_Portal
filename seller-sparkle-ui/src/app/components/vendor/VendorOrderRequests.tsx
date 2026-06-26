@@ -9,7 +9,7 @@ import { vendorOnboardingApi, type VendorDispatchOfferApiDto } from "@/app/servi
 import { toast } from "sonner";
 import { Clock3, RefreshCw } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
-
+import { useNavigate } from "react-router-dom";
 function orderTypeBadgeClass(orderType: string): string {
   const t = orderType.toLowerCase().trim();
   if (t === "buy") {
@@ -20,6 +20,7 @@ function orderTypeBadgeClass(orderType: string): string {
 
 const VendorOrderRequests = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [offers, setOffers] = useState<VendorDispatchOfferApiDto[]>([]);
@@ -71,6 +72,8 @@ const VendorOrderRequests = () => {
       if (action === "accept") {
         await vendorOnboardingApi.acceptVendorDispatchOrder(user.id, orderId);
         toast.success("Order request accepted.");
+        navigate(`/vendor/orders/${orderId}`);
+        return; // Early return to avoid reloading offers since we are navigating away
       } else {
         await vendorOnboardingApi.rejectVendorDispatchOrder(user.id, orderId);
         toast.success("Order request rejected.");

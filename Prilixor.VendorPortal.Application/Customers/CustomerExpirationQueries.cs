@@ -215,7 +215,9 @@ internal sealed class GetAdminAllOrdersQueryHandler(
             r.Order.CustomerId,
             r.Order.Customer?.FullName ?? "Customer",
             r.Order.Customer?.Email ?? "customer@example.com",
-            r.Listing?.Vendor?.Profile?.BusinessName ?? r.Listing?.Vendor?.Email ?? "Vendor",
+            (r.Order.Status == "dispatch_failed" || r.Order.Status == "awaiting_vendor_acceptance") 
+                ? "Unassigned" 
+                : (r.Listing?.Vendor?.Profile?.BusinessName ?? r.Listing?.Vendor?.Email ?? "Vendor"),
             r.Listing?.ListingTitle ?? "Deleted Product",
             r.Order.Status,
             r.Order.OrderType,

@@ -22,6 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/app/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
@@ -261,6 +262,23 @@ export const AdminOrders = () => {
     onError: (error) => {
       console.error("Failed to force cancel and refund", error);
       toast.error(getUserFriendlyMessage(error) || "Failed to force cancel and refund");
+    },
+  });
+
+  const restartDispatchMutation = useMutation({
+    mutationFn: () =>
+      adminApi.restartOrderDispatch({
+        adminUserId: user?.id || "",
+        orderId: selectedOrder?.orderId || "",
+      }),
+    onSuccess: (updatedOrder) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      setSelectedOrder(updatedOrder);
+      setStatusUpdateLocal(updatedOrder.status);
+    },
+    onError: (error) => {
+      console.error("Failed to restart dispatch", error);
+      toast.error(getUserFriendlyMessage(error) || "Failed to restart dispatch");
     },
   });
 
@@ -693,66 +711,57 @@ export const AdminOrders = () => {
                   <h5 className="text-sm font-bold text-foreground">Admin Actions</h5>
 
                   {selectedOrder.status === "dispatch_failed" && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="default"
-                            className="w-full text-xs shadow-sm h-auto whitespace-normal py-2"
-                            disabled={reassignMutation.isPending}
-                          >
-                            {reassignMutation.isPending ? "Reassigning..." : "Reassign to new Vendor"}
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent className="z-[9999]">
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Reassign Order?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to reassign this order to a new vendor? The system will automatically locate and dispatch an offer to the next eligible vendor in the area.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => reassignMutation.mutate()}>Reassign</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                    <TooltipProvider>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                        <AlertDialog>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="default"
+                                  className="w-full text-sm"
+                                  disabled={restartDispatchMutation.isPending}
+                                >
+                                  {restartDispatchMutation.isPending ? "Reassigning..." : "Reassign Order"}
+                                </Button>
+                              </AlertDialogTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs text-center z-[9999]" side="top">
+                              Instantly broadcasts a new dispatch offer to all eligible nearby vendors simultaneously.
+                            </TooltipContent>
+                          </Tooltip>
+                          <AlertDialogContent className="z-[9999]">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Reassign Order?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to reassign this order? The system will automatically broadcast a new offer to all eligible vendors in the area.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => restartDispatchMutation.mutate()}>Reassign</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
 
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="w-full text-xs shadow-sm h-auto whitespace-normal py-2"
-                            disabled={updateStatusMutation.isPending}
-                          >
-                            Override to In-Transit
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent className="z-[9999]">
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Override Status?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to forcefully override the status of this item to In-Transit? This will bypass standard vendor dispatch workflows.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => updateStatusMutation.mutate("in_transit")}>Override</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="destructive"
-                            className="w-full text-xs shadow-sm h-auto whitespace-normal py-2"
-                            disabled={cancelRefundMutation.isPending}
-                          >
-                            {cancelRefundMutation.isPending ? "Cancelling..." : "Force Cancel & Refund"}
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent className="z-[9999]">
+                        <AlertDialog>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="destructive"
+                                  className="w-full text-sm"
+                                  disabled={cancelRefundMutation.isPending}
+                                >
+                                  {cancelRefundMutation.isPending ? "Cancelling..." : "Force Cancel"}
+                                </Button>
+                              </AlertDialogTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs text-center z-[9999]" side="top">
+                              Permanently cancels the order and automatically issues a full refund back to the customer's payment method.
+                            </TooltipContent>
+                          </Tooltip>
+                          <AlertDialogContent className="z-[9999]">
                           <AlertDialogHeader>
                             <AlertDialogTitle>Force Cancel & Refund?</AlertDialogTitle>
                             <AlertDialogDescription>
@@ -766,6 +775,7 @@ export const AdminOrders = () => {
                         </AlertDialogContent>
                       </AlertDialog>
                     </div>
+                    </TooltipProvider>
                   )}
 
                   <div className="flex flex-col sm:flex-row sm:items-end gap-4 bg-accent/20 p-4 rounded-lg border border-border/40">

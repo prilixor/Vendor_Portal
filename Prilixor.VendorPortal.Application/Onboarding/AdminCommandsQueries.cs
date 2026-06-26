@@ -886,7 +886,7 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
             o.CustomerId,
             o.Customer?.FullName ?? "Customer",
             o.Customer?.Email ?? "customer@example.com",
-            listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor",
+            (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"),
             listing?.ListingTitle ?? "Deleted Product",
             o.Status,
             o.OrderType,
@@ -1017,7 +1017,7 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
         var listing = row.Listing;
         return Result.Success(new AdminOrderDto(
             o.Id, o.OrderNumber, o.CustomerId, o.Customer?.FullName ?? "Customer", o.Customer?.Email ?? "customer@example.com",
-            listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor", listing?.ListingTitle ?? "Deleted Product",
+            (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"), listing?.ListingTitle ?? "Deleted Product",
             o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl
         ));
     }
@@ -1070,7 +1070,156 @@ internal sealed class AdminForceCancelRefundOrderCommandHandler(
         var listing = row.Listing;
         return Result.Success(new AdminOrderDto(
             o.Id, o.OrderNumber, o.CustomerId, o.Customer?.FullName ?? "Customer", o.Customer?.Email ?? "customer@example.com",
-            listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor", listing?.ListingTitle ?? "Deleted Product",
+            (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"), listing?.ListingTitle ?? "Deleted Product",
+            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl
+        ));
+    }
+}
+
+public sealed record AdminRestartOrderDispatchCommand(string AdminId, Guid OrderId) : ICommand<AdminOrderDto>;
+
+internal sealed class AdminRestartOrderDispatchCommandHandler(
+    ICustomerRepository customers,
+    IVendorOnboardingRepository vendors,
+    Microsoft.Extensions.Options.IOptions<Prilixor.VendorPortal.Domain.Options.CustomerPricingOptions> pricingOptions)
+    : ICommandHandler<AdminRestartOrderDispatchCommand, AdminOrderDto>
+{
+    public async Task<Result<AdminOrderDto>> Handle(AdminRestartOrderDispatchCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.AdminId, out var adminUserId))
+            return Result.Failure<AdminOrderDto>(new Error("admin.invalid_id", "Admin user id must be a valid UUID.", ErrorCategory.Validation));
+
+        var orderRow = await customers.GetCustomerOrderByIdAsync(request.OrderId, cancellationToken);
+        if (orderRow is null)
+            return Result.Failure<AdminOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
+
+        var order = orderRow.Order;
+        
+        if (order.Status != "dispatch_failed")
+            return Result.Failure<AdminOrderDto>(new Error("admin.invalid_order_status", "Only dispatch_failed orders can be restarted.", ErrorCategory.Validation));
+
+        order.Status = "awaiting_vendor_acceptance";
+        
+        var agg = await customers.GetListingForCustomerAsync(order.VendorProductListingId, cancellationToken);
+        if (agg is null)
+            return Result.Failure<AdminOrderDto>(new Error("customers.listing_not_found", "Original listing not found.", ErrorCategory.NotFound));
+
+        var options = pricingOptions.Value;
+        var vendorAreasByVendorId = new Dictionary<Guid, List<VendorServiceArea>>();
+        CustomerAddress? address = null;
+        if (order.CustomerAddressId.HasValue)
+            address = await customers.GetCustomerAddressByIdAsync(order.CustomerId, order.CustomerAddressId.Value, cancellationToken);
+
+        var candidateListings = await customers.GetCandidateListingsByProductIdAsync(agg.ProductId, cancellationToken);
+        var eligibleCandidates = new List<(VendorProductListingAggregate Candidate, decimal DistanceKm)>();
+        foreach (var candidate in candidateListings.Where(c => c.VendorId != Guid.Empty))
+        {
+            var candidateListing = await vendors.GetVendorProductListingByIdAsync(candidate.VendorId, candidate.ListingId, cancellationToken);
+            if (candidateListing is null) continue;
+
+            var candidateInventory = await vendors.GetVendorInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
+            var candidateAvailable = candidateInventory?.AvailableQuantity ?? candidateListing.AvailableQuantity;
+            if (candidateAvailable < order.Quantity) continue;
+
+            decimal distanceKm = 0m;
+            if (address is not null && address.Latitude.HasValue && address.Longitude.HasValue)
+            {
+                var vendorAreas = await vendors.GetVendorServiceAreasAsync(candidate.VendorId, cancellationToken);
+                var candidateDistance = CustomerOrderPricingRules.ResolveDeliveryDistance(
+                    address.Latitude.Value, address.Longitude.Value, candidate, vendorAreas, options);
+                if (!candidateDistance.IsSuccess) continue;
+                distanceKm = candidateDistance.DistanceKm;
+            }
+            eligibleCandidates.Add((candidate, distanceKm));
+        }
+
+        var ranked = eligibleCandidates
+            .OrderBy(x => x.DistanceKm)
+            .ThenByDescending(x => x.Candidate.InventoryAvailable)
+            .Take(Math.Max(1, options.MaxDispatchVendorsPerLine))
+            .ToList();
+
+        var now = DateTimeOffset.UtcNow;
+        
+        for (var i = 0; i < ranked.Count; i++)
+        {
+            var candidate = ranked[i].Candidate;
+            var offer = new CustomerOrderVendorOffer
+            {
+                CustomerRentalOrderId = order.Id,
+                VendorId = candidate.VendorId,
+                VendorProductListingId = candidate.ListingId,
+                OfferRank = i + 1,
+                Status = "pending",
+                ExpiresAt = now.AddMinutes((double)Math.Max(1m, options.DispatchOfferTtlMinutes)),
+            };
+            await customers.AddCustomerOrderVendorOfferAsync(offer, cancellationToken);
+        }
+
+        if (ranked.Count == 0)
+        {
+            order.Status = "dispatch_failed";
+            await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+            await customers.SaveChangesAsync(cancellationToken);
+            return Result.Failure<AdminOrderDto>(new Error("admin.restart.no_vendor", "Cannot restart dispatch: No eligible vendors found with sufficient stock or within delivery range.", ErrorCategory.Validation));
+        }
+
+        await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+
+        var listingTitle = agg.ListingTitle ?? "Listing";
+        
+        await customers.AddCustomerNotificationAsync(
+            new Prilixor.VendorPortal.Domain.Customers.CustomerNotification
+            {
+                Id = Guid.NewGuid(),
+                CustomerId = order.CustomerId,
+                Title = $"Order {order.OrderNumber} is being re-processed",
+                Body = $"We are re-processing your {order.OrderType} request for \"{listingTitle}\" with our vendors.",
+                NotificationType = "order_pending",
+                RelatedOrderId = order.Id,
+            },
+            cancellationToken);
+
+        foreach (var r in ranked)
+        {
+            var candidate = r.Candidate;
+            await vendors.AddVendorNotificationAsync(new Prilixor.VendorPortal.Domain.Vendors.VendorNotification
+            {
+                VendorId = candidate.VendorId,
+                NotificationType = "dispatch_offer",
+                Title = $"New order request {order.OrderNumber}",
+                Message = $"You have a new {order.OrderType} request for \"{listingTitle}\".",
+                Channel = "in_app",
+                Status = "sent",
+                SentAt = DateTimeOffset.UtcNow
+            }, cancellationToken);
+        }
+        
+        var auditLog = new Prilixor.VendorPortal.Domain.Vendors.AdminAuditLog
+        {
+            AdminId = adminUserId,
+            ActionType = "ADMIN_RESTART_DISPATCH",
+            EntityType = "CustomerRentalOrder",
+            EntityId = order.Id,
+            Notes = "Admin restarted the dispatch process and sent new offers."
+        };
+        await vendors.AddAdminAuditLogAsync(auditLog, cancellationToken);
+
+        await customers.SaveChangesAsync(cancellationToken);
+        await vendors.SaveChangesAsync(cancellationToken);
+
+        return await BuildOrderDto(customers, order.Id, cancellationToken);
+    }
+    
+    private static async Task<Result<AdminOrderDto>> BuildOrderDto(ICustomerRepository customers, Guid orderId, CancellationToken cancellationToken)
+    {
+        var row = await customers.GetCustomerOrderByIdAsync(orderId, cancellationToken);
+        if (row is null) return Result.Failure<AdminOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
+        var o = row.Order;
+        var listing = row.Listing;
+        return Result.Success(new AdminOrderDto(
+            o.Id, o.OrderNumber, o.CustomerId, o.Customer?.FullName ?? "Customer", o.Customer?.Email ?? "customer@example.com",
+            (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"), listing?.ListingTitle ?? "Deleted Product",
             o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl
         ));
     }

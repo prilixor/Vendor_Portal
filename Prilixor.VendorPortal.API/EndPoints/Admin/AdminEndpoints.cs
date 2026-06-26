@@ -477,3 +477,24 @@ public sealed class AdminForceCancelRefundOrderEndpoint(IMediator mediator)
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
+
+public sealed class AdminRestartOrderDispatchRequest : AdminUserIdRequest
+{
+    public Guid OrderId { get; set; }
+}
+
+public sealed class AdminRestartOrderDispatchEndpoint(IMediator mediator)
+    : Endpoint<AdminRestartOrderDispatchRequest, Results<Ok<AdminOrderDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("orders/{orderId}/restart-dispatch");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<AdminOrderDto>, ProblemHttpResult>> ExecuteAsync(AdminRestartOrderDispatchRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new AdminRestartOrderDispatchCommand(req.AdminUserId, req.OrderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}

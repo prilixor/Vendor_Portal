@@ -988,7 +988,6 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 continue;
             }
 
-            var topVendor = ranked[0].Candidate;
             await customers.AddCustomerNotificationAsync(
                 new CustomerNotification
                 {
@@ -1002,16 +1001,20 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
 
-            await vendors.AddVendorNotificationAsync(new VendorNotification
+            foreach (var r in ranked)
             {
-                VendorId = topVendor.VendorId,
-                NotificationType = "dispatch_offer",
-                Title = $"New order request {order.OrderNumber}",
-                Message = $"You have a new {orderType} request for \"{trackedListing.ListingTitle}\".",
-                Channel = "in_app",
-                Status = "sent",
-                SentAt = DateTimeOffset.UtcNow
-            }, cancellationToken);
+                var candidate = r.Candidate;
+                await vendors.AddVendorNotificationAsync(new VendorNotification
+                {
+                    VendorId = candidate.VendorId,
+                    NotificationType = "dispatch_offer",
+                    Title = $"New order request {order.OrderNumber}",
+                    Message = $"You have a new {orderType} request for \"{trackedListing.ListingTitle}\".",
+                    Channel = "in_app",
+                    Status = "sent",
+                    SentAt = DateTimeOffset.UtcNow
+                }, cancellationToken);
+            }
 
             await vendors.SaveChangesAsync(cancellationToken);
 

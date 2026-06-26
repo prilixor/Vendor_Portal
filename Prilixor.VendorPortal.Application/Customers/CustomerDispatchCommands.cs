@@ -508,12 +508,10 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
             myOffer.RespondedAt = now;
             await customers.UpdateCustomerOrderVendorOfferAsync(myOffer, cancellationToken);
 
-            var nextPending = offers
-                .Where(x => x.Id != myOffer.Id && x.Status == "pending" && x.ExpiresAt > now)
-                .OrderBy(x => x.OfferRank)
-                .FirstOrDefault();
+            var anyPendingLeft = offers
+                .Any(x => x.Id != myOffer.Id && x.Status == "pending" && x.ExpiresAt > now);
 
-            if (nextPending is null)
+            if (!anyPendingLeft)
             {
                 order.Status = "dispatch_failed";
                 await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
@@ -528,10 +526,6 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
                         RelatedOrderId = order.Id,
                     },
                     cancellationToken);
-            }
-            else
-            {
-                await NotifyVendorDispatchOfferAsync(vendors, order, nextPending, cancellationToken);
             }
 
             await customers.SaveChangesAsync(cancellationToken);
@@ -605,23 +599,7 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
         return await BuildOrderDto(customers, request.OrderId, cancellationToken);
     }
 
-    private static Task NotifyVendorDispatchOfferAsync(
-        IVendorOnboardingRepository vendors,
-        CustomerRentalOrder order,
-        CustomerOrderVendorOffer offer,
-        CancellationToken cancellationToken) =>
-        vendors.AddVendorNotificationAsync(
-            new VendorNotification
-            {
-                VendorId = offer.VendorId,
-                NotificationType = "dispatch_offer",
-                Title = $"New order request {order.OrderNumber}",
-                Message = $"You have a new {order.OrderType} request for order {order.OrderNumber}.",
-                Channel = "in_app",
-                Status = "sent",
-                SentAt = DateTimeOffset.UtcNow,
-            },
-            cancellationToken);
+
 
     internal static async Task<Result<CustomerOrderDto>> BuildOrderDto(ICustomerRepository customers, Guid orderId, CancellationToken cancellationToken)
     {
@@ -748,26 +726,28 @@ internal sealed class VendorCancelAssignedOrderCommandHandler(
         {
             order.Status = "awaiting_vendor_acceptance";
             await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
-            var next = pending[0];
-            await vendors.AddVendorNotificationAsync(
-                new VendorNotification
-                {
-                    VendorId = next.VendorId,
-                    NotificationType = "dispatch_offer",
-                    Title = $"New order request {order.OrderNumber}",
-                    Message = $"Vendor cancelled previous assignment. Please accept order {order.OrderNumber}.",
-                    Channel = "in_app",
-                    Status = "sent",
-                    SentAt = DateTimeOffset.UtcNow,
-                },
-                cancellationToken);
+            foreach (var next in pending)
+            {
+                await vendors.AddVendorNotificationAsync(
+                    new VendorNotification
+                    {
+                        VendorId = next.VendorId,
+                        NotificationType = "dispatch_offer",
+                        Title = $"New order request {order.OrderNumber}",
+                        Message = $"Vendor cancelled previous assignment. Please accept order {order.OrderNumber}.",
+                        Channel = "in_app",
+                        Status = "sent",
+                        SentAt = DateTimeOffset.UtcNow,
+                    },
+                    cancellationToken);
+            }
             await customers.AddCustomerNotificationAsync(
                 new CustomerNotification
                 {
                     Id = Guid.NewGuid(),
                     CustomerId = order.CustomerId,
                     Title = $"Order {order.OrderNumber} is being reassigned",
-                    Body = "One vendor cancelled this item. We are notifying another nearby vendor.",
+                    Body = "One vendor cancelled this item. We are notifying nearby vendors.",
                     NotificationType = "order_pending",
                     RelatedOrderId = order.Id,
                 },

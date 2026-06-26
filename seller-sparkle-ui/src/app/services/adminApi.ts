@@ -380,6 +380,11 @@ export interface AdminForceCancelRefundOrderRequest {
   orderId: string;
 }
 
+export interface AdminRestartOrderDispatchRequest {
+  adminUserId: string;
+  orderId: string;
+}
+
 export const adminApi = {
   // Vendors
   async getVendors(): Promise<VendorDto[]> {
@@ -568,5 +573,9 @@ export const adminApi = {
 
   async forceCancelRefundOrder(data: AdminForceCancelRefundOrderRequest): Promise<AdminOrderDto> {
     return apiClient.post<AdminOrderDto>(`/admin/orders/${data.orderId}/cancel-refund`, data);
+  },
+
+  async restartOrderDispatch(data: AdminRestartOrderDispatchRequest): Promise<AdminOrderDto> {
+    return apiClient.post<AdminOrderDto>(`/admin/orders/${data.orderId}/restart-dispatch`, data);
   },
 };
