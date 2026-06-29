@@ -39,7 +39,8 @@ public sealed record VendorOrderDto(
     string CustomerName,
     string? CustomerCity,
     string? CustomerState,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    bool IsExtended);
 
 public sealed record GetVendorOrdersQuery(string VendorId, string? Status) : IQuery<List<VendorOrderDto>>;
 
@@ -326,6 +327,7 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
             ("confirmed", "in_transit") => true,
             ("in_transit", "active") => true,
             ("active", "returned") => !string.Equals(order.OrderType, "buy", StringComparison.OrdinalIgnoreCase),
+            ("active", "bought_out") => string.Equals(order.OrderType, "rent", StringComparison.OrdinalIgnoreCase),
             _ => false,
         };
 }
@@ -351,7 +353,8 @@ internal static class VendorOrderMapper
             row.Order.Customer?.FullName ?? "Customer",
             row.Order.CustomerAddress?.City,
             row.Order.CustomerAddress?.State,
-            o.CreatedOnUtc);
+            o.CreatedOnUtc,
+            o.IsExtended);
     }
 }
 

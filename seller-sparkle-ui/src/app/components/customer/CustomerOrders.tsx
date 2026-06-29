@@ -324,7 +324,11 @@ const CustomerOrders = () => {
                                 {o.listingTitle}
                               </Link>
                               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground mt-1">
-                                <span>Period: <strong className="text-foreground font-medium">{formatDateRange(o.startDate, o.endDate)}</strong></span>
+                                {o.orderType?.toLowerCase() === "buy" ? (
+                                  <span>Purchase Date: <strong className="text-foreground font-medium">{formatOrderDate(o.startDate)}</strong></span>
+                                ) : (
+                                  <span>Period: <strong className="text-foreground font-medium">{formatDateRange(o.startDate, o.endDate)}</strong></span>
+                                )}
                                 <span className="text-muted-foreground/30" aria-hidden="true">•</span>
                                 <span>Qty: <strong className="text-foreground font-medium">{o.quantity}</strong></span>
                               </div>

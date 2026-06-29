@@ -30,6 +30,14 @@ public interface ICustomerRepository
     Task<List<CustomerRentalOrderWithListing>> GetAllCustomerOrdersForAdminAsync(CancellationToken cancellationToken);
     Task<bool> OrderNumberExistsAsync(string orderNumber, CancellationToken cancellationToken);
     
+    Task AddCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken);
+    Task<CustomerRentalOrderExtension?> GetCustomerRentalOrderExtensionByIdAsync(Guid extensionId, CancellationToken cancellationToken);
+    Task UpdateCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken);
+
+    Task AddCustomerRentalOrderBuyoutAsync(CustomerRentalOrderBuyout buyout, CancellationToken cancellationToken);
+    Task<CustomerRentalOrderBuyout?> GetCustomerRentalOrderBuyoutByIdAsync(Guid buyoutId, CancellationToken cancellationToken);
+    Task UpdateCustomerRentalOrderBuyoutAsync(CustomerRentalOrderBuyout buyout, CancellationToken cancellationToken);
+    
     Task AddCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderAsset>> GetCustomerRentalOrderAssetsAsync(Guid customerOrderId, CancellationToken cancellationToken);
     Task RemoveCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken);

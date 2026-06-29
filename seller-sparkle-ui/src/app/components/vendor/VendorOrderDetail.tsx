@@ -29,6 +29,7 @@ const getTimelineSteps = (orderType?: string) => {
     { key: "delivered", label: "Delivered" },
     { key: "active", label: "Rental Active" },
     { key: "returned", label: "Returned" },
+    { key: "bought_out", label: "Bought Out" },
   ];
 };
 
@@ -53,6 +54,7 @@ function timelineProgress(status: string, orderType?: string): { completedThroug
       : { completedThrough: 4, currentIndex: null };
   }
   if (compact === "returned") return { completedThrough: 5, currentIndex: null };
+  if (compact === "bought_out") return { completedThrough: 6, currentIndex: null };
   return { completedThrough: 0, currentIndex: 1 };
 }
 
@@ -97,6 +99,9 @@ function OrderTimeline({ status, orderType }: { status: string; orderType?: stri
               {isCurrent ? <p className="mt-1 text-xs text-muted-foreground">In progress</p> : null}
               {!isCurrent && step.key === "active" && status.trim().toLowerCase() === "active" && orderType?.toLowerCase() !== "buy" ? (
                 <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Current status</p>
+              ) : null}
+              {!isCurrent && step.key === "bought_out" && status.trim().toLowerCase() === "bought_out" ? (
+                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Purchased by customer</p>
               ) : null}
             </div>
           </li>
@@ -292,25 +297,47 @@ const VendorOrderDetail = () => {
 
           <Card className="border-border/80 shadow-sm">
             <CardHeader className="pb-4">
-              <p className="text-lg font-semibold">Rental details</p>
+              <p className="text-lg font-semibold">{order.orderType?.toLowerCase() === "buy" ? "Purchase details" : "Rental details"}</p>
             </CardHeader>
             <CardContent className="grid gap-6 sm:grid-cols-2">
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Start date</p>
-                <p className="text-sm font-medium tabular-nums">{formatDetailDate(order.startDate)}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">End date</p>
-                <p className="text-sm font-medium tabular-nums">{formatDetailDate(order.endDate)}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rental days</p>
-                <p className="text-sm font-medium">{order.rentalDays}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order type</p>
-                <p className="text-sm font-medium uppercase">{order.orderType}</p>
-              </div>
+              {order.orderType?.toLowerCase() === "buy" ? (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Purchase date</p>
+                    <p className="text-sm font-medium tabular-nums">{formatDetailDate(order.startDate)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order type</p>
+                    <p className="text-sm font-medium uppercase">{order.orderType}</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Start date</p>
+                    <p className="text-sm font-medium tabular-nums">{formatDetailDate(order.startDate)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">End date</p>
+                      {order.isExtended && (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                          EXTENDED
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium tabular-nums">{formatDetailDate(order.endDate)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rental days</p>
+                    <p className="text-sm font-medium">{order.rentalDays}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order type</p>
+                    <p className="text-sm font-medium uppercase">{order.orderType}</p>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 

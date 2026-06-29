@@ -22,6 +22,7 @@ public class CustomerRentalOrder : AuditableEntity<Guid>, ISoftDelete
     public decimal TotalAmount { get; set; }
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
+    public bool IsExtended { get; set; }
 
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

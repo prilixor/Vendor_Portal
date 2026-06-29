@@ -53,6 +53,7 @@ const statusTabs = [
   { id: "in_transit", label: "In Transit" },
   { id: "active", label: "Active" },
   { id: "returned", label: "Returned" },
+  { id: "bought_out", label: "Bought Out" },
   { id: "cancelled", label: "Cancelled" },
   { id: "dispatch_failed", label: "Dispatch Failed" },
 ] as const;
@@ -90,6 +91,9 @@ function orderStatusBadgeClass(status: string): string {
   if (s.includes("dispatch failed")) {
     return "bg-destructive/15 text-destructive dark:bg-destructive/20 dark:text-destructive";
   }
+  if (s === "bought out") {
+    return "bg-indigo-600 text-white dark:bg-indigo-600 dark:text-white";
+  }
   return "bg-muted text-foreground";
 }
 
@@ -118,6 +122,7 @@ const getTimelineSteps = (orderType?: string) => {
     { key: "delivered", label: "Delivered" },
     { key: "active", label: "Rental Active" },
     { key: "returned", label: "Returned" },
+    { key: "bought_out", label: "Bought Out" },
   ];
 };
 
@@ -148,7 +153,10 @@ function getTimelineProgress(status: string, orderType?: string): {
   if (compact === "active") {
     return isBuy
       ? { cancelled: false, completedThrough: 3, currentIndex: null }
-      : { cancelled: false, completedThrough: 3, currentIndex: 4 };
+      : { cancelled: false, completedThrough: 4, currentIndex: null };
+  }
+  if (compact === "bought_out") {
+    return { cancelled: false, completedThrough: 6, currentIndex: null };
   }
   if (compact === "returned") {
     return { cancelled: false, completedThrough: 5, currentIndex: null };
@@ -170,7 +178,10 @@ function getAvailableStatuses(currentStatus: string, orderType?: string): string
     return ["in_transit", "active", "dispatch_failed", "returned"];
   }
   if (s === "active") {
-    return isBuy ? ["active"] : ["active", "returned"];
+    return isBuy ? ["active"] : ["active", "returned", "bought_out"];
+  }
+  if (s === "bought_out") {
+    return ["bought_out"];
   }
   if (s === "returned") {
     return ["returned"];
@@ -651,12 +662,23 @@ export const AdminOrders = () => {
                     <p className="font-semibold text-foreground">{selectedOrder.vendorName}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-muted-foreground font-semibold flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Rental Terms</p>
+                    <p className="text-muted-foreground font-semibold flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {selectedOrder.orderType === "rent" ? "Rental Terms" : "Purchase Details"}</p>
                     <p className="font-medium text-foreground">{selectedOrder.orderType === "rent" ? `${selectedOrder.rentalDays} days rental` : "Direct Buyout"}</p>
                     {selectedOrder.startDate && (
-                      <p className="text-[10px] text-muted-foreground">
-                        {new Date(selectedOrder.startDate).toLocaleDateString()} → {selectedOrder.endDate ? new Date(selectedOrder.endDate).toLocaleDateString() : ""}
-                      </p>
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                        <span>
+                          {selectedOrder.orderType === "rent" ? (
+                            <>{new Date(selectedOrder.startDate).toLocaleDateString()} → {selectedOrder.endDate ? new Date(selectedOrder.endDate).toLocaleDateString() : ""}</>
+                          ) : (
+                            <>{new Date(selectedOrder.startDate).toLocaleDateString()}</>
+                          )}
+                        </span>
+                        {selectedOrder.isExtended && selectedOrder.orderType === "rent" && (
+                          <span className="rounded bg-amber-100 px-1 py-0 text-[9px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                            EXTENDED
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div className="space-y-1">
@@ -698,6 +720,12 @@ export const AdminOrders = () => {
                                 {step.label}
                               </p>
                               {isCurrent && <span className="text-[10px] text-muted-foreground font-medium">In Progress / Pending Action</span>}
+                              {!isCurrent && step.key === "active" && selectedOrder.status.trim().toLowerCase() === "active" && selectedOrder.orderType?.toLowerCase() !== "buy" ? (
+                                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Current status</p>
+                              ) : null}
+                              {!isCurrent && step.key === "bought_out" && selectedOrder.status.trim().toLowerCase() === "bought_out" ? (
+                                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Purchased by customer</p>
+                              ) : null}
                             </div>
                           </li>
                         );

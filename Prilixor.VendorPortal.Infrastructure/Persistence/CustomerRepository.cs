@@ -711,6 +711,39 @@ public sealed class CustomerRepository(
         });
     }
 
+    public async Task AddCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken)
+    {
+        await customerDb.CustomerRentalOrderExtensions.AddAsync(extension, cancellationToken);
+    }
+
+    public Task<CustomerRentalOrderExtension?> GetCustomerRentalOrderExtensionByIdAsync(Guid extensionId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerRentalOrderExtensions
+            .FirstOrDefaultAsync(e => e.Id == extensionId && !e.IsDeleted, cancellationToken);
+    }
+
+    public Task UpdateCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerRentalOrderExtensions.Update(extension);
+        return Task.CompletedTask;
+    }
+
+    public async Task AddCustomerRentalOrderBuyoutAsync(CustomerRentalOrderBuyout buyout, CancellationToken cancellationToken)
+    {
+        await customerDb.CustomerRentalOrderBuyouts.AddAsync(buyout, cancellationToken);
+    }
+
+    public Task<CustomerRentalOrderBuyout?> GetCustomerRentalOrderBuyoutByIdAsync(Guid buyoutId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerRentalOrderBuyouts
+            .FirstOrDefaultAsync(b => b.Id == buyoutId && !b.IsDeleted, cancellationToken);
+    }
+
+    public Task UpdateCustomerRentalOrderBuyoutAsync(CustomerRentalOrderBuyout buyout, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerRentalOrderBuyouts.Update(buyout);
+        return Task.CompletedTask;
+    }
 
     public async Task AddCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken)
     {

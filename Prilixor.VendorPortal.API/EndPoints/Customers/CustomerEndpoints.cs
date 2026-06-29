@@ -708,3 +708,152 @@ public sealed class UpdateCustomerNotificationPreferenceEndpoint(IMediator media
     }
 }
 
+public sealed class QuoteExtensionRequest
+{
+    public string OrderId { get; set; } = string.Empty;
+    public int AdditionalDays { get; set; } = 1;
+}
+
+public sealed class QuoteExtensionEndpoint(IMediator mediator)
+    : Endpoint<QuoteExtensionRequest, Results<Ok<ExtensionQuoteDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/orders/{OrderId}/extensions/quote");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<ExtensionQuoteDto>, ProblemHttpResult>> ExecuteAsync(QuoteExtensionRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
+
+        var result = await mediator.Send(new QuoteExtensionCommand(customerId, orderId, req.AdditionalDays), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class ProcessExtensionRequest
+{
+    public string OrderId { get; set; } = string.Empty;
+    public int AdditionalDays { get; set; } = 1;
+    public string PaymentIntentId { get; set; } = string.Empty;
+}
+
+public sealed class ProcessExtensionResponse
+{
+    public Guid ExtensionId { get; init; }
+}
+
+public sealed class ProcessExtensionEndpoint(IMediator mediator)
+    : Endpoint<ProcessExtensionRequest, Results<Ok<ProcessExtensionResponse>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/orders/{OrderId}/extensions");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<ProcessExtensionResponse>, ProblemHttpResult>> ExecuteAsync(ProcessExtensionRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
+
+        if (!Guid.TryParse(req.PaymentIntentId, out var paymentIntentId))
+            paymentIntentId = Guid.NewGuid(); // For this demo, just generate one if missing/invalid
+
+        var result = await mediator.Send(new ProcessExtensionCommand(customerId, orderId, req.AdditionalDays, paymentIntentId), ct);
+        if (!result.IsSuccess)
+            return result.ToErrorResponse();
+
+        return TypedResults.Ok(new ProcessExtensionResponse { ExtensionId = result.Value });
+    }
+}
+
+public sealed class QuoteBuyoutRequest
+{
+    public string OrderId { get; set; } = string.Empty;
+}
+
+public sealed class QuoteBuyoutEndpoint(IMediator mediator)
+    : Endpoint<QuoteBuyoutRequest, Results<Ok<BuyoutQuoteDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/orders/{OrderId}/buyouts/quote");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<BuyoutQuoteDto>, ProblemHttpResult>> ExecuteAsync(QuoteBuyoutRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
+
+        var result = await mediator.Send(new QuoteBuyoutCommand(customerId, orderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class ProcessBuyoutRequest
+{
+    public string OrderId { get; set; } = string.Empty;
+    public string PaymentIntentId { get; set; } = string.Empty;
+}
+
+public sealed class ProcessBuyoutResponse
+{
+    public Guid BuyoutId { get; init; }
+}
+
+public sealed class ProcessBuyoutEndpoint(IMediator mediator)
+    : Endpoint<ProcessBuyoutRequest, Results<Ok<ProcessBuyoutResponse>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/orders/{OrderId}/buyouts");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<ProcessBuyoutResponse>, ProblemHttpResult>> ExecuteAsync(ProcessBuyoutRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
+
+        if (!Guid.TryParse(req.PaymentIntentId, out var paymentIntentId))
+            paymentIntentId = Guid.NewGuid();
+
+        var result = await mediator.Send(new ProcessBuyoutCommand(customerId, orderId, paymentIntentId), ct);
+        if (!result.IsSuccess)
+            return result.ToErrorResponse();
+
+        return TypedResults.Ok(new ProcessBuyoutResponse { BuyoutId = result.Value });
+    }
+}

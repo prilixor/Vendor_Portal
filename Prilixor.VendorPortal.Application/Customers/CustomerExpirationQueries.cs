@@ -197,7 +197,8 @@ public sealed record AdminOrderDto(
     DateTimeOffset CreatedOnUtc,
     DateOnly? StartDate,
     DateOnly? EndDate,
-    string? PrimaryImageUrl);
+    string? PrimaryImageUrl,
+    bool IsExtended);
 
 public sealed record GetAdminAllOrdersQuery() : IQuery<List<AdminOrderDto>>;
 
@@ -228,7 +229,8 @@ internal sealed class GetAdminAllOrdersQueryHandler(
             r.Order.CreatedOnUtc,
             r.Order.StartDate,
             r.Order.EndDate,
-            r.ListingPrimaryImageUrl
+            r.ListingPrimaryImageUrl,
+            r.Order.IsExtended
         )).ToList();
 
         return Result.Success(list);

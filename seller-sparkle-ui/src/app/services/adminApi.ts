@@ -362,6 +362,7 @@ export interface AdminOrderDto {
   startDate?: string | null;
   endDate?: string | null;
   primaryImageUrl?: string | null;
+  isExtended?: boolean;
 }
 
 export interface UpdateAdminOrderStatusRequest {

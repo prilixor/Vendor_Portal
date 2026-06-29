@@ -13,6 +13,8 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerAddress> CustomerAddresses => Set<CustomerAddress>();
     public DbSet<CustomerRentalOrder> CustomerRentalOrders => Set<CustomerRentalOrder>();
+    public DbSet<CustomerRentalOrderExtension> CustomerRentalOrderExtensions => Set<CustomerRentalOrderExtension>();
+    public DbSet<CustomerRentalOrderBuyout> CustomerRentalOrderBuyouts => Set<CustomerRentalOrderBuyout>();
     public DbSet<CustomerRentalOrderAsset> CustomerRentalOrderAssets => Set<CustomerRentalOrderAsset>();
     public DbSet<CustomerOrderVendorOffer> CustomerOrderVendorOffers => Set<CustomerOrderVendorOffer>();
     public DbSet<CustomerNotification> CustomerNotifications => Set<CustomerNotification>();
@@ -115,6 +117,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
             entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.Property(x => x.IsExtended).HasColumnName("is_extended");
             entity.HasOne(x => x.CustomerAddress)
                 .WithMany()
                 .HasForeignKey(x => x.CustomerAddressId)
@@ -122,6 +125,58 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.HasOne(x => x.Customer)
                 .WithMany(x => x.Orders)
                 .HasForeignKey(x => x.CustomerId);
+        });
+
+        modelBuilder.Entity<CustomerRentalOrderExtension>(entity =>
+        {
+            entity.ToTable("customer_rental_order_extensions");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CustomerRentalOrderId).HasColumnName("customer_rental_order_id");
+            entity.Property(x => x.OriginalEndDate).HasColumnName("original_end_date");
+            entity.Property(x => x.NewEndDate).HasColumnName("new_end_date");
+            entity.Property(x => x.AdditionalDays).HasColumnName("additional_days");
+            entity.Property(x => x.ExtensionAmount).HasColumnName("extension_amount");
+            entity.Property(x => x.ServiceFeeAmount).HasColumnName("service_fee_amount");
+            entity.Property(x => x.GstAmount).HasColumnName("gst_amount");
+            entity.Property(x => x.TotalAmount).HasColumnName("total_amount");
+            entity.Property(x => x.Status).HasColumnName("status");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            
+            entity.HasOne(x => x.CustomerRentalOrder)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerRentalOrderId);
+        });
+
+        modelBuilder.Entity<CustomerRentalOrderBuyout>(entity =>
+        {
+            entity.ToTable("customer_rental_order_buyouts");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CustomerRentalOrderId).HasColumnName("customer_rental_order_id");
+            entity.Property(x => x.BaseBuyoutAmount).HasColumnName("base_buyout_amount");
+            entity.Property(x => x.RentDeductionAmount).HasColumnName("rent_deduction_amount");
+            entity.Property(x => x.ServiceFeeAmount).HasColumnName("service_fee_amount");
+            entity.Property(x => x.GstAmount).HasColumnName("gst_amount");
+            entity.Property(x => x.TotalAmount).HasColumnName("total_amount");
+            entity.Property(x => x.Status).HasColumnName("status");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            
+            entity.HasOne(x => x.CustomerRentalOrder)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerRentalOrderId);
         });
 
         modelBuilder.Entity<CustomerOrderVendorOffer>(entity =>

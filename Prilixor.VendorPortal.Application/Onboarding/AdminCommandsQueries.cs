@@ -897,7 +897,8 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
             o.CreatedOnUtc,
             o.StartDate,
             o.EndDate,
-            row.ListingPrimaryImageUrl
+            row.ListingPrimaryImageUrl,
+            o.IsExtended
         ));
     }
 }
@@ -1018,7 +1019,7 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
         return Result.Success(new AdminOrderDto(
             o.Id, o.OrderNumber, o.CustomerId, o.Customer?.FullName ?? "Customer", o.Customer?.Email ?? "customer@example.com",
             (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"), listing?.ListingTitle ?? "Deleted Product",
-            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl
+            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended
         ));
     }
 }
@@ -1071,7 +1072,7 @@ internal sealed class AdminForceCancelRefundOrderCommandHandler(
         return Result.Success(new AdminOrderDto(
             o.Id, o.OrderNumber, o.CustomerId, o.Customer?.FullName ?? "Customer", o.Customer?.Email ?? "customer@example.com",
             (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"), listing?.ListingTitle ?? "Deleted Product",
-            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl
+            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended
         ));
     }
 }
@@ -1220,7 +1221,7 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
         return Result.Success(new AdminOrderDto(
             o.Id, o.OrderNumber, o.CustomerId, o.Customer?.FullName ?? "Customer", o.Customer?.Email ?? "customer@example.com",
             (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"), listing?.ListingTitle ?? "Deleted Product",
-            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl
+            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended
         ));
     }
 }

@@ -11,6 +11,9 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Input } from "@/app/components/ui/input";
 import { toast } from "sonner";
 import { cn } from "@/app/helpers/utils";
+import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Label } from "@/app/components/ui/label";
 
 function orderStatusBadgeClass(status: string): string {
   const s = status.toLowerCase().replace(/_/g, " ");
@@ -187,6 +190,13 @@ const CustomerOrderDetail = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const [extensionDialogOpen, setExtensionDialogOpen] = useState(false);
+  const [extensionDays, setExtensionDays] = useState(1);
+  const [extensionQuote, setExtensionQuote] = useState<ExtensionQuoteApi | null>(null);
+
+  const [buyoutDialogOpen, setBuyoutDialogOpen] = useState(false);
+  const [buyoutQuote, setBuyoutQuote] = useState<BuyoutQuoteApi | null>(null);
+
   // Fetch current selected item details
   const currentItemId = selectedItemId || orderId;
 
@@ -255,6 +265,42 @@ const CustomerOrderDetail = () => {
       setNewMessageText("");
     },
     onError: (err: Error) => toast.error(err.message || "Failed to send message.")
+  });
+
+  const quoteExtensionMut = useMutation({
+    mutationFn: (days: number) => customerApi.quoteExtension(activeItem!.id, days),
+    onSuccess: (data) => setExtensionQuote(data),
+    onError: (err: Error) => toast.error(err.message || "Failed to quote extension.")
+  });
+
+  const processExtensionMut = useMutation({
+    mutationFn: () => customerApi.processExtension(activeItem!.id, extensionDays),
+    onSuccess: () => {
+      toast.success("Rental extended successfully!");
+      setExtensionDialogOpen(false);
+      setExtensionQuote(null);
+      queryClient.invalidateQueries({ queryKey: ["customer-order", activeItem?.id] });
+      queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to process extension.")
+  });
+
+  const quoteBuyoutMut = useMutation({
+    mutationFn: () => customerApi.quoteBuyout(activeItem!.id),
+    onSuccess: (data) => setBuyoutQuote(data),
+    onError: (err: Error) => toast.error(err.message || "Failed to quote buyout.")
+  });
+
+  const processBuyoutMut = useMutation({
+    mutationFn: () => customerApi.processBuyout(activeItem!.id),
+    onSuccess: () => {
+      toast.success("Item purchased successfully!");
+      setBuyoutDialogOpen(false);
+      setBuyoutQuote(null);
+      queryClient.invalidateQueries({ queryKey: ["customer-order", activeItem?.id] });
+      queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to process buyout.")
   });
 
   // Find all items belonging to the same order group prefix
@@ -402,28 +448,43 @@ const CustomerOrderDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Selected Item Rental Details */}
+      {/* Selected Item Details */}
       <Card className="border-border/80 shadow-sm">
         <CardHeader className="pb-4">
-          <p className="text-lg font-semibold">Rental details</p>
+          <p className="text-lg font-semibold">{activeItem.orderType?.toLowerCase() === "buy" ? "Purchase details" : "Rental details"}</p>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Start date</p>
-            <p className="text-sm font-medium tabular-nums">{formatDetailDate(activeItem.startDate)}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">End date</p>
-            <p className="text-sm font-medium tabular-nums">{formatDetailDate(activeItem.endDate)}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantity</p>
-            <p className="text-sm font-medium">{activeItem.quantity}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rental days</p>
-            <p className="text-sm font-medium">{activeItem.rentalDays}</p>
-          </div>
+          {activeItem.orderType?.toLowerCase() === "buy" ? (
+            <>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Purchase date</p>
+                <p className="text-sm font-medium tabular-nums">{formatDetailDate(activeItem.startDate)}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantity</p>
+                <p className="text-sm font-medium">{activeItem.quantity}</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Start date</p>
+                <p className="text-sm font-medium tabular-nums">{formatDetailDate(activeItem.startDate)}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">End date</p>
+                <p className="text-sm font-medium tabular-nums">{formatDetailDate(activeItem.endDate)}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantity</p>
+                <p className="text-sm font-medium">{activeItem.quantity}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rental days</p>
+                <p className="text-sm font-medium">{activeItem.rentalDays}</p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -453,7 +514,152 @@ const CustomerOrderDetail = () => {
             Cancel item request
           </Button>
         )}
+
+        {activeItem.status.trim().toLowerCase() === "active" && activeItem.orderType.toLowerCase() === "rent" && (
+          <>
+            <Button
+              variant="default"
+              onClick={() => {
+                setExtensionDays(1);
+                setExtensionQuote(null);
+                setExtensionDialogOpen(true);
+                quoteExtensionMut.mutate(1);
+              }}
+            >
+              Extend Rental
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setBuyoutQuote(null);
+                setBuyoutDialogOpen(true);
+                quoteBuyoutMut.mutate();
+              }}
+            >
+              Buyout Item
+            </Button>
+          </>
+        )}
       </div>
+
+      <Dialog open={extensionDialogOpen} onOpenChange={setExtensionDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Extend Rental</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Additional Days</Label>
+              <div className="flex items-center gap-4">
+                <Input 
+                  type="number" 
+                  min={1} 
+                  max={365} 
+                  value={extensionDays} 
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 1;
+                    setExtensionDays(val);
+                    quoteExtensionMut.mutate(val);
+                  }}
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">days</span>
+              </div>
+            </div>
+
+            {quoteExtensionMut.isPending ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+            ) : extensionQuote ? (
+              <div className="rounded-lg border bg-muted/50 p-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>New End Date:</span>
+                  <span className="font-semibold">{formatDetailDate(extensionQuote.newEndDate)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Extension Rent:</span>
+                  <span>₹{extensionQuote.extensionAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Service Fee:</span>
+                  <span>₹{extensionQuote.serviceFeeAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>GST:</span>
+                  <span>₹{extensionQuote.gstAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between border-t pt-2 font-bold text-foreground">
+                  <span>Total Amount:</span>
+                  <span>₹{extensionQuote.totalAmount.toFixed(2)}</span>
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExtensionDialogOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => processExtensionMut.mutate()} 
+              disabled={processExtensionMut.isPending || quoteExtensionMut.isPending || !extensionQuote}
+            >
+              {processExtensionMut.isPending ? "Processing..." : "Confirm & Pay"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={buyoutDialogOpen} onOpenChange={setBuyoutDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Buyout Item</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              Love this item? You can purchase it permanently. We'll deduct a portion of the rent you've already paid from the final price.
+            </p>
+
+            {quoteBuyoutMut.isPending ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+            ) : buyoutQuote ? (
+              <div className="rounded-lg border bg-emerald-50/50 p-4 space-y-2 text-sm dark:bg-emerald-950/20">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Base Buyout Price:</span>
+                  <span>₹{buyoutQuote.baseBuyoutAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-medium">
+                  <span>Rent Deduction (50% of paid):</span>
+                  <span>-₹{buyoutQuote.rentDeductionAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Service Fee:</span>
+                  <span>₹{buyoutQuote.serviceFeeAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>GST:</span>
+                  <span>₹{buyoutQuote.gstAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between border-t border-emerald-200 pt-2 font-bold text-foreground dark:border-emerald-800">
+                  <span>Final Price:</span>
+                  <span>₹{buyoutQuote.totalAmount.toFixed(2)}</span>
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBuyoutDialogOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => processBuyoutMut.mutate()} 
+              disabled={processBuyoutMut.isPending || quoteBuyoutMut.isPending || !buyoutQuote}
+            >
+              {processBuyoutMut.isPending ? "Processing..." : "Confirm & Purchase"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Sheet open={isChatOpen} onOpenChange={setIsChatOpen}>
         <SheetContent className="flex flex-col h-full sm:max-w-md p-0">

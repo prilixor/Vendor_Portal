@@ -105,6 +105,23 @@ export interface CustomerOrderApi {
   listingPrimaryImageUrl?: string | null;
 }
 
+export interface ExtensionQuoteApi {
+  additionalDays: number;
+  newEndDate: string;
+  extensionAmount: number;
+  serviceFeeAmount: number;
+  gstAmount: number;
+  totalAmount: number;
+}
+
+export interface BuyoutQuoteApi {
+  baseBuyoutAmount: number;
+  rentDeductionAmount: number;
+  serviceFeeAmount: number;
+  gstAmount: number;
+  totalAmount: number;
+}
+
 export interface CartLinePayload {
   listingId: string;
   quantity: number;
@@ -266,6 +283,26 @@ export const customerApi = {
 
   cancelOrder(orderId: string): Promise<CustomerOrderApi> {
     return apiClient.patch<CustomerOrderApi>(`/customers/me/orders/${encodeURIComponent(orderId)}/cancel`, {});
+  },
+
+  quoteExtension(orderId: string, additionalDays: number): Promise<ExtensionQuoteApi> {
+    return apiClient.post<ExtensionQuoteApi>(`/customers/me/orders/${encodeURIComponent(orderId)}/extensions/quote`, {
+      additionalDays
+    });
+  },
+
+  processExtension(orderId: string, additionalDays: number): Promise<void> {
+    return apiClient.post<void>(`/customers/me/orders/${encodeURIComponent(orderId)}/extensions`, {
+      additionalDays
+    });
+  },
+
+  quoteBuyout(orderId: string): Promise<BuyoutQuoteApi> {
+    return apiClient.post<BuyoutQuoteApi>(`/customers/me/orders/${encodeURIComponent(orderId)}/buyouts/quote`, {});
+  },
+
+  processBuyout(orderId: string): Promise<void> {
+    return apiClient.post<void>(`/customers/me/orders/${encodeURIComponent(orderId)}/buyouts`, {});
   },
 
   getNotifications(): Promise<CustomerNotificationApi[]> {
