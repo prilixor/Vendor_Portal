@@ -89,12 +89,12 @@ function orderStatusBadgeClass(status: string): string {
     return "bg-muted text-muted-foreground";
   }
   if (s.includes("dispatch failed")) {
-    return "bg-destructive/15 text-destructive dark:bg-destructive/20 dark:text-destructive";
+    return "bg-destructive/10 text-destructive border-destructive/20 dark:bg-destructive/20 dark:text-destructive dark:border-destructive/80";
   }
   if (s === "bought out") {
-    return "bg-indigo-600 text-white dark:bg-indigo-600 dark:text-white";
+    return "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-950/40 dark:text-fuchsia-300 dark:border-fuchsia-900";
   }
-  return "bg-muted text-foreground";
+  return "bg-muted text-foreground border-border";
 }
 
 function orderTypeBadgeClass(orderType: string): string {
@@ -576,8 +576,8 @@ export const AdminOrders = () => {
                           <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(item.orderType))} variant="outline">
                             {item.orderType.toUpperCase()}
                           </Badge>
-                          <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderStatusBadgeClass(item.status))} variant="outline">
-                            {item.status.toUpperCase()}
+                          <Badge className={cn("text-[10px] font-semibold py-0.5 px-2 capitalize", orderStatusBadgeClass(item.status))} variant="outline">
+                            {item.status.replace(/_/g, " ")}
                           </Badge>
                         </div>
                         <div className="flex items-center gap-3">
@@ -639,8 +639,8 @@ export const AdminOrders = () => {
                 <DialogHeader>
                   <DialogTitle className="text-xl font-bold flex items-center justify-between pr-6">
                     <span>Order Tracking: {selectedOrder.orderNumber}</span>
-                    <Badge className={cn("text-[10px] font-semibold", orderStatusBadgeClass(selectedOrder.status))} variant="outline">
-                      {selectedOrder.status.toUpperCase()}
+                    <Badge className={cn("text-[10px] font-semibold capitalize", orderStatusBadgeClass(selectedOrder.status))} variant="outline">
+                      {selectedOrder.status.replace(/_/g, " ")}
                     </Badge>
                   </DialogTitle>
                   <DialogDescription>

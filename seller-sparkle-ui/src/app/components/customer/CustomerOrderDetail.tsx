@@ -38,6 +38,9 @@ function orderStatusBadgeClass(status: string): string {
   if (s.includes("dispatch failed")) {
     return "bg-destructive/15 text-destructive dark:bg-destructive/20 dark:text-destructive";
   }
+  if (s === "bought out") {
+    return "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-200";
+  }
   return "bg-muted text-foreground";
 }
 
@@ -416,11 +419,11 @@ const CustomerOrderDetail = () => {
                 <div className="flex items-center justify-between sm:justify-end gap-4 mt-3 sm:mt-0">
                   <span
                     className={cn(
-                      "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium",
+                      "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
                       orderStatusBadgeClass(item.status),
                     )}
                   >
-                    {item.status}
+                    {item.status.replace(/_/g, " ")}
                   </span>
                   <span className="font-semibold tabular-nums text-xs sm:w-16 sm:text-right">₹{item.totalAmount.toFixed(0)}</span>
                 </div>

@@ -65,6 +65,9 @@ function orderStatusBadgeClass(status: string): string {
   if (s.includes("dispatch failed")) {
     return "bg-destructive/15 text-destructive dark:bg-destructive/20 dark:text-destructive";
   }
+  if (s === "bought out") {
+    return "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-200";
+  }
   return "bg-muted text-foreground";
 }
 
@@ -340,7 +343,7 @@ const CustomerOrders = () => {
                               <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(o.orderType))} variant="outline">
                                 {o.orderType.toUpperCase()}
                               </Badge>
-                              <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderStatusBadgeClass(o.status))} variant="outline">
+                              <Badge className={cn("text-[10px] font-semibold py-0.5 px-2 capitalize", orderStatusBadgeClass(o.status))} variant="outline">
                                 {o.status.replace(/_/g, " ")}
                               </Badge>
                             </div>

@@ -58,6 +58,35 @@ function timelineProgress(status: string, orderType?: string): { completedThroug
   return { completedThrough: 0, currentIndex: 1 };
 }
 
+function orderStatusBadgeClass(status: string): string {
+  const s = status.toLowerCase().replace(/_/g, " ");
+  if (s === "pending" || s.includes("awaiting")) {
+    return "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200";
+  }
+  if (s === "confirmed") {
+    return "bg-sky-100 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200";
+  }
+  if (s.includes("transit")) {
+    return "bg-violet-100 text-violet-900 dark:bg-violet-950/40 dark:text-violet-200";
+  }
+  if (s === "active") {
+    return "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200";
+  }
+  if (s === "returned") {
+    return "bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-200";
+  }
+  if (s === "cancelled" || s === "canceled") {
+    return "bg-muted text-muted-foreground";
+  }
+  if (s.includes("dispatch failed")) {
+    return "bg-destructive/15 text-destructive dark:bg-destructive/20 dark:text-destructive";
+  }
+  if (s === "bought out") {
+    return "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-200";
+  }
+  return "bg-muted text-foreground";
+}
+
 function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
   const { completedThrough, currentIndex } = timelineProgress(status, orderType);
   const steps = getTimelineSteps(orderType);
@@ -232,8 +261,8 @@ const VendorOrderDetail = () => {
                       {order.listingTitle} · Qty {order.quantity}
                     </p>
                   </div>
-                  <span className="inline-flex shrink-0 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 sm:text-sm dark:bg-emerald-950/40 dark:text-emerald-300">
-                    {order.status}
+                  <span className={cn("inline-flex shrink-0 rounded-full px-3 py-1 text-xs font-semibold sm:text-sm capitalize", orderStatusBadgeClass(order.status))}>
+                    {order.status.replace(/_/g, " ")}
                   </span>
                 </div>
               </div>
