@@ -66,7 +66,7 @@ function orderStatusBadgeClass(status: string): string {
     return "bg-destructive/15 text-destructive dark:bg-destructive/20 dark:text-destructive";
   }
   if (s === "bought out") {
-    return "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-200";
+    return "bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white font-medium shadow-sm border-0 dark:from-fuchsia-600 dark:to-purple-700";
   }
   return "bg-muted text-foreground";
 }

@@ -579,4 +579,30 @@ export const adminApi = {
   async restartOrderDispatch(data: AdminRestartOrderDispatchRequest): Promise<AdminOrderDto> {
     return apiClient.post<AdminOrderDto>(`/admin/orders/${data.orderId}/restart-dispatch`, data);
   },
+
+  async getAdminOrderContinuations(orderId: string): Promise<import('./vendorOnboardingApi').OrderContinuationsDto> {
+    return apiClient.get<import('./vendorOnboardingApi').OrderContinuationsDto>(`/admin/orders/${orderId}/continuations`);
+  },
+
+  async getAdminAllPendingContinuations(): Promise<any[]> {
+    return apiClient.get<any[]>(`/admin/orders/continuations/pending`);
+  },
+
+  async approveAdminExtension(orderId: string, extensionId: string, adminUserId: string, overrides?: any): Promise<void> {
+    const payload = { adminUserId, ...overrides };
+    return apiClient.post(`/admin/orders/${orderId}/extensions/${extensionId}/approve`, payload);
+  },
+
+  async cancelAdminExtension(orderId: string, extensionId: string, adminUserId: string): Promise<void> {
+    return apiClient.post(`/admin/orders/${orderId}/extensions/${extensionId}/cancel`, { adminUserId });
+  },
+
+  async approveAdminBuyout(orderId: string, buyoutId: string, adminUserId: string, overrides?: any): Promise<void> {
+    const payload = { adminUserId, ...overrides };
+    return apiClient.post(`/admin/orders/${orderId}/buyouts/${buyoutId}/approve`, payload);
+  },
+
+  async cancelAdminBuyout(orderId: string, buyoutId: string, adminUserId: string): Promise<void> {
+    return apiClient.post(`/admin/orders/${orderId}/buyouts/${buyoutId}/cancel`, { adminUserId });
+  },
 };

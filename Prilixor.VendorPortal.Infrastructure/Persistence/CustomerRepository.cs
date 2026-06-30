@@ -1058,7 +1058,8 @@ public sealed class CustomerRepository(
                 listing.ListingTitle,
                 order.Status,
                 order.OrderType,
-                order.EndDate.Value));
+                order.EndDate.Value,
+                order.EndDate.Value.DayNumber - DateOnly.FromDateTime(DateTime.UtcNow).DayNumber));
         }
 
         return result;
@@ -1303,6 +1304,81 @@ public sealed class CustomerRepository(
                            && !o.IsDeleted, 
                        cancellationToken);
     }
+
+    public Task<List<CustomerRentalOrderExtension>> GetPendingCustomerRentalOrderExtensionsAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerRentalOrderExtensions
+            .Where(x => x.CustomerRentalOrderId == orderId && !x.IsDeleted && x.Status == "pending_approval")
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<List<CustomerRentalOrderBuyout>> GetPendingCustomerRentalOrderBuyoutsAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerRentalOrderBuyouts
+            .Where(x => x.CustomerRentalOrderId == orderId && !x.IsDeleted && x.Status == "pending_approval")
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<PendingContinuationAggregate>> GetAllPendingContinuationsForAdminAsync(CancellationToken cancellationToken)
+    {
+        var extensions = await customerDb.CustomerRentalOrderExtensions
+            .AsNoTracking()
+            .Include(x => x.CustomerRentalOrder)
+                .ThenInclude(o => o.Customer)
+            .Where(x => !x.IsDeleted && x.Status == "pending_approval")
+            .ToListAsync(cancellationToken);
+
+        var buyouts = await customerDb.CustomerRentalOrderBuyouts
+            .AsNoTracking()
+            .Include(x => x.CustomerRentalOrder)
+                .ThenInclude(o => o.Customer)
+            .Where(x => !x.IsDeleted && x.Status == "pending_approval")
+            .ToListAsync(cancellationToken);
+
+        var listingIds = extensions.Select(x => x.CustomerRentalOrder.VendorProductListingId)
+            .Union(buyouts.Select(x => x.CustomerRentalOrder.VendorProductListingId))
+            .Distinct()
+            .ToList();
+
+        var map = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
+        var result = new List<PendingContinuationAggregate>();
+
+        foreach (var e in extensions)
+        {
+            var listing = map.GetValueOrDefault(e.CustomerRentalOrder.VendorProductListingId);
+            result.Add(new PendingContinuationAggregate(
+                e.Id,
+                e.CustomerRentalOrderId,
+                e.CustomerRentalOrder.OrderNumber,
+                e.CustomerRentalOrder.Customer?.FullName ?? "Customer",
+                listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor",
+                listing?.ListingTitle ?? "Deleted Product",
+                e.TotalAmount,
+                e.CreatedOnUtc,
+                "extension"
+            ));
+        }
+
+        foreach (var b in buyouts)
+        {
+            var listing = map.GetValueOrDefault(b.CustomerRentalOrder.VendorProductListingId);
+            result.Add(new PendingContinuationAggregate(
+                b.Id,
+                b.CustomerRentalOrderId,
+                b.CustomerRentalOrder.OrderNumber,
+                b.CustomerRentalOrder.Customer?.FullName ?? "Customer",
+                listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor",
+                listing?.ListingTitle ?? "Deleted Product",
+                b.TotalAmount,
+                b.CreatedOnUtc,
+                "buyout"
+            ));
+        }
+
+        return result.OrderByDescending(x => x.CreatedOnUtc).ToList();
+    }
 }
+
+
 
 

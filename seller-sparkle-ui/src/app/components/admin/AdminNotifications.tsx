@@ -79,16 +79,23 @@ export const AdminNotifications = () => {
     refetchInterval: 30000,
   });
 
-  const isLoading = isLoadingOrders || isLoadingVendors || isLoadingLogs;
-  const isFetching = isFetchingOrders || isFetchingVendors || isFetchingLogs;
+  // Fetch all pending continuations (extensions & buyouts) globally
+  const { data: pendingContinuations = [], isLoading: isLoadingContinuations, refetch: refetchContinuations, isFetching: isFetchingContinuations } = useQuery({
+    queryKey: ["admin-all-pending-continuations"],
+    queryFn: () => adminApi.getAdminAllPendingContinuations(),
+    refetchInterval: 30000,
+  });
+
+  const isLoading = isLoadingOrders || isLoadingVendors || isLoadingLogs || isLoadingContinuations;
+  const isFetching = isFetchingOrders || isFetchingVendors || isFetchingLogs || isFetchingContinuations;
 
   const handleRefreshAll = async () => {
-    await Promise.all([refetchOrders(), refetchVendors(), refetchLogs()]);
+    await Promise.all([refetchOrders(), refetchVendors(), refetchLogs(), refetchContinuations()]);
   };
 
   // Process dispatch failed and critical alerts
   const criticalOrders = useMemo(() => {
-    return orders
+    const list = orders
       .filter((o) => {
         const s = o.status.toLowerCase().replace(/_/g, " ");
         return s.includes("dispatch failed") || s.includes("cancelled");
@@ -107,9 +114,49 @@ export const AdminNotifications = () => {
           amount: o.totalAmount,
         },
         link: "/admin/orders?tab=dispatch_failed",
-      }))
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [orders]);
+      }));
+
+    // Add extensions/buyouts alerts
+    pendingContinuations.forEach(cont => {
+      if (cont.type === "extension") {
+        list.push({
+          id: `ext-${cont.extensionId}`,
+          type: "extension" as any,
+          title: `Extension Requested: Order ${cont.orderNumber.split("-").slice(0,3).join("-")}`,
+          description: `Customer requested an extension. Requires admin review.`,
+          status: "pending_extension",
+          timestamp: cont.createdOnUtc,
+          meta: {
+            listingTitle: cont.listingTitle,
+            customerName: cont.customerName,
+            vendorName: cont.vendorName,
+            amount: cont.totalAmount,
+            orderId: cont.orderId,
+          },
+          link: `/admin/orders`,
+        });
+      } else if (cont.type === "buyout") {
+        list.push({
+          id: `buy-${cont.extensionId}`,
+          type: "buyout" as any,
+          title: `Buyout Requested: Order ${cont.orderNumber.split("-").slice(0,3).join("-")}`,
+          description: `Customer requested to buyout the rented item. Requires admin review.`,
+          status: "pending_buyout",
+          timestamp: cont.createdOnUtc,
+          meta: {
+            listingTitle: cont.listingTitle,
+            customerName: cont.customerName,
+            vendorName: cont.vendorName,
+            amount: cont.totalAmount,
+            orderId: cont.orderId,
+          },
+          link: `/admin/orders`,
+        });
+      }
+    });
+
+    return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [orders, pendingContinuations]);
 
   // Process pending vendor verification alerts
   const pendingVendors = useMemo(() => {
@@ -216,7 +263,7 @@ export const AdminNotifications = () => {
             All Alerts ({counts.all})
           </TabsTrigger>
           <TabsTrigger value="orders" className="text-xs">
-            Dispatch/Order Failures ({counts.orders})
+            Order Alerts ({counts.orders})
           </TabsTrigger>
           <TabsTrigger value="vendors" className="text-xs">
             Pending Onboarding ({counts.vendors})
@@ -378,7 +425,7 @@ const AlertCard = ({
 }: {
   alert: {
     id: string;
-    type: "order" | "vendor";
+    type: "order" | "vendor" | "extension" | "buyout";
     title: string;
     description: string;
     status: string;
@@ -393,9 +440,15 @@ const AlertCard = ({
       <div className="flex items-start gap-4">
         <div className={cn(
           "rounded-lg p-2.5 shrink-0 mt-0.5",
-          alert.type === "order" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-500"
+          alert.type === "order" ? "bg-destructive/10 text-destructive" 
+          : alert.type === "extension" ? "bg-blue-500/10 text-blue-500"
+          : alert.type === "buyout" ? "bg-fuchsia-500/10 text-fuchsia-500"
+          : "bg-amber-500/10 text-amber-500"
         )}>
-          {alert.type === "order" ? <AlertTriangle className="h-5 w-5" /> : <Building className="h-5 w-5" />}
+          {alert.type === "order" ? <AlertTriangle className="h-5 w-5" /> 
+           : alert.type === "extension" ? <Clock className="h-5 w-5" />
+           : alert.type === "buyout" ? <Package className="h-5 w-5" />
+           : <Building className="h-5 w-5" />}
         </div>
         <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -404,16 +457,20 @@ const AlertCard = ({
               "text-[10px] font-semibold uppercase tracking-wider py-0 px-2",
               alert.type === "order"
                 ? "bg-destructive/15 text-destructive border-destructive/20"
+                : alert.type === "extension"
+                ? "bg-blue-100 text-blue-800 border-blue-500/20 dark:bg-blue-900/30 dark:text-blue-300"
+                : alert.type === "buyout"
+                ? "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-500/20 dark:bg-fuchsia-900/30 dark:text-fuchsia-300"
                 : "bg-amber-100 text-amber-950 border-amber-500/20"
             )}>
-              {alert.status.toUpperCase()}
+              {alert.status.replace("_", " ").toUpperCase()}
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">{alert.description}</p>
           
           {/* Metadata chips */}
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-muted-foreground pt-1.5">
-            {alert.type === "order" ? (
+            {alert.type === "order" || alert.type === "extension" || alert.type === "buyout" ? (
               <>
                 <p>Listing: <span className="text-foreground">{alert.meta.listingTitle}</span></p>
                 <p>Customer: <span className="text-foreground">{alert.meta.customerName}</span></p>
@@ -432,7 +489,13 @@ const AlertCard = ({
       </div>
 
       <div className="flex justify-end shrink-0 pt-3 md:pt-0 border-t border-border/20 md:border-none">
-        <Button size="sm" className="w-full md:w-auto h-9 font-semibold text-xs bg-foreground text-background hover:bg-foreground/90 transition-colors" onClick={() => navigate(alert.link)}>
+        <Button size="sm" className="w-full md:w-auto h-9 font-semibold text-xs bg-foreground text-background hover:bg-foreground/90 transition-colors" onClick={() => {
+          if (alert.type === "extension" || alert.type === "buyout") {
+            navigate(alert.link, { state: { openOrderId: alert.meta.orderId } });
+          } else {
+            navigate(alert.link);
+          }
+        }}>
           Resolve Action
           <ChevronRight className="ml-1 h-3.5 w-3.5" />
         </Button>

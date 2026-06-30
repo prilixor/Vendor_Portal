@@ -72,18 +72,18 @@ internal sealed class QuoteExtensionCommandHandler(
     }
 }
 
-public sealed record ProcessExtensionCommand(Guid CustomerId, Guid OrderId, int AdditionalDays, Guid PaymentIntentId) : ICommand<Guid>;
+public sealed record RequestExtensionCommand(Guid CustomerId, Guid OrderId, int AdditionalDays) : ICommand<Guid>;
 
-internal sealed class ProcessExtensionCommandHandler(
+internal sealed class RequestExtensionCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
     IOptions<CustomerPricingOptions> pricingOptions,
     IMediator mediator)
-    : ICommandHandler<ProcessExtensionCommand, Guid>
+    : ICommandHandler<RequestExtensionCommand, Guid>
 {
     private readonly CustomerPricingOptions options = pricingOptions.Value;
 
-    public async Task<Result<Guid>> Handle(ProcessExtensionCommand request, CancellationToken cancellationToken)
+    public async Task<Result<Guid>> Handle(RequestExtensionCommand request, CancellationToken cancellationToken)
     {
         var row = await customers.GetCustomerOrderAsync(request.CustomerId, request.OrderId, cancellationToken);
         if (row is null || row.Order.IsDeleted)
@@ -103,8 +103,8 @@ internal sealed class ProcessExtensionCommandHandler(
         if (request.AdditionalDays <= 0)
             return Result.Failure<Guid>(new Error("customers.order.invalid_extension_days", "Additional days must be greater than zero.", ErrorCategory.Validation));
 
-        // In a real application, verify PaymentIntentId here before continuing.
-        
+        // In cash flow, no upfront payment intent check is required
+
         var extensionAmount = listingAggregate.DailyRent * order.Quantity * request.AdditionalDays;
         var serviceFeeAmount = options.ExtensionServiceFee;
         var subtotalForGst = extensionAmount + serviceFeeAmount;
@@ -124,31 +124,20 @@ internal sealed class ProcessExtensionCommandHandler(
             ServiceFeeAmount = serviceFeeAmount,
             GstAmount = gstAmount,
             TotalAmount = totalAmount,
-            Status = "paid"
+            Status = "pending_approval"
         };
         
         await customers.AddCustomerRentalOrderExtensionAsync(extension, cancellationToken);
-
-        // Update the original order's end date and financial totals
-        order.EndDate = newEndDate;
-        order.RentalDays += request.AdditionalDays;
-        order.SubtotalAmount += extensionAmount;
-        order.ServiceFeeAmount += serviceFeeAmount;
-        order.GstAmount += gstAmount;
-        order.TotalAmount += totalAmount;
-        order.IsExtended = true;
-
-        await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
         
         // Notify the vendor
         var vendorNotificationCommand = new CreateVendorNotificationCommand(
             listingAggregate.VendorId.ToString(),
-            "rental_extended",
-            "Rental Extended",
-            $"The rental period for order {order.OrderNumber} ({listingAggregate.ListingTitle}) has been extended by {request.AdditionalDays} days. New end date: {newEndDate.ToString("yyyy-MM-dd")}",
+            "order_extension_requested",
+            "Extension Requested",
+            $"The customer has requested to extend the rental period for order {order.OrderNumber} ({listingAggregate.ListingTitle}) by {request.AdditionalDays} days. Please review and approve this request. [ID: {order.Id}]",
             "push",
-            "sent"
+            "pending"
         );
         await mediator.Send(vendorNotificationCommand, cancellationToken);
         
@@ -220,18 +209,18 @@ internal sealed class QuoteBuyoutCommandHandler(
     }
 }
 
-public sealed record ProcessBuyoutCommand(Guid CustomerId, Guid OrderId, Guid PaymentIntentId) : ICommand<Guid>;
+public sealed record RequestBuyoutCommand(Guid CustomerId, Guid OrderId) : ICommand<Guid>;
 
-internal sealed class ProcessBuyoutCommandHandler(
+internal sealed class RequestBuyoutCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
     IOptions<CustomerPricingOptions> pricingOptions,
     IMediator mediator)
-    : ICommandHandler<ProcessBuyoutCommand, Guid>
+    : ICommandHandler<RequestBuyoutCommand, Guid>
 {
     private readonly CustomerPricingOptions options = pricingOptions.Value;
 
-    public async Task<Result<Guid>> Handle(ProcessBuyoutCommand request, CancellationToken cancellationToken)
+    public async Task<Result<Guid>> Handle(RequestBuyoutCommand request, CancellationToken cancellationToken)
     {
         var row = await customers.GetCustomerOrderAsync(request.CustomerId, request.OrderId, cancellationToken);
         if (row is null || row.Order.IsDeleted)
@@ -251,7 +240,7 @@ internal sealed class ProcessBuyoutCommandHandler(
         if (!listingAggregate.IsBuyEnabled || listingAggregate.BuyPrice is null or <= 0)
             return Result.Failure<Guid>(new Error("customers.order.buyout_not_allowed", "This product is not available for buyout.", ErrorCategory.Validation));
 
-        // In a real application, verify PaymentIntentId here before continuing.
+        // In cash flow, no upfront payment intent check is required
         
         var baseBuyoutAmount = listingAggregate.BuyPrice.Value * order.Quantity;
         var rentDeductionAmount = order.SubtotalAmount * (options.BuyoutRentDeductionPercentage / 100m);
@@ -271,75 +260,70 @@ internal sealed class ProcessBuyoutCommandHandler(
             ServiceFeeAmount = serviceFeeAmount,
             GstAmount = gstAmount,
             TotalAmount = totalAmount,
-            Status = "paid"
+            Status = "pending_approval"
         };
         
         await customers.AddCustomerRentalOrderBuyoutAsync(buyout, cancellationToken);
-
-        // Update the order status and financial totals
-        order.Status = "bought_out";
-        order.SubtotalAmount += netBuyoutAmount;
-        order.ServiceFeeAmount += serviceFeeAmount;
-        order.GstAmount += gstAmount;
-        order.TotalAmount += totalAmount;
-
-        await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
-        
-        // We also need to remove these items from Vendor Inventory tracking.
-        var inventory = await vendors.GetVendorInventoryByListingIdAsync(order.VendorProductListingId, cancellationToken);
-        if (inventory is not null)
-        {
-            // Because they are bought out, they are permanently removed from TotalQuantity 
-            // and we remove them from RentedQuantity since they are no longer rented.
-            inventory.TotalQuantity = Math.Max(0, inventory.TotalQuantity - order.Quantity);
-            inventory.RentedQuantity = Math.Max(0, inventory.RentedQuantity - order.Quantity);
-            
-            await vendors.UpsertVendorInventoryAsync(inventory, cancellationToken);
-            await vendors.AddVendorInventoryMovementAsync(
-                new VendorInventoryMovement
-                {
-                    VendorInventoryId = inventory.Id,
-                    MovementType = "stock_removed", // Treated as stock removed since it's bought out
-                    Quantity = order.Quantity,
-                    ReferenceType = "customer_rental_order_buyout",
-                    ReferenceId = buyout.Id,
-                    Notes = $"Order {order.OrderNumber} bought out by customer",
-                    EventAt = DateTimeOffset.UtcNow,
-                },
-                cancellationToken);
-        }
-        else
-        {
-            // If inventory not tracked, we might not need to do anything, 
-            // as available quantity was already decremented when the order was confirmed.
-        }
-        
-        // Update asset statuses to 'sold' if they are tracked individually
-        var assignedAssets = await customers.GetCustomerRentalOrderAssetsAsync(order.Id, cancellationToken);
-        foreach (var orderAsset in assignedAssets)
-        {
-            var asset = await vendors.GetVendorProductAssetByIdAsync(orderAsset.VendorProductAssetId, cancellationToken);
-            if (asset is not null)
-            {
-                asset.Status = "sold";
-                await vendors.UpdateVendorProductAssetAsync(asset, cancellationToken);
-            }
-        }
-        
         await customers.SaveChangesAsync(cancellationToken);
-        await vendors.SaveChangesAsync(cancellationToken);
         
         // Notify the vendor
         var vendorNotificationCommand = new CreateVendorNotificationCommand(
             listingAggregate.VendorId.ToString(),
-            "rental_bought_out",
-            "Item Purchased",
-            $"The customer has purchased the rented item for order {order.OrderNumber} ({listingAggregate.ListingTitle}). You do not need to retrieve it.",
+            "order_buyout_requested",
+            "Buyout Requested",
+            $"The customer has requested to purchase the rented item for order {order.OrderNumber} ({listingAggregate.ListingTitle}). Please review and approve this request. [ID: {order.Id}]",
             "push",
-            "sent"
+            "pending"
         );
         await mediator.Send(vendorNotificationCommand, cancellationToken);
         
         return Result.Success(buyout.Id);
     }
 }
+public sealed record OrderContinuationsDto(
+    List<PendingExtensionDto> PendingExtensions,
+    List<PendingBuyoutDto> PendingBuyouts);
+
+public sealed record PendingExtensionDto(
+    Guid ExtensionId,
+    Guid OrderId,
+    int AdditionalDays,
+    decimal ExtensionAmount,
+    decimal ServiceFeeAmount,
+    decimal GstAmount,
+    decimal TotalAmount,
+    DateOnly OriginalEndDate,
+    DateOnly NewEndDate,
+    DateTime CreatedAtUtc);
+
+public sealed record PendingBuyoutDto(
+    Guid BuyoutId,
+    Guid OrderId,
+    decimal BaseBuyoutAmount,
+    decimal RentDeductionAmount,
+    decimal ServiceFeeAmount,
+    decimal GstAmount,
+    decimal TotalAmount,
+    DateTime CreatedAtUtc);
+
+public sealed record GetOrderContinuationsQuery(Guid OrderId) : IQuery<OrderContinuationsDto>;
+
+internal sealed class GetOrderContinuationsQueryHandler(ICustomerRepository customers)
+    : IQueryHandler<GetOrderContinuationsQuery, OrderContinuationsDto>
+{
+    public async Task<Result<OrderContinuationsDto>> Handle(GetOrderContinuationsQuery request, CancellationToken cancellationToken)
+    {
+        var extensions = await customers.GetPendingCustomerRentalOrderExtensionsAsync(request.OrderId, cancellationToken);
+        var buyouts = await customers.GetPendingCustomerRentalOrderBuyoutsAsync(request.OrderId, cancellationToken);
+
+        var extensionsDto = extensions.Select(e => new PendingExtensionDto(
+            e.Id, e.CustomerRentalOrderId, e.AdditionalDays, e.ExtensionAmount, e.ServiceFeeAmount, e.GstAmount, e.TotalAmount, e.OriginalEndDate, e.NewEndDate, e.CreatedOnUtc)).ToList();
+
+        var buyoutsDto = buyouts.Select(b => new PendingBuyoutDto(
+            b.Id, b.CustomerRentalOrderId, b.BaseBuyoutAmount, b.RentDeductionAmount, b.ServiceFeeAmount, b.GstAmount, b.TotalAmount, b.CreatedOnUtc)).ToList();
+
+        return Result.Success(new OrderContinuationsDto(extensionsDto, buyoutsDto));
+    }
+}
+
+

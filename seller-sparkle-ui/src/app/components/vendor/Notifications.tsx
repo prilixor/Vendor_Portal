@@ -271,7 +271,16 @@ const Notifications = () => {
                     if (!n.read) {
                       void toggleRead(n.id);
                     }
-                    const route = getVendorRoute(n.notificationType, n.title);
+                    let route = getVendorRoute(n.notificationType, n.title);
+                    
+                    // Try to extract order ID from message
+                    const uuidRegex = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+                    const match = n.message.match(uuidRegex);
+                    
+                    if (route === "/vendor/orders" && match) {
+                      route = `/vendor/orders/${match[1]}`;
+                    }
+
                     if (route) {
                       navigate(route);
                     }
@@ -285,7 +294,9 @@ const Notifications = () => {
                       <p className="font-semibold text-sm">{n.title}</p>
                       {!n.read && <span className="h-2 w-2 rounded-full bg-primary" />}
                     </div>
-                    <p className="mt-0.5 text-sm text-muted-foreground">{n.message}</p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">
+                      {n.message.replace(/\s*\[?ID:\s*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\]?/i, "")}
+                    </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
                     </p>
