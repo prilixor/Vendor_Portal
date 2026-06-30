@@ -24,6 +24,7 @@ const statusTabs = [
   { id: "returned", label: "Returned" },
   { id: "cancelled", label: "Cancelled" },
   { id: "dispatch_failed", label: "Dispatch Failed" },
+  { id: "bought_out", label: "Bought Out" },
 ] as const;
 
 function matchesVendorStatus(status: string, tabId: (typeof statusTabs)[number]["id"]): boolean {
@@ -32,6 +33,7 @@ function matchesVendorStatus(status: string, tabId: (typeof statusTabs)[number][
   if (tabId === "awaiting_vendor_acceptance") return s === "awaiting vendor acceptance";
   if (tabId === "in_transit") return s.includes("transit");
   if (tabId === "dispatch_failed") return s === "dispatch failed";
+  if (tabId === "bought_out") return s === "bought out";
   if (tabId === "cancelled") return s === "cancelled" || s === "canceled";
   return s === tabId.replace(/_/g, " ");
 }
@@ -221,7 +223,9 @@ const VendorOrders = () => {
           }}
         >
           <TabsList className="mb-4 h-auto w-full flex-wrap justify-start">
-            {statusTabs.map((tab) => (
+            {statusTabs
+              .filter(tab => tab.id !== "bought_out" || (statusCounts[tab.id] ?? 0) > 0)
+              .map((tab) => (
               <TabsTrigger key={tab.id} value={tab.id}>
                 {tab.label} ({statusCounts[tab.id] ?? 0})
               </TabsTrigger>

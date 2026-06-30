@@ -610,11 +610,13 @@ export const AdminOrders = () => {
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
           <TabsList className="mb-6 h-auto w-full flex-wrap justify-start bg-muted/40 p-1">
-            {statusTabs.map((tab) => (
-              <TabsTrigger key={tab.id} value={tab.id} className="text-xs">
-                {tab.label} ({statusCounts[tab.id] ?? 0})
-              </TabsTrigger>
-            ))}
+            {statusTabs
+              .filter(tab => tab.id !== "bought_out" || (statusCounts[tab.id] ?? 0) > 0)
+              .map((tab) => (
+                <TabsTrigger key={tab.id} value={tab.id} className="text-xs">
+                  {tab.label} ({statusCounts[tab.id] ?? 0})
+                </TabsTrigger>
+              ))}
           </TabsList>
         </Tabs>
 
@@ -954,32 +956,37 @@ export const AdminOrders = () => {
                     </TooltipProvider>
                   )}
 
-                  <div className="flex flex-col sm:flex-row sm:items-end gap-4 bg-accent/20 p-4 rounded-lg border border-border/40">
-                    <div className="flex-1">
-                      <p className="text-xs font-semibold text-muted-foreground mb-1">Force Status Update</p>
-                      <Select value={statusUpdateLocal} onValueChange={setStatusUpdateLocal}>
-                        <SelectTrigger className="w-[180px] h-8 text-xs bg-background">
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {statusTabs
-                            .filter(t => t.id !== "all" && getAvailableStatuses(selectedOrder.status, selectedOrder.orderType).includes(t.id))
-                            .map(t => (
-                            <SelectItem key={t.id} value={t.id} className="text-xs">
-                              {t.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button 
-                      size="sm" 
-                      onClick={() => updateStatusMutation.mutate(statusUpdateLocal)}
-                      disabled={!statusUpdateLocal || statusUpdateLocal === selectedOrder.status || updateStatusMutation.isPending}
-                    >
-                      {updateStatusMutation.isPending ? "Updating..." : "Update Status"}
-                    </Button>
-                  </div>
+                  {(() => {
+                    const hasPendingContinuations = !!continuations && (continuations.pendingExtensions.length > 0 || continuations.pendingBuyouts.length > 0);
+                    return (
+                      <div className={cn("flex flex-col sm:flex-row sm:items-end gap-4 p-4 rounded-lg border", hasPendingContinuations ? "bg-muted/50 border-border/20 opacity-60" : "bg-accent/20 border-border/40")}>
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold text-muted-foreground mb-1">Force Status Update</p>
+                          <Select value={statusUpdateLocal} onValueChange={setStatusUpdateLocal} disabled={hasPendingContinuations}>
+                            <SelectTrigger className="w-[180px] h-8 text-xs bg-background">
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {statusTabs
+                                .filter(t => t.id !== "all" && getAvailableStatuses(selectedOrder.status, selectedOrder.orderType).includes(t.id))
+                                .map(t => (
+                                <SelectItem key={t.id} value={t.id} className="text-xs">
+                                  {t.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          onClick={() => updateStatusMutation.mutate(statusUpdateLocal)}
+                          disabled={hasPendingContinuations || !statusUpdateLocal || statusUpdateLocal === selectedOrder.status || updateStatusMutation.isPending}
+                        >
+                          {updateStatusMutation.isPending ? "Updating..." : "Update Status"}
+                        </Button>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </>
