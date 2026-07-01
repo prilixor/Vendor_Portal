@@ -258,7 +258,7 @@ export const AdminNotifications = () => {
       />
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="h-auto w-full flex-wrap justify-start bg-muted/40 p-1 mb-6">
+        <TabsList className="h-auto w-full flex-nowrap overflow-x-auto justify-start bg-muted/40 p-1 mb-6">
           <TabsTrigger value="all" className="text-xs">
             All Alerts ({counts.all})
           </TabsTrigger>

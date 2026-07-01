@@ -540,7 +540,7 @@ const Verification = () => {
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search vendors…" className="pl-9" />
           </div>
           <Tabs value={filter} onValueChange={handleFilterChange}>
-            <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-lg p-1">
+            <TabsList className="h-auto w-full flex-nowrap justify-start overflow-x-auto rounded-lg p-1">
               <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="pending">Pending</TabsTrigger>
               <TabsTrigger value="active">Active</TabsTrigger>

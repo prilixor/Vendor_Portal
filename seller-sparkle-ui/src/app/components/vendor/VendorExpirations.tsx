@@ -52,7 +52,7 @@ const VendorExpirations = () => {
         title="Expirations"
         description="Track rentals nearing end date for timely returns and follow-up."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant={withinDays === 7 ? "default" : "outline"} onClick={() => setWithinDays(7)}>7 days</Button>
             <Button variant={withinDays === 15 ? "default" : "outline"} onClick={() => setWithinDays(15)}>15 days</Button>
             <Button variant={withinDays === 30 ? "default" : "outline"} onClick={() => setWithinDays(30)}>30 days</Button>
@@ -114,7 +114,7 @@ const VendorExpirations = () => {
                               <span>Ends on <strong className="text-foreground font-medium">{formatEndDate(row.endDate)}</strong></span>
                             </div>
                           </div>
-                          <Badge variant={resolveDaysLeft(row) <= 1 ? "destructive" : "secondary"}>
+                          <Badge className="w-fit mt-1 sm:mt-0" variant={resolveDaysLeft(row) <= 1 ? "destructive" : "secondary"}>
                             {resolveDaysLeft(row) <= 0 ? "Due today" : `${resolveDaysLeft(row)} day(s) left`}
                           </Badge>
                         </div>
