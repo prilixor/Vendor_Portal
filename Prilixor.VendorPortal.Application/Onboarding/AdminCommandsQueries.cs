@@ -1225,3 +1225,41 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
         ));
     }
 }
+
+public sealed record AdminPendingContinuationDto(
+    Guid ExtensionId,
+    Guid OrderId,
+    string OrderNumber,
+    string CustomerName,
+    string VendorName,
+    string ListingTitle,
+    decimal TotalAmount,
+    DateTime CreatedOnUtc,
+    string Type
+);
+
+public sealed record GetAdminAllPendingContinuationsQuery() : IQuery<List<AdminPendingContinuationDto>>;
+
+internal sealed class GetAdminAllPendingContinuationsQueryHandler(
+    ICustomerRepository customers)
+    : IQueryHandler<GetAdminAllPendingContinuationsQuery, List<AdminPendingContinuationDto>>
+{
+    public async Task<Result<List<AdminPendingContinuationDto>>> Handle(GetAdminAllPendingContinuationsQuery request, CancellationToken cancellationToken)
+    {
+        var continuations = await customers.GetAllPendingContinuationsForAdminAsync(cancellationToken);
+
+        var list = continuations.Select(c => new AdminPendingContinuationDto(
+            c.Id,
+            c.CustomerRentalOrderId,
+            c.OrderNumber,
+            c.CustomerName,
+            c.VendorName,
+            c.ListingTitle,
+            c.TotalAmount,
+            c.CreatedOnUtc.UtcDateTime,
+            c.Type
+        )).ToList();
+
+        return Result.Success(list);
+    }
+}

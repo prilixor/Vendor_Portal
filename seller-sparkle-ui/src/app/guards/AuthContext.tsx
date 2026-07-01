@@ -52,6 +52,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsHydrating(false);
   }, []);
 
+  const logout = () => {
+    authApi.logout();
+    persist(null);
+    // Also clear admin user data and token
+    localStorage.removeItem(ADMIN_STORAGE_KEY);
+    localStorage.removeItem("vendor_portal_token");
+  };
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      logout();
+      const path = window.location.pathname;
+      if (path.startsWith("/admin")) {
+        window.location.href = "/admin/login";
+      } else if (path.startsWith("/customer")) {
+        window.location.href = "/customer/login";
+      } else {
+        window.location.href = "/login";
+      }
+    };
+
+    window.addEventListener("unauthorized", handleUnauthorized);
+    return () => {
+      window.removeEventListener("unauthorized", handleUnauthorized);
+    };
+  }, []);
+
   const persist = (u: User | null) => {
     if (u) localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
     else localStorage.removeItem(STORAGE_KEY);
@@ -86,13 +113,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return authApi.registerCustomer(email, password, fullName, phone);
   };
 
-  const logout = () => {
-    authApi.logout();
-    persist(null);
-    // Also clear admin user data and token
-    localStorage.removeItem(ADMIN_STORAGE_KEY);
-    localStorage.removeItem("vendor_portal_token");
-  };
 
   const switchRole = (role: Role) => {
     if (!user) return;

@@ -747,13 +747,13 @@ public sealed class ProcessExtensionRequest
     public string PaymentIntentId { get; set; } = string.Empty;
 }
 
-public sealed class ProcessExtensionResponse
+public sealed class RequestExtensionResponse
 {
     public Guid ExtensionId { get; init; }
 }
 
-public sealed class ProcessExtensionEndpoint(IMediator mediator)
-    : Endpoint<ProcessExtensionRequest, Results<Ok<ProcessExtensionResponse>, ProblemHttpResult>>
+public sealed class RequestExtensionEndpoint(IMediator mediator)
+    : Endpoint<ProcessExtensionRequest, Results<Ok<RequestExtensionResponse>, ProblemHttpResult>>
 {
     public override void Configure()
     {
@@ -765,7 +765,7 @@ public sealed class ProcessExtensionEndpoint(IMediator mediator)
         Options(x => x.WithTags("Customers"));
     }
 
-    public override async Task<Results<Ok<ProcessExtensionResponse>, ProblemHttpResult>> ExecuteAsync(ProcessExtensionRequest req, CancellationToken ct)
+    public override async Task<Results<Ok<RequestExtensionResponse>, ProblemHttpResult>> ExecuteAsync(ProcessExtensionRequest req, CancellationToken ct)
     {
         if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
@@ -773,14 +773,11 @@ public sealed class ProcessExtensionEndpoint(IMediator mediator)
         if (!Guid.TryParse(req.OrderId, out var orderId))
             return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
 
-        if (!Guid.TryParse(req.PaymentIntentId, out var paymentIntentId))
-            paymentIntentId = Guid.NewGuid(); // For this demo, just generate one if missing/invalid
-
-        var result = await mediator.Send(new ProcessExtensionCommand(customerId, orderId, req.AdditionalDays, paymentIntentId), ct);
+        var result = await mediator.Send(new RequestExtensionCommand(customerId, orderId, req.AdditionalDays), ct);
         if (!result.IsSuccess)
             return result.ToErrorResponse();
 
-        return TypedResults.Ok(new ProcessExtensionResponse { ExtensionId = result.Value });
+        return TypedResults.Ok(new RequestExtensionResponse { ExtensionId = result.Value });
     }
 }
 
@@ -821,13 +818,13 @@ public sealed class ProcessBuyoutRequest
     public string PaymentIntentId { get; set; } = string.Empty;
 }
 
-public sealed class ProcessBuyoutResponse
+public sealed class RequestBuyoutResponse
 {
     public Guid BuyoutId { get; init; }
 }
 
-public sealed class ProcessBuyoutEndpoint(IMediator mediator)
-    : Endpoint<ProcessBuyoutRequest, Results<Ok<ProcessBuyoutResponse>, ProblemHttpResult>>
+public sealed class RequestBuyoutEndpoint(IMediator mediator)
+    : Endpoint<ProcessBuyoutRequest, Results<Ok<RequestBuyoutResponse>, ProblemHttpResult>>
 {
     public override void Configure()
     {
@@ -839,7 +836,7 @@ public sealed class ProcessBuyoutEndpoint(IMediator mediator)
         Options(x => x.WithTags("Customers"));
     }
 
-    public override async Task<Results<Ok<ProcessBuyoutResponse>, ProblemHttpResult>> ExecuteAsync(ProcessBuyoutRequest req, CancellationToken ct)
+    public override async Task<Results<Ok<RequestBuyoutResponse>, ProblemHttpResult>> ExecuteAsync(ProcessBuyoutRequest req, CancellationToken ct)
     {
         if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
@@ -847,13 +844,10 @@ public sealed class ProcessBuyoutEndpoint(IMediator mediator)
         if (!Guid.TryParse(req.OrderId, out var orderId))
             return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
 
-        if (!Guid.TryParse(req.PaymentIntentId, out var paymentIntentId))
-            paymentIntentId = Guid.NewGuid();
-
-        var result = await mediator.Send(new ProcessBuyoutCommand(customerId, orderId, paymentIntentId), ct);
+        var result = await mediator.Send(new RequestBuyoutCommand(customerId, orderId), ct);
         if (!result.IsSuccess)
             return result.ToErrorResponse();
 
-        return TypedResults.Ok(new ProcessBuyoutResponse { BuyoutId = result.Value });
+        return TypedResults.Ok(new RequestBuyoutResponse { BuyoutId = result.Value });
     }
 }

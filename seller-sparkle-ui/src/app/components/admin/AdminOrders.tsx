@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -92,7 +92,7 @@ function orderStatusBadgeClass(status: string): string {
     return "bg-destructive/10 text-destructive border-destructive/20 dark:bg-destructive/20 dark:text-destructive dark:border-destructive/80";
   }
   if (s === "bought out") {
-    return "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-950/40 dark:text-fuchsia-300 dark:border-fuchsia-900";
+    return "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200 dark:bg-fuchsia-900/40 dark:text-fuchsia-300 dark:border-fuchsia-800/50";
   }
   return "bg-muted text-foreground border-border";
 }
@@ -198,7 +198,9 @@ function getAvailableStatuses(currentStatus: string, orderType?: string): string
 export const AdminOrders = () => {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const urlTab = searchParams.get("tab") as (typeof statusTabs)[number]["id"];
   const isValidTab = statusTabs.some(t => t.id === urlTab);
   
@@ -213,7 +215,10 @@ export const AdminOrders = () => {
   }, [urlTab]);
   const [page, setPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrderDto | null>(null);
+  const [continuations, setContinuations] = useState<import('@/app/services/vendorOnboardingApi').OrderContinuationsDto | null>(null);
   const [statusUpdateLocal, setStatusUpdateLocal] = useState<string>("");
+
+  const [continuationsUpdating, setContinuationsUpdating] = useState(false);
 
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -221,8 +226,79 @@ export const AdminOrders = () => {
   useEffect(() => {
     if (selectedOrder) {
       setStatusUpdateLocal(selectedOrder.status);
+      adminApi.getAdminOrderContinuations(selectedOrder.orderId)
+        .then(res => setContinuations(res))
+        .catch(err => console.error("Failed to load continuations", err));
+    } else {
+      setContinuations(null);
     }
   }, [selectedOrder]);
+
+  const loadContinuations = async () => {
+    if (!selectedOrder) return;
+    try {
+      const res = await adminApi.getAdminOrderContinuations(selectedOrder.orderId);
+      setContinuations(res);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCancelAdminExtension = async (extensionId: string) => {
+    if (!selectedOrder) return;
+    try {
+      setContinuationsUpdating(true);
+      await adminApi.cancelAdminExtension(selectedOrder.orderId, extensionId, user?.id || "");
+      toast.success("Extension request cancelled.");
+      await loadContinuations();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel request.");
+    } finally {
+      setContinuationsUpdating(false);
+    }
+  };
+
+  const handleApproveAdminExtension = async (extensionId: string) => {
+    if (!selectedOrder) return;
+    try {
+      setContinuationsUpdating(true);
+      await adminApi.approveAdminExtension(selectedOrder.orderId, extensionId, user?.id || "");
+      toast.success("Extension request approved.");
+      await loadContinuations();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to approve request.");
+    } finally {
+      setContinuationsUpdating(false);
+    }
+  };
+
+  const handleCancelAdminBuyout = async (buyoutId: string) => {
+    if (!selectedOrder) return;
+    try {
+      setContinuationsUpdating(true);
+      await adminApi.cancelAdminBuyout(selectedOrder.orderId, buyoutId, user?.id || "");
+      toast.success("Buyout request cancelled.");
+      await loadContinuations();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel request.");
+    } finally {
+      setContinuationsUpdating(false);
+    }
+  };
+
+  const handleApproveAdminBuyout = async (buyoutId: string) => {
+    if (!selectedOrder) return;
+    try {
+      setContinuationsUpdating(true);
+      await adminApi.approveAdminBuyout(selectedOrder.orderId, buyoutId, user?.id || "");
+      toast.success("Buyout request approved.");
+      await loadContinuations();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to approve request.");
+    } finally {
+      setContinuationsUpdating(false);
+    }
+  };
 
   const updateStatusMutation = useMutation({
     mutationFn: (newStatus: string) =>
@@ -297,6 +373,29 @@ export const AdminOrders = () => {
     queryKey: ["admin-orders"],
     queryFn: () => adminApi.getAdminOrders(),
   });
+
+  useEffect(() => {
+    const openParam = searchParams.get("open");
+    const stateOpenOrderId = (location.state as any)?.openOrderId;
+    const targetOrderId = stateOpenOrderId || openParam;
+
+    if (targetOrderId && orders.length > 0) {
+      const orderToOpen = orders.find(o => o.orderId === targetOrderId);
+      if (orderToOpen) {
+        setSelectedOrder(orderToOpen);
+        
+        if (stateOpenOrderId) {
+          navigate(location.pathname + location.search, { replace: true, state: {} });
+        }
+        
+        if (openParam) {
+          const newParams = new URLSearchParams(searchParams);
+          newParams.delete("open");
+          setSearchParams(newParams, { replace: true });
+        }
+      }
+    }
+  }, [searchParams, location.state, orders, setSearchParams, navigate, location.pathname, location.search]);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
@@ -431,9 +530,9 @@ export const AdminOrders = () => {
               <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
                 <ShoppingBag className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Items Ordered</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight">{stats.totalCount}</h3>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Total Items Ordered</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight truncate">{stats.totalCount}</h3>
               </div>
             </div>
           </CardContent>
@@ -445,9 +544,9 @@ export const AdminOrders = () => {
               <div className="rounded-lg bg-emerald-500/10 text-emerald-500 p-2.5">
                 <TrendingUp className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Platform Revenue</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight">₹{stats.revenue.toFixed(0)}</h3>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Platform Revenue</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight truncate">₹{stats.revenue.toFixed(0)}</h3>
               </div>
             </div>
           </CardContent>
@@ -459,9 +558,9 @@ export const AdminOrders = () => {
               <div className="rounded-lg bg-indigo-500/10 text-indigo-500 p-2.5">
                 <Truck className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Rentals</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight">{stats.active}</h3>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Active Rentals</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight truncate">{stats.active}</h3>
               </div>
             </div>
           </CardContent>
@@ -473,9 +572,9 @@ export const AdminOrders = () => {
               <div className="rounded-lg bg-slate-500/10 text-slate-500 p-2.5">
                 <RotateCcw className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Completed Rentals</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight">{stats.returned}</h3>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Completed Rentals</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight truncate">{stats.returned}</h3>
               </div>
             </div>
           </CardContent>
@@ -487,9 +586,9 @@ export const AdminOrders = () => {
               <div className="rounded-lg bg-destructive/10 text-destructive p-2.5">
                 <AlertCircle className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Dispatch Failed</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight text-destructive">{stats.failed}</h3>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Dispatch Failed</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight text-destructive truncate">{stats.failed}</h3>
               </div>
             </div>
           </CardContent>
@@ -510,12 +609,14 @@ export const AdminOrders = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-          <TabsList className="mb-6 h-auto w-full flex-wrap justify-start bg-muted/40 p-1">
-            {statusTabs.map((tab) => (
-              <TabsTrigger key={tab.id} value={tab.id} className="text-xs">
-                {tab.label} ({statusCounts[tab.id] ?? 0})
-              </TabsTrigger>
-            ))}
+          <TabsList className="mb-6 h-auto w-full flex-nowrap overflow-x-auto justify-start bg-muted/40 p-1">
+            {statusTabs
+              .filter(tab => tab.id !== "bought_out" || (statusCounts[tab.id] ?? 0) > 0)
+              .map((tab) => (
+                <TabsTrigger key={tab.id} value={tab.id} className="text-xs">
+                  {tab.label} ({statusCounts[tab.id] ?? 0})
+                </TabsTrigger>
+              ))}
           </TabsList>
         </Tabs>
 
@@ -573,10 +674,15 @@ export const AdminOrders = () => {
 
                       <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 shrink-0 pt-3 sm:pt-0 border-t border-border/20 sm:border-none w-full sm:w-auto mt-2 sm:mt-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(item.orderType))} variant="outline">
+                          <Badge className={cn("whitespace-nowrap text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(item.orderType))} variant="outline">
                             {item.orderType.toUpperCase()}
                           </Badge>
-                          <Badge className={cn("text-[10px] font-semibold py-0.5 px-2 capitalize", orderStatusBadgeClass(item.status))} variant="outline">
+                          {item.isExtended && (
+                            <Badge className="whitespace-nowrap text-[10px] font-bold py-0.5 px-2 bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800/50" variant="outline">
+                              EXTENDED
+                            </Badge>
+                          )}
+                          <Badge className={cn("whitespace-nowrap text-[10px] font-semibold py-0.5 px-2 capitalize", orderStatusBadgeClass(item.status))} variant="outline">
                             {item.status.replace(/_/g, " ")}
                           </Badge>
                         </div>
@@ -637,9 +743,9 @@ export const AdminOrders = () => {
             <>
               <div className="shrink-0 pt-2">
                 <DialogHeader>
-                  <DialogTitle className="text-xl font-bold flex items-center justify-between pr-6">
-                    <span>Order Tracking: {selectedOrder.orderNumber}</span>
-                    <Badge className={cn("text-[10px] font-semibold capitalize", orderStatusBadgeClass(selectedOrder.status))} variant="outline">
+                  <DialogTitle className="text-xl font-bold flex items-start sm:items-center justify-between pr-6 gap-2">
+                    <span className="break-all sm:break-normal">Order Tracking: {selectedOrder.orderNumber}</span>
+                    <Badge className={cn("text-[10px] font-semibold capitalize whitespace-nowrap shrink-0 px-2.5 py-0.5", orderStatusBadgeClass(selectedOrder.status))} variant="outline">
                       {selectedOrder.status.replace(/_/g, " ")}
                     </Badge>
                   </DialogTitle>
@@ -650,6 +756,38 @@ export const AdminOrders = () => {
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-6 pb-6 pr-2">
+                {continuations && (continuations.pendingExtensions.length > 0 || continuations.pendingBuyouts.length > 0) && (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/50 p-4 space-y-4">
+                    <p className="font-semibold text-amber-900 dark:text-amber-400">Pending Customer Requests (Admin Approval)</p>
+                    {continuations.pendingExtensions.map((ext) => (
+                      <div key={ext.extensionId} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white dark:bg-black/20 rounded-md border border-amber-100 dark:border-amber-900/30">
+                        <div>
+                          <p className="font-semibold text-sm">Rent Extension</p>
+                          <p className="text-sm text-muted-foreground mt-1">Customer wants to extend by {ext.additionalDays} days.</p>
+                          <p className="text-sm text-muted-foreground">Amount: ₹{ext.totalAmount.toFixed(2)}</p>
+                        </div>
+                        <div className="flex gap-2 mt-4 sm:mt-0">
+                          <Button variant="outline" size="sm" onClick={() => handleCancelAdminExtension(ext.extensionId)} disabled={continuationsUpdating}>Reject</Button>
+                          <Button size="sm" onClick={() => handleApproveAdminExtension(ext.extensionId)} disabled={continuationsUpdating}>Approve</Button>
+                        </div>
+                      </div>
+                    ))}
+                    {continuations.pendingBuyouts.map((buy) => (
+                      <div key={buy.buyoutId} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white dark:bg-black/20 rounded-md border border-amber-100 dark:border-amber-900/30">
+                        <div>
+                          <p className="font-semibold text-sm">Product Buyout</p>
+                          <p className="text-sm text-muted-foreground mt-1">Customer wants to buy this rented product.</p>
+                          <p className="text-sm text-muted-foreground">Amount: ₹{buy.totalAmount.toFixed(2)}</p>
+                        </div>
+                        <div className="flex gap-2 mt-4 sm:mt-0">
+                          <Button variant="outline" size="sm" onClick={() => handleCancelAdminBuyout(buy.buyoutId)} disabled={continuationsUpdating}>Reject</Button>
+                          <Button size="sm" onClick={() => handleApproveAdminBuyout(buy.buyoutId)} disabled={continuationsUpdating}>Approve</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Meta details */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg bg-accent/25 p-4 border border-border/40 text-xs mt-4">
                   <div className="space-y-1">
@@ -662,7 +800,19 @@ export const AdminOrders = () => {
                     <p className="font-semibold text-foreground">{selectedOrder.vendorName}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-muted-foreground font-semibold flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {selectedOrder.orderType === "rent" ? "Rental Terms" : "Purchase Details"}</p>
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> {selectedOrder.orderType === "rent" ? "Rental Terms" : "Purchase Details"}</p>
+                      {selectedOrder.status === "bought_out" && (
+                        <span className="rounded bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-bold text-fuchsia-800 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">
+                          BOUGHT OUT
+                        </span>
+                      )}
+                      {selectedOrder.isExtended && (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                          EXTENDED
+                        </span>
+                      )}
+                    </div>
                     <p className="font-medium text-foreground">{selectedOrder.orderType === "rent" ? `${selectedOrder.rentalDays} days rental` : "Direct Buyout"}</p>
                     {selectedOrder.startDate && (
                       <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
@@ -806,32 +956,37 @@ export const AdminOrders = () => {
                     </TooltipProvider>
                   )}
 
-                  <div className="flex flex-col sm:flex-row sm:items-end gap-4 bg-accent/20 p-4 rounded-lg border border-border/40">
-                    <div className="flex-1">
-                      <p className="text-xs font-semibold text-muted-foreground mb-1">Force Status Update</p>
-                      <Select value={statusUpdateLocal} onValueChange={setStatusUpdateLocal}>
-                        <SelectTrigger className="w-[180px] h-8 text-xs bg-background">
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {statusTabs
-                            .filter(t => t.id !== "all" && getAvailableStatuses(selectedOrder.status, selectedOrder.orderType).includes(t.id))
-                            .map(t => (
-                            <SelectItem key={t.id} value={t.id} className="text-xs">
-                              {t.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button 
-                      size="sm" 
-                      onClick={() => updateStatusMutation.mutate(statusUpdateLocal)}
-                      disabled={!statusUpdateLocal || statusUpdateLocal === selectedOrder.status || updateStatusMutation.isPending}
-                    >
-                      {updateStatusMutation.isPending ? "Updating..." : "Update Status"}
-                    </Button>
-                  </div>
+                  {(() => {
+                    const hasPendingContinuations = !!continuations && (continuations.pendingExtensions.length > 0 || continuations.pendingBuyouts.length > 0);
+                    return (
+                      <div className={cn("flex flex-col sm:flex-row sm:items-end gap-4 p-4 rounded-lg border", hasPendingContinuations ? "bg-muted/50 border-border/20 opacity-60" : "bg-accent/20 border-border/40")}>
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold text-muted-foreground mb-1">Force Status Update</p>
+                          <Select value={statusUpdateLocal} onValueChange={setStatusUpdateLocal} disabled={hasPendingContinuations}>
+                            <SelectTrigger className="w-[180px] h-8 text-xs bg-background">
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {statusTabs
+                                .filter(t => t.id !== "all" && getAvailableStatuses(selectedOrder.status, selectedOrder.orderType).includes(t.id))
+                                .map(t => (
+                                <SelectItem key={t.id} value={t.id} className="text-xs">
+                                  {t.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          onClick={() => updateStatusMutation.mutate(statusUpdateLocal)}
+                          disabled={hasPendingContinuations || !statusUpdateLocal || statusUpdateLocal === selectedOrder.status || updateStatusMutation.isPending}
+                        >
+                          {updateStatusMutation.isPending ? "Updating..." : "Update Status"}
+                        </Button>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </>

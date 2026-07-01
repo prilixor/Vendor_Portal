@@ -8,8 +8,9 @@ import { Badge } from "@/app/components/ui/badge";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
+import { Input } from "@/app/components/ui/input";
 import { useAuth } from "@/app/guards/AuthContext";
-import { vendorOnboardingApi, type VendorOrderApiDto, type VendorProductAssetApiDto } from "@/app/services/vendorOnboardingApi";
+import { vendorOnboardingApi, type VendorOrderApiDto, type VendorProductAssetApiDto, type OrderContinuationsDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 
 const getTimelineSteps = (orderType?: string) => {
@@ -82,7 +83,7 @@ function orderStatusBadgeClass(status: string): string {
     return "bg-destructive/15 text-destructive dark:bg-destructive/20 dark:text-destructive";
   }
   if (s === "bought out") {
-    return "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-200";
+    return "bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white font-medium shadow-sm border-0 dark:from-fuchsia-600 dark:to-purple-700";
   }
   return "bg-muted text-foreground";
 }
@@ -141,17 +142,20 @@ function OrderTimeline({ status, orderType }: { status: string; orderType?: stri
 }
 
 const VendorOrderDetail = () => {
-  const { user } = useAuth();
-  const { orderId } = useParams<{ orderId: string }>();
+  const { orderId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [order, setOrder] = useState<VendorOrderApiDto | null>(null);
+  const [continuations, setContinuations] = useState<OrderContinuationsDto | null>(null);
 
   const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
   const [dispatchAssetTags, setDispatchAssetTags] = useState<string[]>([]);
   const [availableAssets, setAvailableAssets] = useState<VendorProductAssetApiDto[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
+  const [openDropdowns, setOpenDropdowns] = useState<Record<number, boolean>>({});
 
   const loadOrder = async () => {
     if (!user || !orderId) return;
@@ -159,6 +163,12 @@ const VendorOrderDetail = () => {
       setLoading(true);
       const row = await vendorOnboardingApi.getVendorOrder(user.id, orderId);
       setOrder(row);
+      try {
+        const conts = await vendorOnboardingApi.getVendorOrderContinuations(orderId);
+        setContinuations(conts);
+      } catch (err) {
+        console.error("Failed to load continuations", err);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load order detail.";
       toast.error(message);
@@ -219,18 +229,77 @@ const VendorOrderDetail = () => {
     }
   };
 
+  const hasPendingRequests = Boolean(continuations && (continuations.pendingExtensions.length > 0 || continuations.pendingBuyouts.length > 0));
+
   const normalizedStatus = order?.status.trim().toLowerCase() ?? "";
-  const canMarkTransit = normalizedStatus === "confirmed";
-  const canMarkActive = normalizedStatus === "in transit" || normalizedStatus === "in_transit";
-  const canMarkReturned = normalizedStatus === "active" && order?.orderType.toLowerCase() !== "buy";
-  const canCancel = normalizedStatus === "confirmed";
+  const canMarkTransit = normalizedStatus === "confirmed" && !hasPendingRequests;
+  const canMarkActive = (normalizedStatus === "in transit" || normalizedStatus === "in_transit") && !hasPendingRequests;
+  const canMarkReturned = normalizedStatus === "active" && order?.orderType.toLowerCase() !== "buy" && !hasPendingRequests;
+  const canCancel = normalizedStatus === "confirmed" && !hasPendingRequests;
+
+  const handleCancelBuyout = async (buyoutId: string) => {
+    if (!orderId) return;
+    try {
+      setUpdating(true);
+      await vendorOnboardingApi.cancelVendorBuyout(orderId, buyoutId);
+      toast.success("Buyout request cancelled.");
+      await loadOrder();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel request.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleApproveBuyout = async (buyoutId: string) => {
+    if (!orderId) return;
+    try {
+      setUpdating(true);
+      await vendorOnboardingApi.approveVendorBuyout(orderId, buyoutId);
+      toast.success("Buyout request approved.");
+      await loadOrder();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to approve request.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleCancelExtension = async (extensionId: string) => {
+    if (!orderId) return;
+    try {
+      setUpdating(true);
+      await vendorOnboardingApi.cancelVendorExtension(orderId, extensionId);
+      toast.success("Extension request cancelled.");
+      await loadOrder();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel request.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleApproveExtension = async (extensionId: string) => {
+    if (!orderId) return;
+    try {
+      setUpdating(true);
+      await vendorOnboardingApi.approveVendorExtension(orderId, extensionId);
+      toast.success("Extension request approved.");
+      await loadOrder();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to approve request.");
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const nextAction = useMemo(() => {
+    if (hasPendingRequests) return { label: "Review customer request", disabled: true };
     if (canMarkReturned) return { label: "Mark returned", action: () => handleStatusChange("returned") };
     if (canMarkActive) return { label: "Mark delivered", action: () => handleStatusChange("active") };
     if (canMarkTransit) return { label: "Mark out for delivery", action: () => handleStatusChange("in_transit") };
     return null;
-  }, [canMarkActive, canMarkReturned, canMarkTransit]);
+  }, [canMarkActive, canMarkReturned, canMarkTransit, hasPendingRequests]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -285,7 +354,7 @@ const VendorOrderDetail = () => {
               </p>
             </div>
             {nextAction ? (
-              <Button onClick={() => void nextAction.action()} disabled={updating}>
+              <Button onClick={() => nextAction.action && void nextAction.action()} disabled={updating || nextAction.disabled}>
                 {nextAction.label}
               </Button>
             ) : (
@@ -299,6 +368,72 @@ const VendorOrderDetail = () => {
 
       {!loading && order && (
         <>
+          {continuations && (continuations.pendingExtensions.length > 0 || continuations.pendingBuyouts.length > 0) && (
+            <Card className="border-amber-200 bg-amber-50 shadow-sm dark:bg-amber-950/20 dark:border-amber-900/50">
+              <CardHeader className="pb-2">
+                <p className="text-lg font-semibold text-amber-900 dark:text-amber-400">Pending Customer Requests</p>
+              </CardHeader>
+              <CardContent className="pt-2 space-y-4">
+                {continuations.pendingExtensions.map((ext) => (
+                  <div key={ext.extensionId} className="flex flex-col sm:flex-row sm:items-start justify-between p-4 bg-white dark:bg-black/20 rounded-md border border-amber-100 dark:border-amber-900/30">
+                    <div>
+                      <p className="font-semibold text-sm">Rent Extension Request</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Customer wants to extend by <span className="font-medium">{ext.additionalDays} days</span>.
+                      </p>
+                      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs bg-white/50 dark:bg-black/40 p-2 rounded border border-amber-200/50">
+                        <p className="text-muted-foreground">Original End Date:</p>
+                        <p className="font-medium text-right">{formatDetailDate(ext.originalEndDate)}</p>
+                        <p className="text-muted-foreground">New End Date:</p>
+                        <p className="font-medium text-right">{formatDetailDate(ext.newEndDate)}</p>
+                        <p className="col-span-2 my-0.5 border-t border-amber-200/50"></p>
+                        <p className="text-muted-foreground">Base Extension Rent:</p>
+                        <p className="text-right">₹{ext.extensionAmount.toFixed(2)}</p>
+                        <p className="text-muted-foreground">Service Fee:</p>
+                        <p className="text-right">₹{ext.serviceFeeAmount.toFixed(2)}</p>
+                        <p className="text-muted-foreground">GST:</p>
+                        <p className="text-right">₹{ext.gstAmount.toFixed(2)}</p>
+                        <p className="font-semibold text-amber-900 dark:text-amber-400">Total to Collect:</p>
+                        <p className="font-bold text-right text-amber-900 dark:text-amber-400">₹{ext.totalAmount.toFixed(2)}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-4 sm:mt-0 items-start">
+                      <Button variant="outline" size="sm" onClick={() => handleCancelExtension(ext.extensionId)} disabled={updating}>Reject</Button>
+                      <Button size="sm" onClick={() => handleApproveExtension(ext.extensionId)} disabled={updating}>Approve</Button>
+                    </div>
+                  </div>
+                ))}
+                {continuations.pendingBuyouts.map((buy) => (
+                  <div key={buy.buyoutId} className="flex flex-col sm:flex-row justify-between p-4 bg-white dark:bg-black/20 rounded-md border border-amber-100 dark:border-amber-900/30">
+                    <div className="flex-1 max-w-sm">
+                      <p className="font-semibold text-sm">Product Buyout Request</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Customer wants to buy this rented product permanently.
+                      </p>
+                      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs bg-white/50 dark:bg-black/40 p-2 rounded border border-amber-200/50">
+                        <p className="text-muted-foreground">Base Buyout Value:</p>
+                        <p className="text-right">₹{buy.baseBuyoutAmount.toFixed(2)}</p>
+                        <p className="text-muted-foreground">Rent Deduction:</p>
+                        <p className="text-right text-emerald-600">-₹{buy.rentDeductionAmount.toFixed(2)}</p>
+                        <p className="text-muted-foreground">Service Fee:</p>
+                        <p className="text-right">₹{buy.serviceFeeAmount.toFixed(2)}</p>
+                        <p className="text-muted-foreground">GST:</p>
+                        <p className="text-right">₹{buy.gstAmount.toFixed(2)}</p>
+                        <p className="col-span-2 my-0.5 border-t border-amber-200/50"></p>
+                        <p className="font-semibold text-amber-900 dark:text-amber-400">Total to Collect:</p>
+                        <p className="font-bold text-right text-amber-900 dark:text-amber-400">₹{buy.totalAmount.toFixed(2)}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-4 sm:mt-0 items-start">
+                      <Button variant="outline" size="sm" onClick={() => handleCancelBuyout(buy.buyoutId)} disabled={updating}>Reject</Button>
+                      <Button size="sm" onClick={() => handleApproveBuyout(buy.buyoutId)} disabled={updating}>Approve</Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="border-border/80 shadow-sm">
             <CardHeader className="pb-2">
               <p className="text-lg font-semibold">Order timeline</p>
@@ -336,7 +471,14 @@ const VendorOrderDetail = () => {
                     <p className="text-sm font-medium tabular-nums">{formatDetailDate(order.startDate)}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order type</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order type</p>
+                      {order.status === "bought_out" && (
+                        <span className="rounded bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-bold text-fuchsia-800 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">
+                          BOUGHT OUT
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm font-medium uppercase">{order.orderType}</p>
                   </div>
                 </>
@@ -362,7 +504,14 @@ const VendorOrderDetail = () => {
                     <p className="text-sm font-medium">{order.rentalDays}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order type</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order type</p>
+                      {order.status === "bought_out" && (
+                        <span className="rounded bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-bold text-fuchsia-800 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">
+                          BOUGHT OUT
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm font-medium uppercase">{order.orderType}</p>
                   </div>
                 </>
@@ -402,28 +551,48 @@ const VendorOrderDetail = () => {
                 <p className="text-sm">Loading available stock...</p>
             ) : (
                 <div className="space-y-3">
-                  {dispatchAssetTags.map((tag, idx) => (
-                    <div key={idx} className="space-y-1.5">
-                      <Label>Item {idx + 1} Serial Number (Optional)</Label>
-                      <input 
-                        type="text" 
-                        list={`available-assets-${order?.listingId}`} 
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        placeholder="Enter or select serial number..."
-                        value={tag}
-                        onChange={(e) => {
+                  {dispatchAssetTags.map((tag, idx) => {
+                    const matchingAssets = availableAssets.filter((a) =>
+                      a.assetTag.toLowerCase().includes(tag.toLowerCase())
+                    );
+                    const isOpen = openDropdowns[idx] && matchingAssets.length > 0;
+
+                    return (
+                      <div key={idx} className="space-y-1.5 relative">
+                        <Label>Item {idx + 1} Serial Number (Optional)</Label>
+                        <Input
+                          placeholder="Enter or select serial number..."
+                          value={tag}
+                          onChange={(e) => {
                             const newTags = [...dispatchAssetTags];
                             newTags[idx] = e.target.value;
                             setDispatchAssetTags(newTags);
-                        }}
-                      />
-                    </div>
-                  ))}
-                  <datalist id={`available-assets-${order?.listingId}`}>
-                    {availableAssets.map(a => (
-                        <option key={a.id} value={a.assetTag} />
-                    ))}
-                  </datalist>
+                            setOpenDropdowns({ ...openDropdowns, [idx]: true });
+                          }}
+                          onFocus={() => setOpenDropdowns({ ...openDropdowns, [idx]: true })}
+                          onBlur={() => setTimeout(() => setOpenDropdowns({ ...openDropdowns, [idx]: false }), 150)}
+                        />
+                        {isOpen && (
+                          <div className="absolute top-full left-0 z-[100] mt-1 w-full max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md outline-none">
+                            {matchingAssets.map((a) => (
+                              <div
+                                key={a.id}
+                                className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                                onClick={() => {
+                                  const newTags = [...dispatchAssetTags];
+                                  newTags[idx] = a.assetTag;
+                                  setDispatchAssetTags(newTags);
+                                  setOpenDropdowns({ ...openDropdowns, [idx]: false });
+                                }}
+                              >
+                                {a.assetTag}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
             )}
           </div>

@@ -716,4 +716,49 @@ export const vendorOnboardingApi = {
   getCitiesByState(stateIso2: string) {
     return apiClient.get<{ name: string }[]>(`/vendors/locations/states/${encodeURIComponent(stateIso2)}/cities`);
   },
+
+  getVendorOrderContinuations(orderId: string) {
+    return apiClient.get<OrderContinuationsDto>(`/vendors/me/orders/${orderId}/continuations`);
+  },
+  approveVendorExtension(orderId: string, extensionId: string, overrides?: any) {
+    return apiClient.post(`/vendors/me/orders/${orderId}/extensions/${extensionId}/approve`, overrides ?? {});
+  },
+  cancelVendorExtension(orderId: string, extensionId: string) {
+    return apiClient.post(`/vendors/me/orders/${orderId}/extensions/${extensionId}/cancel`, {});
+  },
+  approveVendorBuyout(orderId: string, buyoutId: string, overrides?: any) {
+    return apiClient.post(`/vendors/me/orders/${orderId}/buyouts/${buyoutId}/approve`, overrides ?? {});
+  },
+  cancelVendorBuyout(orderId: string, buyoutId: string) {
+    return apiClient.post(`/vendors/me/orders/${orderId}/buyouts/${buyoutId}/cancel`, {});
+  },
 };
+
+export interface PendingExtensionDto {
+  extensionId: string;
+  orderId: string;
+  additionalDays: number;
+  extensionAmount: number;
+  serviceFeeAmount: number;
+  gstAmount: number;
+  totalAmount: number;
+  originalEndDate: string;
+  newEndDate: string;
+  createdAtUtc: string;
+}
+
+export interface PendingBuyoutDto {
+  buyoutId: string;
+  orderId: string;
+  baseBuyoutAmount: number;
+  rentDeductionAmount: number;
+  serviceFeeAmount: number;
+  gstAmount: number;
+  totalAmount: number;
+  createdAtUtc: string;
+}
+
+export interface OrderContinuationsDto {
+  pendingExtensions: PendingExtensionDto[];
+  pendingBuyouts: PendingBuyoutDto[];
+}

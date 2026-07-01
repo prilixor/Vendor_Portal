@@ -142,6 +142,11 @@ export const getVendorRoute = (notificationType?: string, title?: string): strin
     return "/vendor/onboarding?tab=bank";
   }
 
+  // Handle older extension/buyout notifications that used 'vendor_' prefix
+  if (type === "vendor_extension_requested" || type === "vendor_buyout_requested") {
+    return "/vendor/orders";
+  }
+
   if (type.startsWith("vendor_")) {
     return "/vendor/onboarding?tab=profile";
   }

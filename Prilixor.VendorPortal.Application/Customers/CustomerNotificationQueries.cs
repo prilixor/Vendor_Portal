@@ -90,3 +90,32 @@ internal sealed class MarkAllCustomerNotificationsReadCommandHandler(ICustomerRe
         return Result.Success(updated);
     }
 }
+
+public sealed record CreateCustomerNotificationCommand(
+    Guid CustomerId,
+    string NotificationType,
+    string Title,
+    string Body,
+    Guid? RelatedOrderId = null) : ICommand<CustomerNotificationDto>;
+
+internal sealed class CreateCustomerNotificationCommandHandler(ICustomerRepository customers)
+    : ICommandHandler<CreateCustomerNotificationCommand, CustomerNotificationDto>
+{
+    public async Task<Result<CustomerNotificationDto>> Handle(CreateCustomerNotificationCommand request, CancellationToken cancellationToken)
+    {
+        var entity = new CustomerNotification
+        {
+            CustomerId = request.CustomerId,
+            NotificationType = request.NotificationType,
+            Title = request.Title,
+            Body = request.Body,
+            RelatedOrderId = request.RelatedOrderId,
+            CreatedOnUtc = DateTime.UtcNow
+        };
+
+        await customers.AddCustomerNotificationAsync(entity, cancellationToken);
+        await customers.SaveChangesAsync(cancellationToken);
+
+        return Result.Success(CustomerNotificationMapping.ToDto(entity));
+    }
+}

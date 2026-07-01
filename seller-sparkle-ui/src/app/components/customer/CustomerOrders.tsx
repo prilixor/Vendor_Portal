@@ -22,6 +22,7 @@ const STATUS_FILTERS = [
   "Returned",
   "Dispatch failed",
   "Cancelled",
+  "Bought Out",
 ] as const;
 
 type StatusFilter = (typeof STATUS_FILTERS)[number];
@@ -66,7 +67,7 @@ function orderStatusBadgeClass(status: string): string {
     return "bg-destructive/15 text-destructive dark:bg-destructive/20 dark:text-destructive";
   }
   if (s === "bought out") {
-    return "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-200";
+    return "bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white font-medium shadow-sm border-0 dark:from-fuchsia-600 dark:to-purple-700";
   }
   return "bg-muted text-foreground";
 }
@@ -94,6 +95,9 @@ function matchesStatusFilter(status: string, filter: StatusFilter): boolean {
   }
   if (filter === "Dispatch failed") {
     return s === "dispatch failed";
+  }
+  if (filter === "Bought Out") {
+    return s === "bought out";
   }
   return s === filter.toLowerCase();
 }
@@ -223,7 +227,7 @@ const CustomerOrders = () => {
 
       <div className="-mx-1 overflow-x-auto px-1 sm:-mx-2 sm:px-2">
         <div className="flex min-h-9 gap-2 pb-1">
-          {STATUS_FILTERS.map((label) => {
+          {STATUS_FILTERS.filter(label => label !== "Bought Out" || (statusCounts["Bought Out"] ?? 0) > 0).map((label) => {
             const selected = appliedFilter === label;
             return (
               <button

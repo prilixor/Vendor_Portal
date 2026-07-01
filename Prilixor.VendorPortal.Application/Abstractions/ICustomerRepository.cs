@@ -33,10 +33,14 @@ public interface ICustomerRepository
     Task AddCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken);
     Task<CustomerRentalOrderExtension?> GetCustomerRentalOrderExtensionByIdAsync(Guid extensionId, CancellationToken cancellationToken);
     Task UpdateCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrderExtension>> GetPendingCustomerRentalOrderExtensionsAsync(Guid orderId, CancellationToken cancellationToken);
 
     Task AddCustomerRentalOrderBuyoutAsync(CustomerRentalOrderBuyout buyout, CancellationToken cancellationToken);
     Task<CustomerRentalOrderBuyout?> GetCustomerRentalOrderBuyoutByIdAsync(Guid buyoutId, CancellationToken cancellationToken);
     Task UpdateCustomerRentalOrderBuyoutAsync(CustomerRentalOrderBuyout buyout, CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrderBuyout>> GetPendingCustomerRentalOrderBuyoutsAsync(Guid orderId, CancellationToken cancellationToken);
+    
+    Task<List<PendingContinuationAggregate>> GetAllPendingContinuationsForAdminAsync(CancellationToken cancellationToken);
     
     Task AddCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderAsset>> GetCustomerRentalOrderAssetsAsync(Guid customerOrderId, CancellationToken cancellationToken);
@@ -154,4 +158,18 @@ public sealed record ExpiringOrderAggregate(
     string ListingTitle,
     string Status,
     string OrderType,
-    DateOnly EndDate);
+    DateOnly EndDate,
+    int DaysLeft
+);
+
+public sealed record PendingContinuationAggregate(
+    Guid Id,
+    Guid CustomerRentalOrderId,
+    string OrderNumber,
+    string CustomerName,
+    string VendorName,
+    string ListingTitle,
+    decimal TotalAmount,
+    DateTimeOffset CreatedOnUtc,
+    string Type
+);
