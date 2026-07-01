@@ -65,6 +65,12 @@ class ApiClient {
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
+    if (response.status === 401) {
+      window.dispatchEvent(new Event('unauthorized'));
+      // Return a promise that never resolves so we don't throw an error while redirecting
+      return new Promise(() => {}) as Promise<T>;
+    }
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'An error occurred' }));
       const message = error.detail || error.title || error.message || 'An error occurred';

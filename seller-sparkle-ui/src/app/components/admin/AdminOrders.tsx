@@ -530,9 +530,9 @@ export const AdminOrders = () => {
               <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
                 <ShoppingBag className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Items Ordered</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight">{stats.totalCount}</h3>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Total Items Ordered</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight truncate">{stats.totalCount}</h3>
               </div>
             </div>
           </CardContent>
@@ -544,9 +544,9 @@ export const AdminOrders = () => {
               <div className="rounded-lg bg-emerald-500/10 text-emerald-500 p-2.5">
                 <TrendingUp className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Platform Revenue</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight">₹{stats.revenue.toFixed(0)}</h3>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Platform Revenue</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight truncate">₹{stats.revenue.toFixed(0)}</h3>
               </div>
             </div>
           </CardContent>
@@ -558,9 +558,9 @@ export const AdminOrders = () => {
               <div className="rounded-lg bg-indigo-500/10 text-indigo-500 p-2.5">
                 <Truck className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Rentals</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight">{stats.active}</h3>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Active Rentals</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight truncate">{stats.active}</h3>
               </div>
             </div>
           </CardContent>
@@ -572,9 +572,9 @@ export const AdminOrders = () => {
               <div className="rounded-lg bg-slate-500/10 text-slate-500 p-2.5">
                 <RotateCcw className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Completed Rentals</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight">{stats.returned}</h3>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Completed Rentals</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight truncate">{stats.returned}</h3>
               </div>
             </div>
           </CardContent>
@@ -586,9 +586,9 @@ export const AdminOrders = () => {
               <div className="rounded-lg bg-destructive/10 text-destructive p-2.5">
                 <AlertCircle className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Dispatch Failed</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight text-destructive">{stats.failed}</h3>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Dispatch Failed</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight text-destructive truncate">{stats.failed}</h3>
               </div>
             </div>
           </CardContent>
@@ -609,7 +609,7 @@ export const AdminOrders = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-          <TabsList className="mb-6 h-auto w-full flex-wrap justify-start bg-muted/40 p-1">
+          <TabsList className="mb-6 h-auto w-full flex-nowrap overflow-x-auto justify-start bg-muted/40 p-1">
             {statusTabs
               .filter(tab => tab.id !== "bought_out" || (statusCounts[tab.id] ?? 0) > 0)
               .map((tab) => (
@@ -674,15 +674,15 @@ export const AdminOrders = () => {
 
                       <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 shrink-0 pt-3 sm:pt-0 border-t border-border/20 sm:border-none w-full sm:w-auto mt-2 sm:mt-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(item.orderType))} variant="outline">
+                          <Badge className={cn("whitespace-nowrap text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(item.orderType))} variant="outline">
                             {item.orderType.toUpperCase()}
                           </Badge>
                           {item.isExtended && (
-                            <Badge className="text-[10px] font-bold py-0.5 px-2 bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800/50" variant="outline">
+                            <Badge className="whitespace-nowrap text-[10px] font-bold py-0.5 px-2 bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800/50" variant="outline">
                               EXTENDED
                             </Badge>
                           )}
-                          <Badge className={cn("text-[10px] font-semibold py-0.5 px-2 capitalize", orderStatusBadgeClass(item.status))} variant="outline">
+                          <Badge className={cn("whitespace-nowrap text-[10px] font-semibold py-0.5 px-2 capitalize", orderStatusBadgeClass(item.status))} variant="outline">
                             {item.status.replace(/_/g, " ")}
                           </Badge>
                         </div>

@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/
 import { InventoryMovement, InventoryRecord } from "@/app/models";
 import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2, Barcode, Trash2, Search } from "lucide-react";
 import { format } from "date-fns";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/app/components/ui/pagination";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorProductAssetApiDto, type TrackedAssetDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
@@ -57,6 +58,25 @@ const Inventory = () => {
   const [trackedAssetResult, setTrackedAssetResult] = useState<TrackedAssetDto | null>(null);
   const [trackAssetLoading, setTrackAssetLoading] = useState(false);
   const [trackAssetError, setTrackAssetError] = useState<string | null>(null);
+
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const filteredInventory = useMemo(() => {
+    if (!searchQuery.trim()) return inventory;
+    return inventory.filter(row => 
+      row.productName.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [inventory, searchQuery]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
+  const paginatedInventory = filteredInventory.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   useEffect(() => {
     if (user) {
@@ -585,8 +605,18 @@ const Inventory = () => {
       </div>
 
       <Card className="mt-6 border-border/60 p-4 sm:p-6 lg:p-8">
-        <div className="border-b border-border pb-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-border pb-4 gap-4">
           <h2 className="font-semibold">Stock by product</h2>
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search products..."
+              className="pl-8"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
         </div>
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full min-w-[700px] text-sm">
@@ -603,7 +633,7 @@ const Inventory = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {inventory.map((row) => {
+              {paginatedInventory.map((row) => {
                 const utilization = row.total === 0 ? 0 : ((row.rented + row.reserved) / row.total) * 100;
                 return (
                   <tr key={row.productId} className="hover:bg-muted/20">
@@ -693,9 +723,52 @@ const Inventory = () => {
                   </td>
                 </tr>
               )}
+              {hasLoaded && inventory.length > 0 && filteredInventory.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    No products match your search.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
+        {true && (
+          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between border-t border-border pt-4 gap-4">
+            <p className="text-sm text-muted-foreground whitespace-nowrap">
+              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredInventory.length)} of {filteredInventory.length} products
+            </p>
+            <Pagination className="w-auto mx-0">
+              <PaginationContent className="flex-wrap justify-center">
+                <PaginationItem>
+                  <PaginationPrevious 
+                    href="#" 
+                    onClick={(e) => { e.preventDefault(); if (currentPage > 1) setCurrentPage(currentPage - 1); }}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <PaginationItem key={page} className="hidden sm:block">
+                    <PaginationLink 
+                      href="#" 
+                      onClick={(e) => { e.preventDefault(); setCurrentPage(page); }}
+                      isActive={currentPage === page}
+                    >
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext 
+                    href="#" 
+                    onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) setCurrentPage(currentPage + 1); }}
+                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </Card>
 
       <Card className="mt-6 border-border/60">

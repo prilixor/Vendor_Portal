@@ -8,6 +8,7 @@ import { Badge } from "@/app/components/ui/badge";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
+import { Input } from "@/app/components/ui/input";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto, type VendorProductAssetApiDto, type OrderContinuationsDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
@@ -154,6 +155,7 @@ const VendorOrderDetail = () => {
   const [dispatchAssetTags, setDispatchAssetTags] = useState<string[]>([]);
   const [availableAssets, setAvailableAssets] = useState<VendorProductAssetApiDto[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
+  const [openDropdowns, setOpenDropdowns] = useState<Record<number, boolean>>({});
 
   const loadOrder = async () => {
     if (!user || !orderId) return;
@@ -227,11 +229,13 @@ const VendorOrderDetail = () => {
     }
   };
 
+  const hasPendingRequests = Boolean(continuations && (continuations.pendingExtensions.length > 0 || continuations.pendingBuyouts.length > 0));
+
   const normalizedStatus = order?.status.trim().toLowerCase() ?? "";
-  const canMarkTransit = normalizedStatus === "confirmed";
-  const canMarkActive = normalizedStatus === "in transit" || normalizedStatus === "in_transit";
-  const canMarkReturned = normalizedStatus === "active" && order?.orderType.toLowerCase() !== "buy";
-  const canCancel = normalizedStatus === "confirmed";
+  const canMarkTransit = normalizedStatus === "confirmed" && !hasPendingRequests;
+  const canMarkActive = (normalizedStatus === "in transit" || normalizedStatus === "in_transit") && !hasPendingRequests;
+  const canMarkReturned = normalizedStatus === "active" && order?.orderType.toLowerCase() !== "buy" && !hasPendingRequests;
+  const canCancel = normalizedStatus === "confirmed" && !hasPendingRequests;
 
   const handleCancelBuyout = async (buyoutId: string) => {
     if (!orderId) return;
@@ -290,11 +294,12 @@ const VendorOrderDetail = () => {
   };
 
   const nextAction = useMemo(() => {
+    if (hasPendingRequests) return { label: "Review customer request", disabled: true };
     if (canMarkReturned) return { label: "Mark returned", action: () => handleStatusChange("returned") };
     if (canMarkActive) return { label: "Mark delivered", action: () => handleStatusChange("active") };
     if (canMarkTransit) return { label: "Mark out for delivery", action: () => handleStatusChange("in_transit") };
     return null;
-  }, [canMarkActive, canMarkReturned, canMarkTransit]);
+  }, [canMarkActive, canMarkReturned, canMarkTransit, hasPendingRequests]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -349,7 +354,7 @@ const VendorOrderDetail = () => {
               </p>
             </div>
             {nextAction ? (
-              <Button onClick={() => void nextAction.action()} disabled={updating}>
+              <Button onClick={() => nextAction.action && void nextAction.action()} disabled={updating || nextAction.disabled}>
                 {nextAction.label}
               </Button>
             ) : (
@@ -546,28 +551,48 @@ const VendorOrderDetail = () => {
                 <p className="text-sm">Loading available stock...</p>
             ) : (
                 <div className="space-y-3">
-                  {dispatchAssetTags.map((tag, idx) => (
-                    <div key={idx} className="space-y-1.5">
-                      <Label>Item {idx + 1} Serial Number (Optional)</Label>
-                      <input 
-                        type="text" 
-                        list={`available-assets-${order?.listingId}`} 
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        placeholder="Enter or select serial number..."
-                        value={tag}
-                        onChange={(e) => {
+                  {dispatchAssetTags.map((tag, idx) => {
+                    const matchingAssets = availableAssets.filter((a) =>
+                      a.assetTag.toLowerCase().includes(tag.toLowerCase())
+                    );
+                    const isOpen = openDropdowns[idx] && matchingAssets.length > 0;
+
+                    return (
+                      <div key={idx} className="space-y-1.5 relative">
+                        <Label>Item {idx + 1} Serial Number (Optional)</Label>
+                        <Input
+                          placeholder="Enter or select serial number..."
+                          value={tag}
+                          onChange={(e) => {
                             const newTags = [...dispatchAssetTags];
                             newTags[idx] = e.target.value;
                             setDispatchAssetTags(newTags);
-                        }}
-                      />
-                    </div>
-                  ))}
-                  <datalist id={`available-assets-${order?.listingId}`}>
-                    {availableAssets.map(a => (
-                        <option key={a.id} value={a.assetTag} />
-                    ))}
-                  </datalist>
+                            setOpenDropdowns({ ...openDropdowns, [idx]: true });
+                          }}
+                          onFocus={() => setOpenDropdowns({ ...openDropdowns, [idx]: true })}
+                          onBlur={() => setTimeout(() => setOpenDropdowns({ ...openDropdowns, [idx]: false }), 150)}
+                        />
+                        {isOpen && (
+                          <div className="absolute top-full left-0 z-[100] mt-1 w-full max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md outline-none">
+                            {matchingAssets.map((a) => (
+                              <div
+                                key={a.id}
+                                className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                                onClick={() => {
+                                  const newTags = [...dispatchAssetTags];
+                                  newTags[idx] = a.assetTag;
+                                  setDispatchAssetTags(newTags);
+                                  setOpenDropdowns({ ...openDropdowns, [idx]: false });
+                                }}
+                              >
+                                {a.assetTag}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
             )}
           </div>

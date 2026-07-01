@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/ta
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Switch } from "@/app/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/app/components/ui/pagination";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { ProductListing } from "@/app/models";
@@ -132,6 +133,13 @@ const Products = () => {
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filter, showFavoritesOnly]);
+
   const getFileNameFromUrl = (url?: string) => {
     if (!url) return "";
     try {
@@ -229,6 +237,9 @@ const Products = () => {
     const f = !showFavoritesOnly || (p.favoriteCount && p.favoriteCount > 0);
     return m && s && f;
   });
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const paginatedProducts = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const toggleListingStatus = async (listing: LocalListing) => {
     if (!user) return;
@@ -811,7 +822,7 @@ const Products = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.map((p) => (
+              {paginatedProducts.map((p) => (
                 <tr key={p.id} className="hover:bg-muted/20 align-middle">
                   <td className="px-3 py-3 sm:px-4">
                     <div className="flex items-center gap-2 sm:gap-3">
@@ -819,13 +830,13 @@ const Products = () => {
                         <ImageIcon className="h-4 w-4 text-primary" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <p className="font-medium truncate">{p.title}</p>
                           {(p.favoriteCount ?? 0) > 0 && (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className="inline-flex items-center text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full font-medium cursor-default">
+                                  <span className="inline-flex items-center shrink-0 text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full font-medium cursor-default">
                                     ❤️ {p.favoriteCount}
                                   </span>
                                 </TooltipTrigger>
@@ -882,6 +893,42 @@ const Products = () => {
             </tbody>
           </table>
         </div>
+        {true && (
+          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between border-t border-border pt-4 gap-4">
+            <p className="text-sm text-muted-foreground whitespace-nowrap">
+              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} products
+            </p>
+            <Pagination className="w-auto mx-0">
+              <PaginationContent className="flex-wrap justify-center">
+                <PaginationItem>
+                  <PaginationPrevious 
+                    href="#" 
+                    onClick={(e) => { e.preventDefault(); if (currentPage > 1) setCurrentPage(currentPage - 1); }}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <PaginationItem key={page} className="hidden sm:block">
+                    <PaginationLink 
+                      href="#" 
+                      onClick={(e) => { e.preventDefault(); setCurrentPage(page); }}
+                      isActive={currentPage === page}
+                    >
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext 
+                    href="#" 
+                    onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) setCurrentPage(currentPage + 1); }}
+                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </Card>
       )}
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
