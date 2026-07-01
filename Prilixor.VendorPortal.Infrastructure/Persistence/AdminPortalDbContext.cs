@@ -7,4 +7,7 @@ namespace Prilixor.VendorPortal.Infrastructure.Persistence;
 /// Uses configuration key <c>AdminPortalConnection</c> and falls back to <c>DefaultConnection</c> when unset.
 /// </summary>
 public sealed class AdminPortalDbContext(DbContextOptions<AdminPortalDbContext> options)
-    : ApplicationDbContext(options);
+    : ApplicationDbContext(options)
+{
+    public DbSet<Prilixor.VendorPortal.Domain.Auth.RefreshToken> RefreshTokens { get; set; } = null!;
+}

@@ -114,6 +114,10 @@ public interface IVendorOnboardingRepository
     Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken);
     Task MarkPasswordResetTokenAsUsedAsync(string token, CancellationToken cancellationToken);
 
+    Task<RefreshToken?> GetRefreshTokenAsync(string token, CancellationToken cancellationToken);
+    Task AddRefreshTokenAsync(RefreshToken token, CancellationToken cancellationToken);
+    Task UpdateRefreshTokenAsync(RefreshToken token, CancellationToken cancellationToken);
+
     Task AddSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken);
     Task<SupportTicket?> GetSupportTicketByIdAsync(Guid ticketId, CancellationToken cancellationToken);
     Task<List<SupportTicket>> GetSupportTicketsByVendorIdAsync(Guid vendorId, CancellationToken cancellationToken);

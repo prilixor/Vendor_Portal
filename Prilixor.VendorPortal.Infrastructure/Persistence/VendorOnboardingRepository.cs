@@ -767,6 +767,23 @@ public sealed class VendorOnboardingRepository(
         }
     }
 
+    public Task<RefreshToken?> GetRefreshTokenAsync(string token, CancellationToken cancellationToken)
+    {
+        return adminDbContext.RefreshTokens
+            .FirstOrDefaultAsync(x => x.Token == token, cancellationToken);
+    }
+
+    public async Task AddRefreshTokenAsync(RefreshToken token, CancellationToken cancellationToken)
+    {
+        await adminDbContext.RefreshTokens.AddAsync(token, cancellationToken);
+    }
+
+    public Task UpdateRefreshTokenAsync(RefreshToken token, CancellationToken cancellationToken)
+    {
+        adminDbContext.RefreshTokens.Update(token);
+        return Task.CompletedTask;
+    }
+
     public async Task AddSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken)
     {
         await dbContext.SupportTickets.AddAsync(ticket, cancellationToken);

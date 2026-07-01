@@ -23,7 +23,7 @@ public sealed class LoginRequest
 
 public sealed record AuthUserDto(string Id, string Email, string Name, string Role);
 
-public sealed record LoginResponse(string Token, AuthUserDto User);
+public sealed record LoginResponse(string Token, string RefreshToken, AuthUserDto User);
 
 public sealed class VerifyEmailRequest
 {
@@ -182,7 +182,20 @@ public sealed class LoginEndpoint(
 
         var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
-        return TypedResults.Ok(new LoginResponse(tokenString, new AuthUserDto(userId, email, name, role)));
+        var refreshToken = new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(64)),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            IsRevoked = false,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        await repository.AddRefreshTokenAsync(refreshToken, ct);
+        await repository.SaveChangesAsync(ct);
+
+        return TypedResults.Ok(new LoginResponse(tokenString, refreshToken.Token, new AuthUserDto(userId, email, name, role)));
     }
 }
 
@@ -518,5 +531,130 @@ public sealed class ResetPasswordEndpoint(
         await repository.SaveChangesAsync(ct);
 
         return TypedResults.Ok(new ResetPasswordResponse(true, "Password reset successfully."));
+    }
+}
+
+public sealed class RefreshTokenRequest
+{
+    public string Token { get; set; } = string.Empty;
+    public string RefreshToken { get; set; } = string.Empty;
+}
+
+public sealed class RefreshTokenEndpoint(
+    IConfiguration configuration,
+    IVendorOnboardingRepository repository,
+    ICustomerRepository customerRepository)
+    : Endpoint<RefreshTokenRequest, Results<Ok<LoginResponse>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("auth/refresh");
+        AllowAnonymous();
+    }
+
+    public override async Task<Results<Ok<LoginResponse>, ProblemHttpResult>> ExecuteAsync(RefreshTokenRequest req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.Token) || string.IsNullOrWhiteSpace(req.RefreshToken))
+        {
+            return TypedResults.Problem(title: "auth.invalid_request", detail: "Both tokens are required.", statusCode: 400);
+        }
+
+        var storedToken = await repository.GetRefreshTokenAsync(req.RefreshToken, ct);
+        if (storedToken == null || storedToken.IsRevoked || storedToken.ExpiresAt < DateTimeOffset.UtcNow)
+        {
+            return TypedResults.Problem(title: "auth.invalid_refresh_token", detail: "Invalid or expired refresh token.", statusCode: 401);
+        }
+
+        var jwtOptions = configuration.GetSection("JwtOptions").Get<JwtOptions>() ?? new JwtOptions();
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var principal = tokenHandler.ValidateToken(req.Token, new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtOptions.Issuer,
+            ValidAudience = jwtOptions.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
+            ValidateLifetime = false // Ignore expiration since we are refreshing it
+        }, out var securityToken);
+
+        if (securityToken is not JwtSecurityToken jwtSecurityToken ||
+            !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
+        {
+            return TypedResults.Problem(title: "auth.invalid_token", detail: "Invalid access token.", statusCode: 401);
+        }
+
+        var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        if (storedToken.UserId != userId)
+        {
+            return TypedResults.Problem(title: "auth.invalid_refresh_token", detail: "Token mismatch.", statusCode: 401);
+        }
+
+        // Revoke the old refresh token
+        storedToken.IsRevoked = true;
+        await repository.UpdateRefreshTokenAsync(storedToken, ct);
+
+        // Get user details for AuthUserDto
+        var email = principal.FindFirstValue(ClaimTypes.Email) ?? "";
+        var role = principal.FindFirstValue(ClaimTypes.Role) ?? "";
+        string name = email;
+
+        if (role == "admin" || role == "super_admin" || role == "verifier" || role == "operations_admin")
+        {
+            var admin = await repository.GetAdminUserByEmailAsync(email, ct);
+            if (admin != null) name = admin.FullName;
+        }
+        else if (role == "customer")
+        {
+            var customer = await customerRepository.GetCustomerByEmailAsync(email, ct);
+            if (customer != null) name = string.IsNullOrWhiteSpace(customer.FullName) ? customer.Email : customer.FullName;
+        }
+        else
+        {
+            var vendor = await repository.GetVendorByEmailAsync(email, ct);
+            if (vendor != null)
+            {
+                var profile = await repository.GetVendorProfileAsync(vendor.Id, ct);
+                name = profile?.OwnerName ?? vendor.Email;
+            }
+        }
+
+        // Generate new JWT
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, userId),
+            new(ClaimTypes.Email, email),
+            new(ClaimTypes.Role, role),
+        };
+
+        var now = DateTime.UtcNow;
+        var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey));
+        var creds = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
+
+        var newToken = new JwtSecurityToken(
+            issuer: jwtOptions.Issuer,
+            audience: jwtOptions.Audience,
+            claims: claims,
+            notBefore: now,
+            expires: now.AddMinutes(jwtOptions.ExpirationMinutes),
+            signingCredentials: creds);
+
+        var tokenString = tokenHandler.WriteToken(newToken);
+
+        // Generate new Refresh Token
+        var newRefreshToken = new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(64)),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            IsRevoked = false,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        await repository.AddRefreshTokenAsync(newRefreshToken, ct);
+        await repository.SaveChangesAsync(ct);
+
+        return TypedResults.Ok(new LoginResponse(tokenString, newRefreshToken.Token, new AuthUserDto(userId, email, name, role)));
     }
 }
