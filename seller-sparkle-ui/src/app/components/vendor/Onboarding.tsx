@@ -875,7 +875,7 @@ const Onboarding = () => {
           </Card>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-            <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-lg p-1">
+            <TabsList className="h-auto w-full flex-nowrap justify-start overflow-x-auto rounded-lg p-1">
               <TabsTrigger value="profile">Profile</TabsTrigger>
               <TabsTrigger value="docs">Docs</TabsTrigger>
               <TabsTrigger value="bank">Bank</TabsTrigger>
