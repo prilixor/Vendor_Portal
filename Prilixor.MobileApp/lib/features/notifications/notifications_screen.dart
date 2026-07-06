@@ -1,0 +1,271 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/notification_provider.dart';
+import '../../core/models/notification_model.dart';
+import '../../core/models/order_model.dart';
+import '../../core/providers/order_provider.dart';
+import '../orders/orders_screen.dart';
+import '../orders/order_detail_screen.dart';
+import '../../core/providers/product_provider.dart';
+import '../product/product_detail_screen.dart';
+
+class NotificationsScreen extends StatefulWidget {
+  const NotificationsScreen({super.key});
+
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<NotificationProvider>(context);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F172A),
+      appBar: AppBar(
+        title: const Text('Alerts', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF0F172A),
+        elevation: 0,
+        actions: [
+          if (provider.unreadCount > 0)
+            TextButton(
+              onPressed: () => provider.markAllAsRead(),
+              child: const Text('Mark all read', style: TextStyle(color: Color(0xFF6C63FF))),
+            ),
+        ],
+      ),
+      body: provider.isLoading && provider.notifications.isEmpty
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          : provider.errorMessage != null
+              ? Center(child: Text(provider.errorMessage!, style: const TextStyle(color: Colors.redAccent)))
+              : provider.notifications.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.notifications_off_outlined, size: 64, color: Colors.white24),
+                          SizedBox(height: 16),
+                          Text('You\'re all caught up!', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      color: const Color(0xFF6C63FF),
+                      onRefresh: provider.fetchNotifications,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: provider.notifications.length,
+                        separatorBuilder: (context, index) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          return _buildNotificationCard(context, provider.notifications[index]);
+                        },
+                      ),
+                    ),
+    );
+  }
+
+  Widget _buildNotificationCard(BuildContext context, NotificationModel notification) {
+    final isUnread = notification.readAt == null;
+
+    return GestureDetector(
+      onTap: () async {
+        if (isUnread) {
+          try {
+            await Provider.of<NotificationProvider>(context, listen: false).markAsRead(notification.id);
+          } catch (e) {
+            debugPrint('Failed to mark read: $e');
+          }
+        }
+
+        if (notification.relatedOrderId != null && notification.relatedOrderId!.isNotEmpty) {
+          final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+          final relatedId = notification.relatedOrderId!; 
+
+          List<OrderModel> getOrdersInGroup(OrderModel targetOrder) {
+            String baseOrder = targetOrder.orderNumber;
+            if (baseOrder.contains('-')) {
+              final p = baseOrder.split('-');
+              if (p.length >= 3) {
+                baseOrder = p.sublist(0, 3).join('-');
+              }
+            }
+            return orderProvider.orders.where((o) {
+              String b = o.orderNumber;
+              if (b.contains('-')) {
+                final p = b.split('-');
+                if (p.length >= 3) {
+                  b = p.sublist(0, 3).join('-');
+                }
+              }
+              return b == baseOrder;
+            }).toList();
+          }
+
+          OrderModel? targetOrder;
+          try {
+            targetOrder = orderProvider.orders.firstWhere((o) => o.id == relatedId);
+          } catch (_) {}
+
+          if (targetOrder == null) {
+            await orderProvider.fetchOrders();
+            try {
+              targetOrder = orderProvider.orders.firstWhere((o) => o.id == relatedId);
+            } catch (_) {}
+          }
+
+          if (targetOrder != null) {
+            final ordersInGroup = getOrdersInGroup(targetOrder);
+            if (context.mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => OrderDetailScreen(
+                    orderNumber: targetOrder!.orderNumber,
+                    ordersInGroup: ordersInGroup,
+                  ),
+                ),
+              );
+            }
+          } else if (context.mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const OrdersScreen()),
+            );
+          }
+        } else {
+          // Fallback routing based on type/title (mirrors WebApp getCustomerRoute)
+          final type = notification.notificationType.toLowerCase();
+          final title = notification.title.toLowerCase();
+          
+          if (type.startsWith("order_") || type.contains("order") || 
+              title.contains("order") || title.contains("rental") || 
+              title.contains("placed") || title.contains("expired") || title.contains("expiring")) {
+            if (context.mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const OrdersScreen()),
+              );
+            }
+          } else if (type.contains("stock") || title.contains("stock") || title.contains("favorite")) {
+            final regex = RegExp(r'Good news! (.*?) from your favorites');
+            final match = regex.firstMatch(notification.body);
+            if (match != null && match.groupCount >= 1 && context.mounted) {
+              final productName = match.group(1)!;
+              final productProvider = Provider.of<ProductProvider>(context, listen: false);
+              
+              await productProvider.fetchProducts(search: productName);
+              if (productProvider.products.isNotEmpty && context.mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => ProductDetailScreen(listingId: productProvider.products.first.id)),
+                );
+              }
+            }
+          }
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isUnread ? const Color(0xFF6C63FF).withValues(alpha: 0.1) : const Color(0xFF1E293B),
+          borderRadius: BorderRadius.circular(12),
+          border: isUnread ? Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.3)) : null,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isUnread ? const Color(0xFF6C63FF).withValues(alpha: 0.2) : Colors.white10,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _getIconForType(notification.notificationType),
+                color: isUnread ? const Color(0xFF6C63FF) : Colors.white70,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    children: [
+                      Text(
+                        notification.title,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: isUnread ? FontWeight.bold : FontWeight.w500,
+                        ),
+                      ),
+                      if (notification.notificationType.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white10,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            notification.notificationType.toLowerCase().replaceAll('_', ' '),
+                            style: const TextStyle(color: Colors.white54, fontSize: 10),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    notification.body,
+                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _formatDate(notification.createdAt),
+                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getIconForType(String type) {
+    final lowerType = type.toLowerCase();
+    if (lowerType.contains('order')) return Icons.shopping_bag_outlined;
+    if (lowerType.contains('expire') || lowerType.contains('return')) return Icons.timer_outlined;
+    if (lowerType.contains('message') || lowerType.contains('chat')) return Icons.chat_bubble_outline;
+    return Icons.notifications_none;
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inDays == 0) {
+      if (difference.inHours == 0) {
+        return '${difference.inMinutes}m ago';
+      }
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${date.day}/${date.month}/${date.year}';
+    }
+  }
+}

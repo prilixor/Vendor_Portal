@@ -48,7 +48,10 @@ public sealed class RegisterCustomerEndpoint(IMediator mediator)
 
 public sealed class GetCustomerCatalogRequest
 {
+    [QueryParam]
     public string? Category { get; set; }
+    
+    [QueryParam]
     public string? Search { get; set; }
 }
 

@@ -84,13 +84,35 @@ const CustomerNotifications = () => {
     },
   });
 
-  const handleRowActivate = (n: CustomerNotificationApi) => {
+  const handleRowActivate = async (n: CustomerNotificationApi) => {
     if (!n.readAt) {
-      markReadMutation.mutate(n.id);
+      try {
+        await markReadMutation.mutateAsync(n.id);
+      } catch (e) {
+        console.error(e);
+      }
     }
     if (n.relatedOrderId) {
       navigate(`/customer/orders/${encodeURIComponent(n.relatedOrderId)}`);
     } else {
+      const isBackInStock = n.title.toLowerCase().includes("stock") || n.notificationType === "back_in_stock";
+      if (isBackInStock) {
+        const match = n.body.match(/Good news! (.*?) from your favorites/);
+        if (match && match[1]) {
+           try {
+             const results = await customerApi.getCatalogListings(undefined, match[1]);
+             if (results && results.length > 0) {
+               navigate(`/customer/browse/${encodeURIComponent(results[0].id)}`);
+               return;
+             }
+           } catch (e) {
+             console.error(e);
+           }
+        }
+        navigate("/customer/browse");
+        return;
+      }
+
       const route = getCustomerRoute(n.notificationType, n.title);
       if (route) {
         navigate(route);

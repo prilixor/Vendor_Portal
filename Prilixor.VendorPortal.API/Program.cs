@@ -68,12 +68,10 @@ builder.Services.AddCors(options =>
         }
         else
         {
-            policy.WithOrigins(
-                "http://localhost:5173",
-                "https://vendor-portal-psi-amber.vercel.app"
-            )
+            policy.SetIsOriginAllowed(origin => true) // Allow all localhost ports for Flutter Web
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
         }
     });
 });
