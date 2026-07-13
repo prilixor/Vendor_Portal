@@ -48,7 +48,7 @@ public interface IVendorOnboardingRepository
     Task AddProductCategoryAsync(ProductCategory category, CancellationToken cancellationToken);
     Task UpdateProductCategoryAsync(ProductCategory category, CancellationToken cancellationToken);
     Task DeleteProductCategoryAsync(Guid categoryId, CancellationToken cancellationToken);
-    Task<List<ProductCategory>> GetProductCategoriesAsync(CancellationToken cancellationToken);
+    Task<List<ProductCategory>> GetProductCategoriesAsync(CancellationToken cancellationToken, bool includeDeleted = false);
 
     Task<Product?> GetProductByIdAsync(Guid productId, CancellationToken cancellationToken);
     Task AddProductAsync(Product product, CancellationToken cancellationToken);
@@ -66,6 +66,7 @@ public interface IVendorOnboardingRepository
     Task UpdateVendorProductListingAsync(VendorProductListing listing, CancellationToken cancellationToken);
     Task DeleteVendorProductListingAsync(Guid vendorId, Guid listingId, CancellationToken cancellationToken);
     Task<List<VendorProductListing>> GetVendorProductListingsAsync(Guid vendorId, CancellationToken cancellationToken);
+    Task<HashSet<Guid>> GetChemicalProductIdsAsync(List<Guid> productIds, CancellationToken cancellationToken);
 
     Task AddVendorProductImageAsync(VendorProductImage image, CancellationToken cancellationToken);
     Task<VendorProductImage?> GetVendorProductImageByIdAsync(Guid vendorId, Guid listingId, Guid imageId, CancellationToken cancellationToken);
@@ -79,6 +80,10 @@ public interface IVendorOnboardingRepository
 
     Task<VendorInventory?> GetVendorInventoryByListingIdAsync(Guid listingId, CancellationToken cancellationToken);
     Task UpsertVendorInventoryAsync(VendorInventory inventory, CancellationToken cancellationToken);
+
+    Task<List<VendorVariantInventory>> GetVariantInventoryByListingIdAsync(Guid listingId, CancellationToken cancellationToken);
+    Task UpsertVariantInventoryAsync(VendorVariantInventory item, CancellationToken cancellationToken);
+
 
     Task AddVendorProductAssetAsync(VendorProductAsset asset, CancellationToken cancellationToken);
     Task<VendorProductAsset?> GetVendorProductAssetByIdAsync(Guid assetId, CancellationToken cancellationToken);

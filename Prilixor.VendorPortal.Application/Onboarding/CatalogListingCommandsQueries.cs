@@ -12,6 +12,7 @@ public sealed record CreateProductCategoryCommand(
     bool PrescriptionRequired,
     bool DepositRequired,
     bool InstallationRequired,
+    bool IsChemical,
     bool IsActive) : ICommand<ProductCategoryDto>;
 
 public sealed class CreateProductCategoryCommandValidator : AbstractValidator<CreateProductCategoryCommand>
@@ -33,6 +34,7 @@ internal sealed class CreateProductCategoryCommandHandler(IVendorOnboardingRepos
             PrescriptionRequired = request.PrescriptionRequired,
             DepositRequired = request.DepositRequired,
             InstallationRequired = request.InstallationRequired,
+            IsChemical = request.IsChemical,
             IsActive = request.IsActive
         };
 
@@ -45,6 +47,7 @@ internal sealed class CreateProductCategoryCommandHandler(IVendorOnboardingRepos
             entity.PrescriptionRequired,
             entity.DepositRequired,
             entity.InstallationRequired,
+            entity.IsChemical,
             entity.IsActive));
     }
 }
@@ -63,11 +66,21 @@ internal sealed class GetProductCategoriesQueryHandler(IVendorOnboardingReposito
             x.PrescriptionRequired,
             x.DepositRequired,
             x.InstallationRequired,
+            x.IsChemical,
             x.IsActive)).ToList();
 
         return Result.Success(result);
     }
 }
+
+public sealed record CreateOrUpdateProductVariantDto(
+    string? Id,
+    string Sku,
+    decimal SizeValue,
+    string SizeUnit,
+    decimal VendorPrice,
+    decimal BuyPrice,
+    bool IsActive);
 
 public sealed record CreateProductCommand(
     string CategoryId,
@@ -80,10 +93,22 @@ public sealed record CreateProductCommand(
     decimal MonthlyRent,
     decimal SecurityDeposit,
     decimal? BuyPrice,
+    decimal VendorDailyRent,
+    decimal VendorMonthlyRent,
+    decimal VendorSecurityDeposit,
+    decimal? VendorBuyPrice,
     decimal GstPercent,
     bool IsRentEnabled,
     bool IsBuyEnabled,
-    bool IsActive) : ICommand<ProductDto>;
+    bool IsActive,
+    List<CreateOrUpdateProductVariantDto>? Variants = null,
+    string? CasNumber = null,
+    string? ChemicalFormula = null,
+    decimal? PurityPercentage = null,
+    decimal? MolecularWeight = null,
+    string? BaseUnit = null,
+    string? SdsDocumentUrl = null,
+    string? CoaDocumentUrl = null) : ICommand<ProductDto>;
 
 public sealed class CreateProductCommandValidator : AbstractValidator<CreateProductCommand>
 {
@@ -127,11 +152,44 @@ internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository re
             MonthlyRent = request.MonthlyRent,
             SecurityDeposit = request.SecurityDeposit,
             BuyPrice = request.BuyPrice,
+            VendorDailyRent = request.VendorDailyRent,
+            VendorMonthlyRent = request.VendorMonthlyRent,
+            VendorSecurityDeposit = request.VendorSecurityDeposit,
+            VendorBuyPrice = request.VendorBuyPrice,
             GstPercent = request.GstPercent,
             IsRentEnabled = request.IsRentEnabled,
             IsBuyEnabled = request.IsBuyEnabled,
             IsActive = request.IsActive
         };
+
+        if (request.Variants != null && request.Variants.Count > 0)
+        {
+            entity.Variants = request.Variants.Select(v => new ProductVariant
+            {
+                Id = string.IsNullOrEmpty(v.Id) ? Guid.NewGuid() : Guid.Parse(v.Id),
+                ProductId = entity.Id,
+                Sku = v.Sku,
+                SizeValue = v.SizeValue,
+                SizeUnit = v.SizeUnit,
+                VendorPrice = v.VendorPrice,
+                BuyPrice = v.BuyPrice,
+                IsActive = v.IsActive
+            }).ToList();
+        }
+
+        if (request.CasNumber != null || request.ChemicalFormula != null || request.BaseUnit != null)
+        {
+            entity.ChemicalProperty = new ChemicalProperty
+            {
+                CasNumber = request.CasNumber,
+                ChemicalFormula = request.ChemicalFormula,
+                PurityPercentage = request.PurityPercentage,
+                MolecularWeight = request.MolecularWeight,
+                BaseUnit = request.BaseUnit ?? "Kg",
+                SdsDocumentUrl = request.SdsDocumentUrl,
+                CoaDocumentUrl = request.CoaDocumentUrl
+            };
+        }
 
         await repository.AddProductAsync(entity, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
@@ -148,10 +206,31 @@ internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository re
             entity.MonthlyRent,
             entity.SecurityDeposit,
             entity.BuyPrice,
+            entity.VendorDailyRent,
+            entity.VendorMonthlyRent,
+            entity.VendorSecurityDeposit,
+            entity.VendorBuyPrice,
             entity.GstPercent,
             entity.IsRentEnabled,
             entity.IsBuyEnabled,
             entity.IsActive,
+            [],
+            entity.Variants?.Select(v => new ProductVariantDto(
+                v.Id.ToString(),
+                v.ProductId.ToString(),
+                v.Sku,
+                v.SizeValue,
+                v.SizeUnit,
+                v.VendorPrice,
+                v.BuyPrice,
+                v.IsActive)).ToList() ?? [],
+            entity.ChemicalProperty?.CasNumber,
+            entity.ChemicalProperty?.ChemicalFormula,
+            entity.ChemicalProperty?.PurityPercentage,
+            entity.ChemicalProperty?.MolecularWeight,
+            entity.ChemicalProperty?.BaseUnit,
+            entity.ChemicalProperty?.SdsDocumentUrl,
+            entity.ChemicalProperty?.CoaDocumentUrl,
             0));
     }
 }
@@ -197,10 +276,31 @@ internal sealed class GetProductsQueryHandler(
             x.MonthlyRent,
             x.SecurityDeposit,
             x.BuyPrice,
+            x.VendorDailyRent,
+            x.VendorMonthlyRent,
+            x.VendorSecurityDeposit,
+            x.VendorBuyPrice,
             x.GstPercent,
             x.IsRentEnabled,
             x.IsBuyEnabled,
             x.IsActive,
+            x.ProductImages?.Select(i => new ProductImageDto(i.Id.ToString(), i.ProductId.ToString(), i.ImageUrl, i.DisplayOrder, i.IsPrimary)).ToList() ?? [],
+            x.Variants?.Select(v => new ProductVariantDto(
+                v.Id.ToString(),
+                v.ProductId.ToString(),
+                v.Sku,
+                v.SizeValue,
+                v.SizeUnit,
+                v.VendorPrice,
+                v.BuyPrice,
+                v.IsActive)).ToList() ?? [],
+            x.ChemicalProperty?.CasNumber,
+            x.ChemicalProperty?.ChemicalFormula,
+            x.ChemicalProperty?.PurityPercentage,
+            x.ChemicalProperty?.MolecularWeight,
+            x.ChemicalProperty?.BaseUnit,
+            x.ChemicalProperty?.SdsDocumentUrl,
+            x.ChemicalProperty?.CoaDocumentUrl,
             favoriteCounts.GetValueOrDefault(x.Id, 0))).ToList();
 
         return Result.Success(result);
@@ -601,6 +701,10 @@ internal sealed class GetVendorProductListingsQueryHandler(
             favoriteCounts = await customerRepository.GetFavoriteCountsByProductsAsync(cancellationToken);
         }
 
+        // Determine which products belong to chemical categories
+        var chemicalProductIds = await repository.GetChemicalProductIdsAsync(
+            rows.Select(x => x.ProductId).Distinct().ToList(), cancellationToken);
+
         var result = rows.Select(x => new VendorProductListingDto(
             x.Id.ToString(),
             x.VendorId.ToString(),
@@ -611,7 +715,8 @@ internal sealed class GetVendorProductListingsQueryHandler(
             x.SecurityDeposit,
             x.AvailableQuantity,
             x.ListingStatus,
-            favoriteCounts.GetValueOrDefault(x.ProductId, 0))).ToList();
+            favoriteCounts.GetValueOrDefault(x.ProductId, 0),
+            chemicalProductIds.Contains(x.ProductId))).ToList();
 
         return Result.Success(result);
     }
@@ -980,6 +1085,7 @@ public sealed record UpdateProductCategoryCommand(
     bool PrescriptionRequired,
     bool DepositRequired,
     bool InstallationRequired,
+    bool IsChemical,
     bool IsActive) : ICommand<ProductCategoryDto>;
 
 public sealed class UpdateProductCategoryCommandValidator : AbstractValidator<UpdateProductCategoryCommand>
@@ -1011,6 +1117,7 @@ internal sealed class UpdateProductCategoryCommandHandler(IVendorOnboardingRepos
         entity.PrescriptionRequired = request.PrescriptionRequired;
         entity.DepositRequired = request.DepositRequired;
         entity.InstallationRequired = request.InstallationRequired;
+        entity.IsChemical = request.IsChemical;
         entity.IsActive = request.IsActive;
 
         await repository.UpdateProductCategoryAsync(entity, cancellationToken);
@@ -1022,6 +1129,7 @@ internal sealed class UpdateProductCategoryCommandHandler(IVendorOnboardingRepos
             entity.PrescriptionRequired,
             entity.DepositRequired,
             entity.InstallationRequired,
+            entity.IsChemical,
             entity.IsActive));
     }
 }
@@ -1078,10 +1186,22 @@ public sealed record UpdateProductCommand(
     decimal MonthlyRent,
     decimal SecurityDeposit,
     decimal? BuyPrice,
+    decimal VendorDailyRent,
+    decimal VendorMonthlyRent,
+    decimal VendorSecurityDeposit,
+    decimal? VendorBuyPrice,
     decimal GstPercent,
     bool IsRentEnabled,
     bool IsBuyEnabled,
-    bool IsActive) : ICommand<ProductDto>;
+    bool IsActive,
+    List<CreateOrUpdateProductVariantDto>? Variants = null,
+    string? CasNumber = null,
+    string? ChemicalFormula = null,
+    decimal? PurityPercentage = null,
+    decimal? MolecularWeight = null,
+    string? BaseUnit = null,
+    string? SdsDocumentUrl = null,
+    string? CoaDocumentUrl = null) : ICommand<ProductDto>;
 
 public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProductCommand>
 {
@@ -1135,10 +1255,65 @@ internal sealed class UpdateProductCommandHandler(IVendorOnboardingRepository re
         entity.MonthlyRent = request.MonthlyRent;
         entity.SecurityDeposit = request.SecurityDeposit;
         entity.BuyPrice = request.BuyPrice;
+        entity.VendorDailyRent = request.VendorDailyRent;
+        entity.VendorMonthlyRent = request.VendorMonthlyRent;
+        entity.VendorSecurityDeposit = request.VendorSecurityDeposit;
+        entity.VendorBuyPrice = request.VendorBuyPrice;
         entity.GstPercent = request.GstPercent;
         entity.IsRentEnabled = request.IsRentEnabled;
         entity.IsBuyEnabled = request.IsBuyEnabled;
         entity.IsActive = request.IsActive;
+
+        if (request.Variants != null)
+        {
+            entity.Variants ??= new List<ProductVariant>();
+            foreach (var v in request.Variants)
+            {
+                var existing = entity.Variants.FirstOrDefault(x => (!string.IsNullOrEmpty(v.Id) && x.Id == Guid.Parse(v.Id)) || x.Sku == v.Sku);
+                if (existing is null)
+                {
+                    entity.Variants.Add(new ProductVariant
+                    {
+                        Id = string.IsNullOrEmpty(v.Id) ? Guid.NewGuid() : Guid.Parse(v.Id),
+                        ProductId = entity.Id,
+                        Sku = v.Sku,
+                        SizeValue = v.SizeValue,
+                        SizeUnit = v.SizeUnit,
+                        VendorPrice = v.VendorPrice,
+                        BuyPrice = v.BuyPrice,
+                        IsActive = v.IsActive
+                    });
+                }
+                else
+                {
+                    existing.Sku = v.Sku;
+                    existing.SizeValue = v.SizeValue;
+                    existing.SizeUnit = v.SizeUnit;
+                    existing.VendorPrice = v.VendorPrice;
+                    existing.BuyPrice = v.BuyPrice;
+                    existing.IsActive = v.IsActive;
+                }
+            }
+            var toRemove = entity.Variants
+                .Where(x => !request.Variants.Any(v => (!string.IsNullOrEmpty(v.Id) && x.Id == Guid.Parse(v.Id)) || x.Sku == v.Sku))
+                .ToList();
+            foreach (var tr in toRemove)
+            {
+                entity.Variants.Remove(tr);
+            }
+        }
+
+        if (request.CasNumber != null || request.ChemicalFormula != null || request.BaseUnit != null)
+        {
+            entity.ChemicalProperty ??= new ChemicalProperty { ProductId = entity.Id };
+            entity.ChemicalProperty.CasNumber = request.CasNumber;
+            entity.ChemicalProperty.ChemicalFormula = request.ChemicalFormula;
+            entity.ChemicalProperty.PurityPercentage = request.PurityPercentage;
+            entity.ChemicalProperty.MolecularWeight = request.MolecularWeight;
+            entity.ChemicalProperty.BaseUnit = request.BaseUnit ?? "Kg";
+            entity.ChemicalProperty.SdsDocumentUrl = request.SdsDocumentUrl;
+            entity.ChemicalProperty.CoaDocumentUrl = request.CoaDocumentUrl;
+        }
 
         await repository.UpdateProductAsync(entity, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
@@ -1155,10 +1330,31 @@ internal sealed class UpdateProductCommandHandler(IVendorOnboardingRepository re
             entity.MonthlyRent,
             entity.SecurityDeposit,
             entity.BuyPrice,
+            entity.VendorDailyRent,
+            entity.VendorMonthlyRent,
+            entity.VendorSecurityDeposit,
+            entity.VendorBuyPrice,
             entity.GstPercent,
             entity.IsRentEnabled,
             entity.IsBuyEnabled,
             entity.IsActive,
+            [],
+            entity.Variants?.Select(v => new ProductVariantDto(
+                v.Id.ToString(),
+                v.ProductId.ToString(),
+                v.Sku,
+                v.SizeValue,
+                v.SizeUnit,
+                v.VendorPrice,
+                v.BuyPrice,
+                v.IsActive)).ToList() ?? [],
+            entity.ChemicalProperty?.CasNumber,
+            entity.ChemicalProperty?.ChemicalFormula,
+            entity.ChemicalProperty?.PurityPercentage,
+            entity.ChemicalProperty?.MolecularWeight,
+            entity.ChemicalProperty?.BaseUnit,
+            entity.ChemicalProperty?.SdsDocumentUrl,
+            entity.ChemicalProperty?.CoaDocumentUrl,
             0));
     }
 }
@@ -1196,7 +1392,7 @@ internal sealed class DeleteProductCommandHandler(IVendorOnboardingRepository re
     }
 }
 
-public sealed record UploadCatalogExcelCommand(byte[] FileData) : ICommand<ExcelUploadResponseDto>;
+public sealed record UploadCatalogExcelCommand(byte[] FileData, bool IsChemicalTemplate = false) : ICommand<ExcelUploadResponseDto>;
 
 public sealed class UploadCatalogExcelCommandValidator : AbstractValidator<UploadCatalogExcelCommand>
 {
@@ -1223,11 +1419,69 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
             
             // Get all sheets
             var categoriesSheet = package.Workbook.Worksheets.FirstOrDefault(ws => ws.Name.Equals("Categories", StringComparison.OrdinalIgnoreCase));
-            var productsSheet = package.Workbook.Worksheets.FirstOrDefault(ws => ws.Name.Equals("Products", StringComparison.OrdinalIgnoreCase));
+            var productsSheet = package.Workbook.Worksheets.FirstOrDefault(ws => ws.Name.Equals(request.IsChemicalTemplate ? "Chemicals" : "Products", StringComparison.OrdinalIgnoreCase))
+                                ?? package.Workbook.Worksheets.FirstOrDefault(ws => ws.Name.Equals("Products", StringComparison.OrdinalIgnoreCase));
+            var variantsSheet = package.Workbook.Worksheets.FirstOrDefault(ws => ws.Name.Equals("Variants", StringComparison.OrdinalIgnoreCase));
             
             if (categoriesSheet == null && productsSheet == null)
             {
-                return Result.Failure<ExcelUploadResponseDto>(new Error("excel.no_sheets", "Excel file must contain 'Categories' and/or 'Products' sheets.", ErrorCategory.Validation));
+                var sheetName = request.IsChemicalTemplate ? "'Chemicals'" : "'Products'";
+                return Result.Failure<ExcelUploadResponseDto>(new Error("excel.no_sheets", $"Excel file must contain 'Categories' and/or {sheetName} sheets.", ErrorCategory.Validation));
+            }
+
+            // Process Variants sheet first if it exists
+            var variantsLookup = new Dictionary<string, List<ProductVariant>>(StringComparer.OrdinalIgnoreCase);
+            if (variantsSheet != null)
+            {
+                var vRowCount = variantsSheet.Dimension?.Rows ?? 0;
+                if (vRowCount > 1)
+                {
+                    for (int row = 2; row <= vRowCount; row++)
+                    {
+                        try
+                        {
+                            var productName = variantsSheet.Cells[row, 1].Text?.Trim();
+                            var sku = variantsSheet.Cells[row, 2].Text?.Trim();
+                            var sizeValueText = variantsSheet.Cells[row, 3].Text?.Trim();
+                            var sizeUnit = variantsSheet.Cells[row, 4].Text?.Trim();
+                            var vendorPriceText = variantsSheet.Cells[row, 5].Text?.Trim();
+                            var buyPriceText = variantsSheet.Cells[row, 6].Text?.Trim();
+                            var isActiveText = variantsSheet.Cells[row, 7].Text?.Trim();
+
+                            if (string.IsNullOrEmpty(productName) || string.IsNullOrEmpty(sku))
+                            {
+                                continue;
+                            }
+
+                            if (!decimal.TryParse(sizeValueText, out var sizeValue)) sizeValue = 1m;
+                            if (!decimal.TryParse(vendorPriceText, out var vendorPrice)) vendorPrice = 0m;
+                            if (!decimal.TryParse(buyPriceText, out var buyPrice)) buyPrice = 0m;
+                            bool isActive = string.IsNullOrEmpty(isActiveText) || isActiveText?.ToLower() == "true" || isActiveText?.ToLower() == "yes" || isActiveText == "1";
+
+                            var variant = new ProductVariant
+                            {
+                                Id = Guid.NewGuid(),
+                                Sku = sku,
+                                SizeValue = sizeValue,
+                                SizeUnit = string.IsNullOrEmpty(sizeUnit) ? "Kg" : sizeUnit,
+                                VendorPrice = vendorPrice,
+                                BuyPrice = buyPrice,
+                                IsActive = isActive
+                            };
+
+                            if (!variantsLookup.TryGetValue(productName, out var list))
+                            {
+                                list = new List<ProductVariant>();
+                                variantsLookup[productName] = list;
+                            }
+                            list.Add(variant);
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add(new ExcelUploadErrorDto(row, "Variants", "row", $"Error processing row: {ex.Message}"));
+                        }
+                    }
+                }
             }
 
             // Process Categories sheet
@@ -1259,26 +1513,47 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                             bool installationRequired = installationRequiredText?.ToLower() == "true" || installationRequiredText?.ToLower() == "yes" || installationRequiredText == "1";
                             bool isActive = string.IsNullOrEmpty(isActiveText) || isActiveText?.ToLower() == "true" || isActiveText?.ToLower() == "yes" || isActiveText == "1";
 
-                            // Check if category already exists
-                            var existingCategories = await repository.GetProductCategoriesAsync(cancellationToken);
-                            if (existingCategories.Any(c => c.CategoryName.Equals(categoryName, StringComparison.OrdinalIgnoreCase)))
+                            // Check if category already exists (including deleted ones)
+                            var existingCategories = await repository.GetProductCategoriesAsync(cancellationToken, includeDeleted: true);
+                            var existingCategory = existingCategories.FirstOrDefault(c => c.CategoryName.Equals(categoryName, StringComparison.OrdinalIgnoreCase));
+
+                            if (existingCategory != null)
                             {
-                                errors.Add(new ExcelUploadErrorDto(row, "Categories", "category_name", $"Category '{categoryName}' already exists."));
-                                continue;
+                                if (!existingCategory.IsDeleted)
+                                {
+                                    errors.Add(new ExcelUploadErrorDto(row, "Categories", "category_name", $"Category '{categoryName}' already exists."));
+                                    continue;
+                                }
+
+                                // Restore deleted category
+                                existingCategory.IsDeleted = false;
+                                existingCategory.DeletedAt = null;
+                                existingCategory.DeletedBy = null;
+                                existingCategory.PrescriptionRequired = prescriptionRequired;
+                                existingCategory.DepositRequired = depositRequired;
+                                existingCategory.InstallationRequired = installationRequired;
+                                existingCategory.IsChemical = request.IsChemicalTemplate;
+                                existingCategory.IsActive = isActive;
+
+                                await repository.UpdateProductCategoryAsync(existingCategory, cancellationToken);
+                                categoriesCreated++;
                             }
-
-                            // Create category
-                            var category = new ProductCategory
+                            else
                             {
-                                CategoryName = categoryName,
-                                PrescriptionRequired = prescriptionRequired,
-                                DepositRequired = depositRequired,
-                                InstallationRequired = installationRequired,
-                                IsActive = isActive
-                            };
+                                // Create category
+                                var category = new ProductCategory
+                                {
+                                    CategoryName = categoryName,
+                                    PrescriptionRequired = prescriptionRequired,
+                                    DepositRequired = depositRequired,
+                                    InstallationRequired = installationRequired,
+                                    IsChemical = request.IsChemicalTemplate,
+                                    IsActive = isActive
+                                };
 
-                            await repository.AddProductCategoryAsync(category, cancellationToken);
-                            categoriesCreated++;
+                                await repository.AddProductCategoryAsync(category, cancellationToken);
+                                categoriesCreated++;
+                            }
                         }
                         catch (Exception ex)
                         {
@@ -1307,17 +1582,70 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                             var categoryName = productsSheet.Cells[row, 1].Text?.Trim();
                             var productName = productsSheet.Cells[row, 2].Text?.Trim();
                             var brandName = productsSheet.Cells[row, 3].Text?.Trim();
-                            var modelName = productsSheet.Cells[row, 4].Text?.Trim();
-                            var shortDescription = productsSheet.Cells[row, 5].Text?.Trim();
-                            var longDescription = productsSheet.Cells[row, 6].Text?.Trim();
-                            var dailyRentText = productsSheet.Cells[row, 7].Text?.Trim();
-                            var monthlyRentText = productsSheet.Cells[row, 8].Text?.Trim();
-                            var securityDepositText = productsSheet.Cells[row, 9].Text?.Trim();
-                            var buyPriceText = productsSheet.Cells[row, 10].Text?.Trim();
-                            var gstPercentText = productsSheet.Cells[row, 11].Text?.Trim();
-                            var isRentEnabledText = productsSheet.Cells[row, 12].Text?.Trim();
-                            var isBuyEnabledText = productsSheet.Cells[row, 13].Text?.Trim();
-                            var isActiveText = productsSheet.Cells[row, 14].Text?.Trim();
+                            
+                            string? modelName = null;
+                            string? shortDescription;
+                            string? longDescription;
+                            string? dailyRentText = null;
+                            string? monthlyRentText = null;
+                            string? securityDepositText = null;
+                            string? buyPriceText;
+                            string? gstPercentText;
+                            string? isRentEnabledText = null;
+                            string? isBuyEnabledText = null;
+                            string? isActiveText;
+                            
+                            // New fields for vendor pricing
+                            string? vendorDailyRentText = null;
+                            string? vendorMonthlyRentText = null;
+                            string? vendorSecurityDepositText = null;
+                            string? vendorBuyPriceText = null;
+                            
+                            string? casNumber = null;
+                            string? chemicalFormula = null;
+                            string? purityText = null;
+                            string? molecularWeightText = null;
+                            string? baseUnit = null;
+                            string? sdsDocumentUrl = null;
+                            string? coaDocumentUrl = null;
+
+                            if (request.IsChemicalTemplate)
+                            {
+                                shortDescription = productsSheet.Cells[row, 4].Text?.Trim();
+                                longDescription = productsSheet.Cells[row, 5].Text?.Trim();
+                                buyPriceText = productsSheet.Cells[row, 6].Text?.Trim();
+                                gstPercentText = productsSheet.Cells[row, 7].Text?.Trim();
+                                casNumber = productsSheet.Cells[row, 8].Text?.Trim();
+                                chemicalFormula = productsSheet.Cells[row, 9].Text?.Trim();
+                                purityText = productsSheet.Cells[row, 10].Text?.Trim();
+                                molecularWeightText = productsSheet.Cells[row, 11].Text?.Trim();
+                                baseUnit = productsSheet.Cells[row, 12].Text?.Trim();
+                                sdsDocumentUrl = productsSheet.Cells[row, 13].Text?.Trim();
+                                coaDocumentUrl = productsSheet.Cells[row, 14].Text?.Trim();
+                                isActiveText = productsSheet.Cells[row, 15].Text?.Trim();
+                                vendorBuyPriceText = productsSheet.Cells[row, 16].Text?.Trim();
+
+                                isRentEnabledText = "false";
+                                isBuyEnabledText = "true";
+                            }
+                            else
+                            {
+                                modelName = productsSheet.Cells[row, 4].Text?.Trim();
+                                shortDescription = productsSheet.Cells[row, 5].Text?.Trim();
+                                longDescription = productsSheet.Cells[row, 6].Text?.Trim();
+                                dailyRentText = productsSheet.Cells[row, 7].Text?.Trim();
+                                monthlyRentText = productsSheet.Cells[row, 8].Text?.Trim();
+                                securityDepositText = productsSheet.Cells[row, 9].Text?.Trim();
+                                buyPriceText = productsSheet.Cells[row, 10].Text?.Trim();
+                                gstPercentText = productsSheet.Cells[row, 11].Text?.Trim();
+                                isRentEnabledText = productsSheet.Cells[row, 12].Text?.Trim();
+                                isBuyEnabledText = productsSheet.Cells[row, 13].Text?.Trim();
+                                isActiveText = productsSheet.Cells[row, 14].Text?.Trim();
+                                vendorDailyRentText = productsSheet.Cells[row, 15].Text?.Trim();
+                                vendorMonthlyRentText = productsSheet.Cells[row, 16].Text?.Trim();
+                                vendorSecurityDepositText = productsSheet.Cells[row, 17].Text?.Trim();
+                                vendorBuyPriceText = productsSheet.Cells[row, 18].Text?.Trim();
+                            }
 
                             // Validate required fields
                             if (string.IsNullOrEmpty(categoryName))
@@ -1348,6 +1676,12 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                             if (!decimal.TryParse(securityDepositText, out var securityDeposit)) securityDeposit = 0m;
                             decimal? buyPrice = null;
                             if (decimal.TryParse(buyPriceText, out var buyPriceParsed)) buyPrice = buyPriceParsed;
+
+                            decimal? vendorDailyRent = decimal.TryParse(vendorDailyRentText, out var vdr) ? vdr : (decimal?)null;
+                            decimal? vendorMonthlyRent = decimal.TryParse(vendorMonthlyRentText, out var vmr) ? vmr : (decimal?)null;
+                            decimal? vendorSecurityDeposit = decimal.TryParse(vendorSecurityDepositText, out var vsd) ? vsd : (decimal?)null;
+                            decimal? vendorBuyPrice = decimal.TryParse(vendorBuyPriceText, out var vbp) ? vbp : (decimal?)null;
+
                             if (!decimal.TryParse(gstPercentText, out var gstPercent)) gstPercent = 18m;
 
                             // Create product
@@ -1363,11 +1697,42 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                                 MonthlyRent = Math.Max(0m, monthlyRent),
                                 SecurityDeposit = Math.Max(0m, securityDeposit),
                                 BuyPrice = buyPrice is > 0m ? buyPrice : null,
+                                VendorDailyRent = Math.Max(0m, vendorDailyRent ?? dailyRent),
+                                VendorMonthlyRent = Math.Max(0m, vendorMonthlyRent ?? monthlyRent),
+                                VendorSecurityDeposit = Math.Max(0m, vendorSecurityDeposit ?? securityDeposit),
+                                VendorBuyPrice = vendorBuyPrice ?? buyPrice,
                                 GstPercent = Math.Clamp(gstPercent, 0m, 100m),
                                 IsRentEnabled = isRentEnabled,
                                 IsBuyEnabled = isBuyEnabled,
-                                IsActive = isActive
+                                IsActive = isActive,
+                                Variants = new List<ProductVariant>()
                             };
+
+                            if (variantsLookup.TryGetValue(productName, out var pVariants))
+                            {
+                                foreach (var v in pVariants)
+                                {
+                                    v.ProductId = product.Id;
+                                    product.Variants.Add(v);
+                                }
+                            }
+
+                            if (request.IsChemicalTemplate || !string.IsNullOrWhiteSpace(casNumber) || !string.IsNullOrWhiteSpace(chemicalFormula) || !string.IsNullOrWhiteSpace(baseUnit))
+                            {
+                                decimal? purity = decimal.TryParse(purityText, out var p) ? p : null;
+                                decimal? molecularWeight = decimal.TryParse(molecularWeightText, out var mw) ? mw : null;
+
+                                product.ChemicalProperty = new ChemicalProperty
+                                {
+                                    CasNumber = string.IsNullOrWhiteSpace(casNumber) ? null : casNumber,
+                                    ChemicalFormula = string.IsNullOrWhiteSpace(chemicalFormula) ? null : chemicalFormula,
+                                    PurityPercentage = purity,
+                                    MolecularWeight = molecularWeight,
+                                    BaseUnit = string.IsNullOrWhiteSpace(baseUnit) ? "Kg" : baseUnit,
+                                    SdsDocumentUrl = string.IsNullOrWhiteSpace(sdsDocumentUrl) ? null : sdsDocumentUrl,
+                                    CoaDocumentUrl = string.IsNullOrWhiteSpace(coaDocumentUrl) ? null : coaDocumentUrl
+                                };
+                            }
 
                             await repository.AddProductAsync(product, cancellationToken);
                             productsCreated++;
@@ -1396,7 +1761,7 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
 }
 
 // Download existing catalog data as Excel
-public sealed record DownloadCatalogExcelQuery : IQuery<byte[]>;
+public sealed record DownloadCatalogExcelQuery(bool IsChemicalTemplate = false) : IQuery<byte[]>;
 
 internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingRepository repository)
     : IQueryHandler<DownloadCatalogExcelQuery, byte[]>
@@ -1443,57 +1808,151 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
             // Auto-fit columns
             categoriesSheet.Cells[1, 1, 1, 5].AutoFitColumns();
 
-            // Create Products sheet
-            var productsSheet = package.Workbook.Worksheets.Add("Products");
-            productsSheet.Cells[1, 1].Value = "category_name";
-            productsSheet.Cells[1, 2].Value = "product_name";
-            productsSheet.Cells[1, 3].Value = "brand_name";
-            productsSheet.Cells[1, 4].Value = "model_name";
-            productsSheet.Cells[1, 5].Value = "short_description";
-            productsSheet.Cells[1, 6].Value = "long_description";
-            productsSheet.Cells[1, 7].Value = "daily_rent";
-            productsSheet.Cells[1, 8].Value = "monthly_rent";
-            productsSheet.Cells[1, 9].Value = "security_deposit";
-            productsSheet.Cells[1, 10].Value = "buy_price";
-            productsSheet.Cells[1, 11].Value = "gst_percent";
-            productsSheet.Cells[1, 12].Value = "is_rent_enabled";
-            productsSheet.Cells[1, 13].Value = "is_buy_enabled";
-            productsSheet.Cells[1, 14].Value = "is_active";
+            // Create Products/Chemicals sheet
+            var sheetName = request.IsChemicalTemplate ? "Chemicals" : "Products";
+            var productsSheet = package.Workbook.Worksheets.Add(sheetName);
+            
+            if (request.IsChemicalTemplate)
+            {
+                productsSheet.Cells[1, 1].Value = "category_name";
+                productsSheet.Cells[1, 2].Value = "product_name";
+                productsSheet.Cells[1, 3].Value = "brand_name";
+                productsSheet.Cells[1, 4].Value = "short_description";
+                productsSheet.Cells[1, 5].Value = "long_description";
+                productsSheet.Cells[1, 6].Value = "buy_price";
+                productsSheet.Cells[1, 7].Value = "gst_percent";
+                productsSheet.Cells[1, 8].Value = "cas_number";
+                productsSheet.Cells[1, 9].Value = "chemical_formula";
+                productsSheet.Cells[1, 10].Value = "purity_percentage";
+                productsSheet.Cells[1, 11].Value = "molecular_weight";
+                productsSheet.Cells[1, 12].Value = "base_unit";
+                productsSheet.Cells[1, 13].Value = "sds_document_url";
+                productsSheet.Cells[1, 14].Value = "coa_document_url";
+                productsSheet.Cells[1, 15].Value = "is_active";
+                productsSheet.Cells[1, 16].Value = "vendor_buy_price";
 
-            // Style header row
-            using (var headerRange = productsSheet.Cells[1, 1, 1, 14])
+                using (var headerRange = productsSheet.Cells[1, 1, 1, 16])
+                {
+                    headerRange.Style.Font.Bold = true;
+                    headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
+                    headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+                }
+
+                row = 2;
+                foreach (var product in products.Where(p => p.ChemicalProperty != null))
+                {
+                    var category = categories.FirstOrDefault(c => c.Id == product.CategoryId);
+                    productsSheet.Cells[row, 1].Value = category?.CategoryName ?? "";
+                    productsSheet.Cells[row, 2].Value = product.ProductName;
+                    productsSheet.Cells[row, 3].Value = product.BrandName;
+                    productsSheet.Cells[row, 4].Value = product.ShortDescription;
+                    productsSheet.Cells[row, 5].Value = product.LongDescription;
+                    productsSheet.Cells[row, 6].Value = product.BuyPrice;
+                    productsSheet.Cells[row, 7].Value = product.GstPercent;
+                    productsSheet.Cells[row, 8].Value = product.ChemicalProperty?.CasNumber;
+                    productsSheet.Cells[row, 9].Value = product.ChemicalProperty?.ChemicalFormula;
+                    productsSheet.Cells[row, 10].Value = product.ChemicalProperty?.PurityPercentage;
+                    productsSheet.Cells[row, 11].Value = product.ChemicalProperty?.MolecularWeight;
+                    productsSheet.Cells[row, 12].Value = product.ChemicalProperty?.BaseUnit;
+                    productsSheet.Cells[row, 13].Value = product.ChemicalProperty?.SdsDocumentUrl;
+                    productsSheet.Cells[row, 14].Value = product.ChemicalProperty?.CoaDocumentUrl;
+                    productsSheet.Cells[row, 15].Value = product.IsActive;
+                    productsSheet.Cells[row, 16].Value = product.VendorBuyPrice;
+                    row++;
+                }
+                productsSheet.Cells[1, 1, 1, 16].AutoFitColumns();
+            }
+            else
+            {
+                productsSheet.Cells[1, 1].Value = "category_name";
+                productsSheet.Cells[1, 2].Value = "product_name";
+                productsSheet.Cells[1, 3].Value = "brand_name";
+                productsSheet.Cells[1, 4].Value = "model_name";
+                productsSheet.Cells[1, 5].Value = "short_description";
+                productsSheet.Cells[1, 6].Value = "long_description";
+                productsSheet.Cells[1, 7].Value = "daily_rent";
+                productsSheet.Cells[1, 8].Value = "monthly_rent";
+                productsSheet.Cells[1, 9].Value = "security_deposit";
+                productsSheet.Cells[1, 10].Value = "buy_price";
+                productsSheet.Cells[1, 11].Value = "gst_percent";
+                productsSheet.Cells[1, 12].Value = "is_rent_enabled";
+                productsSheet.Cells[1, 13].Value = "is_buy_enabled";
+                productsSheet.Cells[1, 14].Value = "is_active";
+                productsSheet.Cells[1, 15].Value = "vendor_daily_rent";
+                productsSheet.Cells[1, 16].Value = "vendor_monthly_rent";
+                productsSheet.Cells[1, 17].Value = "vendor_security_deposit";
+                productsSheet.Cells[1, 18].Value = "vendor_buy_price";
+
+                using (var headerRange = productsSheet.Cells[1, 1, 1, 18])
+                {
+                    headerRange.Style.Font.Bold = true;
+                    headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
+                    headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+                }
+
+                row = 2;
+                foreach (var product in products.Where(p => p.ChemicalProperty == null))
+                {
+                    var category = categories.FirstOrDefault(c => c.Id == product.CategoryId);
+                    productsSheet.Cells[row, 1].Value = category?.CategoryName ?? "";
+                    productsSheet.Cells[row, 2].Value = product.ProductName;
+                    productsSheet.Cells[row, 3].Value = product.BrandName;
+                    productsSheet.Cells[row, 4].Value = product.ModelName;
+                    productsSheet.Cells[row, 5].Value = product.ShortDescription;
+                    productsSheet.Cells[row, 6].Value = product.LongDescription;
+                    productsSheet.Cells[row, 7].Value = product.DailyRent;
+                    productsSheet.Cells[row, 8].Value = product.MonthlyRent;
+                    productsSheet.Cells[row, 9].Value = product.SecurityDeposit;
+                    productsSheet.Cells[row, 10].Value = product.BuyPrice;
+                    productsSheet.Cells[row, 11].Value = product.GstPercent;
+                    productsSheet.Cells[row, 12].Value = product.IsRentEnabled;
+                    productsSheet.Cells[row, 13].Value = product.IsBuyEnabled;
+                    productsSheet.Cells[row, 14].Value = product.IsActive;
+                    productsSheet.Cells[row, 15].Value = product.VendorDailyRent;
+                    productsSheet.Cells[row, 16].Value = product.VendorMonthlyRent;
+                    productsSheet.Cells[row, 17].Value = product.VendorSecurityDeposit;
+                    productsSheet.Cells[row, 18].Value = product.VendorBuyPrice;
+                    row++;
+                }
+                productsSheet.Cells[1, 1, 1, 18].AutoFitColumns();
+            }
+
+            // Create Variants sheet if chemical template or if there are variants
+            var downloadVariantsSheet = package.Workbook.Worksheets.Add("Variants");
+            downloadVariantsSheet.Cells[1, 1].Value = "product_name";
+            downloadVariantsSheet.Cells[1, 2].Value = "sku";
+            downloadVariantsSheet.Cells[1, 3].Value = "size_value";
+            downloadVariantsSheet.Cells[1, 4].Value = "size_unit";
+            downloadVariantsSheet.Cells[1, 5].Value = "vendor_price";
+            downloadVariantsSheet.Cells[1, 6].Value = "buy_price";
+            downloadVariantsSheet.Cells[1, 7].Value = "is_active";
+
+            using (var headerRange = downloadVariantsSheet.Cells[1, 1, 1, 7])
             {
                 headerRange.Style.Font.Bold = true;
                 headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
                 headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
             }
 
-            // Add product data
-            row = 2;
+            var variantRow = 2;
             foreach (var product in products)
             {
-                // Get category name for this product
-                var category = categories.FirstOrDefault(c => c.Id == product.CategoryId);
-                
-                productsSheet.Cells[row, 1].Value = category?.CategoryName ?? "";
-                productsSheet.Cells[row, 2].Value = product.ProductName;
-                productsSheet.Cells[row, 3].Value = product.BrandName;
-                productsSheet.Cells[row, 4].Value = product.ModelName;
-                productsSheet.Cells[row, 5].Value = product.ShortDescription;
-                productsSheet.Cells[row, 6].Value = product.LongDescription;
-                productsSheet.Cells[row, 7].Value = product.DailyRent;
-                productsSheet.Cells[row, 8].Value = product.MonthlyRent;
-                productsSheet.Cells[row, 9].Value = product.SecurityDeposit;
-                productsSheet.Cells[row, 10].Value = product.BuyPrice;
-                productsSheet.Cells[row, 11].Value = product.GstPercent;
-                productsSheet.Cells[row, 12].Value = product.IsRentEnabled;
-                productsSheet.Cells[row, 13].Value = product.IsBuyEnabled;
-                productsSheet.Cells[row, 14].Value = product.IsActive;
-                row++;
+                if (product.Variants != null && product.Variants.Count > 0)
+                {
+                    foreach (var v in product.Variants)
+                    {
+                        downloadVariantsSheet.Cells[variantRow, 1].Value = product.ProductName;
+                        downloadVariantsSheet.Cells[variantRow, 2].Value = v.Sku;
+                        downloadVariantsSheet.Cells[variantRow, 3].Value = v.SizeValue;
+                        downloadVariantsSheet.Cells[variantRow, 4].Value = v.SizeUnit;
+                        downloadVariantsSheet.Cells[variantRow, 5].Value = v.VendorPrice;
+                        downloadVariantsSheet.Cells[variantRow, 6].Value = v.BuyPrice;
+                        downloadVariantsSheet.Cells[variantRow, 7].Value = v.IsActive;
+                        variantRow++;
+                    }
+                }
             }
-
-            // Auto-fit columns
-            productsSheet.Cells[1, 1, 1, 14].AutoFitColumns();
+            downloadVariantsSheet.Cells[1, 1, 1, 7].AutoFitColumns();
 
             // Save to byte array
             var excelData = package.GetAsByteArray();

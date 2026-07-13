@@ -8,6 +8,7 @@ public class ProductCategory : AuditableEntity<Guid>, ISoftDelete
     public bool PrescriptionRequired { get; set; }
     public bool DepositRequired { get; set; }
     public bool InstallationRequired { get; set; }
+    public bool IsChemical { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

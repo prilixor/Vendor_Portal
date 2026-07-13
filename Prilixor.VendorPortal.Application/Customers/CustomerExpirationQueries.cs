@@ -194,11 +194,19 @@ public sealed record AdminOrderDto(
     int RentalDays,
     decimal TotalAmount,
     decimal DepositAmount,
+    decimal VendorSubtotalAmount,
     DateTimeOffset CreatedOnUtc,
     DateOnly? StartDate,
     DateOnly? EndDate,
     string? PrimaryImageUrl,
-    bool IsExtended);
+    bool IsExtended,
+    Guid? DoctorId = null,
+    string? DoctorName = null,
+    string? DoctorSpecialization = null,
+    Guid? HospitalId = null,
+    string? HospitalName = null,
+    string? HospitalCity = null,
+    string? DoctorContactNumber = null);
 
 public sealed record GetAdminAllOrdersQuery() : IQuery<List<AdminOrderDto>>;
 
@@ -219,18 +227,28 @@ internal sealed class GetAdminAllOrdersQueryHandler(
             (r.Order.Status == "dispatch_failed" || r.Order.Status == "awaiting_vendor_acceptance") 
                 ? "Unassigned" 
                 : (r.Listing?.Vendor?.Profile?.BusinessName ?? r.Listing?.Vendor?.Email ?? "Vendor"),
-            r.Listing?.ListingTitle ?? "Deleted Product",
+            !string.IsNullOrEmpty(r.VariantDescription) 
+                ? $"{r.Listing?.ListingTitle ?? "Deleted Product"} ({r.VariantDescription})" 
+                : (r.Listing?.ListingTitle ?? "Deleted Product"),
             r.Order.Status,
             r.Order.OrderType,
             r.Order.Quantity,
             r.Order.RentalDays,
             r.Order.TotalAmount,
             r.Order.DepositAmount,
+            r.Order.VendorSubtotalAmount,
             r.Order.CreatedOnUtc,
             r.Order.StartDate,
             r.Order.EndDate,
             r.ListingPrimaryImageUrl,
-            r.Order.IsExtended
+            r.Order.IsExtended,
+            DoctorId: r.Doctor?.Id,
+            DoctorName: r.Doctor?.FullName,
+            DoctorSpecialization: r.Doctor?.Specialization,
+            HospitalId: r.Hospital?.Id,
+            HospitalName: r.Hospital?.Name,
+            HospitalCity: r.Hospital?.City,
+            DoctorContactNumber: r.Doctor?.ContactNumber
         )).ToList();
 
         return Result.Success(list);

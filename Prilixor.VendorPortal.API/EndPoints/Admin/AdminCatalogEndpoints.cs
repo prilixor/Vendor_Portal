@@ -13,6 +13,7 @@ public sealed class CreateProductCategoryRequest
     public bool PrescriptionRequired { get; set; }
     public bool DepositRequired { get; set; }
     public bool InstallationRequired { get; set; }
+    public bool IsChemical { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -23,6 +24,7 @@ public sealed class UpdateProductCategoryRequest
     public bool PrescriptionRequired { get; set; }
     public bool DepositRequired { get; set; }
     public bool InstallationRequired { get; set; }
+    public bool IsChemical { get; set; }
     public bool IsActive { get; set; }
 }
 
@@ -38,10 +40,15 @@ public sealed class CreateProductRequest
     public decimal MonthlyRent { get; set; }
     public decimal SecurityDeposit { get; set; }
     public decimal? BuyPrice { get; set; }
+    public decimal VendorDailyRent { get; set; }
+    public decimal VendorMonthlyRent { get; set; }
+    public decimal VendorSecurityDeposit { get; set; }
+    public decimal? VendorBuyPrice { get; set; }
     public decimal GstPercent { get; set; } = 18m;
     public bool IsRentEnabled { get; set; } = true;
     public bool IsBuyEnabled { get; set; } = true;
     public bool IsActive { get; set; } = true;
+    public List<CreateOrUpdateProductVariantDto>? Variants { get; set; }
 }
 
 public sealed class UpdateProductRequest
@@ -57,10 +64,15 @@ public sealed class UpdateProductRequest
     public decimal MonthlyRent { get; set; }
     public decimal SecurityDeposit { get; set; }
     public decimal? BuyPrice { get; set; }
+    public decimal VendorDailyRent { get; set; }
+    public decimal VendorMonthlyRent { get; set; }
+    public decimal VendorSecurityDeposit { get; set; }
+    public decimal? VendorBuyPrice { get; set; }
     public decimal GstPercent { get; set; } = 18m;
     public bool IsRentEnabled { get; set; } = true;
     public bool IsBuyEnabled { get; set; } = true;
     public bool IsActive { get; set; }
+    public List<CreateOrUpdateProductVariantDto>? Variants { get; set; }
 }
 
 public sealed class AddProductImageRequest
@@ -123,6 +135,7 @@ public sealed class CreateProductCategoryEndpoint(IMediator mediator)
             req.PrescriptionRequired,
             req.DepositRequired,
             req.InstallationRequired,
+            req.IsChemical,
             req.IsActive), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
@@ -147,6 +160,7 @@ public sealed class UpdateProductCategoryEndpoint(IMediator mediator)
             req.PrescriptionRequired,
             req.DepositRequired,
             req.InstallationRequired,
+            req.IsChemical,
             req.IsActive), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
@@ -222,10 +236,15 @@ public sealed class CreateProductEndpoint(IMediator mediator)
             req.MonthlyRent,
             req.SecurityDeposit,
             req.BuyPrice,
+            req.VendorDailyRent,
+            req.VendorMonthlyRent,
+            req.VendorSecurityDeposit,
+            req.VendorBuyPrice,
             req.GstPercent,
             req.IsRentEnabled,
             req.IsBuyEnabled,
-            req.IsActive), ct);
+            req.IsActive,
+            req.Variants), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -255,10 +274,15 @@ public sealed class UpdateProductEndpoint(IMediator mediator)
             req.MonthlyRent,
             req.SecurityDeposit,
             req.BuyPrice,
+            req.VendorDailyRent,
+            req.VendorMonthlyRent,
+            req.VendorSecurityDeposit,
+            req.VendorBuyPrice,
             req.GstPercent,
             req.IsRentEnabled,
             req.IsBuyEnabled,
-            req.IsActive), ct);
+            req.IsActive,
+            req.Variants), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -386,11 +410,13 @@ public sealed class UploadCatalogExcelEndpoint(IMediator mediator)
             return TypedResults.Problem("No file uploaded.");
         }
 
+        var isChemical = Query<bool>("isChemical", false);
+
         using var memoryStream = new MemoryStream();
         await file.CopyToAsync(memoryStream, ct);
         var fileData = memoryStream.ToArray();
 
-        var result = await mediator.Send(new UploadCatalogExcelCommand(fileData), ct);
+        var result = await mediator.Send(new UploadCatalogExcelCommand(fileData, isChemical), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -408,7 +434,8 @@ public sealed class DownloadCatalogExcelEndpoint(IMediator mediator)
 
     public override async Task<Results<FileStreamHttpResult, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
     {
-        var result = await mediator.Send(new DownloadCatalogExcelQuery(), ct);
+        var isChemical = Query<bool>("isChemical", false);
+        var result = await mediator.Send(new DownloadCatalogExcelQuery(isChemical), ct);
         
         if (!result.IsSuccess)
         {

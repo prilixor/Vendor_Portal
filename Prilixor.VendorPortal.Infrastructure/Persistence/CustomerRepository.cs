@@ -166,6 +166,7 @@ public sealed class CustomerRepository(
             .AsNoTracking()
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
+            .Include(p => p.ChemicalProperty)
             .Where(p => !p.IsDeleted && p.IsActive);
 
         if (!string.IsNullOrWhiteSpace(categoryFilter))
@@ -315,18 +316,21 @@ public sealed class CustomerRepository(
                 productMap.GetValueOrDefault(l.ProductId)?.SecurityDeposit ?? l.SecurityDeposit,
 
                 cat?.PrescriptionRequired ?? false,
-
                 cat?.DepositRequired ?? false,
-
                 l.ListingStatus,
-
                 availableQuantity,
-
                 productTotalAvailableQuantity,
-
                 availabilityStatus,
-
-                primaryUrl);
+                primaryUrl,
+                productMap.GetValueOrDefault(l.ProductId)?.BuyPrice,
+                productMap.GetValueOrDefault(l.ProductId)?.IsRentEnabled ?? true,
+                productMap.GetValueOrDefault(l.ProductId)?.IsBuyEnabled ?? false,
+                productMap.GetValueOrDefault(l.ProductId)?.ChemicalProperty?.CasNumber,
+                productMap.GetValueOrDefault(l.ProductId)?.ChemicalProperty?.ChemicalFormula,
+                productMap.GetValueOrDefault(l.ProductId)?.ChemicalProperty?.PurityPercentage,
+                productMap.GetValueOrDefault(l.ProductId)?.ChemicalProperty?.MolecularWeight,
+                productMap.GetValueOrDefault(l.ProductId)?.ChemicalProperty?.BaseUnit,
+                cat?.IsChemical ?? false);
 
         }).ToList();
 
@@ -352,7 +356,16 @@ public sealed class CustomerRepository(
                 0,
                 0,
                 "out_of_stock",
-                ResolvePrimaryProductImageUrl(p.ProductImages)))
+                ResolvePrimaryProductImageUrl(p.ProductImages),
+                p.BuyPrice,
+                p.IsRentEnabled,
+                p.IsBuyEnabled,
+                p.ChemicalProperty?.CasNumber,
+                p.ChemicalProperty?.ChemicalFormula,
+                p.ChemicalProperty?.PurityPercentage,
+                p.ChemicalProperty?.MolecularWeight,
+                p.ChemicalProperty?.BaseUnit,
+                p.Category?.IsChemical ?? false))
             .ToList();
 
         var listingDistanceMap = new Dictionary<Guid, decimal>();
@@ -436,13 +449,21 @@ public sealed class CustomerRepository(
             .AsNoTracking()
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
+            .Include(p => p.ChemicalProperty)
+            .Include(p => p.Variants)
             .FirstOrDefaultAsync(p => p.Id == l.ProductId && !p.IsDeleted, cancellationToken);
         if (product is null)
         {
             return null;
         }
 
-        return ToAggregate(l, product);
+        // Load per-variant (SKU) stock for chemical listings
+        var variantInventory = await vendorDb.VendorVariantInventories
+            .AsNoTracking()
+            .Where(vi => vi.VendorProductListingId == listingId)
+            .ToListAsync(cancellationToken);
+
+        return ToAggregate(l, product, variantInventory);
     }
 
     public async Task<List<VendorProductListingAggregate>> GetCandidateListingsByProductIdAsync(Guid productId, CancellationToken cancellationToken)
@@ -451,6 +472,8 @@ public sealed class CustomerRepository(
             .AsNoTracking()
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
+            .Include(p => p.ChemicalProperty)
+            .Include(p => p.Variants)
             .FirstOrDefaultAsync(p => p.Id == productId && !p.IsDeleted, cancellationToken);
         if (product is null)
         {
@@ -499,18 +522,14 @@ public sealed class CustomerRepository(
 
         var map = await LoadListingsWithVendorAsync(orders.ConvertAll(o => o.VendorProductListingId), cancellationToken);
 
-        return orders.ConvertAll(o =>
-
+        var results = orders.ConvertAll(o =>
         {
-
             var listing = map.GetValueOrDefault(o.VendorProductListingId);
-
             var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
-
             return new CustomerRentalOrderWithListing(o, listing, img);
-
         });
-
+        var withMedical = await AttachMedicalReferencesAsync(results, cancellationToken);
+        return await AttachVariantDescriptionsAsync(withMedical, cancellationToken);
     }
 
 
@@ -531,8 +550,8 @@ public sealed class CustomerRepository(
 
         var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
 
-        return new CustomerRentalOrderWithListing(order, listing, img);
-
+        var withMedical = await AttachMedicalReferenceAsync(new CustomerRentalOrderWithListing(order, listing, img), cancellationToken);
+        return await AttachVariantDescriptionAsync(withMedical, cancellationToken);
     }
 
 
@@ -555,8 +574,8 @@ public sealed class CustomerRepository(
 
         var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
 
-        return new CustomerRentalOrderWithListing(order, listing, img);
-
+        var withMedical = await AttachMedicalReferenceAsync(new CustomerRentalOrderWithListing(order, listing, img), cancellationToken);
+        return await AttachVariantDescriptionAsync(withMedical, cancellationToken);
     }
 
 
@@ -602,7 +621,7 @@ public sealed class CustomerRepository(
             .ToList();
 
         var map = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
-        return orders
+        var results = orders
             .Select(o =>
             {
                 var isAwaiting = string.Equals(o.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase);
@@ -626,6 +645,9 @@ public sealed class CustomerRepository(
             .Where(x => x is not null)
             .Select(x => x!)
             .ToList();
+            
+        var withMedical = await AttachMedicalReferencesAsync(results, cancellationToken);
+        return await AttachVariantDescriptionsAsync(withMedical, cancellationToken);
     }
 
     public async Task<CustomerRentalOrderWithListing?> GetVendorOrderAsync(Guid vendorId, Guid orderId, CancellationToken cancellationToken)
@@ -667,7 +689,8 @@ public sealed class CustomerRepository(
         }
 
         var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
-        return new CustomerRentalOrderWithListing(order, listing, img);
+        var withMedical = await AttachMedicalReferenceAsync(new CustomerRentalOrderWithListing(order, listing, img), cancellationToken);
+        return await AttachVariantDescriptionAsync(withMedical, cancellationToken);
     }
 
     public Task<bool> OrderNumberExistsAsync(string orderNumber, CancellationToken cancellationToken) =>
@@ -688,7 +711,8 @@ public sealed class CustomerRepository(
 
         var listing = await LoadListingWithVendorAsync(order.VendorProductListingId, cancellationToken);
         var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
-        return new CustomerRentalOrderWithListing(order, listing, img);
+        var withMedical = await AttachMedicalReferenceAsync(new CustomerRentalOrderWithListing(order, listing, img), cancellationToken);
+        return await AttachVariantDescriptionAsync(withMedical, cancellationToken);
     }
 
     public async Task<List<CustomerRentalOrderWithListing>> GetAllCustomerOrdersForAdminAsync(CancellationToken cancellationToken)
@@ -703,12 +727,14 @@ public sealed class CustomerRepository(
         var listingIds = orders.ConvertAll(o => o.VendorProductListingId);
         var map = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
 
-        return orders.ConvertAll(o =>
+        var results = orders.ConvertAll(o =>
         {
             var listing = map.GetValueOrDefault(o.VendorProductListingId);
             var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
             return new CustomerRentalOrderWithListing(o, listing, img);
         });
+        var withMedical = await AttachMedicalReferencesAsync(results, cancellationToken);
+        return await AttachVariantDescriptionsAsync(withMedical, cancellationToken);
     }
 
     public async Task AddCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken)
@@ -775,7 +801,8 @@ public sealed class CustomerRepository(
         var order = orderAsset.CustomerRentalOrder;
         var listing = await LoadListingWithVendorAsync(order.VendorProductListingId, cancellationToken);
         var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
-        return new CustomerRentalOrderWithListing(order, listing, img);
+        var withMedical = new CustomerRentalOrderWithListing(order, listing, img);
+        return await AttachVariantDescriptionAsync(withMedical, cancellationToken);
     }
 
     public Task UpdateCustomerRentalOrderAsync(CustomerRentalOrder order, CancellationToken cancellationToken)
@@ -957,6 +984,76 @@ public sealed class CustomerRepository(
 
 
 
+    // --- Medical Directory ---
+
+    public async Task<Prilixor.VendorPortal.Domain.Common.Hospital?> GetHospitalByIdAsync(Guid hospitalId, CancellationToken cancellationToken)
+    {
+        return await commonDb.Set<Prilixor.VendorPortal.Domain.Common.Hospital>()
+            .FirstOrDefaultAsync(x => x.Id == hospitalId && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task<List<Prilixor.VendorPortal.Domain.Common.Hospital>> SearchHospitalsAsync(string searchTerm, CancellationToken cancellationToken)
+    {
+        var query = commonDb.Set<Prilixor.VendorPortal.Domain.Common.Hospital>()
+            .Where(x => !x.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = $"%{searchTerm}%";
+            query = query.Where(x => EF.Functions.ILike(x.Name, term));
+        }
+
+        return await query.Take(50).ToListAsync(cancellationToken);
+    }
+
+    public async Task AddHospitalAsync(Prilixor.VendorPortal.Domain.Common.Hospital hospital, CancellationToken cancellationToken)
+    {
+        commonDb.Set<Prilixor.VendorPortal.Domain.Common.Hospital>().Add(hospital);
+        await commonDb.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<Prilixor.VendorPortal.Domain.Common.Doctor?> GetDoctorByIdAsync(Guid doctorId, CancellationToken cancellationToken)
+    {
+        return await commonDb.Set<Prilixor.VendorPortal.Domain.Common.Doctor>()
+            .FirstOrDefaultAsync(x => x.Id == doctorId && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> SearchDoctorsAsync(Guid? hospitalId, string searchTerm, CancellationToken cancellationToken)
+    {
+        var query = commonDb.Set<Prilixor.VendorPortal.Domain.Common.Doctor>()
+            .Where(x => !x.IsDeleted);
+
+        if (hospitalId.HasValue)
+        {
+            query = query.Where(d => d.Hospitals.Any(h => h.HospitalId == hospitalId.Value));
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = $"%{searchTerm}%";
+            query = query.Where(x => EF.Functions.ILike(x.FullName, term) || EF.Functions.ILike(x.Specialization ?? "", term));
+        }
+
+        return await query.Take(50).ToListAsync(cancellationToken);
+    }
+
+    public async Task AddDoctorAsync(Prilixor.VendorPortal.Domain.Common.Doctor doctor, CancellationToken cancellationToken)
+    {
+        commonDb.Set<Prilixor.VendorPortal.Domain.Common.Doctor>().Add(doctor);
+        await commonDb.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task LinkDoctorToHospitalAsync(Guid hospitalId, Guid doctorId, CancellationToken cancellationToken)
+    {
+        var link = new Prilixor.VendorPortal.Domain.Common.HospitalDoctor
+        {
+            HospitalId = hospitalId,
+            DoctorId = doctorId
+        };
+        commonDb.Set<Prilixor.VendorPortal.Domain.Common.HospitalDoctor>().Add(link);
+        await commonDb.SaveChangesAsync(cancellationToken);
+    }
+
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken) =>
 
         customerDb.SaveChangesAsync(cancellationToken);
@@ -1015,6 +1112,54 @@ public sealed class CustomerRepository(
 
     }
 
+    private async Task<List<CustomerRentalOrderWithListing>> AttachVariantDescriptionsAsync(
+        List<CustomerRentalOrderWithListing> items,
+        CancellationToken cancellationToken)
+    {
+        var variantIds = items
+            .Select(x => x.Order.ProductVariantId)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+
+        if (variantIds.Count == 0) return items;
+
+        var variants = await commonDb.Set<ProductVariant>()
+            .AsNoTracking()
+            .Where(v => variantIds.Contains(v.Id))
+            .ToDictionaryAsync(v => v.Id, cancellationToken);
+
+        return items.Select(item =>
+        {
+            if (item.Order.ProductVariantId.HasValue &&
+                variants.TryGetValue(item.Order.ProductVariantId.Value, out var variant))
+            {
+                var desc = Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(variant.SizeValue, variant.SizeUnit);
+                return item with { VariantDescription = desc };
+            }
+            return item;
+        }).ToList();
+    }
+
+    private async Task<CustomerRentalOrderWithListing?> AttachVariantDescriptionAsync(
+        CustomerRentalOrderWithListing? item,
+        CancellationToken cancellationToken)
+    {
+        if (item?.Order.ProductVariantId == null) return item;
+
+        var variant = await commonDb.Set<ProductVariant>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(v => v.Id == item.Order.ProductVariantId.Value, cancellationToken);
+
+        if (variant is not null)
+        {
+            var desc = Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(variant.SizeValue, variant.SizeUnit);
+            return item with { VariantDescription = desc };
+        }
+        return item;
+    }
+
     private async Task<List<ExpiringOrderAggregate>> MapExpiringOrdersAsync(
         IReadOnlyCollection<CustomerRentalOrder> orders,
         CancellationToken cancellationToken)
@@ -1068,6 +1213,12 @@ public sealed class CustomerRepository(
 
 
     private VendorProductListingAggregate ToAggregate(VendorProductListing listing, Product product)
+        => ToAggregate(listing, product, []);
+
+    private VendorProductListingAggregate ToAggregate(
+        VendorProductListing listing,
+        Product product,
+        List<Prilixor.VendorPortal.Domain.Vendors.VendorVariantInventory> variantInventory)
     {
         var inv = listing.Inventory;
         var imgs = ResolveOrderedDistinctListingImageUrls(listing.Images);
@@ -1096,9 +1247,14 @@ public sealed class CustomerRepository(
             MonthlyRent = product.MonthlyRent,
             SecurityDeposit = product.SecurityDeposit,
             BuyPrice = product.BuyPrice,
+            VendorDailyRent = product.VendorDailyRent,
+            VendorMonthlyRent = product.VendorMonthlyRent,
+            VendorSecurityDeposit = product.VendorSecurityDeposit,
+            VendorBuyPrice = product.VendorBuyPrice,
             GstPercent = product.GstPercent,
             IsRentEnabled = product.IsRentEnabled,
             IsBuyEnabled = product.IsBuyEnabled,
+            IsChemical = product.Category?.IsChemical ?? false,
             ListingAvailableQuantity = listing.AvailableQuantity,
             CategoryPrescriptionRequired = product.Category?.PrescriptionRequired ?? false,
             CategoryDepositRequired = product.Category?.DepositRequired ?? false,
@@ -1111,6 +1267,25 @@ public sealed class CustomerRepository(
             InventoryTotal = inv?.TotalQuantity ?? listing.AvailableQuantity,
             InventoryRented = inv?.RentedQuantity ?? 0,
             InventoryBlocked = inv?.BlockedQuantity ?? 0,
+            CasNumber = product.ChemicalProperty?.CasNumber,
+            ChemicalFormula = product.ChemicalProperty?.ChemicalFormula,
+            PurityPercentage = product.ChemicalProperty?.PurityPercentage,
+            MolecularWeight = product.ChemicalProperty?.MolecularWeight,
+            BaseUnit = product.ChemicalProperty?.BaseUnit,
+            SdsDocumentUrl = product.ChemicalProperty?.SdsDocumentUrl,
+            CoaDocumentUrl = product.ChemicalProperty?.CoaDocumentUrl,
+            Variants = product.Variants?.Select(v => new Prilixor.VendorPortal.Application.Onboarding.ProductVariantDto(
+                v.Id.ToString(),
+                v.ProductId.ToString(),
+                v.Sku,
+                v.SizeValue,
+                v.SizeUnit,
+                v.VendorPrice,
+                v.BuyPrice,
+                v.IsActive)).ToList() ?? [],
+            VariantInventory = variantInventory
+                .Select(vi => new VariantInventoryItem(vi.ProductVariantId, vi.AvailableQuantity))
+                .ToList(),
         };
     }
 
@@ -1341,6 +1516,30 @@ public sealed class CustomerRepository(
             .ToList();
 
         var map = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
+
+        var variantIds = extensions.Select(x => x.CustomerRentalOrder.ProductVariantId)
+            .Concat(buyouts.Select(x => x.CustomerRentalOrder.ProductVariantId))
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+        var variants = variantIds.Count > 0
+            ? await commonDb.Set<ProductVariant>()
+                .AsNoTracking()
+                .Where(v => variantIds.Contains(v.Id))
+                .ToDictionaryAsync(v => v.Id, cancellationToken)
+            : new Dictionary<Guid, ProductVariant>();
+
+        string ComposeTitle(VendorProductListing? listing, CustomerRentalOrder order)
+        {
+            var title = listing?.ListingTitle ?? "Deleted Product";
+            if (order.ProductVariantId.HasValue && variants.TryGetValue(order.ProductVariantId.Value, out var variant))
+            {
+                title += $" ({Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(variant.SizeValue, variant.SizeUnit)})";
+            }
+            return title;
+        }
+
         var result = new List<PendingContinuationAggregate>();
 
         foreach (var e in extensions)
@@ -1352,7 +1551,7 @@ public sealed class CustomerRepository(
                 e.CustomerRentalOrder.OrderNumber,
                 e.CustomerRentalOrder.Customer?.FullName ?? "Customer",
                 listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor",
-                listing?.ListingTitle ?? "Deleted Product",
+                ComposeTitle(listing, e.CustomerRentalOrder),
                 e.TotalAmount,
                 e.CreatedOnUtc,
                 "extension"
@@ -1368,7 +1567,7 @@ public sealed class CustomerRepository(
                 b.CustomerRentalOrder.OrderNumber,
                 b.CustomerRentalOrder.Customer?.FullName ?? "Customer",
                 listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor",
-                listing?.ListingTitle ?? "Deleted Product",
+                ComposeTitle(listing, b.CustomerRentalOrder),
                 b.TotalAmount,
                 b.CreatedOnUtc,
                 "buyout"
@@ -1376,6 +1575,37 @@ public sealed class CustomerRepository(
         }
 
         return result.OrderByDescending(x => x.CreatedOnUtc).ToList();
+    }
+
+    private async Task<List<CustomerRentalOrderWithListing>> AttachMedicalReferencesAsync(List<CustomerRentalOrderWithListing> items, CancellationToken cancellationToken)
+    {
+        var orderIds = items.Select(x => x.Order.Id).ToList();
+        var refs = await customerDb.CustomerOrderDoctorReferences.Where(r => orderIds.Contains(r.CustomerRentalOrderId) && !r.IsDeleted).ToListAsync(cancellationToken);
+        
+        var doctorIds = refs.Select(r => r.DoctorId).Distinct().ToList();
+        var hospitalIds = refs.Select(r => r.HospitalId).Distinct().ToList();
+
+        var doctors = doctorIds.Count > 0 ? await commonDb.Doctors.Where(d => doctorIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, cancellationToken) : new();
+        var hospitals = hospitalIds.Count > 0 ? await commonDb.Hospitals.Where(h => hospitalIds.Contains(h.Id)).ToDictionaryAsync(h => h.Id, cancellationToken) : new();
+
+        return items.Select(item =>
+        {
+            var r = refs.FirstOrDefault(x => x.CustomerRentalOrderId == item.Order.Id);
+            var doctor = r != null ? doctors.GetValueOrDefault(r.DoctorId) : null;
+            var hospital = r != null ? hospitals.GetValueOrDefault(r.HospitalId) : null;
+            
+            // Re-attach the fetched DoctorReference so it's available in Handlers
+            if (r != null) item.Order.DoctorReference = r;
+            
+            return item with { Doctor = doctor, Hospital = hospital };
+        }).ToList();
+    }
+
+    private async Task<CustomerRentalOrderWithListing?> AttachMedicalReferenceAsync(CustomerRentalOrderWithListing? item, CancellationToken cancellationToken)
+    {
+        if (item is null) return null;
+        var list = await AttachMedicalReferencesAsync(new List<CustomerRentalOrderWithListing> { item }, cancellationToken);
+        return list.FirstOrDefault();
     }
 }
 

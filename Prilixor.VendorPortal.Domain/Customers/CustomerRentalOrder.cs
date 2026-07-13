@@ -14,6 +14,7 @@ public class CustomerRentalOrder : AuditableEntity<Guid>, ISoftDelete
     public string DeliveryOption { get; set; } = "standard";
     public string Status { get; set; } = "pending";
     public decimal SubtotalAmount { get; set; }
+    public decimal VendorSubtotalAmount { get; set; }
     public decimal DepositAmount { get; set; }
     public decimal ServiceFeeAmount { get; set; }
     public decimal DistanceFeeAmount { get; set; }
@@ -23,6 +24,7 @@ public class CustomerRentalOrder : AuditableEntity<Guid>, ISoftDelete
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
     public bool IsExtended { get; set; }
+    public Guid? ProductVariantId { get; set; }
 
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
@@ -31,4 +33,5 @@ public class CustomerRentalOrder : AuditableEntity<Guid>, ISoftDelete
     public Customer Customer { get; set; } = null!;
     /// <summary>Listing rows live in the vendor database; use <see cref="VendorProductListingId"/> when querying the vendor DbContext.</summary>
     public CustomerAddress? CustomerAddress { get; set; }
+    public CustomerOrderDoctorReference? DoctorReference { get; set; }
 }

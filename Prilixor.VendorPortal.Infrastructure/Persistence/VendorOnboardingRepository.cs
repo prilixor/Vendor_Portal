@@ -293,10 +293,14 @@ public sealed class VendorOnboardingRepository(
         }
     }
 
-    public async Task<List<ProductCategory>> GetProductCategoriesAsync(CancellationToken cancellationToken)
+    public async Task<List<ProductCategory>> GetProductCategoriesAsync(CancellationToken cancellationToken, bool includeDeleted = false)
     {
-        var categories = await commonDbContext.ProductCategories
-            .Where(x => !x.IsDeleted)
+        var commonQuery = commonDbContext.ProductCategories.AsQueryable();
+        if (!includeDeleted)
+        {
+            commonQuery = commonQuery.Where(x => !x.IsDeleted);
+        }
+        var categories = await commonQuery
             .OrderBy(x => x.CategoryName)
             .ToListAsync(cancellationToken);
 
@@ -305,8 +309,12 @@ public sealed class VendorOnboardingRepository(
             return categories;
         }
 
-        return await dbContext.ProductCategories
-            .Where(x => !x.IsDeleted)
+        var query = dbContext.ProductCategories.AsQueryable();
+        if (!includeDeleted)
+        {
+            query = query.Where(x => !x.IsDeleted);
+        }
+        return await query
             .OrderBy(x => x.CategoryName)
             .ToListAsync(cancellationToken);
     }
@@ -314,6 +322,9 @@ public sealed class VendorOnboardingRepository(
     public async Task<Product?> GetProductByIdAsync(Guid productId, CancellationToken cancellationToken)
     {
         var product = await commonDbContext.Products
+            .Include(x => x.ChemicalProperty)
+            .Include(x => x.ProductImages)
+            .Include(x => x.Variants)
             .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
         if (product is not null)
         {
@@ -321,6 +332,9 @@ public sealed class VendorOnboardingRepository(
         }
 
         return await dbContext.Products
+            .Include(x => x.ChemicalProperty)
+            .Include(x => x.ProductImages)
+            .Include(x => x.Variants)
             .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
     }
 
@@ -381,6 +395,9 @@ public sealed class VendorOnboardingRepository(
     public async Task<List<Product>> GetProductsAsync(Guid? categoryId, CancellationToken cancellationToken)
     {
         var query = commonDbContext.Products
+            .Include(x => x.ChemicalProperty)
+            .Include(x => x.ProductImages)
+            .Include(x => x.Variants)
             .Where(x => !x.IsDeleted)
             .AsQueryable();
 
@@ -396,6 +413,9 @@ public sealed class VendorOnboardingRepository(
         }
 
         var legacyQuery = dbContext.Products
+            .Include(x => x.ChemicalProperty)
+            .Include(x => x.ProductImages)
+            .Include(x => x.Variants)
             .Where(x => !x.IsDeleted)
             .AsQueryable();
         if (categoryId.HasValue)
@@ -477,6 +497,19 @@ public sealed class VendorOnboardingRepository(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<HashSet<Guid>> GetChemicalProductIdsAsync(List<Guid> productIds, CancellationToken cancellationToken)
+    {
+        if (productIds.Count == 0) return [];
+
+        // A product is "chemical" when it has a ChemicalProperty record — same logic used everywhere in the app.
+        var chemicalProductIds = await dbContext.ChemicalProperties
+            .Where(cp => productIds.Contains(cp.ProductId))
+            .Select(cp => cp.ProductId)
+            .ToListAsync(cancellationToken);
+
+        return [.. chemicalProductIds];
+    }
+
     public async Task AddVendorProductImageAsync(VendorProductImage image, CancellationToken cancellationToken)
     {
         await dbContext.VendorProductImages.AddAsync(image, cancellationToken);
@@ -555,6 +588,27 @@ public sealed class VendorOnboardingRepository(
 
         dbContext.VendorInventory.Update(inventory);
     }
+
+    public Task<List<VendorVariantInventory>> GetVariantInventoryByListingIdAsync(Guid listingId, CancellationToken cancellationToken)
+    {
+        return dbContext.VendorVariantInventories
+            .Include(x => x.ProductVariant)
+            .Where(x => x.VendorProductListingId == listingId)
+            .OrderBy(x => x.ProductVariant.SizeValue)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task UpsertVariantInventoryAsync(VendorVariantInventory item, CancellationToken cancellationToken)
+    {
+        if (item.Id == Guid.Empty)
+        {
+            await dbContext.VendorVariantInventories.AddAsync(item, cancellationToken);
+            return;
+        }
+
+        dbContext.VendorVariantInventories.Update(item);
+    }
+
 
     public async Task AddVendorProductAssetAsync(VendorProductAsset asset, CancellationToken cancellationToken)
     {
@@ -881,12 +935,47 @@ public sealed class VendorOnboardingRepository(
             ModelName = source.ModelName,
             ShortDescription = source.ShortDescription,
             LongDescription = source.LongDescription,
+            DailyRent = source.DailyRent,
+            MonthlyRent = source.MonthlyRent,
+            SecurityDeposit = source.SecurityDeposit,
+            BuyPrice = source.BuyPrice,
+            VendorDailyRent = source.VendorDailyRent,
+            VendorMonthlyRent = source.VendorMonthlyRent,
+            VendorSecurityDeposit = source.VendorSecurityDeposit,
+            VendorBuyPrice = source.VendorBuyPrice,
+            GstPercent = source.GstPercent,
+            IsRentEnabled = source.IsRentEnabled,
+            IsBuyEnabled = source.IsBuyEnabled,
             IsActive = source.IsActive,
             CreatedOnUtc = source.CreatedOnUtc,
             ModifiedOnUtc = source.ModifiedOnUtc,
             IsDeleted = source.IsDeleted,
             DeletedAt = source.DeletedAt,
             DeletedBy = source.DeletedBy,
+            ChemicalProperty = source.ChemicalProperty == null ? null : new ChemicalProperty
+            {
+                CasNumber = source.ChemicalProperty.CasNumber,
+                ChemicalFormula = source.ChemicalProperty.ChemicalFormula,
+                PurityPercentage = source.ChemicalProperty.PurityPercentage,
+                MolecularWeight = source.ChemicalProperty.MolecularWeight,
+                BaseUnit = source.ChemicalProperty.BaseUnit,
+                SdsDocumentUrl = source.ChemicalProperty.SdsDocumentUrl,
+                CoaDocumentUrl = source.ChemicalProperty.CoaDocumentUrl,
+                ProductId = source.Id
+            },
+            Variants = source.Variants?.Select(v => new ProductVariant
+            {
+                Id = v.Id,
+                ProductId = v.ProductId,
+                Sku = v.Sku,
+                SizeValue = v.SizeValue,
+                SizeUnit = v.SizeUnit,
+                VendorPrice = v.VendorPrice,
+                BuyPrice = v.BuyPrice,
+                IsActive = v.IsActive,
+                CreatedOnUtc = v.CreatedOnUtc,
+                ModifiedOnUtc = v.ModifiedOnUtc
+            }).ToList() ?? []
         };
 
     private static void CopyProductValues(Product source, Product destination)
@@ -897,11 +986,76 @@ public sealed class VendorOnboardingRepository(
         destination.ModelName = source.ModelName;
         destination.ShortDescription = source.ShortDescription;
         destination.LongDescription = source.LongDescription;
+        destination.DailyRent = source.DailyRent;
+        destination.MonthlyRent = source.MonthlyRent;
+        destination.SecurityDeposit = source.SecurityDeposit;
+        destination.BuyPrice = source.BuyPrice;
+        destination.VendorDailyRent = source.VendorDailyRent;
+        destination.VendorMonthlyRent = source.VendorMonthlyRent;
+        destination.VendorSecurityDeposit = source.VendorSecurityDeposit;
+        destination.VendorBuyPrice = source.VendorBuyPrice;
+        destination.GstPercent = source.GstPercent;
+        destination.IsRentEnabled = source.IsRentEnabled;
+        destination.IsBuyEnabled = source.IsBuyEnabled;
         destination.IsActive = source.IsActive;
         destination.CreatedOnUtc = source.CreatedOnUtc;
         destination.ModifiedOnUtc = source.ModifiedOnUtc;
         destination.IsDeleted = source.IsDeleted;
         destination.DeletedAt = source.DeletedAt;
         destination.DeletedBy = source.DeletedBy;
+
+        if (source.ChemicalProperty != null)
+        {
+            destination.ChemicalProperty ??= new ChemicalProperty { ProductId = destination.Id };
+            destination.ChemicalProperty.CasNumber = source.ChemicalProperty.CasNumber;
+            destination.ChemicalProperty.ChemicalFormula = source.ChemicalProperty.ChemicalFormula;
+            destination.ChemicalProperty.PurityPercentage = source.ChemicalProperty.PurityPercentage;
+            destination.ChemicalProperty.MolecularWeight = source.ChemicalProperty.MolecularWeight;
+            destination.ChemicalProperty.BaseUnit = source.ChemicalProperty.BaseUnit;
+            destination.ChemicalProperty.SdsDocumentUrl = source.ChemicalProperty.SdsDocumentUrl;
+            destination.ChemicalProperty.CoaDocumentUrl = source.ChemicalProperty.CoaDocumentUrl;
+        }
+
+        if (source.Variants != null)
+        {
+            destination.Variants ??= new List<ProductVariant>();
+            foreach (var sv in source.Variants)
+            {
+                var dv = destination.Variants.FirstOrDefault(v => v.Id == sv.Id || (!string.IsNullOrEmpty(v.Sku) && v.Sku == sv.Sku));
+                if (dv is null)
+                {
+                    destination.Variants.Add(new ProductVariant
+                    {
+                        Id = sv.Id == Guid.Empty ? Guid.NewGuid() : sv.Id,
+                        ProductId = destination.Id,
+                        Sku = sv.Sku,
+                        SizeValue = sv.SizeValue,
+                        SizeUnit = sv.SizeUnit,
+                        VendorPrice = sv.VendorPrice,
+                        BuyPrice = sv.BuyPrice,
+                        IsActive = sv.IsActive,
+                        CreatedOnUtc = sv.CreatedOnUtc,
+                        ModifiedOnUtc = sv.ModifiedOnUtc
+                    });
+                }
+                else
+                {
+                    dv.Sku = sv.Sku;
+                    dv.SizeValue = sv.SizeValue;
+                    dv.SizeUnit = sv.SizeUnit;
+                    dv.VendorPrice = sv.VendorPrice;
+                    dv.BuyPrice = sv.BuyPrice;
+                    dv.IsActive = sv.IsActive;
+                    dv.ModifiedOnUtc = sv.ModifiedOnUtc;
+                }
+            }
+            var toRemove = destination.Variants
+                .Where(dv => !source.Variants.Any(sv => sv.Id == dv.Id || (!string.IsNullOrEmpty(sv.Sku) && sv.Sku == dv.Sku)))
+                .ToList();
+            foreach (var tr in toRemove)
+            {
+                destination.Variants.Remove(tr);
+            }
+        }
     }
 }

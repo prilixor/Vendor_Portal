@@ -15,11 +15,11 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { ProductListing } from "@/app/models";
-import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText, Loader2 } from "lucide-react";
+import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText, Loader2, Package, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { apiClient } from "@/app/services/apiClient";
-import { vendorOnboardingApi, VendorFileFolderType } from "@/app/services/vendorOnboardingApi";
+import { vendorOnboardingApi, VendorFileFolderType, VendorVariantInventoryDto } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
 type LocalListing = ProductListing & {
@@ -30,6 +30,8 @@ type LocalListing = ProductListing & {
   isRentEnabled?: boolean;
   isBuyEnabled?: boolean;
   favoriteCount?: number;
+  baseUnit?: string;
+  variants?: any[];
 };
 
 type CatalogCategory = {
@@ -48,6 +50,8 @@ type CatalogProduct = {
   gstPercent: number;
   isRentEnabled: boolean;
   isBuyEnabled: boolean;
+  baseUnit?: string;
+  variants?: any[];
 };
 
 const normalizeListingStatus = (status: string): ProductListing["status"] => {
@@ -75,7 +79,50 @@ const blankListing = (category?: CatalogCategory, product?: CatalogProduct): Loc
   status: "inactive",
   images: [],
   createdAt: new Date().toISOString(),
+  baseUnit: product?.baseUnit,
+  variants: product?.variants || [],
 });
+
+/**
+ * Per-size price breakdown for a chemical. Collapses to the first few sizes with a
+ * "Show all" toggle so a chemical with many packaging sizes (e.g. 10+) doesn't blow up
+ * the mobile card height; when expanded it scrolls instead of growing unbounded.
+ */
+const ChemSizeBreakdown = ({ sizes }: { sizes: any[] }) => {
+  const COLLAPSED_COUNT = 3;
+  const [expanded, setExpanded] = useState(false);
+  const hasMore = sizes.length > COLLAPSED_COUNT;
+  const visible = expanded ? sizes : sizes.slice(0, COLLAPSED_COUNT);
+  return (
+    <div className="mt-1">
+      <div
+        className={`divide-y divide-border/40 rounded-md border border-border/60 ${
+          expanded ? "max-h-52 overflow-auto" : ""
+        }`}
+      >
+        {visible.map((v: any, i: number) => (
+          <div key={i} className="flex items-center justify-between px-2.5 py-1 text-xs">
+            <span className="text-muted-foreground">
+              {v.sizeValue} {v.sizeUnit}
+            </span>
+            <span className="font-mono font-medium tabular-nums">
+              ₹{Number(v.buyPrice).toLocaleString("en-IN")}
+            </span>
+          </div>
+        ))}
+      </div>
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="mt-1 text-xs font-medium text-primary hover:underline"
+        >
+          {expanded ? "Show less" : `Show all ${sizes.length} sizes`}
+        </button>
+      )}
+    </div>
+  );
+};
 
 const Products = () => {
   const { user } = useAuth();
@@ -89,6 +136,7 @@ const Products = () => {
   const [filter, setFilter] = useState<"all" | "active" | "inactive">(
     ["all", "active", "inactive"].includes(initialFilter) ? initialFilter : "all"
   );
+  const [activeTab, setActiveTab] = useState<"equipment" | "chemical">("equipment");
 
   useEffect(() => {
     const s = searchParams.get("status") as "all" | "active" | "inactive";
@@ -132,13 +180,15 @@ const Products = () => {
   const [previewDocument, setPreviewDocument] = useState<{ id: string; type: string; url: string } | null>(null);
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  // Variant-level stock for the chemical listing currently being edited
+  const [variantStocks, setVariantStocks] = useState<Record<string, number>>({});
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, filter, showFavoritesOnly]);
+  }, [search, filter, showFavoritesOnly, activeTab]);
 
   const getFileNameFromUrl = (url?: string) => {
     if (!url) return "";
@@ -232,6 +282,10 @@ const Products = () => {
   const docFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const filtered = products.filter((p) => {
+    const isChem = p.baseUnit != null;
+    if (activeTab === "equipment" && isChem) return false;
+    if (activeTab === "chemical" && !isChem) return false;
+
     const m = (filter === "all" || p.status === filter);
     const s = !search || p.title.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase());
     const f = !showFavoritesOnly || (p.favoriteCount && p.favoriteCount > 0);
@@ -284,6 +338,40 @@ const Products = () => {
     setDeleteConfirmId(id);
   };
 
+  const openEditListing = async (p: LocalListing) => {
+    setEditing(p);
+    // For chemical listings, pre-load existing per-size (variant) stock
+    if (activeTab === "chemical" && user && p.variants && p.variants.length > 0) {
+      try {
+        const stocks = await vendorOnboardingApi.getVariantInventory(user.id, p.id);
+        const stockMap: Record<string, number> = {};
+        stocks.forEach((s) => { stockMap[s.productVariantId] = s.totalQuantity; });
+        setVariantStocks(stockMap);
+      } catch {
+        setVariantStocks({});
+      }
+    } else {
+      setVariantStocks({});
+    }
+  };
+
+  // Chemicals are priced per packaging size; expose the customer buy-price range + sorted sizes.
+  const getChemPricing = (p: LocalListing) => {
+    const active = (p.variants || []).filter(
+      (v: any) => v?.isActive !== false && typeof v?.buyPrice === "number" && v.buyPrice > 0
+    );
+    if (active.length === 0) return null;
+    const prices = active.map((v: any) => v.buyPrice as number);
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const label =
+      min === max
+        ? `₹${min.toLocaleString("en-IN")}`
+        : `₹${min.toLocaleString("en-IN")} – ₹${max.toLocaleString("en-IN")}`;
+    const sorted = active.slice().sort((a: any, b: any) => (a.sizeValue ?? 0) - (b.sizeValue ?? 0));
+    return { label, sizes: sorted, count: active.length };
+  };
+
   const confirmDeleteListing = async (id: string) => {
     if (!user) return;
 
@@ -333,6 +421,8 @@ const Products = () => {
       gstPercent: p.gstPercent,
       isRentEnabled: p.isRentEnabled,
       isBuyEnabled: p.isBuyEnabled,
+      baseUnit: p.baseUnit,
+      variants: p.variants,
     }));
     const byProductId = new Map(mappedProducts.map((p) => [p.id, p]));
     const byCategoryId = new Map(mappedCategories.map((c) => [c.id, c]));
@@ -362,6 +452,8 @@ const Products = () => {
           images: [],
           favoriteCount: l.favoriteCount ?? 0,
           createdAt: new Date().toISOString(),
+          baseUnit: product?.baseUnit,
+          variants: product?.variants || [],
         };
       })
     );
@@ -392,15 +484,17 @@ const Products = () => {
     // Refresh catalog data to get latest products and categories
     await loadCatalogAndListings();
     
-    const firstCategory = categories[0];
-    const firstProduct = firstCategory ? catalogProducts.find((p) => p.categoryId === firstCategory.id) : undefined;
+    const availableCategories = categories.filter(c => catalogProducts.some(p => p.categoryId === c.id && (activeTab === "chemical" ? p.baseUnit != null : p.baseUnit == null)));
+    const firstCategory = availableCategories[0] || categories[0];
+    const firstProduct = firstCategory ? catalogProducts.find((p) => p.categoryId === firstCategory.id && (activeTab === "chemical" ? p.baseUnit != null : p.baseUnit == null)) : undefined;
+    setVariantStocks({});
     setEditing(blankListing(firstCategory, firstProduct));
   };
 
   const onCategoryChange = (categoryId: string) => {
     if (!editing) return;
     const category = categories.find((c) => c.id === categoryId);
-    const firstProduct = catalogProducts.find((p) => p.categoryId === categoryId);
+    const firstProduct = catalogProducts.find((p) => p.categoryId === categoryId && (activeTab === "chemical" ? p.baseUnit != null : p.baseUnit == null));
     setEditing({
       ...editing,
       categoryId,
@@ -416,6 +510,7 @@ const Products = () => {
 
     try {
       setBusy(true);
+      let savedListingId = editing.id;
 
       if (editing.id) {
         await vendorOnboardingApi.updateVendorProductListing(user.id, editing.id, {
@@ -427,17 +522,30 @@ const Products = () => {
           listingStatus: editing.status,
         });
       } else {
-        await vendorOnboardingApi.createVendorProductListing(user.id, {
+        const created = await vendorOnboardingApi.createVendorProductListing(user.id, {
           vendorId: user.id,
           productId: editing.productId,
           listingTitle: editing.title,
           availableQuantity: editing.quantity,
           listingStatus: editing.status,
         });
+        savedListingId = created.id;
+      }
+
+      // For chemical listings with variants — save per-SKU stock
+      const isChemical = activeTab === "chemical";
+      const hasVariants = editing.variants && editing.variants.length > 0;
+      if (isChemical && hasVariants && savedListingId && Object.keys(variantStocks).length > 0) {
+        const items = editing.variants!.map((v: any) => ({
+          productVariantId: v.id as string,
+          totalQuantity: variantStocks[v.id] ?? 0,
+        }));
+        await vendorOnboardingApi.upsertVariantInventory(user.id, savedListingId, items);
       }
 
       await loadCatalogAndListings();
       setEditing(null);
+      setVariantStocks({});
       toast.success("Listing saved");
     } catch (error) {
       const message = getUserFriendlyMessage(error);
@@ -787,6 +895,21 @@ const Products = () => {
           </div>
         )}
 
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "equipment" | "chemical")}>
+          <TabsList className="mb-4 w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
+            <TabsTrigger value="equipment" className="text-xs sm:text-sm">
+              <Package className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+              <span className="truncate">Equipment</span>
+              <span className="hidden sm:inline ml-1">({products.filter(p => p.baseUnit == null).length})</span>
+            </TabsTrigger>
+            <TabsTrigger value="chemical" className="text-xs sm:text-sm">
+              <FlaskConical className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+              <span className="truncate">Chemicals</span>
+              <span className="hidden sm:inline ml-1">({products.filter(p => p.baseUnit != null).length})</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         <div className="mb-4 flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="w-full sm:max-w-xs">
             <div className="relative">
@@ -808,14 +931,15 @@ const Products = () => {
             </Tabs>
           </div>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-border">
+        <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
           <table className="w-full min-w-[600px] text-sm">
             <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-3 py-3 font-semibold sm:px-4">Listing</th>
                 <th className="px-3 py-3 font-semibold sm:px-4">Category</th>
-                <th className="px-3 py-3 font-semibold text-right sm:px-4">Rent (Admin)</th>
-                <th className="px-3 py-3 font-semibold text-right sm:px-4">Deposit</th>
+                {activeTab === "equipment" && <th className="px-3 py-3 font-semibold text-right sm:px-4">Rent (Admin)</th>}
+                {activeTab === "chemical" && <th className="px-3 py-3 font-semibold text-right sm:px-4">Buy Price (Admin)</th>}
+                {activeTab === "equipment" && <th className="px-3 py-3 font-semibold text-right sm:px-4">Deposit</th>}
                 <th className="px-3 py-3 font-semibold text-right sm:px-4">Qty</th>
                 <th className="px-3 py-3 font-semibold sm:px-4">Status</th>
                 <th className="px-3 py-3 sm:px-4" />
@@ -852,12 +976,57 @@ const Products = () => {
                     </div>
                   </td>
                   <td className="px-3 py-3 text-muted-foreground sm:px-4">{p.category}</td>
-                  <td className="px-3 py-3 text-right font-mono sm:px-4">
-                    ₹{p.dailyRent}/d
-                  </td>
-                  <td className="px-3 py-3 text-right font-mono sm:px-4">
-                    ₹{p.securityDeposit}
-                  </td>
+                  {activeTab === "equipment" && (
+                    <td className="px-3 py-3 text-right font-mono sm:px-4">
+                      ₹{p.dailyRent}/d
+                    </td>
+                  )}
+                  {activeTab === "chemical" && (
+                    <td className="px-3 py-3 text-right font-mono sm:px-4">
+                      {(() => {
+                        const pricing = getChemPricing(p);
+                        if (!pricing) {
+                          return <span className="text-muted-foreground">—</span>;
+                        }
+                        return (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="inline-flex cursor-default flex-col items-end">
+                                  <span className="whitespace-nowrap tabular-nums">{pricing.label}</span>
+                                  <span className="font-sans text-[10px] font-normal text-muted-foreground">
+                                    {pricing.count} {pricing.count === 1 ? "size" : "sizes"}
+                                  </span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="left" align="center" className="min-w-[10rem] p-0">
+                                <div className="border-b border-border/60 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  Price by size
+                                </div>
+                                <div className="max-h-64 divide-y divide-border/40 overflow-auto px-3 py-1.5 font-sans text-xs">
+                                  {pricing.sizes.map((v: any, i: number) => (
+                                    <div key={i} className="flex items-center justify-between gap-6 py-1">
+                                      <span className="text-muted-foreground">
+                                        {v.sizeValue} {v.sizeUnit}
+                                      </span>
+                                      <span className="font-semibold tabular-nums">
+                                        ₹{(v.buyPrice as number).toLocaleString("en-IN")}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        );
+                      })()}
+                    </td>
+                  )}
+                  {activeTab === "equipment" && (
+                    <td className="px-3 py-3 text-right font-mono sm:px-4">
+                      ₹{p.securityDeposit}
+                    </td>
+                  )}
                   <td className="px-3 py-3 text-right sm:px-4">{p.quantity}</td>
                   <td className="px-3 py-3 sm:px-4">
                     <Switch
@@ -871,7 +1040,7 @@ const Products = () => {
                       <Button variant="ghost" size="icon" onClick={() => void openMedia(p)} aria-label="Media" disabled={busy}>
                         <ImageIcon className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setEditing(p)} aria-label="Edit" disabled={busy}>
+                      <Button variant="ghost" size="icon" onClick={() => void openEditListing(p)} aria-label="Edit" disabled={busy}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => deleteListing(p.id)} aria-label="Delete" disabled={busy}>
@@ -893,6 +1062,95 @@ const Products = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile: card layout (table becomes unreadable on narrow screens) */}
+        <div className="space-y-3 md:hidden">
+          {paginatedProducts.map((p) => {
+            const pricing = activeTab === "chemical" ? getChemPricing(p) : null;
+            return (
+              <div key={p.id} className="rounded-lg border border-border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-soft">
+                      <ImageIcon className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="truncate font-medium">{p.title}</p>
+                        {(p.favoriteCount ?? 0) > 0 && (
+                          <span className="inline-flex shrink-0 items-center rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                            ❤️ {p.favoriteCount}
+                          </span>
+                        )}
+                      </div>
+                      <p className="truncate text-xs text-muted-foreground">{p.productName}</p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={p.status === "active"}
+                    onCheckedChange={() => toggleListingStatus(p)}
+                    disabled={busy}
+                  />
+                </div>
+
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div className="min-w-0">
+                    <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Category</dt>
+                    <dd className="truncate">{p.category}</dd>
+                  </div>
+                  <div className="min-w-0 text-right">
+                    <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Qty</dt>
+                    <dd className="font-mono tabular-nums">{p.quantity}</dd>
+                  </div>
+                  {activeTab === "equipment" ? (
+                    <>
+                      <div className="min-w-0">
+                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Rent (Admin)</dt>
+                        <dd className="font-mono tabular-nums">₹{p.dailyRent}/d</dd>
+                      </div>
+                      <div className="min-w-0 text-right">
+                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Deposit</dt>
+                        <dd className="font-mono tabular-nums">₹{p.securityDeposit}</dd>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="col-span-2 min-w-0">
+                      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Buy Price (Admin)</dt>
+                      {pricing ? (
+                        <dd className="mt-1">
+                          <span className="font-mono font-semibold tabular-nums">{pricing.label}</span>
+                          <ChemSizeBreakdown sizes={pricing.sizes} />
+                        </dd>
+                      ) : (
+                        <dd className="text-muted-foreground">—</dd>
+                      )}
+                    </div>
+                  )}
+                </dl>
+
+                <div className="mt-3 flex justify-end gap-1 border-t border-border pt-2">
+                  <Button variant="ghost" size="icon" onClick={() => void openMedia(p)} aria-label="Media" disabled={busy}>
+                    <ImageIcon className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => void openEditListing(p)} aria-label="Edit" disabled={busy}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => deleteListing(p.id)} aria-label="Delete" disabled={busy}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+          {hasLoaded && filtered.length === 0 && (
+            <div className="rounded-lg border border-border px-3 py-8 text-center text-sm text-muted-foreground">
+              {products.length === 0
+                ? "No listings created yet."
+                : "No listings match your current search/filter."}
+            </div>
+          )}
+        </div>
+
         {true && (
           <div className="mt-4 flex flex-col sm:flex-row items-center justify-between border-t border-border pt-4 gap-4">
             <p className="text-sm text-muted-foreground whitespace-nowrap">
@@ -944,7 +1202,11 @@ const Products = () => {
                 <div className="flex items-center gap-2">
                   <Select value={editing.categoryId} onValueChange={onCategoryChange} disabled={!!editing.id}>
                     <SelectTrigger className="pl-1"><SelectValue className="text-left min-w-0" /></SelectTrigger>
-                    <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                    <SelectContent>
+                      {categories.filter(c => catalogProducts.some(p => p.categoryId === c.id && (activeTab === "chemical" ? p.baseUnit != null : p.baseUnit == null))).map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                   {/* Vendor catalog creation disabled - managed by admin */}
                   {/* <Button variant="outline" onClick={openCreateCategory} type="button" disabled={busy}>New</Button> */}
@@ -970,7 +1232,7 @@ const Products = () => {
                   }}>
                     <SelectTrigger className="pl-1"><SelectValue placeholder="Choose product" className="text-left min-w-0" /></SelectTrigger>
                     <SelectContent>
-                      {catalogProducts.filter((p) => p.categoryId === editing.categoryId).map((p) => (
+                      {catalogProducts.filter((p) => p.categoryId === editing.categoryId && (activeTab === "chemical" ? p.baseUnit != null : p.baseUnit == null)).map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -983,22 +1245,63 @@ const Products = () => {
                 <Label>Listing title</Label>
                 <Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} placeholder="E.g. Sony A7 III — Daily Rental" />
               </div>
-              <div className="space-y-1.5">
-                <Label>Daily rent (Admin-set)</Label>
-                <Input value={`₹${editing.dailyRent}`} readOnly />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Monthly rent (Admin-set)</Label>
-                <Input value={`₹${editing.monthlyRent}`} readOnly />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Security deposit (Admin-set)</Label>
-                <Input value={`₹${editing.securityDeposit}`} readOnly />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Buy price (Admin-set)</Label>
-                <Input value={editing.buyPrice ? `₹${editing.buyPrice}` : "Not enabled"} readOnly />
-              </div>
+              {activeTab === "equipment" && (
+                <div className="space-y-1.5">
+                  <Label>Daily rent (Admin-set)</Label>
+                  <Input value={`₹${editing.dailyRent}`} readOnly />
+                </div>
+              )}
+              {activeTab === "equipment" && (
+                <div className="space-y-1.5">
+                  <Label>Monthly rent (Admin-set)</Label>
+                  <Input value={`₹${editing.monthlyRent}`} readOnly />
+                </div>
+              )}
+              {activeTab === "chemical" && (
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label className="font-semibold text-xs text-muted-foreground">Chemical Sizing & Pricing Chart (Admin-set)</Label>
+                  {(!editing.variants || editing.variants.length === 0) ? (
+                    <Input value={editing.buyPrice ? `₹${editing.buyPrice}` : "Not enabled"} readOnly className="bg-muted/50" />
+                  ) : (
+                    <div className="overflow-hidden rounded-md border border-border mt-1">
+                      <table className="w-full text-xs text-left border-collapse bg-muted/20">
+                        <thead>
+                          <tr className="border-b border-border bg-muted/50 text-muted-foreground">
+                            <th className="p-2 font-semibold">SKU</th>
+                            <th className="p-2 font-semibold text-right">Size Value</th>
+                            <th className="p-2 font-semibold">Size Unit</th>
+                            <th className="p-2 font-semibold text-right">Vendor Payout Price</th>
+                            <th className="p-2 font-semibold text-right">Customer Buy Price</th>
+                            <th className="p-2 font-semibold text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {editing.variants.map((v: any, idx: number) => (
+                            <tr key={idx} className="border-b border-border last:border-0 hover:bg-muted/10">
+                              <td className="p-2 font-mono text-[11px]">{v.sku}</td>
+                              <td className="p-2 text-right font-medium">{v.sizeValue}</td>
+                              <td className="p-2">{v.sizeUnit}</td>
+                              <td className="p-2 text-right font-medium text-emerald-600 dark:text-emerald-400">₹{v.vendorPrice}</td>
+                              <td className="p-2 text-right font-medium text-indigo-600 dark:text-indigo-400">₹{v.buyPrice}</td>
+                              <td className="p-2 text-center">
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${v.isActive ? 'bg-green-50 text-green-700 dark:bg-green-950/20 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-950/20 dark:text-red-400'}`}>
+                                  {v.isActive ? 'Active' : 'Inactive'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+              {activeTab === "equipment" && (
+                <div className="space-y-1.5">
+                  <Label>Security deposit (Admin-set)</Label>
+                  <Input value={`₹${editing.securityDeposit}`} readOnly />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label>GST % (Admin-set)</Label>
                 <Input value={`${editing.gstPercent ?? 18}%`} readOnly />
@@ -1007,19 +1310,63 @@ const Products = () => {
                 <Label>Modes (Admin-set)</Label>
                 <Input value={`${editing.isRentEnabled ? "Rent" : ""}${editing.isRentEnabled && editing.isBuyEnabled ? " + " : ""}${editing.isBuyEnabled ? "Buy" : ""}${!editing.isRentEnabled && !editing.isBuyEnabled ? "Unavailable" : ""}`} readOnly />
               </div>
-              <div className="space-y-1.5">
-                <Label>
-                  Quantity
-                  {editing.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(Manage via Inventory)</span>}
-                </Label>
-                <Input 
-                  type="number" 
-                  value={editing.quantity} 
-                  readOnly={!!editing.id} 
-                  className={editing.id ? "bg-muted/50" : ""}
-                  onChange={(e) => setEditing({ ...editing, quantity: Number(e.target.value) })} 
-                />
-              </div>
+              {/* Quantity field: for equipment show single number, for chemicals show per-variant stock table */}
+              {activeTab === "equipment" && (
+                <div className="space-y-1.5">
+                  <Label>
+                    Quantity
+                    {editing.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(Manage via Inventory)</span>}
+                  </Label>
+                  <Input 
+                    type="number" 
+                    value={editing.quantity} 
+                    readOnly={!!editing.id} 
+                    className={editing.id ? "bg-muted/50" : ""}
+                    onChange={(e) => setEditing({ ...editing, quantity: Number(e.target.value) })} 
+                  />
+                </div>
+              )}
+              {activeTab === "chemical" && (
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label className="font-semibold text-xs">
+                    Stock per Packaging Size (Variant)
+                  </Label>
+                  {(!editing.variants || editing.variants.length === 0) ? (
+                    <p className="text-xs text-muted-foreground border border-border rounded-md p-3 bg-muted/20">
+                      ⚠ No packaging sizes defined for this chemical yet. Ask Admin to add variants (e.g. 1L, 5L) first.
+                    </p>
+                  ) : (
+                    <div className="overflow-hidden rounded-md border border-border mt-1">
+                      <table className="w-full text-xs text-left border-collapse bg-muted/20">
+                        <thead>
+                          <tr className="border-b border-border bg-muted/50 text-muted-foreground">
+                            <th className="p-2 font-semibold">SKU</th>
+                            <th className="p-2 font-semibold text-right">Size</th>
+                            <th className="p-2 font-semibold text-right text-indigo-600 dark:text-indigo-400">Stock (Units)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {editing.variants.map((v: any, idx: number) => (
+                            <tr key={idx} className="border-b border-border last:border-0 hover:bg-muted/10">
+                              <td className="p-2 font-mono text-[11px]">{v.sku}</td>
+                              <td className="p-2 text-right font-medium">{v.sizeValue} {v.sizeUnit}</td>
+                              <td className="p-2 text-right">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  className="h-7 w-20 text-right ml-auto text-xs"
+                                  value={variantStocks[v.id] ?? 0}
+                                  onChange={(e) => setVariantStocks(prev => ({ ...prev, [v.id]: Math.max(0, Number(e.target.value)) }))}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="space-y-1.5 sm:col-span-2">
                 <Label>Status</Label>
                 <Select value={editing.status} onValueChange={(v) => setEditing({ ...editing, status: v as ProductListing["status"] })}>

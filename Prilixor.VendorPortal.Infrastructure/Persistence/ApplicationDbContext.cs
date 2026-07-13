@@ -3,6 +3,7 @@ using Prilixor.VendorPortal.Domain.Auth;
 using Prilixor.VendorPortal.Domain.Support;
 using Prilixor.Shared.Abstractions.DB;
 using Microsoft.EntityFrameworkCore;
+using Prilixor.VendorPortal.Domain.Common;
 
 namespace Prilixor.VendorPortal.Infrastructure.Persistence;
 
@@ -43,6 +44,11 @@ public class ApplicationDbContext : DbContext
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<VendorProductAsset> VendorProductAssets => Set<VendorProductAsset>();
+    public DbSet<Hospital> Hospitals => Set<Hospital>();
+    public DbSet<Doctor> Doctors => Set<Doctor>();
+    public DbSet<HospitalDoctor> HospitalDoctors => Set<HospitalDoctor>();
+    public DbSet<ChemicalProperty> ChemicalProperties => Set<ChemicalProperty>();
+    public DbSet<VendorVariantInventory> VendorVariantInventories => Set<VendorVariantInventory>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Ignore<List<IDomainEvent>>()
@@ -252,6 +258,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.PrescriptionRequired).HasColumnName("prescription_required");
             entity.Property(x => x.DepositRequired).HasColumnName("deposit_required");
             entity.Property(x => x.InstallationRequired).HasColumnName("installation_required");
+            entity.Property(x => x.IsChemical).HasColumnName("is_chemical");
             entity.Property(x => x.IsActive).HasColumnName("is_active");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
@@ -280,6 +287,10 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.MonthlyRent).HasColumnName("monthly_rent");
             entity.Property(x => x.SecurityDeposit).HasColumnName("security_deposit");
             entity.Property(x => x.BuyPrice).HasColumnName("buy_price");
+            entity.Property(x => x.VendorDailyRent).HasColumnName("vendor_daily_rent");
+            entity.Property(x => x.VendorMonthlyRent).HasColumnName("vendor_monthly_rent");
+            entity.Property(x => x.VendorSecurityDeposit).HasColumnName("vendor_security_deposit");
+            entity.Property(x => x.VendorBuyPrice).HasColumnName("vendor_buy_price");
             entity.Property(x => x.GstPercent).HasColumnName("gst_percent");
             entity.Property(x => x.IsRentEnabled).HasColumnName("is_rent_enabled");
             entity.Property(x => x.IsBuyEnabled).HasColumnName("is_buy_enabled");
@@ -296,6 +307,52 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(x => x.ProductId);
             entity.HasMany(x => x.ProductImages)
                 .WithOne(x => x.Product)
+                .HasForeignKey(x => x.ProductId);
+            entity.HasOne(x => x.ChemicalProperty)
+                .WithOne(x => x.Product)
+                .HasForeignKey<ChemicalProperty>(x => x.ProductId);
+            entity.HasMany(x => x.Variants)
+                .WithOne(x => x.Product)
+                .HasForeignKey(x => x.ProductId);
+        });
+
+        modelBuilder.Entity<ChemicalProperty>(entity =>
+        {
+            entity.ToTable("chemical_properties");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.ProductId).HasColumnName("product_id");
+            entity.Property(x => x.CasNumber).HasColumnName("cas_number");
+            entity.Property(x => x.ChemicalFormula).HasColumnName("chemical_formula");
+            entity.Property(x => x.PurityPercentage).HasColumnName("purity_percentage");
+            entity.Property(x => x.MolecularWeight).HasColumnName("molecular_weight");
+            entity.Property(x => x.BaseUnit).HasColumnName("base_unit");
+            entity.Property(x => x.SdsDocumentUrl).HasColumnName("sds_document_url");
+            entity.Property(x => x.CoaDocumentUrl).HasColumnName("coa_document_url");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Ignore(x => x.CreatedBy);
+            entity.Ignore(x => x.ModifiedBy);
+        });
+
+        modelBuilder.Entity<ProductVariant>(entity =>
+        {
+            entity.ToTable("product_variants");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.ProductId).HasColumnName("product_id");
+            entity.Property(x => x.Sku).HasColumnName("sku");
+            entity.Property(x => x.SizeValue).HasColumnName("size_value");
+            entity.Property(x => x.SizeUnit).HasColumnName("size_unit");
+            entity.Property(x => x.VendorPrice).HasColumnName("vendor_price");
+            entity.Property(x => x.BuyPrice).HasColumnName("buy_price");
+            entity.Property(x => x.IsActive).HasColumnName("is_active");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Ignore(x => x.CreatedBy);
+            entity.Ignore(x => x.ModifiedBy);
+            entity.HasOne(x => x.Product)
+                .WithMany(x => x.Variants)
                 .HasForeignKey(x => x.ProductId);
         });
 
@@ -631,6 +688,91 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(x => x.Ticket)
                 .WithMany(x => x.Messages)
                 .HasForeignKey(x => x.TicketId);
+        });
+
+        modelBuilder.Entity<Hospital>(entity =>
+        {
+            entity.ToTable("hospitals");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.Name).HasColumnName("name");
+            entity.Property(x => x.AddressLine1).HasColumnName("address_line_1");
+            entity.Property(x => x.City).HasColumnName("city");
+            entity.Property(x => x.State).HasColumnName("state");
+            entity.Property(x => x.PostalCode).HasColumnName("postal_code");
+            entity.Property(x => x.IsVerified).HasColumnName("is_verified");
+            
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+        });
+
+        modelBuilder.Entity<Doctor>(entity =>
+        {
+            entity.ToTable("doctors");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.FullName).HasColumnName("full_name");
+            entity.Property(x => x.Specialization).HasColumnName("specialization");
+            entity.Property(x => x.ContactNumber).HasColumnName("contact_number");
+            entity.Property(x => x.IsVerified).HasColumnName("is_verified");
+            
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+        });
+
+        modelBuilder.Entity<HospitalDoctor>(entity =>
+        {
+            entity.ToTable("hospital_doctors");
+            entity.HasKey(x => new { x.HospitalId, x.DoctorId });
+            
+            entity.Property(x => x.HospitalId).HasColumnName("hospital_id");
+            entity.Property(x => x.DoctorId).HasColumnName("doctor_id");
+
+            entity.HasOne(x => x.Hospital)
+                .WithMany(h => h.Doctors)
+                .HasForeignKey(x => x.HospitalId);
+
+            entity.HasOne(x => x.Doctor)
+                .WithMany(d => d.Hospitals)
+                .HasForeignKey(x => x.DoctorId);
+        });
+
+        modelBuilder.Entity<VendorVariantInventory>(entity =>
+        {
+            entity.ToTable("vendor_variant_inventory");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.VendorProductListingId).HasColumnName("vendor_product_listing_id");
+            entity.Property(x => x.ProductVariantId).HasColumnName("product_variant_id");
+            entity.Property(x => x.TotalQuantity).HasColumnName("total_quantity");
+            entity.Property(x => x.AvailableQuantity).HasColumnName("available_quantity");
+            entity.Property(x => x.ReservedQuantity).HasColumnName("reserved_quantity");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Ignore(x => x.CreatedBy);
+            entity.Ignore(x => x.ModifiedBy);
+
+            entity.HasOne(x => x.VendorProductListing)
+                .WithMany()
+                .HasForeignKey(x => x.VendorProductListingId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.ProductVariant)
+                .WithMany()
+                .HasForeignKey(x => x.ProductVariantId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(x => new { x.VendorProductListingId, x.ProductVariantId }).IsUnique();
         });
     }
 

@@ -10,7 +10,7 @@ import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { InventoryMovement, InventoryRecord } from "@/app/models";
-import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2, Barcode, Trash2, Search } from "lucide-react";
+import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2, Barcode, Trash2, Search, FlaskConical } from "lucide-react";
 import { format } from "date-fns";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/app/components/ui/pagination";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -41,6 +41,8 @@ const Inventory = () => {
   const [movementRow, setMovementRow] = useState<InventoryRecord | null>(null);
   const [movementType, setMovementType] = useState<"in" | "out">("in");
   const [movementQtyInput, setMovementQtyInput] = useState("1");
+  const [activeTab, setActiveTab] = useState<"equipment" | "chemical">("equipment");
+  const [listingIsChemical, setListingIsChemical] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -65,15 +67,25 @@ const Inventory = () => {
   const itemsPerPage = 10;
 
   const filteredInventory = useMemo(() => {
-    if (!searchQuery.trim()) return inventory;
-    return inventory.filter(row => 
-      row.productName.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [inventory, searchQuery]);
+    let result = inventory;
+    result = result.filter(row => {
+      const isChem = listingIsChemical[row.productId] || false;
+      if (activeTab === "equipment" && isChem) return false;
+      if (activeTab === "chemical" && !isChem) return false;
+      return true;
+    });
+
+    if (searchQuery.trim()) {
+      result = result.filter(row => 
+        row.productName.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    return result;
+  }, [inventory, searchQuery, activeTab, listingIsChemical]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, activeTab]);
 
   const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
   const paginatedInventory = filteredInventory.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -99,6 +111,13 @@ const Inventory = () => {
     ]);
 
     const productById = new Map(products.map((p) => [p.id, p.productName]));
+    
+    const isChemMap: Record<string, boolean> = {};
+    listings.forEach(l => {
+      const p = products.find(prod => prod.id === l.productId);
+      isChemMap[l.id] = (p?.baseUnit != null);
+    });
+    setListingIsChemical(isChemMap);
 
     const rows = await Promise.all(
       listings.map(async (listing) => {
@@ -606,7 +625,25 @@ const Inventory = () => {
 
       <Card className="mt-6 border-border/60 p-4 sm:p-6 lg:p-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-border pb-4 gap-4">
-          <h2 className="font-semibold">Stock by product</h2>
+          <div className="flex items-center gap-4">
+            <h2 className="font-semibold">Stock by product</h2>
+            <div className="flex bg-muted p-1 rounded-lg w-fit ml-4">
+              <button
+                onClick={() => setActiveTab("equipment")}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center ${activeTab === "equipment" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50"}`}
+              >
+                <Package className="w-4 h-4 mr-2" />
+                Equipment
+              </button>
+              <button
+                onClick={() => setActiveTab("chemical")}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center ${activeTab === "chemical" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50"}`}
+              >
+                <FlaskConical className="w-4 h-4 mr-2" />
+                Chemicals
+              </button>
+            </div>
+          </div>
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -618,16 +655,17 @@ const Inventory = () => {
             />
           </div>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-border">
+        
+        <div className="overflow-x-auto rounded-lg border border-border mt-4">
           <table className="w-full min-w-[700px] text-sm">
             <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-              <tr>
+              <tr className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
                 <th className="px-4 py-3 font-semibold">Product</th>
                 <th className="px-4 py-3 font-semibold text-right">Total</th>
                 <th className="px-4 py-3 font-semibold text-right">Available</th>
-                <th className="px-4 py-3 font-semibold text-right">Reserved</th>
-                <th className="px-4 py-3 font-semibold text-right">Rented</th>
-                <th className="px-4 py-3 font-semibold text-right">Blocked</th>
+                {activeTab === "equipment" && <th className="px-4 py-3 font-semibold text-right">Rented</th>}
+                <th className="px-4 py-3 font-semibold text-right text-warning">Reserved</th>
+                <th className="px-4 py-3 font-semibold text-right text-destructive">Blocked</th>
                 <th className="px-4 py-3 font-semibold">Utilization</th>
                 <th className="px-4 py-3 font-semibold text-right">Action</th>
               </tr>
@@ -637,13 +675,19 @@ const Inventory = () => {
                 const utilization = row.total === 0 ? 0 : ((row.rented + row.reserved) / row.total) * 100;
                 return (
                   <tr key={row.productId} className="hover:bg-muted/20">
-                    <td className="px-4 py-3 font-medium">{row.productName}</td>
-                    <td className="px-4 py-3 text-right font-mono">{row.total}</td>
-                    <td className="px-4 py-3 text-right font-mono text-success">{row.available}</td>
-                    <td className="px-4 py-3 text-right font-mono text-warning">{row.reserved}</td>
-                    <td className="px-4 py-3 text-right font-mono text-info">{row.rented}</td>
-                    <td className="px-4 py-3 text-right font-mono text-destructive">{row.blocked}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-4 font-medium">{row.productName}</td>
+                    <td className="px-4 py-4 text-right font-mono">{row.total}</td>
+                    <td className="px-4 py-4 text-right">
+                      <span className="inline-flex items-center justify-center font-mono font-medium text-success bg-success/10 px-2.5 py-0.5 rounded-full min-w-[3rem]">
+                        {row.available}
+                      </span>
+                    </td>
+                    {activeTab === "equipment" && (
+                      <td className="px-4 py-4 text-right font-mono text-info">{row.rented}</td>
+                    )}
+                    <td className="px-4 py-4 text-right font-mono text-warning">{row.reserved}</td>
+                    <td className="px-4 py-4 text-right font-mono text-destructive">{row.blocked}</td>
+                    <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
                         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                           <div className="h-full bg-gradient-primary" style={{ width: `${utilization}%` }} />
@@ -651,7 +695,7 @@ const Inventory = () => {
                         <span className="w-10 text-right text-xs font-semibold">{utilization.toFixed(0)}%</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-4 text-right">
                       <TooltipProvider>
                         <div className="flex justify-end gap-1">
                           <Tooltip>
@@ -734,7 +778,7 @@ const Inventory = () => {
           </table>
         </div>
         {true && (
-          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between border-t border-border pt-4 gap-4">
+          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between border-t border-border pt-4 gap-4 px-4 pb-4">
             <p className="text-sm text-muted-foreground whitespace-nowrap">
               Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredInventory.length)} of {filteredInventory.length} products
             </p>
@@ -770,7 +814,6 @@ const Inventory = () => {
           </div>
         )}
       </Card>
-
       <Card className="mt-6 border-border/60">
         <div className="border-b border-border p-4">
           <h2 className="font-semibold">Movement history</h2>
@@ -809,7 +852,7 @@ const Inventory = () => {
           <DialogHeader>
             <DialogTitle>Edit stock - {editingRow?.productName}</DialogTitle>
           </DialogHeader>
-          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
+          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1 space-y-4">
             <FormGrid cols={2}>
             <div className="space-y-1.5">
               <Label>Total</Label>
@@ -819,18 +862,21 @@ const Inventory = () => {
               <Label>Reserved</Label>
               <Input type="number" min={0} value={editForm.reserved} onChange={(e) => updateFormValue("reserved", e.target.value)} />
             </div>
-            <div className="space-y-1.5">
-              <Label>Rented</Label>
-              <Input type="number" min={0} value={editForm.rented} onChange={(e) => updateFormValue("rented", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
+          </FormGrid>
+                  {activeTab === "equipment" && (
+                    <div className="space-y-2">
+                      <Label>Currently Rented</Label>
+                      <Input type="number" min="0" value={editForm.rented} onChange={(e) => setEditForm({ ...editForm, rented: parseInt(e.target.value) || 0 })} />
+                      <p className="text-[10px] text-muted-foreground leading-tight">Usually managed automatically when orders ship</p>
+                    </div>
+                  )}
+                  <div className="space-y-2">
               <Label>Blocked</Label>
               <Input type="number" min={0} value={editForm.blocked} onChange={(e) => updateFormValue("blocked", e.target.value)} />
             </div>
             <div className="sm:col-span-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
               Available (auto): <span className="font-semibold">{computedAvailable}</span>
             </div>
-          </FormGrid>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingRow(null)} disabled={busy}>

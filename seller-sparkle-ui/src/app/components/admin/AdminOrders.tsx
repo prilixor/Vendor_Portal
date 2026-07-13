@@ -523,72 +523,72 @@ export const AdminOrders = () => {
       />
 
       {/* Stats Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Card className="border-border/60 bg-card/60 backdrop-blur-md">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex items-center gap-3">
               <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
                 <ShoppingBag className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Total Items Ordered</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight truncate">{stats.totalCount}</h3>
+                <h3 className="mt-1 text-lg sm:text-xl font-bold tracking-tight tabular-nums whitespace-nowrap">{stats.totalCount}</h3>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="border-border/60 bg-card/60 backdrop-blur-md">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex items-center gap-3">
               <div className="rounded-lg bg-emerald-500/10 text-emerald-500 p-2.5">
                 <TrendingUp className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Platform Revenue</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight truncate">₹{stats.revenue.toFixed(0)}</h3>
+                <h3 className="mt-1 text-lg sm:text-xl font-bold tracking-tight tabular-nums whitespace-nowrap">₹{stats.revenue.toFixed(0)}</h3>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="border-border/60 bg-card/60 backdrop-blur-md">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex items-center gap-3">
               <div className="rounded-lg bg-indigo-500/10 text-indigo-500 p-2.5">
                 <Truck className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Active Rentals</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight truncate">{stats.active}</h3>
+                <h3 className="mt-1 text-lg sm:text-xl font-bold tracking-tight tabular-nums whitespace-nowrap">{stats.active}</h3>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="border-border/60 bg-card/60 backdrop-blur-md">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex items-center gap-3">
               <div className="rounded-lg bg-slate-500/10 text-slate-500 p-2.5">
                 <RotateCcw className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Completed Rentals</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight truncate">{stats.returned}</h3>
+                <h3 className="mt-1 text-lg sm:text-xl font-bold tracking-tight tabular-nums whitespace-nowrap">{stats.returned}</h3>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="border-border/60 bg-card/60 backdrop-blur-md">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex items-center gap-3">
               <div className="rounded-lg bg-destructive/10 text-destructive p-2.5">
                 <AlertCircle className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider leading-tight">Dispatch Failed</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight text-destructive truncate">{stats.failed}</h3>
+                <h3 className="mt-1 text-lg sm:text-xl font-bold tracking-tight text-destructive tabular-nums whitespace-nowrap">{stats.failed}</h3>
               </div>
             </div>
           </CardContent>
@@ -840,6 +840,34 @@ export const AdminOrders = () => {
                     <p className="font-bold text-foreground">₹{selectedOrder.totalAmount.toFixed(0)} total</p>
                     <p className="text-[10px] text-muted-foreground">+ ₹{selectedOrder.depositAmount.toFixed(0)} deposit amount</p>
                   </div>
+
+                  {/* Medical Reference */}
+                  {(selectedOrder.doctorId || selectedOrder.hospitalId) && (
+                    <div className="space-y-1 sm:col-span-2">
+                      <p className="text-muted-foreground font-semibold flex items-center gap-1"><User className="h-3.5 w-3.5" /> Medical Reference</p>
+                      <div className="flex flex-wrap gap-4 text-[10px] bg-white/40 dark:bg-black/20 p-2 rounded border border-border/50">
+                        {selectedOrder.doctorName && (
+                          <div>
+                            <span className="font-bold uppercase tracking-wider text-muted-foreground mr-1">Doctor:</span> 
+                            <span className="font-medium text-foreground">
+                              {selectedOrder.doctorName}
+                              {selectedOrder.doctorSpecialization && <span className="font-normal text-muted-foreground ml-1">- {selectedOrder.doctorSpecialization}</span>}
+                            </span>
+                            {selectedOrder.doctorContactNumber && <span className="text-muted-foreground ml-1">({selectedOrder.doctorContactNumber})</span>}
+                          </div>
+                        )}
+                        {selectedOrder.hospitalName && (
+                          <div>
+                            <span className="font-bold uppercase tracking-wider text-muted-foreground mr-1">Hospital:</span> 
+                            <span className="font-medium text-foreground">
+                              {selectedOrder.hospitalName}
+                              {selectedOrder.hospitalCity && <span className="font-normal text-muted-foreground ml-1">({selectedOrder.hospitalCity})</span>}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Progress Timeline */}

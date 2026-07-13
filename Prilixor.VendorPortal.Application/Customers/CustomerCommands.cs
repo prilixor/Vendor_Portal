@@ -317,7 +317,16 @@ internal sealed class GetCustomerCatalogListingsQueryHandler(ICustomerRepository
     }
 }
 
-public sealed record CartLineRequest(Guid ListingId, int Quantity, int RentalDays, string OrderType = "rent");
+public sealed record CartLineRequest(
+    Guid ListingId,
+    int Quantity,
+    int RentalDays,
+    string OrderType = "rent",
+    Guid? ProductVariantId = null,
+    Guid? DoctorId = null,
+    Guid? HospitalId = null,
+    string? ContactNumber = null,
+    string? ReferenceNumber = null);
 
 public sealed record CustomerOrderQuoteDto(
     decimal SubtotalAmount,
@@ -372,7 +381,17 @@ public sealed record FailedCustomerOrderLineDto(
     int RentalDays,
     string OrderType,
     string ReasonCode,
-    string Message);
+    string Message,
+    IReadOnlyList<VariantStockSuggestionDto>? VariantSuggestions = null);
+
+/// <summary>Alternate packaging size (SKU) that has stock, offered when the requested size cannot be fulfilled.</summary>
+public sealed record VariantStockSuggestionDto(
+    Guid ProductVariantId,
+    string Sku,
+    decimal SizeValue,
+    string SizeUnit,
+    decimal BuyPrice,
+    int AvailableQuantity);
 
 public sealed record PlaceCustomerOrdersResultDto(
     List<CustomerOrderDto> PlacedOrders,
@@ -397,8 +416,15 @@ public sealed record CustomerOrderDto(
     string OrderType,
     int Quantity,
     int RentalDays,
-    string? ListingPrimaryImageUrl);
-
+    string? ListingPrimaryImageUrl,
+    Guid? ProductVariantId = null,
+    Guid? DoctorId = null,
+    string? DoctorName = null,
+    string? DoctorSpecialization = null,
+    Guid? HospitalId = null,
+    string? HospitalName = null,
+    string? HospitalCity = null,
+    string? DoctorContactNumber = null);
 internal static class CustomerOrderPricingRules
 {
     public static string NormalizeDeliveryOption(string? option) =>
@@ -443,6 +469,19 @@ internal static class CustomerOrderPricingRules
         CartLineRequest line,
         CustomerPricingOptions options)
     {
+        if (line.ProductVariantId.HasValue && line.ProductVariantId.Value != Guid.Empty)
+        {
+            var variant = aggregate.Variants.FirstOrDefault(v => v.Id == line.ProductVariantId.Value.ToString());
+            if (variant != null)
+            {
+                if (string.Equals(orderType, "buy", StringComparison.OrdinalIgnoreCase))
+                {
+                    return variant.BuyPrice * line.Quantity;
+                }
+                return variant.BuyPrice * line.RentalDays * line.Quantity;
+            }
+        }
+
         if (string.Equals(orderType, "buy", StringComparison.OrdinalIgnoreCase))
         {
             var unitBuyPrice = aggregate.BuyPrice ?? (aggregate.DailyRent * options.BuyPriceMultiplierFromDailyRent);
@@ -450,6 +489,34 @@ internal static class CustomerOrderPricingRules
         }
 
         return aggregate.DailyRent * line.RentalDays * line.Quantity;
+    }
+
+    public static decimal CalculateVendorLineSubtotal(
+        string orderType,
+        VendorProductListingAggregate aggregate,
+        CartLineRequest line,
+        CustomerPricingOptions options)
+    {
+        if (line.ProductVariantId.HasValue && line.ProductVariantId.Value != Guid.Empty)
+        {
+            var variant = aggregate.Variants.FirstOrDefault(v => v.Id == line.ProductVariantId.Value.ToString());
+            if (variant != null)
+            {
+                if (string.Equals(orderType, "buy", StringComparison.OrdinalIgnoreCase))
+                {
+                    return variant.VendorPrice * line.Quantity;
+                }
+                return variant.VendorPrice * line.RentalDays * line.Quantity;
+            }
+        }
+
+        if (string.Equals(orderType, "buy", StringComparison.OrdinalIgnoreCase))
+        {
+            var unitVendorBuyPrice = aggregate.VendorBuyPrice ?? (aggregate.VendorDailyRent * options.BuyPriceMultiplierFromDailyRent);
+            return unitVendorBuyPrice * line.Quantity;
+        }
+
+        return aggregate.VendorDailyRent * line.RentalDays * line.Quantity;
     }
 
     public static decimal CalculateDistanceKm(decimal lat1, decimal lon1, decimal lat2, decimal lon2)
@@ -623,13 +690,27 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
             if (trackedListing is null)
                 return Result.Failure<CustomerOrderQuoteDto>(new Error("customers.listing_not_found", "Listing not found.", ErrorCategory.NotFound));
 
-            var inventory = await vendors.GetVendorInventoryByListingIdAsync(agg.ListingId, cancellationToken);
-            var available = inventory?.AvailableQuantity ?? trackedListing.AvailableQuantity;
-            if (available < line.Quantity)
-                return Result.Failure<CustomerOrderQuoteDto>(new Error(
-                    "customers.insufficient_stock",
-                    $"Not enough availability for \"{trackedListing.ListingTitle}\".",
-                    ErrorCategory.Validation));
+            if (line.ProductVariantId.HasValue)
+            {
+                var variantInv = await vendors.GetVariantInventoryByListingIdAsync(agg.ListingId, cancellationToken);
+                var specificVariant = variantInv.FirstOrDefault(vi => vi.ProductVariantId == line.ProductVariantId.Value);
+                var varAvailable = specificVariant?.AvailableQuantity ?? 0;
+                if (varAvailable < line.Quantity)
+                    return Result.Failure<CustomerOrderQuoteDto>(new Error(
+                        "customers.insufficient_stock",
+                        $"Not enough availability for \"{trackedListing.ListingTitle}\" ({specificVariant?.ProductVariant?.Sku ?? "Selected size"}).",
+                        ErrorCategory.Validation));
+            }
+            else
+            {
+                var inventory = await vendors.GetVendorInventoryByListingIdAsync(agg.ListingId, cancellationToken);
+                var available = inventory?.AvailableQuantity ?? trackedListing.AvailableQuantity;
+                if (available < line.Quantity)
+                    return Result.Failure<CustomerOrderQuoteDto>(new Error(
+                        "customers.insufficient_stock",
+                        $"Not enough availability for \"{trackedListing.ListingTitle}\".",
+                        ErrorCategory.Validation));
+            }
 
             var depositPerUnit = agg.CategoryDepositRequired ? agg.SecurityDeposit : 0m;
             var lineSubtotal = CustomerOrderPricingRules.CalculateLineSubtotal(orderType, agg, line, options);
@@ -829,22 +910,63 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 continue;
             }
 
-            var inventory = await vendors.GetVendorInventoryByListingIdAsync(agg.ListingId, cancellationToken);
-            var available = inventory?.AvailableQuantity ?? trackedListing.AvailableQuantity;
-            if (available < line.Quantity)
+            if (line.ProductVariantId.HasValue)
             {
-                failed.Add(new FailedCustomerOrderLineDto(
-                    line.ListingId,
-                    line.Quantity,
-                    line.RentalDays,
-                    orderType,
-                    "customers.insufficient_stock",
-                    $"Not enough availability for \"{trackedListing.ListingTitle}\"."));
-                continue;
+                var variantInv = await vendors.GetVariantInventoryByListingIdAsync(agg.ListingId, cancellationToken);
+                var specificVariant = variantInv.FirstOrDefault(vi => vi.ProductVariantId == line.ProductVariantId.Value);
+                var varAvailable = specificVariant?.AvailableQuantity ?? 0;
+                if (varAvailable < line.Quantity)
+                {
+                    var suggestions = BuildVariantSuggestions(agg, variantInv, line.ProductVariantId.Value);
+                    var suggestionHint = suggestions.Count > 0
+                        ? " Other sizes are in stock — see suggestions."
+                        : string.Empty;
+                    failed.Add(new FailedCustomerOrderLineDto(
+                        line.ListingId,
+                        line.Quantity,
+                        line.RentalDays,
+                        orderType,
+                        "customers.insufficient_stock",
+                        $"Not enough availability for \"{trackedListing.ListingTitle}\" ({specificVariant?.ProductVariant?.Sku ?? "Selected size"}).{suggestionHint}",
+                        suggestions));
+                    continue;
+                }
+            }
+            else
+            {
+                var inventory = await vendors.GetVendorInventoryByListingIdAsync(agg.ListingId, cancellationToken);
+                var available = inventory?.AvailableQuantity ?? trackedListing.AvailableQuantity;
+                if (available < line.Quantity)
+                {
+                    failed.Add(new FailedCustomerOrderLineDto(
+                        line.ListingId,
+                        line.Quantity,
+                        line.RentalDays,
+                        orderType,
+                        "customers.insufficient_stock",
+                        $"Not enough availability for \"{trackedListing.ListingTitle}\"."));
+                    continue;
+                }
+            }
+
+            if (agg.CategoryPrescriptionRequired)
+            {
+                if (line.DoctorId is null || line.HospitalId is null)
+                {
+                    failed.Add(new FailedCustomerOrderLineDto(
+                        line.ListingId,
+                        line.Quantity,
+                        line.RentalDays,
+                        orderType,
+                        "customers.prescription_required",
+                        "Doctor and Hospital reference are required for this product category."));
+                    continue;
+                }
             }
 
             var depositPerUnit = agg.CategoryDepositRequired ? agg.SecurityDeposit : 0m;
             var subtotal = CustomerOrderPricingRules.CalculateLineSubtotal(orderType, agg, line, options);
+            var vendorSubtotal = CustomerOrderPricingRules.CalculateVendorLineSubtotal(orderType, agg, line, options);
             var deposit = orderType == "buy" ? 0m : depositPerUnit * line.Quantity;
             var expressFee = CustomerOrderPricingRules.CalculateExpressFee(deliveryOption, options);
 
@@ -899,6 +1021,7 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 DeliveryOption = deliveryOption,
                 Status = "awaiting_vendor_acceptance",
                 SubtotalAmount = subtotal,
+                VendorSubtotalAmount = vendorSubtotal,
                 DepositAmount = deposit,
                 ServiceFeeAmount = fees,
                 DistanceFeeAmount = distanceFee,
@@ -907,7 +1030,19 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 TotalAmount = total,
                 StartDate = start,
                 EndDate = end,
+                ProductVariantId = line.ProductVariantId,
             };
+
+            if (agg.CategoryPrescriptionRequired && line.DoctorId.HasValue && line.HospitalId.HasValue)
+            {
+                order.DoctorReference = new CustomerOrderDoctorReference
+                {
+                    DoctorId = line.DoctorId.Value,
+                    HospitalId = line.HospitalId.Value,
+                    ContactNumber = line.ContactNumber,
+                    ReferenceNumber = line.ReferenceNumber
+                };
+            }
 
             await customers.AddCustomerRentalOrderAsync(order, cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
@@ -920,10 +1055,21 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 if (candidateListing is null)
                     continue;
 
-                var candidateInventory = await vendors.GetVendorInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
-                var candidateAvailable = candidateInventory?.AvailableQuantity ?? candidateListing.AvailableQuantity;
-                if (candidateAvailable < line.Quantity)
-                    continue;
+                if (line.ProductVariantId.HasValue)
+                {
+                    var variantInv = await vendors.GetVariantInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
+                    var specificVariant = variantInv.FirstOrDefault(vi => vi.ProductVariantId == line.ProductVariantId.Value);
+                    var varAvailable = specificVariant?.AvailableQuantity ?? 0;
+                    if (varAvailable < line.Quantity)
+                        continue;
+                }
+                else
+                {
+                    var candidateInventory = await vendors.GetVendorInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
+                    var candidateAvailable = candidateInventory?.AvailableQuantity ?? candidateListing.AvailableQuantity;
+                    if (candidateAvailable < line.Quantity)
+                        continue;
+                }
 
                 decimal distanceKm = 0m;
                 if (CustomerOrderPricingRules.RequiresAddress(deliveryOption))
@@ -1020,11 +1166,20 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
 
             var vendorDisplay = string.IsNullOrWhiteSpace(agg.VendorBusinessName) ? "Vendor" : agg.VendorBusinessName!;
             var primaryImg = agg.ImageUrls.Count > 0 ? agg.ImageUrls[0] : null;
+            var placementTitle = trackedListing.ListingTitle;
+            if (order.ProductVariantId.HasValue && agg.Variants != null)
+            {
+                var variant = agg.Variants.FirstOrDefault(v => string.Equals(v.Id, order.ProductVariantId.Value.ToString(), StringComparison.OrdinalIgnoreCase));
+                if (variant != null)
+                {
+                    placementTitle += $" ({Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(variant.SizeValue, variant.SizeUnit)})";
+                }
+            }
             placed.Add(new CustomerOrderDto(
                 order.Id,
                 order.OrderNumber,
                 order.VendorProductListingId,
-                trackedListing.ListingTitle,
+                placementTitle,
                 vendorDisplay,
                 agg.VendorId,
                 CustomerOrderStatusMapper.ToDisplay(order.Status),
@@ -1039,7 +1194,10 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 order.OrderType,
                 order.Quantity,
                 order.RentalDays,
-                primaryImg));
+                primaryImg,
+                ProductVariantId: order.ProductVariantId,
+                DoctorId: order.DoctorReference?.DoctorId,
+                HospitalId: order.DoctorReference?.HospitalId));
         }
 
         return Result.Success(new PlaceCustomerOrdersResultDto(placed, failed));
@@ -1056,6 +1214,29 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
         }
 
         return $"CRT-{Guid.NewGuid():N}"[..24];
+    }
+
+    /// <summary>
+    /// Builds alternate packaging-size suggestions for a chemical listing when the requested size (SKU)
+    /// cannot be fulfilled. Returns sibling variants of the same listing that currently have stock,
+    /// ordered by most-available first, so the customer can be nudged toward a size we can actually ship.
+    /// </summary>
+    private static List<VariantStockSuggestionDto> BuildVariantSuggestions(
+        VendorProductListingAggregate agg,
+        IReadOnlyCollection<VendorVariantInventory> variantInventory,
+        Guid requestedVariantId)
+    {
+        return variantInventory
+            .Where(vi => vi.ProductVariantId != requestedVariantId && vi.AvailableQuantity > 0)
+            .OrderByDescending(vi => vi.AvailableQuantity)
+            .Select(vi => new VariantStockSuggestionDto(
+                vi.ProductVariantId,
+                vi.ProductVariant?.Sku ?? string.Empty,
+                vi.ProductVariant?.SizeValue ?? 0m,
+                vi.ProductVariant?.SizeUnit ?? string.Empty,
+                agg.Variants.FirstOrDefault(v => v.Id == vi.ProductVariantId.ToString())?.BuyPrice ?? 0m,
+                vi.AvailableQuantity))
+            .ToList();
     }
 }
 
@@ -1087,6 +1268,10 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
             var listing = row.Listing;
             var vendorName = listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor";
             var title = listing?.ListingTitle ?? "Listing unavailable";
+            if (!string.IsNullOrEmpty(row.VariantDescription))
+            {
+                title += $" ({row.VariantDescription})";
+            }
             list.Add(new CustomerOrderDto(
                 o.Id,
                 o.OrderNumber,
@@ -1106,7 +1291,15 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
                 o.OrderType,
                 o.Quantity,
                 o.RentalDays,
-                row.ListingPrimaryImageUrl));
+                row.ListingPrimaryImageUrl,
+                ProductVariantId: o.ProductVariantId,
+                DoctorId: row.Doctor?.Id,
+                DoctorName: row.Doctor?.FullName,
+                DoctorSpecialization: row.Doctor?.Specialization,
+                HospitalId: row.Hospital?.Id,
+                HospitalName: row.Hospital?.Name,
+                HospitalCity: row.Hospital?.City,
+                DoctorContactNumber: row.Doctor?.ContactNumber));
         }
 
         return Result.Success(list);
@@ -1132,6 +1325,10 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
         var listing = row.Listing;
         var vendorName = listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor";
         var title = listing?.ListingTitle ?? "Listing unavailable";
+        if (!string.IsNullOrEmpty(row.VariantDescription))
+        {
+            title += $" ({row.VariantDescription})";
+        }
         return Result.Success(new CustomerOrderDto(
             o.Id,
             o.OrderNumber,
@@ -1151,7 +1348,15 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
             o.OrderType,
             o.Quantity,
             o.RentalDays,
-            row.ListingPrimaryImageUrl));
+            row.ListingPrimaryImageUrl,
+            ProductVariantId: o.ProductVariantId,
+            DoctorId: row.Doctor?.Id,
+            DoctorName: row.Doctor?.FullName,
+            DoctorSpecialization: row.Doctor?.Specialization,
+            HospitalId: row.Hospital?.Id,
+            HospitalName: row.Hospital?.Name,
+            HospitalCity: row.Hospital?.City,
+            DoctorContactNumber: row.Doctor?.ContactNumber));
     }
 }
 
@@ -1196,31 +1401,78 @@ internal sealed class CancelCustomerOrderCommandHandler(ICustomerRepository cust
 
         if (!string.Equals(o.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase))
         {
-            var inventory = await vendors.GetVendorInventoryByListingIdAsync(o.VendorProductListingId, cancellationToken);
-            if (inventory is not null)
+            if (o.ProductVariantId.HasValue)
             {
-                inventory.AvailableQuantity += o.Quantity;
-                inventory.ReservedQuantity = Math.Max(0, inventory.ReservedQuantity - o.Quantity);
-                await vendors.UpsertVendorInventoryAsync(inventory, cancellationToken);
-                var movement = new VendorInventoryMovement
+                var variantInv = await vendors.GetVariantInventoryByListingIdAsync(o.VendorProductListingId, cancellationToken);
+                var specificVariant = variantInv.FirstOrDefault(vi => vi.ProductVariantId == o.ProductVariantId.Value);
+                if (specificVariant is not null)
                 {
-                    VendorInventoryId = inventory.Id,
-                    MovementType = "reservation_released",
-                    Quantity = o.Quantity,
-                    ReferenceType = "customer_rental_order",
-                    ReferenceId = o.Id,
-                    Notes = $"Cancellation {o.OrderNumber}",
-                    EventAt = DateTimeOffset.UtcNow,
-                };
-                await vendors.AddVendorInventoryMovementAsync(movement, cancellationToken);
-            }
-            else
-            {
+                    specificVariant.AvailableQuantity += o.Quantity;
+                    specificVariant.ReservedQuantity = Math.Max(0, specificVariant.ReservedQuantity - o.Quantity);
+                    await vendors.UpsertVariantInventoryAsync(specificVariant, cancellationToken);
+                }
+                
+                // Sync global aggregates
+                var refreshed = await vendors.GetVariantInventoryByListingIdAsync(o.VendorProductListingId, cancellationToken);
+                var totalAvailable = refreshed.Sum(x => x.AvailableQuantity);
+                var totalStock = refreshed.Sum(x => x.TotalQuantity);
+                var totalReserved = refreshed.Sum(x => x.ReservedQuantity);
+
                 var listing = await vendors.GetVendorProductListingByIdAsync(agg.VendorId, o.VendorProductListingId, cancellationToken);
                 if (listing is not null)
                 {
-                    listing.AvailableQuantity += o.Quantity;
+                    listing.AvailableQuantity = totalAvailable;
                     await vendors.UpdateVendorProductListingAsync(listing, cancellationToken);
+                }
+
+                var inventory = await vendors.GetVendorInventoryByListingIdAsync(o.VendorProductListingId, cancellationToken);
+                if (inventory is not null)
+                {
+                    inventory.AvailableQuantity = totalAvailable;
+                    inventory.TotalQuantity = totalStock;
+                    inventory.ReservedQuantity = totalReserved;
+                    await vendors.UpsertVendorInventoryAsync(inventory, cancellationToken);
+                    var movement = new VendorInventoryMovement
+                    {
+                        VendorInventoryId = inventory.Id,
+                        MovementType = "reservation_released",
+                        Quantity = o.Quantity,
+                        ReferenceType = "customer_rental_order",
+                        ReferenceId = o.Id,
+                        Notes = $"Cancellation {o.OrderNumber} (Variant {specificVariant?.ProductVariant?.Sku ?? "Selected size"})",
+                        EventAt = DateTimeOffset.UtcNow,
+                    };
+                    await vendors.AddVendorInventoryMovementAsync(movement, cancellationToken);
+                }
+            }
+            else
+            {
+                var inventory = await vendors.GetVendorInventoryByListingIdAsync(o.VendorProductListingId, cancellationToken);
+                if (inventory is not null)
+                {
+                    inventory.AvailableQuantity += o.Quantity;
+                    inventory.ReservedQuantity = Math.Max(0, inventory.ReservedQuantity - o.Quantity);
+                    await vendors.UpsertVendorInventoryAsync(inventory, cancellationToken);
+                    var movement = new VendorInventoryMovement
+                    {
+                        VendorInventoryId = inventory.Id,
+                        MovementType = "reservation_released",
+                        Quantity = o.Quantity,
+                        ReferenceType = "customer_rental_order",
+                        ReferenceId = o.Id,
+                        Notes = $"Cancellation {o.OrderNumber}",
+                        EventAt = DateTimeOffset.UtcNow,
+                    };
+                    await vendors.AddVendorInventoryMovementAsync(movement, cancellationToken);
+                }
+                else
+                {
+                    var listing = await vendors.GetVendorProductListingByIdAsync(agg.VendorId, o.VendorProductListingId, cancellationToken);
+                    if (listing is not null)
+                    {
+                        listing.AvailableQuantity += o.Quantity;
+                        await vendors.UpdateVendorProductListingAsync(listing, cancellationToken);
+                    }
                 }
             }
         }
@@ -1229,6 +1481,10 @@ internal sealed class CancelCustomerOrderCommandHandler(ICustomerRepository cust
         await customers.UpdateCustomerRentalOrderAsync(o, cancellationToken);
 
         var listingTitleForNotif = row.Listing?.ListingTitle ?? agg.ListingTitle ?? "Listing unavailable";
+        if (!string.IsNullOrEmpty(row.VariantDescription))
+        {
+            listingTitleForNotif += $" ({row.VariantDescription})";
+        }
         await customers.AddCustomerNotificationAsync(
             new CustomerNotification
             {
@@ -1246,6 +1502,10 @@ internal sealed class CancelCustomerOrderCommandHandler(ICustomerRepository cust
         var listingNav = row.Listing;
         var vendorName = listingNav?.Vendor?.Profile?.BusinessName ?? listingNav?.Vendor?.Email ?? agg.VendorBusinessName ?? "Vendor";
         var listingTitle = listingNav?.ListingTitle ?? agg.ListingTitle ?? "Listing unavailable";
+        if (!string.IsNullOrEmpty(row.VariantDescription))
+        {
+            listingTitle += $" ({row.VariantDescription})";
+        }
         return Result.Success(new CustomerOrderDto(
             o.Id,
             o.OrderNumber,
@@ -1265,6 +1525,14 @@ internal sealed class CancelCustomerOrderCommandHandler(ICustomerRepository cust
             o.OrderType,
             o.Quantity,
             o.RentalDays,
-            row.ListingPrimaryImageUrl));
+            row.ListingPrimaryImageUrl,
+            ProductVariantId: o.ProductVariantId,
+            DoctorId: row.Doctor?.Id,
+            DoctorName: row.Doctor?.FullName,
+            DoctorSpecialization: row.Doctor?.Specialization,
+            HospitalId: row.Hospital?.Id,
+            HospitalName: row.Hospital?.Name,
+            HospitalCity: row.Hospital?.City,
+            DoctorContactNumber: row.Doctor?.ContactNumber));
     }
 }

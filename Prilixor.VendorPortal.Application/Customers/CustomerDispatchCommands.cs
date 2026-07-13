@@ -21,7 +21,15 @@ public sealed record VendorDispatchOfferDto(
     string Status,
     decimal TotalAmount,
     DateOnly? StartDate,
-    DateOnly? EndDate);
+    DateOnly? EndDate,
+    Guid? ProductVariantId = null,
+    Guid? DoctorId = null,
+    string? DoctorName = null,
+    string? DoctorSpecialization = null,
+    Guid? HospitalId = null,
+    string? HospitalName = null,
+    string? HospitalCity = null,
+    string? DoctorContactNumber = null);
 
 public sealed record VendorOrderDto(
     Guid OrderId,
@@ -31,6 +39,7 @@ public sealed record VendorOrderDto(
     int Quantity,
     int RentalDays,
     decimal TotalAmount,
+    decimal VendorSubtotalAmount,
     DateOnly? StartDate,
     DateOnly? EndDate,
     Guid ListingId,
@@ -40,7 +49,15 @@ public sealed record VendorOrderDto(
     string? CustomerCity,
     string? CustomerState,
     DateTime CreatedAtUtc,
-    bool IsExtended);
+    bool IsExtended,
+    Guid? ProductVariantId = null,
+    Guid? DoctorId = null,
+    string? DoctorName = null,
+    string? DoctorSpecialization = null,
+    Guid? HospitalId = null,
+    string? HospitalName = null,
+    string? HospitalCity = null,
+    string? DoctorContactNumber = null);
 
 public sealed record GetVendorOrdersQuery(string VendorId, string? Status) : IQuery<List<VendorOrderDto>>;
 
@@ -195,7 +212,66 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
                 order.EndDate = order.StartDate;
             }
 
-            if (inventory is not null)
+            if (order.ProductVariantId.HasValue)
+            {
+                var variantInv = await vendors.GetVariantInventoryByListingIdAsync(listing.Id, cancellationToken);
+                var specificVariant = variantInv.FirstOrDefault(vi => vi.ProductVariantId == order.ProductVariantId.Value);
+                if (specificVariant is not null)
+                {
+                    if (order.OrderType == "buy")
+                    {
+                        specificVariant.TotalQuantity = Math.Max(0, specificVariant.TotalQuantity - order.Quantity);
+                        
+                        int quantityToReduce = order.Quantity;
+                        
+                        int fromReserved = Math.Min(specificVariant.ReservedQuantity, quantityToReduce);
+                        specificVariant.ReservedQuantity -= fromReserved;
+                        quantityToReduce -= fromReserved;
+                        
+                        if (quantityToReduce > 0)
+                        {
+                            int fromAvailable = Math.Min(specificVariant.AvailableQuantity, quantityToReduce);
+                            specificVariant.AvailableQuantity -= fromAvailable;
+                            quantityToReduce -= fromAvailable;
+                        }
+                    }
+                    else
+                    {
+                        specificVariant.ReservedQuantity = Math.Max(0, specificVariant.ReservedQuantity - order.Quantity);
+                    }
+                    await vendors.UpsertVariantInventoryAsync(specificVariant, cancellationToken);
+                }
+                
+                // Sync global aggregates
+                var refreshed = await vendors.GetVariantInventoryByListingIdAsync(listing.Id, cancellationToken);
+                var totalAvailable = refreshed.Sum(x => x.AvailableQuantity);
+                var totalStock = refreshed.Sum(x => x.TotalQuantity);
+                var totalReserved = refreshed.Sum(x => x.ReservedQuantity);
+
+                listing.AvailableQuantity = totalAvailable;
+                await vendors.UpdateVendorProductListingAsync(listing, cancellationToken);
+
+                if (inventory is not null)
+                {
+                    inventory.AvailableQuantity = totalAvailable;
+                    inventory.TotalQuantity = totalStock;
+                    inventory.ReservedQuantity = totalReserved;
+                    await vendors.UpsertVendorInventoryAsync(inventory, cancellationToken);
+                    await vendors.AddVendorInventoryMovementAsync(
+                        new VendorInventoryMovement
+                        {
+                            VendorInventoryId = inventory.Id,
+                            MovementType = order.OrderType == "buy" ? "stock_removed" : "rented",
+                            Quantity = order.Quantity,
+                            ReferenceType = "customer_rental_order",
+                            ReferenceId = order.Id,
+                            Notes = $"Order {order.OrderNumber} moved to active (Variant {specificVariant?.ProductVariant?.Sku ?? "Selected size"})",
+                            EventAt = now,
+                        },
+                        cancellationToken);
+                }
+            }
+            else if (inventory is not null)
             {
                 if (order.OrderType == "buy")
                 {
@@ -260,7 +336,42 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
         }
         else if (target == "returned")
         {
-            if (inventory is not null)
+            if (order.ProductVariantId.HasValue)
+            {
+                var variantInv = await vendors.GetVariantInventoryByListingIdAsync(listing.Id, cancellationToken);
+                var specificVariant = variantInv.FirstOrDefault(vi => vi.ProductVariantId == order.ProductVariantId.Value);
+                if (specificVariant is not null)
+                {
+                    specificVariant.AvailableQuantity += order.Quantity;
+                    await vendors.UpsertVariantInventoryAsync(specificVariant, cancellationToken);
+                }
+                
+                // Sync global
+                var refreshed = await vendors.GetVariantInventoryByListingIdAsync(listing.Id, cancellationToken);
+                var totalAvailable = refreshed.Sum(x => x.AvailableQuantity);
+                
+                listing.AvailableQuantity = totalAvailable;
+                await vendors.UpdateVendorProductListingAsync(listing, cancellationToken);
+
+                if (inventory is not null)
+                {
+                    inventory.AvailableQuantity = totalAvailable;
+                    await vendors.UpsertVendorInventoryAsync(inventory, cancellationToken);
+                    await vendors.AddVendorInventoryMovementAsync(
+                        new VendorInventoryMovement
+                        {
+                            VendorInventoryId = inventory.Id,
+                            MovementType = "returned",
+                            Quantity = order.Quantity,
+                            ReferenceType = "customer_rental_order",
+                            ReferenceId = order.Id,
+                            Notes = $"Order {order.OrderNumber} marked returned (Variant {specificVariant?.ProductVariant?.Sku ?? "Selected size"})",
+                            EventAt = now,
+                        },
+                        cancellationToken);
+                }
+            }
+            else if (inventory is not null)
             {
                 inventory.RentedQuantity = Math.Max(0, inventory.RentedQuantity - order.Quantity);
                 inventory.AvailableQuantity += order.Quantity;
@@ -345,16 +456,27 @@ internal static class VendorOrderMapper
             o.Quantity,
             o.RentalDays,
             o.TotalAmount,
+            o.VendorSubtotalAmount,
             o.StartDate,
             o.EndDate,
             o.VendorProductListingId,
-            row.Listing?.ListingTitle ?? "Listing unavailable",
+            !string.IsNullOrEmpty(row.VariantDescription) 
+                ? $"{row.Listing?.ListingTitle ?? "Listing unavailable"} ({row.VariantDescription})" 
+                : (row.Listing?.ListingTitle ?? "Listing unavailable"),
             row.ListingPrimaryImageUrl,
             row.Order.Customer?.FullName ?? "Customer",
             row.Order.CustomerAddress?.City,
             row.Order.CustomerAddress?.State,
             o.CreatedOnUtc,
-            o.IsExtended);
+            o.IsExtended,
+            ProductVariantId: o.ProductVariantId,
+            DoctorId: row.Doctor?.Id,
+            DoctorName: row.Doctor?.FullName,
+            DoctorSpecialization: row.Doctor?.Specialization,
+            HospitalId: row.Hospital?.Id,
+            HospitalName: row.Hospital?.Name,
+            HospitalCity: row.Hospital?.City,
+            DoctorContactNumber: row.Doctor?.ContactNumber);
     }
 }
 
@@ -424,9 +546,11 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
                 changed = true;
             }
 
-            var order = await customers.GetCustomerOrderEntityByIdAsync(offer.CustomerRentalOrderId, cancellationToken);
-            if (order is null)
+            var orderWithListing = await customers.GetCustomerOrderByIdAsync(offer.CustomerRentalOrderId, cancellationToken);
+            if (orderWithListing is null)
                 continue;
+
+            var order = orderWithListing.Order;
 
             if (!string.Equals(order.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase))
             {
@@ -440,8 +564,9 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
                 continue;
             }
 
-            var listing = await vendors.GetVendorProductListingByIdAsync(vendorId, offer.VendorProductListingId, cancellationToken);
-            var title = listing?.ListingTitle ?? "Listing";
+            var title = !string.IsNullOrEmpty(orderWithListing.VariantDescription)
+                ? $"{orderWithListing.Listing?.ListingTitle ?? "Listing"} ({orderWithListing.VariantDescription})"
+                : (orderWithListing.Listing?.ListingTitle ?? "Listing");
 
             result.Add(new VendorDispatchOfferDto(
                 offer.Id,
@@ -456,7 +581,15 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
                 offer.Status,
                 order.TotalAmount,
                 order.StartDate,
-                order.EndDate));
+                order.EndDate,
+                ProductVariantId: order.ProductVariantId,
+                DoctorId: orderWithListing.Doctor?.Id,
+                DoctorName: orderWithListing.Doctor?.FullName,
+                DoctorSpecialization: orderWithListing.Doctor?.Specialization,
+                HospitalId: orderWithListing.Hospital?.Id,
+                HospitalName: orderWithListing.Hospital?.Name,
+                HospitalCity: orderWithListing.Hospital?.City,
+                DoctorContactNumber: orderWithListing.Doctor?.ContactNumber));
 
             changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, order.Id, now, cancellationToken);
         }
@@ -540,10 +673,21 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
         if (selectedListing is null)
             return Result.Failure<CustomerOrderDto>(new Error("vendors.listing.not_found", "Vendor listing not found.", ErrorCategory.NotFound));
 
-        var selectedInventory = await vendors.GetVendorInventoryByListingIdAsync(selectedListing.Id, cancellationToken);
-        var available = selectedInventory?.AvailableQuantity ?? selectedListing.AvailableQuantity;
-        if (available < order.Quantity)
-            return Result.Failure<CustomerOrderDto>(new Error("vendors.inventory.insufficient", "Insufficient stock to accept this order.", ErrorCategory.Validation));
+        if (order.ProductVariantId.HasValue)
+        {
+            var variantInv = await vendors.GetVariantInventoryByListingIdAsync(selectedListing.Id, cancellationToken);
+            var specificVariant = variantInv.FirstOrDefault(vi => vi.ProductVariantId == order.ProductVariantId.Value);
+            var varAvailable = specificVariant?.AvailableQuantity ?? 0;
+            if (varAvailable < order.Quantity)
+                return Result.Failure<CustomerOrderDto>(new Error("vendors.inventory.insufficient", $"Insufficient stock for the requested variant ({specificVariant?.ProductVariant?.Sku ?? "Selected size"}) to accept this order.", ErrorCategory.Validation));
+        }
+        else
+        {
+            var selectedInventory = await vendors.GetVendorInventoryByListingIdAsync(selectedListing.Id, cancellationToken);
+            var available = selectedInventory?.AvailableQuantity ?? selectedListing.AvailableQuantity;
+            if (available < order.Quantity)
+                return Result.Failure<CustomerOrderDto>(new Error("vendors.inventory.insufficient", "Insufficient stock to accept this order.", ErrorCategory.Validation));
+        }
 
         order.VendorProductListingId = selectedListing.Id;
         order.Status = "confirmed";
@@ -560,28 +704,61 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
             await customers.UpdateCustomerOrderVendorOfferAsync(offer, cancellationToken);
         }
 
-        if (selectedInventory is not null)
+        if (order.ProductVariantId.HasValue)
         {
-            selectedInventory.AvailableQuantity -= order.Quantity;
-            selectedInventory.ReservedQuantity += order.Quantity;
-            await vendors.UpsertVendorInventoryAsync(selectedInventory, cancellationToken);
-            await vendors.AddVendorInventoryMovementAsync(
-                new VendorInventoryMovement
-                {
-                    VendorInventoryId = selectedInventory.Id,
-                    MovementType = "reserved",
-                    Quantity = order.Quantity,
-                    ReferenceType = "customer_rental_order",
-                    ReferenceId = order.Id,
-                    Notes = $"Dispatch accepted for {order.OrderNumber}",
-                    EventAt = DateTimeOffset.UtcNow,
-                },
-                cancellationToken);
+            var variantInv = await vendors.GetVariantInventoryByListingIdAsync(selectedListing.Id, cancellationToken);
+            var specificVariant = variantInv.FirstOrDefault(vi => vi.ProductVariantId == order.ProductVariantId.Value);
+            if (specificVariant is not null)
+            {
+                specificVariant.AvailableQuantity = Math.Max(0, specificVariant.AvailableQuantity - order.Quantity);
+                specificVariant.ReservedQuantity += order.Quantity;
+                await vendors.UpsertVariantInventoryAsync(specificVariant, cancellationToken);
+            }
+
+            // Sync aggregate stocks
+            var refreshed = await vendors.GetVariantInventoryByListingIdAsync(selectedListing.Id, cancellationToken);
+            var totalAvailable = refreshed.Sum(x => x.AvailableQuantity);
+            var totalStock = refreshed.Sum(x => x.TotalQuantity);
+            var totalReserved = refreshed.Sum(x => x.ReservedQuantity);
+
+            selectedListing.AvailableQuantity = totalAvailable;
+            await vendors.UpdateVendorProductListingAsync(selectedListing, cancellationToken);
+
+            var selectedInventory = await vendors.GetVendorInventoryByListingIdAsync(selectedListing.Id, cancellationToken);
+            if (selectedInventory is not null)
+            {
+                selectedInventory.AvailableQuantity = totalAvailable;
+                selectedInventory.TotalQuantity = totalStock;
+                selectedInventory.ReservedQuantity = totalReserved;
+                await vendors.UpsertVendorInventoryAsync(selectedInventory, cancellationToken);
+            }
         }
         else
         {
-            selectedListing.AvailableQuantity -= order.Quantity;
-            await vendors.UpdateVendorProductListingAsync(selectedListing, cancellationToken);
+            var selectedInventory = await vendors.GetVendorInventoryByListingIdAsync(selectedListing.Id, cancellationToken);
+            if (selectedInventory is not null)
+            {
+                selectedInventory.AvailableQuantity -= order.Quantity;
+                selectedInventory.ReservedQuantity += order.Quantity;
+                await vendors.UpsertVendorInventoryAsync(selectedInventory, cancellationToken);
+                await vendors.AddVendorInventoryMovementAsync(
+                    new VendorInventoryMovement
+                    {
+                        VendorInventoryId = selectedInventory.Id,
+                        MovementType = "reserved",
+                        Quantity = order.Quantity,
+                        ReferenceType = "customer_rental_order",
+                        ReferenceId = order.Id,
+                        Notes = $"Dispatch accepted for {order.OrderNumber}",
+                        EventAt = DateTimeOffset.UtcNow,
+                    },
+                    cancellationToken);
+            }
+            else
+            {
+                selectedListing.AvailableQuantity -= order.Quantity;
+                await vendors.UpdateVendorProductListingAsync(selectedListing, cancellationToken);
+            }
         }
 
         await customers.AddCustomerNotificationAsync(
@@ -614,6 +791,10 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
         var listing = row.Listing;
         var vendorName = listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor";
         var title = listing?.ListingTitle ?? "Listing unavailable";
+        if (!string.IsNullOrEmpty(row.VariantDescription))
+        {
+            title += $" ({row.VariantDescription})";
+        }
 
         return Result.Success(new CustomerOrderDto(
             o.Id,

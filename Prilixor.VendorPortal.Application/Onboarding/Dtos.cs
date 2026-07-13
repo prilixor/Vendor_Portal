@@ -90,6 +90,7 @@ public sealed record ProductCategoryDto(
     bool PrescriptionRequired,
     bool DepositRequired,
     bool InstallationRequired,
+    bool IsChemical,
     bool IsActive);
 
 public sealed record ProductDto(
@@ -104,11 +105,34 @@ public sealed record ProductDto(
     decimal MonthlyRent,
     decimal SecurityDeposit,
     decimal? BuyPrice,
+    decimal VendorDailyRent,
+    decimal VendorMonthlyRent,
+    decimal VendorSecurityDeposit,
+    decimal? VendorBuyPrice,
     decimal GstPercent,
     bool IsRentEnabled,
     bool IsBuyEnabled,
     bool IsActive,
+    List<ProductImageDto> Images,
+    List<ProductVariantDto> Variants,
+    string? CasNumber = null,
+    string? ChemicalFormula = null,
+    decimal? PurityPercentage = null,
+    decimal? MolecularWeight = null,
+    string? BaseUnit = null,
+    string? SdsDocumentUrl = null,
+    string? CoaDocumentUrl = null,
     int FavoriteCount = 0);
+
+public sealed record ProductVariantDto(
+    string Id,
+    string ProductId,
+    string Sku,
+    decimal SizeValue,
+    string SizeUnit,
+    decimal VendorPrice,
+    decimal BuyPrice,
+    bool IsActive);
 
 public sealed record ProductImageDto(
     string Id,
@@ -127,7 +151,8 @@ public sealed record VendorProductListingDto(
     decimal SecurityDeposit,
     int AvailableQuantity,
     string ListingStatus,
-    int FavoriteCount = 0);
+    int FavoriteCount = 0,
+    bool IsChemical = false);
 
 public sealed record VendorProductImageDto(
     string Id,
@@ -163,6 +188,21 @@ public sealed record VendorInventoryMovementDto(
     string? ReferenceId,
     string? Notes,
     DateTimeOffset EventAt);
+
+public sealed record VendorVariantInventoryDto(
+    string Id,
+    string VendorProductListingId,
+    string ProductVariantId,
+    string Sku,
+    decimal SizeValue,
+    string SizeUnit,
+    int TotalQuantity,
+    int AvailableQuantity,
+    int ReservedQuantity);
+
+public sealed record UpsertVariantInventoryItemDto(
+    string ProductVariantId,
+    int TotalQuantity);
 
 public sealed record VendorNotificationPreferenceDto(
     string Id,

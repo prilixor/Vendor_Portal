@@ -123,6 +123,41 @@ public sealed class CustomerListingDetailResponse
     public string AvailabilityStatus { get; set; } = "available";
     public string Description { get; set; } = string.Empty;
     public List<string> ImageUrls { get; set; } = [];
+    public bool IsRentEnabled { get; set; } = true;
+    public bool IsBuyEnabled { get; set; }
+    /// <summary>True when this listing is a chemical (drives buy-only + chemical spec display on the customer UI).</summary>
+    public bool IsChemical { get; set; }
+    public decimal? BuyPrice { get; set; }
+    public string? CasNumber { get; set; }
+    public string? ChemicalFormula { get; set; }
+    public decimal? PurityPercentage { get; set; }
+    public decimal? MolecularWeight { get; set; }
+    public string? BaseUnit { get; set; }
+    public string? SdsDocumentUrl { get; set; }
+    public string? CoaDocumentUrl { get; set; }
+    /// <summary>Customer-facing packaging sizes (SKUs) with per-size price and live stock.</summary>
+    public List<CustomerListingVariantResponse> Variants { get; set; } = [];
+    public List<VariantInventoryItemResponse> VariantInventory { get; set; } = [];
+}
+
+/// <summary>Per-variant stock for customer-side availability display.</summary>
+public sealed class VariantInventoryItemResponse
+{
+    public Guid ProductVariantId { get; set; }
+    public int AvailableQuantity { get; set; }
+}
+
+/// <summary>Customer-safe packaging size (SKU): price + live stock, without vendor cost.</summary>
+public sealed class CustomerListingVariantResponse
+{
+    public string Id { get; set; } = string.Empty;
+    public string ProductId { get; set; } = string.Empty;
+    public string Sku { get; set; } = string.Empty;
+    public decimal SizeValue { get; set; }
+    public string SizeUnit { get; set; } = string.Empty;
+    public decimal BuyPrice { get; set; }
+    public bool IsActive { get; set; }
+    public int AvailableQuantity { get; set; }
 }
 
 public sealed class GetCustomerListingDetailRequest
@@ -176,6 +211,40 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
             AvailabilityStatus = availabilityStatus,
             Description = agg.Description,
             ImageUrls = agg.ImageUrls.Count > 0 ? agg.ImageUrls : [],
+            IsRentEnabled = agg.IsRentEnabled,
+            IsBuyEnabled = agg.IsBuyEnabled,
+            IsChemical = agg.IsChemical,
+            BuyPrice = agg.BuyPrice,
+            CasNumber = agg.CasNumber,
+            ChemicalFormula = agg.ChemicalFormula,
+            PurityPercentage = agg.PurityPercentage,
+            MolecularWeight = agg.MolecularWeight,
+            BaseUnit = agg.BaseUnit,
+            SdsDocumentUrl = agg.SdsDocumentUrl,
+            CoaDocumentUrl = agg.CoaDocumentUrl,
+            Variants = agg.Variants
+                .Where(v => v.IsActive)
+                .Select(v => new CustomerListingVariantResponse
+                {
+                    Id = v.Id,
+                    ProductId = v.ProductId,
+                    Sku = v.Sku,
+                    SizeValue = v.SizeValue,
+                    SizeUnit = v.SizeUnit,
+                    BuyPrice = v.BuyPrice,
+                    IsActive = v.IsActive,
+                    AvailableQuantity = agg.VariantInventory
+                        .FirstOrDefault(vi => vi.ProductVariantId.ToString() == v.Id)?.AvailableQuantity ?? 0,
+                })
+                .OrderBy(v => v.SizeValue)
+                .ToList(),
+            VariantInventory = agg.VariantInventory
+                .Select(vi => new VariantInventoryItemResponse
+                {
+                    ProductVariantId = vi.ProductVariantId,
+                    AvailableQuantity = vi.AvailableQuantity,
+                })
+                .ToList(),
         };
 
         return TypedResults.Ok(res);
@@ -389,6 +458,11 @@ public sealed class CartLineDto
     public int Quantity { get; set; }
     public int RentalDays { get; set; }
     public string OrderType { get; set; } = "rent";
+    public Guid? ProductVariantId { get; set; }
+    public Guid? DoctorId { get; set; }
+    public Guid? HospitalId { get; set; }
+    public string? ContactNumber { get; set; }
+    public string? ReferenceNumber { get; set; }
 }
 
 public sealed class PlaceCustomerOrdersRequest
@@ -421,7 +495,9 @@ public sealed class QuoteCustomerOrdersEndpoint(IMediator mediator)
         if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
 
-        var lines = req.Lines.ConvertAll(l => new CartLineRequest(l.ListingId, l.Quantity, l.RentalDays, l.OrderType));
+        var lines = req.Lines.ConvertAll(l => new CartLineRequest(
+            l.ListingId, l.Quantity, l.RentalDays, l.OrderType, l.ProductVariantId,
+            l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber));
         var result = await mediator.Send(new QuoteCustomerOrdersCommand(
             customerId,
             req.CustomerAddressId,
@@ -450,7 +526,9 @@ public sealed class PlaceCustomerOrdersEndpoint(IMediator mediator)
         if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
 
-        var lines = req.Lines.ConvertAll(l => new CartLineRequest(l.ListingId, l.Quantity, l.RentalDays, l.OrderType));
+        var lines = req.Lines.ConvertAll(l => new CartLineRequest(
+            l.ListingId, l.Quantity, l.RentalDays, l.OrderType, l.ProductVariantId,
+            l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber));
         var result = await mediator.Send(new PlaceCustomerOrdersCommand(
             customerId,
             req.CustomerAddressId,

@@ -48,6 +48,7 @@ CREATE DATABASE customer_portal_db;
 
 \c common_portal_db
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Schema/047_admin_product_price_master_and_backfill.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Schema/054_chemical_properties.sql'
 
 \c customer_portal_db
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Schema/044_customer_address_geolocation.sql'

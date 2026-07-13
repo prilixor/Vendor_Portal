@@ -115,6 +115,14 @@ export interface ProductApiDto {
   isRentEnabled: boolean;
   isBuyEnabled: boolean;
   isActive: boolean;
+  casNumber?: string;
+  chemicalFormula?: string;
+  purityPercentage?: number;
+  molecularWeight?: number;
+  baseUnit?: string;
+  sdsDocumentUrl?: string;
+  coaDocumentUrl?: string;
+  variants?: ProductVariantPayload[];
 }
 
 export interface VendorProductListingApiDto {
@@ -279,6 +287,17 @@ export interface CreateProductCategoryPayload {
   prescriptionRequired: boolean;
   depositRequired: boolean;
   installationRequired: boolean;
+  isChemical?: boolean;
+  isActive: boolean;
+}
+
+export interface ProductVariantPayload {
+  id?: string;
+  sku: string;
+  sizeValue: number;
+  sizeUnit: string;
+  vendorPrice: number;
+  buyPrice: number;
   isActive: boolean;
 }
 
@@ -289,7 +308,26 @@ export interface CreateProductPayload {
   modelName?: string;
   shortDescription?: string;
   longDescription?: string;
+  dailyRent?: number;
+  monthlyRent?: number;
+  securityDeposit?: number;
+  buyPrice?: number;
+  vendorDailyRent?: number;
+  vendorMonthlyRent?: number;
+  vendorSecurityDeposit?: number;
+  vendorBuyPrice?: number;
+  gstPercent?: number;
+  isRentEnabled?: boolean;
+  isBuyEnabled?: boolean;
   isActive: boolean;
+  casNumber?: string;
+  chemicalFormula?: string;
+  purityPercentage?: number;
+  molecularWeight?: number;
+  baseUnit?: string;
+  sdsDocumentUrl?: string;
+  coaDocumentUrl?: string;
+  variants?: ProductVariantPayload[];
 }
 
 export interface UpsertVendorProductListingPayload {
@@ -378,6 +416,7 @@ export interface VendorDispatchOfferApiDto {
   expiresAt: string;
   status: string;
   totalAmount: number;
+  vendorSubtotalAmount: number;
   startDate?: string;
   endDate?: string;
 }
@@ -390,6 +429,7 @@ export interface VendorOrderApiDto {
   quantity: number;
   rentalDays: number;
   totalAmount: number;
+  vendorSubtotalAmount: number;
   startDate?: string;
   endDate?: string;
   listingId: string;
@@ -400,6 +440,13 @@ export interface VendorOrderApiDto {
   customerState?: string;
   createdAtUtc: string;
   isExtended?: boolean;
+  doctorId?: string;
+  doctorName?: string;
+  doctorSpecialization?: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  hospitalCity?: string;
+  doctorContactNumber?: string;
 }
 
 export interface VendorExpiringOrderApiDto {
@@ -732,7 +779,28 @@ export const vendorOnboardingApi = {
   cancelVendorBuyout(orderId: string, buyoutId: string) {
     return apiClient.post(`/vendors/me/orders/${orderId}/buyouts/${buyoutId}/cancel`, {});
   },
+
+  // --- Variant-level (SKU-level) chemical inventory ---
+  getVariantInventory(vendorId: string, listingId: string) {
+    return apiClient.get<VendorVariantInventoryDto[]>(`/vendors/${vendorId}/listings/${listingId}/variant-inventory`);
+  },
+
+  upsertVariantInventory(vendorId: string, listingId: string, items: { productVariantId: string; totalQuantity: number }[]) {
+    return apiClient.put<VendorVariantInventoryDto[]>(`/vendors/${vendorId}/listings/${listingId}/variant-inventory`, { items });
+  },
 };
+
+export interface VendorVariantInventoryDto {
+  id: string;
+  vendorProductListingId: string;
+  productVariantId: string;
+  sku: string;
+  sizeValue: number;
+  sizeUnit: string;
+  totalQuantity: number;
+  availableQuantity: number;
+  reservedQuantity: number;
+}
 
 export interface PendingExtensionDto {
   extensionId: string;

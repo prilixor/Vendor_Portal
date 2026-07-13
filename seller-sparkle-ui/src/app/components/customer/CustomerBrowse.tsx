@@ -97,6 +97,7 @@ const CustomerBrowse = () => {
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>("all");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+  const [browseMode, setBrowseMode] = useState<"equipment" | "chemicals">("equipment");
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -201,6 +202,11 @@ const CustomerBrowse = () => {
   const filteredData = useMemo(() => {
     if (!data) return [];
     let result = data;
+    if (browseMode === "equipment") {
+      result = result.filter((item) => item.baseUnit == null);
+    } else {
+      result = result.filter((item) => item.baseUnit != null);
+    }
     if (availabilityFilter !== "all") {
       result = result.filter((item) => item.availabilityStatus.toLowerCase() === availabilityFilter);
     }
@@ -208,7 +214,7 @@ const CustomerBrowse = () => {
       result = result.filter((item) => wishlist.has(item.id));
     }
     return result;
-  }, [data, availabilityFilter, showFavoritesOnly, wishlist]);
+  }, [data, availabilityFilter, showFavoritesOnly, wishlist, browseMode]);
 
   const toggleWishlist = (id: string, e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -229,11 +235,34 @@ const CustomerBrowse = () => {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Browse rentals</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Discover gear from verified vendors. Sign in to save addresses and place orders.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Browse Catalog</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Discover medical equipment and chemicals from verified vendors.
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
+          <button
+            onClick={() => setBrowseMode("equipment")}
+            className={cn(
+              "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+              browseMode === "equipment" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+            )}
+          >
+            Equipment Rentals
+          </button>
+          <button
+            onClick={() => setBrowseMode("chemicals")}
+            className={cn(
+              "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+              browseMode === "chemicals" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+            )}
+          >
+            Chemicals (Buy)
+          </button>
+        </div>
       </div>
 
       <div className="relative">
@@ -414,17 +443,35 @@ const CustomerBrowse = () => {
               </CardHeader>
               <CardContent className="space-y-3 px-4 pb-4 pt-0">
                 <div className="flex flex-wrap gap-1.5">
-                  <Badge variant="secondary" className="font-normal tabular-nums">
-                    ₹{item.dailyRent.toFixed(0)}/day
-                  </Badge>
-                  <Badge variant="secondary" className="font-normal tabular-nums">
-                    ₹{item.monthlyRent.toFixed(0)}/mo
-                  </Badge>
-                  {item.depositRequired && (
-                    <Badge variant="outline" className="font-normal tabular-nums">
-                      Deposit ₹{item.securityDeposit.toFixed(0)}
-                    </Badge>
-                  )}
+                  {(() => {
+                    const isChem = !!item.isChemical;
+                    const showRent = !isChem && (item.isRentEnabled ?? true);
+                    const showBuy = isChem || !!item.isBuyEnabled;
+                    return (
+                      <>
+                        {showRent && (
+                          <>
+                            <Badge variant="secondary" className="font-normal tabular-nums">
+                              ₹{item.dailyRent.toFixed(0)}/day
+                            </Badge>
+                            <Badge variant="secondary" className="font-normal tabular-nums">
+                              ₹{item.monthlyRent.toFixed(0)}/mo
+                            </Badge>
+                            {item.depositRequired && (
+                              <Badge variant="outline" className="font-normal tabular-nums">
+                                Deposit ₹{item.securityDeposit.toFixed(0)}
+                              </Badge>
+                            )}
+                          </>
+                        )}
+                        {showBuy && (
+                          <Badge variant="secondary" className="font-normal tabular-nums bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+                            Buy Price: ₹{item.buyPrice?.toFixed(0)} / {item.baseUnit ?? "Unit"}
+                          </Badge>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </CardContent>
               <CardFooter className="border-t bg-muted/30 px-4 pb-4 pt-3">

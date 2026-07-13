@@ -8,8 +8,9 @@ import { Card, CardContent } from "@/app/components/ui/card";
 import { QuantityStepper } from "@/app/components/ui/quantity-stepper";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { cn } from "@/app/helpers/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
+import type { CustomerListingDetailApi } from "@/app/services/customerApi";
 
 function CartThumb({ url }: { url?: string | null }) {
   const [failed, setFailed] = useState(false);
@@ -47,9 +48,10 @@ function CartLineCard({
   onRemove: (listingId: string) => void;
 }) {
   const isOverStock = availableQuantity !== undefined && line.quantity > availableQuantity;
+  const linePrice = line.buyPrice ?? (line.dailyRent * 30);
   const lineRent =
     line.orderType === "buy"
-      ? line.dailyRent * 30 * line.quantity
+      ? linePrice * line.quantity
       : line.dailyRent * line.quantity * line.rentalDays;
   const listingTo = `/customer/browse/${encodeURIComponent(line.listingId)}`;
 
@@ -79,9 +81,9 @@ function CartLineCard({
                 {line.title}
               </Link>
               <p className="text-xs text-muted-foreground tabular-nums">
-                ₹{line.dailyRent.toFixed(0)} / day ·{" "}
-                {line.orderType === "buy" ? "Buy mode" : `${line.rentalDays} days`} ·
-                {line.orderType === "buy" ? " no deposit" : ` deposit ₹${line.securityDeposit.toFixed(0)}`}
+                {line.orderType === "buy"
+                  ? `Buy Price: ₹${linePrice.toFixed(0)}`
+                  : `₹${line.dailyRent.toFixed(0)} / day · ${line.rentalDays} days · deposit ₹${line.securityDeposit.toFixed(0)}`}
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">
@@ -142,23 +144,52 @@ function CartLineCard({
 const CustomerCart = () => {
   const { lines, updateLine, removeLine, totalEstimatedRent } = useCart();
 
-  const { data: listings } = useQuery({
-    queryKey: ["customer-catalog-listings"],
-    queryFn: () => customerApi.getCatalogListings(),
+  const distinctListingIds = useMemo(
+    () => Array.from(new Set(lines.map((l) => l.listingId))),
+    [lines],
+  );
+
+  const detailQueries = useQueries({
+    queries: distinctListingIds.map((id) => ({
+      queryKey: ["customer-listing", id],
+      queryFn: () => customerApi.getListingDetail(id),
+      staleTime: 30_000,
+    })),
   });
 
-  const availabilityMap = useMemo(() => {
-    if (!listings) return new Map<string, number>();
-    return new Map(listings.map((l) => [l.id, l.availableQuantity]));
-  }, [listings]);
-
-  const hasStockIssues = useMemo(() => {
-    if (!listings) return false;
-    return lines.some((l) => {
-      const avail = availabilityMap.get(l.listingId);
-      return avail !== undefined && l.quantity > avail;
+  const detailMap = useMemo(() => {
+    const m = new Map<string, CustomerListingDetailApi>();
+    detailQueries.forEach((q, ix) => {
+      const data = q.data as CustomerListingDetailApi | undefined;
+      if (data) m.set(distinctListingIds[ix], data);
     });
-  }, [lines, listings, availabilityMap]);
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailQueries.map((q) => q.dataUpdatedAt).join(","), distinctListingIds]);
+
+  // Per-line stock respects the selected packaging size (variant) when present,
+  // so a 1 L order isn't validated against 5 L stock.
+  const lineAvailability = (line: CartLine): number | undefined => {
+    const detail = detailMap.get(line.listingId);
+    if (!detail) return undefined;
+    if (line.productVariantId) {
+      const variant = detail.variants?.find((v) => v.id === line.productVariantId);
+      if (variant?.availableQuantity !== undefined) return variant.availableQuantity;
+      const vi = detail.variantInventory?.find((x) => x.productVariantId === line.productVariantId);
+      return vi?.availableQuantity ?? 0;
+    }
+    return detail.availableQuantity;
+  };
+
+  const hasStockIssues = useMemo(
+    () =>
+      lines.some((l) => {
+        const avail = lineAvailability(l);
+        return avail !== undefined && l.quantity > avail;
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lines, detailMap],
+  );
 
   const totalDeposit = useMemo(
     () => lines.reduce((sum, l) => sum + (l.orderType === "buy" ? 0 : l.securityDeposit * l.quantity), 0),
@@ -186,9 +217,9 @@ const CustomerCart = () => {
           <div className="space-y-4">
             {lines.map((line) => (
               <CartLineCard
-                key={line.listingId}
+                key={`${line.listingId}-${line.productVariantId ?? "base"}`}
                 line={line}
-                availableQuantity={availabilityMap.get(line.listingId)}
+                availableQuantity={lineAvailability(line)}
                 onUpdateQty={(listingId, qty) => updateLine(listingId, { quantity: qty })}
                 onUpdateDays={(listingId, rentalDays) => updateLine(listingId, { rentalDays })}
                 onUpdateOrderType={(listingId, orderType) => updateLine(listingId, { orderType })}

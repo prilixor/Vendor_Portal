@@ -12,6 +12,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Prilixor.VendorPortal.API.EndPoints.Common;
 
 try
 {
@@ -279,6 +280,7 @@ app.UseFastEndpoints(op =>
 }).UseSwaggerGen();
 
 app.MapSupportEndpoints();
+app.MapMedicalDirectoryEndpoints();
 
 app.Run();
 

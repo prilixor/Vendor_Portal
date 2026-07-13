@@ -17,6 +17,31 @@ export interface CustomerCatalogListingApi {
   productTotalAvailableQuantity: number;
   availabilityStatus: "available" | "low_stock" | "out_of_stock" | string;
   primaryImageUrl?: string | null;
+  buyPrice?: number;
+  isRentEnabled?: boolean;
+  isBuyEnabled?: boolean;
+  /** True when the listing's category is a chemical (buy-only + chemical spec display). */
+  isChemical?: boolean;
+  casNumber?: string;
+  chemicalFormula?: string;
+  purityPercentage?: number;
+  molecularWeight?: number;
+  baseUnit?: string;
+  variants?: ProductVariantDto[];
+  variantInventory?: { productVariantId: string; availableQuantity: number }[];
+}
+
+export interface ProductVariantDto {
+  id: string;
+  productId: string;
+  sku: string;
+  sizeValue: number;
+  sizeUnit: string;
+  vendorPrice?: number;
+  buyPrice: number;
+  isActive: boolean;
+  /** Live per-size stock (only populated on the customer listing-detail response). */
+  availableQuantity?: number;
 }
 
 export interface CustomerCatalogCategoryApi {
@@ -45,6 +70,20 @@ export interface CustomerListingDetailApi {
   availabilityStatus: "available" | "low_stock" | "out_of_stock" | string;
   description: string;
   imageUrls: string[];
+  buyPrice?: number;
+  isRentEnabled?: boolean;
+  isBuyEnabled?: boolean;
+  /** True when the listing's category is a chemical (buy-only + chemical spec display). */
+  isChemical?: boolean;
+  casNumber?: string;
+  chemicalFormula?: string;
+  purityPercentage?: number;
+  molecularWeight?: number;
+  baseUnit?: string;
+  sdsDocumentUrl?: string;
+  coaDocumentUrl?: string;
+  variants?: ProductVariantDto[];
+  variantInventory?: { productVariantId: string; availableQuantity: number }[];
 }
 
 export interface CustomerProfileApi {
@@ -103,6 +142,14 @@ export interface CustomerOrderApi {
   quantity: number;
   rentalDays: number;
   listingPrimaryImageUrl?: string | null;
+  productVariantId?: string | null;
+  doctorId?: string;
+  doctorName?: string;
+  doctorSpecialization?: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  hospitalCity?: string;
+  doctorContactNumber?: string;
 }
 
 export interface ExtensionQuoteApi {
@@ -122,11 +169,43 @@ export interface BuyoutQuoteApi {
   totalAmount: number;
 }
 
+export interface HospitalApi {
+  id: string;
+  name: string;
+  addressLine1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  isVerified: boolean;
+}
+
+export interface DoctorApi {
+  id: string;
+  fullName: string;
+  specialization?: string | null;
+  contactNumber?: string | null;
+  isVerified: boolean;
+}
+
 export interface CartLinePayload {
   listingId: string;
   quantity: number;
   rentalDays: number;
   orderType?: "rent" | "buy";
+  productVariantId?: string;
+  doctorId?: string;
+  hospitalId?: string;
+  contactNumber?: string;
+  referenceNumber?: string;
+}
+
+export interface VariantStockSuggestionApi {
+  productVariantId: string;
+  sku: string;
+  sizeValue: number;
+  sizeUnit: string;
+  buyPrice: number;
+  availableQuantity: number;
 }
 
 export interface PlaceCustomerOrdersResultApi {
@@ -138,6 +217,7 @@ export interface PlaceCustomerOrdersResultApi {
     orderType: string;
     reasonCode: string;
     message: string;
+    variantSuggestions?: VariantStockSuggestionApi[] | null;
   }>;
 }
 
@@ -239,6 +319,38 @@ export const customerApi = {
     return apiClient.delete(`/customers/me/addresses/${encodeURIComponent(addressId)}`);
   },
 
+  searchHospitals(search?: string): Promise<HospitalDto[]> {
+    const qs = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : "";
+    return apiClient.get<HospitalDto[]>(`/medical-directory/hospitals${qs}`);
+  },
+
+  createHospital(payload: {
+    name: string;
+    addressLine1?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+  }): Promise<HospitalDto> {
+    return apiClient.post<HospitalDto>("/medical-directory/hospitals", payload);
+  },
+
+  searchDoctors(hospitalId?: string, search?: string): Promise<DoctorDto[]> {
+    const qs = new URLSearchParams();
+    if (hospitalId) qs.set("hospitalId", hospitalId);
+    if (search?.trim()) qs.set("search", search.trim());
+    const queryStr = qs.toString();
+    return apiClient.get<DoctorDto[]>(`/medical-directory/doctors${queryStr ? "?" + queryStr : ""}`);
+  },
+
+  createDoctor(payload: {
+    hospitalId: string;
+    fullName: string;
+    specialization?: string;
+    contactNumber?: string;
+  }): Promise<DoctorDto> {
+    return apiClient.post<DoctorDto>("/medical-directory/doctors", payload);
+  },
+
   getOrders(): Promise<CustomerOrderApi[]> {
     return apiClient.get<CustomerOrderApi[]>("/customers/me/orders");
   },
@@ -260,6 +372,11 @@ export const customerApi = {
         quantity: l.quantity,
         rentalDays: l.rentalDays,
         orderType: l.orderType ?? "rent",
+        productVariantId: l.productVariantId,
+        doctorId: l.doctorId,
+        hospitalId: l.hospitalId,
+        contactNumber: l.contactNumber,
+        referenceNumber: l.referenceNumber,
       })),
     });
   },
@@ -277,6 +394,11 @@ export const customerApi = {
         quantity: l.quantity,
         rentalDays: l.rentalDays,
         orderType: l.orderType ?? "rent",
+        productVariantId: l.productVariantId,
+        doctorId: l.doctorId,
+        hospitalId: l.hospitalId,
+        contactNumber: l.contactNumber,
+        referenceNumber: l.referenceNumber,
       })),
     });
   },
@@ -370,3 +492,22 @@ export interface CustomerNotificationPreferenceApi {
   directMessagesEnabled: boolean;
   marketingEmailsEnabled: boolean;
 }
+
+export interface HospitalDto {
+  id: string;
+  name: string;
+  addressLine1?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  isVerified: boolean;
+}
+
+export interface DoctorDto {
+  id: string;
+  fullName: string;
+  specialization?: string;
+  contactNumber?: string;
+  isVerified: boolean;
+}
+

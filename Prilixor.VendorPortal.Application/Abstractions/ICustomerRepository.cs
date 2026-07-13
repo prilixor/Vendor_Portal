@@ -86,6 +86,15 @@ public interface ICustomerRepository
     Task<Dictionary<Guid, int>> GetFavoriteCountsByListingsAsync(List<Guid> listingIds, CancellationToken cancellationToken);
     Task<Dictionary<Guid, int>> GetFavoriteCountsByProductsAsync(CancellationToken cancellationToken);
 
+    // --- Medical Directory ---
+    Task<Prilixor.VendorPortal.Domain.Common.Hospital?> GetHospitalByIdAsync(Guid hospitalId, CancellationToken cancellationToken);
+    Task<List<Prilixor.VendorPortal.Domain.Common.Hospital>> SearchHospitalsAsync(string searchTerm, CancellationToken cancellationToken);
+    Task AddHospitalAsync(Prilixor.VendorPortal.Domain.Common.Hospital hospital, CancellationToken cancellationToken);
+    Task<Prilixor.VendorPortal.Domain.Common.Doctor?> GetDoctorByIdAsync(Guid doctorId, CancellationToken cancellationToken);
+    Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> SearchDoctorsAsync(Guid? hospitalId, string searchTerm, CancellationToken cancellationToken);
+    Task AddDoctorAsync(Prilixor.VendorPortal.Domain.Common.Doctor doctor, CancellationToken cancellationToken);
+    Task LinkDoctorToHospitalAsync(Guid hospitalId, Guid doctorId, CancellationToken cancellationToken);
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }
 
@@ -93,7 +102,10 @@ public interface ICustomerRepository
 public sealed record CustomerRentalOrderWithListing(
     CustomerRentalOrder Order,
     VendorProductListing? Listing,
-    string? ListingPrimaryImageUrl);
+    string? ListingPrimaryImageUrl,
+    Prilixor.VendorPortal.Domain.Common.Doctor? Doctor = null,
+    Prilixor.VendorPortal.Domain.Common.Hospital? Hospital = null,
+    string? VariantDescription = null);
 
 /// <summary>Listing row for customer browse (mapped from vendor listings).</summary>
 public sealed record CustomerCatalogListingDto(
@@ -112,7 +124,16 @@ public sealed record CustomerCatalogListingDto(
     int AvailableQuantity,
     int ProductTotalAvailableQuantity,
     string AvailabilityStatus,
-    string? PrimaryImageUrl);
+    string? PrimaryImageUrl,
+    decimal? BuyPrice = null,
+    bool IsRentEnabled = true,
+    bool IsBuyEnabled = false,
+    string? CasNumber = null,
+    string? ChemicalFormula = null,
+    decimal? PurityPercentage = null,
+    decimal? MolecularWeight = null,
+    string? BaseUnit = null,
+    bool IsChemical = false);
 
 /// <summary>Listing + vendor + product loaded for checkout validation.</summary>
 public sealed class VendorProductListingAggregate
@@ -130,22 +151,43 @@ public sealed class VendorProductListingAggregate
     public decimal MonthlyRent { get; init; }
     public decimal SecurityDeposit { get; init; }
     public decimal? BuyPrice { get; init; }
+    public decimal VendorDailyRent { get; init; }
+    public decimal VendorMonthlyRent { get; init; }
+    public decimal VendorSecurityDeposit { get; init; }
+    public decimal? VendorBuyPrice { get; init; }
     public decimal GstPercent { get; init; }
     public bool IsRentEnabled { get; init; }
     public bool IsBuyEnabled { get; init; }
+    /// <summary>True when the product's category is a chemical (drives buy-only + chemical spec display).</summary>
+    public bool IsChemical { get; init; }
     public int ListingAvailableQuantity { get; init; }
     public bool CategoryPrescriptionRequired { get; init; }
     public bool CategoryDepositRequired { get; init; }
     public string CategoryName { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
     public List<string> ImageUrls { get; init; } = [];
+    public List<Prilixor.VendorPortal.Application.Onboarding.ProductVariantDto> Variants { get; init; } = [];
     public Guid? InventoryId { get; init; }
     public int InventoryAvailable { get; init; }
     public int InventoryReserved { get; init; }
     public int InventoryTotal { get; init; }
     public int InventoryRented { get; init; }
+    public string? CasNumber { get; init; }
+    public string? ChemicalFormula { get; init; }
+    public decimal? PurityPercentage { get; init; }
+    public decimal? MolecularWeight { get; init; }
+    public string? BaseUnit { get; init; }
+    public string? SdsDocumentUrl { get; init; }
+    public string? CoaDocumentUrl { get; init; }
     public int InventoryBlocked { get; init; }
+    /// <summary>Per-variant (SKU-level) available stock for chemical listings.</summary>
+    public List<VariantInventoryItem> VariantInventory { get; init; } = [];
 }
+
+/// <summary>Lightweight stock summary for one packaging size (SKU).</summary>
+public sealed record VariantInventoryItem(
+    Guid ProductVariantId,
+    int AvailableQuantity);
 
 public sealed record ExpiringOrderAggregate(
     Guid OrderId,

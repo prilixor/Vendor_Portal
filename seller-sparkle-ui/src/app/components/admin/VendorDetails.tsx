@@ -28,7 +28,7 @@ import { Badge } from "@/app/components/ui/badge";
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 
-import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto, VendorWorkingHourDto, VendorProductListingDto } from "@/app/services/adminApi";
+import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto, VendorWorkingHourDto, VendorProductListingDto, ProductDto } from "@/app/services/adminApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 
 const getApiOrigin = (): string | null => {
@@ -134,9 +134,11 @@ const getAdminUserId = () => {
 import {
   Building2,
   ChevronLeft,
+  ChevronDown,
   CircleOff,
   Clock3,
   FileText,
+  FlaskConical,
   MapPin,
   Package,
   Phone,
@@ -175,11 +177,47 @@ const dayLabel: Record<number, string> = {
 };
 
 
-const vendorTabs = ["profile", "docs", "bank", "areas", "products"] as const;
+const vendorTabs = ["profile", "docs", "bank", "areas", "products", "chemicals"] as const;
 
 type VendorTab = (typeof vendorTabs)[number];
 
+type ChemSize = { sizeValue: number; sizeUnit: string; buyPrice: number };
 
+/**
+ * Chemical price shown as a tap/click disclosure (works on touch + mouse, unlike a hover
+ * tooltip). Shows the buy-price range and expands to the full per-size breakdown, which
+ * scrolls when a chemical has many packaging sizes.
+ */
+const ChemPriceDisclosure = ({ label, count, sizes }: { label: string; count: number; sizes: ChemSize[] }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-0.5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1 text-xs font-medium text-foreground"
+      >
+        <span>{label}</span>
+        <span className="font-normal text-muted-foreground">
+          · {count} {count === 1 ? "size" : "sizes"}
+        </span>
+        <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="mt-1 max-h-52 w-full max-w-[16rem] divide-y divide-border/40 overflow-auto rounded-md border border-border/60">
+          {sizes.map((v, i) => (
+            <div key={i} className="flex items-center justify-between gap-6 px-2.5 py-1 text-xs">
+              <span className="text-muted-foreground">
+                {v.sizeValue} {v.sizeUnit}
+              </span>
+              <span className="font-medium tabular-nums">₹{v.buyPrice.toLocaleString("en-IN")}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const VendorDetails = () => {
 
@@ -218,6 +256,7 @@ const VendorDetails = () => {
 
 
   const [productListings, setProductListings] = useState<VendorProductListingDto[]>([]);
+  const [productMap, setProductMap] = useState<Record<string, ProductDto>>({});
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [inventoryMap, setInventoryMap] = useState<Record<string, any>>({});
   const [previewDocument, setPreviewDocument] = useState<{ url: string; type: string } | null>(null);
@@ -288,6 +327,16 @@ const VendorDetails = () => {
       const sortedListings = listingsData.sort((a, b) => a.listingTitle.localeCompare(b.listingTitle));
       setProductListings(sortedListings);
 
+      // Load catalog products (with per-size variants) so chemical listings can show pricing.
+      try {
+        const productsData = await adminApi.getProducts();
+        const map: Record<string, ProductDto> = {};
+        productsData.forEach((prod) => { map[prod.id] = prod; });
+        setProductMap(map);
+      } catch {
+        setProductMap({});
+      }
+
       // Fetch inventory for each listing
       const inventoryData: Record<string, any> = {};
       await Promise.all(
@@ -315,7 +364,23 @@ const VendorDetails = () => {
 
   };
 
-
+  // Chemicals are priced per packaging size; derive the customer buy-price range + sorted sizes.
+  const getChemPricing = (productId: string) => {
+    const product = productMap[productId];
+    const active = (product?.variants || []).filter(
+      (v) => v.isActive !== false && typeof v.buyPrice === "number" && v.buyPrice > 0
+    );
+    if (active.length === 0) return null;
+    const prices = active.map((v) => v.buyPrice);
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const label =
+      min === max
+        ? `₹${min.toLocaleString("en-IN")}`
+        : `₹${min.toLocaleString("en-IN")} – ₹${max.toLocaleString("en-IN")}`;
+    const sizes = active.slice().sort((a, b) => (a.sizeValue ?? 0) - (b.sizeValue ?? 0));
+    return { label, sizes, count: active.length };
+  };
 
   if (!vendorId) return <Navigate to="/admin/vendors" replace />;
 
@@ -810,7 +875,9 @@ const VendorDetails = () => {
 
           <TabsTrigger value="areas">Areas</TabsTrigger>
 
-          <TabsTrigger value="products">Products</TabsTrigger>
+          <TabsTrigger value="products">Equipment</TabsTrigger>
+
+          <TabsTrigger value="chemicals">Chemicals</TabsTrigger>
 
         </TabsList>
 
@@ -1181,19 +1248,19 @@ const VendorDetails = () => {
           <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
 
             <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <h3 className="font-semibold">Listings</h3>
+              <h3 className="font-semibold">Equipment Listings</h3>
               <div className="flex items-center gap-4">
                 <div className="flex items-center space-x-2">
                   <Switch id="vendor-favorites-only" checked={showFavoritesOnly} onCheckedChange={setShowFavoritesOnly} />
                   <Label htmlFor="vendor-favorites-only" className="text-sm cursor-pointer whitespace-nowrap">Favorites Only</Label>
                 </div>
-                <p className="text-xs text-muted-foreground">{productListings.filter(p => !showFavoritesOnly || p.favoriteCount > 0).length} total</p>
+                <p className="text-xs text-muted-foreground">{productListings.filter(p => !p.isChemical && (!showFavoritesOnly || p.favoriteCount > 0)).length} total</p>
               </div>
             </div>
 
             <div className="space-y-2">
 
-              {productListings.filter(p => !showFavoritesOnly || p.favoriteCount > 0).map((p) => (
+              {productListings.filter(p => !p.isChemical && (!showFavoritesOnly || p.favoriteCount > 0)).map((p) => (
 
                 <div key={p.id} className="flex items-center justify-between rounded-lg border border-border p-3">
 
@@ -1228,7 +1295,19 @@ const VendorDetails = () => {
                           </TooltipProvider>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">Daily: ₹{p.dailyRent}</p>
+                      {p.isChemical ? (
+                        (() => {
+                          const pricing = getChemPricing(p.productId);
+                          if (!pricing) {
+                            return <p className="text-xs text-muted-foreground mt-0.5">Price not set</p>;
+                          }
+                          return (
+                            <ChemPriceDisclosure label={pricing.label} count={pricing.count} sizes={pricing.sizes} />
+                          );
+                        })()
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-0.5">Daily: ₹{p.dailyRent}</p>
+                      )}
                     </div>
 
                   </div>
@@ -1244,11 +1323,112 @@ const VendorDetails = () => {
 
               ))}
 
-              {productListings.filter(p => !showFavoritesOnly || p.favoriteCount > 0).length === 0 && (
+              {productListings.filter(p => !p.isChemical && (!showFavoritesOnly || p.favoriteCount > 0)).length === 0 && (
 
                 <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
 
-                  No listings found.
+                  No equipment listings found.
+
+                </div>
+
+              )}
+
+            </div>
+
+          </Card>
+
+        </TabsContent>
+
+
+
+        <TabsContent value="chemicals">
+
+          <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
+
+            <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <FlaskConical className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold">Chemical Listings</h3>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center space-x-2">
+                  <Switch id="vendor-chem-favorites-only" checked={showFavoritesOnly} onCheckedChange={setShowFavoritesOnly} />
+                  <Label htmlFor="vendor-chem-favorites-only" className="text-sm cursor-pointer whitespace-nowrap">Favorites Only</Label>
+                </div>
+                <p className="text-xs text-muted-foreground">{productListings.filter(p => p.isChemical && (!showFavoritesOnly || p.favoriteCount > 0)).length} total</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+
+              {productListings.filter(p => p.isChemical && (!showFavoritesOnly || p.favoriteCount > 0)).map((p) => (
+
+                <div key={p.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+
+                  <div className="flex items-center gap-2">
+
+                    <FlaskConical className="h-4 w-4 text-primary" />
+
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium">{p.listingTitle}</p>
+                        {p.listingStatus === "active" || p.listingStatus === "approved" ? (
+                          <Badge variant="outline" className="border-success text-success bg-success/10 text-[10px] h-4 px-1.5 py-0 font-medium leading-none">Active</Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-muted-foreground/30 text-muted-foreground bg-muted/50 text-[10px] h-4 px-1.5 py-0 font-medium leading-none">
+                            {p.listingStatus ? p.listingStatus.charAt(0).toUpperCase() + p.listingStatus.slice(1).replace('_', ' ') : "Inactive"}
+                          </Badge>
+                        )}
+                        {p.favoriteCount > 0 && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-block cursor-default">
+                                  <Badge variant="outline" className="border-rose-200 text-rose-600 bg-rose-50 text-[10px] h-4 px-1.5 py-0 font-medium leading-none dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400">
+                                    ❤️ {p.favoriteCount}
+                                  </Badge>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                <p>Favorited by {p.favoriteCount} {p.favoriteCount === 1 ? 'customer' : 'customers'}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
+                      {p.isChemical ? (
+                        (() => {
+                          const pricing = getChemPricing(p.productId);
+                          if (!pricing) {
+                            return <p className="text-xs text-muted-foreground mt-0.5">Price not set</p>;
+                          }
+                          return (
+                            <ChemPriceDisclosure label={pricing.label} count={pricing.count} sizes={pricing.sizes} />
+                          );
+                        })()
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-0.5">Daily: ₹{p.dailyRent}</p>
+                      )}
+                    </div>
+
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-sm font-mono font-medium">Qty {inventoryMap[p.id]?.totalQuantity ?? p.availableQuantity}</p>
+                    {inventoryMap[p.id] && (
+                      <p className="text-[10px] text-muted-foreground">{inventoryMap[p.id].availableQuantity} available</p>
+                    )}
+                  </div>
+
+                </div>
+
+              ))}
+
+              {productListings.filter(p => p.isChemical && (!showFavoritesOnly || p.favoriteCount > 0)).length === 0 && (
+
+                <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+
+                  No chemical listings found.
 
                 </div>
 

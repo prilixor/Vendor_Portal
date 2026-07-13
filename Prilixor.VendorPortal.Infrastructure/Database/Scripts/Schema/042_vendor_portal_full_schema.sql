@@ -237,6 +237,7 @@ CREATE TABLE IF NOT EXISTS public.product_categories (
     prescription_required boolean NOT NULL DEFAULT false,
     deposit_required boolean NOT NULL DEFAULT false,
     installation_required boolean NOT NULL DEFAULT false,
+    is_chemical boolean NOT NULL DEFAULT false,
     is_active boolean NOT NULL DEFAULT true,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),

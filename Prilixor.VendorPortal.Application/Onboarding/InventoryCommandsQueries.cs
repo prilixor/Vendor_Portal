@@ -315,3 +315,131 @@ internal sealed class GetVendorInventoryMovementsQueryHandler(IVendorOnboardingR
         return new DateTimeOffset(utc, TimeSpan.Zero);
     }
 }
+
+// -----------------------------------------------------------------------
+// Variant-Level (SKU-Level) Inventory — Chemicals only
+// -----------------------------------------------------------------------
+
+public sealed record GetVariantInventoryQuery(
+    string VendorId,
+    string ListingId) : IQuery<List<VendorVariantInventoryDto>>;
+
+internal sealed class GetVariantInventoryQueryHandler(IVendorOnboardingRepository repository)
+    : IQueryHandler<GetVariantInventoryQuery, List<VendorVariantInventoryDto>>
+{
+    public async Task<Result<List<VendorVariantInventoryDto>>> Handle(GetVariantInventoryQuery request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.VendorId, out var vendorId) || !Guid.TryParse(request.ListingId, out var listingId))
+            return Result.Failure<List<VendorVariantInventoryDto>>(new Error("vendors.inventory.invalid_id", "Vendor/listing id must be a valid UUID.", ErrorCategory.Validation));
+
+        var listing = await repository.GetVendorProductListingByIdAsync(vendorId, listingId, cancellationToken);
+        if (listing is null)
+            return Result.Failure<List<VendorVariantInventoryDto>>(new Error("vendors.listing.not_found", "Vendor listing not found.", ErrorCategory.NotFound));
+
+        var rows = await repository.GetVariantInventoryByListingIdAsync(listingId, cancellationToken);
+
+        var result = rows.Select(x => new VendorVariantInventoryDto(
+            x.Id.ToString(),
+            x.VendorProductListingId.ToString(),
+            x.ProductVariantId.ToString(),
+            x.ProductVariant.Sku,
+            x.ProductVariant.SizeValue,
+            x.ProductVariant.SizeUnit,
+            x.TotalQuantity,
+            x.AvailableQuantity,
+            x.ReservedQuantity)).ToList();
+
+        return Result.Success(result);
+    }
+}
+
+public sealed record UpsertVariantInventoryCommand(
+    string VendorId,
+    string ListingId,
+    List<UpsertVariantInventoryItemDto> Items) : ICommand<List<VendorVariantInventoryDto>>;
+
+public sealed class UpsertVariantInventoryCommandValidator : AbstractValidator<UpsertVariantInventoryCommand>
+{
+    public UpsertVariantInventoryCommandValidator()
+    {
+        RuleFor(x => x.VendorId).NotEmpty();
+        RuleFor(x => x.ListingId).NotEmpty();
+        RuleFor(x => x.Items).NotNull();
+        RuleForEach(x => x.Items).ChildRules(item =>
+        {
+            item.RuleFor(i => i.ProductVariantId).NotEmpty();
+            item.RuleFor(i => i.TotalQuantity).GreaterThanOrEqualTo(0);
+        });
+    }
+}
+
+internal sealed class UpsertVariantInventoryCommandHandler(IVendorOnboardingRepository repository)
+    : ICommandHandler<UpsertVariantInventoryCommand, List<VendorVariantInventoryDto>>
+{
+    public async Task<Result<List<VendorVariantInventoryDto>>> Handle(UpsertVariantInventoryCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.VendorId, out var vendorId) || !Guid.TryParse(request.ListingId, out var listingId))
+            return Result.Failure<List<VendorVariantInventoryDto>>(new Error("vendors.inventory.invalid_id", "Vendor/listing id must be a valid UUID.", ErrorCategory.Validation));
+
+        var listing = await repository.GetVendorProductListingByIdAsync(vendorId, listingId, cancellationToken);
+        if (listing is null)
+            return Result.Failure<List<VendorVariantInventoryDto>>(new Error("vendors.listing.not_found", "Vendor listing not found.", ErrorCategory.NotFound));
+
+        // Load existing rows for this listing
+        var existing = await repository.GetVariantInventoryByListingIdAsync(listingId, cancellationToken);
+
+        foreach (var item in request.Items)
+        {
+            if (!Guid.TryParse(item.ProductVariantId, out var variantId))
+                continue;
+
+            var row = existing.FirstOrDefault(x => x.ProductVariantId == variantId)
+                ?? new VendorVariantInventory
+                {
+                    VendorProductListingId = listingId,
+                    ProductVariantId = variantId,
+                };
+
+            row.TotalQuantity = item.TotalQuantity;
+            // Available = Total minus any already-reserved units (preserve reservations)
+            row.AvailableQuantity = Math.Max(0, item.TotalQuantity - row.ReservedQuantity);
+
+            await repository.UpsertVariantInventoryAsync(row, cancellationToken);
+        }
+
+        await repository.SaveChangesAsync(cancellationToken);
+
+        // Sync variant inventory back to listing available quantity and vendor inventory totals
+        var refreshed = await repository.GetVariantInventoryByListingIdAsync(listingId, cancellationToken);
+        var totalAvailable = refreshed.Sum(x => x.AvailableQuantity);
+        var totalStock = refreshed.Sum(x => x.TotalQuantity);
+        var totalReserved = refreshed.Sum(x => x.ReservedQuantity);
+
+        listing.AvailableQuantity = totalAvailable;
+        await repository.UpdateVendorProductListingAsync(listing, cancellationToken);
+
+        var inventory = await repository.GetVendorInventoryByListingIdAsync(listingId, cancellationToken);
+        if (inventory is not null)
+        {
+            inventory.AvailableQuantity = totalAvailable;
+            inventory.TotalQuantity = totalStock;
+            inventory.ReservedQuantity = totalReserved;
+            await repository.UpsertVendorInventoryAsync(inventory, cancellationToken);
+        }
+
+        await repository.SaveChangesAsync(cancellationToken);
+
+        var result = refreshed.Select(x => new VendorVariantInventoryDto(
+            x.Id.ToString(),
+            x.VendorProductListingId.ToString(),
+            x.ProductVariantId.ToString(),
+            x.ProductVariant.Sku,
+            x.ProductVariant.SizeValue,
+            x.ProductVariant.SizeUnit,
+            x.TotalQuantity,
+            x.AvailableQuantity,
+            x.ReservedQuantity)).ToList();
+
+        return Result.Success(result);
+    }
+}

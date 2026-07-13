@@ -82,6 +82,7 @@ export interface VendorProductListingDto {
   availableQuantity: number;
   listingStatus: string;
   favoriteCount: number;
+  isChemical?: boolean;
 }
 
 export interface AdminUserDto {
@@ -174,6 +175,7 @@ export interface VendorProductListingDto {
   availableQuantity: number;
   listingStatus: string;
   favoriteCount: number;
+  isChemical?: boolean;
 }
 
 export interface VerifyVendorListingRequest {
@@ -233,6 +235,18 @@ export interface ProductCategoryDto {
   prescriptionRequired: boolean;
   depositRequired: boolean;
   installationRequired: boolean;
+  isChemical?: boolean;
+  isActive: boolean;
+}
+
+export interface ProductVariantDto {
+  id?: string;
+  productId?: string;
+  sku: string;
+  sizeValue: number;
+  sizeUnit: string;
+  vendorPrice: number;
+  buyPrice: number;
   isActive: boolean;
 }
 
@@ -248,11 +262,24 @@ export interface ProductDto {
   monthlyRent: number;
   securityDeposit: number;
   buyPrice?: number;
+  vendorDailyRent: number;
+  vendorMonthlyRent: number;
+  vendorSecurityDeposit: number;
+  vendorBuyPrice?: number;
   gstPercent: number;
   isRentEnabled: boolean;
   isBuyEnabled: boolean;
   isActive: boolean;
+  images?: ProductImageDto[];
+  casNumber?: string;
+  chemicalFormula?: string;
+  purityPercentage?: number;
+  molecularWeight?: number;
+  baseUnit?: string;
+  sdsDocumentUrl?: string;
+  coaDocumentUrl?: string;
   favoriteCount: number;
+  variants?: ProductVariantDto[];
 }
 
 export interface ProductImageDto {
@@ -283,6 +310,7 @@ export interface CreateProductCategoryRequest {
   prescriptionRequired: boolean;
   depositRequired: boolean;
   installationRequired: boolean;
+  isChemical?: boolean;
   isActive: boolean;
 }
 
@@ -292,6 +320,7 @@ export interface UpdateProductCategoryRequest {
   prescriptionRequired: boolean;
   depositRequired: boolean;
   installationRequired: boolean;
+  isChemical?: boolean;
   isActive: boolean;
 }
 
@@ -306,10 +335,22 @@ export interface CreateProductRequest {
   monthlyRent: number;
   securityDeposit: number;
   buyPrice?: number;
+  vendorDailyRent: number;
+  vendorMonthlyRent: number;
+  vendorSecurityDeposit: number;
+  vendorBuyPrice?: number;
   gstPercent: number;
   isRentEnabled: boolean;
   isBuyEnabled: boolean;
   isActive: boolean;
+  casNumber?: string;
+  chemicalFormula?: string;
+  purityPercentage?: number;
+  molecularWeight?: number;
+  baseUnit?: string;
+  sdsDocumentUrl?: string;
+  coaDocumentUrl?: string;
+  variants?: ProductVariantDto[];
 }
 
 export interface UpdateProductRequest {
@@ -324,10 +365,22 @@ export interface UpdateProductRequest {
   monthlyRent: number;
   securityDeposit: number;
   buyPrice?: number;
+  vendorDailyRent: number;
+  vendorMonthlyRent: number;
+  vendorSecurityDeposit: number;
+  vendorBuyPrice?: number;
   gstPercent: number;
   isRentEnabled: boolean;
   isBuyEnabled: boolean;
   isActive: boolean;
+  casNumber?: string;
+  chemicalFormula?: string;
+  purityPercentage?: number;
+  molecularWeight?: number;
+  baseUnit?: string;
+  sdsDocumentUrl?: string;
+  coaDocumentUrl?: string;
+  variants?: ProductVariantDto[];
 }
 
 export interface ExcelUploadErrorDto {
@@ -358,11 +411,20 @@ export interface AdminOrderDto {
   rentalDays: number;
   totalAmount: number;
   depositAmount: number;
+  vendorSubtotalAmount: number;
   createdOnUtc: string;
   startDate?: string | null;
   endDate?: string | null;
   primaryImageUrl?: string | null;
   isExtended?: boolean;
+  productVariantId?: string | null;
+  doctorId?: string;
+  doctorName?: string;
+  doctorSpecialization?: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  hospitalCity?: string;
+  doctorContactNumber?: string;
 }
 
 export interface UpdateAdminOrderStatusRequest {
@@ -549,15 +611,15 @@ export const adminApi = {
     });
   },
 
-  async uploadCatalogExcel(file: File): Promise<ExcelUploadResponseDto> {
+  async uploadCatalogExcel(file: File, isChemical: boolean = false): Promise<ExcelUploadResponseDto> {
     const formData = new FormData();
     formData.append('file', file);
-    return apiClient.postForm<ExcelUploadResponseDto>('/admin/catalog/upload-excel', formData);
+    return apiClient.postForm<ExcelUploadResponseDto>(`/admin/catalog/upload-excel?isChemical=${isChemical}`, formData);
   },
 
-  async downloadCatalogExcel(): Promise<void> {
-    const filename = `catalog_export_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "_")}.xlsx`;
-    return apiClient.downloadBlob('/admin/catalog/download-excel', filename);
+  async downloadCatalogExcel(isChemical: boolean = false): Promise<void> {
+    const filename = `catalog_${isChemical ? 'chemical' : 'equipment'}_export_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "_")}.xlsx`;
+    return apiClient.downloadBlob(`/admin/catalog/download-excel?isChemical=${isChemical}`, filename);
   },
 
   async getAdminOrders(): Promise<AdminOrderDto[]> {

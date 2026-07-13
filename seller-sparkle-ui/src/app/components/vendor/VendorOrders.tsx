@@ -317,7 +317,7 @@ const VendorOrders = () => {
                                 <User className="h-3.5 w-3.5 opacity-60 shrink-0" /> {order.customerName}
                               </span>
                               <span>Qty: <strong className="text-foreground font-medium">{order.quantity}</strong></span>
-                              <span>Total: <strong className="text-foreground font-semibold">₹{order.totalAmount.toFixed(0)}</strong></span>
+                              <span>Payout: <strong className="text-foreground font-semibold">₹{(order.vendorSubtotalAmount && order.vendorSubtotalAmount > 0 ? order.vendorSubtotalAmount : order.totalAmount).toFixed(0)}</strong></span>
                               <span>Location: {order.customerCity ?? "-"}, {order.customerState ?? "-"}</span>
                             </div>
                           </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { customerApi } from "@/app/services/customerApi";
+import type { PlaceCustomerOrdersResultApi } from "@/app/services/customerApi";
 import { useCart } from "@/app/contexts/CartContext";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
@@ -14,9 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogClose } from "@/app/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus, FileText, CheckCircle2 } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
+import { CustomerMedicalReference } from "./CustomerMedicalReference";
+import { Checkbox } from "@/app/components/ui/checkbox";
 
 type DeliveryChoice = "standard" | "express" | "vendor_pickup";
 
@@ -32,6 +36,39 @@ const CustomerCheckout = () => {
   const [addressId, setAddressId] = useState<string>("");
   const [deliveryChoice, setDeliveryChoice] = useState<DeliveryChoice>("standard");
   const [hasInitializedAddress, setHasInitializedAddress] = useState(false);
+  const [applyToAll, setApplyToAll] = useState(false);
+  const [failedLines, setFailedLines] = useState<PlaceCustomerOrdersResultApi["failedLines"]>([]);
+
+  type MedicalRef = { hospitalId: string; doctorId: string; contactNumber: string; referenceNumber: string };
+  const [medicalRefs, setMedicalRefs] = useState<Record<string, MedicalRef>>({});
+
+  const updateMedicalRef = (listingId: string, field: keyof MedicalRef, value: string) => {
+    setMedicalRefs((prev) => ({
+      ...prev,
+      [listingId]: {
+        ...(prev[listingId] || { hospitalId: "", doctorId: "", contactNumber: "", referenceNumber: "" }),
+        [field]: value,
+      },
+    }));
+  };
+
+  const applyMedicalRefToAll = (sourceListingId: string) => {
+    const source = medicalRefs[sourceListingId];
+    if (!source) return;
+    
+    setMedicalRefs((prev) => {
+      const next = { ...prev };
+      lines
+        .filter((l) => l.prescriptionRequired && l.listingId !== sourceListingId)
+        .forEach((l) => {
+          next[l.listingId] = { ...source };
+        });
+      return next;
+    });
+    toast.success("Applied to all items requiring a prescription");
+  };
+
+  const needsPrescription = lines.some((l) => l.prescriptionRequired);
 
   const { data: addresses } = useQuery({
     queryKey: ["customer-addresses"],
@@ -62,9 +99,16 @@ const CustomerCheckout = () => {
         quantity: l.quantity,
         rentalDays: l.rentalDays,
         orderType: l.orderType,
+        productVariantId: l.productVariantId || undefined,
+        ...(l.prescriptionRequired ? {
+          doctorId: medicalRefs[l.listingId]?.doctorId || undefined,
+          hospitalId: medicalRefs[l.listingId]?.hospitalId || undefined,
+          contactNumber: medicalRefs[l.listingId]?.contactNumber || undefined,
+          referenceNumber: medicalRefs[l.listingId]?.referenceNumber || undefined,
+        } : {})
       })),
     }),
-    [addressId, deliveryChoice, lines],
+    [addressId, deliveryChoice, lines, medicalRefs],
   );
 
   const { data: quote, isFetching: quoteLoading, error: quoteError } = useQuery({
@@ -90,11 +134,19 @@ const CustomerCheckout = () => {
           quantity: l.quantity,
           rentalDays: l.rentalDays,
           orderType: l.orderType,
+          productVariantId: l.productVariantId || undefined,
+          ...(l.prescriptionRequired ? {
+            doctorId: medicalRefs[l.listingId]?.doctorId || undefined,
+            hospitalId: medicalRefs[l.listingId]?.hospitalId || undefined,
+            contactNumber: medicalRefs[l.listingId]?.contactNumber || undefined,
+            referenceNumber: medicalRefs[l.listingId]?.referenceNumber || undefined,
+          } : {})
         })),
       }),
     onSuccess: (result) => {
       const placedCount = result.placedOrders.length;
       const failedCount = result.failedLines.length;
+      setFailedLines(failedCount > 0 ? result.failedLines : []);
       if (placedCount > 0 && failedCount > 0) {
         const failedDetails = result.failedLines.map((l) => l.message).join(", ");
         toast.success(`Placed ${placedCount} order(s). Failed lines: ${failedDetails}`);
@@ -150,6 +202,35 @@ const CustomerCheckout = () => {
           </p>
           <p className="mt-1 text-muted-foreground ml-4">
             {quoteError instanceof Error ? quoteError.message : "A validation error occurred. Please review your cart."}
+          </p>
+        </div>
+      )}
+
+      {failedLines.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm shadow-sm dark:border-amber-500/40 dark:bg-amber-500/10">
+          <p className="font-bold text-amber-900 dark:text-amber-200">Some items could not be placed</p>
+          <div className="mt-2 space-y-3">
+            {failedLines.map((l, ix) => (
+              <div key={`failed-${l.listingId}-${ix}`} className="space-y-1.5">
+                <p className="text-amber-900/90 dark:text-amber-100/90">{l.message}</p>
+                {l.variantSuggestions?.length ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs font-medium text-amber-800/80 dark:text-amber-200/80">Available sizes:</span>
+                    {l.variantSuggestions.map((s) => (
+                      <span
+                        key={`sugg-${s.productVariantId}`}
+                        className="rounded-md border border-amber-400 bg-white px-2 py-1 text-xs font-semibold text-amber-900 dark:bg-transparent dark:text-amber-100"
+                      >
+                        {s.sizeValue} {s.sizeUnit} · ₹{s.buyPrice.toFixed(0)} · {s.availableQuantity} in stock
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-amber-800/80 dark:text-amber-200/80">
+            Update the packaging size or quantity in your cart, then try again.
           </p>
         </div>
       )}
@@ -240,6 +321,103 @@ const CustomerCheckout = () => {
               </RadioGroup>
             </CardContent>
           </Card>
+
+          {needsPrescription && (
+            <Card className="border-blue-200 shadow-sm overflow-hidden bg-white">
+              <div className="bg-blue-50/60 px-5 py-4 border-b border-blue-100/60 flex items-start gap-3">
+                <FileText className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-blue-900">Action Required: Prescriptions</h3>
+                  <p className="text-sm text-blue-700/80 mt-0.5 leading-relaxed">
+                    Some items in your cart require a doctor's reference. Please attach them below.
+                  </p>
+                </div>
+              </div>
+              <div className="divide-y divide-border/60">
+                {lines.map((l) => {
+                  if (!l.prescriptionRequired) return null;
+                  const mRef = medicalRefs[l.listingId];
+                  const hasFilled = !!(mRef?.hospitalId && mRef?.doctorId);
+                  const hasOthers = lines.filter((x) => x.prescriptionRequired).length > 1;
+                  const isFirst = lines.filter((x) => x.prescriptionRequired)[0]?.listingId === l.listingId;
+
+                  return (
+                    <div key={l.listingId} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <p className="font-medium">{l.title}</p>
+                        {hasFilled ? (
+                          <div className="flex items-center gap-1.5 mt-2 text-[13px] text-green-700 font-medium bg-green-50/80 w-fit px-2.5 py-1 rounded-md border border-green-200/60">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>Prescription attached</span>
+                          </div>
+                        ) : (
+                          <p className="text-[13px] text-amber-600 mt-1 font-medium">Pending details</p>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Dialog onOpenChange={(open) => { if (open) setApplyToAll(false); }}>
+                          <DialogTrigger asChild>
+                            <Button variant={hasFilled ? "outline" : "default"} size="sm" className="h-8">
+                              {hasFilled ? "Edit Details" : (
+                                <>
+                                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Doctor
+                                </>
+                              )}
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden border-blue-100">
+                            <DialogTitle className="sr-only">Prescription details</DialogTitle>
+                            <DialogDescription className="sr-only">Add or edit prescription details for {l.title}</DialogDescription>
+                            <div className="p-4 sm:p-6 pb-2">
+                              <CustomerMedicalReference
+                                title={`Prescription: ${l.title}`}
+                                hospitalId={mRef?.hospitalId || ""}
+                                setHospitalId={(v) => updateMedicalRef(l.listingId, "hospitalId", v)}
+                                doctorId={mRef?.doctorId || ""}
+                                setDoctorId={(v) => updateMedicalRef(l.listingId, "doctorId", v)}
+                                referenceNumber={mRef?.referenceNumber || ""}
+                                setReferenceNumber={(v) => updateMedicalRef(l.listingId, "referenceNumber", v)}
+                              />
+                            </div>
+                            <div className="bg-muted/40 p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between border-t border-border/40 gap-4">
+                              {hasOthers ? (
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    id={`apply-all-${l.listingId}`} 
+                                    checked={applyToAll} 
+                                    onCheckedChange={(c) => setApplyToAll(!!c)} 
+                                  />
+                                  <label 
+                                    htmlFor={`apply-all-${l.listingId}`} 
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none"
+                                  >
+                                    Apply to all items
+                                  </label>
+                                </div>
+                              ) : <div />}
+                              <DialogClose asChild>
+                                <Button 
+                                  className="w-full sm:w-auto shrink-0"
+                                  onClick={() => {
+                                    if (applyToAll) {
+                                      applyMedicalRefToAll(l.listingId);
+                                    }
+                                  }}
+                                >
+                                  Save & Close
+                                </Button>
+                              </DialogClose>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
         </div>
 
         <Card className="h-fit border-border/80 shadow-sm lg:sticky lg:top-4">
@@ -256,7 +434,9 @@ const CustomerCheckout = () => {
                     <span>{l.title}</span>
                   </span>
                   <span className="shrink-0 tabular-nums font-medium">
-                    ₹{(l.dailyRent * l.quantity * l.rentalDays).toFixed(0)}
+                    ₹{(l.orderType === "buy"
+                      ? (l.buyPrice ?? 0) * l.quantity
+                      : l.dailyRent * l.quantity * l.rentalDays).toFixed(0)}
                   </span>
                 </div>
               ))}
@@ -315,7 +495,7 @@ const CustomerCheckout = () => {
             <Button
               className="w-full bg-foreground text-background hover:bg-foreground/90"
               size="lg"
-              disabled={placeMutation.isPending || !!quoteError || quoteLoading}
+              disabled={placeMutation.isPending || !!quoteError || quoteLoading || lines.some(l => l.prescriptionRequired && (!medicalRefs[l.listingId]?.hospitalId || !medicalRefs[l.listingId]?.doctorId))}
               onClick={() => placeMutation.mutate()}
             >
               {placeMutation.isPending ? (

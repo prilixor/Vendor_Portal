@@ -491,6 +491,46 @@ const CustomerOrderDetail = () => {
         </CardContent>
       </Card>
 
+      {/* Medical Reference */}
+      {(activeItem.doctorId || activeItem.hospitalId) && (
+        <Card className="border-border/80 shadow-sm">
+          <CardHeader className="pb-4">
+            <p className="text-lg font-semibold">Medical reference</p>
+          </CardHeader>
+          <CardContent className="grid gap-6 sm:grid-cols-2">
+            {activeItem.doctorName && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Doctor</p>
+                <p className="text-sm font-medium">
+                  {activeItem.doctorName}
+                  {activeItem.doctorSpecialization && (
+                    <span className="text-muted-foreground font-normal ml-1">
+                      - {activeItem.doctorSpecialization}
+                    </span>
+                  )}
+                </p>
+                {activeItem.doctorContactNumber && (
+                  <p className="text-xs text-muted-foreground">{activeItem.doctorContactNumber}</p>
+                )}
+              </div>
+            )}
+            {activeItem.hospitalName && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hospital</p>
+                <p className="text-sm font-medium">
+                  {activeItem.hospitalName}
+                  {activeItem.hospitalCity && (
+                    <span className="text-muted-foreground font-normal ml-1">
+                      ({activeItem.hospitalCity})
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Support and Cancellation Actions for Selected Item */}
       <div className="flex flex-wrap gap-3">
         <Button variant="outline" asChild>

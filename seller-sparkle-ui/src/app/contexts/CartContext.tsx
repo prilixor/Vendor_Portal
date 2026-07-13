@@ -13,6 +13,9 @@ export interface CartLine {
   quantity: number;
   rentalDays: number;
   orderType: "rent" | "buy";
+  prescriptionRequired?: boolean;
+  productVariantId?: string;
+  buyPrice?: number;
 }
 
 interface CartContextValue {
@@ -54,7 +57,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     const orderType = line.orderType ?? "rent";
     const days = orderType === "buy" ? 0 : (line.rentalDays ?? 7);
     setLines((prev) => {
-      const ix = prev.findIndex((l) => l.listingId === line.listingId);
+      const ix = prev.findIndex((l) => l.listingId === line.listingId && l.productVariantId === line.productVariantId);
       if (ix >= 0) {
         const next = [...prev];
         next[ix] = {
@@ -68,6 +71,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           securityDeposit: line.securityDeposit,
           primaryImageUrl: line.primaryImageUrl,
           orderType,
+          prescriptionRequired: line.prescriptionRequired ?? next[ix].prescriptionRequired,
+          buyPrice: line.buyPrice,
         };
         return next;
       }
@@ -84,6 +89,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           quantity: qty,
           rentalDays: days,
           orderType,
+          prescriptionRequired: line.prescriptionRequired,
+          productVariantId: line.productVariantId,
+          buyPrice: line.buyPrice,
         },
       ];
     });
@@ -113,9 +121,10 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const totalEstimatedRent = useMemo(
     () =>
       lines.reduce(
-        (sum, l) =>
-          sum +
-          (l.orderType === "buy" ? l.dailyRent * 30 * l.quantity : l.dailyRent * l.quantity * l.rentalDays),
+        (sum, l) => {
+          const buyPrice = l.buyPrice ?? (l.dailyRent * 30);
+          return sum + (l.orderType === "buy" ? buyPrice * l.quantity : l.dailyRent * l.quantity * l.rentalDays);
+        },
         0,
       ),
     [lines],

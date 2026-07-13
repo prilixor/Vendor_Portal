@@ -22,6 +22,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<CustomerFavorite> CustomerFavorites => Set<CustomerFavorite>();
+    public DbSet<CustomerOrderDoctorReference> CustomerOrderDoctorReferences => Set<CustomerOrderDoctorReference>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -102,6 +103,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.DeliveryOption).HasColumnName("delivery_option");
             entity.Property(x => x.Status).HasColumnName("status");
             entity.Property(x => x.SubtotalAmount).HasColumnName("subtotal_amount");
+            entity.Property(x => x.VendorSubtotalAmount).HasColumnName("vendor_subtotal_amount");
             entity.Property(x => x.DepositAmount).HasColumnName("deposit_amount");
             entity.Property(x => x.ServiceFeeAmount).HasColumnName("service_fee_amount");
             entity.Property(x => x.DistanceFeeAmount).HasColumnName("distance_fee_amount");
@@ -118,6 +120,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
             entity.Property(x => x.IsExtended).HasColumnName("is_extended");
+            entity.Property(x => x.ProductVariantId).HasColumnName("product_variant_id");
             entity.HasOne(x => x.CustomerAddress)
                 .WithMany()
                 .HasForeignKey(x => x.CustomerAddressId)
@@ -125,6 +128,30 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.HasOne(x => x.Customer)
                 .WithMany(x => x.Orders)
                 .HasForeignKey(x => x.CustomerId);
+        });
+
+        modelBuilder.Entity<CustomerOrderDoctorReference>(entity =>
+        {
+            entity.ToTable("customer_order_doctor_references");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CustomerRentalOrderId).HasColumnName("customer_rental_order_id");
+            entity.Property(x => x.DoctorId).HasColumnName("doctor_id");
+            entity.Property(x => x.HospitalId).HasColumnName("hospital_id");
+            entity.Property(x => x.ContactNumber).HasColumnName("contact_number");
+            entity.Property(x => x.ReferenceNumber).HasColumnName("reference_number");
+            
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            
+            entity.HasOne(x => x.Order)
+                .WithOne(x => x.DoctorReference)
+                .HasForeignKey<CustomerOrderDoctorReference>(x => x.CustomerRentalOrderId);
         });
 
         modelBuilder.Entity<CustomerRentalOrderExtension>(entity =>

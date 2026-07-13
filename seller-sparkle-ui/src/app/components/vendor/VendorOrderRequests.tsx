@@ -7,7 +7,7 @@ import { Skeleton } from "@/app/components/ui/skeleton";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorDispatchOfferApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
-import { Clock3, RefreshCw } from "lucide-react";
+import { Clock3, RefreshCw, User } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
 import { useNavigate } from "react-router-dom";
 function orderTypeBadgeClass(orderType: string): string {
@@ -181,10 +181,38 @@ const VendorOrderRequests = () => {
                               <p className="text-sm font-semibold text-foreground">{offer.listingTitle}</p>
                               <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                                 <span>Qty: <span className="font-medium text-foreground">{offer.quantity}</span></span>
-                                <span>Days: <span className="font-medium text-foreground">{offer.rentalDays}</span></span>
-                                <span>Total: <span className="font-medium text-foreground">₹{offer.totalAmount.toFixed(0)}</span></span>
+                                {offer.orderType !== "buy" && (
+                                  <span>Days: <span className="font-medium text-foreground">{offer.rentalDays}</span></span>
+                                )}
+                                <span>Payout: <span className="font-medium text-foreground">₹{(offer.vendorSubtotalAmount && offer.vendorSubtotalAmount > 0 ? offer.vendorSubtotalAmount : offer.totalAmount).toFixed(0)}</span></span>
                                 <span>Type: <Badge className={cn("text-[10px] px-1.5 py-0 capitalize", orderTypeBadgeClass(offer.orderType))} variant="outline">{offer.orderType}</Badge></span>
                               </div>
+                              
+                              {(offer.doctorId || offer.hospitalId) && (
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] bg-accent/50 px-2 py-1.5 rounded-md border border-border/50">
+                                  <div className="flex items-center gap-1 font-semibold text-muted-foreground">
+                                    <User className="h-3 w-3" /> Medical:
+                                  </div>
+                                  {offer.doctorName && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-muted-foreground uppercase tracking-wide">Dr.</span>
+                                      <span className="font-medium text-foreground">
+                                        {offer.doctorName}
+                                        {offer.doctorSpecialization && <span className="font-normal text-muted-foreground ml-1">- {offer.doctorSpecialization}</span>}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {offer.hospitalName && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-muted-foreground uppercase tracking-wide">Hosp.</span>
+                                      <span className="font-medium text-foreground">
+                                        {offer.hospitalName}
+                                        {offer.hospitalCity && <span className="font-normal text-muted-foreground ml-1">({offer.hospitalCity})</span>}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
 
                             <div className="mt-3 md:mt-0 flex items-center justify-between md:justify-end gap-4 border-t border-border/20 md:border-none pt-2 md:pt-0">

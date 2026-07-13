@@ -8,6 +8,7 @@ import {
   MessageSquare,
   ShoppingBag,
   Bell,
+  FlaskConical,
 } from "lucide-react";
 import type { NavSection } from "@/app/helpers/navigation";
 
@@ -31,6 +32,7 @@ export const adminNav: NavSection[] = [
     title: "Catalog",
     items: [
       { label: "Products Management", to: "/admin/products", icon: Package },
+      { label: "Chemicals Management", to: "/admin/chemicals", icon: FlaskConical },
     ],
   },
   {

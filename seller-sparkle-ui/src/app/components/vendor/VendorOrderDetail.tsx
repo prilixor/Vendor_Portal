@@ -336,8 +336,10 @@ const VendorOrderDetail = () => {
                 </div>
               </div>
               <div className="flex shrink-0 flex-col items-start border-t border-border pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
-                <p className="text-3xl font-bold tabular-nums tracking-tight">₹{order.totalAmount.toFixed(2)}</p>
-                <p className="mt-1 text-sm text-muted-foreground tabular-nums">+ Deposit included</p>
+                <p className="text-3xl font-bold tabular-nums tracking-tight">
+                  ₹{((order.vendorSubtotalAmount && order.vendorSubtotalAmount > 0) ? order.vendorSubtotalAmount : order.totalAmount).toFixed(2)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground uppercase font-semibold tracking-wider">Estimated Vendor Payout</p>
               </div>
             </div>
           </CardContent>
@@ -518,6 +520,46 @@ const VendorOrderDetail = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* Medical Reference */}
+          {(order.doctorId || order.hospitalId) && (
+            <Card className="border-border/80 shadow-sm">
+              <CardHeader className="pb-4">
+                <p className="text-lg font-semibold">Medical reference</p>
+              </CardHeader>
+              <CardContent className="grid gap-6 sm:grid-cols-2">
+                {order.doctorName && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Doctor</p>
+                    <p className="text-sm font-medium">
+                      {order.doctorName}
+                      {order.doctorSpecialization && (
+                        <span className="text-muted-foreground font-normal ml-1">
+                          - {order.doctorSpecialization}
+                        </span>
+                      )}
+                    </p>
+                    {order.doctorContactNumber && (
+                      <p className="text-xs text-muted-foreground">{order.doctorContactNumber}</p>
+                    )}
+                  </div>
+                )}
+                {order.hospitalName && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hospital</p>
+                    <p className="text-sm font-medium">
+                      {order.hospitalName}
+                      {order.hospitalCity && (
+                        <span className="text-muted-foreground font-normal ml-1">
+                          ({order.hospitalCity})
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline">{order.orderType.toUpperCase()}</Badge>

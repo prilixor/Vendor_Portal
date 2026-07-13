@@ -7,6 +7,7 @@ create table if not exists public.product_categories (
     prescription_required boolean not null default false,
     deposit_required boolean not null default false,
     installation_required boolean not null default false,
+    is_chemical boolean not null default false,
     is_active boolean not null default true,
 
     -- Audit columns

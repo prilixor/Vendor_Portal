@@ -46,6 +46,7 @@ internal sealed class CreateSupportTicketCommandHandler(
         
         var ticket = new SupportTicket
         {
+            Id = Guid.NewGuid(),
             VendorId = vendorId,
             TicketNumber = ticketNumber,
             Category = request.Category,
@@ -59,6 +60,7 @@ internal sealed class CreateSupportTicketCommandHandler(
         var message = new SupportMessage
         {
             TicketId = ticket.Id,
+            Ticket = ticket,
             SenderId = vendorId,
             SenderType = "Vendor",
             Message = request.InitialMessage,
@@ -344,6 +346,7 @@ internal sealed class AiChatCommandHandler(
             var ticketNumber = $"TK-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..4].ToUpper()}";
             ticket = new SupportTicket
             {
+                Id = Guid.NewGuid(),
                 VendorId = vendorId,
                 TicketNumber = ticketNumber,
                 Category = request.Category ?? "General",
@@ -366,6 +369,7 @@ internal sealed class AiChatCommandHandler(
         var vendorMessage = new SupportMessage
         {
             TicketId = ticket.Id,
+            Ticket = ticket,
             SenderId = vendorId,
             SenderType = "Vendor",
             Message = request.Message,
@@ -395,6 +399,7 @@ internal sealed class AiChatCommandHandler(
         var aiMessage = new SupportMessage
         {
             TicketId = ticket.Id,
+            Ticket = ticket,
             SenderId = Guid.Empty,
             SenderType = "AI",
             Message = aiResponse.Message,
@@ -402,19 +407,16 @@ internal sealed class AiChatCommandHandler(
         };
         await repository.AddSupportMessageAsync(aiMessage, cancellationToken);
 
-        // Don't overwrite admin-set status — only set "Open" for new tickets (default)
-        if (activeTicket is null)
-        {
-            ticket.Status = "Open";
-        }
         // Reopen resolved tickets when vendor sends new message (Closed tickets are never reused)
-        else if (ticket.Status is "Resolved")
+        if (activeTicket != null)
         {
-            ticket.Status = "Open";
+            if (ticket.Status == "Resolved")
+            {
+                ticket.Status = "Open";
+            }
+            await repository.UpdateSupportTicketAsync(ticket, cancellationToken);
         }
-        // If admins set it to "In Progress", keep it there
 
-        await repository.UpdateSupportTicketAsync(ticket, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
 
         var ticketDto = new SupportTicketDto(

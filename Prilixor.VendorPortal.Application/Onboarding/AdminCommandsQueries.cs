@@ -887,18 +887,28 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
             o.Customer?.FullName ?? "Customer",
             o.Customer?.Email ?? "customer@example.com",
             (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"),
-            listing?.ListingTitle ?? "Deleted Product",
+            !string.IsNullOrEmpty(row.VariantDescription) 
+                ? $"{listing?.ListingTitle ?? "Deleted Product"} ({row.VariantDescription})" 
+                : (listing?.ListingTitle ?? "Deleted Product"),
             o.Status,
             o.OrderType,
             o.Quantity,
             o.RentalDays,
             o.TotalAmount,
             o.DepositAmount,
+            o.VendorSubtotalAmount,
             o.CreatedOnUtc,
             o.StartDate,
             o.EndDate,
             row.ListingPrimaryImageUrl,
-            o.IsExtended
+            o.IsExtended,
+            DoctorId: row.Doctor?.Id,
+            DoctorName: row.Doctor?.FullName,
+            DoctorSpecialization: row.Doctor?.Specialization,
+            HospitalId: row.Hospital?.Id,
+            HospitalName: row.Hospital?.Name,
+            HospitalCity: row.Hospital?.City,
+            DoctorContactNumber: row.Doctor?.ContactNumber
         ));
     }
 }
@@ -1018,8 +1028,12 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
         var listing = row.Listing;
         return Result.Success(new AdminOrderDto(
             o.Id, o.OrderNumber, o.CustomerId, o.Customer?.FullName ?? "Customer", o.Customer?.Email ?? "customer@example.com",
-            (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"), listing?.ListingTitle ?? "Deleted Product",
-            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended
+            (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"),
+            !string.IsNullOrEmpty(row.VariantDescription) 
+                ? $"{listing?.ListingTitle ?? "Deleted Product"} ({row.VariantDescription})" 
+                : (listing?.ListingTitle ?? "Deleted Product"),
+            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.VendorSubtotalAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended,
+            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: row.Hospital?.Id, HospitalName: row.Hospital?.Name, HospitalCity: row.Hospital?.City, DoctorContactNumber: row.Doctor?.ContactNumber
         ));
     }
 }
@@ -1071,8 +1085,12 @@ internal sealed class AdminForceCancelRefundOrderCommandHandler(
         var listing = row.Listing;
         return Result.Success(new AdminOrderDto(
             o.Id, o.OrderNumber, o.CustomerId, o.Customer?.FullName ?? "Customer", o.Customer?.Email ?? "customer@example.com",
-            (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"), listing?.ListingTitle ?? "Deleted Product",
-            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended
+            (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"),
+            !string.IsNullOrEmpty(row.VariantDescription) 
+                ? $"{listing?.ListingTitle ?? "Deleted Product"} ({row.VariantDescription})" 
+                : (listing?.ListingTitle ?? "Deleted Product"),
+            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.VendorSubtotalAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended,
+            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: row.Hospital?.Id, HospitalName: row.Hospital?.Name, HospitalCity: row.Hospital?.City, DoctorContactNumber: row.Doctor?.ContactNumber
         ));
     }
 }
@@ -1168,6 +1186,14 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
         await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
 
         var listingTitle = agg.ListingTitle ?? "Listing";
+        if (order.ProductVariantId.HasValue)
+        {
+            var reprocessVariant = agg.Variants.FirstOrDefault(v => v.Id == order.ProductVariantId.Value.ToString());
+            if (reprocessVariant != null)
+            {
+                listingTitle += $" ({Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(reprocessVariant.SizeValue, reprocessVariant.SizeUnit)})";
+            }
+        }
         
         await customers.AddCustomerNotificationAsync(
             new Prilixor.VendorPortal.Domain.Customers.CustomerNotification
@@ -1220,8 +1246,12 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
         var listing = row.Listing;
         return Result.Success(new AdminOrderDto(
             o.Id, o.OrderNumber, o.CustomerId, o.Customer?.FullName ?? "Customer", o.Customer?.Email ?? "customer@example.com",
-            (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"), listing?.ListingTitle ?? "Deleted Product",
-            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended
+            (o.Status == "dispatch_failed" || o.Status == "awaiting_vendor_acceptance") ? "Unassigned" : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor"),
+            !string.IsNullOrEmpty(row.VariantDescription) 
+                ? $"{listing?.ListingTitle ?? "Deleted Product"} ({row.VariantDescription})" 
+                : (listing?.ListingTitle ?? "Deleted Product"),
+            o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.VendorSubtotalAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended,
+            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: row.Hospital?.Id, HospitalName: row.Hospital?.Name, HospitalCity: row.Hospital?.City, DoctorContactNumber: row.Doctor?.ContactNumber
         ));
     }
 }

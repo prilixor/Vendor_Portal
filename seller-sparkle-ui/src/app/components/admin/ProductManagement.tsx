@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest } from "@/app/services/adminApi";
-import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import {
@@ -39,6 +39,7 @@ const ProductManagement = () => {
     prescriptionRequired: false,
     depositRequired: false,
     installationRequired: false,
+    isChemical: false,
     isActive: true,
   });
   
@@ -66,7 +67,6 @@ const ProductManagement = () => {
   const [newImageUrl, setNewImageUrl] = useState("");
   const [newImageIsPrimary, setNewImageIsPrimary] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
-  
   // Excel upload state
   const [excelDialogOpen, setExcelDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -74,7 +74,7 @@ const ProductManagement = () => {
   // Status confirmation state
   const [statusConfirmId, setStatusConfirmId] = useState<string | null>(null);
   const [statusConfirmAction, setStatusConfirmAction] = useState<'activate' | 'deactivate' | null>(null);
-  
+
   // Delete confirmation state
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   
@@ -82,6 +82,8 @@ const ProductManagement = () => {
   const [categoryStatusConfirmId, setCategoryStatusConfirmId] = useState<string | null>(null);
   const [categoryStatusConfirmAction, setCategoryStatusConfirmAction] = useState<'activate' | 'deactivate' | null>(null);
   const [categoryDeleteConfirmId, setCategoryDeleteConfirmId] = useState<string | null>(null);
+
+  const isChemical = false; // Add this line to fix the ReferenceError
 
   useEffect(() => {
     loadData();
@@ -105,12 +107,18 @@ const ProductManagement = () => {
   };
 
   const filteredCategories = categories.filter((c) => {
+    const isChem = c.isChemical;
+    if (isChem) return false;
+
     const matchesSearch = !search || c.categoryName.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? c.isActive : !c.isActive);
     return matchesSearch && matchesStatus;
   });
 
   const filteredProducts = products.filter((p) => {
+    const isChem = p.baseUnit != null;
+    if (isChem) return false; // Hide chemicals in Equipment tab
+
     const matchesSearch = !search || 
       p.productName.toLowerCase().includes(search.toLowerCase()) ||
       p.brandName?.toLowerCase().includes(search.toLowerCase()) ||
@@ -146,6 +154,7 @@ const ProductManagement = () => {
         prescriptionRequired: category.prescriptionRequired,
         depositRequired: category.depositRequired,
         installationRequired: category.installationRequired,
+        isChemical: category.isChemical,
         isActive: action === 'activate',
       });
 
@@ -214,6 +223,7 @@ const ProductManagement = () => {
         prescriptionRequired: category.prescriptionRequired,
         depositRequired: category.depositRequired,
         installationRequired: category.installationRequired,
+        isChemical: category.isChemical,
         isActive: category.isActive,
       });
     } else {
@@ -223,6 +233,7 @@ const ProductManagement = () => {
         prescriptionRequired: false,
         depositRequired: false,
         installationRequired: false,
+        isChemical: false,
         isActive: true,
       });
     }
@@ -306,6 +317,10 @@ const ProductManagement = () => {
         monthlyRent: product.monthlyRent,
         securityDeposit: product.securityDeposit,
         buyPrice: product.buyPrice,
+        vendorDailyRent: product.vendorDailyRent || 0,
+        vendorMonthlyRent: product.vendorMonthlyRent || 0,
+        vendorSecurityDeposit: product.vendorSecurityDeposit || 0,
+        vendorBuyPrice: product.vendorBuyPrice,
         gstPercent: product.gstPercent,
         isRentEnabled: product.isRentEnabled,
         isBuyEnabled: product.isBuyEnabled,
@@ -325,6 +340,10 @@ const ProductManagement = () => {
         monthlyRent: 0,
         securityDeposit: 0,
         buyPrice: undefined,
+        vendorDailyRent: 0,
+        vendorMonthlyRent: 0,
+        vendorSecurityDeposit: 0,
+        vendorBuyPrice: undefined,
         gstPercent: 18,
         isRentEnabled: true,
         isBuyEnabled: true,
@@ -419,14 +438,17 @@ const ProductManagement = () => {
   const saveProduct = async () => {
     try {
       setLoading(true);
+      
+      const payload = { ...productForm };
+
       if (editingProduct) {
         await adminApi.updateProduct(editingProduct.id, {
-          ...productForm,
+          ...payload,
           id: editingProduct.id,
         });
         toast.success("Product updated");
       } else {
-        await adminApi.createProduct(productForm);
+        await adminApi.createProduct(payload);
         toast.success("Product created");
       }
       setProductDialogOpen(false);
@@ -484,7 +506,7 @@ const ProductManagement = () => {
 
     try {
       setLoading(true);
-      const result = await adminApi.uploadCatalogExcel(file);
+      const result = await adminApi.uploadCatalogExcel(file, false);
       
       if (result.success) {
         toast.success(`Excel uploaded successfully: ${result.categoriesCreated} categories, ${result.productsCreated} products created.`);
@@ -508,25 +530,22 @@ const ProductManagement = () => {
 
   const downloadSampleExcel = () => {
     try {
-      // Create workbook with two sheets
       const wb = XLSX.utils.book_new();
 
-      // Categories sheet - headers only
       const categoriesHeaders = [
         ["category_name", "prescription_required", "deposit_required", "installation_required", "is_active"]
       ];
       const categoriesWs = XLSX.utils.aoa_to_sheet(categoriesHeaders);
       XLSX.utils.book_append_sheet(wb, categoriesWs, "Categories");
 
-      // Products sheet - headers only
       const productsHeaders = [
-        ["category_name", "product_name", "brand_name", "model_name", "short_description", "long_description", "daily_rent", "monthly_rent", "security_deposit", "buy_price", "gst_percent", "is_rent_enabled", "is_buy_enabled", "is_active"]
+        ["category_name", "product_name", "brand_name", "model_name", "short_description", "long_description", "daily_rent", "monthly_rent", "security_deposit", "buy_price", "gst_percent", "is_rent_enabled", "is_buy_enabled", "is_active", "vendor_daily_rent", "vendor_monthly_rent", "vendor_security_deposit", "vendor_buy_price"]
       ];
+      
       const productsWs = XLSX.utils.aoa_to_sheet(productsHeaders);
       XLSX.utils.book_append_sheet(wb, productsWs, "Products");
 
-      // Download file
-      XLSX.writeFile(wb, "catalog_template.xlsx");
+      XLSX.writeFile(wb, `catalog_template_equipment.xlsx`);
       toast.success("Sample template downloaded");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to download template.";
@@ -537,7 +556,7 @@ const ProductManagement = () => {
   const downloadExistingData = async () => {
     try {
       setLoading(true);
-      await adminApi.downloadCatalogExcel();
+      await adminApi.downloadCatalogExcel(false);
       toast.success("Catalog data downloaded");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to download catalog data.";
@@ -547,58 +566,173 @@ const ProductManagement = () => {
     }
   };
 
+  const renderProductGrid = () => (
+    loading ? (
+      <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0 animate-pulse">
+        <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
+          <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+            <tr>
+              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-32" /></th>
+              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-24" /></th>
+              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>
+              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>
+              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
+              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-12" /></th>
+              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
+              <th className="px-4 py-3 font-semibold text-center"><Skeleton className="h-3 w-12 mx-auto" /></th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <tr key={i} className="hover:bg-muted/20">
+                <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+                <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                {activeTab === "equipment" && <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>}
+                <td className="px-4 py-3"><Skeleton className="h-6 w-12 rounded" /></td>
+                <td className="px-4 py-3"><Skeleton className="h-4 w-12" /></td>
+                <td className="px-4 py-3"><Skeleton className="h-6 w-12 rounded" /></td>
+                <td className="px-4 py-3 text-center"><Skeleton className="h-6 w-12 rounded mx-auto" /></td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex justify-end gap-1">
+                    <Skeleton className="h-8 w-8 rounded" />
+                    <Skeleton className="h-8 w-8 rounded" />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
+        <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
+          <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Product Name</th>
+              <th className="px-4 py-3 font-semibold">Category</th>
+              <th className="px-4 py-3 font-semibold">Brand</th>
+              {activeTab === "equipment" && <th className="px-4 py-3 font-semibold">Model</th>}
+              <th className="px-4 py-3 font-semibold">{activeTab === "equipment" ? "Daily" : "Buy Price"}</th>
+              <th className="px-4 py-3 font-semibold">GST %</th>
+              <th className="px-4 py-3 font-semibold">Status</th>
+              <th className="px-4 py-3 font-semibold text-center">Favorites</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {filteredProducts.map((p) => (
+              <tr key={p.id} className="hover:bg-muted/20">
+                <td className="px-4 py-3 font-medium">{p.productName}</td>
+                <td className="px-4 py-3 text-muted-foreground">{getCategoryName(p.categoryId)}</td>
+                <td className="px-4 py-3">{p.brandName || "-"}</td>
+                {activeTab === "equipment" && <td className="px-4 py-3">{p.modelName || "-"}</td>}
+                <td className="px-4 py-3">₹{(activeTab === "equipment" ? p.dailyRent : (p.buyPrice || 0)).toFixed(0)}</td>
+                <td className="px-4 py-3">{p.gstPercent.toFixed(0)}%</td>
+                <td className="px-4 py-3">
+                  <Switch
+                    checked={p.isActive}
+                    onCheckedChange={() => toggleProductStatus(p.id, p.isActive)}
+                    disabled={loading}
+                  />
+                </td>
+                <td className="px-4 py-3 text-center">
+                  {p.favoriteCount > 0 ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="inline-flex items-center justify-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+                            ❤️ {p.favoriteCount}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <p>Favorited by {p.favoriteCount} {p.favoriteCount === 1 ? 'customer' : 'customers'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex justify-end gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => openProductDialog(p)} disabled={loading}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => deleteProduct(p.id)} disabled={loading}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {filteredProducts.length === 0 && (
+              <tr>
+                <td colSpan={activeTab === "equipment" ? 9 : 8} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  No products found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    )
+  );
+
   return (
     <div>
       <PageHeader
         title="Products Management"
         description="Manage product categories and products for the marketplace catalog."
-        actions={
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" disabled={loading} className="w-full sm:w-auto justify-center">
-                  <Download className="mr-2 h-4 w-4 shrink-0" />
-                  <span className="hidden sm:inline">Download Excel</span>
-                  <span className="sm:hidden">Download</span>
-                  <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] sm:w-auto max-w-sm">
-                <DropdownMenuItem onClick={downloadSampleExcel}>
-                  <FileDown className="mr-2 h-4 w-4 shrink-0" />
-                  <span className="truncate">Download Sample Excel</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={downloadExistingData}>
-                  <Database className="mr-2 h-4 w-4 shrink-0" />
-                  <span className="truncate">Download Existing Data Excel</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button onClick={() => setExcelDialogOpen(true)} disabled={loading} className="w-full sm:w-auto">
-              <Upload className="mr-2 h-4 w-4 shrink-0" />
-              <span className="hidden sm:inline">Upload Excel</span>
-              <span className="sm:hidden">Upload</span>
-            </Button>
-          </div>
-        }
       />
 
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-4 w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
-            <TabsTrigger value="categories" className="text-xs sm:text-sm">
-              <FolderTree className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
-              <span className="truncate">Categories</span>
-              <span className="hidden sm:inline ml-1">({categories.length})</span>
-            </TabsTrigger>
-            <TabsTrigger value="products" className="text-xs sm:text-sm">
-              <Package className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
-              <span className="truncate">Products</span>
-              <span className="hidden sm:inline ml-1">({products.length})</span>
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 border-b border-border pb-4">
+            <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
+              <TabsTrigger value="categories" className="text-xs sm:text-sm">
+                <FolderTree className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate">Categories</span>
+                <span className="hidden sm:inline ml-1">({categories.filter(c => !c.isChemical).length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="equipment" className="text-xs sm:text-sm">
+                <Package className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate">Equipment</span>
+                <span className="hidden sm:inline ml-1">({products.filter(p => p.baseUnit == null).length})</span>
+              </TabsTrigger>
+            </TabsList>
 
-          <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="mt-4 sm:mt-0 flex gap-2 w-full sm:w-auto">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={loading} className="w-full sm:w-auto justify-center">
+                    <Download className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="hidden sm:inline">Download Excel</span>
+                    <span className="sm:hidden">Download</span>
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] sm:w-auto max-w-sm">
+                  <DropdownMenuItem onClick={downloadSampleExcel}>
+                    <FileDown className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">Download Sample Excel</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={downloadExistingData}>
+                    <Database className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">Download Existing Data Excel</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="outline" onClick={() => setExcelDialogOpen(true)} disabled={loading} className="w-full sm:w-auto">
+                <Upload className="mr-2 h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Upload Excel</span>
+                <span className="sm:hidden">Upload</span>
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between -mx-4 sm:-mx-6 lg:-mx-8 border-b border-border bg-muted/10 mb-4 px-4 sm:px-6 lg:px-8">
             <div className="relative w-full sm:max-w-xs">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -609,7 +743,7 @@ const ProductManagement = () => {
               />
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-              {activeTab === "products" && (
+              {activeTab === "equipment" && (
                 <div className="flex items-center space-x-2 mr-2">
                   <Switch id="favorites-only" checked={showFavoritesOnly} onCheckedChange={setShowFavoritesOnly} />
                   <Label htmlFor="favorites-only" className="text-sm cursor-pointer whitespace-nowrap">Favorites Only</Label>
@@ -627,7 +761,7 @@ const ProductManagement = () => {
               </Select>
               <Button onClick={() => activeTab === "categories" ? openCategoryDialog() : openProductDialog()} disabled={loading} className="w-full sm:w-auto whitespace-nowrap">
                 <Plus className="mr-2 h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">New {activeTab === "categories" ? "Category" : "Product"}</span>
+                <span className="hidden sm:inline">New {activeTab === "categories" ? "Category" : "Equipment"}</span>
                 <span className="sm:hidden">New</span>
               </Button>
             </div>
@@ -728,134 +862,8 @@ const ProductManagement = () => {
             )}
           </TabsContent>
 
-          <TabsContent value="products" className="mt-4">
-            {loading ? (
-              <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0 animate-pulse">
-                <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
-                  <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-32" /></th>
-                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-24" /></th>
-                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>
-                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>
-                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
-                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-12" /></th>
-                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
-                      <th className="px-4 py-3 font-semibold text-center"><Skeleton className="h-3 w-12 mx-auto" /></th>
-                      <th className="px-4 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <tr key={i} className="hover:bg-muted/20">
-                        <td className="px-4 py-3">
-                          <Skeleton className="h-4 w-32" />
-                        </td>
-                        <td className="px-4 py-3">
-                          <Skeleton className="h-4 w-24" />
-                        </td>
-                        <td className="px-4 py-3">
-                          <Skeleton className="h-4 w-20" />
-                        </td>
-                        <td className="px-4 py-3">
-                          <Skeleton className="h-4 w-20" />
-                        </td>
-                        <td className="px-4 py-3">
-                          <Skeleton className="h-6 w-12 rounded" />
-                        </td>
-                        <td className="px-4 py-3">
-                          <Skeleton className="h-4 w-12" />
-                        </td>
-                        <td className="px-4 py-3">
-                          <Skeleton className="h-6 w-12 rounded" />
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <Skeleton className="h-6 w-12 rounded mx-auto" />
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-1">
-                            <Skeleton className="h-8 w-8 rounded" />
-                            <Skeleton className="h-8 w-8 rounded" />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
-                <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
-                  <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold">Product Name</th>
-                      <th className="px-4 py-3 font-semibold">Category</th>
-                      <th className="px-4 py-3 font-semibold">Brand</th>
-                      <th className="px-4 py-3 font-semibold">Model</th>
-                      <th className="px-4 py-3 font-semibold">Daily</th>
-                      <th className="px-4 py-3 font-semibold">GST %</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 font-semibold text-center">Favorites</th>
-                      <th className="px-4 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {filteredProducts.map((p) => (
-                      <tr key={p.id} className="hover:bg-muted/20">
-                        <td className="px-4 py-3 font-medium">{p.productName}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{getCategoryName(p.categoryId)}</td>
-                        <td className="px-4 py-3">{p.brandName || "-"}</td>
-                        <td className="px-4 py-3">{p.modelName || "-"}</td>
-                        <td className="px-4 py-3">₹{p.dailyRent.toFixed(0)}</td>
-                        <td className="px-4 py-3">{p.gstPercent.toFixed(0)}%</td>
-                        <td className="px-4 py-3">
-                          <Switch
-                            checked={p.isActive}
-                            onCheckedChange={() => toggleProductStatus(p.id, p.isActive)}
-                            disabled={loading}
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {p.favoriteCount > 0 ? (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="inline-flex items-center justify-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
-                                    ❤️ {p.favoriteCount}
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">
-                                  <p>Favorited by {p.favoriteCount} {p.favoriteCount === 1 ? 'customer' : 'customers'}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => openProductDialog(p)} disabled={loading}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => deleteProduct(p.id)} disabled={loading}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredProducts.length === 0 && (
-                      <tr>
-                        <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                          No products found.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          <TabsContent value="equipment" className="mt-4">
+            {renderProductGrid()}
           </TabsContent>
         </Tabs>
       </Card>
@@ -1197,6 +1205,7 @@ const ProductManagement = () => {
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-1.5">
                 <Label>Product Name</Label>
                 <Input
@@ -1237,38 +1246,81 @@ const ProductManagement = () => {
                   placeholder="Detailed product description"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label>Daily Rent (INR)</Label>
-                <Input
-                  type="number"
-                  value={productForm.dailyRent}
-                  onChange={(e) => setProductForm({ ...productForm, dailyRent: Number(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Monthly Rent (INR)</Label>
-                <Input
-                  type="number"
-                  value={productForm.monthlyRent}
-                  onChange={(e) => setProductForm({ ...productForm, monthlyRent: Number(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Security Deposit (INR)</Label>
-                <Input
-                  type="number"
-                  value={productForm.securityDeposit}
-                  onChange={(e) => setProductForm({ ...productForm, securityDeposit: Number(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Buy Price (INR, optional)</Label>
-                <Input
-                  type="number"
-                  value={productForm.buyPrice ?? ""}
-                  onChange={(e) => setProductForm({ ...productForm, buyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
-                />
-              </div>
+              {!isChemical && (
+                <>
+                  <div className="space-y-1.5 sm:col-span-2 border-t pt-4">
+                    <h4 className="font-semibold text-sm text-indigo-600 dark:text-indigo-400">Customer Pricing (Admin Side)</h4>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Daily Rent (INR)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.dailyRent}
+                      onChange={(e) => setProductForm({ ...productForm, dailyRent: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Monthly Rent (INR)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.monthlyRent}
+                      onChange={(e) => setProductForm({ ...productForm, monthlyRent: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Security Deposit (INR)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.securityDeposit}
+                      onChange={(e) => setProductForm({ ...productForm, securityDeposit: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Buy Price (INR, optional)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.buyPrice ?? ""}
+                      onChange={(e) => setProductForm({ ...productForm, buyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 sm:col-span-2 border-t pt-4">
+                    <h4 className="font-semibold text-sm text-emerald-600 dark:text-emerald-400">Vendor Payout Pricing (Set by Admin)</h4>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Vendor Daily Rent (INR)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.vendorDailyRent}
+                      onChange={(e) => setProductForm({ ...productForm, vendorDailyRent: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Vendor Monthly Rent (INR)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.vendorMonthlyRent}
+                      onChange={(e) => setProductForm({ ...productForm, vendorMonthlyRent: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Vendor Security Deposit (INR)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.vendorSecurityDeposit}
+                      onChange={(e) => setProductForm({ ...productForm, vendorSecurityDeposit: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Vendor Buy Price (INR, optional)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.vendorBuyPrice ?? ""}
+                      onChange={(e) => setProductForm({ ...productForm, vendorBuyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
+                    />
+                  </div>
+                </>
+              )}
               <div className="space-y-1.5">
                 <Label>GST %</Label>
                 <Input
@@ -1277,24 +1329,28 @@ const ProductManagement = () => {
                   onChange={(e) => setProductForm({ ...productForm, gstPercent: Number(e.target.value) || 0 })}
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isRentEnabled"
-                  checked={productForm.isRentEnabled}
-                  onChange={(e) => setProductForm({ ...productForm, isRentEnabled: e.target.checked })}
-                />
-                <Label htmlFor="isRentEnabled">Rent Enabled</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isBuyEnabled"
-                  checked={productForm.isBuyEnabled}
-                  onChange={(e) => setProductForm({ ...productForm, isBuyEnabled: e.target.checked })}
-                />
-                <Label htmlFor="isBuyEnabled">Buy Enabled</Label>
-              </div>
+              {!isChemical && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="isRentEnabled"
+                      checked={productForm.isRentEnabled}
+                      onChange={(e) => setProductForm({ ...productForm, isRentEnabled: e.target.checked })}
+                    />
+                    <Label htmlFor="isRentEnabled">Rent Enabled</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="isBuyEnabled"
+                      checked={productForm.isBuyEnabled}
+                      onChange={(e) => setProductForm({ ...productForm, isBuyEnabled: e.target.checked })}
+                    />
+                    <Label htmlFor="isBuyEnabled">Buy Enabled</Label>
+                  </div>
+                </>
+              )}
               <div className="flex items-center gap-2 sm:col-span-2">
                 <input
                   type="checkbox"

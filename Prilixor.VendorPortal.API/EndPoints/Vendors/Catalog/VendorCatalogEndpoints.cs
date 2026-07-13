@@ -12,6 +12,7 @@ public sealed class CreateProductCategoryRequest
     public bool PrescriptionRequired { get; set; }
     public bool DepositRequired { get; set; }
     public bool InstallationRequired { get; set; }
+    public bool IsChemical { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -97,6 +98,7 @@ public sealed class CreateProductCategoryEndpoint(IMediator mediator)
             req.PrescriptionRequired,
             req.DepositRequired,
             req.InstallationRequired,
+            req.IsChemical,
             req.IsActive), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
@@ -141,10 +143,15 @@ public sealed class CreateProductEndpoint(IMediator mediator)
             0m,
             0m,
             null,
+            0m, // VendorDailyRent
+            0m, // VendorMonthlyRent
+            0m, // VendorSecurityDeposit
+            null, // VendorBuyPrice
             18m,
             true,
             true,
-            req.IsActive), ct);
+            req.IsActive,
+            null), ct); // Variants
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }

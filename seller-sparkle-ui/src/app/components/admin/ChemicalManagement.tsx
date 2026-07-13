@@ -1,0 +1,1847 @@
+import { useState, useEffect, useRef } from "react";
+import { PageHeader } from "@/app/components/shared/PageHeader";
+import { Card } from "@/app/components/ui/card";
+import { Button } from "@/app/components/ui/button";
+import { Input } from "@/app/components/ui/input";
+import { Label } from "@/app/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { Switch } from "@/app/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
+import { FormGrid } from "@/app/components/shared/FormGrid";
+import { Skeleton } from "@/app/components/ui/skeleton";
+import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest } from "@/app/services/adminApi";
+import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown, FlaskConical } from "lucide-react";
+import { toast } from "sonner";
+import * as XLSX from "xlsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/app/components/ui/dropdown-menu";
+
+type ChemSize = { sizeValue: number; sizeUnit: string; buyPrice: number };
+
+/**
+ * Chemical buy price shown as a tap/click disclosure. Chemicals price per packaging size
+ * (variant), so the product-level buy_price is 0 — instead we show the range across the
+ * active variants and expand to the full per-size breakdown (scrolls for many sizes).
+ */
+const ChemPriceDisclosure = ({ label, count, sizes }: { label: string; count: number; sizes: ChemSize[] }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1 text-sm font-medium text-foreground"
+      >
+        <span className="tabular-nums">{label}</span>
+        <span className="text-xs font-normal text-muted-foreground">
+          · {count} {count === 1 ? "size" : "sizes"}
+        </span>
+        <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="mt-1 max-h-52 w-full max-w-[16rem] divide-y divide-border/40 overflow-auto rounded-md border border-border/60">
+          {sizes.map((v, i) => (
+            <div key={i} className="flex items-center justify-between gap-6 px-2.5 py-1 text-xs">
+              <span className="text-muted-foreground">
+                {v.sizeValue} {v.sizeUnit}
+              </span>
+              <span className="font-medium tabular-nums">₹{v.buyPrice.toLocaleString("en-IN")}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ChemicalManagement = () => {
+  const [categories, setCategories] = useState<ProductCategoryDto[]>([]);
+  const [products, setProducts] = useState<ProductDto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("chemical");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  
+  // Category dialog state
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<ProductCategoryDto | null>(null);
+  const [categoryForm, setCategoryForm] = useState<CreateProductCategoryRequest>({
+    categoryName: "",
+    prescriptionRequired: false,
+    depositRequired: false,
+    installationRequired: false,
+    isChemical: true,
+    isActive: true,
+  });
+  
+  // Product dialog state
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductDto | null>(null);
+  const [productForm, setProductForm] = useState<CreateProductRequest>({
+    categoryId: "",
+    productName: "",
+    brandName: "",
+    modelName: "",
+    shortDescription: "",
+    longDescription: "",
+    dailyRent: 0,
+    monthlyRent: 0,
+    securityDeposit: 0,
+    buyPrice: undefined,
+    vendorDailyRent: 0,
+    vendorMonthlyRent: 0,
+    vendorSecurityDeposit: 0,
+    vendorBuyPrice: undefined,
+    gstPercent: 18,
+    isRentEnabled: true,
+    isBuyEnabled: true,
+    isActive: true,
+  });
+  const [productImages, setProductImages] = useState<ProductImageDto[]>([]);
+  const [productImagesLoading, setProductImagesLoading] = useState(false);
+  const [newImageUrl, setNewImageUrl] = useState("");
+  const [newImageIsPrimary, setNewImageIsPrimary] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [isChemical, setIsChemical] = useState(true);
+  
+  // Excel upload state
+  const [excelDialogOpen, setExcelDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Status confirmation state
+  const [statusConfirmId, setStatusConfirmId] = useState<string | null>(null);
+  const [statusConfirmAction, setStatusConfirmAction] = useState<'activate' | 'deactivate' | null>(null);
+  
+  // Delete confirmation state
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  
+  // Category confirmation state
+  const [categoryStatusConfirmId, setCategoryStatusConfirmId] = useState<string | null>(null);
+  const [categoryStatusConfirmAction, setCategoryStatusConfirmAction] = useState<'activate' | 'deactivate' | null>(null);
+  const [categoryDeleteConfirmId, setCategoryDeleteConfirmId] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [categoriesRes, productsRes] = await Promise.all([
+        adminApi.getProductCategories(),
+        adminApi.getProducts(),
+      ]);
+      setCategories(categoriesRes);
+      setProducts(productsRes);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load catalog data.";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredCategories = categories.filter((c) => {
+    const isChem = c.isChemical;
+    if (!isChem) return false;
+
+    const matchesSearch = !search || c.categoryName.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? c.isActive : !c.isActive);
+    return matchesSearch && matchesStatus;
+  });
+
+  const filteredProducts = products.filter((p) => {
+    const isChem = p.baseUnit != null;
+    if (!isChem) return false;
+
+    const matchesSearch = !search || 
+      p.productName.toLowerCase().includes(search.toLowerCase()) ||
+      p.brandName?.toLowerCase().includes(search.toLowerCase()) ||
+      p.modelName?.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? p.isActive : !p.isActive);
+    const matchesFavorites = !showFavoritesOnly || p.favoriteCount > 0;
+    return matchesSearch && matchesStatus && matchesFavorites;
+  });
+
+  const getCategoryName = (categoryId: string) => {
+    const category = categories.find((c) => c.id === categoryId);
+    return category?.categoryName || "Unknown";
+  };
+
+  const getChemPricing = (product: ProductDto) => {
+    const active = (product.variants || []).filter(
+      (v) => v.isActive !== false && typeof v.buyPrice === "number" && v.buyPrice > 0
+    );
+    if (active.length === 0) return null;
+    const prices = active.map((v) => v.buyPrice);
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const label =
+      min === max
+        ? `₹${min.toLocaleString("en-IN")}`
+        : `₹${min.toLocaleString("en-IN")} – ₹${max.toLocaleString("en-IN")}`;
+    const sizes: ChemSize[] = active
+      .slice()
+      .sort((a, b) => (a.sizeValue ?? 0) - (b.sizeValue ?? 0))
+      .map((v) => ({ sizeValue: v.sizeValue, sizeUnit: v.sizeUnit, buyPrice: v.buyPrice }));
+    return { label, sizes, count: active.length };
+  };
+
+  const toggleCategoryStatus = async (id: string, currentStatus: boolean) => {
+    const category = categories.find((c) => c.id === id);
+    if (!category) return;
+
+    const newStatus = !currentStatus;
+    setCategoryStatusConfirmId(id);
+    setCategoryStatusConfirmAction(newStatus ? 'activate' : 'deactivate');
+  };
+
+  const confirmCategoryStatusChange = async (id: string, action: 'activate' | 'deactivate') => {
+    const category = categories.find((c) => c.id === id);
+    if (!category) return;
+
+    try {
+      setLoading(true);
+      const updated = await adminApi.updateProductCategory(id, {
+        id,
+        categoryName: category.categoryName,
+        prescriptionRequired: category.prescriptionRequired,
+        depositRequired: category.depositRequired,
+        installationRequired: category.installationRequired,
+        isChemical: category.isChemical,
+        isActive: action === 'activate',
+      });
+
+      setCategories(categories.map((c) => (c.id === id ? updated : c)));
+      toast.success(`Category ${action}d successfully`);
+      setCategoryStatusConfirmId(null);
+      setCategoryStatusConfirmAction(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update category status.";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleProductStatus = async (id: string, currentStatus: boolean) => {
+    const product = products.find((p) => p.id === id);
+    if (!product) return;
+
+    const newStatus = !currentStatus;
+    setStatusConfirmId(id);
+    setStatusConfirmAction(newStatus ? 'activate' : 'deactivate');
+  };
+
+  const confirmStatusChange = async (id: string, action: 'activate' | 'deactivate') => {
+    const product = products.find((p) => p.id === id);
+    if (!product) return;
+
+    try {
+      setLoading(true);
+      const updated = await adminApi.updateProduct(id, {
+        id,
+        categoryId: product.categoryId,
+        productName: product.productName,
+        brandName: product.brandName,
+        modelName: product.modelName,
+        shortDescription: product.shortDescription,
+        longDescription: product.longDescription,
+        dailyRent: product.dailyRent,
+        monthlyRent: product.monthlyRent,
+        securityDeposit: product.securityDeposit,
+        buyPrice: product.buyPrice,
+        gstPercent: product.gstPercent,
+        isRentEnabled: product.isRentEnabled,
+        isBuyEnabled: product.isBuyEnabled,
+        isActive: action === 'activate',
+      });
+
+      setProducts(products.map((p) => (p.id === id ? updated : p)));
+      toast.success(`Product ${action}d successfully`);
+      setStatusConfirmId(null);
+      setStatusConfirmAction(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update product status.";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openCategoryDialog = (category?: ProductCategoryDto) => {
+    if (category) {
+      setEditingCategory(category);
+      setCategoryForm({
+        categoryName: category.categoryName,
+        prescriptionRequired: category.prescriptionRequired,
+        depositRequired: category.depositRequired,
+        installationRequired: category.installationRequired,
+        isChemical: category.isChemical,
+        isActive: category.isActive,
+      });
+    } else {
+      setEditingCategory(null);
+      setCategoryForm({
+        categoryName: "",
+        prescriptionRequired: false,
+        depositRequired: false,
+        installationRequired: false,
+        isChemical: true,
+        isActive: true,
+      });
+    }
+    setCategoryDialogOpen(true);
+  };
+
+  const saveCategory = async () => {
+    try {
+      setLoading(true);
+      if (editingCategory) {
+        await adminApi.updateProductCategory(editingCategory.id, {
+          ...categoryForm,
+          id: editingCategory.id,
+        });
+        toast.success("Category updated");
+      } else {
+        await adminApi.createProductCategory(categoryForm);
+        toast.success("Category created");
+      }
+      setCategoryDialogOpen(false);
+      await loadData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save category.";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteCategory = async (id: string) => {
+    const category = categories.find((c) => c.id === id);
+    if (!category) return;
+
+    // Show confirmation
+    setCategoryDeleteConfirmId(id);
+  };
+
+  const confirmCategoryDelete = async (id: string) => {
+    try {
+      setLoading(true);
+      await adminApi.deleteProductCategory(id);
+      toast.success("Category deleted");
+      await loadData();
+      setCategoryDeleteConfirmId(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete category.";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadProductImages = async (productId: string, silent = false) => {
+    try {
+      setProductImagesLoading(true);
+      const images = await adminApi.getProductImages(productId);
+      setProductImages(images);
+      setNewImageIsPrimary(images.length === 0);
+    } catch (error) {
+      if (!silent) {
+        const message = error instanceof Error ? error.message : "Failed to load product images.";
+        toast.error(message);
+      }
+      setProductImages([]);
+    } finally {
+      setProductImagesLoading(false);
+    }
+  };
+
+  const openProductDialog = (product?: ProductDto) => {
+    if (product) {
+      setEditingProduct(product);
+      setProductForm({
+        categoryId: product.categoryId,
+        productName: product.productName,
+        brandName: product.brandName,
+        modelName: product.modelName,
+        shortDescription: product.shortDescription,
+        longDescription: product.longDescription,
+        dailyRent: product.dailyRent,
+        monthlyRent: product.monthlyRent,
+        securityDeposit: product.securityDeposit,
+        buyPrice: product.buyPrice,
+        vendorDailyRent: product.vendorDailyRent || 0,
+        vendorMonthlyRent: product.vendorMonthlyRent || 0,
+        vendorSecurityDeposit: product.vendorSecurityDeposit || 0,
+        vendorBuyPrice: product.vendorBuyPrice,
+        gstPercent: product.gstPercent,
+        isRentEnabled: product.isRentEnabled,
+        isBuyEnabled: product.isBuyEnabled,
+        isActive: product.isActive,
+        casNumber: product.casNumber,
+        chemicalFormula: product.chemicalFormula,
+        purityPercentage: product.purityPercentage,
+        molecularWeight: product.molecularWeight,
+        baseUnit: product.baseUnit,
+        sdsDocumentUrl: product.sdsDocumentUrl,
+        coaDocumentUrl: product.coaDocumentUrl,
+        variants: product.variants || [],
+      });
+      setProductImages(product.images || []);
+      setNewImageUrl("");
+      setNewImageIsPrimary(false);
+      setIsChemical(true);
+      void loadProductImages(product.id, true);
+    } else {
+      setEditingProduct(null);
+      setProductForm({
+        categoryId: "",
+        productName: "",
+        brandName: "",
+        modelName: "",
+        shortDescription: "",
+        longDescription: "",
+        dailyRent: 0,
+        monthlyRent: 0,
+        securityDeposit: 0,
+        buyPrice: undefined,
+        vendorDailyRent: 0,
+        vendorMonthlyRent: 0,
+        vendorSecurityDeposit: 0,
+        vendorBuyPrice: undefined,
+        gstPercent: 18,
+        isRentEnabled: false,
+        isBuyEnabled: true,
+        isActive: true,
+        casNumber: "",
+        chemicalFormula: "",
+        purityPercentage: undefined,
+        molecularWeight: undefined,
+        baseUnit: "",
+        sdsDocumentUrl: "",
+        coaDocumentUrl: "",
+        variants: [],
+      });
+      setIsChemical(true);
+      setProductImages([]);
+      setNewImageUrl("");
+      setNewImageIsPrimary(false);
+    }
+    setProductDialogOpen(true);
+  };
+
+  const addProductImageFromValue = async (imageRef: string) => {
+    if (!editingProduct) {
+      toast.error("Save product first, then add images.");
+      return;
+    }
+
+    const normalized = imageRef.trim();
+    if (!normalized) {
+      toast.error("Please enter image URL or upload an image.");
+      return;
+    }
+
+    try {
+      setProductImagesLoading(true);
+      await adminApi.addProductImage(editingProduct.id, {
+        imageUrl: normalized,
+        displayOrder: Math.max(1, productImages.length + 1),
+        isPrimary: newImageIsPrimary || productImages.length === 0,
+      });
+      setNewImageUrl("");
+      await loadProductImages(editingProduct.id);
+      toast.success("Product image added");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to add product image.";
+      toast.error(message);
+    } finally {
+      setProductImagesLoading(false);
+    }
+  };
+
+  const handleProductImageUpload = async (file?: File) => {
+    if (!file) return;
+    if (!editingProduct) {
+      toast.error("Save product first, then upload images.");
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
+      const upload = await adminApi.uploadProductImageFile(file);
+      await addProductImageFromValue(upload.storageKey?.trim() || upload.fileUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to upload image.";
+      toast.error(message);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const deleteProductImage = async (imageId: string) => {
+    if (!editingProduct) return;
+    try {
+      setProductImagesLoading(true);
+      await adminApi.deleteProductImage(editingProduct.id, imageId);
+      await loadProductImages(editingProduct.id);
+      toast.success("Product image deleted");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete product image.";
+      toast.error(message);
+    } finally {
+      setProductImagesLoading(false);
+    }
+  };
+
+  const setPrimaryProductImage = async (imageId: string) => {
+    if (!editingProduct) return;
+    try {
+      setProductImagesLoading(true);
+      await adminApi.setPrimaryProductImage(editingProduct.id, imageId);
+      await loadProductImages(editingProduct.id);
+      toast.success("Primary image updated");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to set primary image.";
+      toast.error(message);
+    } finally {
+      setProductImagesLoading(false);
+    }
+  };
+
+  const saveProduct = async () => {
+    try {
+      setLoading(true);
+      
+      const payload = { ...productForm };
+      if (isChemical) {
+        payload.isRentEnabled = false;
+        payload.isBuyEnabled = true;
+      } else {
+        payload.casNumber = "";
+        payload.chemicalFormula = "";
+        payload.purityPercentage = undefined;
+        payload.molecularWeight = undefined;
+        payload.baseUnit = "";
+        payload.sdsDocumentUrl = "";
+        payload.coaDocumentUrl = "";
+      }
+
+      if (editingProduct) {
+        await adminApi.updateProduct(editingProduct.id, {
+          ...payload,
+          id: editingProduct.id,
+        });
+        toast.success("Product updated");
+      } else {
+        await adminApi.createProduct(payload);
+        toast.success("Product created");
+      }
+      setProductDialogOpen(false);
+      await loadData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save product.";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteProduct = async (id: string) => {
+    const product = products.find((p) => p.id === id);
+    if (!product) return;
+
+    // If already confirming for this product, execute the deletion
+    if (deleteConfirmId === id) {
+      try {
+        setLoading(true);
+        await adminApi.deleteProduct(id);
+        toast.success("Product deleted");
+        await loadData();
+        setDeleteConfirmId(null);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to delete product.";
+        toast.error(message);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Show confirmation
+      setDeleteConfirmId(id);
+    }
+  };
+
+  const confirmDelete = async (id: string) => {
+    try {
+      setLoading(true);
+      await adminApi.deleteProduct(id);
+      toast.success("Product deleted");
+      await loadData();
+      setDeleteConfirmId(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete product.";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setLoading(true);
+      const result = await adminApi.uploadCatalogExcel(file, true);
+      
+      if (result.success) {
+        toast.success(`Excel uploaded successfully: ${result.categoriesCreated} categories, ${result.productsCreated} products created.`);
+        await loadData();
+      } else {
+        toast.error(`Excel upload failed with ${result.errors.length} errors.`);
+        result.errors.forEach((error) => {
+          console.error(`Row ${error.row} (${error.sheet}): ${error.field} - ${error.message}`);
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to upload Excel.";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const downloadSampleExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+
+      const categoriesHeaders = [
+        ["category_name", "prescription_required", "deposit_required", "installation_required", "is_active"]
+      ];
+      const categoriesWs = XLSX.utils.aoa_to_sheet(categoriesHeaders);
+      XLSX.utils.book_append_sheet(wb, categoriesWs, "Categories");
+
+      const productsHeaders = [
+        ["category_name", "product_name", "brand_name", "short_description", "long_description", "buy_price", "gst_percent", "cas_number", "chemical_formula", "purity_percentage", "molecular_weight", "base_unit", "sds_document_url", "coa_document_url", "is_active", "vendor_buy_price"]
+      ];
+      const productsWs = XLSX.utils.aoa_to_sheet(productsHeaders);
+      XLSX.utils.book_append_sheet(wb, productsWs, "Chemicals");
+
+      const variantsHeaders = [
+        ["product_name", "sku", "size_value", "size_unit", "vendor_price", "buy_price", "is_active"]
+      ];
+      const variantsWs = XLSX.utils.aoa_to_sheet(variantsHeaders);
+      XLSX.utils.book_append_sheet(wb, variantsWs, "Variants");
+
+      XLSX.writeFile(wb, `catalog_template_chemical.xlsx`);
+      toast.success("Sample template downloaded");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to download template.";
+      toast.error(message);
+    }
+  };
+
+  const downloadExistingData = async () => {
+    try {
+      setLoading(true);
+      await adminApi.downloadCatalogExcel(true);
+      toast.success("Catalog data downloaded");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to download catalog data.";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderProductGrid = () => (
+    loading ? (
+      <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0 animate-pulse">
+        <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
+          <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+            <tr>
+              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-32" /></th>
+              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-24" /></th>
+              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>
+              {activeTab === "equipment" && <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>}
+              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
+              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-12" /></th>
+              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
+              <th className="px-4 py-3 font-semibold text-center"><Skeleton className="h-3 w-12 mx-auto" /></th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <tr key={i} className="hover:bg-muted/20">
+                <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+                <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+
+                <td className="px-4 py-3"><Skeleton className="h-6 w-12 rounded" /></td>
+                <td className="px-4 py-3"><Skeleton className="h-4 w-12" /></td>
+                <td className="px-4 py-3"><Skeleton className="h-6 w-12 rounded" /></td>
+                <td className="px-4 py-3 text-center"><Skeleton className="h-6 w-12 rounded mx-auto" /></td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex justify-end gap-1">
+                    <Skeleton className="h-8 w-8 rounded" />
+                    <Skeleton className="h-8 w-8 rounded" />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
+        <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
+          <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Chemical Name</th>
+              <th className="px-4 py-3 font-semibold">Category</th>
+              <th className="px-4 py-3 font-semibold">Brand</th>
+              <th className="px-4 py-3 font-semibold">Buy Price</th>
+              <th className="px-4 py-3 font-semibold">GST %</th>
+              <th className="px-4 py-3 font-semibold">Status</th>
+              <th className="px-4 py-3 font-semibold text-center">Favorites</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {filteredProducts.map((p) => (
+              <tr key={p.id} className="hover:bg-muted/20">
+                <td className="px-4 py-3 font-medium">{p.productName}</td>
+                <td className="px-4 py-3 text-muted-foreground">{getCategoryName(p.categoryId)}</td>
+                <td className="px-4 py-3">{p.brandName || "-"}</td>
+                <td className="px-4 py-3">
+                  {(() => {
+                    const pricing = getChemPricing(p);
+                    if (pricing) {
+                      return <ChemPriceDisclosure label={pricing.label} count={pricing.count} sizes={pricing.sizes} />;
+                    }
+                    return p.buyPrice && p.buyPrice > 0 ? `₹${p.buyPrice.toFixed(0)}` : <span className="text-muted-foreground">—</span>;
+                  })()}
+                </td>
+                <td className="px-4 py-3">{p.gstPercent.toFixed(0)}%</td>
+                <td className="px-4 py-3">
+                  <Switch
+                    checked={p.isActive}
+                    onCheckedChange={() => toggleProductStatus(p.id, p.isActive)}
+                    disabled={loading}
+                  />
+                </td>
+                <td className="px-4 py-3 text-center">
+                  {p.favoriteCount > 0 ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="inline-flex items-center justify-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+                            ❤️ {p.favoriteCount}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <p>Favorited by {p.favoriteCount} {p.favoriteCount === 1 ? 'customer' : 'customers'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex justify-end gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => openProductDialog(p)} disabled={loading}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => deleteProduct(p.id)} disabled={loading}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {filteredProducts.length === 0 && (
+              <tr>
+                <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  No chemicals found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    )
+  );
+
+  return (
+    <div>
+      <PageHeader
+        title="Chemicals Management"
+        description="Manage product categories and chemical products for the marketplace catalog."
+      />
+
+      <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 border-b border-border pb-4">
+            <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
+              <TabsTrigger value="categories" className="text-xs sm:text-sm">
+                <FolderTree className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate">Categories</span>
+                <span className="hidden sm:inline ml-1">({categories.filter(c => c.isChemical).length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="chemical" className="text-xs sm:text-sm">
+                <FlaskConical className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate">Chemicals</span>
+                <span className="hidden sm:inline ml-1">({products.filter(p => p.baseUnit != null).length})</span>
+              </TabsTrigger>
+            </TabsList>
+
+            <div className="mt-4 sm:mt-0 flex gap-2 w-full sm:w-auto">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={loading} className="w-full sm:w-auto justify-center">
+                    <Download className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="hidden sm:inline">Download Excel</span>
+                    <span className="sm:hidden">Download</span>
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] sm:w-auto max-w-sm">
+                  <DropdownMenuItem onClick={downloadSampleExcel}>
+                    <FileDown className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">Download Sample Excel</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={downloadExistingData}>
+                    <Database className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">Download Existing Data Excel</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="outline" onClick={() => setExcelDialogOpen(true)} disabled={loading} className="w-full sm:w-auto">
+                <Upload className="mr-2 h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Upload Excel</span>
+                <span className="sm:hidden">Upload</span>
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between -mx-4 sm:-mx-6 lg:-mx-8 border-b border-border bg-muted/10 mb-4 px-4 sm:px-6 lg:px-8">
+            <div className="relative w-full sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={`Search ${activeTab}...`}
+                className="pl-9 w-full"
+              />
+            </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              {activeTab === "chemical" && (
+                <div className="flex items-center space-x-2 mr-2">
+                  <Switch id="favorites-only" checked={showFavoritesOnly} onCheckedChange={setShowFavoritesOnly} />
+                  <Label htmlFor="favorites-only" className="text-sm cursor-pointer whitespace-nowrap">Favorites Only</Label>
+                </div>
+              )}
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "active" | "inactive")}>
+                <SelectTrigger className="w-full sm:w-[150px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper" className="max-w-[calc(100vw-2rem)]">
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button onClick={() => activeTab === "categories" ? openCategoryDialog() : openProductDialog()} disabled={loading} className="w-full sm:w-auto whitespace-nowrap">
+                <Plus className="mr-2 h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">New {activeTab === "categories" ? "Category" : "Chemical"}</span>
+                <span className="sm:hidden">New</span>
+              </Button>
+            </div>
+          </div>
+
+          <TabsContent value="categories" className="mt-4">
+            {loading ? (
+              <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0 animate-pulse">
+                <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
+                  <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-32" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-24" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>
+                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <tr key={i} className="hover:bg-muted/20">
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-32" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-8" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-8" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-8" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-6 w-12 rounded" />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Skeleton className="h-8 w-8 rounded" />
+                            <Skeleton className="h-8 w-8 rounded" />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
+                <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
+                  <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Category Name</th>
+                      <th className="px-4 py-3 font-semibold">Prescription</th>
+                      <th className="px-4 py-3 font-semibold">Deposit</th>
+                      <th className="px-4 py-3 font-semibold">Installation</th>
+                      <th className="px-4 py-3 font-semibold">Status</th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredCategories.map((c) => (
+                      <tr key={c.id} className="hover:bg-muted/20">
+                        <td className="px-4 py-3 font-medium">{c.categoryName}</td>
+                        <td className="px-4 py-3">{c.prescriptionRequired ? "Yes" : "No"}</td>
+                        <td className="px-4 py-3">{c.depositRequired ? "Yes" : "No"}</td>
+                        <td className="px-4 py-3">{c.installationRequired ? "Yes" : "No"}</td>
+                        <td className="px-4 py-3">
+                          <Switch
+                            checked={c.isActive}
+                            onCheckedChange={() => toggleCategoryStatus(c.id, c.isActive)}
+                            disabled={loading}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => openCategoryDialog(c)} disabled={loading}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => deleteCategory(c.id)} disabled={loading}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredCategories.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                          No categories found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="chemical" className="mt-4">
+            {renderProductGrid()}
+          </TabsContent>
+        </Tabs>
+      </Card>
+
+      {/* Delete Confirmation Card */}
+      {deleteConfirmId && (() => {
+        const product = products.find(p => p.id === deleteConfirmId);
+        if (!product) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Delete Chemical</h3>
+                  <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-2">Are you sure you want to delete this chemical?</p>
+                <div className="p-3 bg-muted/50 rounded-md">
+                  <p className="font-medium text-sm">{product.productName}</p>
+                  <p className="text-xs text-muted-foreground">{getCategoryName(product.categoryId)}</p>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={() => confirmDelete(deleteConfirmId)}
+                  className="flex-1"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>
+                  ) : (
+                    <><Trash2 className="mr-2 h-4 w-4" /> Delete Chemical</>
+                  )}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+      
+      {/* Status Confirmation Card */}
+      {statusConfirmId && statusConfirmAction && (() => {
+        const product = products.find(p => p.id === statusConfirmId);
+        if (!product) return null;
+        const isActivating = statusConfirmAction === 'activate';
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isActivating ? 'bg-green-100' : 'bg-amber-100'}`}>
+                  {isActivating ? (
+                    <Package className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <Package className="h-5 w-5 text-amber-600" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">
+                    {isActivating ? 'Activate Chemical' : 'Deactivate Chemical'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {isActivating ? 'This will make the chemical available for vendors' : 'This will hide the chemical from vendors'}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Are you sure you want to {isActivating ? 'activate' : 'deactivate'} this chemical?
+                </p>
+                <div className="p-3 bg-muted/50 rounded-md">
+                  <p className="font-medium text-sm">{product.productName}</p>
+                  <p className="text-xs text-muted-foreground">{getCategoryName(product.categoryId)}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className={`w-2 h-2 rounded-full ${product.isActive ? 'bg-green-500' : 'bg-gray-400'}`} />
+                    <span className="text-xs text-muted-foreground">
+                      Currently: {product.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setStatusConfirmId(null);
+                    setStatusConfirmAction(null);
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant={isActivating ? 'default' : 'secondary'}
+                  onClick={() => confirmStatusChange(statusConfirmId, statusConfirmAction)}
+                  className="flex-1"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {isActivating ? 'Activating...' : 'Deactivating...'}</>
+                  ) : (
+                    <><Package className="mr-2 h-4 w-4" /> {isActivating ? 'Activate Chemical' : 'Deactivate Chemical'}</>
+                  )}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+      
+      {/* Category Status Confirmation Card */}
+      {categoryStatusConfirmId && categoryStatusConfirmAction && (() => {
+        const category = categories.find(c => c.id === categoryStatusConfirmId);
+        if (!category) return null;
+        const isActivating = categoryStatusConfirmAction === 'activate';
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isActivating ? 'bg-green-100' : 'bg-amber-100'}`}>
+                  {isActivating ? (
+                    <FolderTree className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <FolderTree className="h-5 w-5 text-amber-600" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">
+                    {isActivating ? 'Activate Category' : 'Deactivate Category'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {isActivating ? 'This will make the category and its products available for vendors' : 'This will hide the category and all its products from vendors'}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Are you sure you want to {isActivating ? 'activate' : 'deactivate'} this category?
+                </p>
+                <div className="p-3 bg-muted/50 rounded-md">
+                  <p className="font-medium text-sm">{category.categoryName}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className={`w-2 h-2 rounded-full ${category.isActive ? 'bg-green-500' : 'bg-gray-400'}`} />
+                    <span className="text-xs text-muted-foreground">
+                      Currently: {category.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setCategoryStatusConfirmId(null);
+                    setCategoryStatusConfirmAction(null);
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant={isActivating ? 'default' : 'secondary'}
+                  onClick={() => confirmCategoryStatusChange(categoryStatusConfirmId, categoryStatusConfirmAction)}
+                  className="flex-1"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {isActivating ? 'Activating...' : 'Deactivating...'}</>
+                  ) : (
+                    <><FolderTree className="mr-2 h-4 w-4" /> {isActivating ? 'Activate Category' : 'Deactivate Category'}</>
+                  )}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+      
+      {/* Category Delete Confirmation Card */}
+      {categoryDeleteConfirmId && (() => {
+        const category = categories.find(c => c.id === categoryDeleteConfirmId);
+        if (!category) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Delete Category</h3>
+                  <p className="text-sm text-muted-foreground">This will also delete all products in this category</p>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-2">Are you sure you want to delete this category?</p>
+                <div className="p-3 bg-muted/50 rounded-md">
+                  <p className="font-medium text-sm">{category.categoryName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {products.filter(p => p.categoryId === category.id).length} products will be deleted
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setCategoryDeleteConfirmId(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={() => confirmCategoryDelete(categoryDeleteConfirmId)}
+                  className="flex-1"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>
+                  ) : (
+                    <><Trash2 className="mr-2 h-4 w-4" /> Delete Category</>
+                  )}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+
+      {/* Category Dialog */}
+      <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingCategory ? "Edit Category" : "New Category"}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
+            <FormGrid cols={1}>
+              <div className="space-y-1.5">
+                <Label>Category Name</Label>
+                <Input
+                  value={categoryForm.categoryName}
+                  onChange={(e) => setCategoryForm({ ...categoryForm, categoryName: e.target.value })}
+                  placeholder="E.g. Home Appliances"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="prescription"
+                  checked={categoryForm.prescriptionRequired}
+                  onChange={(e) => setCategoryForm({ ...categoryForm, prescriptionRequired: e.target.checked })}
+                />
+                <Label htmlFor="prescription">Prescription Required</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="deposit"
+                  checked={categoryForm.depositRequired}
+                  onChange={(e) => setCategoryForm({ ...categoryForm, depositRequired: e.target.checked })}
+                />
+                <Label htmlFor="deposit">Deposit Required</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="installation"
+                  checked={categoryForm.installationRequired}
+                  onChange={(e) => setCategoryForm({ ...categoryForm, installationRequired: e.target.checked })}
+                />
+                <Label htmlFor="installation">Installation Required</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="active"
+                  checked={categoryForm.isActive}
+                  onChange={(e) => setCategoryForm({ ...categoryForm, isActive: e.target.checked })}
+                />
+                <Label htmlFor="active">Active</Label>
+              </div>
+            </FormGrid>
+            <div className="h-5" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCategoryDialogOpen(false)} disabled={loading}>
+              Cancel
+            </Button>
+            <Button onClick={saveCategory} disabled={loading}>
+              {editingCategory ? "Update" : "Create"} Category
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingProduct ? (isChemical ? "Edit Chemical" : "Edit Product") : (isChemical ? "New Chemical" : "New Product")}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
+            <FormGrid cols={2}>
+              <div className="space-y-1.5">
+                <Label>Category</Label>
+                <Select
+                  value={productForm.categoryId}
+                  onValueChange={(v) => setProductForm({ ...productForm, categoryId: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.filter((c) => c.isChemical).map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.categoryName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5 sm:col-span-2 mt-2 mb-2 p-4 border rounded-lg bg-blue-50/30">
+                <h4 className="font-semibold text-sm text-blue-700 dark:text-blue-400 mb-4">Chemical Specifications</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>CAS Number</Label>
+                    <Input
+                      value={productForm.casNumber || ""}
+                      onChange={(e) => setProductForm({ ...productForm, casNumber: e.target.value })}
+                      placeholder="E.g. 7732-18-5"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Chemical Formula</Label>
+                    <Input
+                      value={productForm.chemicalFormula || ""}
+                      onChange={(e) => setProductForm({ ...productForm, chemicalFormula: e.target.value })}
+                      placeholder="E.g. H2O"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Purity Percentage (%)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.purityPercentage ?? ""}
+                      onChange={(e) => setProductForm({ ...productForm, purityPercentage: e.target.value === "" ? undefined : Number(e.target.value) })}
+                      placeholder="E.g. 99.5"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Molecular Weight (g/mol)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.molecularWeight ?? ""}
+                      onChange={(e) => setProductForm({ ...productForm, molecularWeight: e.target.value === "" ? undefined : Number(e.target.value) })}
+                      placeholder="E.g. 18.015"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Base Unit</Label>
+                    <Input
+                      value={productForm.baseUnit || ""}
+                      onChange={(e) => setProductForm({ ...productForm, baseUnit: e.target.value })}
+                      placeholder="E.g. Kg, L, g"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>SDS Document URL</Label>
+                    <Input
+                      value={productForm.sdsDocumentUrl || ""}
+                      onChange={(e) => setProductForm({ ...productForm, sdsDocumentUrl: e.target.value })}
+                      placeholder="Link to SDS PDF"
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label>COA Document URL</Label>
+                    <Input
+                      value={productForm.coaDocumentUrl || ""}
+                      onChange={(e) => setProductForm({ ...productForm, coaDocumentUrl: e.target.value })}
+                      placeholder="Link to COA PDF"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>{isChemical ? "Chemical Name" : "Product Name"}</Label>
+                <Input
+                  value={productForm.productName}
+                  onChange={(e) => setProductForm({ ...productForm, productName: e.target.value })}
+                  placeholder={isChemical ? "E.g. Hydrochloric Acid 37%" : "E.g. Washing Machine"}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Brand</Label>
+                <Input
+                  value={productForm.brandName || ""}
+                  onChange={(e) => setProductForm({ ...productForm, brandName: e.target.value })}
+                  placeholder={isChemical ? "E.g. Merck" : "E.g. IFB"}
+                />
+              </div>
+              {!isChemical && (
+                <div className="space-y-1.5">
+                  <Label>Model</Label>
+                  <Input
+                    value={productForm.modelName || ""}
+                    onChange={(e) => setProductForm({ ...productForm, modelName: e.target.value })}
+                    placeholder="E.g. Senator Plus SX"
+                  />
+                </div>
+              )}
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>Short Description</Label>
+                <Input
+                  value={productForm.shortDescription || ""}
+                  onChange={(e) => setProductForm({ ...productForm, shortDescription: e.target.value })}
+                  placeholder={isChemical ? "Brief chemical description" : "Brief product description"}
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>Long Description</Label>
+                <Input
+                  value={productForm.longDescription || ""}
+                  onChange={(e) => setProductForm({ ...productForm, longDescription: e.target.value })}
+                  placeholder={isChemical ? "Detailed chemical description" : "Detailed product description"}
+                />
+              </div>
+              {!isChemical && (
+                <>
+                  <div className="space-y-1.5 sm:col-span-2 border-t pt-4">
+                    <h4 className="font-semibold text-sm text-indigo-600 dark:text-indigo-400">Customer Pricing (Admin Side)</h4>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Daily Rent (INR)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.dailyRent}
+                      onChange={(e) => setProductForm({ ...productForm, dailyRent: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Monthly Rent (INR)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.monthlyRent}
+                      onChange={(e) => setProductForm({ ...productForm, monthlyRent: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Security Deposit (INR)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.securityDeposit}
+                      onChange={(e) => setProductForm({ ...productForm, securityDeposit: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Buy Price (INR, optional)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.buyPrice ?? ""}
+                      onChange={(e) => setProductForm({ ...productForm, buyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 sm:col-span-2 border-t pt-4">
+                    <h4 className="font-semibold text-sm text-emerald-600 dark:text-emerald-400">Vendor Payout Pricing (Set by Admin)</h4>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Vendor Daily Rent (INR)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.vendorDailyRent}
+                      onChange={(e) => setProductForm({ ...productForm, vendorDailyRent: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Vendor Monthly Rent (INR)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.vendorMonthlyRent}
+                      onChange={(e) => setProductForm({ ...productForm, vendorMonthlyRent: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Vendor Security Deposit (INR)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.vendorSecurityDeposit}
+                      onChange={(e) => setProductForm({ ...productForm, vendorSecurityDeposit: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Vendor Buy Price (INR, optional)</Label>
+                    <Input
+                      type="number"
+                      value={productForm.vendorBuyPrice ?? ""}
+                      onChange={(e) => setProductForm({ ...productForm, vendorBuyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
+                    />
+                  </div>
+                </>
+              )}
+              <div className="space-y-1.5">
+                <Label>GST %</Label>
+                <Input
+                  type="number"
+                  value={productForm.gstPercent}
+                  onChange={(e) => setProductForm({ ...productForm, gstPercent: Number(e.target.value) || 0 })}
+                />
+              </div>
+              {!isChemical && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="isRentEnabled"
+                      checked={productForm.isRentEnabled}
+                      onChange={(e) => setProductForm({ ...productForm, isRentEnabled: e.target.checked })}
+                    />
+                    <Label htmlFor="isRentEnabled">Rent Enabled</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="isBuyEnabled"
+                      checked={productForm.isBuyEnabled}
+                      onChange={(e) => setProductForm({ ...productForm, isBuyEnabled: e.target.checked })}
+                    />
+                    <Label htmlFor="isBuyEnabled">Buy Enabled</Label>
+                  </div>
+                </>
+              )}
+              <div className="flex items-center gap-2 sm:col-span-2">
+                <input
+                  type="checkbox"
+                  id="productActive"
+                  checked={productForm.isActive}
+                  onChange={(e) => setProductForm({ ...productForm, isActive: e.target.checked })}
+                />
+                <Label htmlFor="productActive">Active</Label>
+              </div>
+
+              {isChemical && (
+                <div className="space-y-3 sm:col-span-2 rounded-lg border border-indigo-100 dark:border-indigo-950 p-4 bg-indigo-50/30 dark:bg-indigo-950/10">
+                  <div className="flex items-center justify-between border-b pb-2 mb-3">
+                    <div>
+                      <h4 className="font-semibold text-sm text-indigo-700 dark:text-indigo-400">Chemical Sizing & Pricing Chart</h4>
+                      <p className="text-xs text-muted-foreground">Define different packaging sizes, units, and pricing for this chemical.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400"
+                      onClick={() => {
+                        const nextIndex = (productForm.variants?.length || 0) + 1;
+                        const newVar = {
+                          sku: `${productForm.productName.substring(0, 3).toUpperCase()}-VAR-${nextIndex}-${Date.now().toString().slice(-4)}`,
+                          sizeValue: 1,
+                          sizeUnit: productForm.baseUnit || "kg",
+                          vendorPrice: 0,
+                          buyPrice: 0,
+                          isActive: true
+                        };
+                        setProductForm({
+                          ...productForm,
+                          variants: [...(productForm.variants || []), newVar]
+                        });
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-1" /> Add Size Row
+                    </Button>
+                  </div>
+
+                  {(!productForm.variants || productForm.variants.length === 0) ? (
+                    <div className="text-center py-6 text-xs text-muted-foreground border border-dashed rounded-lg border-indigo-200 dark:border-indigo-900 bg-white dark:bg-zinc-950">
+                      No sizing variants configured yet. Click "Add Size Row" to start.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-border bg-indigo-100/50 dark:bg-indigo-950/20 text-muted-foreground">
+                            <th className="p-2 font-semibold">SKU</th>
+                            <th className="p-2 font-semibold w-24">Size Value</th>
+                            <th className="p-2 font-semibold w-24">Size Unit</th>
+                            <th className="p-2 font-semibold w-28">Vendor Price (Payout)</th>
+                            <th className="p-2 font-semibold w-28">Customer Price (Buy)</th>
+                            <th className="p-2 font-semibold w-20 text-center">Active</th>
+                            <th className="p-2 font-semibold w-12"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {productForm.variants.map((v, idx) => (
+                            <tr key={idx} className="border-b border-border hover:bg-indigo-50/20 dark:hover:bg-indigo-950/5">
+                              <td className="p-2">
+                                <Input
+                                  value={v.sku}
+                                  onChange={(e) => {
+                                    const updated = [...(productForm.variants || [])];
+                                    updated[idx] = { ...updated[idx], sku: e.target.value };
+                                    setProductForm({ ...productForm, variants: updated });
+                                  }}
+                                  className="h-8 py-1 text-xs"
+                                  placeholder="SKU"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <Input
+                                  type="number"
+                                  value={v.sizeValue}
+                                  onChange={(e) => {
+                                    const updated = [...(productForm.variants || [])];
+                                    updated[idx] = { ...updated[idx], sizeValue: Number(e.target.value) || 0 };
+                                    setProductForm({ ...productForm, variants: updated });
+                                  }}
+                                  className="h-8 py-1 text-xs"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <Select
+                                  value={v.sizeUnit}
+                                  onValueChange={(val) => {
+                                    const updated = [...(productForm.variants || [])];
+                                    updated[idx] = { ...updated[idx], sizeUnit: val };
+                                    setProductForm({ ...productForm, variants: updated });
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 text-xs py-1">
+                                    <SelectValue placeholder="Unit" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="kg">kg</SelectItem>
+                                    <SelectItem value="g">g</SelectItem>
+                                    <SelectItem value="Ltr">Ltr</SelectItem>
+                                    <SelectItem value="ml">ml</SelectItem>
+                                    <SelectItem value="mg">mg</SelectItem>
+                                    <SelectItem value="Pack">Pack</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              <td className="p-2">
+                                <Input
+                                  type="number"
+                                  value={v.vendorPrice}
+                                  onChange={(e) => {
+                                    const updated = [...(productForm.variants || [])];
+                                    updated[idx] = { ...updated[idx], vendorPrice: Number(e.target.value) || 0 };
+                                    setProductForm({ ...productForm, variants: updated });
+                                  }}
+                                  className="h-8 py-1 text-xs"
+                                  placeholder="Payout"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <Input
+                                  type="number"
+                                  value={v.buyPrice}
+                                  onChange={(e) => {
+                                    const updated = [...(productForm.variants || [])];
+                                    updated[idx] = { ...updated[idx], buyPrice: Number(e.target.value) || 0 };
+                                    setProductForm({ ...productForm, variants: updated });
+                                  }}
+                                  className="h-8 py-1 text-xs"
+                                  placeholder="Customer Price"
+                                />
+                              </td>
+                              <td className="p-2 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={v.isActive}
+                                  onChange={(e) => {
+                                    const updated = [...(productForm.variants || [])];
+                                    updated[idx] = { ...updated[idx], isActive: e.target.checked };
+                                    setProductForm({ ...productForm, variants: updated });
+                                  }}
+                                  className="h-4 w-4 accent-indigo-600"
+                                />
+                              </td>
+                              <td className="p-2 text-center">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive"
+                                  onClick={() => {
+                                    const updated = (productForm.variants || []).filter((_, i) => i !== idx);
+                                    setProductForm({ ...productForm, variants: updated });
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-3 sm:col-span-2 rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-sm font-semibold">{isChemical ? "Chemical Images" : "Product Images"}</Label>
+                  {!editingProduct && (
+                    <span className="text-xs text-muted-foreground">Save {isChemical ? "chemical" : "product"} first to add images</span>
+                  )}
+                </div>
+
+                {editingProduct ? (
+                  <>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        disabled={uploadingImage || productImagesLoading}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          void handleProductImageUpload(file);
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        Upload image
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+                      <Input
+                        value={newImageUrl}
+                        onChange={(e) => setNewImageUrl(e.target.value)}
+                        placeholder="Paste image URL or storage key"
+                        disabled={uploadingImage || productImagesLoading}
+                      />
+                      <label className="flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={newImageIsPrimary}
+                          onChange={(e) => setNewImageIsPrimary(e.target.checked)}
+                          disabled={uploadingImage || productImagesLoading}
+                        />
+                        Primary
+                      </label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void addProductImageFromValue(newImageUrl)}
+                        disabled={uploadingImage || productImagesLoading}
+                      >
+                        Add
+                      </Button>
+                    </div>
+
+                    {productImagesLoading ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    ) : productImages.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No {isChemical ? "chemical" : "product"} images added yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {productImages.map((img, index) => (
+                          <div key={img.id} className="flex items-center gap-3 rounded-md border border-border p-2">
+                            <img
+                              src={img.imageUrl}
+                              alt=""
+                              className="h-12 w-12 rounded object-cover bg-muted"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).style.display = "none";
+                              }}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs">{img.imageUrl}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                Order: {img.displayOrder} {img.isPrimary ? "• Primary" : ""}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {!img.isPrimary && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => void setPrimaryProductImage(img.id)}
+                                  disabled={uploadingImage || productImagesLoading}
+                                >
+                                  Set primary
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => void deleteProductImage(img.id)}
+                                disabled={uploadingImage || productImagesLoading}
+                                aria-label={`Delete image ${index + 1}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Create the {isChemical ? "chemical" : "product"} first, then reopen to manage images.</p>
+                )}
+              </div>
+            </FormGrid>
+            <div className="h-5" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProductDialogOpen(false)} disabled={loading}>
+              Cancel
+            </Button>
+            <Button onClick={saveProduct} disabled={loading}>
+              {editingProduct ? "Update" : "Create"} {isChemical ? "Chemical" : "Product"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Excel Upload Dialog */}
+      <Dialog open={excelDialogOpen} onOpenChange={setExcelDialogOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Upload Excel</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
+            <p className="text-sm text-muted-foreground mb-4">
+              Upload an Excel file containing three sheets: "Categories", "Chemicals", and "Variants".<br />
+              <strong>Need a template?</strong> Use the "Download Sample Excel" option above to get started.
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleExcelUpload}
+              className="w-full"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExcelDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default ChemicalManagement;

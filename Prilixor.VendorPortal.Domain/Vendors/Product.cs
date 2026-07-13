@@ -14,6 +14,10 @@ public class Product : AuditableEntity<Guid>, ISoftDelete
     public decimal MonthlyRent { get; set; }
     public decimal SecurityDeposit { get; set; }
     public decimal? BuyPrice { get; set; }
+    public decimal VendorDailyRent { get; set; }
+    public decimal VendorMonthlyRent { get; set; }
+    public decimal VendorSecurityDeposit { get; set; }
+    public decimal? VendorBuyPrice { get; set; }
     public decimal GstPercent { get; set; } = 18m;
     public bool IsRentEnabled { get; set; } = true;
     public bool IsBuyEnabled { get; set; } = true;
@@ -25,4 +29,6 @@ public class Product : AuditableEntity<Guid>, ISoftDelete
     public ProductCategory Category { get; set; } = null!;
     public ICollection<ProductImage> ProductImages { get; set; } = [];
     public ICollection<VendorProductListing> VendorProductListings { get; set; } = [];
+    public ChemicalProperty? ChemicalProperty { get; set; }
+    public ICollection<ProductVariant> Variants { get; set; } = [];
 }
