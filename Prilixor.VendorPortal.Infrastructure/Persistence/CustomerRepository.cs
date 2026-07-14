@@ -167,6 +167,7 @@ public sealed class CustomerRepository(
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
             .Include(p => p.ChemicalProperty)
+            .Include(p => p.Variants)
             .Where(p => !p.IsDeleted && p.IsActive);
 
         if (!string.IsNullOrWhiteSpace(categoryFilter))
@@ -295,6 +296,9 @@ public sealed class CustomerRepository(
                 ? "out_of_stock"
                 : (availableQuantity <= 3 ? "low_stock" : "available");
 
+            var product = productMap.GetValueOrDefault(l.ProductId);
+            var (buyPrice, maxBuyPrice) = ResolveCatalogBuyPrices(product);
+
             return new CustomerCatalogListingDto(
 
                 l.Id,
@@ -309,11 +313,11 @@ public sealed class CustomerRepository(
 
                 cat?.CategoryName ?? "General",
 
-                productMap.GetValueOrDefault(l.ProductId)?.DailyRent ?? l.DailyRent,
+                product?.DailyRent ?? l.DailyRent,
 
-                productMap.GetValueOrDefault(l.ProductId)?.MonthlyRent ?? l.MonthlyRent,
+                product?.MonthlyRent ?? l.MonthlyRent,
 
-                productMap.GetValueOrDefault(l.ProductId)?.SecurityDeposit ?? l.SecurityDeposit,
+                product?.SecurityDeposit ?? l.SecurityDeposit,
 
                 cat?.PrescriptionRequired ?? false,
                 cat?.DepositRequired ?? false,
@@ -322,15 +326,16 @@ public sealed class CustomerRepository(
                 productTotalAvailableQuantity,
                 availabilityStatus,
                 primaryUrl,
-                productMap.GetValueOrDefault(l.ProductId)?.BuyPrice,
-                productMap.GetValueOrDefault(l.ProductId)?.IsRentEnabled ?? true,
-                productMap.GetValueOrDefault(l.ProductId)?.IsBuyEnabled ?? false,
-                productMap.GetValueOrDefault(l.ProductId)?.ChemicalProperty?.CasNumber,
-                productMap.GetValueOrDefault(l.ProductId)?.ChemicalProperty?.ChemicalFormula,
-                productMap.GetValueOrDefault(l.ProductId)?.ChemicalProperty?.PurityPercentage,
-                productMap.GetValueOrDefault(l.ProductId)?.ChemicalProperty?.MolecularWeight,
-                productMap.GetValueOrDefault(l.ProductId)?.ChemicalProperty?.BaseUnit,
-                cat?.IsChemical ?? false);
+                buyPrice,
+                product?.IsRentEnabled ?? true,
+                product?.IsBuyEnabled ?? false,
+                product?.ChemicalProperty?.CasNumber,
+                product?.ChemicalProperty?.ChemicalFormula,
+                product?.ChemicalProperty?.PurityPercentage,
+                product?.ChemicalProperty?.MolecularWeight,
+                product?.ChemicalProperty?.BaseUnit,
+                cat?.IsChemical ?? false,
+                maxBuyPrice);
 
         }).ToList();
 
@@ -340,32 +345,37 @@ public sealed class CustomerRepository(
 
         var placeholders = products
             .Where(p => !listedProductIds.Contains(p.Id))
-            .Select(p => new CustomerCatalogListingDto(
-                p.Id,
-                p.ProductName,
-                "No vendor assigned",
-                0m,
-                "Vendor assignment pending",
-                p.Category?.CategoryName ?? "General",
-                p.DailyRent,
-                p.MonthlyRent,
-                p.SecurityDeposit,
-                p.Category?.PrescriptionRequired ?? false,
-                p.Category?.DepositRequired ?? false,
-                "product_only",
-                0,
-                0,
-                "out_of_stock",
-                ResolvePrimaryProductImageUrl(p.ProductImages),
-                p.BuyPrice,
-                p.IsRentEnabled,
-                p.IsBuyEnabled,
-                p.ChemicalProperty?.CasNumber,
-                p.ChemicalProperty?.ChemicalFormula,
-                p.ChemicalProperty?.PurityPercentage,
-                p.ChemicalProperty?.MolecularWeight,
-                p.ChemicalProperty?.BaseUnit,
-                p.Category?.IsChemical ?? false))
+            .Select(p =>
+            {
+                var (buyPrice, maxBuyPrice) = ResolveCatalogBuyPrices(p);
+                return new CustomerCatalogListingDto(
+                    p.Id,
+                    p.ProductName,
+                    "No vendor assigned",
+                    0m,
+                    "Vendor assignment pending",
+                    p.Category?.CategoryName ?? "General",
+                    p.DailyRent,
+                    p.MonthlyRent,
+                    p.SecurityDeposit,
+                    p.Category?.PrescriptionRequired ?? false,
+                    p.Category?.DepositRequired ?? false,
+                    "product_only",
+                    0,
+                    0,
+                    "out_of_stock",
+                    ResolvePrimaryProductImageUrl(p.ProductImages),
+                    buyPrice,
+                    p.IsRentEnabled,
+                    p.IsBuyEnabled,
+                    p.ChemicalProperty?.CasNumber,
+                    p.ChemicalProperty?.ChemicalFormula,
+                    p.ChemicalProperty?.PurityPercentage,
+                    p.ChemicalProperty?.MolecularWeight,
+                    p.ChemicalProperty?.BaseUnit,
+                    p.Category?.IsChemical ?? false,
+                    maxBuyPrice);
+            })
             .ToList();
 
         var listingDistanceMap = new Dictionary<Guid, decimal>();
@@ -1606,6 +1616,29 @@ public sealed class CustomerRepository(
         if (item is null) return null;
         var list = await AttachMedicalReferencesAsync(new List<CustomerRentalOrderWithListing> { item }, cancellationToken);
         return list.FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Chemicals are priced per packaging size (variants). Prefer active variant buy prices;
+    /// fall back to product-level BuyPrice for equipment.
+    /// </summary>
+    private static (decimal? MinBuyPrice, decimal? MaxBuyPrice) ResolveCatalogBuyPrices(Product? product)
+    {
+        if (product is null) return (null, null);
+
+        var activeVariantPrices = product.Variants?
+            .Where(v => v.IsActive && v.BuyPrice > 0)
+            .Select(v => v.BuyPrice)
+            .ToList() ?? [];
+
+        if (activeVariantPrices.Count > 0)
+        {
+            var min = activeVariantPrices.Min();
+            var max = activeVariantPrices.Max();
+            return (min, max > min ? max : null);
+        }
+
+        return (product.BuyPrice, null);
     }
 }
 

@@ -55,8 +55,11 @@ const AdminLogin = () => {
   return (
     <AuthLayout title="Admin Sign In" subtitle="Access the admin dashboard and manage vendors." portalType="admin">
       <form onSubmit={handleSubmit} className="space-y-4">
+        <p className="text-xs text-muted-foreground -mt-1">
+          Fields marked <span className="text-destructive">*</span> are required.
+        </p>
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email" required>Email</Label>
           <Input
             id="email"
             type="email"
@@ -71,7 +74,7 @@ const AdminLogin = () => {
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" required>Password</Label>
             <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
           </div>
           <div className="relative">

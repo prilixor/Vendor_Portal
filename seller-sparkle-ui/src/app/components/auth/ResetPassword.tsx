@@ -86,8 +86,11 @@ const ResetPassword = () => {
   return (
     <AuthLayout title="Reset Password" subtitle="Enter your new password below.">
       <form onSubmit={handleSubmit} className="space-y-4">
+        <p className="text-xs text-muted-foreground -mt-1">
+          Fields marked <span className="text-destructive">*</span> are required.
+        </p>
         <div className="space-y-1.5">
-          <Label htmlFor="newPassword">New Password</Label>
+          <Label htmlFor="newPassword" required>New Password</Label>
           <div className="relative">
             <Input
               id="newPassword"
@@ -111,7 +114,7 @@ const ResetPassword = () => {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="confirmPassword">Confirm Password</Label>
+          <Label htmlFor="confirmPassword" required>Confirm Password</Label>
           <div className="relative">
             <Input
               id="confirmPassword"

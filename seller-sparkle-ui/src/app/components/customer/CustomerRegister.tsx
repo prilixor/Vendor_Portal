@@ -51,8 +51,11 @@ const CustomerRegister = () => {
   return (
     <AuthLayout title="Create customer account" subtitle="Rent equipment from verified vendors in one place." portalType="customer">
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        <p className="text-xs text-muted-foreground -mt-1">
+          Fields marked <span className="text-destructive">*</span> are required.
+        </p>
         <div className="space-y-1.5">
-          <Label htmlFor="fullName">Full name</Label>
+          <Label htmlFor="fullName" required>Full name</Label>
           <Input
             id="fullName"
             value={fullName}
@@ -63,7 +66,7 @@ const CustomerRegister = () => {
           {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email" required>Email</Label>
           <Input
             id="email"
             type="email"
@@ -79,7 +82,7 @@ const CustomerRegister = () => {
           <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password" required>Password</Label>
           <div className="relative">
             <Input
               id="password"

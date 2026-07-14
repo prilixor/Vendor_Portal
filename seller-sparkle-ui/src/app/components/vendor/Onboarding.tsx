@@ -9,6 +9,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { FormGrid } from "@/app/components/shared/FormGrid";
+import { FieldError } from "@/app/components/shared/FieldError";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
@@ -103,6 +104,52 @@ const Onboarding = () => {
   const [statesError, setStatesError] = useState<string | null>(null);
   const [citiesError, setCitiesError] = useState<string | null>(null);
   const [selectedStateIso2, setSelectedStateIso2] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (key: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const validateProfileFields = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!profile.businessName.trim()) errors.businessName = "Please enter your business name.";
+    if (!profile.ownerName.trim()) errors.ownerName = "Please enter the owner's name.";
+    if (!profile.addressLine1.trim()) errors.addressLine1 = "Please enter address line 1.";
+    if (!profile.city.trim()) errors.city = "Please select a city.";
+    if (!profile.state.trim()) errors.state = "Please select a state.";
+    if (!profile.postalCode.trim()) errors.postalCode = "Please enter a postal code.";
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error("Please fill in the required fields.");
+      return false;
+    }
+    setFieldErrors({});
+    return true;
+  };
+
+  const validateBankFields = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!bank.accountHolderName.trim()) errors.accountHolderName = "Please enter the account holder name.";
+    if (!bank.accountNumber.trim()) errors.accountNumber = "Please enter the account number.";
+    if (!bank.confirmAccountNumber.trim()) {
+      errors.confirmAccountNumber = "Please confirm the account number.";
+    } else if (bank.accountNumber !== bank.confirmAccountNumber) {
+      errors.confirmAccountNumber = "Account numbers do not match.";
+    }
+    if (!bank.ifscCode.trim()) errors.ifscCode = "Please enter the IFSC code.";
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error("Please fill in the required fields.");
+      return false;
+    }
+    setFieldErrors({});
+    return true;
+  };
 
   const prev = () => setStep((s) => Math.max(s - 1, 0));
 
@@ -119,8 +166,10 @@ const Onboarding = () => {
     }
   };
 
-  const updateProfile = <K extends keyof typeof profile>(k: K, v: (typeof profile)[K]) =>
+  const updateProfile = <K extends keyof typeof profile>(k: K, v: (typeof profile)[K]) => {
     setProfile((p) => ({ ...p, [k]: v }));
+    clearFieldError(k as string);
+  };
 
   const updateBank = <K extends keyof typeof bank>(k: K, v: (typeof bank)[K]) => {
     // Only allow numeric characters for account number
@@ -128,6 +177,7 @@ const Onboarding = () => {
       v = v.replace(/[^0-9]/g, "") as (typeof bank)[K];
     }
     setBank((p) => ({ ...p, [k]: v }));
+    clearFieldError(k as string);
   };
 
   const validateIFSC = (ifsc: string): boolean => {
@@ -509,30 +559,7 @@ const Onboarding = () => {
 
     if (step === 1) {
       // Validate required profile fields before saving
-      if (!profile.businessName.trim()) {
-        toast.error("Please fill in business name");
-        return;
-      }
-      if (!profile.ownerName.trim()) {
-        toast.error("Please fill in owner name");
-        return;
-      }
-      if (!profile.addressLine1.trim()) {
-        toast.error("Please fill in address line 1");
-        return;
-      }
-      if (!profile.city.trim()) {
-        toast.error("Please fill in city");
-        return;
-      }
-      if (!profile.state.trim()) {
-        toast.error("Please fill in state");
-        return;
-      }
-      if (!profile.postalCode.trim()) {
-        toast.error("Please fill in postal code");
-        return;
-      }
+      if (!validateProfileFields()) return;
       try {
         setBusy(true);
         await saveProfile();
@@ -548,26 +575,7 @@ const Onboarding = () => {
 
     if (step === 3) {
       // Validate required bank details fields
-      if (!bank.accountHolderName.trim()) {
-        toast.error("Please fill in account holder name");
-        return;
-      }
-      if (!bank.accountNumber.trim()) {
-        toast.error("Please fill in account number");
-        return;
-      }
-      if (!bank.confirmAccountNumber.trim()) {
-        toast.error("Please fill in confirm account number");
-        return;
-      }
-      if (bank.accountNumber !== bank.confirmAccountNumber) {
-        toast.error("Account numbers do not match");
-        return;
-      }
-      if (!bank.ifscCode.trim()) {
-        toast.error("Please fill in IFSC code");
-        return;
-      }
+      if (!validateBankFields()) return;
       if (!bank.bankName.trim()) {
         toast.error("Please enter a valid IFSC code to auto-fill bank name");
         return;
@@ -598,11 +606,7 @@ const Onboarding = () => {
     if (!user) return;
 
     // Validate bank details before final submission
-    if (!bank.accountHolderName.trim()) { toast.error("Please fill in account holder name"); return; }
-    if (!bank.accountNumber.trim()) { toast.error("Please fill in account number"); return; }
-    if (!bank.confirmAccountNumber.trim()) { toast.error("Please fill in confirm account number"); return; }
-    if (bank.accountNumber !== bank.confirmAccountNumber) { toast.error("Account numbers do not match"); return; }
-    if (!bank.ifscCode.trim()) { toast.error("Please fill in IFSC code"); return; }
+    if (!validateBankFields()) return;
     if (!bank.bankName.trim()) { toast.error("Please enter a valid IFSC code to auto-fill bank name"); return; }
     if (!bank.branchName.trim()) { toast.error("Please enter a valid IFSC code to auto-fill branch name"); return; }
 
@@ -630,6 +634,7 @@ const Onboarding = () => {
     } else if (sectionIndex === 3) {
       setOriginalBank({ ...bank });
     }
+    setFieldErrors({});
     setEditingSection(sectionIndex);
     setStep(sectionIndex);
   };
@@ -637,30 +642,7 @@ const Onboarding = () => {
   const handleSaveSection = async () => {
     if (editingSection === 1) {
       // Validate required profile fields
-      if (!profile.businessName.trim()) {
-        toast.error("Please fill in business name");
-        return;
-      }
-      if (!profile.ownerName.trim()) {
-        toast.error("Please fill in owner name");
-        return;
-      }
-      if (!profile.addressLine1.trim()) {
-        toast.error("Please fill in address line 1");
-        return;
-      }
-      if (!profile.city.trim()) {
-        toast.error("Please fill in city");
-        return;
-      }
-      if (!profile.state.trim()) {
-        toast.error("Please fill in state");
-        return;
-      }
-      if (!profile.postalCode.trim()) {
-        toast.error("Please fill in postal code");
-        return;
-      }
+      if (!validateProfileFields()) return;
       if (!profile.gstNumber.trim()) {
         toast.error("Please fill in GSTIN");
         return;
@@ -674,26 +656,7 @@ const Onboarding = () => {
       await saveProfile();
     } else if (editingSection === 3) {
       // Validate required bank details fields
-      if (!bank.accountHolderName.trim()) {
-        toast.error("Please fill in account holder name");
-        return;
-      }
-      if (!bank.accountNumber.trim()) {
-        toast.error("Please fill in account number");
-        return;
-      }
-      if (!bank.confirmAccountNumber.trim()) {
-        toast.error("Please fill in confirm account number");
-        return;
-      }
-      if (bank.accountNumber !== bank.confirmAccountNumber) {
-        toast.error("Account numbers do not match");
-        return;
-      }
-      if (!bank.ifscCode.trim()) {
-        toast.error("Please fill in IFSC code");
-        return;
-      }
+      if (!validateBankFields()) return;
       if (!bank.bankName.trim()) {
         toast.error("Please enter a valid IFSC code to auto-fill bank name");
         return;
@@ -717,6 +680,7 @@ const Onboarding = () => {
       setBank(originalBank);
       setOriginalBank(null);
     }
+    setFieldErrors({});
     setEditingSection(null);
   };
 
@@ -891,12 +855,16 @@ const Onboarding = () => {
                 </div>
                 {editingSection === 1 ? (
                   <div className="space-y-4">
+                    <p className="text-xs text-muted-foreground -mt-2">
+                      Fields marked <span className="text-destructive">*</span> are required.
+                    </p>
                     <FormGrid cols={3}>
-                      <Field label="Business name" value={profile.businessName} onChange={(v) => updateProfile("businessName", v)} />
-                      <Field label="Owner name" value={profile.ownerName} onChange={(v) => updateProfile("ownerName", v)} />
+                      <Field required label="Business name" value={profile.businessName} onChange={(v) => updateProfile("businessName", v)} error={fieldErrors.businessName} />
+                      <Field required label="Owner name" value={profile.ownerName} onChange={(v) => updateProfile("ownerName", v)} error={fieldErrors.ownerName} />
                       <Field label="Phone" value={profile.phone} onChange={(v) => updateProfile("phone", v)} readonly />
                       <Field label="GST number" value={profile.gstNumber} onChange={(v) => updateProfile("gstNumber", v)} />
                       <StateCityCombobox
+                        required
                         label="State"
                         value={profile.state}
                         options={states.map(s => s.name)}
@@ -908,18 +876,21 @@ const Onboarding = () => {
                         }}
                         placeholder={statesLoading ? "Loading states..." : "Select state"}
                         disabled={statesLoading}
+                        error={fieldErrors.state}
                       />
                       <StateCityCombobox
+                        required
                         label="City"
                         value={profile.city}
                         options={cities}
                         onChange={(v) => updateProfile("city", v)}
                         placeholder={citiesLoading ? "Loading cities..." : profile.state ? "Select city" : "Select state first"}
                         disabled={!profile.state || citiesLoading}
+                        error={fieldErrors.city}
                       />
-                      <Field className="sm:col-span-2" label="Address line 1" value={profile.addressLine1} onChange={(v) => updateProfile("addressLine1", v)} />
+                      <Field required className="sm:col-span-2" label="Address line 1" value={profile.addressLine1} onChange={(v) => updateProfile("addressLine1", v)} error={fieldErrors.addressLine1} />
                       <Field className="sm:col-span-2" label="Address line 2 (optional)" value={profile.addressLine2 ?? ""} onChange={(v) => updateProfile("addressLine2", v)} />
-                      <Field label="Postal code" value={profile.postalCode} onChange={(v) => updateProfile("postalCode", v)} />
+                      <Field required label="Postal code" value={profile.postalCode} onChange={(v) => updateProfile("postalCode", v)} error={fieldErrors.postalCode} />
                     </FormGrid>
                     {(statesError || citiesError) && (
                       <p className="text-xs text-amber-700 dark:text-amber-400">
@@ -1099,18 +1070,22 @@ const Onboarding = () => {
                 </div>
                 {editingSection === 3 ? (
                   <div className="space-y-4">
+                    <p className="text-xs text-muted-foreground -mt-2">
+                      Fields marked <span className="text-destructive">*</span> are required.
+                    </p>
                     <FormGrid cols={2}>
-                      <Field label="Account holder name" value={bank.accountHolderName} onChange={(v) => updateBank("accountHolderName", v)} />
-                      <Field label="Account number" value={bank.accountNumber} onChange={(v) => updateBank("accountNumber", v)} />
-                      <Field label="Confirm account number" value={bank.confirmAccountNumber} onChange={(v) => updateBank("confirmAccountNumber", v)} />
+                      <Field required label="Account holder name" value={bank.accountHolderName} onChange={(v) => updateBank("accountHolderName", v)} error={fieldErrors.accountHolderName} />
+                      <Field required label="Account number" value={bank.accountNumber} onChange={(v) => updateBank("accountNumber", v)} error={fieldErrors.accountNumber} />
+                      <Field required label="Confirm account number" value={bank.confirmAccountNumber} onChange={(v) => updateBank("confirmAccountNumber", v)} error={fieldErrors.confirmAccountNumber} />
                       <div className="space-y-1.5">
-                        <Label>IFSC code</Label>
+                        <Label required>IFSC code</Label>
                         <div className="relative">
                           <Input
                             value={bank.ifscCode}
                             onChange={(e) => updateBank("ifscCode", e.target.value)}
                             onBlur={handleIFSCBlur}
                             disabled={ifscLoading}
+                            className={fieldErrors.ifscCode ? "border-destructive" : ""}
                           />
                           {ifscLoading && (
                             <div className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -1118,6 +1093,7 @@ const Onboarding = () => {
                             </div>
                           )}
                         </div>
+                        <FieldError message={fieldErrors.ifscCode} />
                         {ifscError && <p className="text-xs text-destructive">{ifscError}</p>}
                       </div>
                       <Field label="Bank name" value={bank.bankName} onChange={(v) => updateBank("bankName", v)} readonly />
@@ -1198,13 +1174,17 @@ const Onboarding = () => {
         {step === 1 && (
           <div className="space-y-5 animate-fade-in">
             <h2 className="text-lg font-semibold">Business profile</h2>
+            <p className="text-xs text-muted-foreground -mt-3">
+              Fields marked <span className="text-destructive">*</span> are required.
+            </p>
             <FormGrid cols={2}>
-              <Field label="Business name" value={profile.businessName} onChange={(v) => updateProfile("businessName", v)} />
-              <Field label="Owner name" value={profile.ownerName} onChange={(v) => updateProfile("ownerName", v)} />
+              <Field required label="Business name" value={profile.businessName} onChange={(v) => updateProfile("businessName", v)} error={fieldErrors.businessName} />
+              <Field required label="Owner name" value={profile.ownerName} onChange={(v) => updateProfile("ownerName", v)} error={fieldErrors.ownerName} />
               <Field label="GST number" value={profile.gstNumber} onChange={(v) => updateProfile("gstNumber", v)} />
-              <Field className="sm:col-span-2" label="Address line 1" value={profile.addressLine1} onChange={(v) => updateProfile("addressLine1", v)} />
+              <Field required className="sm:col-span-2" label="Address line 1" value={profile.addressLine1} onChange={(v) => updateProfile("addressLine1", v)} error={fieldErrors.addressLine1} />
               <Field className="sm:col-span-2" label="Address line 2 (optional)" value={profile.addressLine2 ?? ""} onChange={(v) => updateProfile("addressLine2", v)} />
               <StateCityCombobox
+                required
                 label="State"
                 value={profile.state}
                 options={states.map(s => s.name)}
@@ -1216,16 +1196,19 @@ const Onboarding = () => {
                 }}
                 placeholder={statesLoading ? "Loading states..." : "Select state"}
                 disabled={statesLoading}
+                error={fieldErrors.state}
               />
               <StateCityCombobox
+                required
                 label="City"
                 value={profile.city}
                 options={cities}
                 onChange={(v) => updateProfile("city", v)}
                 placeholder={citiesLoading ? "Loading cities..." : profile.state ? "Select city" : "Select state first"}
                 disabled={!profile.state || citiesLoading}
+                error={fieldErrors.city}
               />
-              <Field label="Postal code" value={profile.postalCode} onChange={(v) => updateProfile("postalCode", v)} />
+              <Field required label="Postal code" value={profile.postalCode} onChange={(v) => updateProfile("postalCode", v)} error={fieldErrors.postalCode} />
             </FormGrid>
             {(statesError || citiesError) && (
               <p className="text-xs text-amber-700 dark:text-amber-400">
@@ -1383,18 +1366,22 @@ const Onboarding = () => {
         {step === 3 && (
           <div className="space-y-5 max-w-2xl animate-fade-in">
             <h2 className="text-lg font-semibold">Bank details</h2>
+            <p className="text-xs text-muted-foreground -mt-3">
+              Fields marked <span className="text-destructive">*</span> are required.
+            </p>
             <FormGrid cols={2}>
-              <Field label="Account holder name" value={bank.accountHolderName} onChange={(v) => updateBank("accountHolderName", v)} />
-              <Field label="Account number" value={bank.accountNumber} onChange={(v) => updateBank("accountNumber", v)} />
-              <Field label="Confirm account number" value={bank.confirmAccountNumber} onChange={(v) => updateBank("confirmAccountNumber", v)} />
+              <Field required label="Account holder name" value={bank.accountHolderName} onChange={(v) => updateBank("accountHolderName", v)} error={fieldErrors.accountHolderName} />
+              <Field required label="Account number" value={bank.accountNumber} onChange={(v) => updateBank("accountNumber", v)} error={fieldErrors.accountNumber} />
+              <Field required label="Confirm account number" value={bank.confirmAccountNumber} onChange={(v) => updateBank("confirmAccountNumber", v)} error={fieldErrors.confirmAccountNumber} />
               <div className="space-y-1.5">
-                <Label>IFSC code</Label>
+                <Label required>IFSC code</Label>
                 <div className="relative">
                   <Input
                     value={bank.ifscCode}
                     onChange={(e) => updateBank("ifscCode", e.target.value)}
                     onBlur={handleIFSCBlur}
                     disabled={ifscLoading}
+                    className={fieldErrors.ifscCode ? "border-destructive" : ""}
                   />
                   {ifscLoading && (
                     <div className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -1402,6 +1389,7 @@ const Onboarding = () => {
                     </div>
                   )}
                 </div>
+                <FieldError message={fieldErrors.ifscCode} />
                 {ifscError && <p className="text-xs text-destructive">{ifscError}</p>}
               </div>
               <Field label="Bank name" value={bank.bankName} onChange={(v) => updateBank("bankName", v)} readonly />
@@ -1634,6 +1622,8 @@ const Field = ({
   className,
   readonly,
   onBlur,
+  required,
+  error,
 }: {
   label: string;
   value: string;
@@ -1641,15 +1631,19 @@ const Field = ({
   className?: string;
   readonly?: boolean;
   onBlur?: () => void;
+  required?: boolean;
+  error?: string;
 }) => (
   <div className={`space-y-1.5 ${className ?? ""}`}>
-    <Label>{label}</Label>
+    <Label required={required}>{label}</Label>
     <Input
       value={value}
       onChange={(e) => onChange(e.target.value)}
       readOnly={readonly}
       onBlur={onBlur}
+      className={error ? "border-destructive" : ""}
     />
+    <FieldError message={error} />
   </div>
 );
 
@@ -1772,21 +1766,23 @@ interface StateCityComboboxProps {
   onChange: (value: string) => void;
   placeholder: string;
   disabled?: boolean;
+  required?: boolean;
+  error?: string;
 }
 
-const StateCityCombobox = ({ label, value, options, onChange, placeholder, disabled }: StateCityComboboxProps) => {
+const StateCityCombobox = ({ label, value, options, onChange, placeholder, disabled, required, error }: StateCityComboboxProps) => {
   const [open, setOpen] = useState(false);
 
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label required={required}>{label}</Label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between"
+            className={cn("w-full justify-between", error ? "border-destructive" : "")}
             disabled={disabled}
           >
             {value || placeholder}
@@ -1822,6 +1818,7 @@ const StateCityCombobox = ({ label, value, options, onChange, placeholder, disab
           </Command>
         </PopoverContent>
       </Popover>
+      <FieldError message={error} />
     </div>
   );
 };

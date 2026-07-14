@@ -193,6 +193,13 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
             ? "out_of_stock"
             : (availableQuantity <= 3 ? "low_stock" : "available");
 
+        var activeVariantBuyPrices = agg.Variants
+            .Where(v => v.IsActive && v.BuyPrice > 0)
+            .Select(v => v.BuyPrice)
+            .ToList();
+        var resolvedBuyPrice = agg.BuyPrice
+            ?? (activeVariantBuyPrices.Count > 0 ? activeVariantBuyPrices.Min() : null);
+
         var res = new CustomerListingDetailResponse
         {
             Id = agg.ListingId,
@@ -214,7 +221,7 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
             IsRentEnabled = agg.IsRentEnabled,
             IsBuyEnabled = agg.IsBuyEnabled,
             IsChemical = agg.IsChemical,
-            BuyPrice = agg.BuyPrice,
+            BuyPrice = resolvedBuyPrice,
             CasNumber = agg.CasNumber,
             ChemicalFormula = agg.ChemicalFormula,
             PurityPercentage = agg.PurityPercentage,

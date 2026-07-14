@@ -82,8 +82,11 @@ const Login = () => {
   return (
     <AuthLayout title="Vendor sign in" subtitle="Access your workspace and manage your listings." portalType="vendor">
       <form onSubmit={handleSubmit} className="space-y-4">
+        <p className="text-xs text-muted-foreground -mt-1">
+          Fields marked <span className="text-destructive">*</span> are required.
+        </p>
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email or Phone Number</Label>
+          <Label htmlFor="email" required>Email or Phone Number</Label>
           <Input
             id="email"
             type="text"
@@ -98,7 +101,7 @@ const Login = () => {
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" required>Password</Label>
             <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
           </div>
           <div className="relative">

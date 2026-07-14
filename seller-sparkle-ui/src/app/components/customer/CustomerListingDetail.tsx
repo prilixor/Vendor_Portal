@@ -149,8 +149,12 @@ const CustomerListingDetail = () => {
     : [];
 
   const handleAdd = () => {
+    if (activeVariants.length > 0 && !selectedVariantId) {
+      toast.error("Please select a packaging size.");
+      return;
+    }
     if (qty < 1 || (actualOrderType === "rent" && days < 1)) {
-      toast.error("Quantity and rental days must be positive.");
+      toast.error("Please fill in the required fields.");
       return;
     }
     if (qty > currentAvailableQuantity) {
@@ -417,10 +421,11 @@ const CustomerListingDetail = () => {
                   </Select>
                 </div>
               )}
-              <QuantityStepper label="Qty" value={qty} min={1} max={Math.max(1, currentAvailableQuantity)} onChange={setQty} />
+              <QuantityStepper label="Qty" required value={qty} min={1} max={Math.max(1, currentAvailableQuantity)} onChange={setQty} />
               {actualOrderType === "rent" ? (
                 <QuantityStepper
                   label="Days"
+                  required
                   value={days}
                   min={1}
                   max={366}
@@ -428,6 +433,9 @@ const CustomerListingDetail = () => {
                 />
               ) : null}
             </div>
+            <p className="text-xs text-muted-foreground">
+              Fields marked <span className="text-destructive">*</span> are required.
+            </p>
             <p className="text-xs text-muted-foreground">
               Estimated {actualOrderType === "buy" ? "buy amount" : "rent"} for this line:{" "}
               <span className="font-semibold text-foreground tabular-nums">₹{rentEstimate.toFixed(0)}</span>{" "}

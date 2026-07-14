@@ -343,6 +343,8 @@ public sealed class VendorOnboardingRepository(
         await commonDbContext.Products.AddAsync(product, cancellationToken);
 
         var legacyProduct = await dbContext.Products
+            .Include(x => x.ChemicalProperty)
+            .Include(x => x.Variants)
             .FirstOrDefaultAsync(x => x.Id == product.Id, cancellationToken);
         if (legacyProduct is null)
         {
@@ -358,7 +360,11 @@ public sealed class VendorOnboardingRepository(
     {
         commonDbContext.Products.Update(product);
 
+        // Must include ChemicalProperty/Variants so CopyProductValues updates existing rows
+        // instead of inserting duplicates (uq_chemical_properties_product / sku uniqueness).
         var legacyProduct = await dbContext.Products
+            .Include(x => x.ChemicalProperty)
+            .Include(x => x.Variants)
             .FirstOrDefaultAsync(x => x.Id == product.Id, cancellationToken);
         if (legacyProduct is null)
         {
@@ -471,7 +477,12 @@ public sealed class VendorOnboardingRepository(
 
     public Task UpdateVendorProductListingAsync(VendorProductListing listing, CancellationToken cancellationToken)
     {
-        dbContext.VendorProductListings.Update(listing);
+        var entry = dbContext.Entry(listing);
+        if (entry.State == EntityState.Detached)
+        {
+            dbContext.VendorProductListings.Update(listing);
+        }
+        // Already tracked: property mutations are enough — Update() would mark the whole graph Modified.
         return Task.CompletedTask;
     }
 
@@ -501,13 +512,39 @@ public sealed class VendorOnboardingRepository(
     {
         if (productIds.Count == 0) return [];
 
-        // A product is "chemical" when it has a ChemicalProperty record — same logic used everywhere in the app.
-        var chemicalProductIds = await dbContext.ChemicalProperties
+        // Prefer common portal catalog (source of truth), then vendor DB, then chemical categories.
+        var fromCommonCp = await commonDbContext.ChemicalProperties
             .Where(cp => productIds.Contains(cp.ProductId))
             .Select(cp => cp.ProductId)
             .ToListAsync(cancellationToken);
 
-        return [.. chemicalProductIds];
+        var fromVendorCp = await dbContext.ChemicalProperties
+            .Where(cp => productIds.Contains(cp.ProductId))
+            .Select(cp => cp.ProductId)
+            .ToListAsync(cancellationToken);
+
+        var fromChemicalCategories = await commonDbContext.Products
+            .Where(p => productIds.Contains(p.Id) && !p.IsDeleted)
+            .Join(
+                commonDbContext.ProductCategories.Where(c => c.IsChemical && !c.IsDeleted),
+                p => p.CategoryId,
+                c => c.Id,
+                (p, _) => p.Id)
+            .ToListAsync(cancellationToken);
+
+        if (fromChemicalCategories.Count == 0)
+        {
+            fromChemicalCategories = await dbContext.Products
+                .Where(p => productIds.Contains(p.Id) && !p.IsDeleted)
+                .Join(
+                    dbContext.ProductCategories.Where(c => c.IsChemical && !c.IsDeleted),
+                    p => p.CategoryId,
+                    c => c.Id,
+                    (p, _) => p.Id)
+                .ToListAsync(cancellationToken);
+        }
+
+        return [.. fromCommonCp.Concat(fromVendorCp).Concat(fromChemicalCategories)];
     }
 
     public async Task AddVendorProductImageAsync(VendorProductImage image, CancellationToken cancellationToken)
@@ -580,13 +617,49 @@ public sealed class VendorOnboardingRepository(
 
     public async Task UpsertVendorInventoryAsync(VendorInventory inventory, CancellationToken cancellationToken)
     {
-        if (inventory.Id == Guid.Empty)
+        var entry = dbContext.Entry(inventory);
+        if (entry.State != EntityState.Detached)
         {
-            await dbContext.VendorInventory.AddAsync(inventory, cancellationToken);
+            // Already tracked (loaded earlier): caller mutated quantities — do not call Update().
             return;
         }
 
-        dbContext.VendorInventory.Update(inventory);
+        // Pre-assigned Ids are common (Guid.CreateVersion7). Never Update() a row that is not in the DB yet.
+        var exists = inventory.Id != Guid.Empty && await dbContext.VendorInventory
+            .AsNoTracking()
+            .AnyAsync(x => x.Id == inventory.Id, cancellationToken);
+
+        if (!exists && inventory.Id != Guid.Empty)
+        {
+            exists = await dbContext.VendorInventory
+                .AsNoTracking()
+                .AnyAsync(x => x.VendorProductListingId == inventory.VendorProductListingId && !x.IsDeleted, cancellationToken);
+        }
+
+        if (exists)
+        {
+            var tracked = await dbContext.VendorInventory
+                .FirstOrDefaultAsync(x =>
+                    x.Id == inventory.Id ||
+                    (x.VendorProductListingId == inventory.VendorProductListingId && !x.IsDeleted),
+                    cancellationToken);
+            if (tracked is not null)
+            {
+                tracked.TotalQuantity = inventory.TotalQuantity;
+                tracked.AvailableQuantity = inventory.AvailableQuantity;
+                tracked.ReservedQuantity = inventory.ReservedQuantity;
+                tracked.RentedQuantity = inventory.RentedQuantity;
+                tracked.BlockedQuantity = inventory.BlockedQuantity;
+                return;
+            }
+        }
+
+        if (inventory.Id == Guid.Empty)
+        {
+            inventory.Id = Guid.CreateVersion7();
+        }
+
+        await dbContext.VendorInventory.AddAsync(inventory, cancellationToken);
     }
 
     public Task<List<VendorVariantInventory>> GetVariantInventoryByListingIdAsync(Guid listingId, CancellationToken cancellationToken)
@@ -600,13 +673,56 @@ public sealed class VendorOnboardingRepository(
 
     public async Task UpsertVariantInventoryAsync(VendorVariantInventory item, CancellationToken cancellationToken)
     {
-        if (item.Id == Guid.Empty)
+        var entry = dbContext.Entry(item);
+        if (entry.State != EntityState.Detached)
         {
-            await dbContext.VendorVariantInventories.AddAsync(item, cancellationToken);
+            // Included ProductVariant must stay Unchanged — never cascade an UPDATE to catalog rows.
+            var variantEntry = entry.Reference(x => x.ProductVariant).TargetEntry;
+            if (variantEntry is { State: EntityState.Modified or EntityState.Added })
+            {
+                variantEntry.State = EntityState.Unchanged;
+            }
+
             return;
         }
 
-        dbContext.VendorVariantInventories.Update(item);
+        // Detached graphs: strip navigations so Update/Add cannot mark ProductVariant Modified.
+        item.ProductVariant = null!;
+        item.VendorProductListing = null!;
+
+        // New instances often already have an Id (CreateVersion7). Calling Update() would
+        // emit UPDATE … WHERE id = @id and hit DbUpdateConcurrencyException (0 rows).
+        var existing = await dbContext.VendorVariantInventories
+            .FirstOrDefaultAsync(
+                x => x.VendorProductListingId == item.VendorProductListingId
+                     && x.ProductVariantId == item.ProductVariantId,
+                cancellationToken);
+
+        if (existing is not null)
+        {
+            existing.TotalQuantity = item.TotalQuantity;
+            existing.AvailableQuantity = item.AvailableQuantity;
+            existing.ReservedQuantity = item.ReservedQuantity;
+            return;
+        }
+
+        if (item.Id == Guid.Empty)
+        {
+            item.Id = Guid.CreateVersion7();
+        }
+
+        await dbContext.VendorVariantInventories.AddAsync(item, cancellationToken);
+    }
+
+    public void DiscardTrackedProductVariantChanges()
+    {
+        foreach (var entry in dbContext.ChangeTracker.Entries<ProductVariant>())
+        {
+            if (entry.State is EntityState.Modified or EntityState.Deleted)
+            {
+                entry.State = EntityState.Unchanged;
+            }
+        }
     }
 
 
@@ -639,6 +755,7 @@ public sealed class VendorOnboardingRepository(
     public Task<List<VendorProductAsset>> GetVendorProductAssetsAsync(Guid listingId, CancellationToken cancellationToken)
     {
         return dbContext.VendorProductAssets
+            .Include(x => x.ProductVariant)
             .Where(x => x.VendorProductListingId == listingId && !x.IsDeleted)
             .OrderBy(x => x.AssetTag)
             .ToListAsync(cancellationToken);
@@ -903,6 +1020,7 @@ public sealed class VendorOnboardingRepository(
             PrescriptionRequired = source.PrescriptionRequired,
             DepositRequired = source.DepositRequired,
             InstallationRequired = source.InstallationRequired,
+            IsChemical = source.IsChemical,
             IsActive = source.IsActive,
             CreatedOnUtc = source.CreatedOnUtc,
             ModifiedOnUtc = source.ModifiedOnUtc,
@@ -917,6 +1035,7 @@ public sealed class VendorOnboardingRepository(
         destination.PrescriptionRequired = source.PrescriptionRequired;
         destination.DepositRequired = source.DepositRequired;
         destination.InstallationRequired = source.InstallationRequired;
+        destination.IsChemical = source.IsChemical;
         destination.IsActive = source.IsActive;
         destination.CreatedOnUtc = source.CreatedOnUtc;
         destination.ModifiedOnUtc = source.ModifiedOnUtc;
@@ -954,6 +1073,8 @@ public sealed class VendorOnboardingRepository(
             DeletedBy = source.DeletedBy,
             ChemicalProperty = source.ChemicalProperty == null ? null : new ChemicalProperty
             {
+                Id = source.ChemicalProperty.Id == Guid.Empty ? Guid.NewGuid() : source.ChemicalProperty.Id,
+                ProductId = source.Id,
                 CasNumber = source.ChemicalProperty.CasNumber,
                 ChemicalFormula = source.ChemicalProperty.ChemicalFormula,
                 PurityPercentage = source.ChemicalProperty.PurityPercentage,
@@ -961,7 +1082,6 @@ public sealed class VendorOnboardingRepository(
                 BaseUnit = source.ChemicalProperty.BaseUnit,
                 SdsDocumentUrl = source.ChemicalProperty.SdsDocumentUrl,
                 CoaDocumentUrl = source.ChemicalProperty.CoaDocumentUrl,
-                ProductId = source.Id
             },
             Variants = source.Variants?.Select(v => new ProductVariant
             {
@@ -1006,7 +1126,15 @@ public sealed class VendorOnboardingRepository(
 
         if (source.ChemicalProperty != null)
         {
-            destination.ChemicalProperty ??= new ChemicalProperty { ProductId = destination.Id };
+            if (destination.ChemicalProperty is null)
+            {
+                destination.ChemicalProperty = new ChemicalProperty
+                {
+                    Id = source.ChemicalProperty.Id == Guid.Empty ? Guid.NewGuid() : source.ChemicalProperty.Id,
+                    ProductId = destination.Id
+                };
+            }
+
             destination.ChemicalProperty.CasNumber = source.ChemicalProperty.CasNumber;
             destination.ChemicalProperty.ChemicalFormula = source.ChemicalProperty.ChemicalFormula;
             destination.ChemicalProperty.PurityPercentage = source.ChemicalProperty.PurityPercentage;

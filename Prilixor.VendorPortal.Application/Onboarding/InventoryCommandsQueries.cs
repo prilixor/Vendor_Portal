@@ -337,8 +337,34 @@ internal sealed class GetVariantInventoryQueryHandler(IVendorOnboardingRepositor
             return Result.Failure<List<VendorVariantInventoryDto>>(new Error("vendors.listing.not_found", "Vendor listing not found.", ErrorCategory.NotFound));
 
         var rows = await repository.GetVariantInventoryByListingIdAsync(listingId, cancellationToken);
+        var product = await repository.GetProductByIdAsync(listing.ProductId, cancellationToken);
+        var variants = (product?.Variants ?? [])
+            .Where(v => v.IsActive)
+            .OrderBy(v => v.SizeValue)
+            .ToList();
 
-        var result = rows.Select(x => new VendorVariantInventoryDto(
+        // Always surface every packaging size so vendors can set stock even before a row exists.
+        if (variants.Count > 0)
+        {
+            var byVariant = rows.ToDictionary(x => x.ProductVariantId);
+            var result = variants.Select(v =>
+            {
+                byVariant.TryGetValue(v.Id, out var stock);
+                return new VendorVariantInventoryDto(
+                    stock?.Id.ToString() ?? Guid.Empty.ToString(),
+                    listingId.ToString(),
+                    v.Id.ToString(),
+                    v.Sku,
+                    v.SizeValue,
+                    v.SizeUnit,
+                    stock?.TotalQuantity ?? 0,
+                    stock?.AvailableQuantity ?? 0,
+                    stock?.ReservedQuantity ?? 0);
+            }).ToList();
+            return Result.Success(result);
+        }
+
+        var fallback = rows.Select(x => new VendorVariantInventoryDto(
             x.Id.ToString(),
             x.VendorProductListingId.ToString(),
             x.ProductVariantId.ToString(),
@@ -349,7 +375,7 @@ internal sealed class GetVariantInventoryQueryHandler(IVendorOnboardingRepositor
             x.AvailableQuantity,
             x.ReservedQuantity)).ToList();
 
-        return Result.Success(result);
+        return Result.Success(fallback);
     }
 }
 
@@ -385,7 +411,7 @@ internal sealed class UpsertVariantInventoryCommandHandler(IVendorOnboardingRepo
         if (listing is null)
             return Result.Failure<List<VendorVariantInventoryDto>>(new Error("vendors.listing.not_found", "Vendor listing not found.", ErrorCategory.NotFound));
 
-        // Load existing rows for this listing
+        // Load existing rows for this listing (includes ProductVariant for response mapping)
         var existing = await repository.GetVariantInventoryByListingIdAsync(listingId, cancellationToken);
 
         foreach (var item in request.Items)
@@ -393,12 +419,17 @@ internal sealed class UpsertVariantInventoryCommandHandler(IVendorOnboardingRepo
             if (!Guid.TryParse(item.ProductVariantId, out var variantId))
                 continue;
 
-            var row = existing.FirstOrDefault(x => x.ProductVariantId == variantId)
-                ?? new VendorVariantInventory
+            var row = existing.FirstOrDefault(x => x.ProductVariantId == variantId);
+            if (row is null)
+            {
+                row = new VendorVariantInventory
                 {
+                    Id = Guid.CreateVersion7(),
                     VendorProductListingId = listingId,
                     ProductVariantId = variantId,
                 };
+                existing.Add(row);
+            }
 
             row.TotalQuantity = item.TotalQuantity;
             // Available = Total minus any already-reserved units (preserve reservations)
@@ -407,28 +438,47 @@ internal sealed class UpsertVariantInventoryCommandHandler(IVendorOnboardingRepo
             await repository.UpsertVariantInventoryAsync(row, cancellationToken);
         }
 
-        await repository.SaveChangesAsync(cancellationToken);
-
-        // Sync variant inventory back to listing available quantity and vendor inventory totals
-        var refreshed = await repository.GetVariantInventoryByListingIdAsync(listingId, cancellationToken);
-        var totalAvailable = refreshed.Sum(x => x.AvailableQuantity);
-        var totalStock = refreshed.Sum(x => x.TotalQuantity);
-        var totalReserved = refreshed.Sum(x => x.ReservedQuantity);
+        // Re-read from DB after upserts — in-memory list can diverge from tracked entities.
+        var persistedVariants = await repository.GetVariantInventoryByListingIdAsync(listingId, cancellationToken);
+        var totalAvailable = persistedVariants.Sum(x => x.AvailableQuantity);
+        var totalStock = persistedVariants.Sum(x => x.TotalQuantity);
+        var totalReserved = persistedVariants.Sum(x => x.ReservedQuantity);
 
         listing.AvailableQuantity = totalAvailable;
         await repository.UpdateVendorProductListingAsync(listing, cancellationToken);
 
         var inventory = await repository.GetVendorInventoryByListingIdAsync(listingId, cancellationToken);
-        if (inventory is not null)
+        if (inventory is null)
+        {
+            inventory = new VendorInventory
+            {
+                Id = Guid.CreateVersion7(),
+                VendorProductListingId = listingId,
+                TotalQuantity = totalStock,
+                AvailableQuantity = totalAvailable,
+                ReservedQuantity = totalReserved,
+                RentedQuantity = 0,
+                BlockedQuantity = 0,
+            };
+        }
+        else
         {
             inventory.AvailableQuantity = totalAvailable;
             inventory.TotalQuantity = totalStock;
             inventory.ReservedQuantity = totalReserved;
-            await repository.UpsertVendorInventoryAsync(inventory, cancellationToken);
+            // Chemicals are not rented as equipment units — keep blocked as-is, clear rented drift.
+            inventory.RentedQuantity = 0;
         }
 
+        await repository.UpsertVendorInventoryAsync(inventory, cancellationToken);
+
+        // Stock upserts Include ProductVariant; never let those catalog rows be UPDATEd (0-row concurrency).
+        repository.DiscardTrackedProductVariantChanges();
+
+        // Single save — avoids concurrency issues from re-updating already-saved tracked entities.
         await repository.SaveChangesAsync(cancellationToken);
 
+        var refreshed = await repository.GetVariantInventoryByListingIdAsync(listingId, cancellationToken);
         var result = refreshed.Select(x => new VendorVariantInventoryDto(
             x.Id.ToString(),
             x.VendorProductListingId.ToString(),

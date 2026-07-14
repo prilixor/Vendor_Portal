@@ -502,6 +502,7 @@ public class ApplicationDbContext : DbContext
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id).HasColumnName("id");
             entity.Property(x => x.VendorProductListingId).HasColumnName("vendor_product_listing_id");
+            entity.Property(x => x.ProductVariantId).HasColumnName("product_variant_id");
             entity.Property(x => x.AssetTag).HasColumnName("asset_tag");
             entity.Property(x => x.Status).HasColumnName("status");
             entity.Property(x => x.Condition).HasColumnName("condition");
@@ -518,6 +519,11 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(x => x.VendorProductListing)
                 .WithMany()
                 .HasForeignKey(x => x.VendorProductListingId);
+
+            entity.HasOne(x => x.ProductVariant)
+                .WithMany()
+                .HasForeignKey(x => x.ProductVariantId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<VendorNotificationPreference>(entity =>

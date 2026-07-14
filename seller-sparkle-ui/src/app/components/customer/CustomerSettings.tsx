@@ -4,6 +4,7 @@ import { Button } from "@/app/components/ui/button";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { FieldError } from "@/app/components/shared/FieldError";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
@@ -40,6 +41,27 @@ const CustomerSettings = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const [profileFieldErrors, setProfileFieldErrors] = useState<Record<string, string>>({});
+  const [passwordFieldErrors, setPasswordFieldErrors] = useState<Record<string, string>>({});
+
+  const clearProfileFieldError = (key: string) => {
+    setProfileFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const clearPasswordFieldError = (key: string) => {
+    setPasswordFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
   const updatePrefsMut = useMutation({
     mutationFn: (next: Omit<CustomerNotificationPreferenceApi, "customerId">) =>
       customerApi.updateNotificationPreferences(next),
@@ -75,10 +97,16 @@ const CustomerSettings = () => {
 
   const saveProfile = (e: FormEvent) => {
     e.preventDefault();
+    const errors: Record<string, string> = {};
     if (fullName.trim().length < 2) {
-      toast.error("Full name is required.");
+      errors.fullName = "Please enter your full name.";
+    }
+    if (Object.keys(errors).length > 0) {
+      setProfileFieldErrors(errors);
+      toast.error("Please fill in the required fields.");
       return;
     }
+    setProfileFieldErrors({});
     saveProfileMut.mutate();
   };
 
@@ -88,18 +116,18 @@ const CustomerSettings = () => {
       toast.error("You must be signed in.");
       return;
     }
-    if (!currentPassword || !newPassword) {
-      toast.error("Current and new password are required.");
+    const errors: Record<string, string> = {};
+    if (!currentPassword) errors.currentPassword = "Please enter your current password.";
+    if (!newPassword) errors.newPassword = "Please enter a new password.";
+    else if (newPassword.length < 8) errors.newPassword = "New password must be at least 8 characters.";
+    if (!confirmPassword) errors.confirmPassword = "Please confirm your new password.";
+    else if (newPassword && newPassword !== confirmPassword) errors.confirmPassword = "New password and confirm password must match.";
+    if (Object.keys(errors).length > 0) {
+      setPasswordFieldErrors(errors);
+      toast.error("Please fill in the required fields.");
       return;
     }
-    if (newPassword.length < 8) {
-      toast.error("New password must be at least 8 characters.");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error("New password and confirm password must match.");
-      return;
-    }
+    setPasswordFieldErrors({});
 
     try {
       await authApi.changePassword({
@@ -154,13 +182,21 @@ const CustomerSettings = () => {
                 </div>
               ) : (
                 <form onSubmit={saveProfile} className="space-y-4">
+                  <p className="text-xs text-muted-foreground -mt-1">
+                    Fields marked <span className="text-destructive">*</span> are required.
+                  </p>
                   <div className="space-y-1.5">
-                    <Label htmlFor="customer-settings-name">Full name</Label>
+                    <Label htmlFor="customer-settings-name" required>Full name</Label>
                     <Input
                       id="customer-settings-name"
                       value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
+                      onChange={(e) => {
+                        setFullName(e.target.value);
+                        clearProfileFieldError("fullName");
+                      }}
+                      className={profileFieldErrors.fullName ? "border-destructive" : ""}
                     />
+                    <FieldError message={profileFieldErrors.fullName} />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="customer-settings-email">Email</Label>
@@ -183,39 +219,57 @@ const CustomerSettings = () => {
           <Card>
             <CardContent className="space-y-4 p-5">
               <form className="space-y-4" onSubmit={(e) => void updatePassword(e)}>
+                <p className="text-xs text-muted-foreground -mt-1">
+                  Fields marked <span className="text-destructive">*</span> are required.
+                </p>
                 <div className="space-y-1.5">
-                  <Label htmlFor="customer-settings-cur-pw">Current password</Label>
+                  <Label htmlFor="customer-settings-cur-pw" required>Current password</Label>
                   <Input
                     id="customer-settings-cur-pw"
                     type="password"
                     placeholder="••••••••"
                     value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    onChange={(e) => {
+                      setCurrentPassword(e.target.value);
+                      clearPasswordFieldError("currentPassword");
+                    }}
                     autoComplete="current-password"
+                    className={passwordFieldErrors.currentPassword ? "border-destructive" : ""}
                   />
+                  <FieldError message={passwordFieldErrors.currentPassword} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="customer-settings-new-pw">New password</Label>
+                    <Label htmlFor="customer-settings-new-pw" required>New password</Label>
                     <Input
                       id="customer-settings-new-pw"
                       type="password"
                       placeholder="••••••••"
                       value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
+                      onChange={(e) => {
+                        setNewPassword(e.target.value);
+                        clearPasswordFieldError("newPassword");
+                      }}
                       autoComplete="new-password"
+                      className={passwordFieldErrors.newPassword ? "border-destructive" : ""}
                     />
+                    <FieldError message={passwordFieldErrors.newPassword} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="customer-settings-cp-pw">Confirm</Label>
+                    <Label htmlFor="customer-settings-cp-pw" required>Confirm</Label>
                     <Input
                       id="customer-settings-cp-pw"
                       type="password"
                       placeholder="••••••••"
                       value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        clearPasswordFieldError("confirmPassword");
+                      }}
                       autoComplete="new-password"
+                      className={passwordFieldErrors.confirmPassword ? "border-destructive" : ""}
                     />
+                    <FieldError message={passwordFieldErrors.confirmPassword} />
                   </div>
                 </div>
                 <Button type="submit">Update password</Button>

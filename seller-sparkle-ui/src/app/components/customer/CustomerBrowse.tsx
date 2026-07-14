@@ -192,7 +192,12 @@ const CustomerBrowse = () => {
     setShowLocationPrompt(false);
   };
 
-  const categoryPills = useMemo(() => ["All", ...categories.map((c) => c.categoryName)], [categories]);
+  const categoryPills = useMemo(() => {
+    const modeCategories = categories.filter((c) =>
+      browseMode === "chemicals" ? !!c.isChemical : !c.isChemical,
+    );
+    return ["All", ...modeCategories.map((c) => c.categoryName)];
+  }, [categories, browseMode]);
   const availabilityPills: Array<{ id: AvailabilityFilter; label: string }> = [
     { id: "all", label: "All stock" },
     { id: "available", label: "Available" },
@@ -215,6 +220,17 @@ const CustomerBrowse = () => {
     }
     return result;
   }, [data, availabilityFilter, showFavoritesOnly, wishlist, browseMode]);
+
+  // Drop category selection when switching tabs if it doesn't belong to the new mode.
+  useEffect(() => {
+    if (!appliedCat) return;
+    const stillValid = categories.some(
+      (c) =>
+        c.categoryName === appliedCat &&
+        (browseMode === "chemicals" ? !!c.isChemical : !c.isChemical),
+    );
+    if (!stillValid) setAppliedCat(undefined);
+  }, [browseMode, categories, appliedCat]);
 
   const toggleWishlist = (id: string, e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -270,7 +286,7 @@ const CustomerBrowse = () => {
         <Input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search beds, oxygen, wheelchairs..."
+          placeholder={browseMode === "chemicals" ? "Search acids, reagents, solvents..." : "Search beds, oxygen, wheelchairs..."}
           className="pl-9"
           aria-label="Search listings"
         />
@@ -466,7 +482,20 @@ const CustomerBrowse = () => {
                         )}
                         {showBuy && (
                           <Badge variant="secondary" className="font-normal tabular-nums bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
-                            Buy Price: ₹{item.buyPrice?.toFixed(0)} / {item.baseUnit ?? "Unit"}
+                            {(() => {
+                              const min = item.buyPrice;
+                              const max = item.maxBuyPrice;
+                              if (min == null || min <= 0) {
+                                return "Buy Price: See details";
+                              }
+                              const amount =
+                                max != null && max > min
+                                  ? `₹${min.toFixed(0)} – ₹${max.toFixed(0)}`
+                                  : `₹${min.toFixed(0)}`;
+                              return isChem
+                                ? `Buy from ${amount}`
+                                : `Buy Price: ${amount}${item.baseUnit ? ` / ${item.baseUnit}` : ""}`;
+                            })()}
                           </Badge>
                         )}
                       </>

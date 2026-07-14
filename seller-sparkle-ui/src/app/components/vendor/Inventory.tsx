@@ -7,15 +7,26 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { FormGrid } from "@/app/components/shared/FormGrid";
+import { FieldError } from "@/app/components/shared/FieldError";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { InventoryMovement, InventoryRecord } from "@/app/models";
 import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2, Barcode, Trash2, Search, FlaskConical } from "lucide-react";
 import { format } from "date-fns";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/app/components/ui/pagination";
 import { useAuth } from "@/app/guards/AuthContext";
-import { vendorOnboardingApi, type VendorProductAssetApiDto, type TrackedAssetDto } from "@/app/services/vendorOnboardingApi";
+import { vendorOnboardingApi, type VendorProductAssetApiDto, type TrackedAssetDto, type VendorVariantInventoryDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
+
+type ChemicalStockEditRow = {
+  productVariantId: string;
+  sku: string;
+  sizeLabel: string;
+  total: number;
+  reserved: number;
+  available: number;
+};
 
 const movementMeta: Record<string, { label: string; icon: any; cls: string }> = {
   stock_added: { label: "Stock Added", icon: ArrowDownRight, cls: "bg-success-soft text-success" },
@@ -37,6 +48,8 @@ const Inventory = () => {
   const [inventory, setInventory] = useState<InventoryRecord[]>([]);
   const [editingRow, setEditingRow] = useState<InventoryRecord | null>(null);
   const [editForm, setEditForm] = useState({ total: 0, reserved: 0, rented: 0, blocked: 0 });
+  const [chemicalEditRows, setChemicalEditRows] = useState<ChemicalStockEditRow[]>([]);
+  const [chemicalEditLoading, setChemicalEditLoading] = useState(false);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [movementRow, setMovementRow] = useState<InventoryRecord | null>(null);
   const [movementType, setMovementType] = useState<"in" | "out">("in");
@@ -53,6 +66,8 @@ const Inventory = () => {
   const [assetSearchQuery, setAssetSearchQuery] = useState("");
   const [newAssetTag, setNewAssetTag] = useState("");
   const [newAssetCondition, setNewAssetCondition] = useState("");
+  const [newAssetVariantId, setNewAssetVariantId] = useState("");
+  const [assetVariantOptions, setAssetVariantOptions] = useState<VendorVariantInventoryDto[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(false);
 
   const [trackAssetDialogOpen, setTrackAssetDialogOpen] = useState(false);
@@ -60,6 +75,16 @@ const Inventory = () => {
   const [trackedAssetResult, setTrackedAssetResult] = useState<TrackedAssetDto | null>(null);
   const [trackAssetLoading, setTrackAssetLoading] = useState(false);
   const [trackAssetError, setTrackAssetError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (key: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -115,17 +140,52 @@ const Inventory = () => {
     const isChemMap: Record<string, boolean> = {};
     listings.forEach(l => {
       const p = products.find(prod => prod.id === l.productId);
-      isChemMap[l.id] = (p?.baseUnit != null);
+      isChemMap[l.id] = !!(
+        l.isChemical ||
+        p?.baseUnit ||
+        p?.casNumber ||
+        p?.chemicalFormula
+      );
     });
     setListingIsChemical(isChemMap);
 
     const rows = await Promise.all(
       listings.map(async (listing) => {
+        const isChemical = !!isChemMap[listing.id];
+        const baseName = `${listing.listingTitle}${productById.get(listing.productId) ? ` (${productById.get(listing.productId)})` : ""}`;
+
         try {
+          // Chemicals: packaging-size (variant) stock is the source of truth — not flat VendorInventory.
+          if (isChemical) {
+            const [inv, variantRows] = await Promise.all([
+              vendorOnboardingApi.getVendorInventory(user.id, listing.id).catch(() => null),
+              vendorOnboardingApi.getVariantInventory(user.id, listing.id).catch(() => []),
+            ]);
+
+            if (variantRows.length > 0) {
+              const total = variantRows.reduce((sum, r) => sum + (r.totalQuantity || 0), 0);
+              const available = variantRows.reduce((sum, r) => sum + (r.availableQuantity || 0), 0);
+              const reserved = variantRows.reduce((sum, r) => sum + (r.reservedQuantity || 0), 0);
+              return {
+                productId: listing.id,
+                catalogProductId: listing.productId,
+                isChemical: true,
+                productName: baseName,
+                total,
+                available,
+                reserved,
+                rented: 0,
+                blocked: inv?.blockedQuantity ?? 0,
+              } satisfies InventoryRecord;
+            }
+          }
+
           const inv = await vendorOnboardingApi.getVendorInventory(user.id, listing.id);
           return {
             productId: listing.id,
-            productName: `${listing.listingTitle}${productById.get(listing.productId) ? ` (${productById.get(listing.productId)})` : ""}`,
+            catalogProductId: listing.productId,
+            isChemical,
+            productName: baseName,
             total: inv.totalQuantity,
             available: inv.availableQuantity,
             reserved: inv.reservedQuantity,
@@ -148,7 +208,9 @@ const Inventory = () => {
           });
           return {
             productId: listing.id,
-            productName: `${listing.listingTitle}${productById.get(listing.productId) ? ` (${productById.get(listing.productId)})` : ""}`,
+            catalogProductId: listing.productId,
+            isChemical,
+            productName: baseName,
             total: seeded.totalQuantity,
             available: seeded.availableQuantity,
             reserved: seeded.reservedQuantity,
@@ -219,7 +281,8 @@ const Inventory = () => {
     [inventory]
   );
 
-  const openEdit = (row: InventoryRecord) => {
+  const openEdit = async (row: InventoryRecord) => {
+    setFieldErrors({});
     setEditingRow(row);
     setEditForm({
       total: row.total,
@@ -227,6 +290,29 @@ const Inventory = () => {
       rented: row.rented,
       blocked: row.blocked,
     });
+    setChemicalEditRows([]);
+
+    if (!(row.isChemical || listingIsChemical[row.productId]) || !user) return;
+
+    try {
+      setChemicalEditLoading(true);
+      const rows = await vendorOnboardingApi.getVariantInventory(user.id, row.productId);
+      setChemicalEditRows(
+        rows.map((r) => ({
+          productVariantId: r.productVariantId,
+          sku: r.sku,
+          sizeLabel: `${r.sizeValue} ${r.sizeUnit}`,
+          total: r.totalQuantity,
+          reserved: r.reservedQuantity,
+          available: r.availableQuantity,
+        }))
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load packaging stock.";
+      toast.error(message);
+    } finally {
+      setChemicalEditLoading(false);
+    }
   };
 
   const updateFormValue = (field: "total" | "reserved" | "rented" | "blocked", value: string) => {
@@ -237,10 +323,86 @@ const Inventory = () => {
     }));
   };
 
+  const updateChemicalStockValue = (productVariantId: string, value: string) => {
+    const parsed = Number(value);
+    const nextTotal = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+    setChemicalEditRows((prev) =>
+      prev.map((row) => {
+        if (row.productVariantId !== productVariantId) return row;
+        const reserved = Math.min(row.reserved, nextTotal);
+        return {
+          ...row,
+          total: nextTotal,
+          reserved,
+          available: Math.max(0, nextTotal - reserved),
+        };
+      })
+    );
+  };
+
   const computedAvailable = Math.max(0, editForm.total - editForm.reserved - editForm.rented - editForm.blocked);
+  const isEditingChemical = !!(editingRow && (editingRow.isChemical || listingIsChemical[editingRow.productId]));
+  const chemicalEditTotal = chemicalEditRows.reduce((sum, row) => sum + row.total, 0);
 
   const saveEdit = async () => {
     if (!editingRow || !user) return;
+
+    // Chemicals: stock is managed per packaging size (measurement), then rolled up to listing totals.
+    if (editingRow.isChemical || listingIsChemical[editingRow.productId]) {
+      if (chemicalEditRows.length === 0) {
+        toast.error("No packaging sizes found. Ask Admin to add sizes (e.g. 1L, 5L) for this chemical.");
+        return;
+      }
+
+      for (const row of chemicalEditRows) {
+        if (row.reserved > row.total) {
+          toast.error(`Reserved cannot exceed total for ${row.sizeLabel}.`);
+          return;
+        }
+      }
+
+      try {
+        setBusy(true);
+        const previousTotal = editingRow.total;
+        await vendorOnboardingApi.upsertVariantInventory(
+          user.id,
+          editingRow.productId,
+          chemicalEditRows.map((row) => ({
+            productVariantId: row.productVariantId,
+            totalQuantity: row.total,
+          }))
+        );
+
+        const nextTotal = chemicalEditRows.reduce((sum, row) => sum + row.total, 0);
+        const totalDiff = nextTotal - previousTotal;
+        if (totalDiff !== 0) {
+          await vendorOnboardingApi.addVendorInventoryMovement(user.id, editingRow.productId, {
+            vendorId: user.id,
+            listingId: editingRow.productId,
+            movementType: totalDiff > 0 ? "stock_added" : "stock_removed",
+            quantity: Math.abs(totalDiff),
+            referenceType: "manual_correction",
+            notes: "Chemical packaging stock updated via Inventory",
+          });
+        }
+
+        try {
+          await loadInventory();
+          setEditingRow(null);
+          setChemicalEditRows([]);
+          toast.success("Chemical stock updated by packaging size.");
+        } catch (err) {
+          console.error("Failed to reload inventory after chemical edit:", err);
+          toast.error("Changes saved but failed to refresh inventory. Please reload the page.");
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to update chemical inventory.";
+        toast.error(message);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     
     // Validation
     if (editForm.reserved > editForm.total) {
@@ -387,6 +549,7 @@ const Inventory = () => {
   };
 
   const openMovement = (row: InventoryRecord, type: "in" | "out") => {
+    setFieldErrors({});
     setMovementRow(row);
     setMovementType(type);
     setMovementQtyInput("1");
@@ -395,7 +558,13 @@ const Inventory = () => {
   const saveMovement = async () => {
     if (!movementRow || !user) return;
     const parsedQty = Number(movementQtyInput);
-    const qty = Number.isFinite(parsedQty) ? Math.max(1, Math.floor(parsedQty)) : 1;
+    if (!movementQtyInput.trim() || !Number.isFinite(parsedQty) || parsedQty < 1) {
+      setFieldErrors({ quantity: "Please enter a quantity of at least 1." });
+      toast.error("Please fill in the required fields.");
+      return;
+    }
+    setFieldErrors({});
+    const qty = Math.max(1, Math.floor(parsedQty));
 
     const current = movementRow;
     const removable = Math.min(qty, current.available);
@@ -441,14 +610,28 @@ const Inventory = () => {
   };
 
   const openAssets = async (row: InventoryRecord) => {
+    setFieldErrors({});
     setAssetRow(row);
     setAssetsLoading(true);
     setNewAssetTag("");
     setNewAssetCondition("");
+    setNewAssetVariantId("");
+    setAssetVariantOptions([]);
+    setAssetSearchQuery("");
     try {
       if (!user) return;
-      const data = await vendorOnboardingApi.getVendorProductAssets(user.id, row.productId);
+      const isChem = row.isChemical || listingIsChemical[row.productId];
+      const [data, variantStock] = await Promise.all([
+        vendorOnboardingApi.getVendorProductAssets(user.id, row.productId),
+        isChem
+          ? vendorOnboardingApi.getVariantInventory(user.id, row.productId).catch(() => [] as VendorVariantInventoryDto[])
+          : Promise.resolve([] as VendorVariantInventoryDto[]),
+      ]);
       setAssets(data);
+      setAssetVariantOptions(variantStock);
+      if (variantStock.length === 1) {
+        setNewAssetVariantId(variantStock[0].productVariantId);
+      }
     } catch (err) {
       toast.error("Failed to load serial numbers");
     } finally {
@@ -456,18 +639,48 @@ const Inventory = () => {
     }
   };
 
+  const selectedAssetVariantStock = assetVariantOptions.find((v) => v.productVariantId === newAssetVariantId);
+  const selectedAssetVariantSerialCount = newAssetVariantId
+    ? assets.filter((a) => a.productVariantId === newAssetVariantId).length
+    : 0;
+  const selectedAssetVariantRemaining = selectedAssetVariantStock
+    ? Math.max(0, selectedAssetVariantStock.totalQuantity - selectedAssetVariantSerialCount)
+    : 0;
+  const isAssetRowChemical = !!(assetRow && (assetRow.isChemical || listingIsChemical[assetRow.productId]));
+
   const handleAddAsset = async () => {
-    if (!assetRow || !user || !newAssetTag.trim()) return;
+    if (!assetRow || !user) return;
+    const isChem = assetRow.isChemical || listingIsChemical[assetRow.productId];
+
+    const errors: Record<string, string> = {};
+    if (!newAssetTag.trim()) {
+      errors.assetTag = isChem ? "Please enter a batch/serial number." : "Please enter a serial number.";
+    }
+    if (isChem && !newAssetVariantId) {
+      errors.assetVariantId = "Please select a packaging size.";
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error("Please fill in the required fields.");
+      return;
+    }
+
+    if (isChem && selectedAssetVariantRemaining <= 0) {
+      toast.error("No remaining stock slots for this packaging size. Increase stock first.");
+      return;
+    }
     try {
       setAssetsLoading(true);
+      setFieldErrors({});
       await vendorOnboardingApi.addVendorProductAsset(user.id, assetRow.productId, {
         vendorId: user.id,
         listingId: assetRow.productId,
         assetTag: newAssetTag.trim(),
         status: "Available",
-        condition: newAssetCondition.trim() || undefined
+        condition: newAssetCondition.trim() || undefined,
+        productVariantId: isChem ? newAssetVariantId : undefined,
       });
-      toast.success("Serial number added");
+      toast.success(isChem ? "Batch/serial number added" : "Serial number added");
       setNewAssetTag("");
       setNewAssetCondition("");
       const data = await vendorOnboardingApi.getVendorProductAssets(user.id, assetRow.productId);
@@ -698,34 +911,38 @@ const Inventory = () => {
                     <td className="px-4 py-4 text-right">
                       <TooltipProvider>
                         <div className="flex justify-end gap-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-block">
-                                <Button variant="ghost" size="icon" onClick={() => openMovement(row, "in")} aria-label={`Add stock for ${row.productName}`} disabled={busy || isPending}>
-                                  <Plus className="h-4 w-4" />
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            {isPending && (
-                              <TooltipContent side="top">
-                                <p>Available once your account is approved</p>
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-block">
-                                <Button variant="ghost" size="icon" onClick={() => openMovement(row, "out")} aria-label={`Remove stock for ${row.productName}`} disabled={busy || isPending}>
-                                  <Minus className="h-4 w-4" />
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            {isPending && (
-                              <TooltipContent side="top">
-                                <p>Available once your account is approved</p>
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
+                          {activeTab === "equipment" && (
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-block">
+                                    <Button variant="ghost" size="icon" onClick={() => openMovement(row, "in")} aria-label={`Add stock for ${row.productName}`} disabled={busy || isPending}>
+                                      <Plus className="h-4 w-4" />
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                {isPending && (
+                                  <TooltipContent side="top">
+                                    <p>Available once your account is approved</p>
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-block">
+                                    <Button variant="ghost" size="icon" onClick={() => openMovement(row, "out")} aria-label={`Remove stock for ${row.productName}`} disabled={busy || isPending}>
+                                      <Minus className="h-4 w-4" />
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                {isPending && (
+                                  <TooltipContent side="top">
+                                    <p>Available once your account is approved</p>
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
+                            </>
+                          )}
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span className="inline-block">
@@ -734,25 +951,21 @@ const Inventory = () => {
                                 </Button>
                               </span>
                             </TooltipTrigger>
-                            {isPending && (
-                              <TooltipContent side="top">
-                                <p>Available once your account is approved</p>
-                              </TooltipContent>
-                            )}
+                            <TooltipContent side="top">
+                              <p>{isPending ? "Available once your account is approved" : activeTab === "chemical" ? "Batch / serial by packaging size" : "Serial numbers"}</p>
+                            </TooltipContent>
                           </Tooltip>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span className="inline-block">
-                                <Button variant="ghost" size="icon" onClick={() => openEdit(row)} aria-label={`Edit ${row.productName} stock`} disabled={busy || isPending}>
+                                <Button variant="ghost" size="icon" onClick={() => void openEdit(row)} aria-label={`Edit ${row.productName} stock`} disabled={busy || isPending}>
                                   <Pencil className="h-4 w-4" />
                                 </Button>
                               </span>
                             </TooltipTrigger>
-                            {isPending && (
-                              <TooltipContent side="top">
-                                <p>Available once your account is approved</p>
-                              </TooltipContent>
-                            )}
+                            <TooltipContent side="top">
+                              <p>{isPending ? "Available once your account is approved" : activeTab === "chemical" ? "Edit stock by packaging size" : "Edit stock"}</p>
+                            </TooltipContent>
                           </Tooltip>
                         </div>
                       </TooltipProvider>
@@ -847,42 +1060,102 @@ const Inventory = () => {
         </ul>
       </Card>
 
-      <Dialog open={!!editingRow} onOpenChange={(open) => !open && setEditingRow(null)}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-md">
+      <Dialog open={!!editingRow} onOpenChange={(open) => !open && (setEditingRow(null), setChemicalEditRows([]))}>
+        <DialogContent className={`max-h-[90vh] overflow-y-auto ${isEditingChemical ? "max-w-2xl sm:max-w-2xl" : "max-w-md sm:max-w-md"}`}>
           <DialogHeader>
-            <DialogTitle>Edit stock - {editingRow?.productName}</DialogTitle>
+            <DialogTitle>
+              {isEditingChemical ? "Edit packaging stock" : "Edit stock"} - {editingRow?.productName}
+            </DialogTitle>
           </DialogHeader>
           <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1 space-y-4">
-            <FormGrid cols={2}>
-            <div className="space-y-1.5">
-              <Label>Total</Label>
-              <Input type="number" min={0} value={editForm.total} onChange={(e) => updateFormValue("total", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Reserved</Label>
-              <Input type="number" min={0} value={editForm.reserved} onChange={(e) => updateFormValue("reserved", e.target.value)} />
-            </div>
-          </FormGrid>
-                  {activeTab === "equipment" && (
-                    <div className="space-y-2">
-                      <Label>Currently Rented</Label>
-                      <Input type="number" min="0" value={editForm.rented} onChange={(e) => setEditForm({ ...editForm, rented: parseInt(e.target.value) || 0 })} />
-                      <p className="text-[10px] text-muted-foreground leading-tight">Usually managed automatically when orders ship</p>
-                    </div>
-                  )}
-                  <div className="space-y-2">
-              <Label>Blocked</Label>
-              <Input type="number" min={0} value={editForm.blocked} onChange={(e) => updateFormValue("blocked", e.target.value)} />
-            </div>
-            <div className="sm:col-span-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
-              Available (auto): <span className="font-semibold">{computedAvailable}</span>
-            </div>
+            {isEditingChemical ? (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Chemicals are stocked by packaging size (e.g. 500 mL, 1 L, 5 L). Update units per size here — not as a single flat total.
+                </p>
+                {chemicalEditLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                ) : chemicalEditRows.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground text-center">
+                    No packaging sizes defined for this chemical yet. Ask Admin to add variants first.
+                  </div>
+                ) : (
+                  <div className="overflow-hidden rounded-md border border-border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold">Size</th>
+                          <th className="px-3 py-2 text-left font-semibold">SKU</th>
+                          <th className="px-3 py-2 text-right font-semibold">Total units</th>
+                          <th className="px-3 py-2 text-right font-semibold">Reserved</th>
+                          <th className="px-3 py-2 text-right font-semibold">Available</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {chemicalEditRows.map((row) => (
+                          <tr key={row.productVariantId}>
+                            <td className="px-3 py-2 font-medium">{row.sizeLabel}</td>
+                            <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{row.sku}</td>
+                            <td className="px-3 py-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                className="h-8 w-24 ml-auto text-right"
+                                value={row.total}
+                                onChange={(e) => updateChemicalStockValue(row.productVariantId, e.target.value)}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono text-warning">{row.reserved}</td>
+                            <td className="px-3 py-2 text-right font-mono text-success">{row.available}</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-muted/30 font-semibold">
+                          <td className="px-3 py-2" colSpan={2}>All sizes</td>
+                          <td className="px-3 py-2 text-right font-mono">{chemicalEditTotal}</td>
+                          <td className="px-3 py-2 text-right font-mono">
+                            {chemicalEditRows.reduce((sum, row) => sum + row.reserved, 0)}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono">
+                            {chemicalEditRows.reduce((sum, row) => sum + row.available, 0)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <FormGrid cols={2}>
+                  <div className="space-y-1.5">
+                    <Label required>Total</Label>
+                    <Input type="number" min={0} value={editForm.total} onChange={(e) => updateFormValue("total", e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Reserved</Label>
+                    <Input type="number" min={0} value={editForm.reserved} onChange={(e) => updateFormValue("reserved", e.target.value)} />
+                  </div>
+                </FormGrid>
+                <div className="space-y-2">
+                  <Label>Currently Rented</Label>
+                  <Input type="number" min="0" value={editForm.rented} onChange={(e) => setEditForm({ ...editForm, rented: parseInt(e.target.value) || 0 })} />
+                  <p className="text-[10px] text-muted-foreground leading-tight">Usually managed automatically when orders ship</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Blocked</Label>
+                  <Input type="number" min={0} value={editForm.blocked} onChange={(e) => updateFormValue("blocked", e.target.value)} />
+                </div>
+                <div className="sm:col-span-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+                  Available (auto): <span className="font-semibold">{computedAvailable}</span>
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingRow(null)} disabled={busy}>
+            <Button variant="outline" onClick={() => { setEditingRow(null); setChemicalEditRows([]); }} disabled={busy}>
               Cancel
             </Button>
-            <Button onClick={() => void saveEdit()} disabled={busy}>
+            <Button onClick={() => void saveEdit()} disabled={busy || (isEditingChemical && (chemicalEditLoading || chemicalEditRows.length === 0))}>
               {busy ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
               ) : (
@@ -900,13 +1173,18 @@ const Inventory = () => {
           </DialogHeader>
           <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
             <div className="space-y-1.5">
-            <Label>Quantity</Label>
+            <Label required>Quantity</Label>
             <Input
               type="number"
               min={1}
               value={movementQtyInput}
-              onChange={(e) => setMovementQtyInput(e.target.value)}
+              onChange={(e) => {
+                setMovementQtyInput(e.target.value);
+                clearFieldError("quantity");
+              }}
+              className={fieldErrors.quantity ? "border-destructive" : ""}
             />
+            <FieldError message={fieldErrors.quantity} />
             {movementType === "out" && (
               <p className="text-xs text-muted-foreground">Available to remove: {movementRow?.available ?? 0}</p>
             )}
@@ -933,19 +1211,26 @@ const Inventory = () => {
       <Dialog open={!!assetRow} onOpenChange={(open) => !open && setAssetRow(null)}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-hidden flex flex-col sm:max-w-xl p-0 gap-0">
           <DialogHeader className="p-6 pb-4 border-b border-border bg-muted/30">
-            <DialogTitle>Serial Numbers - {assetRow?.productName}</DialogTitle>
+            <DialogTitle>
+              {isAssetRowChemical ? "Batch / Serial Numbers" : "Serial Numbers"} - {assetRow?.productName}
+            </DialogTitle>
           </DialogHeader>
           
-          <div className="p-4 border-b border-border bg-background sticky top-0 z-10">
+          <div className="p-4 border-b border-border bg-background sticky top-0 z-10 space-y-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="Search serial numbers..." 
+                placeholder={isAssetRowChemical ? "Search batch / serial numbers..." : "Search serial numbers..."} 
                 className="pl-9" 
                 value={assetSearchQuery}
                 onChange={(e) => setAssetSearchQuery(e.target.value)}
               />
             </div>
+            {isAssetRowChemical && assetVariantOptions.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Register one tag per physical container/bottle, tied to its packaging size. You cannot exceed that size&apos;s stock.
+              </p>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-muted/10">
@@ -957,7 +1242,12 @@ const Inventory = () => {
                   <div key={asset.id} className="flex items-center justify-between p-3 border border-border bg-card rounded-md text-sm shadow-sm transition-all hover:shadow-md">
                     <div>
                       <p className="font-semibold">{asset.assetTag}</p>
-                      <p className="text-xs text-muted-foreground">{asset.condition || "No condition specified"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isAssetRowChemical && asset.variantLabel ? (
+                          <span className="mr-2 font-medium text-foreground">{asset.variantLabel}</span>
+                        ) : null}
+                        {asset.condition || "No condition specified"}
+                      </p>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider ${asset.status === 'Available' ? 'bg-success-soft text-success' : 'bg-muted text-muted-foreground'}`}>
@@ -976,7 +1266,7 @@ const Inventory = () => {
                 )}
                 {assets.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground text-sm bg-card rounded-md border border-dashed border-border">
-                    No serial numbers registered yet.
+                    {isAssetRowChemical ? "No batch/serial numbers registered yet." : "No serial numbers registered yet."}
                   </div>
                 )}
               </div>
@@ -984,11 +1274,70 @@ const Inventory = () => {
           </div>
             
           <div className="p-4 border-t border-border bg-card shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] z-10">
-            <p className="font-medium text-sm mb-3">Register new serial number</p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Input placeholder="Serial Number / Tag" value={newAssetTag} onChange={(e) => setNewAssetTag(e.target.value)} />
-              <Input placeholder="Condition (Optional)" value={newAssetCondition} onChange={(e) => setNewAssetCondition(e.target.value)} />
-              <Button onClick={() => void handleAddAsset()} disabled={assetsLoading || !newAssetTag.trim()}>Add</Button>
+            <p className="font-medium text-sm mb-3">
+              {isAssetRowChemical ? "Register new batch / serial number" : "Register new serial number"}
+            </p>
+            <div className="flex flex-col gap-2">
+              {isAssetRowChemical && (
+                <div className="space-y-1.5">
+                  <Label required className="text-xs">Packaging size</Label>
+                  <Select
+                    value={newAssetVariantId}
+                    onValueChange={(v) => {
+                      setNewAssetVariantId(v);
+                      clearFieldError("assetVariantId");
+                    }}
+                  >
+                    <SelectTrigger className={fieldErrors.assetVariantId ? "border-destructive" : ""}>
+                      <SelectValue placeholder={assetVariantOptions.length === 0 ? "No packaging sizes / stock yet" : "Select packaging size"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assetVariantOptions.map((v) => {
+                        const used = assets.filter((a) => a.productVariantId === v.productVariantId).length;
+                        const remaining = Math.max(0, v.totalQuantity - used);
+                        return (
+                          <SelectItem key={v.productVariantId} value={v.productVariantId} disabled={v.totalQuantity <= 0}>
+                            {v.sizeValue} {v.sizeUnit} · stock {v.totalQuantity} · slots left {remaining}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <FieldError message={fieldErrors.assetVariantId} />
+                  {newAssetVariantId && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {selectedAssetVariantSerialCount} registered / {selectedAssetVariantStock?.totalQuantity ?? 0} stock
+                      {selectedAssetVariantRemaining === 0 ? " — increase stock to add more tags" : ""}
+                    </p>
+                  )}
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label required className="text-xs">{isAssetRowChemical ? "Batch / Serial / Tag" : "Serial Number / Tag"}</Label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Input
+                    placeholder={isAssetRowChemical ? "Batch / Serial / Tag" : "Serial Number / Tag"}
+                    value={newAssetTag}
+                    onChange={(e) => {
+                      setNewAssetTag(e.target.value);
+                      clearFieldError("assetTag");
+                    }}
+                    className={fieldErrors.assetTag ? "border-destructive" : ""}
+                  />
+                  <Input placeholder="Condition (Optional)" value={newAssetCondition} onChange={(e) => setNewAssetCondition(e.target.value)} />
+                  <Button
+                    onClick={() => void handleAddAsset()}
+                    disabled={
+                      assetsLoading ||
+                      !newAssetTag.trim() ||
+                      (isAssetRowChemical && (!newAssetVariantId || selectedAssetVariantRemaining <= 0))
+                    }
+                  >
+                    Add
+                  </Button>
+                </div>
+                <FieldError message={fieldErrors.assetTag} />
+              </div>
             </div>
           </div>
 

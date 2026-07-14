@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/app/components/ui/select";
 import { MapPicker } from "@/app/components/shared/MapPicker";
+import { FieldError } from "@/app/components/shared/FieldError";
 import { toast } from "sonner";
 import { Trash2, Edit2 } from "lucide-react";
 
@@ -35,6 +36,25 @@ const CustomerAddresses = () => {
   const [setDefault, setSetDefault] = useState(false);
   const [selectedStateIso2, setSelectedStateIso2] = useState<string>("");
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (key: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const validateAddressForm = () => {
+    const errors: Record<string, string> = {};
+    if (!line1.trim()) errors.line1 = "Please enter the address line.";
+    if (!city.trim()) errors.city = "Please select a city.";
+    if (!state.trim()) errors.state = "Please select a state.";
+    if (!postal.trim()) errors.postal = "Please enter the postal code.";
+    return errors;
+  };
 
   const {
     data: states = [],
@@ -80,6 +100,7 @@ const CustomerAddresses = () => {
       setLatitude(23.0225);
       setLongitude(72.5714);
       setSetDefault(false);
+      setFieldErrors({});
       queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
     },
     onError: (err: Error) => toast.error(err.message),
@@ -109,6 +130,7 @@ const CustomerAddresses = () => {
       setLatitude(23.0225);
       setLongitude(72.5714);
       setSetDefault(false);
+      setFieldErrors({});
       queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
     },
     onError: (err: Error) => toast.error(err.message),
@@ -172,6 +194,7 @@ const CustomerAddresses = () => {
                     setLatitude(a.latitude ?? 23.0225);
                     setLongitude(a.longitude ?? 72.5714);
                     setSetDefault(a.isDefault);
+                    setFieldErrors({});
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}>
                     <Edit2 className="h-4 w-4" />
@@ -190,23 +213,39 @@ const CustomerAddresses = () => {
             <p className="font-medium">{editingAddressId ? "Edit address" : "Add address"}</p>
           </CardHeader>
           <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground -mt-1 mb-1">
+              Fields marked <span className="text-destructive">*</span> are required.
+            </p>
             <div className="space-y-1.5">
               <Label htmlFor="addr-label">Label (optional)</Label>
               <Input id="addr-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Home" />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="addr-line1">Address line</Label>
-              <Input id="addr-line1" value={line1} onChange={(e) => setLine1(e.target.value)} placeholder="Street, building" />
+              <Label htmlFor="addr-line1" required>Address line</Label>
+              <Input
+                id="addr-line1"
+                value={line1}
+                onChange={(e) => {
+                  setLine1(e.target.value);
+                  clearFieldError("line1");
+                }}
+                placeholder="Street, building"
+                className={fieldErrors.line1 ? "border-destructive" : ""}
+              />
+              <FieldError message={fieldErrors.line1} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="addr-city">City</Label>
+                <Label htmlFor="addr-city" required>City</Label>
                 <Select
                   value={city || "none"}
-                  onValueChange={(value) => setCity(value === "none" ? "" : value)}
+                  onValueChange={(value) => {
+                    setCity(value === "none" ? "" : value);
+                    clearFieldError("city");
+                  }}
                   disabled={!selectedStateIso2 || citiesLoading}
                 >
-                  <SelectTrigger id="addr-city">
+                  <SelectTrigger id="addr-city" className={fieldErrors.city ? "border-destructive" : ""}>
                     <SelectValue
                       placeholder={
                         citiesLoading
@@ -226,9 +265,10 @@ const CustomerAddresses = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                <FieldError message={fieldErrors.city} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="addr-state">State</Label>
+                <Label htmlFor="addr-state" required>State</Label>
                 <Select
                   value={selectedStateIso2 || "none"}
                   onValueChange={(value) => {
@@ -237,10 +277,11 @@ const CustomerAddresses = () => {
                     const selected = states.find((s) => s.iso2 === iso2);
                     setState(selected?.name ?? "");
                     setCity("");
+                    clearFieldError("state");
                   }}
                   disabled={statesLoading}
                 >
-                  <SelectTrigger id="addr-state">
+                  <SelectTrigger id="addr-state" className={fieldErrors.state ? "border-destructive" : ""}>
                     <SelectValue placeholder={statesLoading ? "Loading states..." : "Select state"} />
                   </SelectTrigger>
                   <SelectContent>
@@ -252,6 +293,7 @@ const CustomerAddresses = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                <FieldError message={fieldErrors.state} />
               </div>
             </div>
             {(statesError || citiesError) && (
@@ -264,8 +306,17 @@ const CustomerAddresses = () => {
               </p>
             )}
             <div className="space-y-1.5">
-              <Label htmlFor="addr-postal">Postal code</Label>
-              <Input id="addr-postal" value={postal} onChange={(e) => setPostal(e.target.value)} />
+              <Label htmlFor="addr-postal" required>Postal code</Label>
+              <Input
+                id="addr-postal"
+                value={postal}
+                onChange={(e) => {
+                  setPostal(e.target.value);
+                  clearFieldError("postal");
+                }}
+                className={fieldErrors.postal ? "border-destructive" : ""}
+              />
+              <FieldError message={fieldErrors.postal} />
             </div>
             <div className="space-y-1.5">
               <Label>Pin delivery location</Label>
@@ -306,6 +357,7 @@ const CustomerAddresses = () => {
                   setLatitude(23.0225);
                   setLongitude(72.5714);
                   setSetDefault(false);
+                  setFieldErrors({});
                 }}
               >
                 Cancel
@@ -313,8 +365,18 @@ const CustomerAddresses = () => {
             )}
             <Button
               className="w-full bg-gradient-primary hover:opacity-95 shadow-glow"
-              disabled={(editingAddressId ? editMut.isPending : addMut.isPending) || !line1.trim() || !city.trim() || !state.trim() || !postal.trim()}
-              onClick={() => editingAddressId ? editMut.mutate() : addMut.mutate()}
+              disabled={editingAddressId ? editMut.isPending : addMut.isPending}
+              onClick={() => {
+                const errors = validateAddressForm();
+                if (Object.keys(errors).length > 0) {
+                  setFieldErrors(errors);
+                  toast.error("Please fill in the required fields.");
+                  return;
+                }
+                setFieldErrors({});
+                if (editingAddressId) editMut.mutate();
+                else addMut.mutate();
+              }}
             >
               {editingAddressId ? "Update address" : "Save address"}
             </Button>

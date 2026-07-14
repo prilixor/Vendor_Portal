@@ -133,7 +133,9 @@ public sealed record CustomerCatalogListingDto(
     decimal? PurityPercentage = null,
     decimal? MolecularWeight = null,
     string? BaseUnit = null,
-    bool IsChemical = false);
+    bool IsChemical = false,
+    /// <summary>Highest active variant buy price (chemicals). Null when equal to BuyPrice or not applicable.</summary>
+    decimal? MaxBuyPrice = null);
 
 /// <summary>Listing + vendor + product loaded for checkout validation.</summary>
 public sealed class VendorProductListingAggregate

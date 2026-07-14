@@ -136,6 +136,7 @@ export interface VendorProductListingApiDto {
   availableQuantity: number;
   listingStatus: string;
   favoriteCount: number;
+  isChemical?: boolean;
 }
 
 export interface VendorProductImageApiDto {
@@ -173,6 +174,8 @@ export interface VendorProductAssetApiDto {
   status: string;
   condition?: string;
   createdAt: string;
+  productVariantId?: string | null;
+  variantLabel?: string | null;
 }
 
 export interface TrackedAssetDto {
@@ -193,6 +196,7 @@ export interface UpsertVendorProductAssetPayload {
   assetTag: string;
   status: string;
   condition?: string;
+  productVariantId?: string | null;
 }
 
 export interface VendorInventoryMovementApiDto {

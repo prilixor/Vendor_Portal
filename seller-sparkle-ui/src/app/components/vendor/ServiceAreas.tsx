@@ -6,6 +6,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { MapPicker } from "@/app/components/shared/MapPicker";
+import { FieldError } from "@/app/components/shared/FieldError";
 import { ServiceArea } from "@/app/models";
 import { Plus, MapPin, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -25,6 +26,16 @@ const ServiceAreas = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (key: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const toUiArea = (a: Awaited<ReturnType<typeof vendorOnboardingApi.getVendorServiceAreas>>[number]): ServiceArea => ({
     id: a.id,
@@ -35,8 +46,8 @@ const ServiceAreas = () => {
     radiusKm: a.serviceRadiusKm,
   });
 
-  const startNew = () => { setEditing({ ...blank, id: `sa${Date.now()}` }); setOpen(true); };
-  const startEdit = (a: ServiceArea) => { setEditing(a); setOpen(true); };
+  const startNew = () => { setFieldErrors({}); setEditing({ ...blank, id: `sa${Date.now()}` }); setOpen(true); };
+  const startEdit = (a: ServiceArea) => { setFieldErrors({}); setEditing(a); setOpen(true); };
   const remove = (id: string) => {
     setDeleteConfirmId(id);
   };
@@ -68,10 +79,22 @@ const ServiceAreas = () => {
       return;
     }
 
-    if (!editing.name || !editing.city) { toast.error("Name and city are required"); return; }
+    const errors: Record<string, string> = {};
+    if (!editing.name?.trim()) {
+      errors.name = "Please enter an area name.";
+    }
+    if (!editing.city?.trim()) {
+      errors.city = "Please enter a city.";
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error("Please fill in the required fields.");
+      return;
+    }
 
     try {
       setBusy(true);
+      setFieldErrors({});
       const exists = areas.some((p) => p.id === editing.id);
 
       if (exists) {
@@ -233,15 +256,36 @@ const ServiceAreas = () => {
           <DialogHeader>
             <DialogTitle>{editing.id && areas.some((a) => a.id === editing.id) ? "Edit" : "New"} service area</DialogTitle>
           </DialogHeader>
+          <p className="text-xs text-muted-foreground px-1 -mt-1 mb-2">
+            Fields marked <span className="text-destructive">*</span> are required.
+          </p>
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Area name</Label>
-                <Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="e.g. South Mumbai" />
+                <Label required>Area name</Label>
+                <Input
+                  value={editing.name}
+                  onChange={(e) => {
+                    setEditing({ ...editing, name: e.target.value });
+                    clearFieldError("name");
+                  }}
+                  placeholder="e.g. South Mumbai"
+                  className={fieldErrors.name ? "border-destructive" : ""}
+                />
+                <FieldError message={fieldErrors.name} />
               </div>
               <div className="space-y-1.5">
-                <Label>City</Label>
-                <Input value={editing.city} onChange={(e) => setEditing({ ...editing, city: e.target.value })} placeholder="Mumbai" />
+                <Label required>City</Label>
+                <Input
+                  value={editing.city}
+                  onChange={(e) => {
+                    setEditing({ ...editing, city: e.target.value });
+                    clearFieldError("city");
+                  }}
+                  placeholder="Mumbai"
+                  className={fieldErrors.city ? "border-destructive" : ""}
+                />
+                <FieldError message={fieldErrors.city} />
               </div>
             </div>
             {mapReady ? (

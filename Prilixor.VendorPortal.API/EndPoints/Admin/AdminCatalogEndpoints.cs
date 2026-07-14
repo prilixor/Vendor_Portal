@@ -49,6 +49,13 @@ public sealed class CreateProductRequest
     public bool IsBuyEnabled { get; set; } = true;
     public bool IsActive { get; set; } = true;
     public List<CreateOrUpdateProductVariantDto>? Variants { get; set; }
+    public string? CasNumber { get; set; }
+    public string? ChemicalFormula { get; set; }
+    public decimal? PurityPercentage { get; set; }
+    public decimal? MolecularWeight { get; set; }
+    public string? BaseUnit { get; set; }
+    public string? SdsDocumentUrl { get; set; }
+    public string? CoaDocumentUrl { get; set; }
 }
 
 public sealed class UpdateProductRequest
@@ -73,6 +80,13 @@ public sealed class UpdateProductRequest
     public bool IsBuyEnabled { get; set; } = true;
     public bool IsActive { get; set; }
     public List<CreateOrUpdateProductVariantDto>? Variants { get; set; }
+    public string? CasNumber { get; set; }
+    public string? ChemicalFormula { get; set; }
+    public decimal? PurityPercentage { get; set; }
+    public decimal? MolecularWeight { get; set; }
+    public string? BaseUnit { get; set; }
+    public string? SdsDocumentUrl { get; set; }
+    public string? CoaDocumentUrl { get; set; }
 }
 
 public sealed class AddProductImageRequest
@@ -244,7 +258,14 @@ public sealed class CreateProductEndpoint(IMediator mediator)
             req.IsRentEnabled,
             req.IsBuyEnabled,
             req.IsActive,
-            req.Variants), ct);
+            req.Variants,
+            req.CasNumber,
+            req.ChemicalFormula,
+            req.PurityPercentage,
+            req.MolecularWeight,
+            req.BaseUnit,
+            req.SdsDocumentUrl,
+            req.CoaDocumentUrl), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -262,6 +283,7 @@ public sealed class UpdateProductEndpoint(IMediator mediator)
 
     public override async Task<Results<Ok<ProductDto>, ProblemHttpResult>> ExecuteAsync(UpdateProductRequest req, CancellationToken ct)
     {
+        req.Id = Route<string>("id") ?? req.Id;
         var result = await mediator.Send(new UpdateProductCommand(
             req.Id,
             req.CategoryId,
@@ -282,7 +304,14 @@ public sealed class UpdateProductEndpoint(IMediator mediator)
             req.IsRentEnabled,
             req.IsBuyEnabled,
             req.IsActive,
-            req.Variants), ct);
+            req.Variants,
+            req.CasNumber,
+            req.ChemicalFormula,
+            req.PurityPercentage,
+            req.MolecularWeight,
+            req.BaseUnit,
+            req.SdsDocumentUrl,
+            req.CoaDocumentUrl), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }

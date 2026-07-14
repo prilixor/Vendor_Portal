@@ -331,6 +331,9 @@ const CustomerCheckout = () => {
                   <p className="text-sm text-blue-700/80 mt-0.5 leading-relaxed">
                     Some items in your cart require a doctor's reference. Please attach them below.
                   </p>
+                  <p className="text-xs text-blue-700/70 mt-1">
+                    Hospital and doctor (<span className="text-destructive">*</span>) are required for these items.
+                  </p>
                 </div>
               </div>
               <div className="divide-y divide-border/60">
@@ -495,8 +498,17 @@ const CustomerCheckout = () => {
             <Button
               className="w-full bg-foreground text-background hover:bg-foreground/90"
               size="lg"
-              disabled={placeMutation.isPending || !!quoteError || quoteLoading || lines.some(l => l.prescriptionRequired && (!medicalRefs[l.listingId]?.hospitalId || !medicalRefs[l.listingId]?.doctorId))}
-              onClick={() => placeMutation.mutate()}
+              disabled={placeMutation.isPending || !!quoteError || quoteLoading}
+              onClick={() => {
+                const missingPrescription = lines.some(
+                  (l) => l.prescriptionRequired && (!medicalRefs[l.listingId]?.hospitalId || !medicalRefs[l.listingId]?.doctorId),
+                );
+                if (missingPrescription) {
+                  toast.error("Please fill in the required fields. Attach hospital and doctor details for prescription items.");
+                  return;
+                }
+                placeMutation.mutate();
+              }}
             >
               {placeMutation.isPending ? (
                 <>

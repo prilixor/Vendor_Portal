@@ -83,6 +83,8 @@ public interface IVendorOnboardingRepository
 
     Task<List<VendorVariantInventory>> GetVariantInventoryByListingIdAsync(Guid listingId, CancellationToken cancellationToken);
     Task UpsertVariantInventoryAsync(VendorVariantInventory item, CancellationToken cancellationToken);
+    /// <summary>Marks tracked ProductVariant entities Unchanged so stock saves never UPDATE catalog rows.</summary>
+    void DiscardTrackedProductVariantChanges();
 
 
     Task AddVendorProductAssetAsync(VendorProductAsset asset, CancellationToken cancellationToken);

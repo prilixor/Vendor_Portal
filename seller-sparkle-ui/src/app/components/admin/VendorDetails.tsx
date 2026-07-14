@@ -219,6 +219,59 @@ const ChemPriceDisclosure = ({ label, count, sizes }: { label: string; count: nu
   );
 };
 
+type ChemStockSize = { label: string; sku: string; total: number; available: number };
+
+/** Collapsed by default so many packaging sizes do not stretch the listing row. */
+const ChemStockDisclosure = ({
+  total,
+  available,
+  sizes,
+}: {
+  total: number;
+  available: number;
+  sizes: ChemStockSize[];
+}) => {
+  const [open, setOpen] = useState(false);
+  const count = sizes.length;
+  return (
+    <div className="text-right">
+      <p className="text-sm font-mono font-medium">Qty {total}</p>
+      <p className="text-[10px] text-muted-foreground">{available} available</p>
+      {count > 0 && (
+        <div className="mt-0.5 flex flex-col items-end">
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+          >
+            <span>
+              {count} {count === 1 ? "size" : "sizes"}
+            </span>
+            <ChevronDown className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+          {open && (
+            <div className="mt-1 max-h-40 w-full min-w-[9rem] max-w-[12rem] divide-y divide-border/40 overflow-auto rounded-md border border-border/60 text-left">
+              {sizes.map((s, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 px-2 py-1 text-[10px]">
+                  <span className="text-muted-foreground truncate" title={s.sku}>
+                    {s.label}
+                  </span>
+                  <span className="font-mono tabular-nums font-medium shrink-0">
+                    {s.total}
+                    {s.available !== s.total ? (
+                      <span className="text-muted-foreground font-normal"> · {s.available}</span>
+                    ) : null}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const VendorDetails = () => {
 
   const { vendorId } = useParams();
@@ -328,22 +381,67 @@ const VendorDetails = () => {
       setProductListings(sortedListings);
 
       // Load catalog products (with per-size variants) so chemical listings can show pricing.
+      let productsById: Record<string, ProductDto> = {};
       try {
         const productsData = await adminApi.getProducts();
         const map: Record<string, ProductDto> = {};
         productsData.forEach((prod) => { map[prod.id] = prod; });
+        productsById = map;
         setProductMap(map);
       } catch {
         setProductMap({});
       }
 
-      // Fetch inventory for each listing
-      const inventoryData: Record<string, any> = {};
+      // Fetch inventory for each listing.
+      // Chemicals: packaging-size (variant) stock is authoritative — same as Vendor Inventory.
+      // Equipment: flat VendorInventory.
+      const inventoryData: Record<string, {
+        totalQuantity: number;
+        availableQuantity: number;
+        reservedQuantity?: number;
+        sizes?: { label: string; sku: string; total: number; available: number }[];
+        source: "variant" | "flat";
+      }> = {};
       await Promise.all(
         sortedListings.map(async (l) => {
           try {
+            const catalogProduct = productsById[l.productId];
+            const isChemical = !!(
+              l.isChemical ||
+              catalogProduct?.baseUnit ||
+              catalogProduct?.casNumber ||
+              catalogProduct?.chemicalFormula ||
+              (catalogProduct?.variants && catalogProduct.variants.length > 0)
+            );
+
+            if (isChemical) {
+              const variantRows = await vendorOnboardingApi.getVariantInventory(id, l.id).catch(() => []);
+              if (variantRows.length > 0) {
+                inventoryData[l.id] = {
+                  totalQuantity: variantRows.reduce((sum, r) => sum + (r.totalQuantity || 0), 0),
+                  availableQuantity: variantRows.reduce((sum, r) => sum + (r.availableQuantity || 0), 0),
+                  reservedQuantity: variantRows.reduce((sum, r) => sum + (r.reservedQuantity || 0), 0),
+                  sizes: variantRows.map((r) => ({
+                    label: `${r.sizeValue} ${r.sizeUnit}`,
+                    sku: r.sku,
+                    total: r.totalQuantity || 0,
+                    available: r.availableQuantity || 0,
+                  })),
+                  source: "variant",
+                };
+                return;
+              }
+            }
+
             const inv = await vendorOnboardingApi.getVendorInventory(id, l.id);
-            if (inv) inventoryData[l.id] = inv;
+            if (inv) {
+              inventoryData[l.id] = {
+                totalQuantity: inv.totalQuantity,
+                availableQuantity: inv.availableQuantity,
+                reservedQuantity: inv.reservedQuantity,
+                source: "flat",
+              };
+            }
           } catch {
             // ignore if no inventory
           }
@@ -1413,10 +1511,20 @@ const VendorDetails = () => {
 
                   </div>
 
-                  <div className="text-right">
-                    <p className="text-sm font-mono font-medium">Qty {inventoryMap[p.id]?.totalQuantity ?? p.availableQuantity}</p>
-                    {inventoryMap[p.id] && (
-                      <p className="text-[10px] text-muted-foreground">{inventoryMap[p.id].availableQuantity} available</p>
+                  <div className="text-right shrink-0">
+                    {inventoryMap[p.id]?.source === "variant" && inventoryMap[p.id]?.sizes && inventoryMap[p.id].sizes!.length > 0 ? (
+                      <ChemStockDisclosure
+                        total={inventoryMap[p.id].totalQuantity}
+                        available={inventoryMap[p.id].availableQuantity}
+                        sizes={inventoryMap[p.id].sizes!}
+                      />
+                    ) : (
+                      <>
+                        <p className="text-sm font-mono font-medium">Qty {inventoryMap[p.id]?.totalQuantity ?? p.availableQuantity}</p>
+                        {inventoryMap[p.id] && (
+                          <p className="text-[10px] text-muted-foreground">{inventoryMap[p.id].availableQuantity} available</p>
+                        )}
+                      </>
                     )}
                   </div>
 

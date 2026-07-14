@@ -18,6 +18,8 @@ export interface CustomerCatalogListingApi {
   availabilityStatus: "available" | "low_stock" | "out_of_stock" | string;
   primaryImageUrl?: string | null;
   buyPrice?: number;
+  /** Highest chemical packaging buy price when sizes differ; omit when same as buyPrice. */
+  maxBuyPrice?: number;
   isRentEnabled?: boolean;
   isBuyEnabled?: boolean;
   /** True when the listing's category is a chemical (buy-only + chemical spec display). */
@@ -51,6 +53,8 @@ export interface CustomerCatalogCategoryApi {
   depositRequired: boolean;
   installationRequired: boolean;
   isActive: boolean;
+  /** True for chemical categories (used to filter pills by Equipment vs Chemicals tab). */
+  isChemical?: boolean;
 }
 
 export interface CustomerListingDetailApi {

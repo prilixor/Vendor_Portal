@@ -21,6 +21,7 @@ public sealed class AddVendorProductAssetRequest : VendorListingIdRequest
     public string AssetTag { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string? Condition { get; set; }
+    public Guid? ProductVariantId { get; set; }
 }
 
 public sealed class UpdateVendorProductAssetRequest : VendorAssetIdRequest
@@ -61,7 +62,13 @@ public sealed class AddVendorProductAssetEndpoint(IMediator mediator)
 
     public override async Task<Results<Ok<Guid>, ProblemHttpResult>> ExecuteAsync(AddVendorProductAssetRequest req, CancellationToken ct)
     {
-        var result = await mediator.Send(new AddVendorProductAssetCommand(Guid.Parse(req.VendorId), req.ListingId, req.AssetTag, req.Status, req.Condition), ct);
+        var result = await mediator.Send(new AddVendorProductAssetCommand(
+            Guid.Parse(req.VendorId),
+            req.ListingId,
+            req.AssetTag,
+            req.Status,
+            req.Condition,
+            req.ProductVariantId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

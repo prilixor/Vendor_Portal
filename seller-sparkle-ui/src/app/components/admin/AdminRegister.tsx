@@ -8,9 +8,9 @@ import { adminApi } from "@/app/services/adminApi";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
-const Field = ({ id, label, type, value, onChange, placeholder, error, disabled = false }: any) => (
+const Field = ({ id, label, type, value, onChange, placeholder, error, disabled = false, required }: any) => (
   <div className="space-y-1.5">
-    <Label htmlFor={id}>{label}</Label>
+    <Label htmlFor={id} required={required}>{label}</Label>
     <Input
       id={id}
       type={type}
@@ -25,9 +25,9 @@ const Field = ({ id, label, type, value, onChange, placeholder, error, disabled 
   </div>
 );
 
-const SelectField = ({ id, label, value, onChange, options, error }: any) => (
+const SelectField = ({ id, label, value, onChange, options, error, required }: any) => (
   <div className="space-y-1.5">
-    <Label htmlFor={id}>{label}</Label>
+    <Label htmlFor={id} required={required}>{label}</Label>
     <select
       id={id}
       value={value}
@@ -99,6 +99,9 @@ const AdminRegister = () => {
   return (
     <AuthLayout title="Create admin account" subtitle="Add a new administrator to the system." portalType="admin">
       <form onSubmit={submit} className="space-y-4">
+        <p className="text-xs text-muted-foreground -mt-1">
+          Fields marked <span className="text-destructive">*</span> are required.
+        </p>
         <Field
           id="fullName"
           label="Full name"
@@ -107,6 +110,7 @@ const AdminRegister = () => {
           onChange={(e: any) => setFullName(e.target.value)}
           placeholder="John Doe"
           error={errors.fullName}
+          required
         />
         <Field
           id="email"
@@ -116,6 +120,7 @@ const AdminRegister = () => {
           onChange={(e: any) => setEmail(e.target.value)}
           placeholder="admin@company.com"
           error={errors.email}
+          required
         />
         <SelectField
           id="role"
@@ -124,6 +129,7 @@ const AdminRegister = () => {
           onChange={(e: any) => setRole(e.target.value)}
           options={roleOptions}
           error={errors.role}
+          required
         />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
@@ -134,6 +140,7 @@ const AdminRegister = () => {
             onChange={(e: any) => setPassword(e.target.value)}
             placeholder="••••••••"
             error={errors.password}
+            required
           />
           <Field
             id="confirm"
@@ -143,6 +150,7 @@ const AdminRegister = () => {
             onChange={(e: any) => setConfirm(e.target.value)}
             placeholder="••••••••"
             error={errors.confirm}
+            required
           />
         </div>
 

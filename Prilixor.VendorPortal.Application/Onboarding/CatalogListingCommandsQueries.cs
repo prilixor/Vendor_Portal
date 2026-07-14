@@ -142,6 +142,7 @@ internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository re
 
         var entity = new Product
         {
+            Id = Guid.CreateVersion7(),
             CategoryId = categoryId,
             ProductName = request.ProductName,
             BrandName = request.BrandName,
@@ -166,7 +167,7 @@ internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository re
         {
             entity.Variants = request.Variants.Select(v => new ProductVariant
             {
-                Id = string.IsNullOrEmpty(v.Id) ? Guid.NewGuid() : Guid.Parse(v.Id),
+                Id = string.IsNullOrEmpty(v.Id) ? Guid.CreateVersion7() : Guid.Parse(v.Id),
                 ProductId = entity.Id,
                 Sku = v.Sku,
                 SizeValue = v.SizeValue,
@@ -177,17 +178,28 @@ internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository re
             }).ToList();
         }
 
-        if (request.CasNumber != null || request.ChemicalFormula != null || request.BaseUnit != null)
+        var hasChemicalFields = !string.IsNullOrWhiteSpace(request.CasNumber)
+            || !string.IsNullOrWhiteSpace(request.ChemicalFormula)
+            || !string.IsNullOrWhiteSpace(request.BaseUnit)
+            || request.PurityPercentage.HasValue
+            || request.MolecularWeight.HasValue
+            || !string.IsNullOrWhiteSpace(request.SdsDocumentUrl)
+            || !string.IsNullOrWhiteSpace(request.CoaDocumentUrl);
+
+        // Chemical categories must always get a ChemicalProperty row — UI filters chemicals by these fields.
+        if (category.IsChemical || hasChemicalFields)
         {
             entity.ChemicalProperty = new ChemicalProperty
             {
-                CasNumber = request.CasNumber,
-                ChemicalFormula = request.ChemicalFormula,
+                Id = Guid.CreateVersion7(),
+                ProductId = entity.Id,
+                CasNumber = string.IsNullOrWhiteSpace(request.CasNumber) ? null : request.CasNumber.Trim(),
+                ChemicalFormula = string.IsNullOrWhiteSpace(request.ChemicalFormula) ? null : request.ChemicalFormula.Trim(),
                 PurityPercentage = request.PurityPercentage,
                 MolecularWeight = request.MolecularWeight,
-                BaseUnit = request.BaseUnit ?? "Kg",
-                SdsDocumentUrl = request.SdsDocumentUrl,
-                CoaDocumentUrl = request.CoaDocumentUrl
+                BaseUnit = string.IsNullOrWhiteSpace(request.BaseUnit) ? "Kg" : request.BaseUnit.Trim(),
+                SdsDocumentUrl = string.IsNullOrWhiteSpace(request.SdsDocumentUrl) ? null : request.SdsDocumentUrl.Trim(),
+                CoaDocumentUrl = string.IsNullOrWhiteSpace(request.CoaDocumentUrl) ? null : request.CoaDocumentUrl.Trim()
             };
         }
 
@@ -353,6 +365,7 @@ internal sealed class AddProductImageCommandHandler(
 
         var entity = new ProductImage
         {
+            Id = Guid.CreateVersion7(),
             ProductId = productId,
             ImageUrl = request.ImageUrl,
             DisplayOrder = request.DisplayOrder,
@@ -1303,16 +1316,39 @@ internal sealed class UpdateProductCommandHandler(IVendorOnboardingRepository re
             }
         }
 
-        if (request.CasNumber != null || request.ChemicalFormula != null || request.BaseUnit != null)
+        var hasChemicalFields = !string.IsNullOrWhiteSpace(request.CasNumber)
+            || !string.IsNullOrWhiteSpace(request.ChemicalFormula)
+            || !string.IsNullOrWhiteSpace(request.BaseUnit)
+            || request.PurityPercentage.HasValue
+            || request.MolecularWeight.HasValue
+            || !string.IsNullOrWhiteSpace(request.SdsDocumentUrl)
+            || !string.IsNullOrWhiteSpace(request.CoaDocumentUrl);
+
+        // Only apply chemical field updates when the request carries chemical data.
+        // Partial updates (e.g. status toggle) must not wipe CAS/formula/base unit to null.
+        if (hasChemicalFields)
         {
-            entity.ChemicalProperty ??= new ChemicalProperty { ProductId = entity.Id };
-            entity.ChemicalProperty.CasNumber = request.CasNumber;
-            entity.ChemicalProperty.ChemicalFormula = request.ChemicalFormula;
+            entity.ChemicalProperty ??= new ChemicalProperty
+            {
+                Id = Guid.CreateVersion7(),
+                ProductId = entity.Id
+            };
+            entity.ChemicalProperty.CasNumber = string.IsNullOrWhiteSpace(request.CasNumber) ? null : request.CasNumber.Trim();
+            entity.ChemicalProperty.ChemicalFormula = string.IsNullOrWhiteSpace(request.ChemicalFormula) ? null : request.ChemicalFormula.Trim();
             entity.ChemicalProperty.PurityPercentage = request.PurityPercentage;
             entity.ChemicalProperty.MolecularWeight = request.MolecularWeight;
-            entity.ChemicalProperty.BaseUnit = request.BaseUnit ?? "Kg";
-            entity.ChemicalProperty.SdsDocumentUrl = request.SdsDocumentUrl;
-            entity.ChemicalProperty.CoaDocumentUrl = request.CoaDocumentUrl;
+            entity.ChemicalProperty.BaseUnit = string.IsNullOrWhiteSpace(request.BaseUnit) ? "Kg" : request.BaseUnit.Trim();
+            entity.ChemicalProperty.SdsDocumentUrl = string.IsNullOrWhiteSpace(request.SdsDocumentUrl) ? null : request.SdsDocumentUrl.Trim();
+            entity.ChemicalProperty.CoaDocumentUrl = string.IsNullOrWhiteSpace(request.CoaDocumentUrl) ? null : request.CoaDocumentUrl.Trim();
+        }
+        else if (category.IsChemical && entity.ChemicalProperty is null)
+        {
+            entity.ChemicalProperty = new ChemicalProperty
+            {
+                Id = Guid.CreateVersion7(),
+                ProductId = entity.Id,
+                BaseUnit = "Kg"
+            };
         }
 
         await repository.UpdateProductAsync(entity, cancellationToken);
@@ -1724,6 +1760,8 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
 
                                 product.ChemicalProperty = new ChemicalProperty
                                 {
+                                    Id = Guid.NewGuid(),
+                                    ProductId = product.Id,
                                     CasNumber = string.IsNullOrWhiteSpace(casNumber) ? null : casNumber,
                                     ChemicalFormula = string.IsNullOrWhiteSpace(chemicalFormula) ? null : chemicalFormula,
                                     PurityPercentage = purity,

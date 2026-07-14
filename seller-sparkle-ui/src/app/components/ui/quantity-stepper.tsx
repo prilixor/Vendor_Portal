@@ -7,16 +7,25 @@ export function QuantityStepper({
   min,
   max,
   onChange,
+  required,
 }: {
   label: string;
   value: number;
   min: number;
   max: number;
   onChange: (next: number) => void;
+  required?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="text-xs font-medium text-muted-foreground">
+        {label}
+        {required ? (
+          <span className="ml-0.5 text-destructive" aria-hidden="true">
+            *
+          </span>
+        ) : null}
+      </span>
       <div className="inline-flex h-9 items-center rounded-full border border-border bg-background shadow-sm">
         <Button
           type="button"

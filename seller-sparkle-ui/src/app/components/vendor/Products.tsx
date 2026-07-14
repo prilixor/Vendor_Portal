@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/app/components/ui/pagination";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { FormGrid } from "@/app/components/shared/FormGrid";
+import { FieldError } from "@/app/components/shared/FieldError";
 import { ProductListing } from "@/app/models";
 import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText, Loader2, Package, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
@@ -31,12 +32,16 @@ type LocalListing = ProductListing & {
   isBuyEnabled?: boolean;
   favoriteCount?: number;
   baseUnit?: string;
+  casNumber?: string;
+  chemicalFormula?: string;
+  isChemical?: boolean;
   variants?: any[];
 };
 
 type CatalogCategory = {
   id: string;
   name: string;
+  isChemical?: boolean;
 };
 
 type CatalogProduct = {
@@ -47,10 +52,12 @@ type CatalogProduct = {
   monthlyRent: number;
   securityDeposit: number;
   buyPrice?: number;
-  gstPercent: number;
-  isRentEnabled: boolean;
-  isBuyEnabled: boolean;
+  gstPercent?: number;
+  isRentEnabled?: boolean;
+  isBuyEnabled?: boolean;
   baseUnit?: string;
+  casNumber?: string;
+  chemicalFormula?: string;
   variants?: any[];
 };
 
@@ -182,6 +189,16 @@ const Products = () => {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   // Variant-level stock for the chemical listing currently being edited
   const [variantStocks, setVariantStocks] = useState<Record<string, number>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (key: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -281,8 +298,16 @@ const Products = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const docFileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const isChemicalCatalogProduct = (p: CatalogProduct, cats: CatalogCategory[] = categories) => {
+    const category = cats.find((c) => c.id === p.categoryId);
+    return !!(category?.isChemical || p.baseUnit || p.casNumber || p.chemicalFormula);
+  };
+
+  const isChemicalListing = (p: LocalListing) =>
+    !!(p.isChemical || p.baseUnit || p.casNumber || p.chemicalFormula);
+
   const filtered = products.filter((p) => {
-    const isChem = p.baseUnit != null;
+    const isChem = isChemicalListing(p);
     if (activeTab === "equipment" && isChem) return false;
     if (activeTab === "chemical" && !isChem) return false;
 
@@ -339,16 +364,26 @@ const Products = () => {
   };
 
   const openEditListing = async (p: LocalListing) => {
+    setFieldErrors({});
     setEditing(p);
-    // For chemical listings, pre-load existing per-size (variant) stock
+    // For chemical listings, pre-load existing per-size (variant) stock and align QTY to that sum.
     if (activeTab === "chemical" && user && p.variants && p.variants.length > 0) {
       try {
         const stocks = await vendorOnboardingApi.getVariantInventory(user.id, p.id);
         const stockMap: Record<string, number> = {};
         stocks.forEach((s) => { stockMap[s.productVariantId] = s.totalQuantity; });
+        // Ensure every catalog variant has a row (default 0) so save always syncs totals.
+        p.variants.forEach((v: any) => {
+          if (stockMap[v.id] === undefined) stockMap[v.id] = 0;
+        });
+        const variantTotal = Object.values(stockMap).reduce((sum, n) => sum + (Number(n) || 0), 0);
         setVariantStocks(stockMap);
+        setEditing({ ...p, quantity: variantTotal });
       } catch {
-        setVariantStocks({});
+        const empty: Record<string, number> = {};
+        p.variants.forEach((v: any) => { empty[v.id] = 0; });
+        setVariantStocks(empty);
+        setEditing({ ...p, quantity: 0 });
       }
     } else {
       setVariantStocks({});
@@ -390,7 +425,7 @@ const Products = () => {
   };
 
   const loadCatalogAndListings = async () => {
-    if (!user) return;
+    if (!user) return { categories: [] as CatalogCategory[], products: [] as CatalogProduct[] };
 
     const [categoriesRes, productsRes, listingsRes] = await Promise.all([
       vendorOnboardingApi.getProductCategories(),
@@ -409,7 +444,11 @@ const Products = () => {
     );
     const inventoryMap = new Map(inventories.filter(i => i !== null).map(i => [i!.vendorProductListingId, i]));
 
-    const mappedCategories: CatalogCategory[] = categoriesRes.map((c) => ({ id: c.id, name: c.categoryName }));
+    const mappedCategories: CatalogCategory[] = categoriesRes.map((c) => ({
+      id: c.id,
+      name: c.categoryName,
+      isChemical: c.isChemical,
+    }));
     const mappedProducts: CatalogProduct[] = productsRes.map((p) => ({
       id: p.id,
       categoryId: p.categoryId,
@@ -422,10 +461,34 @@ const Products = () => {
       isRentEnabled: p.isRentEnabled,
       isBuyEnabled: p.isBuyEnabled,
       baseUnit: p.baseUnit,
+      casNumber: p.casNumber,
+      chemicalFormula: p.chemicalFormula,
       variants: p.variants,
     }));
     const byProductId = new Map(mappedProducts.map((p) => [p.id, p]));
     const byCategoryId = new Map(mappedCategories.map((c) => [c.id, c]));
+
+    // For chemicals, QTY must come from per-size (variant) stock — not the flat listing inventory.
+    const chemicalListingIds = listingsRes
+      .filter((l) => {
+        const product = byProductId.get(l.productId);
+        const category = product ? byCategoryId.get(product.categoryId) : undefined;
+        return !!(category?.isChemical || product?.baseUnit || product?.casNumber || product?.chemicalFormula || l.isChemical);
+      })
+      .map((l) => l.id);
+
+    const variantInventoryByListing = new Map<string, number>();
+    await Promise.all(
+      chemicalListingIds.map(async (listingId) => {
+        try {
+          const rows = await vendorOnboardingApi.getVariantInventory(user.id, listingId);
+          const total = rows.reduce((sum, r) => sum + (r.totalQuantity || 0), 0);
+          variantInventoryByListing.set(listingId, total);
+        } catch {
+          // Keep listing-level qty as fallback when variant inventory is unavailable.
+        }
+      })
+    );
 
     setCategories(mappedCategories);
     setCatalogProducts(mappedProducts);
@@ -433,6 +496,11 @@ const Products = () => {
       listingsRes.map((l) => {
         const product = byProductId.get(l.productId);
         const category = product ? byCategoryId.get(product.categoryId) : undefined;
+        const isChemical = !!(category?.isChemical || product?.baseUnit || product?.casNumber || product?.chemicalFormula || l.isChemical);
+        const listingQty = inventoryMap.get(l.id)?.totalQuantity ?? l.availableQuantity;
+        const quantity = isChemical && variantInventoryByListing.has(l.id)
+          ? (variantInventoryByListing.get(l.id) ?? 0)
+          : listingQty;
         return {
           id: l.id,
           productId: l.productId,
@@ -447,16 +515,21 @@ const Products = () => {
           gstPercent: product?.gstPercent ?? 18,
           isRentEnabled: product?.isRentEnabled ?? true,
           isBuyEnabled: product?.isBuyEnabled ?? true,
-          quantity: inventoryMap.get(l.id)?.totalQuantity ?? l.availableQuantity,
+          quantity,
           status: normalizeListingStatus(l.listingStatus),
           images: [],
           favoriteCount: l.favoriteCount ?? 0,
           createdAt: new Date().toISOString(),
           baseUnit: product?.baseUnit,
+          casNumber: product?.casNumber,
+          chemicalFormula: product?.chemicalFormula,
           variants: product?.variants || [],
+          isChemical,
         };
       })
     );
+
+    return { categories: mappedCategories, products: mappedProducts };
   };
 
   useEffect(() => {
@@ -481,12 +554,15 @@ const Products = () => {
   }, [user]);
 
   const openNew = async () => {
+    setFieldErrors({});
     // Refresh catalog data to get latest products and categories
-    await loadCatalogAndListings();
+    const loaded = await loadCatalogAndListings();
+    const freshCategories = loaded?.categories ?? categories;
+    const freshProducts = loaded?.products ?? catalogProducts;
     
-    const availableCategories = categories.filter(c => catalogProducts.some(p => p.categoryId === c.id && (activeTab === "chemical" ? p.baseUnit != null : p.baseUnit == null)));
-    const firstCategory = availableCategories[0] || categories[0];
-    const firstProduct = firstCategory ? catalogProducts.find((p) => p.categoryId === firstCategory.id && (activeTab === "chemical" ? p.baseUnit != null : p.baseUnit == null)) : undefined;
+    const availableCategories = freshCategories.filter(c => freshProducts.some(p => p.categoryId === c.id && (activeTab === "chemical" ? isChemicalCatalogProduct(p, freshCategories) : !isChemicalCatalogProduct(p, freshCategories))));
+    const firstCategory = availableCategories[0] || freshCategories[0];
+    const firstProduct = firstCategory ? freshProducts.find((p) => p.categoryId === firstCategory.id && (activeTab === "chemical" ? isChemicalCatalogProduct(p, freshCategories) : !isChemicalCatalogProduct(p, freshCategories))) : undefined;
     setVariantStocks({});
     setEditing(blankListing(firstCategory, firstProduct));
   };
@@ -494,7 +570,7 @@ const Products = () => {
   const onCategoryChange = (categoryId: string) => {
     if (!editing) return;
     const category = categories.find((c) => c.id === categoryId);
-    const firstProduct = catalogProducts.find((p) => p.categoryId === categoryId && (activeTab === "chemical" ? p.baseUnit != null : p.baseUnit == null));
+    const firstProduct = catalogProducts.find((p) => p.categoryId === categoryId && (activeTab === "chemical" ? isChemicalCatalogProduct(p) : !isChemicalCatalogProduct(p)));
     setEditing({
       ...editing,
       categoryId,
@@ -506,11 +582,39 @@ const Products = () => {
 
   const save = async () => {
     if (!editing || !user) return;
-    if (!editing.title || !editing.productId) { toast.error("Title and product are required"); return; }
+
+    const errors: Record<string, string> = {};
+    if (!editing.categoryId?.trim()) {
+      errors.categoryId = "Please select a category.";
+    }
+    if (!editing.productId?.trim()) {
+      errors.productId = "Please select a product.";
+    }
+    if (!editing.title?.trim()) {
+      errors.title = "Please enter a listing title.";
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error("Please fill in the required fields.");
+      return;
+    }
 
     try {
       setBusy(true);
+      setFieldErrors({});
       let savedListingId = editing.id;
+
+      const isChemical = activeTab === "chemical" || !!editing.isChemical;
+      const hasVariants = !!(editing.variants && editing.variants.length > 0);
+      const isNewListing = !editing.id;
+
+      // Chemicals: initial stock is set only when creating the listing (same rule as equipment Quantity).
+      const chemicalQty = hasVariants
+        ? editing.variants!.reduce((sum: number, v: any) => sum + (Number(variantStocks[v.id]) || 0), 0)
+        : editing.quantity;
+      const quantityToSave = isChemical
+        ? (isNewListing ? chemicalQty : editing.quantity)
+        : editing.quantity;
 
       if (editing.id) {
         await vendorOnboardingApi.updateVendorProductListing(user.id, editing.id, {
@@ -518,7 +622,7 @@ const Products = () => {
           listingId: editing.id,
           productId: editing.productId,
           listingTitle: editing.title,
-          availableQuantity: editing.quantity,
+          availableQuantity: quantityToSave,
           listingStatus: editing.status,
         });
       } else {
@@ -526,19 +630,17 @@ const Products = () => {
           vendorId: user.id,
           productId: editing.productId,
           listingTitle: editing.title,
-          availableQuantity: editing.quantity,
+          availableQuantity: quantityToSave,
           listingStatus: editing.status,
         });
         savedListingId = created.id;
       }
 
-      // For chemical listings with variants — save per-SKU stock
-      const isChemical = activeTab === "chemical";
-      const hasVariants = editing.variants && editing.variants.length > 0;
-      if (isChemical && hasVariants && savedListingId && Object.keys(variantStocks).length > 0) {
+      // Seed per-SKU stock only on first create — later changes go through Inventory.
+      if (isChemical && hasVariants && savedListingId && isNewListing) {
         const items = editing.variants!.map((v: any) => ({
           productVariantId: v.id as string,
-          totalQuantity: variantStocks[v.id] ?? 0,
+          totalQuantity: Number(variantStocks[v.id]) || 0,
         }));
         await vendorOnboardingApi.upsertVariantInventory(user.id, savedListingId, items);
       }
@@ -900,12 +1002,12 @@ const Products = () => {
             <TabsTrigger value="equipment" className="text-xs sm:text-sm">
               <Package className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
               <span className="truncate">Equipment</span>
-              <span className="hidden sm:inline ml-1">({products.filter(p => p.baseUnit == null).length})</span>
+              <span className="hidden sm:inline ml-1">({products.filter(p => !isChemicalListing(p)).length})</span>
             </TabsTrigger>
             <TabsTrigger value="chemical" className="text-xs sm:text-sm">
               <FlaskConical className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
               <span className="truncate">Chemicals</span>
-              <span className="hidden sm:inline ml-1">({products.filter(p => p.baseUnit != null).length})</span>
+              <span className="hidden sm:inline ml-1">({products.filter(p => isChemicalListing(p)).length})</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -1194,16 +1296,26 @@ const Products = () => {
           <DialogHeader>
             <DialogTitle>{products.some((p) => p.id === editing?.id) ? "Edit listing" : "New listing"}</DialogTitle>
           </DialogHeader>
+          <p className="text-xs text-muted-foreground px-1 -mt-1 mb-2">
+            Fields marked <span className="text-destructive">*</span> are required.
+          </p>
           {editing && (
             <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
               <FormGrid cols={2}>
               <div className="space-y-1.5">
-                <Label>Category {editing.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(Cannot be changed)</span>}</Label>
+                <Label required>Category {editing.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(Cannot be changed)</span>}</Label>
                 <div className="flex items-center gap-2">
-                  <Select value={editing.categoryId} onValueChange={onCategoryChange} disabled={!!editing.id}>
-                    <SelectTrigger className="pl-1"><SelectValue className="text-left min-w-0" /></SelectTrigger>
+                  <Select
+                    value={editing.categoryId}
+                    onValueChange={(v) => {
+                      onCategoryChange(v);
+                      clearFieldError("categoryId");
+                    }}
+                    disabled={!!editing.id}
+                  >
+                    <SelectTrigger className={`pl-1 ${fieldErrors.categoryId ? "border-destructive" : ""}`}><SelectValue className="text-left min-w-0" /></SelectTrigger>
                     <SelectContent>
-                      {categories.filter(c => catalogProducts.some(p => p.categoryId === c.id && (activeTab === "chemical" ? p.baseUnit != null : p.baseUnit == null))).map((c) => (
+                      {categories.filter(c => catalogProducts.some(p => p.categoryId === c.id && (activeTab === "chemical" ? isChemicalCatalogProduct(p) : !isChemicalCatalogProduct(p)))).map((c) => (
                         <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -1211,9 +1323,10 @@ const Products = () => {
                   {/* Vendor catalog creation disabled - managed by admin */}
                   {/* <Button variant="outline" onClick={openCreateCategory} type="button" disabled={busy}>New</Button> */}
                 </div>
+                <FieldError message={fieldErrors.categoryId} />
               </div>
               <div className="space-y-1.5">
-                <Label>Product (from catalog) {editing.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(Cannot be changed)</span>}</Label>
+                <Label required>Product (from catalog) {editing.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(Cannot be changed)</span>}</Label>
                 <div className="flex items-center gap-2">
                   <Select value={editing.productId} disabled={!!editing.id} onValueChange={(v) => {
                     const selected = catalogProducts.find((p) => p.id === v);
@@ -1229,10 +1342,11 @@ const Products = () => {
                       isRentEnabled: selected?.isRentEnabled ?? true,
                       isBuyEnabled: selected?.isBuyEnabled ?? true,
                     });
+                    clearFieldError("productId");
                   }}>
-                    <SelectTrigger className="pl-1"><SelectValue placeholder="Choose product" className="text-left min-w-0" /></SelectTrigger>
+                    <SelectTrigger className={`pl-1 ${fieldErrors.productId ? "border-destructive" : ""}`}><SelectValue placeholder="Choose product" className="text-left min-w-0" /></SelectTrigger>
                     <SelectContent>
-                      {catalogProducts.filter((p) => p.categoryId === editing.categoryId && (activeTab === "chemical" ? p.baseUnit != null : p.baseUnit == null)).map((p) => (
+                      {catalogProducts.filter((p) => p.categoryId === editing.categoryId && (activeTab === "chemical" ? isChemicalCatalogProduct(p) : !isChemicalCatalogProduct(p))).map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -1240,10 +1354,20 @@ const Products = () => {
                   {/* Vendor catalog creation disabled - managed by admin */}
                   {/* <Button variant="outline" onClick={openCreateProduct} type="button" disabled={busy}>New</Button> */}
                 </div>
+                <FieldError message={fieldErrors.productId} />
               </div>
               <div className="space-y-1.5 sm:col-span-2">
-                <Label>Listing title</Label>
-                <Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} placeholder="E.g. Sony A7 III — Daily Rental" />
+                <Label required>Listing title</Label>
+                <Input
+                  value={editing.title}
+                  onChange={(e) => {
+                    setEditing({ ...editing, title: e.target.value });
+                    clearFieldError("title");
+                  }}
+                  placeholder="E.g. Sony A7 III — Daily Rental"
+                  className={fieldErrors.title ? "border-destructive" : ""}
+                />
+                <FieldError message={fieldErrors.title} />
               </div>
               {activeTab === "equipment" && (
                 <div className="space-y-1.5">
@@ -1329,11 +1453,16 @@ const Products = () => {
               {activeTab === "chemical" && (
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label className="font-semibold text-xs">
-                    Stock per Packaging Size (Variant)
+                    Stock per Packaging Size
+                    {editing.id && (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        (Manage via Inventory after first save)
+                      </span>
+                    )}
                   </Label>
                   {(!editing.variants || editing.variants.length === 0) ? (
                     <p className="text-xs text-muted-foreground border border-border rounded-md p-3 bg-muted/20">
-                      ⚠ No packaging sizes defined for this chemical yet. Ask Admin to add variants (e.g. 1L, 5L) first.
+                      No packaging sizes defined for this chemical yet. Ask Admin to add variants (e.g. 1L, 5L) first.
                     </p>
                   ) : (
                     <div className="overflow-hidden rounded-md border border-border mt-1">
@@ -1354,15 +1483,43 @@ const Products = () => {
                                 <Input
                                   type="number"
                                   min={0}
-                                  className="h-7 w-20 text-right ml-auto text-xs"
+                                  readOnly={!!editing.id}
+                                  className={`h-7 w-20 text-right ml-auto text-xs ${editing.id ? "bg-muted/50" : ""}`}
                                   value={variantStocks[v.id] ?? 0}
-                                  onChange={(e) => setVariantStocks(prev => ({ ...prev, [v.id]: Math.max(0, Number(e.target.value)) }))}
+                                  onChange={(e) => {
+                                    if (editing.id) return;
+                                    const next = Math.max(0, Number(e.target.value) || 0);
+                                    setVariantStocks((prev) => {
+                                      const updated = { ...prev, [v.id]: next };
+                                      const total = (editing.variants || []).reduce(
+                                        (sum: number, row: any) => sum + (Number(updated[row.id]) || 0),
+                                        0
+                                      );
+                                      setEditing((curr) => (curr ? { ...curr, quantity: total } : curr));
+                                      return updated;
+                                    });
+                                  }}
                                 />
                               </td>
                             </tr>
                           ))}
+                          <tr className="bg-muted/30">
+                            <td className="p-2 font-semibold" colSpan={2}>Total QTY</td>
+                            <td className="p-2 text-right font-semibold tabular-nums">
+                              {(editing.variants || []).reduce(
+                                (sum: number, row: any) => sum + (Number(variantStocks[row.id]) || 0),
+                                0
+                              )}
+                            </td>
+                          </tr>
                         </tbody>
                       </table>
+                      {editing.id && (
+                        <p className="px-2 py-1.5 text-[11px] text-muted-foreground border-t border-border">
+                          After the listing is created, change packaging stock only from{" "}
+                          <span className="font-medium text-foreground">Inventory → Chemicals</span>.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

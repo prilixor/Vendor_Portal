@@ -6,6 +6,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
 import { FormGrid } from "@/app/components/shared/FormGrid";
+import { FieldError } from "@/app/components/shared/FieldError";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { adminApi, AdminUserDto } from "@/app/services/adminApi";
 import { Plus, Shield, Users, Settings, Loader2, Trash2 } from "lucide-react";
@@ -28,6 +29,16 @@ const Admins = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("verifier");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (key: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   useEffect(() => {
     loadAdmins();
@@ -47,10 +58,16 @@ const Admins = () => {
   };
 
   const add = async () => {
-    if (!name || !email || !password) {
-      toast.error("Name, email, and password are required");
+    const errors: Record<string, string> = {};
+    if (!name.trim()) errors.name = "Please enter the admin's name.";
+    if (!email.trim()) errors.email = "Please enter an email address.";
+    if (!password) errors.password = "Please enter a password.";
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error("Please fill in the required fields.");
       return;
     }
+    setFieldErrors({});
     setLoading(true);
     try {
       await adminApi.registerAdminUser({
@@ -80,7 +97,13 @@ const Admins = () => {
         title="Admin management"
         description="Add or remove admin users and assign their roles."
         actions={
-          <Button onClick={() => setOpen(true)} className="bg-gradient-primary shadow-glow">
+          <Button
+            onClick={() => {
+              setFieldErrors({});
+              setOpen(true);
+            }}
+            className="bg-gradient-primary shadow-glow"
+          >
             <Plus className="mr-2 h-4 w-4" /> Add admin
           </Button>
         }
@@ -144,11 +167,52 @@ const Admins = () => {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader><DialogTitle>Add admin user</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground px-1 -mt-1 mb-2">
+            Fields marked <span className="text-destructive">*</span> are required.
+          </p>
           <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
             <FormGrid cols={1}>
-              <div className="space-y-1.5"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" /></div>
-              <div className="space-y-1.5"><Label>Email</Label><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@portal.com" type="email" /></div>
-              <div className="space-y-1.5"><Label>Password</Label><Input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" type="password" /></div>
+              <div className="space-y-1.5">
+                <Label required>Name</Label>
+                <Input
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    clearFieldError("name");
+                  }}
+                  placeholder="Jane Doe"
+                  className={fieldErrors.name ? "border-destructive" : ""}
+                />
+                <FieldError message={fieldErrors.name} />
+              </div>
+              <div className="space-y-1.5">
+                <Label required>Email</Label>
+                <Input
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    clearFieldError("email");
+                  }}
+                  placeholder="jane@portal.com"
+                  type="email"
+                  className={fieldErrors.email ? "border-destructive" : ""}
+                />
+                <FieldError message={fieldErrors.email} />
+              </div>
+              <div className="space-y-1.5">
+                <Label required>Password</Label>
+                <Input
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    clearFieldError("password");
+                  }}
+                  placeholder="••••••••"
+                  type="password"
+                  className={fieldErrors.password ? "border-destructive" : ""}
+                />
+                <FieldError message={fieldErrors.password} />
+              </div>
               <div className="space-y-1.5">
                 <Label>Role</Label>
                 <Select value={role} onValueChange={(v: any) => setRole(v)}>
@@ -164,8 +228,8 @@ const Admins = () => {
             <div className="h-5" />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={add}>Create user</Button>
+            <Button variant="outline" onClick={() => { setOpen(false); setFieldErrors({}); }}>Cancel</Button>
+            <Button onClick={add} disabled={loading}>Create user</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

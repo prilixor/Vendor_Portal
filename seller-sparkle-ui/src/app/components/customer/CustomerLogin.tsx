@@ -48,8 +48,11 @@ const CustomerLogin = () => {
   return (
     <AuthLayout title="Customer sign in" subtitle="Browse rentals and manage your orders." portalType="customer">
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        <p className="text-xs text-muted-foreground -mt-1">
+          Fields marked <span className="text-destructive">*</span> are required.
+        </p>
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email" required>Email</Label>
           <Input
             id="email"
             type="email"
@@ -64,7 +67,7 @@ const CustomerLogin = () => {
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" required>Password</Label>
             <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
               Forgot?
             </Link>

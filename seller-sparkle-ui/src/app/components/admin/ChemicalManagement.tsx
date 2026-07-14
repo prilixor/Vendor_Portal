@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -10,7 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/app/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { FormGrid } from "@/app/components/shared/FormGrid";
+import { FieldError } from "@/app/components/shared/FieldError";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Skeleton } from "@/app/components/ui/skeleton";
+import { Textarea } from "@/app/components/ui/textarea";
 import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest } from "@/app/services/adminApi";
 import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
@@ -21,6 +24,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
+
+const PAGE_SIZE = 10;
+const CHEMICAL_FORM_STEPS = ["Basic", "Specs", "Packaging", "Images"] as const;
 
 type ChemSize = { sizeValue: number; sizeUnit: string; buyPrice: number };
 
@@ -68,6 +74,9 @@ const ChemicalManagement = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [categoryPage, setCategoryPage] = useState(1);
+  const [productPage, setProductPage] = useState(1);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   
   // Category dialog state
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
@@ -83,6 +92,7 @@ const ChemicalManagement = () => {
   
   // Product dialog state
   const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [productFormStep, setProductFormStep] = useState(0);
   const [editingProduct, setEditingProduct] = useState<ProductDto | null>(null);
   const [productForm, setProductForm] = useState<CreateProductRequest>({
     categoryId: "",
@@ -157,9 +167,15 @@ const ChemicalManagement = () => {
     return matchesSearch && matchesStatus;
   });
 
+  const chemicalCategoryIds = new Set(categories.filter((c) => c.isChemical).map((c) => c.id));
+  const isChemicalProduct = (p: ProductDto) =>
+    chemicalCategoryIds.has(p.categoryId) ||
+    !!p.baseUnit ||
+    !!p.casNumber ||
+    !!p.chemicalFormula;
+
   const filteredProducts = products.filter((p) => {
-    const isChem = p.baseUnit != null;
-    if (!isChem) return false;
+    if (!isChemicalProduct(p)) return false;
 
     const matchesSearch = !search || 
       p.productName.toLowerCase().includes(search.toLowerCase()) ||
@@ -169,6 +185,30 @@ const ChemicalManagement = () => {
     const matchesFavorites = !showFavoritesOnly || p.favoriteCount > 0;
     return matchesSearch && matchesStatus && matchesFavorites;
   });
+
+  useEffect(() => {
+    setCategoryPage(1);
+    setProductPage(1);
+  }, [search, statusFilter, showFavoritesOnly, activeTab]);
+
+  const paginatedCategories = useMemo(() => {
+    const start = (categoryPage - 1) * PAGE_SIZE;
+    return filteredCategories.slice(start, start + PAGE_SIZE);
+  }, [filteredCategories, categoryPage]);
+
+  const paginatedProducts = useMemo(() => {
+    const start = (productPage - 1) * PAGE_SIZE;
+    return filteredProducts.slice(start, start + PAGE_SIZE);
+  }, [filteredProducts, productPage]);
+
+  const clearFieldError = (key: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const getCategoryName = (categoryId: string) => {
     const category = categories.find((c) => c.id === categoryId);
@@ -258,13 +298,25 @@ const ChemicalManagement = () => {
         monthlyRent: product.monthlyRent,
         securityDeposit: product.securityDeposit,
         buyPrice: product.buyPrice,
+        vendorDailyRent: product.vendorDailyRent || 0,
+        vendorMonthlyRent: product.vendorMonthlyRent || 0,
+        vendorSecurityDeposit: product.vendorSecurityDeposit || 0,
+        vendorBuyPrice: product.vendorBuyPrice,
         gstPercent: product.gstPercent,
-        isRentEnabled: product.isRentEnabled,
-        isBuyEnabled: product.isBuyEnabled,
+        isRentEnabled: false,
+        isBuyEnabled: true,
         isActive: action === 'activate',
+        casNumber: product.casNumber,
+        chemicalFormula: product.chemicalFormula,
+        purityPercentage: product.purityPercentage,
+        molecularWeight: product.molecularWeight,
+        baseUnit: product.baseUnit || "Kg",
+        sdsDocumentUrl: product.sdsDocumentUrl,
+        coaDocumentUrl: product.coaDocumentUrl,
+        variants: product.variants || [],
       });
 
-      setProducts(products.map((p) => (p.id === id ? updated : p)));
+      setProducts(products.map((p) => (p.id === id ? { ...product, ...updated } : p)));
       toast.success(`Product ${action}d successfully`);
       setStatusConfirmId(null);
       setStatusConfirmAction(null);
@@ -277,6 +329,7 @@ const ChemicalManagement = () => {
   };
 
   const openCategoryDialog = (category?: ProductCategoryDto) => {
+    setFieldErrors({});
     if (category) {
       setEditingCategory(category);
       setCategoryForm({
@@ -302,16 +355,32 @@ const ChemicalManagement = () => {
   };
 
   const saveCategory = async () => {
+    const errors: Record<string, string> = {};
+    if (!categoryForm.categoryName?.trim()) {
+      errors.categoryName = "Please enter a category name.";
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error("Please fill in the required fields.");
+      return;
+    }
+
     try {
       setLoading(true);
+      setFieldErrors({});
       if (editingCategory) {
         await adminApi.updateProductCategory(editingCategory.id, {
           ...categoryForm,
+          categoryName: categoryForm.categoryName.trim(),
           id: editingCategory.id,
         });
         toast.success("Category updated");
       } else {
-        await adminApi.createProductCategory(categoryForm);
+        await adminApi.createProductCategory({
+          ...categoryForm,
+          categoryName: categoryForm.categoryName.trim(),
+          isChemical: true,
+        });
         toast.success("Category created");
       }
       setCategoryDialogOpen(false);
@@ -364,16 +433,52 @@ const ChemicalManagement = () => {
     }
   };
 
+  const validateChemicalStep = (step: number): boolean => {
+    const errors: Record<string, string> = {};
+    if (step === 0) {
+      if (!productForm.categoryId?.trim()) {
+        errors.categoryId = "Please select a chemical category.";
+      }
+      if (!productForm.productName?.trim()) {
+        errors.productName = "Please enter a chemical name.";
+      }
+      if (!productForm.baseUnit?.trim()) {
+        errors.baseUnit = "Please enter a base unit (e.g. L, Kg, g).";
+      }
+    }
+    if (step === 2) {
+      const variants = productForm.variants || [];
+      if (variants.length === 0) {
+        errors.variants = "Add at least one packaging size (e.g. 1 L, 5 L) with buy price.";
+      } else {
+        const invalid = variants.find(
+          (v) => !v.sizeUnit?.trim() || !(Number(v.sizeValue) > 0) || !(Number(v.buyPrice) > 0)
+        );
+        if (invalid) {
+          errors.variants = "Each size needs Size value, Unit, and Buy price greater than 0.";
+        }
+      }
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...errors }));
+      toast.error("Please fill in the required fields.");
+      return false;
+    }
+    return true;
+  };
+
   const openProductDialog = (product?: ProductDto) => {
+    setFieldErrors({});
+    setProductFormStep(0);
     if (product) {
       setEditingProduct(product);
       setProductForm({
         categoryId: product.categoryId,
         productName: product.productName,
-        brandName: product.brandName,
-        modelName: product.modelName,
-        shortDescription: product.shortDescription,
-        longDescription: product.longDescription,
+        brandName: product.brandName || "",
+        modelName: product.modelName || "",
+        shortDescription: product.shortDescription || "",
+        longDescription: product.longDescription || "",
         dailyRent: product.dailyRent,
         monthlyRent: product.monthlyRent,
         securityDeposit: product.securityDeposit,
@@ -386,13 +491,13 @@ const ChemicalManagement = () => {
         isRentEnabled: product.isRentEnabled,
         isBuyEnabled: product.isBuyEnabled,
         isActive: product.isActive,
-        casNumber: product.casNumber,
-        chemicalFormula: product.chemicalFormula,
+        casNumber: product.casNumber || "",
+        chemicalFormula: product.chemicalFormula || "",
         purityPercentage: product.purityPercentage,
         molecularWeight: product.molecularWeight,
-        baseUnit: product.baseUnit,
-        sdsDocumentUrl: product.sdsDocumentUrl,
-        coaDocumentUrl: product.coaDocumentUrl,
+        baseUnit: product.baseUnit || "Kg",
+        sdsDocumentUrl: product.sdsDocumentUrl || "",
+        coaDocumentUrl: product.coaDocumentUrl || "",
         variants: product.variants || [],
       });
       setProductImages(product.images || []);
@@ -425,7 +530,7 @@ const ChemicalManagement = () => {
         chemicalFormula: "",
         purityPercentage: undefined,
         molecularWeight: undefined,
-        baseUnit: "",
+        baseUnit: "Kg",
         sdsDocumentUrl: "",
         coaDocumentUrl: "",
         variants: [],
@@ -518,35 +623,119 @@ const ChemicalManagement = () => {
   };
 
   const saveProduct = async () => {
+    const errors: Record<string, string> = {};
+    if (!productForm.categoryId?.trim()) {
+      errors.categoryId = "Please select a chemical category.";
+    }
+    if (!productForm.productName?.trim()) {
+      errors.productName = "Please enter a chemical name.";
+    }
+    if (!productForm.baseUnit?.trim()) {
+      errors.baseUnit = "Please enter a base unit (e.g. L, Kg, g).";
+    }
+    const variants = productForm.variants || [];
+    if (variants.length === 0) {
+      errors.variants = "Add at least one packaging size (e.g. 1 L, 5 L) with buy price.";
+    } else {
+      const invalid = variants.find(
+        (v) => !v.sizeUnit?.trim() || !(Number(v.sizeValue) > 0) || !(Number(v.buyPrice) > 0)
+      );
+      if (invalid) {
+        errors.variants = "Each size needs Size value, Unit, and Buy price greater than 0.";
+      }
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      if (errors.categoryId || errors.productName || errors.baseUnit) setProductFormStep(0);
+      else if (errors.variants) setProductFormStep(2);
+      toast.error("Please fill in the required fields.");
+      return;
+    }
+
     try {
       setLoading(true);
-      
-      const payload = { ...productForm };
-      if (isChemical) {
-        payload.isRentEnabled = false;
-        payload.isBuyEnabled = true;
-      } else {
-        payload.casNumber = "";
-        payload.chemicalFormula = "";
-        payload.purityPercentage = undefined;
-        payload.molecularWeight = undefined;
-        payload.baseUnit = "";
-        payload.sdsDocumentUrl = "";
-        payload.coaDocumentUrl = "";
-      }
+      setFieldErrors({});
+
+      const payload: CreateProductRequest = {
+        ...productForm,
+        categoryId: productForm.categoryId.trim(),
+        productName: productForm.productName.trim(),
+        brandName: productForm.brandName?.trim() || undefined,
+        modelName: productForm.modelName?.trim() || undefined,
+        shortDescription: productForm.shortDescription?.trim() || undefined,
+        longDescription: productForm.longDescription?.trim() || undefined,
+        isRentEnabled: false,
+        isBuyEnabled: true,
+        casNumber: productForm.casNumber?.trim() || undefined,
+        chemicalFormula: productForm.chemicalFormula?.trim() || undefined,
+        purityPercentage: productForm.purityPercentage,
+        molecularWeight: productForm.molecularWeight,
+        baseUnit: productForm.baseUnit?.trim() || "Kg",
+        sdsDocumentUrl: productForm.sdsDocumentUrl?.trim() || undefined,
+        coaDocumentUrl: productForm.coaDocumentUrl?.trim() || undefined,
+        variants: productForm.variants || [],
+        vendorDailyRent: productForm.vendorDailyRent || 0,
+        vendorMonthlyRent: productForm.vendorMonthlyRent || 0,
+        vendorSecurityDeposit: productForm.vendorSecurityDeposit || 0,
+      };
 
       if (editingProduct) {
-        await adminApi.updateProduct(editingProduct.id, {
+        const updated = await adminApi.updateProduct(editingProduct.id, {
           ...payload,
           id: editingProduct.id,
         });
-        toast.success("Product updated");
+        toast.success("Chemical updated");
+        setEditingProduct({ ...editingProduct, ...updated });
+        setProductForm({
+          ...productForm,
+          casNumber: updated.casNumber || "",
+          chemicalFormula: updated.chemicalFormula || "",
+          purityPercentage: updated.purityPercentage,
+          molecularWeight: updated.molecularWeight,
+          baseUnit: updated.baseUnit || "Kg",
+          sdsDocumentUrl: updated.sdsDocumentUrl || "",
+          coaDocumentUrl: updated.coaDocumentUrl || "",
+          variants: updated.variants || productForm.variants || [],
+        });
+        await loadData();
       } else {
-        await adminApi.createProduct(payload);
-        toast.success("Product created");
+        const created = await adminApi.createProduct(payload);
+        toast.success("Chemical created. You can now add images.");
+        // Keep dialog open in edit mode so images can be uploaded (UI requires saved chemical).
+        setEditingProduct(created);
+        setProductForm({
+          categoryId: created.categoryId,
+          productName: created.productName,
+          brandName: created.brandName,
+          modelName: created.modelName,
+          shortDescription: created.shortDescription,
+          longDescription: created.longDescription,
+          dailyRent: created.dailyRent,
+          monthlyRent: created.monthlyRent,
+          securityDeposit: created.securityDeposit,
+          buyPrice: created.buyPrice,
+          vendorDailyRent: created.vendorDailyRent || 0,
+          vendorMonthlyRent: created.vendorMonthlyRent || 0,
+          vendorSecurityDeposit: created.vendorSecurityDeposit || 0,
+          vendorBuyPrice: created.vendorBuyPrice,
+          gstPercent: created.gstPercent,
+          isRentEnabled: false,
+          isBuyEnabled: true,
+          isActive: created.isActive,
+          casNumber: created.casNumber || payload.casNumber || "",
+          chemicalFormula: created.chemicalFormula || payload.chemicalFormula || "",
+          purityPercentage: created.purityPercentage ?? payload.purityPercentage,
+          molecularWeight: created.molecularWeight ?? payload.molecularWeight,
+          baseUnit: created.baseUnit || payload.baseUnit || "Kg",
+          sdsDocumentUrl: created.sdsDocumentUrl || payload.sdsDocumentUrl || "",
+          coaDocumentUrl: created.coaDocumentUrl || payload.coaDocumentUrl || "",
+          variants: created.variants || payload.variants || [],
+        });
+        setProductImages(created.images || []);
+        setProductFormStep(3);
+        await loadData();
+        await loadProductImages(created.id, true);
       }
-      setProductDialogOpen(false);
-      await loadData();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save product.";
       toast.error(message);
@@ -705,6 +894,7 @@ const ChemicalManagement = () => {
         </table>
       </div>
     ) : (
+      <>
       <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
         <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
           <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -720,7 +910,7 @@ const ChemicalManagement = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {filteredProducts.map((p) => (
+            {paginatedProducts.map((p) => (
               <tr key={p.id} className="hover:bg-muted/20">
                 <td className="px-4 py-3 font-medium">{p.productName}</td>
                 <td className="px-4 py-3 text-muted-foreground">{getCategoryName(p.categoryId)}</td>
@@ -782,6 +972,16 @@ const ChemicalManagement = () => {
           </tbody>
         </table>
       </div>
+      {!loading && (
+        <TablePagination
+          page={productPage}
+          pageSize={PAGE_SIZE}
+          total={filteredProducts.length}
+          onPageChange={setProductPage}
+          label="chemicals"
+        />
+      )}
+      </>
     )
   );
 
@@ -804,7 +1004,7 @@ const ChemicalManagement = () => {
               <TabsTrigger value="chemical" className="text-xs sm:text-sm">
                 <FlaskConical className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
                 <span className="truncate">Chemicals</span>
-                <span className="hidden sm:inline ml-1">({products.filter(p => p.baseUnit != null).length})</span>
+                <span className="hidden sm:inline ml-1">({products.filter(isChemicalProduct).length})</span>
               </TabsTrigger>
             </TabsList>
 
@@ -929,7 +1129,7 @@ const ChemicalManagement = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {filteredCategories.map((c) => (
+                    {paginatedCategories.map((c) => (
                       <tr key={c.id} className="hover:bg-muted/20">
                         <td className="px-4 py-3 font-medium">{c.categoryName}</td>
                         <td className="px-4 py-3">{c.prescriptionRequired ? "Yes" : "No"}</td>
@@ -964,6 +1164,15 @@ const ChemicalManagement = () => {
                   </tbody>
                 </table>
               </div>
+            )}
+            {!loading && (
+              <TablePagination
+                page={categoryPage}
+                pageSize={PAGE_SIZE}
+                total={filteredCategories.length}
+                onPageChange={setCategoryPage}
+                label="categories"
+              />
             )}
           </TabsContent>
 
@@ -1224,15 +1433,24 @@ const ChemicalManagement = () => {
           <DialogHeader>
             <DialogTitle>{editingCategory ? "Edit Category" : "New Category"}</DialogTitle>
           </DialogHeader>
+          <p className="text-xs text-muted-foreground px-1 -mt-1 mb-2">
+            Fields marked <span className="text-destructive">*</span> are required.
+          </p>
           <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
             <FormGrid cols={1}>
               <div className="space-y-1.5">
-                <Label>Category Name</Label>
+                <Label required>Category Name</Label>
                 <Input
                   value={categoryForm.categoryName}
-                  onChange={(e) => setCategoryForm({ ...categoryForm, categoryName: e.target.value })}
-                  placeholder="E.g. Home Appliances"
+                  onChange={(e) => {
+                    setCategoryForm({ ...categoryForm, categoryName: e.target.value });
+                    clearFieldError("categoryName");
+                  }}
+                  placeholder="E.g. Organic Solvents"
+                  className={fieldErrors.categoryName ? "border-destructive" : ""}
                 />
+                <FieldError message={fieldErrors.categoryName} />
+                <p className="text-[11px] text-muted-foreground">Required. Used to group chemicals in the catalog.</p>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -1284,259 +1502,224 @@ const ChemicalManagement = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{editingProduct ? (isChemical ? "Edit Chemical" : "Edit Product") : (isChemical ? "New Chemical" : "New Product")}</DialogTitle>
+      <Dialog
+        open={productDialogOpen}
+        onOpenChange={(open) => {
+          setProductDialogOpen(open);
+          if (!open) setProductFormStep(0);
+        }}
+      >
+        <DialogContent className="flex max-h-[min(92dvh,900px)] w-[calc(100vw-1.5rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+          <DialogHeader className="shrink-0 space-y-1 border-b border-border px-4 py-4 pr-12 sm:px-6 text-left">
+            <DialogTitle>{editingProduct ? "Edit Chemical" : "New Chemical"}</DialogTitle>
+            <p className="text-xs text-muted-foreground font-normal">
+              Fields marked <span className="text-destructive">*</span> are required.
+            </p>
+            <div className="flex items-center gap-1.5 pt-3">
+              {CHEMICAL_FORM_STEPS.map((label, idx) => {
+                const active = productFormStep === idx;
+                const done = productFormStep > idx;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => {
+                      if (idx < productFormStep) setProductFormStep(idx);
+                      else if (idx > productFormStep) {
+                        for (let s = productFormStep; s < idx; s++) {
+                          if (!validateChemicalStep(s)) return;
+                        }
+                        setProductFormStep(idx);
+                      }
+                    }}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : done
+                          ? "bg-primary/15 text-primary"
+                          : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-black/10 text-[10px] font-semibold">
+                      {idx + 1}
+                    </span>
+                    <span className="hidden sm:inline">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </DialogHeader>
-          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
-            <FormGrid cols={2}>
-              <div className="space-y-1.5">
-                <Label>Category</Label>
-                <Select
-                  value={productForm.categoryId}
-                  onValueChange={(v) => setProductForm({ ...productForm, categoryId: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.filter((c) => c.isChemical).map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.categoryName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5 sm:col-span-2 mt-2 mb-2 p-4 border rounded-lg bg-blue-50/30">
-                <h4 className="font-semibold text-sm text-blue-700 dark:text-blue-400 mb-4">Chemical Specifications</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label>CAS Number</Label>
-                    <Input
-                      value={productForm.casNumber || ""}
-                      onChange={(e) => setProductForm({ ...productForm, casNumber: e.target.value })}
-                      placeholder="E.g. 7732-18-5"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Chemical Formula</Label>
-                    <Input
-                      value={productForm.chemicalFormula || ""}
-                      onChange={(e) => setProductForm({ ...productForm, chemicalFormula: e.target.value })}
-                      placeholder="E.g. H2O"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Purity Percentage (%)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.purityPercentage ?? ""}
-                      onChange={(e) => setProductForm({ ...productForm, purityPercentage: e.target.value === "" ? undefined : Number(e.target.value) })}
-                      placeholder="E.g. 99.5"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Molecular Weight (g/mol)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.molecularWeight ?? ""}
-                      onChange={(e) => setProductForm({ ...productForm, molecularWeight: e.target.value === "" ? undefined : Number(e.target.value) })}
-                      placeholder="E.g. 18.015"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Base Unit</Label>
-                    <Input
-                      value={productForm.baseUnit || ""}
-                      onChange={(e) => setProductForm({ ...productForm, baseUnit: e.target.value })}
-                      placeholder="E.g. Kg, L, g"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>SDS Document URL</Label>
-                    <Input
-                      value={productForm.sdsDocumentUrl || ""}
-                      onChange={(e) => setProductForm({ ...productForm, sdsDocumentUrl: e.target.value })}
-                      placeholder="Link to SDS PDF"
-                    />
-                  </div>
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <Label>COA Document URL</Label>
-                    <Input
-                      value={productForm.coaDocumentUrl || ""}
-                      onChange={(e) => setProductForm({ ...productForm, coaDocumentUrl: e.target.value })}
-                      placeholder="Link to COA PDF"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>{isChemical ? "Chemical Name" : "Product Name"}</Label>
-                <Input
-                  value={productForm.productName}
-                  onChange={(e) => setProductForm({ ...productForm, productName: e.target.value })}
-                  placeholder={isChemical ? "E.g. Hydrochloric Acid 37%" : "E.g. Washing Machine"}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Brand</Label>
-                <Input
-                  value={productForm.brandName || ""}
-                  onChange={(e) => setProductForm({ ...productForm, brandName: e.target.value })}
-                  placeholder={isChemical ? "E.g. Merck" : "E.g. IFB"}
-                />
-              </div>
-              {!isChemical && (
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 space-y-4">
+            {productFormStep === 0 && (
+            <section className="rounded-lg border border-border p-3 sm:p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-foreground">Basic details</h4>
+              <FormGrid cols={2}>
                 <div className="space-y-1.5">
-                  <Label>Model</Label>
+                  <Label required>Category</Label>
+                  <Select
+                    value={productForm.categoryId}
+                    onValueChange={(v) => {
+                      setProductForm({ ...productForm, categoryId: v });
+                      clearFieldError("categoryId");
+                    }}
+                  >
+                    <SelectTrigger className={fieldErrors.categoryId ? "border-destructive" : ""}>
+                      <SelectValue placeholder="Select chemical category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.filter((c) => c.isChemical).map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.categoryName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError message={fieldErrors.categoryId} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label required>Chemical Name</Label>
                   <Input
-                    value={productForm.modelName || ""}
-                    onChange={(e) => setProductForm({ ...productForm, modelName: e.target.value })}
-                    placeholder="E.g. Senator Plus SX"
+                    value={productForm.productName}
+                    onChange={(e) => {
+                      setProductForm({ ...productForm, productName: e.target.value });
+                      clearFieldError("productName");
+                    }}
+                    placeholder="E.g. Hydrochloric Acid 37%"
+                    className={fieldErrors.productName ? "border-destructive" : ""}
+                  />
+                  <FieldError message={fieldErrors.productName} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Brand</Label>
+                  <Input
+                    value={productForm.brandName || ""}
+                    onChange={(e) => setProductForm({ ...productForm, brandName: e.target.value })}
+                    placeholder="E.g. Merck"
                   />
                 </div>
-              )}
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Short Description</Label>
-                <Input
-                  value={productForm.shortDescription || ""}
-                  onChange={(e) => setProductForm({ ...productForm, shortDescription: e.target.value })}
-                  placeholder={isChemical ? "Brief chemical description" : "Brief product description"}
-                />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Long Description</Label>
-                <Input
-                  value={productForm.longDescription || ""}
-                  onChange={(e) => setProductForm({ ...productForm, longDescription: e.target.value })}
-                  placeholder={isChemical ? "Detailed chemical description" : "Detailed product description"}
-                />
-              </div>
-              {!isChemical && (
-                <>
-                  <div className="space-y-1.5 sm:col-span-2 border-t pt-4">
-                    <h4 className="font-semibold text-sm text-indigo-600 dark:text-indigo-400">Customer Pricing (Admin Side)</h4>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Daily Rent (INR)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.dailyRent}
-                      onChange={(e) => setProductForm({ ...productForm, dailyRent: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Monthly Rent (INR)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.monthlyRent}
-                      onChange={(e) => setProductForm({ ...productForm, monthlyRent: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Security Deposit (INR)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.securityDeposit}
-                      onChange={(e) => setProductForm({ ...productForm, securityDeposit: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Buy Price (INR, optional)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.buyPrice ?? ""}
-                      onChange={(e) => setProductForm({ ...productForm, buyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
-                    />
-                  </div>
+                <div className="space-y-1.5">
+                  <Label required>Base Unit</Label>
+                  <Input
+                    value={productForm.baseUnit || ""}
+                    onChange={(e) => {
+                      setProductForm({ ...productForm, baseUnit: e.target.value });
+                      clearFieldError("baseUnit");
+                    }}
+                    placeholder="E.g. Kg, L, g, ml"
+                    className={fieldErrors.baseUnit ? "border-destructive" : ""}
+                  />
+                  <FieldError message={fieldErrors.baseUnit} />
+                  <p className="text-[11px] text-muted-foreground">Packaging sizes and stock use this unit.</p>
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Short Description</Label>
+                  <Input
+                    value={productForm.shortDescription || ""}
+                    onChange={(e) => setProductForm({ ...productForm, shortDescription: e.target.value })}
+                    placeholder="One-line summary for catalog listings"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Long Description</Label>
+                  <Textarea
+                    value={productForm.longDescription || ""}
+                    onChange={(e) => setProductForm({ ...productForm, longDescription: e.target.value })}
+                    placeholder="Full chemical details for customers"
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>GST %</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={productForm.gstPercent}
+                    onChange={(e) => setProductForm({ ...productForm, gstPercent: Number(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-6">
+                  <input
+                    type="checkbox"
+                    id="productActive"
+                    checked={productForm.isActive}
+                    onChange={(e) => setProductForm({ ...productForm, isActive: e.target.checked })}
+                  />
+                  <Label htmlFor="productActive">Active in catalog</Label>
+                </div>
+              </FormGrid>
+            </section>
+            )}
 
-                  <div className="space-y-1.5 sm:col-span-2 border-t pt-4">
-                    <h4 className="font-semibold text-sm text-emerald-600 dark:text-emerald-400">Vendor Payout Pricing (Set by Admin)</h4>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Vendor Daily Rent (INR)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.vendorDailyRent}
-                      onChange={(e) => setProductForm({ ...productForm, vendorDailyRent: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Vendor Monthly Rent (INR)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.vendorMonthlyRent}
-                      onChange={(e) => setProductForm({ ...productForm, vendorMonthlyRent: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Vendor Security Deposit (INR)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.vendorSecurityDeposit}
-                      onChange={(e) => setProductForm({ ...productForm, vendorSecurityDeposit: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Vendor Buy Price (INR, optional)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.vendorBuyPrice ?? ""}
-                      onChange={(e) => setProductForm({ ...productForm, vendorBuyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
-                    />
-                  </div>
-                </>
-              )}
-              <div className="space-y-1.5">
-                <Label>GST %</Label>
-                <Input
-                  type="number"
-                  value={productForm.gstPercent}
-                  onChange={(e) => setProductForm({ ...productForm, gstPercent: Number(e.target.value) || 0 })}
-                />
+            {productFormStep === 1 && (
+            <section className="rounded-lg border border-blue-100 dark:border-blue-950/40 bg-blue-50/30 dark:bg-blue-950/10 p-4 space-y-3">
+              <div>
+                <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400">Chemical specifications</h4>
+                <p className="text-xs text-muted-foreground">Optional technical details (CAS, formula, documents).</p>
               </div>
-              {!isChemical && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="isRentEnabled"
-                      checked={productForm.isRentEnabled}
-                      onChange={(e) => setProductForm({ ...productForm, isRentEnabled: e.target.checked })}
-                    />
-                    <Label htmlFor="isRentEnabled">Rent Enabled</Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="isBuyEnabled"
-                      checked={productForm.isBuyEnabled}
-                      onChange={(e) => setProductForm({ ...productForm, isBuyEnabled: e.target.checked })}
-                    />
-                    <Label htmlFor="isBuyEnabled">Buy Enabled</Label>
-                  </div>
-                </>
-              )}
-              <div className="flex items-center gap-2 sm:col-span-2">
-                <input
-                  type="checkbox"
-                  id="productActive"
-                  checked={productForm.isActive}
-                  onChange={(e) => setProductForm({ ...productForm, isActive: e.target.checked })}
-                />
-                <Label htmlFor="productActive">Active</Label>
-              </div>
+              <FormGrid cols={2}>
+                <div className="space-y-1.5">
+                  <Label>CAS Number</Label>
+                  <Input
+                    value={productForm.casNumber || ""}
+                    onChange={(e) => setProductForm({ ...productForm, casNumber: e.target.value })}
+                    placeholder="E.g. 7732-18-5"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Chemical Formula</Label>
+                  <Input
+                    value={productForm.chemicalFormula || ""}
+                    onChange={(e) => setProductForm({ ...productForm, chemicalFormula: e.target.value })}
+                    placeholder="E.g. HCl"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Purity Percentage (%)</Label>
+                  <Input
+                    type="number"
+                    value={productForm.purityPercentage ?? ""}
+                    onChange={(e) => setProductForm({ ...productForm, purityPercentage: e.target.value === "" ? undefined : Number(e.target.value) })}
+                    placeholder="E.g. 99.5"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Molecular Weight (g/mol)</Label>
+                  <Input
+                    type="number"
+                    value={productForm.molecularWeight ?? ""}
+                    onChange={(e) => setProductForm({ ...productForm, molecularWeight: e.target.value === "" ? undefined : Number(e.target.value) })}
+                    placeholder="E.g. 36.46"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>SDS Document URL</Label>
+                  <Input
+                    value={productForm.sdsDocumentUrl || ""}
+                    onChange={(e) => setProductForm({ ...productForm, sdsDocumentUrl: e.target.value })}
+                    placeholder="Link to SDS PDF"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>COA Document URL</Label>
+                  <Input
+                    value={productForm.coaDocumentUrl || ""}
+                    onChange={(e) => setProductForm({ ...productForm, coaDocumentUrl: e.target.value })}
+                    placeholder="Link to COA PDF"
+                  />
+                </div>
+              </FormGrid>
+            </section>
+            )}
 
-              {isChemical && (
-                <div className="space-y-3 sm:col-span-2 rounded-lg border border-indigo-100 dark:border-indigo-950 p-4 bg-indigo-50/30 dark:bg-indigo-950/10">
-                  <div className="flex items-center justify-between border-b pb-2 mb-3">
+            {productFormStep === 2 && (
+                <div className={`space-y-3 rounded-lg border p-4 bg-indigo-50/30 dark:bg-indigo-950/10 ${fieldErrors.variants ? "border-destructive" : "border-indigo-100 dark:border-indigo-950"}`}>
+                  <div className="flex items-center justify-between border-b pb-2 mb-3 gap-3">
                     <div>
-                      <h4 className="font-semibold text-sm text-indigo-700 dark:text-indigo-400">Chemical Sizing & Pricing Chart</h4>
-                      <p className="text-xs text-muted-foreground">Define different packaging sizes, units, and pricing for this chemical.</p>
+                      <h4 className="font-semibold text-sm text-indigo-700 dark:text-indigo-400">
+                        Packaging sizes & pricing <span className="text-destructive">*</span>
+                      </h4>
+                      <p className="text-xs text-muted-foreground">Add at least one size (e.g. 500 ml, 1 L) with buy price. Same UI for create and edit.</p>
+                      <FieldError message={fieldErrors.variants} />
                     </div>
                     <Button
                       type="button"
@@ -1557,6 +1740,7 @@ const ChemicalManagement = () => {
                           ...productForm,
                           variants: [...(productForm.variants || []), newVar]
                         });
+                        clearFieldError("variants");
                       }}
                     >
                       <Plus className="h-4 w-4 mr-1" /> Add Size Row
@@ -1689,13 +1873,14 @@ const ChemicalManagement = () => {
                     </div>
                   )}
                 </div>
-              )}
+            )}
 
-              <div className="space-y-3 sm:col-span-2 rounded-lg border border-border p-3">
+            {productFormStep === 3 && (
+              <div className="space-y-3 rounded-lg border border-border p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <Label className="text-sm font-semibold">{isChemical ? "Chemical Images" : "Product Images"}</Label>
+                  <Label className="text-sm font-semibold">Chemical Images</Label>
                   {!editingProduct && (
-                    <span className="text-xs text-muted-foreground">Save {isChemical ? "chemical" : "product"} first to add images</span>
+                    <span className="text-xs text-muted-foreground">Create chemical first, then add images here</span>
                   )}
                 </div>
 
@@ -1749,7 +1934,7 @@ const ChemicalManagement = () => {
                         <Skeleton className="h-10 w-full" />
                       </div>
                     ) : productImages.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No {isChemical ? "chemical" : "product"} images added yet.</p>
+                      <p className="text-xs text-muted-foreground">No chemical images added yet.</p>
                     ) : (
                       <div className="space-y-2">
                         {productImages.map((img, index) => (
@@ -1797,19 +1982,47 @@ const ChemicalManagement = () => {
                     )}
                   </>
                 ) : (
-                  <p className="text-xs text-muted-foreground">Create the {isChemical ? "chemical" : "product"} first, then reopen to manage images.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Use Create Chemical on the Packaging step first. After create, you&apos;ll land here to upload images.
+                  </p>
                 )}
               </div>
-            </FormGrid>
-            <div className="h-5" />
+            )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0 mt-0 border-t border-border bg-background px-4 py-3 sm:px-6 sm:justify-between">
             <Button variant="outline" onClick={() => setProductDialogOpen(false)} disabled={loading}>
-              Cancel
+              {editingProduct ? "Close" : "Cancel"}
             </Button>
-            <Button onClick={saveProduct} disabled={loading}>
-              {editingProduct ? "Update" : "Create"} {isChemical ? "Chemical" : "Product"}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {productFormStep > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={loading}
+                  onClick={() => setProductFormStep((s) => Math.max(0, s - 1))}
+                >
+                  Back
+                </Button>
+              )}
+              {productFormStep < CHEMICAL_FORM_STEPS.length - 1 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={loading}
+                  onClick={() => {
+                    if (!validateChemicalStep(productFormStep)) return;
+                    setProductFormStep((s) => s + 1);
+                  }}
+                >
+                  Next
+                </Button>
+              )}
+              {(productFormStep === 2 || (productFormStep === 3 && editingProduct)) && (
+                <Button onClick={saveProduct} disabled={loading}>
+                  {editingProduct ? "Update" : "Create"} Chemical
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

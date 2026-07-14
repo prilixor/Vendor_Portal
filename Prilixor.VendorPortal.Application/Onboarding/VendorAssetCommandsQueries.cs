@@ -14,7 +14,9 @@ public sealed record VendorProductAssetDto(
     string Status,
     string? Condition,
     DateTimeOffset CreatedOnUtc,
-    DateTimeOffset? ModifiedOnUtc);
+    DateTimeOffset? ModifiedOnUtc,
+    Guid? ProductVariantId = null,
+    string? VariantLabel = null);
 
 public sealed record TrackedAssetDto(
     Guid AssetId,
@@ -32,7 +34,8 @@ public sealed record AddVendorProductAssetCommand(
     Guid ListingId,
     string AssetTag,
     string Status,
-    string? Condition) : IRequest<Result<Guid>>;
+    string? Condition,
+    Guid? ProductVariantId = null) : IRequest<Result<Guid>>;
 
 public sealed class AddVendorProductAssetCommandValidator : AbstractValidator<AddVendorProductAssetCommand>
 {
@@ -70,9 +73,51 @@ internal sealed class AddVendorProductAssetCommandHandler(IVendorOnboardingRepos
             }
         }
 
+        // Chemicals with packaging sizes: serial/batch tags must target a size and stay within that size's stock.
+        var product = await repository.GetProductByIdAsync(listing.ProductId, cancellationToken);
+        var hasPackagingSizes = product?.Variants?.Any(v => v.IsActive) == true;
+        if (hasPackagingSizes)
+        {
+            if (!request.ProductVariantId.HasValue)
+            {
+                return Result.Failure<Guid>(new Error(
+                    "vendors.inventory.asset_variant_required",
+                    "Select a packaging size before adding a serial/batch number for this chemical."));
+            }
+
+            var variantExists = product!.Variants!.Any(v => v.Id == request.ProductVariantId.Value && v.IsActive);
+            if (!variantExists)
+            {
+                return Result.Failure<Guid>(new Error(
+                    "vendors.inventory.asset_variant_invalid",
+                    "The selected packaging size is not valid for this chemical."));
+            }
+
+            var variantStock = await repository.GetVariantInventoryByListingIdAsync(request.ListingId, cancellationToken);
+            var stockRow = variantStock.FirstOrDefault(x => x.ProductVariantId == request.ProductVariantId.Value);
+            var maxUnits = stockRow?.TotalQuantity ?? 0;
+            if (maxUnits <= 0)
+            {
+                return Result.Failure<Guid>(new Error(
+                    "vendors.inventory.asset_no_stock",
+                    "No stock for this packaging size. Update stock in Inventory first, then add serial/batch numbers."));
+            }
+
+            var existingForSize = (await repository.GetVendorProductAssetsAsync(request.ListingId, cancellationToken))
+                .Count(a => a.ProductVariantId == request.ProductVariantId.Value);
+            if (existingForSize >= maxUnits)
+            {
+                return Result.Failure<Guid>(new Error(
+                    "vendors.inventory.asset_over_stock",
+                    $"This packaging size only has {maxUnits} unit(s) in stock. Remove a serial or increase stock first."));
+            }
+        }
+
         var asset = new VendorProductAsset
         {
+            Id = Guid.CreateVersion7(),
             VendorProductListingId = request.ListingId,
+            ProductVariantId = request.ProductVariantId,
             AssetTag = request.AssetTag,
             Status = request.Status,
             Condition = request.Condition,
@@ -108,7 +153,9 @@ internal sealed class GetVendorProductAssetsQueryHandler(IVendorOnboardingReposi
             x.Status,
             x.Condition,
             x.CreatedOnUtc,
-            x.ModifiedOnUtc));
+            x.ModifiedOnUtc,
+            x.ProductVariantId,
+            x.ProductVariant is null ? null : $"{x.ProductVariant.SizeValue} {x.ProductVariant.SizeUnit}"));
 
         return Result.Success(dtos);
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -10,7 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/app/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { FormGrid } from "@/app/components/shared/FormGrid";
+import { FieldError } from "@/app/components/shared/FieldError";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Skeleton } from "@/app/components/ui/skeleton";
+import { Textarea } from "@/app/components/ui/textarea";
 import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest } from "@/app/services/adminApi";
 import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
@@ -22,6 +25,9 @@ import {
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
 
+const PAGE_SIZE = 10;
+const PRODUCT_FORM_STEPS = ["Basic", "Pricing", "Tax & images"] as const;
+
 const ProductManagement = () => {
   const [categories, setCategories] = useState<ProductCategoryDto[]>([]);
   const [products, setProducts] = useState<ProductDto[]>([]);
@@ -30,6 +36,9 @@ const ProductManagement = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [categoryPage, setCategoryPage] = useState(1);
+  const [productPage, setProductPage] = useState(1);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   
   // Category dialog state
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
@@ -45,6 +54,7 @@ const ProductManagement = () => {
   
   // Product dialog state
   const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [productFormStep, setProductFormStep] = useState(0);
   const [editingProduct, setEditingProduct] = useState<ProductDto | null>(null);
   const [productForm, setProductForm] = useState<CreateProductRequest>({
     categoryId: "",
@@ -115,9 +125,15 @@ const ProductManagement = () => {
     return matchesSearch && matchesStatus;
   });
 
+  const chemicalCategoryIds = new Set(categories.filter((c) => c.isChemical).map((c) => c.id));
+  const isChemicalProduct = (p: ProductDto) =>
+    chemicalCategoryIds.has(p.categoryId) ||
+    !!p.baseUnit ||
+    !!p.casNumber ||
+    !!p.chemicalFormula;
+
   const filteredProducts = products.filter((p) => {
-    const isChem = p.baseUnit != null;
-    if (isChem) return false; // Hide chemicals in Equipment tab
+    if (isChemicalProduct(p)) return false; // Hide chemicals in Equipment tab
 
     const matchesSearch = !search || 
       p.productName.toLowerCase().includes(search.toLowerCase()) ||
@@ -127,6 +143,30 @@ const ProductManagement = () => {
     const matchesFavorites = !showFavoritesOnly || p.favoriteCount > 0;
     return matchesSearch && matchesStatus && matchesFavorites;
   });
+
+  useEffect(() => {
+    setCategoryPage(1);
+    setProductPage(1);
+  }, [search, statusFilter, showFavoritesOnly, activeTab]);
+
+  const paginatedCategories = useMemo(() => {
+    const start = (categoryPage - 1) * PAGE_SIZE;
+    return filteredCategories.slice(start, start + PAGE_SIZE);
+  }, [filteredCategories, categoryPage]);
+
+  const paginatedProducts = useMemo(() => {
+    const start = (productPage - 1) * PAGE_SIZE;
+    return filteredProducts.slice(start, start + PAGE_SIZE);
+  }, [filteredProducts, productPage]);
+
+  const clearFieldError = (key: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const getCategoryName = (categoryId: string) => {
     const category = categories.find((c) => c.id === categoryId);
@@ -216,6 +256,7 @@ const ProductManagement = () => {
   };
 
   const openCategoryDialog = (category?: ProductCategoryDto) => {
+    setFieldErrors({});
     if (category) {
       setEditingCategory(category);
       setCategoryForm({
@@ -241,16 +282,31 @@ const ProductManagement = () => {
   };
 
   const saveCategory = async () => {
+    const errors: Record<string, string> = {};
+    if (!categoryForm.categoryName?.trim()) {
+      errors.categoryName = "Please enter a category name.";
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error("Please fill in the required fields.");
+      return;
+    }
+
     try {
       setLoading(true);
+      setFieldErrors({});
       if (editingCategory) {
         await adminApi.updateProductCategory(editingCategory.id, {
           ...categoryForm,
+          categoryName: categoryForm.categoryName.trim(),
           id: editingCategory.id,
         });
         toast.success("Category updated");
       } else {
-        await adminApi.createProductCategory(categoryForm);
+        await adminApi.createProductCategory({
+          ...categoryForm,
+          categoryName: categoryForm.categoryName.trim(),
+        });
         toast.success("Category created");
       }
       setCategoryDialogOpen(false);
@@ -303,7 +359,37 @@ const ProductManagement = () => {
     }
   };
 
+  const validateProductStep = (step: number): boolean => {
+    const errors: Record<string, string> = {};
+    if (step === 0) {
+      if (!productForm.categoryId?.trim()) {
+        errors.categoryId = "Please select an equipment category.";
+      }
+      if (!productForm.productName?.trim()) {
+        errors.productName = "Please enter a product name.";
+      }
+    }
+    if (step === 1) {
+      if (productForm.isRentEnabled && !(productForm.dailyRent > 0 || productForm.monthlyRent > 0)) {
+        errors.dailyRent = "Enter daily or monthly rent when rent is enabled.";
+      }
+    }
+    if (step === 2) {
+      if (productForm.gstPercent == null || Number.isNaN(Number(productForm.gstPercent))) {
+        errors.gstPercent = "Please enter GST %.";
+      }
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...errors }));
+      toast.error("Please fill in the required fields.");
+      return false;
+    }
+    return true;
+  };
+
   const openProductDialog = (product?: ProductDto) => {
+    setFieldErrors({});
+    setProductFormStep(0);
     if (product) {
       setEditingProduct(product);
       setProductForm({
@@ -329,8 +415,9 @@ const ProductManagement = () => {
       void loadProductImages(product.id, true);
     } else {
       setEditingProduct(null);
+      const equipmentCategories = categories.filter((c) => !c.isChemical);
       setProductForm({
-        categoryId: categories[0]?.id || "",
+        categoryId: equipmentCategories[0]?.id || "",
         productName: "",
         brandName: "",
         modelName: "",
@@ -436,10 +523,37 @@ const ProductManagement = () => {
   };
 
   const saveProduct = async () => {
+    const errors: Record<string, string> = {};
+    if (!productForm.categoryId?.trim()) {
+      errors.categoryId = "Please select an equipment category.";
+    }
+    if (!productForm.productName?.trim()) {
+      errors.productName = "Please enter a product name.";
+    }
+    if (productForm.isRentEnabled && !(productForm.dailyRent > 0 || productForm.monthlyRent > 0)) {
+      errors.dailyRent = "Enter daily or monthly rent when rent is enabled.";
+    }
+    if (productForm.gstPercent == null || Number.isNaN(Number(productForm.gstPercent))) {
+      errors.gstPercent = "Please enter GST %.";
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      if (errors.categoryId || errors.productName) setProductFormStep(0);
+      else if (errors.dailyRent) setProductFormStep(1);
+      else setProductFormStep(2);
+      toast.error("Please fill in the required fields.");
+      return;
+    }
+
     try {
       setLoading(true);
+      setFieldErrors({});
       
-      const payload = { ...productForm };
+      const payload = {
+        ...productForm,
+        productName: productForm.productName.trim(),
+        categoryId: productForm.categoryId.trim(),
+      };
 
       if (editingProduct) {
         await adminApi.updateProduct(editingProduct.id, {
@@ -606,6 +720,7 @@ const ProductManagement = () => {
         </table>
       </div>
     ) : (
+      <>
       <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
         <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
           <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -622,7 +737,7 @@ const ProductManagement = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {filteredProducts.map((p) => (
+            {paginatedProducts.map((p) => (
               <tr key={p.id} className="hover:bg-muted/20">
                 <td className="px-4 py-3 font-medium">{p.productName}</td>
                 <td className="px-4 py-3 text-muted-foreground">{getCategoryName(p.categoryId)}</td>
@@ -677,6 +792,16 @@ const ProductManagement = () => {
           </tbody>
         </table>
       </div>
+      {!loading && (
+        <TablePagination
+          page={productPage}
+          pageSize={PAGE_SIZE}
+          total={filteredProducts.length}
+          onPageChange={setProductPage}
+          label="products"
+        />
+      )}
+    </>
     )
   );
 
@@ -699,7 +824,7 @@ const ProductManagement = () => {
               <TabsTrigger value="equipment" className="text-xs sm:text-sm">
                 <Package className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
                 <span className="truncate">Equipment</span>
-                <span className="hidden sm:inline ml-1">({products.filter(p => p.baseUnit == null).length})</span>
+                <span className="hidden sm:inline ml-1">({products.filter((p) => !isChemicalProduct(p)).length})</span>
               </TabsTrigger>
             </TabsList>
 
@@ -824,7 +949,7 @@ const ProductManagement = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {filteredCategories.map((c) => (
+                    {paginatedCategories.map((c) => (
                       <tr key={c.id} className="hover:bg-muted/20">
                         <td className="px-4 py-3 font-medium">{c.categoryName}</td>
                         <td className="px-4 py-3">{c.prescriptionRequired ? "Yes" : "No"}</td>
@@ -859,6 +984,15 @@ const ProductManagement = () => {
                   </tbody>
                 </table>
               </div>
+            )}
+            {!loading && (
+              <TablePagination
+                page={categoryPage}
+                pageSize={PAGE_SIZE}
+                total={filteredCategories.length}
+                onPageChange={setCategoryPage}
+                label="categories"
+              />
             )}
           </TabsContent>
 
@@ -1119,15 +1253,24 @@ const ProductManagement = () => {
           <DialogHeader>
             <DialogTitle>{editingCategory ? "Edit Category" : "New Category"}</DialogTitle>
           </DialogHeader>
+          <p className="text-xs text-muted-foreground px-1 -mt-1 mb-2">
+            Fields marked <span className="text-destructive">*</span> are required.
+          </p>
           <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
             <FormGrid cols={1}>
               <div className="space-y-1.5">
-                <Label>Category Name</Label>
+                <Label required>Category Name</Label>
                 <Input
                   value={categoryForm.categoryName}
-                  onChange={(e) => setCategoryForm({ ...categoryForm, categoryName: e.target.value })}
+                  onChange={(e) => {
+                    setCategoryForm({ ...categoryForm, categoryName: e.target.value });
+                    clearFieldError("categoryName");
+                  }}
                   placeholder="E.g. Home Appliances"
+                  className={fieldErrors.categoryName ? "border-destructive" : ""}
                 />
+                <FieldError message={fieldErrors.categoryName} />
+                <p className="text-[11px] text-muted-foreground">Required. Used to group equipment in the catalog.</p>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -1180,192 +1323,286 @@ const ProductManagement = () => {
       </Dialog>
 
       {/* Product Dialog */}
-      <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
+      <Dialog
+        open={productDialogOpen}
+        onOpenChange={(open) => {
+          setProductDialogOpen(open);
+          if (!open) setProductFormStep(0);
+        }}
+      >
+        <DialogContent className="flex max-h-[min(92dvh,900px)] w-[calc(100vw-1.5rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+          <DialogHeader className="shrink-0 space-y-1 border-b border-border px-4 py-4 pr-12 sm:px-6 text-left">
             <DialogTitle>{editingProduct ? "Edit Product" : "New Product"}</DialogTitle>
+            <p className="text-xs text-muted-foreground font-normal">
+              Fields marked <span className="text-destructive">*</span> are required.
+            </p>
+            <div className="flex items-center gap-1.5 pt-3">
+              {PRODUCT_FORM_STEPS.map((label, idx) => {
+                const active = productFormStep === idx;
+                const done = productFormStep > idx;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => {
+                      if (idx < productFormStep) setProductFormStep(idx);
+                      else if (idx > productFormStep) {
+                        for (let s = productFormStep; s < idx; s++) {
+                          if (!validateProductStep(s)) return;
+                        }
+                        setProductFormStep(idx);
+                      }
+                    }}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : done
+                          ? "bg-primary/15 text-primary"
+                          : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-black/10 text-[10px] font-semibold">
+                      {idx + 1}
+                    </span>
+                    <span className="hidden sm:inline">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </DialogHeader>
-          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
-            <FormGrid cols={2}>
-              <div className="space-y-1.5">
-                <Label>Category</Label>
-                <Select
-                  value={productForm.categoryId}
-                  onValueChange={(v) => setProductForm({ ...productForm, categoryId: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.categoryName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 space-y-4">
+            {productFormStep === 0 && (
+            <section className="rounded-lg border border-border p-3 sm:p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-foreground">Basic details</h4>
+              <FormGrid cols={2}>
+                <div className="space-y-1.5">
+                  <Label required>Category</Label>
+                  <Select
+                    value={productForm.categoryId}
+                    onValueChange={(v) => {
+                      setProductForm({ ...productForm, categoryId: v });
+                      clearFieldError("categoryId");
+                    }}
+                  >
+                    <SelectTrigger className={fieldErrors.categoryId ? "border-destructive" : ""}>
+                      <SelectValue placeholder="Select equipment category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.filter((c) => !c.isChemical).map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.categoryName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError message={fieldErrors.categoryId} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label required>Product Name</Label>
+                  <Input
+                    value={productForm.productName}
+                    onChange={(e) => {
+                      setProductForm({ ...productForm, productName: e.target.value });
+                      clearFieldError("productName");
+                    }}
+                    placeholder="E.g. Oxygen Concentrator"
+                    className={fieldErrors.productName ? "border-destructive" : ""}
+                  />
+                  <FieldError message={fieldErrors.productName} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Brand</Label>
+                  <Input
+                    value={productForm.brandName || ""}
+                    onChange={(e) => setProductForm({ ...productForm, brandName: e.target.value })}
+                    placeholder="E.g. IFB"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Model</Label>
+                  <Input
+                    value={productForm.modelName || ""}
+                    onChange={(e) => setProductForm({ ...productForm, modelName: e.target.value })}
+                    placeholder="E.g. Senator Plus SX"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Short Description</Label>
+                  <Input
+                    value={productForm.shortDescription || ""}
+                    onChange={(e) => setProductForm({ ...productForm, shortDescription: e.target.value })}
+                    placeholder="One-line summary shown in catalog listings"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Long Description</Label>
+                  <Textarea
+                    value={productForm.longDescription || ""}
+                    onChange={(e) => setProductForm({ ...productForm, longDescription: e.target.value })}
+                    placeholder="Full product details for customers"
+                    rows={3}
+                  />
+                </div>
+              </FormGrid>
+            </section>
+            )}
 
-              <div className="space-y-1.5">
-                <Label>Product Name</Label>
-                <Input
-                  value={productForm.productName}
-                  onChange={(e) => setProductForm({ ...productForm, productName: e.target.value })}
-                  placeholder="E.g. Washing Machine"
-                />
+            {productFormStep === 1 && (
+            <>
+            <section className="rounded-lg border border-indigo-100 dark:border-indigo-950/40 bg-indigo-50/30 dark:bg-indigo-950/10 p-4 space-y-3">
+              <div>
+                <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400">Customer pricing</h4>
+                <p className="text-xs text-muted-foreground">What customers see and pay on the marketplace.</p>
               </div>
-              <div className="space-y-1.5">
-                <Label>Brand</Label>
-                <Input
-                  value={productForm.brandName || ""}
-                  onChange={(e) => setProductForm({ ...productForm, brandName: e.target.value })}
-                  placeholder="E.g. IFB"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Model</Label>
-                <Input
-                  value={productForm.modelName || ""}
-                  onChange={(e) => setProductForm({ ...productForm, modelName: e.target.value })}
-                  placeholder="E.g. Senator Plus SX"
-                />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Short Description</Label>
-                <Input
-                  value={productForm.shortDescription || ""}
-                  onChange={(e) => setProductForm({ ...productForm, shortDescription: e.target.value })}
-                  placeholder="Brief product description"
-                />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Long Description</Label>
-                <Input
-                  value={productForm.longDescription || ""}
-                  onChange={(e) => setProductForm({ ...productForm, longDescription: e.target.value })}
-                  placeholder="Detailed product description"
-                />
-              </div>
-              {!isChemical && (
-                <>
-                  <div className="space-y-1.5 sm:col-span-2 border-t pt-4">
-                    <h4 className="font-semibold text-sm text-indigo-600 dark:text-indigo-400">Customer Pricing (Admin Side)</h4>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Daily Rent (INR)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.dailyRent}
-                      onChange={(e) => setProductForm({ ...productForm, dailyRent: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Monthly Rent (INR)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.monthlyRent}
-                      onChange={(e) => setProductForm({ ...productForm, monthlyRent: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Security Deposit (INR)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.securityDeposit}
-                      onChange={(e) => setProductForm({ ...productForm, securityDeposit: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Buy Price (INR, optional)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.buyPrice ?? ""}
-                      onChange={(e) => setProductForm({ ...productForm, buyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5 sm:col-span-2 border-t pt-4">
-                    <h4 className="font-semibold text-sm text-emerald-600 dark:text-emerald-400">Vendor Payout Pricing (Set by Admin)</h4>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Vendor Daily Rent (INR)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.vendorDailyRent}
-                      onChange={(e) => setProductForm({ ...productForm, vendorDailyRent: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Vendor Monthly Rent (INR)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.vendorMonthlyRent}
-                      onChange={(e) => setProductForm({ ...productForm, vendorMonthlyRent: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Vendor Security Deposit (INR)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.vendorSecurityDeposit}
-                      onChange={(e) => setProductForm({ ...productForm, vendorSecurityDeposit: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Vendor Buy Price (INR, optional)</Label>
-                    <Input
-                      type="number"
-                      value={productForm.vendorBuyPrice ?? ""}
-                      onChange={(e) => setProductForm({ ...productForm, vendorBuyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
-                    />
-                  </div>
-                </>
-              )}
-              <div className="space-y-1.5">
-                <Label>GST %</Label>
-                <Input
-                  type="number"
-                  value={productForm.gstPercent}
-                  onChange={(e) => setProductForm({ ...productForm, gstPercent: Number(e.target.value) || 0 })}
-                />
-              </div>
-              {!isChemical && (
-                <>
-                  <div className="flex items-center gap-2">
+              <FormGrid cols={2}>
+                <div className="space-y-1.5">
+                  <Label required={productForm.isRentEnabled}>Daily Rent (INR)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={productForm.dailyRent}
+                    onChange={(e) => {
+                      setProductForm({ ...productForm, dailyRent: Number(e.target.value) || 0 });
+                      clearFieldError("dailyRent");
+                    }}
+                    className={fieldErrors.dailyRent ? "border-destructive" : ""}
+                  />
+                  <FieldError message={fieldErrors.dailyRent} />
+                  <p className="text-[11px] text-muted-foreground">Required when Rent is enabled (or set Monthly Rent).</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Monthly Rent (INR)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={productForm.monthlyRent}
+                    onChange={(e) => setProductForm({ ...productForm, monthlyRent: Number(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Security Deposit (INR)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={productForm.securityDeposit}
+                    onChange={(e) => setProductForm({ ...productForm, securityDeposit: Number(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Buy Price (INR, optional)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={productForm.buyPrice ?? ""}
+                    onChange={(e) => setProductForm({ ...productForm, buyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
+                    placeholder="Leave empty if buy not offered"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-4 sm:col-span-2">
+                  <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
-                      id="isRentEnabled"
                       checked={productForm.isRentEnabled}
                       onChange={(e) => setProductForm({ ...productForm, isRentEnabled: e.target.checked })}
                     />
-                    <Label htmlFor="isRentEnabled">Rent Enabled</Label>
-                  </div>
-                  <div className="flex items-center gap-2">
+                    Rent enabled
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
-                      id="isBuyEnabled"
                       checked={productForm.isBuyEnabled}
                       onChange={(e) => setProductForm({ ...productForm, isBuyEnabled: e.target.checked })}
                     />
-                    <Label htmlFor="isBuyEnabled">Buy Enabled</Label>
-                  </div>
-                </>
-              )}
-              <div className="flex items-center gap-2 sm:col-span-2">
-                <input
-                  type="checkbox"
-                  id="productActive"
-                  checked={productForm.isActive}
-                  onChange={(e) => setProductForm({ ...productForm, isActive: e.target.checked })}
-                />
-                <Label htmlFor="productActive">Active</Label>
-              </div>
+                    Buy enabled
+                  </label>
+                </div>
+              </FormGrid>
+            </section>
 
-              <div className="space-y-3 sm:col-span-2 rounded-lg border border-border p-3">
+            <section className="rounded-lg border border-emerald-100 dark:border-emerald-950/40 bg-emerald-50/30 dark:bg-emerald-950/10 p-4 space-y-3">
+              <div>
+                <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Vendor payout pricing</h4>
+                <p className="text-xs text-muted-foreground">Admin-set amounts paid out to the vendor.</p>
+              </div>
+              <FormGrid cols={2}>
+                <div className="space-y-1.5">
+                  <Label>Vendor Daily Rent (INR)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={productForm.vendorDailyRent}
+                    onChange={(e) => setProductForm({ ...productForm, vendorDailyRent: Number(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Vendor Monthly Rent (INR)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={productForm.vendorMonthlyRent}
+                    onChange={(e) => setProductForm({ ...productForm, vendorMonthlyRent: Number(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Vendor Security Deposit (INR)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={productForm.vendorSecurityDeposit}
+                    onChange={(e) => setProductForm({ ...productForm, vendorSecurityDeposit: Number(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Vendor Buy Price (INR, optional)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={productForm.vendorBuyPrice ?? ""}
+                    onChange={(e) => setProductForm({ ...productForm, vendorBuyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
+                  />
+                </div>
+              </FormGrid>
+            </section>
+            </>
+            )}
+
+            {productFormStep === 2 && (
+            <>
+            <section className="rounded-lg border border-border p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-foreground">Tax & availability</h4>
+              <FormGrid cols={2}>
+                <div className="space-y-1.5">
+                  <Label required>GST %</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={productForm.gstPercent}
+                    onChange={(e) => {
+                      setProductForm({ ...productForm, gstPercent: Number(e.target.value) || 0 });
+                      clearFieldError("gstPercent");
+                    }}
+                    className={fieldErrors.gstPercent ? "border-destructive" : ""}
+                  />
+                  <FieldError message={fieldErrors.gstPercent} />
+                </div>
+                <div className="flex flex-wrap items-center gap-4 pt-6">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={productForm.isActive}
+                      onChange={(e) => setProductForm({ ...productForm, isActive: e.target.checked })}
+                    />
+                    Active in catalog
+                  </label>
+                </div>
+              </FormGrid>
+            </section>
+
+              <div className="space-y-3 rounded-lg border border-border p-3">
                 <div className="flex items-center justify-between gap-2">
                   <Label className="text-sm font-semibold">Product Images</Label>
                   {!editingProduct && (
-                    <span className="text-xs text-muted-foreground">Save product first to add images</span>
+                    <span className="text-xs text-muted-foreground">Save product first, then reopen to add images</span>
                   )}
                 </div>
 
@@ -1470,16 +1707,41 @@ const ProductManagement = () => {
                   <p className="text-xs text-muted-foreground">Create the product first, then reopen to manage images.</p>
                 )}
               </div>
-            </FormGrid>
-            <div className="h-5" />
+            </>
+            )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0 mt-0 border-t border-border bg-background px-4 py-3 sm:px-6 sm:justify-between">
             <Button variant="outline" onClick={() => setProductDialogOpen(false)} disabled={loading}>
               Cancel
             </Button>
-            <Button onClick={saveProduct} disabled={loading}>
-              {editingProduct ? "Update" : "Create"} Product
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {productFormStep > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={loading}
+                  onClick={() => setProductFormStep((s) => Math.max(0, s - 1))}
+                >
+                  Back
+                </Button>
+              )}
+              {productFormStep < PRODUCT_FORM_STEPS.length - 1 ? (
+                <Button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    if (!validateProductStep(productFormStep)) return;
+                    setProductFormStep((s) => s + 1);
+                  }}
+                >
+                  Next
+                </Button>
+              ) : (
+                <Button onClick={saveProduct} disabled={loading}>
+                  {editingProduct ? "Update" : "Create"} Product
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

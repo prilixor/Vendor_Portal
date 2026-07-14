@@ -101,6 +101,9 @@ export interface InventoryRecord {
   reserved: number;
   rented: number;
   blocked: number;
+  /** Catalog product id (for chemical packaging sizes). */
+  catalogProductId?: string;
+  isChemical?: boolean;
 }
 
 export interface InventoryMovement {

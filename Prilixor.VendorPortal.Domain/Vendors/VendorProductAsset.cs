@@ -5,6 +5,12 @@ namespace Prilixor.VendorPortal.Domain.Vendors;
 public class VendorProductAsset : AuditableEntity<Guid>, ISoftDelete
 {
     public Guid VendorProductListingId { get; set; }
+
+    /// <summary>
+    /// For chemicals: packaging size (variant) this batch/container serial belongs to.
+    /// Null for equipment assets (unit-level serials).
+    /// </summary>
+    public Guid? ProductVariantId { get; set; }
     
     /// <summary>
     /// The unique identifier or serial number for this specific physical item.
@@ -26,4 +32,5 @@ public class VendorProductAsset : AuditableEntity<Guid>, ISoftDelete
     public Guid? DeletedBy { get; set; }
 
     public VendorProductListing VendorProductListing { get; set; } = null!;
+    public ProductVariant? ProductVariant { get; set; }
 }

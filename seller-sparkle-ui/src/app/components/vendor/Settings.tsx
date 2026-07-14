@@ -6,6 +6,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { FormGrid } from "@/app/components/shared/FormGrid";
+import { FieldError } from "@/app/components/shared/FieldError";
 import { useAuth } from "@/app/guards/AuthContext";
 import { authApi } from "@/app/services/authApi";
 import { vendorOnboardingApi, type VendorProfileApiDto } from "@/app/services/vendorOnboardingApi";
@@ -28,6 +29,16 @@ const Settings = () => {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordUpdatedAt, setPasswordUpdatedAt] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (key: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const getPasswordStrength = (password: string): { label: "weak" | "medium" | "strong"; cls: string } => {
     let score = 0;
@@ -71,7 +82,18 @@ const Settings = () => {
       return;
     }
 
+    const errors: Record<string, string> = {};
+    if (!fullName.trim() || fullName.trim().length < 2) {
+      errors.fullName = "Please enter your full name (at least 2 characters).";
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error("Please fill in the required fields.");
+      return;
+    }
+
     setSavingProfile(true);
+    setFieldErrors({});
     try {
       const updated = await vendorOnboardingApi.upsertVendorProfile(user.id, {
         vendorId: user.id,
@@ -101,18 +123,23 @@ const Settings = () => {
   };
 
   const updatePassword = async () => {
-    if (!currentPassword || !newPassword) {
-      toast.error("Current and new password are required.");
-      return;
+    const errors: Record<string, string> = {};
+    if (!currentPassword) {
+      errors.currentPassword = "Please enter your current password.";
     }
-
-    if (newPassword.length < 8) {
-      toast.error("New password must be at least 8 characters.");
-      return;
+    if (!newPassword) {
+      errors.newPassword = "Please enter a new password.";
+    } else if (newPassword.length < 8) {
+      errors.newPassword = "New password must be at least 8 characters.";
     }
-
-    if (newPassword !== confirmPassword) {
-      toast.error("New password and confirm password must match.");
+    if (!confirmPassword) {
+      errors.confirmPassword = "Please confirm your new password.";
+    } else if (newPassword && newPassword !== confirmPassword) {
+      errors.confirmPassword = "New password and confirm password must match.";
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error("Please fill in the required fields.");
       return;
     }
 
@@ -124,6 +151,7 @@ const Settings = () => {
     }
 
     setSavingPassword(true);
+    setFieldErrors({});
     try {
       const res = await authApi.changePassword({ email: user?.email ?? "", currentPassword, newPassword });
       setCurrentPassword("");
@@ -196,11 +224,23 @@ const Settings = () => {
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
-          <h2 className="mb-4 font-semibold">Account</h2>
+          <h2 className="mb-1 font-semibold">Account</h2>
+          <p className="text-xs text-muted-foreground mb-4">
+            Fields marked <span className="text-destructive">*</span> are required.
+          </p>
           <FormGrid cols={2}>
             <div className="space-y-1.5">
-              <Label>Full name</Label>
-              <Input value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={loading || savingProfile} />
+              <Label required>Full name</Label>
+              <Input
+                value={fullName}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  clearFieldError("fullName");
+                }}
+                disabled={loading || savingProfile}
+                className={fieldErrors.fullName ? "border-destructive" : ""}
+              />
+              <FieldError message={fieldErrors.fullName} />
             </div>
             <div className="space-y-1.5">
               <Label>Email</Label>
@@ -220,16 +260,23 @@ const Settings = () => {
           </Button>
         </Card>
         <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
-          <h2 className="mb-4 font-semibold">Security</h2>
+          <h2 className="mb-1 font-semibold">Security</h2>
+          <p className="text-xs text-muted-foreground mb-4">
+            Fields marked <span className="text-destructive">*</span> are required.
+          </p>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>Current password</Label>
+              <Label required>Current password</Label>
               <div className="flex gap-2">
                 <Input
                   type={showCurrentPassword ? "text" : "password"}
                   value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  onChange={(e) => {
+                    setCurrentPassword(e.target.value);
+                    clearFieldError("currentPassword");
+                  }}
                   disabled={savingPassword}
+                  className={fieldErrors.currentPassword ? "border-destructive" : ""}
                 />
                 <Button
                   type="button"
@@ -242,15 +289,20 @@ const Settings = () => {
                   {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
+              <FieldError message={fieldErrors.currentPassword} />
             </div>
             <div className="space-y-1.5">
-              <Label>New password</Label>
+              <Label required>New password</Label>
               <div className="flex gap-2">
                 <Input
                   type={showNewPassword ? "text" : "password"}
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    clearFieldError("newPassword");
+                  }}
                   disabled={savingPassword}
+                  className={fieldErrors.newPassword ? "border-destructive" : ""}
                 />
                 <Button
                   type="button"
@@ -263,20 +315,25 @@ const Settings = () => {
                   {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
-              {newPassword.length > 0 && (
+              <FieldError message={fieldErrors.newPassword} />
+              {!fieldErrors.newPassword && newPassword.length > 0 && (
                 <p className={`text-xs ${passwordStrength.cls}`}>
                   Password strength: {passwordStrength.label}
                 </p>
               )}
             </div>
             <div className="space-y-1.5">
-              <Label>Confirm password</Label>
+              <Label required>Confirm password</Label>
               <div className="flex gap-2">
                 <Input
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    clearFieldError("confirmPassword");
+                  }}
                   disabled={savingPassword}
+                  className={fieldErrors.confirmPassword ? "border-destructive" : ""}
                 />
                 <Button
                   type="button"
@@ -289,6 +346,7 @@ const Settings = () => {
                   {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
+              <FieldError message={fieldErrors.confirmPassword} />
             </div>
             <Button variant="outline" className="w-full" onClick={() => void updatePassword()} disabled={savingPassword}>
               Update password

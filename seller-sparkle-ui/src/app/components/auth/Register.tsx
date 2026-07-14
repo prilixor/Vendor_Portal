@@ -9,9 +9,9 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
-const Field = ({ id, label, type, value, onChange, placeholder, error }: any) => (
+const Field = ({ id, label, type, value, onChange, placeholder, error, required }: any) => (
   <div className="space-y-1.5">
-    <Label htmlFor={id}>{label}</Label>
+    <Label htmlFor={id} required={required}>{label}</Label>
     <Input
       id={id}
       type={type}
@@ -75,8 +75,11 @@ const Register = () => {
   return (
     <AuthLayout title="Create your vendor account" subtitle="Start onboarding in less than 5 minutes.">
       <form onSubmit={submit} className="space-y-4">
-        <Field id="name" label="Full name" type="text" value={name} onChange={(e: any) => setName(e.target.value)} placeholder="John Doe" error={errors.name} />
-        <Field id="email" label="Work email" type="email" value={email} onChange={(e: any) => setEmail(e.target.value)} placeholder="you@company.com" error={errors.email} />
+        <p className="text-xs text-muted-foreground -mt-1">
+          Fields marked <span className="text-destructive">*</span> are required.
+        </p>
+        <Field id="name" label="Full name" type="text" value={name} onChange={(e: any) => setName(e.target.value)} placeholder="John Doe" error={errors.name} required />
+        <Field id="email" label="Work email" type="email" value={email} onChange={(e: any) => setEmail(e.target.value)} placeholder="you@company.com" error={errors.email} required />
         <Field
           id="phone"
           label="Phone number"
@@ -85,10 +88,11 @@ const Register = () => {
           onChange={(e: any) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
           placeholder="1234567890"
           error={errors.phone}
+          required
         />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field id="password" label="Password" type="password" value={password} onChange={(e: any) => setPassword(e.target.value)} placeholder="••••••••" error={errors.password} />
-          <Field id="confirm" label="Confirm" type="password" value={confirm} onChange={(e: any) => setConfirm(e.target.value)} placeholder="••••••••" error={errors.confirm} />
+          <Field id="password" label="Password" type="password" value={password} onChange={(e: any) => setPassword(e.target.value)} placeholder="••••••••" error={errors.password} required />
+          <Field id="confirm" label="Confirm" type="password" value={confirm} onChange={(e: any) => setConfirm(e.target.value)} placeholder="••••••••" error={errors.confirm} required />
         </div>
 
         <div className="flex items-start space-x-2 py-1">

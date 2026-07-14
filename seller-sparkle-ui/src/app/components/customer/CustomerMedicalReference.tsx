@@ -5,6 +5,7 @@ import { customerApi } from "@/app/services/customerApi";
 import { Label } from "@/app/components/ui/label";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
+import { FieldError } from "@/app/components/shared/FieldError";
 import { toast } from "sonner";
 import { Loader2, Plus, Building2, UserRound, MapPin, Stethoscope, Search, Check, ChevronRight } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
@@ -41,6 +42,27 @@ export function CustomerMedicalReference({
   
   const [hospitalSearch, setHospitalSearch] = useState("");
   const [doctorSearch, setDoctorSearch] = useState("");
+
+  const [hospitalFieldErrors, setHospitalFieldErrors] = useState<Record<string, string>>({});
+  const [doctorFieldErrors, setDoctorFieldErrors] = useState<Record<string, string>>({});
+
+  const clearHospitalFieldError = (key: string) => {
+    setHospitalFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const clearDoctorFieldError = (key: string) => {
+    setDoctorFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const { data: hospitals = [], isLoading: loadingHospitals } = useQuery({
     queryKey: ["hospitals"],
@@ -81,6 +103,16 @@ export function CustomerMedicalReference({
     onError: (err: any) => toast.error(err.message || "Failed to create hospital"),
   });
 
+  const handleCreateHospital = () => {
+    if (!newHospitalName.trim()) {
+      setHospitalFieldErrors({ name: "Please enter the hospital name." });
+      toast.error("Please fill in the required fields.");
+      return;
+    }
+    setHospitalFieldErrors({});
+    createHospitalMut.mutate();
+  };
+
   const createDoctorMut = useMutation({
     mutationFn: () => customerApi.createDoctor({
       hospitalId,
@@ -98,6 +130,20 @@ export function CustomerMedicalReference({
     onError: (err: any) => toast.error(err.message || "Failed to create doctor"),
   });
 
+  const handleCreateDoctor = () => {
+    if (!hospitalId) {
+      toast.error("Please select a hospital first.");
+      return;
+    }
+    if (!newDoctorName.trim()) {
+      setDoctorFieldErrors({ name: "Please enter the doctor's full name." });
+      toast.error("Please fill in the required fields.");
+      return;
+    }
+    setDoctorFieldErrors({});
+    createDoctorMut.mutate();
+  };
+
   // --- Main View ---
   if (activeView === "main") {
     return (
@@ -107,12 +153,15 @@ export function CustomerMedicalReference({
           <p className="text-sm text-slate-500">
             Select or add the hospital and doctor details for your prescription.
           </p>
+          <p className="text-xs text-slate-500">
+            Fields marked <span className="text-destructive">*</span> are required.
+          </p>
         </div>
 
         <div className="space-y-4">
           {/* Hospital Selection Card */}
           <div className="space-y-2">
-            <Label className="text-sm font-semibold text-slate-700 ml-1">1. Hospital / Clinic</Label>
+            <Label required className="text-sm font-semibold text-slate-700 ml-1">1. Hospital / Clinic</Label>
             <div 
               onClick={() => setActiveView("select_hospital")}
               className={cn(
@@ -156,7 +205,7 @@ export function CustomerMedicalReference({
 
           {/* Doctor Selection Card */}
           <div className="space-y-2">
-            <Label className="text-sm font-semibold text-slate-700 ml-1">2. Doctor</Label>
+            <Label required className="text-sm font-semibold text-slate-700 ml-1">2. Doctor</Label>
             <div 
               onClick={() => {
                 if (!hospitalId) {
@@ -283,6 +332,7 @@ export function CustomerMedicalReference({
             className="w-full h-11 rounded-xl border-dashed border-blue-200 text-blue-700 bg-blue-50/30 hover:bg-blue-50 hover:border-blue-300"
             onClick={() => {
               setNewHospitalName(hospitalSearch);
+              setHospitalFieldErrors({});
               setActiveView("add_hospital");
             }}
           >
@@ -302,16 +352,27 @@ export function CustomerMedicalReference({
           <Button variant="ghost" size="sm" onClick={() => setActiveView("select_hospital")}>Back</Button>
         </div>
 
+        <p className="text-xs text-slate-500">
+          Fields marked <span className="text-destructive">*</span> are required.
+        </p>
+
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-2xl border border-blue-100/50 space-y-4 shadow-sm">
           <div className="space-y-2">
-            <Label className="text-sm font-semibold text-slate-800">Hospital Name</Label>
+            <Label required className="text-sm font-semibold text-slate-800">Hospital Name</Label>
             <Input 
-              className="bg-white border-white/40 shadow-sm h-11 rounded-xl focus-visible:ring-blue-500/30" 
+              className={cn(
+                "bg-white border-white/40 shadow-sm h-11 rounded-xl focus-visible:ring-blue-500/30",
+                hospitalFieldErrors.name ? "border-destructive" : ""
+              )}
               placeholder="e.g. Apollo General Hospital" 
               value={newHospitalName} 
-              onChange={e => setNewHospitalName(e.target.value)} 
+              onChange={e => {
+                setNewHospitalName(e.target.value);
+                clearHospitalFieldError("name");
+              }} 
               autoFocus
             />
+            <FieldError message={hospitalFieldErrors.name} />
           </div>
           <div className="space-y-2">
             <Label className="text-sm font-semibold text-slate-800">City (Optional)</Label>
@@ -327,8 +388,8 @@ export function CustomerMedicalReference({
         <Button 
           size="lg" 
           className="w-full h-12 rounded-xl text-base bg-blue-600 hover:bg-blue-700 shadow-sm transition-all hover:shadow-md" 
-          onClick={() => createHospitalMut.mutate()} 
-          disabled={!newHospitalName.trim() || createHospitalMut.isPending}
+          onClick={handleCreateHospital} 
+          disabled={createHospitalMut.isPending}
         >
           {createHospitalMut.isPending ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Building2 className="h-5 w-5 mr-2" />} 
           Save & Select Hospital
@@ -400,6 +461,7 @@ export function CustomerMedicalReference({
             className="w-full h-11 rounded-xl border-dashed border-emerald-200 text-emerald-700 bg-emerald-50/30 hover:bg-emerald-50 hover:border-emerald-300"
             onClick={() => {
               setNewDoctorName(doctorSearch);
+              setDoctorFieldErrors({});
               setActiveView("add_doctor");
             }}
           >
@@ -419,16 +481,27 @@ export function CustomerMedicalReference({
           <Button variant="ghost" size="sm" onClick={() => setActiveView("select_doctor")}>Back</Button>
         </div>
 
+        <p className="text-xs text-slate-500">
+          Fields marked <span className="text-destructive">*</span> are required.
+        </p>
+
         <div className="bg-gradient-to-br from-emerald-50 to-teal-50 p-5 rounded-2xl border border-emerald-100/50 space-y-4 shadow-sm">
           <div className="space-y-2">
-            <Label className="text-sm font-semibold text-slate-800">Doctor Full Name</Label>
+            <Label required className="text-sm font-semibold text-slate-800">Doctor Full Name</Label>
             <Input 
-              className="bg-white border-white/40 shadow-sm h-11 rounded-xl focus-visible:ring-emerald-500/30" 
+              className={cn(
+                "bg-white border-white/40 shadow-sm h-11 rounded-xl focus-visible:ring-emerald-500/30",
+                doctorFieldErrors.name ? "border-destructive" : ""
+              )}
               placeholder="e.g. Dr. Jane Smith" 
               value={newDoctorName} 
-              onChange={e => setNewDoctorName(e.target.value)} 
+              onChange={e => {
+                setNewDoctorName(e.target.value);
+                clearDoctorFieldError("name");
+              }} 
               autoFocus
             />
+            <FieldError message={doctorFieldErrors.name} />
           </div>
           <div className="space-y-2">
             <Label className="text-sm font-semibold text-slate-800">Specialization (Optional)</Label>
@@ -444,8 +517,8 @@ export function CustomerMedicalReference({
         <Button 
           size="lg" 
           className="w-full h-12 rounded-xl text-base bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all hover:shadow-md" 
-          onClick={() => createDoctorMut.mutate()} 
-          disabled={!newDoctorName.trim() || createDoctorMut.isPending}
+          onClick={handleCreateDoctor} 
+          disabled={createDoctorMut.isPending}
         >
           {createDoctorMut.isPending ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <UserRound className="h-5 w-5 mr-2" />} 
           Save & Select Doctor
