@@ -1,16 +1,26 @@
 import { useState, useEffect, useMemo, type MouseEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import { Heart, ImageOff, Search } from "lucide-react";
+import { Heart, ImageOff } from "lucide-react";
 import { customerApi } from "@/app/services/customerApi";
-import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/app/components/ui/card";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Badge } from "@/app/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Switch } from "@/app/components/ui/switch";
+import { Label } from "@/app/components/ui/label";
 import { cn } from "@/app/helpers/utils";
 import { useAuth } from "@/app/guards/AuthContext";
+import {
+  ActiveFilterChips,
+  FilterPanel,
+  FilterSearchBar,
+  FilterSection,
+  FilterSelectRow,
+  FilterTileGrid,
+  type ActiveFilterChip,
+} from "@/app/components/shared/ProfessionalFilters";
 
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -98,6 +108,10 @@ const CustomerBrowse = () => {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
   const [browseMode, setBrowseMode] = useState<"equipment" | "chemicals">("equipment");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draftCategory, setDraftCategory] = useState<string | undefined>(undefined);
+  const [draftAvailability, setDraftAvailability] = useState<AvailabilityFilter>("all");
+  const [draftFavorites, setDraftFavorites] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -248,8 +262,59 @@ const CustomerBrowse = () => {
     }
   };
 
-  const pillSelected = (label: string) =>
-    label === "All" ? appliedCat === undefined : appliedCat === label;
+  const openFilters = () => {
+    setDraftCategory(appliedCat);
+    setDraftAvailability(availabilityFilter);
+    setDraftFavorites(showFavoritesOnly);
+    setFiltersOpen(true);
+  };
+
+  const applyFilters = () => {
+    setAppliedCat(draftCategory);
+    setAvailabilityFilter(draftAvailability);
+    setShowFavoritesOnly(draftFavorites);
+  };
+
+  const resetDraftFilters = () => {
+    setDraftCategory(undefined);
+    setDraftAvailability("all");
+    setDraftFavorites(false);
+  };
+
+  const clearAllFilters = () => {
+    setAppliedCat(undefined);
+    setAvailabilityFilter("all");
+    setShowFavoritesOnly(false);
+  };
+
+  const activeFilterCount =
+    (appliedCat ? 1 : 0) + (availabilityFilter !== "all" ? 1 : 0) + (showFavoritesOnly ? 1 : 0);
+
+  const activeChips: ActiveFilterChip[] = [];
+  if (appliedCat) {
+    activeChips.push({
+      key: "category",
+      label: appliedCat,
+      onClear: () => setAppliedCat(undefined),
+    });
+  }
+  if (availabilityFilter !== "all") {
+    const label = availabilityPills.find((p) => p.id === availabilityFilter)?.label ?? availabilityFilter;
+    activeChips.push({
+      key: "availability",
+      label,
+      onClear: () => setAvailabilityFilter("all"),
+    });
+  }
+  if (showFavoritesOnly) {
+    activeChips.push({
+      key: "favorites",
+      label: "Favorites",
+      onClear: () => setShowFavoritesOnly(false),
+    });
+  }
+
+  const modeCategoryNames = categoryPills.filter((label) => label !== "All");
 
   return (
     <div className="space-y-8">
@@ -283,82 +348,91 @@ const CustomerBrowse = () => {
         </div>
       </div>
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
+      <div className="space-y-3 max-w-2xl">
+        <FilterSearchBar
           value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
+          onChange={setSearchInput}
           placeholder={browseMode === "chemicals" ? "Search acids, reagents, solvents..." : "Search beds, oxygen, wheelchairs..."}
-          className="pl-9"
+          activeCount={activeFilterCount}
+          onOpenFilters={openFilters}
           aria-label="Search listings"
         />
+        <ActiveFilterChips chips={activeChips} onClearAll={clearAllFilters} clearLabel="Clear all" />
       </div>
 
-      <div className="-mx-1 overflow-x-auto px-1 sm:-mx-2 sm:px-2">
-        <div className="flex min-h-9 gap-2 pb-1">
-          {catLoading
-            ? Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-8 w-20 shrink-0 rounded-full" />
-              ))
-            : categoryPills.map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => setAppliedCat(label === "All" ? undefined : label)}
-                  className={cn(
-                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                    pillSelected(label)
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border bg-background hover:bg-accent",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-        </div>
-      </div>
-
-      <div className="-mx-1 overflow-x-auto px-1 sm:-mx-2 sm:px-2">
-        <div className="flex min-h-9 gap-2 pb-1">
-          <button
-            type="button"
-            onClick={() => {
-              if (!user) {
-                toast.error("Please log in to see your saved items.");
-                return;
-              }
-              setShowFavoritesOnly(!showFavoritesOnly);
-            }}
-            className={cn(
-              "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5",
-              showFavoritesOnly
-                ? "border-destructive bg-destructive text-destructive-foreground"
-                : "border-border bg-background hover:bg-accent text-foreground",
+      <FilterPanel
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        title="Filters"
+        description="Narrow by category, stock, and saved items."
+        onReset={resetDraftFilters}
+        resetLabel="Clear all"
+        onApply={applyFilters}
+        applyLabel={
+          (draftCategory ? 1 : 0) + (draftAvailability !== "all" ? 1 : 0) + (draftFavorites ? 1 : 0) > 0
+            ? `Show results (${(draftCategory ? 1 : 0) + (draftAvailability !== "all" ? 1 : 0) + (draftFavorites ? 1 : 0)})`
+            : "Show results"
+        }
+      >
+        <div className="space-y-4">
+          <FilterSection title="Category">
+            {catLoading ? (
+              <div className="space-y-2 p-4">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : (
+              <>
+                <FilterSelectRow
+                  label="All categories"
+                  selected={draftCategory === undefined}
+                  onClick={() => setDraftCategory(undefined)}
+                />
+                {modeCategoryNames.map((name) => (
+                  <FilterSelectRow
+                    key={name}
+                    label={name}
+                    selected={draftCategory === name}
+                    onClick={() => setDraftCategory(name)}
+                    showDivider
+                  />
+                ))}
+              </>
             )}
-          >
-            <Heart className={cn("h-3.5 w-3.5", showFavoritesOnly ? "fill-current text-current" : "text-destructive")} />
-            Saved
-          </button>
-          
-          <div className="w-px h-6 bg-border mx-1 self-center shrink-0" />
+          </FilterSection>
 
-          {availabilityPills.map((pill) => (
-            <button
-              key={pill.id}
-              type="button"
-              onClick={() => setAvailabilityFilter(pill.id)}
-              className={cn(
-                "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                availabilityFilter === pill.id
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-background hover:bg-accent",
-              )}
-            >
-              {pill.label}
-            </button>
-          ))}
+          <FilterSection title="Availability">
+            <FilterTileGrid
+              options={availabilityPills}
+              value={draftAvailability}
+              onChange={(id) => setDraftAvailability(id as AvailabilityFilter)}
+            />
+          </FilterSection>
+
+          <FilterSection title="Saved">
+            <div className="flex items-center justify-between gap-4 px-4 py-4">
+              <div className="min-w-0 space-y-0.5">
+                <Label htmlFor="browse-favorites" className="text-sm font-semibold">
+                  Favorites only
+                </Label>
+                <p className="text-xs text-muted-foreground">Show items you have saved</p>
+              </div>
+              <Switch
+                id="browse-favorites"
+                checked={draftFavorites}
+                onCheckedChange={(checked) => {
+                  if (checked && !user) {
+                    toast.error("Please log in to see your saved items.");
+                    return;
+                  }
+                  setDraftFavorites(checked);
+                }}
+              />
+            </div>
+          </FilterSection>
         </div>
-      </div>
+      </FilterPanel>
 
       {error && (
         <p className="text-sm text-destructive">

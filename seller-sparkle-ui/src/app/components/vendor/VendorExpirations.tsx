@@ -115,7 +115,12 @@ const VendorExpirations = () => {
                             </div>
                           </div>
                           <Badge className="w-fit mt-1 sm:mt-0" variant={resolveDaysLeft(row) <= 1 ? "destructive" : "secondary"}>
-                            {resolveDaysLeft(row) <= 0 ? "Due today" : `${resolveDaysLeft(row)} day(s) left`}
+                            {(() => {
+                              const days = resolveDaysLeft(row);
+                              if (days <= 0) return "Due Today";
+                              if (days === 1) return "1 day left";
+                              return `${days} days left`;
+                            })()}
                           </Badge>
                         </div>
                       </div>

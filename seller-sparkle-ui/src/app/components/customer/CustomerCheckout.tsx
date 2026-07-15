@@ -19,7 +19,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogClose } from "@/app/components/ui/dialog";
 import { toast } from "sonner";
 import { Loader2, Plus, FileText, CheckCircle2 } from "lucide-react";
-import { cn } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { CustomerMedicalReference } from "./CustomerMedicalReference";
 import { Checkbox } from "@/app/components/ui/checkbox";
 
@@ -447,20 +447,36 @@ const CustomerCheckout = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3 text-sm">
-              {lines.map((l) => (
-                <div key={l.listingId} className="flex justify-between gap-4">
-                  <span className="min-w-0 leading-snug">
-                    <span className="font-medium tabular-nums">{l.quantity}</span>
-                    <span className="text-muted-foreground"> × </span>
-                    <span>{l.title}</span>
-                  </span>
+              {lines.map((l) => {
+                const imageUrl = resolveItemImageUrl(l);
+                return (
+                <div key={l.listingId} className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {imageUrl ? (
+                      <img
+                        src={imageUrl}
+                        alt={l.title}
+                        className="h-10 w-10 shrink-0 rounded-md object-cover border border-border/40 bg-muted"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border/40 bg-muted text-[10px] text-muted-foreground">
+                        No Img
+                      </div>
+                    )}
+                    <span className="min-w-0 leading-snug">
+                      <span className="font-medium tabular-nums">{l.quantity}</span>
+                      <span className="text-muted-foreground"> × </span>
+                      <span>{l.title}</span>
+                    </span>
+                  </div>
                   <span className="shrink-0 tabular-nums font-medium">
                     ₹{(l.orderType === "buy"
                       ? (l.buyPrice ?? 0) * l.quantity
                       : l.dailyRent * l.quantity * l.rentalDays).toFixed(0)}
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
               <div className="space-y-2.5 border-t pt-4 text-sm">

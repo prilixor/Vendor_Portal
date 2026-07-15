@@ -7,7 +7,7 @@ import { Button } from "@/app/components/ui/button";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { QuantityStepper } from "@/app/components/ui/quantity-stepper";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
-import { cn } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { useQueries } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
 import type { CustomerListingDetailApi } from "@/app/services/customerApi";
@@ -37,6 +37,7 @@ function CartThumb({ url }: { url?: string | null }) {
 function CartLineCard({
   line,
   availableQuantity,
+  imageUrl,
   onUpdateQty,
   onUpdateDays,
   onUpdateOrderType,
@@ -44,6 +45,7 @@ function CartLineCard({
 }: {
   line: CartLine;
   availableQuantity?: number;
+  imageUrl?: string | null;
   onUpdateQty: (listingId: string, qty: number) => void;
   onUpdateDays: (listingId: string, days: number) => void;
   onUpdateOrderType: (listingId: string, orderType: "rent" | "buy") => void;
@@ -56,6 +58,9 @@ function CartLineCard({
       ? linePrice * line.quantity
       : line.dailyRent * line.quantity * line.rentalDays;
   const listingTo = `/customer/browse/${encodeURIComponent(line.listingId)}`;
+  const thumbUrl = resolveItemImageUrl({
+    primaryImageUrl: imageUrl ?? line.primaryImageUrl,
+  });
 
   return (
     <div
@@ -70,7 +75,7 @@ function CartLineCard({
           className="relative aspect-square w-20 shrink-0 overflow-hidden rounded-lg bg-muted ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:w-24"
           aria-label={`View listing: ${line.title}`}
         >
-          <CartThumb url={line.primaryImageUrl} />
+          <CartThumb url={thumbUrl} />
         </Link>
 
         <div className="min-w-0 flex-1 space-y-3">
@@ -236,6 +241,7 @@ const CustomerCart = () => {
                 key={`${line.listingId}-${line.productVariantId ?? "base"}`}
                 line={line}
                 availableQuantity={lineAvailability(line)}
+                imageUrl={resolveItemImageUrl(detailMap.get(line.listingId))}
                 onUpdateQty={(listingId, qty) => updateLine(listingId, { quantity: qty })}
                 onUpdateDays={(listingId, rentalDays) => updateLine(listingId, { rentalDays })}
                 onUpdateOrderType={(listingId, orderType) => updateLine(listingId, { orderType })}

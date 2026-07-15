@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { QuantityStepper } from "@/app/components/ui/quantity-stepper";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Skeleton } from "@/app/components/ui/skeleton";
+import { ProductImageGallery } from "@/app/components/shared/ProductImageGallery";
 import { toast } from "sonner";
 import { ShoppingCart } from "lucide-react";
 
@@ -54,7 +55,6 @@ const CustomerListingDetail = () => {
   const [qty, setQty] = useState(1);
   const [days, setDays] = useState(7);
   const [orderType, setOrderType] = useState<"rent" | "buy">("rent");
-  const [imgIx, setImgIx] = useState(0);
   const [selectedVariantId, setSelectedVariantId] = useState<string>("");
 
   const { data, isLoading, error } = useQuery({
@@ -188,66 +188,7 @@ const CustomerListingDetail = () => {
 
   return (
     <div className="grid gap-10 lg:grid-cols-2">
-      <div className="min-w-0 space-y-3">
-        <div className="relative w-full overflow-hidden rounded-xl border bg-card">
-          <div className="block w-full pb-[75%]" aria-hidden />
-          {images.length > 0 ? (
-            <img
-              src={images[imgIx % images.length]}
-              alt=""
-              className="customer-catalog-media-img"
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                maxWidth: "none",
-                maxHeight: "none",
-                objectFit: "contain",
-                objectPosition: "center",
-                display: "block",
-              }}
-              loading="lazy"
-              decoding="async"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-              No photos
-            </div>
-          )}
-        </div>
-        {images.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {images.map((url, i) => (
-              <button
-                key={`listing-img-${i}`}
-                type="button"
-                onClick={() => setImgIx(i)}
-                className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-md border-2 bg-card ${i === imgIx ? "border-primary" : "border-transparent"}`}
-              >
-                <img
-                  src={url}
-                  alt=""
-                  className="customer-catalog-media-img"
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    maxWidth: "none",
-                    maxHeight: "none",
-                    objectFit: "contain",
-                    objectPosition: "center",
-                    display: "block",
-                  }}
-                  loading="lazy"
-                  decoding="async"
-                />
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <ProductImageGallery images={images} alt={data.title} />
 
       <div className="space-y-6">
         <div>

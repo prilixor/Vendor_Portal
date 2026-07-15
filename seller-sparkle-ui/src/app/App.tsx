@@ -46,6 +46,7 @@ import AdminRegister from "@/app/components/admin/AdminRegister";
 import AdminLogin from "@/app/components/admin/AdminLogin";
 import SupportManagement from "@/app/components/admin/SupportManagement";
 import AdminOrders from "@/app/components/admin/AdminOrders";
+import AdminOrderDetail from "@/app/components/admin/AdminOrderDetail";
 import { AdminNotifications } from "@/app/components/admin/AdminNotifications";
 
 import CustomerBrowse from "@/app/components/customer/CustomerBrowse";
@@ -117,6 +118,7 @@ const App = () => (
               <Route path="audit-logs" element={<AuditLogs />} />
               <Route path="support" element={<SupportManagement />} />
               <Route path="orders" element={<AdminOrders />} />
+              <Route path="orders/:orderId" element={<AdminOrderDetail />} />
               <Route path="notifications" element={<AdminNotifications />} />
             </Route>
 

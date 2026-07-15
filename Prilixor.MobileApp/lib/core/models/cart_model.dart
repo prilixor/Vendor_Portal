@@ -1,8 +1,10 @@
+import '../utils/media_url.dart';
+
 class CartLineModel {
   final String listingId;
   final String title;
   final String? vendorName;
-  final String? primaryImageUrl;
+  String? primaryImageUrl;
   final double dailyRent;
   final double monthlyRent;
   final double securityDeposit;
@@ -64,7 +66,11 @@ class CartLineModel {
       listingId: json['listingId'],
       title: json['title'],
       vendorName: json['vendorName'],
-      primaryImageUrl: json['primaryImageUrl'],
+      primaryImageUrl: resolveItemImageUrl(
+        primaryImageUrl: json['primaryImageUrl']?.toString(),
+        listingPrimaryImageUrl: json['listingPrimaryImageUrl']?.toString(),
+        json: json,
+      ),
       dailyRent: (json['dailyRent'] as num).toDouble(),
       monthlyRent: (json['monthlyRent'] as num?)?.toDouble() ?? 0,
       securityDeposit: (json['securityDeposit'] as num).toDouble(),

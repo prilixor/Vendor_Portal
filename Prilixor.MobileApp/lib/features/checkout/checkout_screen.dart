@@ -6,6 +6,7 @@ import '../../core/providers/address_provider.dart';
 import '../../core/models/medical_model.dart';
 import '../../shared/utils/require_auth.dart';
 import '../../shared/widgets/required_field_ux.dart';
+import '../../shared/widgets/catalog_image.dart';
 import 'medical_reference_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -138,29 +139,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                       child: Row(
                         children: [
-                          if (line.primaryImageUrl != null && line.primaryImageUrl!.isNotEmpty)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                line.primaryImageUrl!,
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: SizedBox(
+                              width: 50,
+                              height: 50,
+                              child: CatalogImage(
+                                url: line.primaryImageUrl,
                                 width: 50,
                                 height: 50,
                                 fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) => Container(
-                                  width: 50,
-                                  height: 50,
-                                  color: Colors.white10,
-                                  child: const Icon(Icons.image, color: Colors.white54),
-                                ),
                               ),
-                            )
-                          else
-                            Container(
-                              width: 50,
-                              height: 50,
-                              color: Colors.white10,
-                              child: const Icon(Icons.image, color: Colors.white54),
                             ),
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(

@@ -6,6 +6,7 @@ import '../../core/providers/address_provider.dart';
 import '../../core/providers/product_provider.dart';
 import '../../core/providers/favorite_provider.dart';
 import '../../core/models/product_model.dart';
+import '../../core/models/category_model.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/utils/require_auth.dart';
 import '../product/product_detail_screen.dart';
@@ -97,13 +98,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _onCategorySelected(String categoryName) {
-    setState(() {
-      _selectedCategoryName = _selectedCategoryName == categoryName ? null : categoryName;
-    });
-    _onSearch();
-  }
-
   void _setBrowseMode(String mode) {
     if (_browseMode == mode) return;
     setState(() {
@@ -190,83 +184,124 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  TextField(
-                    controller: _searchController,
-                    onSubmitted: (_) => _onSearch(),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: _browseMode == 'chemicals' ? 'Search chemicals...' : 'Search equipment...',
-                      hintStyle: const TextStyle(color: Colors.white54),
-                      prefixIcon: const Icon(Icons.search, color: Colors.white70),
-                      filled: true,
-                      fillColor: const Color(0xFF1E293B),
-                      border: OutlineInputBorder(
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          onSubmitted: (_) => _onSearch(),
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: _browseMode == 'chemicals' ? 'Search chemicals...' : 'Search equipment...',
+                            hintStyle: const TextStyle(color: Colors.white54),
+                            prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                            filled: true,
+                            fillColor: const Color(0xFF1E293B),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Material(
+                        color: _hasActiveFilters
+                            ? const Color(0xFF6C63FF)
+                            : const Color(0xFF1E293B),
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
+                        child: InkWell(
+                          onTap: () => _openFiltersSheet(modeCategories),
+                          borderRadius: BorderRadius.circular(16),
+                          child: SizedBox(
+                            width: 52,
+                            height: 52,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Icon(
+                                  Icons.tune_rounded,
+                                  color: _hasActiveFilters ? Colors.white : Colors.white70,
+                                ),
+                                if (_activeFilterCount > 0)
+                                  Positioned(
+                                    top: 10,
+                                    right: 10,
+                                    child: Container(
+                                      width: 16,
+                                      height: 16,
+                                      alignment: Alignment.center,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Text(
+                                        '$_activeFilterCount',
+                                        style: const TextStyle(
+                                          color: Color(0xFF6C63FF),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_hasActiveFilters) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 36,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          if (_selectedCategoryName != null)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _ActiveFilterChip(
+                                label: _selectedCategoryName!,
+                                onClear: () {
+                                  setState(() => _selectedCategoryName = null);
+                                  _onSearch();
+                                },
+                              ),
+                            ),
+                          if (_availabilityFilter != 'all')
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _ActiveFilterChip(
+                                label: availabilityPills
+                                    .firstWhere((p) => p['id'] == _availabilityFilter)['label']!,
+                                onClear: () => setState(() => _availabilityFilter = 'all'),
+                              ),
+                            ),
+                          if (_showFavoritesOnly)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _ActiveFilterChip(
+                                label: 'Favorites',
+                                onClear: () => setState(() => _showFavoritesOnly = false),
+                              ),
+                            ),
+                          TextButton(
+                            onPressed: _clearAllFilters,
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.white70,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text('Clear all', style: TextStyle(fontSize: 13)),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            
-            if (modeCategories.isNotEmpty)
-              SizedBox(
-                height: 50,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: modeCategories.length,
-                  itemBuilder: (context, index) {
-                    final category = modeCategories[index];
-                    final isSelected = _selectedCategoryName == category.categoryName;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: ChoiceChip(
-                        label: Text(category.categoryName),
-                        selected: isSelected,
-                        onSelected: (_) => _onCategorySelected(category.categoryName),
-                        selectedColor: const Color(0xFF6C63FF),
-                        backgroundColor: const Color(0xFF1E293B),
-                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.white70),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              
-            SizedBox(
-              height: 40,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: availabilityPills.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final pill = availabilityPills[index];
-                  final selected = _availabilityFilter == pill['id'];
-                  return ChoiceChip(
-                    label: Text(pill['label']!),
-                    selected: selected,
-                    onSelected: (_) => setState(() => _availabilityFilter = pill['id']!),
-                    selectedColor: const Color(0xFF6C63FF),
-                    backgroundColor: const Color(0xFF1E293B),
-                    labelStyle: TextStyle(color: selected ? Colors.white : Colors.white70, fontSize: 12),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                children: [
-                  Switch(
-                    value: _showFavoritesOnly,
-                    onChanged: (val) => setState(() => _showFavoritesOnly = val),
-                    activeThumbColor: const Color(0xFF6C63FF),
-                  ),
-                  const Text('Favorites Only', style: TextStyle(color: Colors.white70)),
+                  ],
                 ],
               ),
             ),
@@ -303,6 +338,244 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  bool get _hasActiveFilters =>
+      _selectedCategoryName != null ||
+      _availabilityFilter != 'all' ||
+      _showFavoritesOnly;
+
+  int get _activeFilterCount {
+    var n = 0;
+    if (_selectedCategoryName != null) n++;
+    if (_availabilityFilter != 'all') n++;
+    if (_showFavoritesOnly) n++;
+    return n;
+  }
+
+  void _clearAllFilters() {
+    setState(() {
+      _selectedCategoryName = null;
+      _availabilityFilter = 'all';
+      _showFavoritesOnly = false;
+    });
+    _onSearch();
+  }
+
+  Future<void> _openFiltersSheet(List<CategoryModel> categories) async {
+    var draftCategory = _selectedCategoryName;
+    var draftAvailability = _availabilityFilter;
+    var draftFavorites = _showFavoritesOnly;
+
+    const availabilityOptions = <Map<String, String>>[
+      {'id': 'all', 'label': 'All'},
+      {'id': 'available', 'label': 'Available'},
+      {'id': 'low_stock', 'label': 'Low stock'},
+      {'id': 'out_of_stock', 'label': 'Out of stock'},
+    ];
+
+    int draftCount() {
+      var n = 0;
+      if (draftCategory != null) n++;
+      if (draftAvailability != 'all') n++;
+      if (draftFavorites) n++;
+      return n;
+    }
+
+    final applied = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final maxH = MediaQuery.of(ctx).size.height * 0.82;
+            final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
+            final count = draftCount();
+
+            return SafeArea(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Container(
+                  constraints: BoxConstraints(maxHeight: maxH),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0F172A),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                    border: Border(
+                      top: BorderSide(color: Color(0xFF334155)),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF475569),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Filters',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                setSheetState(() {
+                                  draftCategory = null;
+                                  draftAvailability = 'all';
+                                  draftFavorites = false;
+                                });
+                              },
+                              child: const Text(
+                                'Clear all',
+                                style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                              tooltip: 'Close',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 1, color: Color(0xFF1E293B)),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _FilterSectionCard(
+                                title: 'Category',
+                                child: Column(
+                                  children: [
+                                    _FilterSelectRow(
+                                      label: 'All categories',
+                                      selected: draftCategory == null,
+                                      onTap: () => setSheetState(() => draftCategory = null),
+                                    ),
+                                    ...categories.map((c) {
+                                      return _FilterSelectRow(
+                                        label: c.categoryName,
+                                        selected: draftCategory == c.categoryName,
+                                        onTap: () => setSheetState(() => draftCategory = c.categoryName),
+                                        showDivider: true,
+                                      );
+                                    }),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              _FilterSectionCard(
+                                title: 'Availability',
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: GridView.count(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    crossAxisCount: 2,
+                                    mainAxisSpacing: 10,
+                                    crossAxisSpacing: 10,
+                                    childAspectRatio: 2.6,
+                                    children: availabilityOptions.map((opt) {
+                                      final selected = draftAvailability == opt['id'];
+                                      return _AvailabilityTile(
+                                        label: opt['label']!,
+                                        selected: selected,
+                                        onTap: () => setSheetState(() => draftAvailability = opt['id']!),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              _FilterSectionCard(
+                                title: 'Saved',
+                                child: _FavoritesFilterRow(
+                                  value: draftFavorites,
+                                  onChanged: (v) => setSheetState(() => draftFavorites = v),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomInset),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF0F172A),
+                          border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.white70,
+                                  side: const BorderSide(color: Color(0xFF334155)),
+                                  minimumSize: const Size.fromHeight(48),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                                child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF6C63FF),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  minimumSize: const Size.fromHeight(48),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                                child: Text(
+                                  count > 0 ? 'Show results ($count)' : 'Show results',
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (applied == true && mounted) {
+      setState(() {
+        _selectedCategoryName = draftCategory;
+        _availabilityFilter = draftAvailability;
+        _showFavoritesOnly = draftFavorites;
+      });
+      _onSearch();
+    }
   }
 
   Widget _browseModeChip(String mode, String label) {
@@ -451,6 +724,230 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActiveFilterChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onClear;
+
+  const _ActiveFilterChip({required this.label, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(left: 12, right: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF6C63FF).withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          IconButton(
+            onPressed: onClear,
+            icon: const Icon(Icons.close, size: 16, color: Colors.white70),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterSectionCard extends StatelessWidget {
+  final String title;
+  final Widget child;
+
+  const _FilterSectionCard({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF334155).withValues(alpha: 0.7)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterSelectRow extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool showDivider;
+
+  const _FilterSelectRow({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.showDivider = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (showDivider) const Divider(height: 1, color: Color(0xFF334155)),
+        Material(
+          color: selected ? const Color(0xFF6C63FF).withValues(alpha: 0.12) : Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: selected ? Colors.white : const Color(0xFFE2E8F0),
+                        fontSize: 14,
+                        fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    selected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                    size: 22,
+                    color: selected ? const Color(0xFF6C63FF) : const Color(0xFF64748B),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AvailabilityTile extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _AvailabilityTile({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? const Color(0xFF6C63FF) : const Color(0xFF0F172A),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? const Color(0xFF6C63FF) : const Color(0xFF334155),
+            ),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: selected ? Colors.white : const Color(0xFFCBD5E1),
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FavoritesFilterRow extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _FavoritesFilterRow({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 12, 14),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  value ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  color: value ? const Color(0xFFEF4444) : const Color(0xFF94A3B8),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Favorites only',
+                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Show items you have saved',
+                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              Switch.adaptive(
+                value: value,
+                activeThumbColor: Colors.white,
+                activeTrackColor: const Color(0xFF6C63FF),
+                onChanged: onChanged,
+              ),
+            ],
+          ),
         ),
       ),
     );

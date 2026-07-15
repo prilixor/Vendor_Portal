@@ -2,16 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, RefreshCw, Search, Package, User } from "lucide-react";
-import { Input } from "@/app/components/ui/input";
-import { cn } from "@/app/helpers/utils";
+import { ChevronLeft, ChevronRight, RefreshCw, Package, User } from "lucide-react";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import {
+  ActiveFilterChips,
+  FilterPanel,
+  FilterSearchBar,
+  FilterSection,
+  FilterSelectRow,
+  type ActiveFilterChip,
+} from "@/app/components/shared/ProfessionalFilters";
 
 const PAGE_SIZE = 8;
 
@@ -89,6 +95,8 @@ const VendorOrders = () => {
   const [orders, setOrders] = useState<VendorOrderApiDto[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draftStatus, setDraftStatus] = useState<(typeof statusTabs)[number]["id"]>("all");
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
@@ -185,6 +193,31 @@ const VendorOrders = () => {
     }, {} as Record<(typeof statusTabs)[number]["id"], number>);
   }, [orders, debouncedSearch]);
 
+  const setStatusFilter = (nextStatus: (typeof statusTabs)[number]["id"]) => {
+    setActiveStatus(nextStatus);
+    if (nextStatus === "all") {
+      setSearchParams({});
+    } else {
+      setSearchParams({ status: nextStatus });
+    }
+  };
+
+  const statusOptions = statusTabs.filter(
+    (tab) => tab.id !== "bought_out" || (statusCounts[tab.id] ?? 0) > 0,
+  );
+
+  const activeTabLabel = statusTabs.find((t) => t.id === activeStatus)?.label ?? "All";
+  const activeChips: ActiveFilterChip[] =
+    activeStatus === "all"
+      ? []
+      : [
+          {
+            key: "status",
+            label: `${activeTabLabel} (${statusCounts[activeStatus] ?? 0})`,
+            onClear: () => setStatusFilter("all"),
+          },
+        ];
+
   return (
     <div>
       <PageHeader
@@ -199,39 +232,49 @@ const VendorOrders = () => {
       />
 
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
-        <div className="relative max-w-2xl mb-6">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
+        <div className="mb-6 max-w-2xl space-y-3">
+          <FilterSearchBar
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={setSearchInput}
             placeholder="Search by order ID, item, or customer"
-            className="pl-9"
+            activeCount={activeStatus === "all" ? 0 : 1}
+            onOpenFilters={() => {
+              setDraftStatus(activeStatus);
+              setFiltersOpen(true);
+            }}
             aria-label="Search orders"
           />
+          <ActiveFilterChips chips={activeChips} />
         </div>
 
-        <Tabs
-          value={activeStatus}
-          onValueChange={(value) => {
-            const nextStatus = value as typeof activeStatus;
-            setActiveStatus(nextStatus);
-            if (nextStatus === "all") {
-              setSearchParams({});
-            } else {
-              setSearchParams({ status: nextStatus });
-            }
-          }}
+        <FilterPanel
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
+          title="Filter orders"
+          description="Show orders by current status."
+          onReset={() => setDraftStatus("all")}
+          resetLabel="Clear"
+          onApply={() => setStatusFilter(draftStatus)}
+          applyLabel={
+            draftStatus === "all"
+              ? "Show all orders"
+              : `Show ${(statusTabs.find((t) => t.id === draftStatus)?.label ?? draftStatus).toLowerCase()}`
+          }
         >
-          <TabsList className="mb-4 h-auto w-full flex-nowrap overflow-x-auto justify-start">
-            {statusTabs
-              .filter(tab => tab.id !== "bought_out" || (statusCounts[tab.id] ?? 0) > 0)
-              .map((tab) => (
-              <TabsTrigger key={tab.id} value={tab.id}>
-                {tab.label} ({statusCounts[tab.id] ?? 0})
-              </TabsTrigger>
+          <FilterSection title="Status">
+            {statusOptions.map((tab, index) => (
+              <FilterSelectRow
+                key={tab.id}
+                label={tab.label}
+                count={statusCounts[tab.id] ?? 0}
+                selected={draftStatus === tab.id}
+                onClick={() => setDraftStatus(tab.id)}
+                showDivider={index > 0}
+              />
             ))}
-          </TabsList>
-        </Tabs>
+          </FilterSection>
+        </FilterPanel>
+
         <p className="mb-4 text-xs text-muted-foreground">
           Status note: <span className="font-medium">Cancelled</span> means customer cancelled the order.
           {" "}
@@ -296,12 +339,14 @@ const VendorOrders = () => {
 
                   {/* Items List */}
                   <div className="space-y-4">
-                    {group.items.map((order) => (
+                    {group.items.map((order) => {
+                      const imageUrl = resolveItemImageUrl(order);
+                      return (
                       <div key={order.orderId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/10 hover:border-border transition-all duration-300 shadow-sm gap-4">
                         <div className="flex items-center gap-4 flex-1">
-                          {order.listingPrimaryImageUrl ? (
+                          {imageUrl ? (
                             <img
-                              src={order.listingPrimaryImageUrl}
+                              src={imageUrl}
                               alt={order.listingTitle}
                               className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm"
                             />
@@ -343,7 +388,8 @@ const VendorOrders = () => {
                           </Button>
                         </div>
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
                 </div>
               ));

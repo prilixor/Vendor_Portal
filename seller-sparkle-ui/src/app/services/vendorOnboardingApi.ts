@@ -423,6 +423,14 @@ export interface VendorDispatchOfferApiDto {
   vendorSubtotalAmount: number;
   startDate?: string;
   endDate?: string;
+  listingPrimaryImageUrl?: string | null;
+  doctorId?: string;
+  doctorName?: string;
+  doctorSpecialization?: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  hospitalCity?: string;
+  doctorContactNumber?: string;
 }
 
 export interface VendorOrderApiDto {

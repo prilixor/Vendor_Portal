@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/order_detail_provider.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/models/order_model.dart';
+import '../../shared/widgets/catalog_image.dart';
 import '../product/product_detail_screen.dart';
 import '../../core/providers/chat_provider.dart';
 import '../chat/chat_detail_screen.dart';
@@ -336,9 +337,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                           children: [
                                             ClipRRect(
                                               borderRadius: BorderRadius.circular(8),
-                                              child: order.listingPrimaryImageUrl != null && order.listingPrimaryImageUrl!.isNotEmpty
-                                                  ? Image.network(order.listingPrimaryImageUrl!, width: 44, height: 44, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 44, height: 44, color: Colors.white10, child: const Icon(Icons.broken_image, color: Colors.white24)))
-                                                  : Container(width: 44, height: 44, color: Colors.white10, child: const Center(child: Text('No img', style: TextStyle(color: Colors.white24, fontSize: 10)))),
+                                              child: SizedBox(
+                                                width: 44,
+                                                height: 44,
+                                                child: CatalogImage(
+                                                  url: order.listingPrimaryImageUrl,
+                                                  width: 44,
+                                                  height: 44,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
                                             ),
                                             const SizedBox(width: 12),
                                             Expanded(

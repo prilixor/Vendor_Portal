@@ -4,6 +4,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/providers/cart_provider.dart';
 import '../../shared/utils/require_auth.dart';
+import '../../shared/widgets/catalog_image.dart';
 import '../checkout/checkout_screen.dart';
 
 class CartScreen extends StatefulWidget {
@@ -217,19 +218,17 @@ class _CartLineCard extends StatelessWidget {
               Container(
                 width: 80,
                 height: 80,
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color: const Color(0xFF0F172A),
-                  image: line.primaryImageUrl != null
-                      ? DecorationImage(
-                          image: NetworkImage(line.primaryImageUrl!),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
                 ),
-                child: line.primaryImageUrl == null
-                    ? const Icon(Icons.image_not_supported, color: Colors.white24)
-                    : null,
+                child: CatalogImage(
+                  url: line.primaryImageUrl,
+                  width: 80,
+                  height: 80,
+                  fit: BoxFit.cover,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(

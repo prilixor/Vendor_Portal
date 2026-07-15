@@ -15,7 +15,8 @@ public sealed record ExpiringOrderDto(
     string Status,
     string OrderType,
     DateOnly EndDate,
-    int DaysLeft);
+    int DaysLeft,
+    string? ListingPrimaryImageUrl = null);
 
 public sealed record GetCustomerOrderExpirationsQuery(Guid CustomerId, int WithinDays = 7) : IQuery<List<ExpiringOrderDto>>;
 public sealed record GetVendorOrderExpirationsQuery(string VendorId, int WithinDays = 7) : IQuery<List<ExpiringOrderDto>>;
@@ -174,7 +175,8 @@ file static class ExpiringOrderMapper
             row.Status,
             row.OrderType,
             row.EndDate,
-            row.DaysLeft(fromDate));
+            row.DaysLeft(fromDate),
+            row.ListingPrimaryImageUrl);
 
     public static int DaysLeft(this ExpiringOrderAggregate row, DateOnly fromDate) =>
         Math.Max(0, row.EndDate.DayNumber - fromDate.DayNumber);

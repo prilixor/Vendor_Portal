@@ -10,7 +10,7 @@ import { Skeleton } from "@/app/components/ui/skeleton";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/app/components/ui/sheet";
 import { Input } from "@/app/components/ui/input";
 import { toast } from "sonner";
-import { cn } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
@@ -390,6 +390,7 @@ const CustomerOrderDetail = () => {
         <CardContent className="space-y-3">
           {orderGroupItems.map((item) => {
             const isSelected = item.id === activeItem.id;
+            const imageUrl = resolveItemImageUrl(item);
             return (
               <button
                 key={item.id}
@@ -403,8 +404,8 @@ const CustomerOrderDetail = () => {
                 )}
               >
                 <div className="flex items-center gap-3">
-                  {item.primaryImageUrl ? (
-                    <img src={item.primaryImageUrl} alt={item.listingTitle} className="h-10 w-10 rounded-md object-cover border border-border/40 bg-muted" />
+                  {imageUrl ? (
+                    <img src={imageUrl} alt={item.listingTitle} className="h-10 w-10 rounded-md object-cover border border-border/40 bg-muted" />
                   ) : (
                     <div className="h-10 w-10 rounded-md bg-muted border border-border/40 flex items-center justify-center text-[10px] text-muted-foreground">No Img</div>
                   )}

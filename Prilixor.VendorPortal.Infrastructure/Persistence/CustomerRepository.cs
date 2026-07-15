@@ -531,11 +531,12 @@ public sealed class CustomerRepository(
 
 
         var map = await LoadListingsWithVendorAsync(orders.ConvertAll(o => o.VendorProductListingId), cancellationToken);
+        var productMap = await LoadProductsWithImagesAsync(map.Values.Select(l => l.ProductId), cancellationToken);
 
         var results = orders.ConvertAll(o =>
         {
             var listing = map.GetValueOrDefault(o.VendorProductListingId);
-            var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
+            var img = ResolveOrderPrimaryImageUrl(listing, productMap);
             return new CustomerRentalOrderWithListing(o, listing, img);
         });
         var withMedical = await AttachMedicalReferencesAsync(results, cancellationToken);
@@ -557,8 +558,10 @@ public sealed class CustomerRepository(
 
 
         var listing = await LoadListingWithVendorAsync(order.VendorProductListingId, cancellationToken);
-
-        var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
+        var productMap = listing is null
+            ? null
+            : await LoadProductsWithImagesAsync([listing.ProductId], cancellationToken);
+        var img = ResolveOrderPrimaryImageUrl(listing, productMap);
 
         var withMedical = await AttachMedicalReferenceAsync(new CustomerRentalOrderWithListing(order, listing, img), cancellationToken);
         return await AttachVariantDescriptionAsync(withMedical, cancellationToken);
@@ -581,8 +584,10 @@ public sealed class CustomerRepository(
 
 
         var listing = await LoadListingWithVendorAsync(order.VendorProductListingId, cancellationToken);
-
-        var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
+        var productMap = listing is null
+            ? null
+            : await LoadProductsWithImagesAsync([listing.ProductId], cancellationToken);
+        var img = ResolveOrderPrimaryImageUrl(listing, productMap);
 
         var withMedical = await AttachMedicalReferenceAsync(new CustomerRentalOrderWithListing(order, listing, img), cancellationToken);
         return await AttachVariantDescriptionAsync(withMedical, cancellationToken);
@@ -631,6 +636,7 @@ public sealed class CustomerRepository(
             .ToList();
 
         var map = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
+        var productMap = await LoadProductsWithImagesAsync(map.Values.Select(l => l.ProductId), cancellationToken);
         var results = orders
             .Select(o =>
             {
@@ -641,7 +647,7 @@ public sealed class CustomerRepository(
                         return null;
 
                     var pendingListing = map.GetValueOrDefault(pendingOffer.VendorProductListingId) ?? map.GetValueOrDefault(o.VendorProductListingId);
-                    var pendingImg = ResolvePrimaryListingImageUrl(pendingListing?.Images ?? []);
+                    var pendingImg = ResolveOrderPrimaryImageUrl(pendingListing, productMap);
                     return new CustomerRentalOrderWithListing(o, pendingListing, pendingImg);
                 }
 
@@ -649,7 +655,7 @@ public sealed class CustomerRepository(
                 if (listing is null || listing.VendorId != vendorId)
                     return null;
 
-                var img = ResolvePrimaryListingImageUrl(listing.Images);
+                var img = ResolveOrderPrimaryImageUrl(listing, productMap);
                 return new CustomerRentalOrderWithListing(o, listing, img);
             })
             .Where(x => x is not null)
@@ -698,7 +704,10 @@ public sealed class CustomerRepository(
                 return null;
         }
 
-        var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
+        var productMap = listing is null
+            ? null
+            : await LoadProductsWithImagesAsync([listing.ProductId], cancellationToken);
+        var img = ResolveOrderPrimaryImageUrl(listing, productMap);
         var withMedical = await AttachMedicalReferenceAsync(new CustomerRentalOrderWithListing(order, listing, img), cancellationToken);
         return await AttachVariantDescriptionAsync(withMedical, cancellationToken);
     }
@@ -720,7 +729,10 @@ public sealed class CustomerRepository(
             return null;
 
         var listing = await LoadListingWithVendorAsync(order.VendorProductListingId, cancellationToken);
-        var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
+        var productMap = listing is null
+            ? null
+            : await LoadProductsWithImagesAsync([listing.ProductId], cancellationToken);
+        var img = ResolveOrderPrimaryImageUrl(listing, productMap);
         var withMedical = await AttachMedicalReferenceAsync(new CustomerRentalOrderWithListing(order, listing, img), cancellationToken);
         return await AttachVariantDescriptionAsync(withMedical, cancellationToken);
     }
@@ -736,11 +748,12 @@ public sealed class CustomerRepository(
 
         var listingIds = orders.ConvertAll(o => o.VendorProductListingId);
         var map = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
+        var productMap = await LoadProductsWithImagesAsync(map.Values.Select(l => l.ProductId), cancellationToken);
 
         var results = orders.ConvertAll(o =>
         {
             var listing = map.GetValueOrDefault(o.VendorProductListingId);
-            var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
+            var img = ResolveOrderPrimaryImageUrl(listing, productMap);
             return new CustomerRentalOrderWithListing(o, listing, img);
         });
         var withMedical = await AttachMedicalReferencesAsync(results, cancellationToken);
@@ -810,7 +823,10 @@ public sealed class CustomerRepository(
 
         var order = orderAsset.CustomerRentalOrder;
         var listing = await LoadListingWithVendorAsync(order.VendorProductListingId, cancellationToken);
-        var img = ResolvePrimaryListingImageUrl(listing?.Images ?? []);
+        var productMap = listing is null
+            ? null
+            : await LoadProductsWithImagesAsync([listing.ProductId], cancellationToken);
+        var img = ResolveOrderPrimaryImageUrl(listing, productMap);
         var withMedical = new CustomerRentalOrderWithListing(order, listing, img);
         return await AttachVariantDescriptionAsync(withMedical, cancellationToken);
     }
@@ -1183,8 +1199,13 @@ public sealed class CustomerRepository(
         var listings = await vendorDb.VendorProductListings
             .AsNoTracking()
             .Include(x => x.Vendor).ThenInclude(v => v.Profile)
+            .Include(x => x.Images)
             .Where(x => listingIds.Contains(x.Id) && !x.IsDeleted)
             .ToDictionaryAsync(x => x.Id, cancellationToken);
+
+        var productMap = await LoadProductsWithImagesAsync(
+            listings.Values.Select(l => l.ProductId),
+            cancellationToken);
 
         var result = new List<ExpiringOrderAggregate>(orders.Count);
         foreach (var order in orders)
@@ -1214,7 +1235,8 @@ public sealed class CustomerRepository(
                 order.Status,
                 order.OrderType,
                 order.EndDate.Value,
-                order.EndDate.Value.DayNumber - DateOnly.FromDateTime(DateTime.UtcNow).DayNumber));
+                order.EndDate.Value.DayNumber - DateOnly.FromDateTime(DateTime.UtcNow).DayNumber,
+                ResolveOrderPrimaryImageUrl(listing, productMap)));
         }
 
         return result;
@@ -1358,6 +1380,38 @@ public sealed class CustomerRepository(
 
     private string? ResolvePrimaryProductImageUrl(IEnumerable<ProductImage> images) =>
         ResolveOrderedDistinctProductImageUrls(images).FirstOrDefault();
+
+    /// <summary>
+    /// Prefer listing primary image; fall back to product primary image (same as Browse catalog).
+    /// </summary>
+    private string? ResolveOrderPrimaryImageUrl(
+        VendorProductListing? listing,
+        IReadOnlyDictionary<Guid, Product>? productMap = null)
+    {
+        if (listing is null) return null;
+        var listingUrl = ResolvePrimaryListingImageUrl(listing.Images);
+        if (!string.IsNullOrWhiteSpace(listingUrl)) return listingUrl;
+        if (productMap is null) return null;
+        var product = productMap.GetValueOrDefault(listing.ProductId);
+        return ResolvePrimaryProductImageUrl(product?.ProductImages ?? []);
+    }
+
+    private async Task<Dictionary<Guid, Product>> LoadProductsWithImagesAsync(
+        IEnumerable<Guid> productIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = productIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        if (ids.Count == 0)
+            return new Dictionary<Guid, Product>();
+
+        var products = await commonDb.Products
+            .AsNoTracking()
+            .Include(p => p.ProductImages)
+            .Where(p => ids.Contains(p.Id) && !p.IsDeleted)
+            .ToListAsync(cancellationToken);
+
+        return products.ToDictionary(p => p.Id);
+    }
 
     public Task<CustomerNotificationPreference?> GetCustomerNotificationPreferenceAsync(Guid customerId, CancellationToken cancellationToken) =>
         customerDb.CustomerNotificationPreferences.FirstOrDefaultAsync(p => p.CustomerId == customerId && !p.IsDeleted, cancellationToken);

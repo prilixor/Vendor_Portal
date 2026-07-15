@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Check } from "lucide-react";
-import { cn } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
@@ -141,14 +141,26 @@ function OrderTimeline({ status, orderType }: { status: string; orderType?: stri
   );
 }
 
+function getBaseOrderNumber(orderNumber: string): string {
+  return orderNumber.split("-").slice(0, 3).join("-");
+}
+
+function itemPayout(item: VendorOrderApiDto): number {
+  return item.vendorSubtotalAmount && item.vendorSubtotalAmount > 0
+    ? item.vendorSubtotalAmount
+    : item.totalAmount;
+}
+
 const VendorOrderDetail = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  
+
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [order, setOrder] = useState<VendorOrderApiDto | null>(null);
+  const [allOrders, setAllOrders] = useState<VendorOrderApiDto[]>([]);
   const [continuations, setContinuations] = useState<OrderContinuationsDto | null>(null);
 
   const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
@@ -157,17 +169,25 @@ const VendorOrderDetail = () => {
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [openDropdowns, setOpenDropdowns] = useState<Record<number, boolean>>({});
 
-  const loadOrder = async () => {
-    if (!user || !orderId) return;
+  const currentItemId = selectedItemId || orderId;
+
+  useEffect(() => {
+    setSelectedItemId(null);
+  }, [orderId]);
+
+  const loadOrder = async (itemId?: string | null) => {
+    const id = itemId ?? currentItemId;
+    if (!user || !id) return;
     try {
       setLoading(true);
-      const row = await vendorOnboardingApi.getVendorOrder(user.id, orderId);
+      const row = await vendorOnboardingApi.getVendorOrder(user.id, id);
       setOrder(row);
       try {
-        const conts = await vendorOnboardingApi.getVendorOrderContinuations(orderId);
+        const conts = await vendorOnboardingApi.getVendorOrderContinuations(id);
         setContinuations(conts);
       } catch (err) {
         console.error("Failed to load continuations", err);
+        setContinuations(null);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load order detail.";
@@ -177,19 +197,68 @@ const VendorOrderDetail = () => {
     }
   };
 
+  const loadAllOrders = async () => {
+    if (!user) return;
+    try {
+      const rows = await vendorOnboardingApi.getVendorOrders(user.id);
+      setAllOrders(rows);
+    } catch (error) {
+      console.error("Failed to load vendor orders for grouping", error);
+    }
+  };
+
   useEffect(() => {
-    void loadOrder();
-  }, [user?.id, orderId]);
+    void loadOrder(currentItemId);
+  }, [user?.id, currentItemId]);
+
+  useEffect(() => {
+    void loadAllOrders();
+  }, [user?.id]);
+
+  const orderGroupItems = useMemo(() => {
+    if (!order) return [];
+    const baseNum = getBaseOrderNumber(order.orderNumber);
+    if (!baseNum) return [order];
+    const matches = allOrders.filter(
+      (o) => o.orderNumber && getBaseOrderNumber(o.orderNumber) === baseNum,
+    );
+    if (matches.length === 0) return [order];
+    const hasCurrent = matches.some((o) => o.orderId === order.orderId);
+    const items = hasCurrent
+      ? matches
+      : [order, ...matches.filter((o) => o.orderId !== order.orderId)];
+    return [...items].sort((a, b) => a.orderNumber.localeCompare(b.orderNumber));
+  }, [order, allOrders]);
+
+  const groupPayoutAmount = useMemo(
+    () => orderGroupItems.reduce((sum, item) => sum + itemPayout(item), 0),
+    [orderGroupItems],
+  );
+
+  const baseOrderNumber = useMemo(
+    () => (order?.orderNumber ? getBaseOrderNumber(order.orderNumber) : ""),
+    [order],
+  );
+
+  const handleSelectItem = (itemId: string) => {
+    if (itemId === currentItemId) return;
+    const fromList = allOrders.find((o) => o.orderId === itemId);
+    if (fromList) {
+      setOrder(fromList);
+      setContinuations(null);
+    }
+    setSelectedItemId(itemId);
+  };
 
   const handleStatusChange = async (status: "in_transit" | "active" | "returned") => {
     if (status === "in_transit" && !dispatchDialogOpen) {
       setDispatchDialogOpen(true);
       setDispatchAssetTags(new Array(order!.quantity).fill(""));
-      
+
       try {
         setLoadingAssets(true);
         const data = await vendorOnboardingApi.getVendorProductAssets(user!.id, order!.listingId);
-        setAvailableAssets(data.filter(a => a.status.toLowerCase() === 'available'));
+        setAvailableAssets(data.filter((a) => a.status.toLowerCase() === "available"));
       } catch (e) {
         console.error(e);
       } finally {
@@ -198,14 +267,17 @@ const VendorOrderDetail = () => {
       return;
     }
 
-    if (!user || !orderId) return;
+    if (!user || !currentItemId) return;
     try {
       setUpdating(true);
-      const assetTagsToSubmit = (status === "in_transit" || status === "active") ? dispatchAssetTags.filter(t => t.trim() !== "") : undefined;
-      await vendorOnboardingApi.updateVendorOrderStatus(user.id, orderId, status, assetTagsToSubmit);
+      const assetTagsToSubmit =
+        status === "in_transit" || status === "active"
+          ? dispatchAssetTags.filter((t) => t.trim() !== "")
+          : undefined;
+      await vendorOnboardingApi.updateVendorOrderStatus(user.id, currentItemId, status, assetTagsToSubmit);
       toast.success("Order status updated.");
       setDispatchDialogOpen(false);
-      await loadOrder();
+      await Promise.all([loadOrder(currentItemId), loadAllOrders()]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update status.";
       toast.error(message);
@@ -215,12 +287,12 @@ const VendorOrderDetail = () => {
   };
 
   const handleCancel = async () => {
-    if (!user || !orderId) return;
+    if (!user || !currentItemId) return;
     try {
       setUpdating(true);
-      await vendorOnboardingApi.cancelAssignedVendorOrder(user.id, orderId);
+      await vendorOnboardingApi.cancelAssignedVendorOrder(user.id, currentItemId);
       toast.success("Order cancelled and reassigned.");
-      await loadOrder();
+      await Promise.all([loadOrder(currentItemId), loadAllOrders()]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to cancel order.";
       toast.error(message);
@@ -231,6 +303,9 @@ const VendorOrderDetail = () => {
 
   const hasPendingRequests = Boolean(continuations && (continuations.pendingExtensions.length > 0 || continuations.pendingBuyouts.length > 0));
 
+  const isDetailSynced = Boolean(order && order.orderId === currentItemId);
+  const actionsLocked = updating || loading || !isDetailSynced;
+
   const normalizedStatus = order?.status.trim().toLowerCase() ?? "";
   const canMarkTransit = normalizedStatus === "confirmed" && !hasPendingRequests;
   const canMarkActive = (normalizedStatus === "in transit" || normalizedStatus === "in_transit") && !hasPendingRequests;
@@ -238,12 +313,12 @@ const VendorOrderDetail = () => {
   const canCancel = normalizedStatus === "confirmed" && !hasPendingRequests;
 
   const handleCancelBuyout = async (buyoutId: string) => {
-    if (!orderId) return;
+    if (!currentItemId) return;
     try {
       setUpdating(true);
-      await vendorOnboardingApi.cancelVendorBuyout(orderId, buyoutId);
+      await vendorOnboardingApi.cancelVendorBuyout(currentItemId, buyoutId);
       toast.success("Buyout request cancelled.");
-      await loadOrder();
+      await Promise.all([loadOrder(currentItemId), loadAllOrders()]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to cancel request.");
     } finally {
@@ -252,12 +327,12 @@ const VendorOrderDetail = () => {
   };
 
   const handleApproveBuyout = async (buyoutId: string) => {
-    if (!orderId) return;
+    if (!currentItemId) return;
     try {
       setUpdating(true);
-      await vendorOnboardingApi.approveVendorBuyout(orderId, buyoutId);
+      await vendorOnboardingApi.approveVendorBuyout(currentItemId, buyoutId);
       toast.success("Buyout request approved.");
-      await loadOrder();
+      await Promise.all([loadOrder(currentItemId), loadAllOrders()]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to approve request.");
     } finally {
@@ -266,12 +341,12 @@ const VendorOrderDetail = () => {
   };
 
   const handleCancelExtension = async (extensionId: string) => {
-    if (!orderId) return;
+    if (!currentItemId) return;
     try {
       setUpdating(true);
-      await vendorOnboardingApi.cancelVendorExtension(orderId, extensionId);
+      await vendorOnboardingApi.cancelVendorExtension(currentItemId, extensionId);
       toast.success("Extension request cancelled.");
-      await loadOrder();
+      await Promise.all([loadOrder(currentItemId), loadAllOrders()]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to cancel request.");
     } finally {
@@ -280,12 +355,12 @@ const VendorOrderDetail = () => {
   };
 
   const handleApproveExtension = async (extensionId: string) => {
-    if (!orderId) return;
+    if (!currentItemId) return;
     try {
       setUpdating(true);
-      await vendorOnboardingApi.approveVendorExtension(orderId, extensionId);
+      await vendorOnboardingApi.approveVendorExtension(currentItemId, extensionId);
       toast.success("Extension request approved.");
-      await loadOrder();
+      await Promise.all([loadOrder(currentItemId), loadAllOrders()]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to approve request.");
     } finally {
@@ -312,7 +387,7 @@ const VendorOrderDetail = () => {
       </Button>
 
       <Card className="overflow-hidden border-border/80 shadow-sm">
-        {loading || !order ? (
+        {!order ? (
           <CardContent className="space-y-3 p-6">
             <Skeleton className="h-6 w-52" />
             <Skeleton className="h-4 w-72" />
@@ -322,41 +397,101 @@ const VendorOrderDetail = () => {
           <CardContent className="p-6">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
               <div className="relative min-w-0 flex-1 space-y-2 lg:pr-8">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order ID</p>
-                    <h1 className="text-2xl font-bold tracking-tight tabular-nums sm:text-3xl">{order.orderNumber}</h1>
-                    <p className="text-sm text-muted-foreground">
-                      {order.listingTitle} · Qty {order.quantity}
-                    </p>
-                  </div>
-                  <span className={cn("inline-flex shrink-0 rounded-full px-3 py-1 text-xs font-semibold sm:text-sm capitalize", orderStatusBadgeClass(order.status))}>
-                    {order.status.replace(/_/g, " ")}
-                  </span>
-                </div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order Group</p>
+                <h1 className="text-2xl font-bold tracking-tight tabular-nums sm:text-3xl">{baseOrderNumber}</h1>
+                <p className="text-sm text-muted-foreground">Consolidated fulfillment overview</p>
               </div>
               <div className="flex shrink-0 flex-col items-start border-t border-border pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
                 <p className="text-3xl font-bold tabular-nums tracking-tight">
-                  ₹{((order.vendorSubtotalAmount && order.vendorSubtotalAmount > 0) ? order.vendorSubtotalAmount : order.totalAmount).toFixed(2)}
+                  ₹{groupPayoutAmount.toFixed(2)}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground uppercase font-semibold tracking-wider">Estimated Vendor Payout</p>
+                <p className="mt-1 text-xs text-muted-foreground uppercase font-semibold tracking-wider">
+                  Estimated Vendor Payout{orderGroupItems.length > 1 ? " (Combined)" : ""}
+                </p>
               </div>
             </div>
           </CardContent>
         )}
       </Card>
 
-      {!loading && order && (
+      {order && (
+        <Card className="border-border/80 shadow-sm">
+          <CardHeader className="pb-4">
+            <p className="text-lg font-semibold">Items in this Order</p>
+            <p className="text-xs text-muted-foreground">
+              Select an item below to track its individual timeline and fulfill actions.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {orderGroupItems.map((item) => {
+              const isSelected = item.orderId === currentItemId;
+              const imageUrl = resolveItemImageUrl(item);
+              return (
+                <button
+                  key={item.orderId}
+                  type="button"
+                  onClick={() => handleSelectItem(item.orderId)}
+                  className={cn(
+                    "w-full text-left flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border transition-all",
+                    isSelected
+                      ? "bg-accent/40 border-foreground/60 shadow-sm"
+                      : "bg-transparent border-border/60 hover:bg-accent/20",
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    {imageUrl ? (
+                      <img
+                        src={imageUrl}
+                        alt={item.listingTitle}
+                        className="h-10 w-10 rounded-md object-cover border border-border/40 bg-muted"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-md bg-muted border border-border/40 flex items-center justify-center text-[10px] text-muted-foreground">
+                        No Img
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{item.listingTitle}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Qty: {item.quantity}
+                        {item.orderNumber.includes("-") ? (
+                          <span className="ml-2 tabular-nums">· {item.orderNumber}</span>
+                        ) : null}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-4 mt-3 sm:mt-0">
+                    <span
+                      className={cn(
+                        "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
+                        orderStatusBadgeClass(item.status),
+                      )}
+                    >
+                      {item.status.replace(/_/g, " ")}
+                    </span>
+                    <span className="font-semibold tabular-nums text-xs sm:w-20 sm:text-right">
+                      ₹{itemPayout(item).toFixed(0)}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {order && (
         <Card className="border-border/80 shadow-sm">
           <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="font-semibold">Next step</p>
               <p className="text-sm text-muted-foreground">
-                Move this rental forward when you've completed the required operation.
+                Move the selected item forward when you've completed the required operation.
               </p>
             </div>
             {nextAction ? (
-              <Button onClick={() => nextAction.action && void nextAction.action()} disabled={updating || nextAction.disabled}>
+              <Button onClick={() => nextAction.action && void nextAction.action()} disabled={actionsLocked || nextAction.disabled}>
                 {nextAction.label}
               </Button>
             ) : (
@@ -368,7 +503,7 @@ const VendorOrderDetail = () => {
         </Card>
       )}
 
-      {!loading && order && (
+      {order && (
         <>
           {continuations && (continuations.pendingExtensions.length > 0 || continuations.pendingBuyouts.length > 0) && (
             <Card className="border-amber-200 bg-amber-50 shadow-sm dark:bg-amber-950/20 dark:border-amber-900/50">
@@ -439,6 +574,9 @@ const VendorOrderDetail = () => {
           <Card className="border-border/80 shadow-sm">
             <CardHeader className="pb-2">
               <p className="text-lg font-semibold">Order timeline</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Tracking: <span className="font-semibold text-foreground">{order.listingTitle}</span>
+              </p>
             </CardHeader>
             <CardContent className="pt-2">
               <OrderTimeline status={order.status} orderType={order.orderType} />
@@ -563,16 +701,16 @@ const VendorOrderDetail = () => {
 
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline">{order.orderType.toUpperCase()}</Badge>
-            <Button variant="outline" disabled={!canMarkTransit || updating} onClick={() => void handleStatusChange("in_transit")}>
+            <Button variant="outline" disabled={!canMarkTransit || actionsLocked} onClick={() => void handleStatusChange("in_transit")}>
               Mark In Transit
             </Button>
-            <Button variant="outline" disabled={!canMarkActive || updating} onClick={() => void handleStatusChange("active")}>
+            <Button variant="outline" disabled={!canMarkActive || actionsLocked} onClick={() => void handleStatusChange("active")}>
               Mark Delivered
             </Button>
-            <Button variant="outline" disabled={!canMarkReturned || updating} onClick={() => void handleStatusChange("returned")}>
+            <Button variant="outline" disabled={!canMarkReturned || actionsLocked} onClick={() => void handleStatusChange("returned")}>
               Mark Returned
             </Button>
-            <Button variant="destructive" disabled={!canCancel || updating} onClick={() => void handleCancel()}>
+            <Button variant="destructive" disabled={!canCancel || actionsLocked} onClick={() => void handleCancel()}>
               Cancel & Reassign
             </Button>
           </div>

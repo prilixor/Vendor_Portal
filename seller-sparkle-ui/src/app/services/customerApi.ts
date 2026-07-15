@@ -146,6 +146,8 @@ export interface CustomerOrderApi {
   quantity: number;
   rentalDays: number;
   listingPrimaryImageUrl?: string | null;
+  /** Alias some responses may use; prefer listingPrimaryImageUrl. */
+  primaryImageUrl?: string | null;
   productVariantId?: string | null;
   doctorId?: string;
   doctorName?: string;

@@ -63,9 +63,7 @@ class OrderModel {
       orderType: json['orderType'] ?? '',
       quantity: json['quantity'] ?? 0,
       rentalDays: json['rentalDays'] ?? 0,
-      listingPrimaryImageUrl: resolveMediaUrl(
-        (json['listingPrimaryImageUrl'] ?? json['primaryImageUrl'])?.toString(),
-      ),
+      listingPrimaryImageUrl: resolveItemImageUrl(json: json),
     );
   }
 }

@@ -166,9 +166,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Orders', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22)),
+            SizedBox(height: 2),
             Text(
-              'Track rentals and purchases from request through return.',
-              maxLines: 2,
+              'Track rentals and purchases',
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.normal),
             ),
@@ -176,7 +177,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         ),
         backgroundColor: const Color(0xFF0F172A),
         elevation: 0,
-        toolbarHeight: 72,
+        toolbarHeight: 64,
       ),
       body: !auth.isAuthenticated || provider.errorMessage == 'auth_required'
           ? const GuestSignInPrompt(
@@ -201,76 +202,136 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _buildStatCard(
-                                      'Active rentals',
-                                      provider.activeRentalsCount.toString(),
-                                      '₹${provider.activeRentalsTotal.toStringAsFixed(0)} in flight',
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: _buildStatCard(
-                                      'Upcoming deliveries',
-                                      provider.upcomingDeliveriesCount.toString(),
-                                      'Pending & in transit',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              TextField(
-                                controller: _searchController,
-                                style: const TextStyle(color: Colors.white),
-                                onChanged: (v) => setState(() => _searchQuery = v),
-                                decoration: InputDecoration(
-                                  hintText: 'Search by order ID or item',
-                                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
-                                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
-                                  filled: true,
-                                  fillColor: const Color(0xFF1E293B),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                height: 40,
-                                child: ListView(
-                                  scrollDirection: Axis.horizontal,
-                                  padding: EdgeInsets.zero,
-                                  children: _statusFilters
-                                      .where((f) => f != 'Bought Out' || (counts[f] ?? 0) > 0)
-                                      .map((label) {
-                                    final selected = _statusFilter == label;
-                                    final count = counts[label] ?? 0;
-                                    return Padding(
-                                      padding: const EdgeInsets.only(right: 8),
-                                      child: ChoiceChip(
-                                        label: Text('$label ($count)'),
-                                        selected: selected,
-                                        onSelected: (_) => setState(() => _statusFilter = label),
-                                        selectedColor: Colors.white,
-                                        backgroundColor: const Color(0xFF1E293B),
-                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                        labelStyle: TextStyle(
-                                          color: selected ? const Color(0xFF0F172A) : Colors.white70,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final narrow = constraints.maxWidth < 360;
+                                  final rentalsTotal = provider.activeRentalsTotal;
+                                  return Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: _buildStatCard(
+                                          icon: Icons.inventory_2_outlined,
+                                          title: narrow ? 'Active' : 'Active rentals',
+                                          value: provider.activeRentalsCount.toString(),
+                                          subtitle: narrow
+                                              ? _formatInrCompact(rentalsTotal)
+                                              : '${_formatInr(rentalsTotal)} in flight',
+                                          accent: const Color(0xFF34D399),
                                         ),
-                                        side: BorderSide(color: selected ? Colors.white : Colors.white24),
-                                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                                        visualDensity: VisualDensity.compact,
                                       ),
-                                    );
-                                  }).toList(),
-                                ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: _buildStatCard(
+                                          icon: Icons.local_shipping_outlined,
+                                          title: narrow ? 'Upcoming' : 'Deliveries',
+                                          value: provider.upcomingDeliveriesCount.toString(),
+                                          subtitle: narrow ? 'Pending / transit' : 'Pending & in transit',
+                                          accent: const Color(0xFF60A5FA),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
+                              const SizedBox(height: 14),
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final narrow = constraints.maxWidth < 360;
+                                  return Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _searchController,
+                                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                                          onChanged: (v) => setState(() => _searchQuery = v),
+                                          decoration: InputDecoration(
+                                            hintText: narrow ? 'Search orders' : 'Search by order ID or item',
+                                            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                                            prefixIcon: const Padding(
+                                              padding: EdgeInsets.only(left: 4),
+                                              child: Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 20),
+                                            ),
+                                            prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                                            isDense: true,
+                                            filled: true,
+                                            fillColor: const Color(0xFF1E293B),
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                            border: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(14),
+                                              borderSide: BorderSide.none,
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(14),
+                                              borderSide: const BorderSide(color: Color(0xFF334155)),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(14),
+                                              borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 1.2),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Material(
+                                        color: _statusFilter != 'All'
+                                            ? const Color(0xFF6C63FF)
+                                            : const Color(0xFF1E293B),
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: InkWell(
+                                          onTap: () => _openStatusFilterSheet(counts),
+                                          borderRadius: BorderRadius.circular(14),
+                                          child: Container(
+                                            width: 48,
+                                            height: 48,
+                                            decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(14),
+                                              border: Border.all(
+                                                color: _statusFilter != 'All'
+                                                    ? const Color(0xFF6C63FF)
+                                                    : const Color(0xFF334155),
+                                              ),
+                                            ),
+                                            child: Stack(
+                                              alignment: Alignment.center,
+                                              children: [
+                                                Icon(
+                                                  Icons.tune_rounded,
+                                                  size: 20,
+                                                  color: _statusFilter != 'All' ? Colors.white : const Color(0xFFCBD5E1),
+                                                ),
+                                                if (_statusFilter != 'All')
+                                                  Positioned(
+                                                    top: 8,
+                                                    right: 8,
+                                                    child: Container(
+                                                      width: 7,
+                                                      height: 7,
+                                                      decoration: const BoxDecoration(
+                                                        color: Colors.white,
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                              if (_statusFilter != 'All') ...[
+                                const SizedBox(height: 12),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: _OrdersActiveFilterChip(
+                                    label: '$_statusFilter (${counts[_statusFilter] ?? 0})',
+                                    onClear: () => setState(() => _statusFilter = 'All'),
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 16),
                             ],
                           ),
@@ -301,23 +362,261 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, String subtitle) {
+  Future<void> _openStatusFilterSheet(Map<String, int> counts) async {
+    var draft = _statusFilter;
+    final options = _statusFilters
+        .where((f) => f != 'Bought Out' || (counts[f] ?? 0) > 0)
+        .toList();
+
+    final applied = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final maxH = MediaQuery.of(ctx).size.height * 0.78;
+            final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
+            return SafeArea(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Container(
+                  constraints: BoxConstraints(maxHeight: maxH),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0F172A),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                    border: Border(top: BorderSide(color: Color(0xFF334155))),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF475569),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Filter orders',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => setSheetState(() => draft = 'All'),
+                              child: const Text(
+                                'Clear',
+                                style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 1, color: Color(0xFF1E293B)),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFF334155).withValues(alpha: 0.7)),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const Padding(
+                                  padding: EdgeInsets.fromLTRB(16, 14, 16, 6),
+                                  child: Text(
+                                    'Status',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                for (var i = 0; i < options.length; i++) ...[
+                                  if (i > 0) const Divider(height: 1, color: Color(0xFF334155)),
+                                  _OrdersStatusRow(
+                                    label: options[i],
+                                    count: counts[options[i]] ?? 0,
+                                    selected: draft == options[i],
+                                    onTap: () => setSheetState(() => draft = options[i]),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomInset),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF0F172A),
+                          border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.white70,
+                                  side: const BorderSide(color: Color(0xFF334155)),
+                                  minimumSize: const Size.fromHeight(48),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                                child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF6C63FF),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  minimumSize: const Size.fromHeight(48),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                                child: Text(
+                                  draft == 'All'
+                                      ? 'Show all orders'
+                                      : 'Show ${draft.toLowerCase()}',
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (applied == true && mounted) {
+      setState(() => _statusFilter = draft);
+    }
+  }
+
+  String _formatInr(num amount) {
+    final n = amount.round();
+    final s = n.toString();
+    if (s.length <= 3) return '₹$s';
+    final last3 = s.substring(s.length - 3);
+    var rest = s.substring(0, s.length - 3);
+    final parts = <String>[];
+    while (rest.length > 2) {
+      parts.insert(0, rest.substring(rest.length - 2));
+      rest = rest.substring(0, rest.length - 2);
+    }
+    if (rest.isNotEmpty) parts.insert(0, rest);
+    return '₹${parts.join(',')},$last3';
+  }
+
+  String _formatInrCompact(num amount) {
+    final n = amount.round();
+    if (n >= 10000000) return '₹${(n / 10000000).toStringAsFixed(n % 10000000 == 0 ? 0 : 1)}Cr';
+    if (n >= 100000) return '₹${(n / 100000).toStringAsFixed(n % 100000 == 0 ? 0 : 1)}L';
+    if (n >= 1000) return '₹${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}K';
+    return '₹$n';
+  }
+
+  Widget _buildStatCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required String subtitle,
+    required Color accent,
+  }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF334155)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 8),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 2),
-          Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 15, color: accent),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 26,
+              fontWeight: FontWeight.w700,
+              height: 1,
+              letterSpacing: -0.6,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              height: 1.25,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
         ],
       ),
     );
@@ -681,5 +980,104 @@ class _OrdersScreenState extends State<OrdersScreen> {
     if (a != '—') return a;
     if (b != '—') return b;
     return '—';
+  }
+}
+
+class _OrdersActiveFilterChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onClear;
+
+  const _OrdersActiveFilterChip({required this.label, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(left: 12, right: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF6C63FF).withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          IconButton(
+            onPressed: onClear,
+            icon: const Icon(Icons.close, size: 16, color: Colors.white70),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrdersStatusRow extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _OrdersStatusRow({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? const Color(0xFF6C63FF).withValues(alpha: 0.12) : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: selected ? Colors.white : const Color(0xFFE2E8F0),
+                    fontSize: 14,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? const Color(0xFF6C63FF).withValues(alpha: 0.25)
+                      : const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    color: selected ? Colors.white : const Color(0xFF94A3B8),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Icon(
+                selected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                size: 22,
+                color: selected ? const Color(0xFF6C63FF) : const Color(0xFF64748B),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

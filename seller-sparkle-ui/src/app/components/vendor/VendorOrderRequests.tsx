@@ -7,8 +7,8 @@ import { Skeleton } from "@/app/components/ui/skeleton";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorDispatchOfferApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
-import { Clock3, RefreshCw, User } from "lucide-react";
-import { cn } from "@/app/helpers/utils";
+import { Clock3, Package, RefreshCw, User } from "lucide-react";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { useNavigate } from "react-router-dom";
 function orderTypeBadgeClass(orderType: string): string {
   const t = orderType.toLowerCase().trim();
@@ -175,9 +175,22 @@ const VendorOrderRequests = () => {
                       {group.items.map((offer) => {
                         const itemExpired = new Date(offer.expiresAt).getTime() <= now;
                         const status = offer.status.trim().toLowerCase();
+                        const imageUrl = resolveItemImageUrl(offer);
                         return (
-                          <div key={offer.offerId} className="flex flex-col md:flex-row md:items-center md:justify-between p-3 rounded-lg bg-accent/30 border border-border/40 hover:bg-accent/50 transition-colors">
-                            <div className="flex-1">
+                          <div key={offer.offerId} className="flex flex-col md:flex-row md:items-center md:justify-between p-3 rounded-lg bg-accent/30 border border-border/40 hover:bg-accent/50 transition-colors gap-3">
+                            <div className="flex flex-1 items-start gap-3 min-w-0">
+                              {imageUrl ? (
+                                <img
+                                  src={imageUrl}
+                                  alt={offer.listingTitle}
+                                  className="h-12 w-12 shrink-0 rounded-lg object-cover border border-border bg-muted shadow-sm"
+                                />
+                              ) : (
+                                <div className="h-12 w-12 shrink-0 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">
+                                  <Package className="h-5 w-5 opacity-60" />
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
                               <p className="text-sm font-semibold text-foreground">{offer.listingTitle}</p>
                               <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                                 <span>Qty: <span className="font-medium text-foreground">{offer.quantity}</span></span>
@@ -213,9 +226,10 @@ const VendorOrderRequests = () => {
                                   )}
                                 </div>
                               )}
+                              </div>
                             </div>
 
-                            <div className="mt-3 md:mt-0 flex items-center justify-between md:justify-end gap-4 border-t border-border/20 md:border-none pt-2 md:pt-0">
+                            <div className="mt-0 flex items-center justify-between md:justify-end gap-4 border-t border-border/20 md:border-none pt-2 md:pt-0">
                               <span className="text-xs font-semibold capitalize text-muted-foreground">
                                 {status.replaceAll("_", " ")}
                               </span>

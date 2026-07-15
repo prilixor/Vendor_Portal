@@ -203,7 +203,8 @@ public sealed record ExpiringOrderAggregate(
     string Status,
     string OrderType,
     DateOnly EndDate,
-    int DaysLeft
+    int DaysLeft,
+    string? ListingPrimaryImageUrl = null
 );
 
 public sealed record PendingContinuationAggregate(

@@ -1,48 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
-import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
+import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Input } from "@/app/components/ui/input";
 import { Skeleton } from "@/app/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/app/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/app/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
-import { useAuth } from "@/app/guards/AuthContext";
-import { toast } from "sonner";
-import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
-import {
-  Search,
   RefreshCw,
   ShoppingBag,
   TrendingUp,
   RotateCcw,
   AlertCircle,
   Truck,
-  User,
   Building,
-  Calendar,
-  DollarSign,
   ChevronRight,
-  Check,
   Package,
 } from "lucide-react";
-import { cn } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import {
+  ActiveFilterChips,
+  FilterPanel,
+  FilterSearchBar,
+  FilterSection,
+  FilterSelectRow,
+  type ActiveFilterChip,
+} from "@/app/components/shared/ProfessionalFilters";
 
 const PAGE_SIZE = 8;
 
@@ -105,108 +89,20 @@ function orderTypeBadgeClass(orderType: string): string {
   return "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900";
 }
 
-const getTimelineSteps = (orderType?: string) => {
-  const isBuy = orderType?.toLowerCase() === "buy";
-  if (isBuy) {
-    return [
-      { key: "placed", label: "Order Placed" },
-      { key: "confirmed", label: "Vendor Confirmed" },
-      { key: "out", label: "Out for Delivery" },
-      { key: "active", label: "Delivered & Purchased" },
-    ];
-  }
-  return [
-    { key: "placed", label: "Order Placed" },
-    { key: "confirmed", label: "Vendor Confirmed" },
-    { key: "out", label: "Out for Delivery" },
-    { key: "delivered", label: "Delivered" },
-    { key: "active", label: "Rental Active" },
-    { key: "returned", label: "Returned" },
-    { key: "bought_out", label: "Bought Out" },
-  ];
-};
-
-function getTimelineProgress(status: string, orderType?: string): {
-  cancelled: boolean;
-  completedThrough: number;
-  currentIndex: number | null;
-} {
-  const raw = status.toLowerCase().trim();
-  const compact = raw.replace(/\s+/g, "_");
-  const isBuy = orderType?.toLowerCase() === "buy";
-
-  if (compact === "cancelled" || compact === "canceled") {
-    return { cancelled: true, completedThrough: -1, currentIndex: null };
-  }
-  if (compact === "dispatch_failed" || raw.includes("dispatch failed")) {
-    return { cancelled: false, completedThrough: 0, currentIndex: null };
-  }
-  if (compact === "pending" || compact.includes("awaiting")) {
-    return { cancelled: false, completedThrough: 0, currentIndex: 1 };
-  }
-  if (compact === "confirmed") {
-    return { cancelled: false, completedThrough: 1, currentIndex: 2 };
-  }
-  if (compact === "in_transit" || raw.includes("transit")) {
-    return { cancelled: false, completedThrough: 2, currentIndex: 3 };
-  }
-  if (compact === "active") {
-    return isBuy
-      ? { cancelled: false, completedThrough: 3, currentIndex: null }
-      : { cancelled: false, completedThrough: 4, currentIndex: null };
-  }
-  if (compact === "bought_out") {
-    return { cancelled: false, completedThrough: 6, currentIndex: null };
-  }
-  if (compact === "returned") {
-    return { cancelled: false, completedThrough: 5, currentIndex: null };
-  }
-  return { cancelled: false, completedThrough: 0, currentIndex: 1 };
-}
-
-function getAvailableStatuses(currentStatus: string, orderType?: string): string[] {
-  const s = currentStatus.toLowerCase().trim().replace(/\s+/g, "_");
-  const isBuy = orderType?.toLowerCase() === "buy";
-  
-  if (s === "pending" || s.includes("awaiting")) {
-    return ["pending", "confirmed", "cancelled"];
-  }
-  if (s === "confirmed") {
-    return ["confirmed", "in_transit", "cancelled", "dispatch_failed"];
-  }
-  if (s === "in_transit" || s.includes("transit")) {
-    return ["in_transit", "active", "dispatch_failed", "returned"];
-  }
-  if (s === "active") {
-    return isBuy ? ["active"] : ["active", "returned", "bought_out"];
-  }
-  if (s === "bought_out") {
-    return ["bought_out"];
-  }
-  if (s === "returned") {
-    return ["returned"];
-  }
-  if (s === "cancelled" || s === "canceled") {
-    return ["cancelled"];
-  }
-  if (s === "dispatch_failed" || s.includes("dispatch failed")) {
-    return ["dispatch_failed", "cancelled"];
-  }
-  return ["pending", "confirmed", "in_transit", "active", "returned", "cancelled", "dispatch_failed"];
-}
-
 export const AdminOrders = () => {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const urlTab = searchParams.get("tab") as (typeof statusTabs)[number]["id"];
   const isValidTab = statusTabs.some(t => t.id === urlTab);
   
   const [activeTab, setActiveTab] = useState<(typeof statusTabs)[number]["id"]>(
     isValidTab ? urlTab : "all"
   );
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draftTab, setDraftTab] = useState<(typeof statusTabs)[number]["id"]>("all");
 
   useEffect(() => {
     if (urlTab && isValidTab && urlTab !== activeTab) {
@@ -214,160 +110,6 @@ export const AdminOrders = () => {
     }
   }, [urlTab]);
   const [page, setPage] = useState(1);
-  const [selectedOrder, setSelectedOrder] = useState<AdminOrderDto | null>(null);
-  const [continuations, setContinuations] = useState<import('@/app/services/vendorOnboardingApi').OrderContinuationsDto | null>(null);
-  const [statusUpdateLocal, setStatusUpdateLocal] = useState<string>("");
-
-  const [continuationsUpdating, setContinuationsUpdating] = useState(false);
-
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    if (selectedOrder) {
-      setStatusUpdateLocal(selectedOrder.status);
-      adminApi.getAdminOrderContinuations(selectedOrder.orderId)
-        .then(res => setContinuations(res))
-        .catch(err => console.error("Failed to load continuations", err));
-    } else {
-      setContinuations(null);
-    }
-  }, [selectedOrder]);
-
-  const loadContinuations = async () => {
-    if (!selectedOrder) return;
-    try {
-      const res = await adminApi.getAdminOrderContinuations(selectedOrder.orderId);
-      setContinuations(res);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleCancelAdminExtension = async (extensionId: string) => {
-    if (!selectedOrder) return;
-    try {
-      setContinuationsUpdating(true);
-      await adminApi.cancelAdminExtension(selectedOrder.orderId, extensionId, user?.id || "");
-      toast.success("Extension request cancelled.");
-      await loadContinuations();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to cancel request.");
-    } finally {
-      setContinuationsUpdating(false);
-    }
-  };
-
-  const handleApproveAdminExtension = async (extensionId: string) => {
-    if (!selectedOrder) return;
-    try {
-      setContinuationsUpdating(true);
-      await adminApi.approveAdminExtension(selectedOrder.orderId, extensionId, user?.id || "");
-      toast.success("Extension request approved.");
-      await loadContinuations();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to approve request.");
-    } finally {
-      setContinuationsUpdating(false);
-    }
-  };
-
-  const handleCancelAdminBuyout = async (buyoutId: string) => {
-    if (!selectedOrder) return;
-    try {
-      setContinuationsUpdating(true);
-      await adminApi.cancelAdminBuyout(selectedOrder.orderId, buyoutId, user?.id || "");
-      toast.success("Buyout request cancelled.");
-      await loadContinuations();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to cancel request.");
-    } finally {
-      setContinuationsUpdating(false);
-    }
-  };
-
-  const handleApproveAdminBuyout = async (buyoutId: string) => {
-    if (!selectedOrder) return;
-    try {
-      setContinuationsUpdating(true);
-      await adminApi.approveAdminBuyout(selectedOrder.orderId, buyoutId, user?.id || "");
-      toast.success("Buyout request approved.");
-      await loadContinuations();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to approve request.");
-    } finally {
-      setContinuationsUpdating(false);
-    }
-  };
-
-  const updateStatusMutation = useMutation({
-    mutationFn: (newStatus: string) =>
-      adminApi.updateAdminOrderStatus({
-        adminUserId: user?.id || "",
-        orderId: selectedOrder?.orderId || "",
-        status: newStatus,
-      }),
-    onSuccess: (updatedOrder) => {
-      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-      setSelectedOrder(updatedOrder);
-      setStatusUpdateLocal(updatedOrder.status);
-    },
-    onError: (error) => {
-      console.error("Failed to update status", error);
-      toast.error(getUserFriendlyMessage(error) || "Failed to update status");
-    },
-  });
-
-  const reassignMutation = useMutation({
-    mutationFn: () =>
-      adminApi.reassignVendorOrder({
-        adminUserId: user?.id || "",
-        orderId: selectedOrder?.orderId || "",
-      }),
-    onSuccess: (updatedOrder) => {
-      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-      setSelectedOrder(updatedOrder);
-      setStatusUpdateLocal(updatedOrder.status);
-    },
-    onError: (error) => {
-      console.error("Failed to reassign order", error);
-      toast.error(getUserFriendlyMessage(error) || "Failed to reassign order");
-    },
-  });
-
-  const cancelRefundMutation = useMutation({
-    mutationFn: () =>
-      adminApi.forceCancelRefundOrder({
-        adminUserId: user?.id || "",
-        orderId: selectedOrder?.orderId || "",
-      }),
-    onSuccess: (updatedOrder) => {
-      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-      setSelectedOrder(updatedOrder);
-      setStatusUpdateLocal(updatedOrder.status);
-    },
-    onError: (error) => {
-      console.error("Failed to force cancel and refund", error);
-      toast.error(getUserFriendlyMessage(error) || "Failed to force cancel and refund");
-    },
-  });
-
-  const restartDispatchMutation = useMutation({
-    mutationFn: () =>
-      adminApi.restartOrderDispatch({
-        adminUserId: user?.id || "",
-        orderId: selectedOrder?.orderId || "",
-      }),
-    onSuccess: (updatedOrder) => {
-      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-      setSelectedOrder(updatedOrder);
-      setStatusUpdateLocal(updatedOrder.status);
-    },
-    onError: (error) => {
-      console.error("Failed to restart dispatch", error);
-      toast.error(getUserFriendlyMessage(error) || "Failed to restart dispatch");
-    },
-  });
 
   const { data: orders = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["admin-orders"],
@@ -376,26 +118,13 @@ export const AdminOrders = () => {
 
   useEffect(() => {
     const openParam = searchParams.get("open");
-    const stateOpenOrderId = (location.state as any)?.openOrderId;
+    const stateOpenOrderId = (location.state as { openOrderId?: string } | null)?.openOrderId;
     const targetOrderId = stateOpenOrderId || openParam;
 
-    if (targetOrderId && orders.length > 0) {
-      const orderToOpen = orders.find(o => o.orderId === targetOrderId);
-      if (orderToOpen) {
-        setSelectedOrder(orderToOpen);
-        
-        if (stateOpenOrderId) {
-          navigate(location.pathname + location.search, { replace: true, state: {} });
-        }
-        
-        if (openParam) {
-          const newParams = new URLSearchParams(searchParams);
-          newParams.delete("open");
-          setSearchParams(newParams, { replace: true });
-        }
-      }
+    if (targetOrderId) {
+      navigate(`/admin/orders/${encodeURIComponent(targetOrderId)}`, { replace: true });
     }
-  }, [searchParams, location.state, orders, setSearchParams, navigate, location.pathname, location.search]);
+  }, [searchParams, location.state, navigate]);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
@@ -464,6 +193,22 @@ export const AdminOrders = () => {
     }, {} as Record<(typeof statusTabs)[number]["id"], number>);
   }, [orders, debouncedSearch]);
 
+  const statusOptions = statusTabs.filter(
+    (tab) => tab.id !== "bought_out" || (statusCounts[tab.id] ?? 0) > 0,
+  );
+
+  const activeTabLabel = statusTabs.find((t) => t.id === activeTab)?.label ?? "All";
+  const activeChips: ActiveFilterChip[] =
+    activeTab === "all"
+      ? []
+      : [
+          {
+            key: "status",
+            label: `${activeTabLabel} (${statusCounts[activeTab] ?? 0})`,
+            onClear: () => setActiveTab("all"),
+          },
+        ];
+
   // Pagination
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -503,11 +248,6 @@ export const AdminOrders = () => {
 
     return groups;
   }, [pageSlice]);
-
-  const timelineInfo = useMemo(() => {
-    if (!selectedOrder) return null;
-    return getTimelineProgress(selectedOrder.status, selectedOrder.orderType);
-  }, [selectedOrder]);
 
   return (
     <div className="space-y-6">
@@ -597,28 +337,48 @@ export const AdminOrders = () => {
 
       {/* Main Filter & List Container */}
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
-        <div className="relative max-w-2xl mb-6">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
+        <div className="mb-6 max-w-2xl space-y-3">
+          <FilterSearchBar
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={setSearchInput}
             placeholder="Search by order prefix, item, customer, or vendor..."
-            className="pl-9"
+            activeCount={activeTab === "all" ? 0 : 1}
+            onOpenFilters={() => {
+              setDraftTab(activeTab);
+              setFiltersOpen(true);
+            }}
             aria-label="Search orders"
           />
+          <ActiveFilterChips chips={activeChips} />
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-          <TabsList className="mb-6 h-auto w-full flex-nowrap overflow-x-auto justify-start bg-muted/40 p-1">
-            {statusTabs
-              .filter(tab => tab.id !== "bought_out" || (statusCounts[tab.id] ?? 0) > 0)
-              .map((tab) => (
-                <TabsTrigger key={tab.id} value={tab.id} className="text-xs">
-                  {tab.label} ({statusCounts[tab.id] ?? 0})
-                </TabsTrigger>
-              ))}
-          </TabsList>
-        </Tabs>
+        <FilterPanel
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
+          title="Filter orders"
+          description="Show orders by current status."
+          onReset={() => setDraftTab("all")}
+          resetLabel="Clear"
+          onApply={() => setActiveTab(draftTab)}
+          applyLabel={
+            draftTab === "all"
+              ? "Show all orders"
+              : `Show ${(statusTabs.find((t) => t.id === draftTab)?.label ?? draftTab).toLowerCase()}`
+          }
+        >
+          <FilterSection title="Status">
+            {statusOptions.map((tab, index) => (
+              <FilterSelectRow
+                key={tab.id}
+                label={tab.label}
+                count={statusCounts[tab.id] ?? 0}
+                selected={draftTab === tab.id}
+                onClick={() => setDraftTab(tab.id)}
+                showDivider={index > 0}
+              />
+            ))}
+          </FilterSection>
+        </FilterPanel>
 
         {isLoading ? (
           <div className="space-y-4">
@@ -652,11 +412,13 @@ export const AdminOrders = () => {
 
                 {/* Sub items within order group */}
                 <div className="space-y-3">
-                  {group.items.map((item) => (
+                  {group.items.map((item) => {
+                    const imageUrl = resolveItemImageUrl(item);
+                    return (
                     <div key={item.orderId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/10 hover:border-border transition-all duration-300 shadow-sm gap-4">
                       <div className="flex items-center gap-4 flex-1">
-                        {item.primaryImageUrl ? (
-                          <img src={item.primaryImageUrl} alt={item.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" />
+                        {imageUrl ? (
+                          <img src={imageUrl} alt={item.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" />
                         ) : (
                           <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">
                             <Package className="h-5 w-5 opacity-60" />
@@ -692,15 +454,16 @@ export const AdminOrders = () => {
                           size="sm"
                           variant="ghost"
                           className="h-8 text-xs font-semibold px-2 hover:bg-accent text-primary transition-colors flex items-center gap-1 group/btn"
-                          onClick={() => setSelectedOrder(item)}
+                          onClick={() => navigate(`/admin/orders/${encodeURIComponent(item.orderId)}`)}
                         >
-                          View Tracking
+                          View details
                           <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-0.5" />
                         </Button>
                         </div>
                       </div>
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               </div>
             ))}
@@ -736,291 +499,6 @@ export const AdminOrders = () => {
           </div>
         )}
       </Card>
-
-      <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-border/80 bg-background/95 backdrop-blur-xl shadow-2xl">
-          {selectedOrder && (
-            <>
-              <div className="shrink-0 pt-2">
-                <DialogHeader>
-                  <DialogTitle className="text-xl font-bold flex items-start sm:items-center justify-between pr-6 gap-2">
-                    <span className="break-all sm:break-normal">Order Tracking: {selectedOrder.orderNumber}</span>
-                    <Badge className={cn("text-[10px] font-semibold capitalize whitespace-nowrap shrink-0 px-2.5 py-0.5", orderStatusBadgeClass(selectedOrder.status))} variant="outline">
-                      {selectedOrder.status.replace(/_/g, " ")}
-                    </Badge>
-                  </DialogTitle>
-                  <DialogDescription>
-                    Tracking and metadata lifecycle overview for the selected item transaction.
-                  </DialogDescription>
-                </DialogHeader>
-              </div>
-
-              <div className="flex-1 overflow-y-auto space-y-6 pb-6 pr-2">
-                {continuations && (continuations.pendingExtensions.length > 0 || continuations.pendingBuyouts.length > 0) && (
-                  <div className="rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/50 p-4 space-y-4">
-                    <p className="font-semibold text-amber-900 dark:text-amber-400">Pending Customer Requests (Admin Approval)</p>
-                    {continuations.pendingExtensions.map((ext) => (
-                      <div key={ext.extensionId} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white dark:bg-black/20 rounded-md border border-amber-100 dark:border-amber-900/30">
-                        <div>
-                          <p className="font-semibold text-sm">Rent Extension</p>
-                          <p className="text-sm text-muted-foreground mt-1">Customer wants to extend by {ext.additionalDays} days.</p>
-                          <p className="text-sm text-muted-foreground">Amount: ₹{ext.totalAmount.toFixed(2)}</p>
-                        </div>
-                        <div className="flex gap-2 mt-4 sm:mt-0">
-                          <Button variant="outline" size="sm" onClick={() => handleCancelAdminExtension(ext.extensionId)} disabled={continuationsUpdating}>Reject</Button>
-                          <Button size="sm" onClick={() => handleApproveAdminExtension(ext.extensionId)} disabled={continuationsUpdating}>Approve</Button>
-                        </div>
-                      </div>
-                    ))}
-                    {continuations.pendingBuyouts.map((buy) => (
-                      <div key={buy.buyoutId} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white dark:bg-black/20 rounded-md border border-amber-100 dark:border-amber-900/30">
-                        <div>
-                          <p className="font-semibold text-sm">Product Buyout</p>
-                          <p className="text-sm text-muted-foreground mt-1">Customer wants to buy this rented product.</p>
-                          <p className="text-sm text-muted-foreground">Amount: ₹{buy.totalAmount.toFixed(2)}</p>
-                        </div>
-                        <div className="flex gap-2 mt-4 sm:mt-0">
-                          <Button variant="outline" size="sm" onClick={() => handleCancelAdminBuyout(buy.buyoutId)} disabled={continuationsUpdating}>Reject</Button>
-                          <Button size="sm" onClick={() => handleApproveAdminBuyout(buy.buyoutId)} disabled={continuationsUpdating}>Approve</Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Meta details */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg bg-accent/25 p-4 border border-border/40 text-xs mt-4">
-                  <div className="space-y-1">
-                    <p className="text-muted-foreground font-semibold flex items-center gap-1"><User className="h-3.5 w-3.5" /> Customer Name</p>
-                    <p className="font-semibold text-foreground">{selectedOrder.customerName}</p>
-                    <p className="text-[10px] text-muted-foreground">{selectedOrder.customerEmail}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-muted-foreground font-semibold flex items-center gap-1"><Building className="h-3.5 w-3.5" /> Assigned Vendor</p>
-                    <p className="font-semibold text-foreground">{selectedOrder.vendorName}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> {selectedOrder.orderType === "rent" ? "Rental Terms" : "Purchase Details"}</p>
-                      {selectedOrder.status === "bought_out" && (
-                        <span className="rounded bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-bold text-fuchsia-800 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">
-                          BOUGHT OUT
-                        </span>
-                      )}
-                      {selectedOrder.isExtended && (
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                          EXTENDED
-                        </span>
-                      )}
-                    </div>
-                    <p className="font-medium text-foreground">{selectedOrder.orderType === "rent" ? `${selectedOrder.rentalDays} days rental` : "Direct Buyout"}</p>
-                    {selectedOrder.startDate && (
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                        <span>
-                          {selectedOrder.orderType === "rent" ? (
-                            <>{new Date(selectedOrder.startDate).toLocaleDateString()} → {selectedOrder.endDate ? new Date(selectedOrder.endDate).toLocaleDateString() : ""}</>
-                          ) : (
-                            <>{new Date(selectedOrder.startDate).toLocaleDateString()}</>
-                          )}
-                        </span>
-                        {selectedOrder.isExtended && selectedOrder.orderType === "rent" && (
-                          <span className="rounded bg-amber-100 px-1 py-0 text-[9px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                            EXTENDED
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-muted-foreground font-semibold flex items-center gap-1"><Package className="h-3.5 w-3.5" /> Order Quantity</p>
-                    <p className="font-bold text-foreground">{selectedOrder.quantity} item{selectedOrder.quantity !== 1 ? 's' : ''}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-muted-foreground font-semibold flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> Financial Summary</p>
-                    <p className="font-bold text-foreground">₹{selectedOrder.totalAmount.toFixed(0)} total</p>
-                    <p className="text-[10px] text-muted-foreground">+ ₹{selectedOrder.depositAmount.toFixed(0)} deposit amount</p>
-                  </div>
-
-                  {/* Medical Reference */}
-                  {(selectedOrder.doctorId || selectedOrder.hospitalId) && (
-                    <div className="space-y-1 sm:col-span-2">
-                      <p className="text-muted-foreground font-semibold flex items-center gap-1"><User className="h-3.5 w-3.5" /> Medical Reference</p>
-                      <div className="flex flex-wrap gap-4 text-[10px] bg-white/40 dark:bg-black/20 p-2 rounded border border-border/50">
-                        {selectedOrder.doctorName && (
-                          <div>
-                            <span className="font-bold uppercase tracking-wider text-muted-foreground mr-1">Doctor:</span> 
-                            <span className="font-medium text-foreground">
-                              {selectedOrder.doctorName}
-                              {selectedOrder.doctorSpecialization && <span className="font-normal text-muted-foreground ml-1">- {selectedOrder.doctorSpecialization}</span>}
-                            </span>
-                            {selectedOrder.doctorContactNumber && <span className="text-muted-foreground ml-1">({selectedOrder.doctorContactNumber})</span>}
-                          </div>
-                        )}
-                        {selectedOrder.hospitalName && (
-                          <div>
-                            <span className="font-bold uppercase tracking-wider text-muted-foreground mr-1">Hospital:</span> 
-                            <span className="font-medium text-foreground">
-                              {selectedOrder.hospitalName}
-                              {selectedOrder.hospitalCity && <span className="font-normal text-muted-foreground ml-1">({selectedOrder.hospitalCity})</span>}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Progress Timeline */}
-                <div className="space-y-3">
-                  <h5 className="text-sm font-bold text-foreground">Timeline Lifecycle Log</h5>
-                  {timelineInfo?.cancelled ? (
-                    <p className="text-sm text-destructive font-semibold">This order item was cancelled.</p>
-                  ) : (
-                    <ol className="relative border-l border-border ml-3.5 mt-2 space-y-6">
-                      {getTimelineSteps(selectedOrder.orderType).map((step, i) => {
-                        const isDone = i <= timelineInfo!.completedThrough;
-                        const isCurrent = timelineInfo!.currentIndex === i;
-                        const isUpcoming = !isDone && !isCurrent;
-
-                        return (
-                          <li key={step.key} className="relative pl-6 last:pb-0">
-                            <span className={cn(
-                              "absolute -left-[11px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full border text-[9px] font-bold transition-all",
-                              isDone && "bg-foreground text-background border-foreground",
-                              isCurrent && "bg-background text-foreground border-foreground shadow-sm animate-pulse",
-                              isUpcoming && "bg-muted text-muted-foreground border-border"
-                            )}>
-                              {isDone ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
-                              {isCurrent ? <span className="h-1.5 w-1.5 rounded-full bg-foreground" aria-hidden /> : null}
-                            </span>
-                            <div>
-                              <p className={cn("text-xs font-semibold leading-tight", isUpcoming ? "text-muted-foreground" : "text-foreground")}>
-                                {step.label}
-                              </p>
-                              {isCurrent && <span className="text-[10px] text-muted-foreground font-medium">In Progress / Pending Action</span>}
-                              {!isCurrent && step.key === "active" && selectedOrder.status.trim().toLowerCase() === "active" && selectedOrder.orderType?.toLowerCase() !== "buy" ? (
-                                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Current status</p>
-                              ) : null}
-                              {!isCurrent && step.key === "bought_out" && selectedOrder.status.trim().toLowerCase() === "bought_out" ? (
-                                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Purchased by customer</p>
-                              ) : null}
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  )}
-                </div>
-
-                {/* Admin Status Update Action */}
-                <div className="space-y-3 pt-4 border-t border-border/40 pb-4">
-                  <h5 className="text-sm font-bold text-foreground">Admin Actions</h5>
-
-                  {selectedOrder.status === "dispatch_failed" && (
-                    <TooltipProvider>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                        <AlertDialog>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="default"
-                                  className="w-full text-sm"
-                                  disabled={restartDispatchMutation.isPending}
-                                >
-                                  {restartDispatchMutation.isPending ? "Reassigning..." : "Reassign Order"}
-                                </Button>
-                              </AlertDialogTrigger>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs text-center z-[9999]" side="top">
-                              Instantly broadcasts a new dispatch offer to all eligible nearby vendors simultaneously.
-                            </TooltipContent>
-                          </Tooltip>
-                          <AlertDialogContent className="z-[9999]">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Reassign Order?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to reassign this order? The system will automatically broadcast a new offer to all eligible vendors in the area.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => restartDispatchMutation.mutate()}>Reassign</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-
-                        <AlertDialog>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="destructive"
-                                  className="w-full text-sm"
-                                  disabled={cancelRefundMutation.isPending}
-                                >
-                                  {cancelRefundMutation.isPending ? "Cancelling..." : "Force Cancel"}
-                                </Button>
-                              </AlertDialogTrigger>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs text-center z-[9999]" side="top">
-                              Permanently cancels the order and automatically issues a full refund back to the customer's payment method.
-                            </TooltipContent>
-                          </Tooltip>
-                          <AlertDialogContent className="z-[9999]">
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Force Cancel & Refund?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to forcefully cancel this order and issue a full refund to the customer? This action is permanent and cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Keep Order</AlertDialogCancel>
-                            <AlertDialogAction className="bg-destructive hover:bg-destructive/90 text-destructive-foreground" onClick={() => cancelRefundMutation.mutate()}>Force Cancel</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                    </TooltipProvider>
-                  )}
-
-                  {(() => {
-                    const hasPendingContinuations = !!continuations && (continuations.pendingExtensions.length > 0 || continuations.pendingBuyouts.length > 0);
-                    return (
-                      <div className={cn("flex flex-col sm:flex-row sm:items-end gap-4 p-4 rounded-lg border", hasPendingContinuations ? "bg-muted/50 border-border/20 opacity-60" : "bg-accent/20 border-border/40")}>
-                        <div className="flex-1">
-                          <p className="text-xs font-semibold text-muted-foreground mb-1">Force Status Update</p>
-                          <Select value={statusUpdateLocal} onValueChange={setStatusUpdateLocal} disabled={hasPendingContinuations}>
-                            <SelectTrigger className="w-[180px] h-8 text-xs bg-background">
-                              <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {statusTabs
-                                .filter(t => t.id !== "all" && getAvailableStatuses(selectedOrder.status, selectedOrder.orderType).includes(t.id))
-                                .map(t => (
-                                <SelectItem key={t.id} value={t.id} className="text-xs">
-                                  {t.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button 
-                          size="sm" 
-                          onClick={() => updateStatusMutation.mutate(statusUpdateLocal)}
-                          disabled={hasPendingContinuations || !statusUpdateLocal || statusUpdateLocal === selectedOrder.status || updateStatusMutation.isPending}
-                        >
-                          {updateStatusMutation.isPending ? "Updating..." : "Update Status"}
-                        </Button>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

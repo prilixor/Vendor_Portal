@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/models/expiring_order_model.dart';
+import '../../shared/widgets/catalog_image.dart';
 
 class ExpirationsScreen extends StatefulWidget {
   const ExpirationsScreen({super.key});
@@ -103,6 +104,23 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
                                         ),
                                         child: Row(
                                           children: [
+                                            Container(
+                                              width: 44,
+                                              height: 44,
+                                              clipBehavior: Clip.antiAlias,
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF1E293B),
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(color: Colors.white10),
+                                              ),
+                                              child: CatalogImage(
+                                                url: item.listingPrimaryImageUrl,
+                                                width: 44,
+                                                height: 44,
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
                                             Expanded(
                                               child: Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,7 +141,11 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
                                                 borderRadius: BorderRadius.circular(8),
                                               ),
                                               child: Text(
-                                                '${item.daysLeft} day(s) left',
+                                                item.daysLeft <= 0
+                                                    ? 'Due Today'
+                                                    : item.daysLeft == 1
+                                                        ? '1 day left'
+                                                        : '${item.daysLeft} days left',
                                                 style: TextStyle(
                                                   color: urgent ? Colors.redAccent : Colors.white70,
                                                   fontSize: 11,

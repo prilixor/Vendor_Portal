@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../api/api_client.dart';
 import '../models/cart_model.dart';
 import '../models/product_detail_model.dart';
+import '../utils/media_url.dart';
 
 class CartProvider extends ChangeNotifier {
   final List<CartLineModel> _lines = [];
@@ -84,6 +85,19 @@ class CartProvider extends ChangeNotifier {
       }
       // Drop details for listings no longer in cart.
       _listingDetails.removeWhere((id, _) => !ids.contains(id));
+
+      // Fill missing cart thumbnails from listing primary/gallery images.
+      var hydrated = false;
+      for (final line in _lines) {
+        if (line.primaryImageUrl != null && line.primaryImageUrl!.trim().isNotEmpty) continue;
+        final detail = _listingDetails[line.listingId];
+        if (detail == null || detail.imageUrls.isEmpty) continue;
+        final url = resolveItemImageUrl(imageUrls: detail.imageUrls);
+        if (url == null) continue;
+        line.primaryImageUrl = url;
+        hydrated = true;
+      }
+      if (hydrated) _saveCart();
     } finally {
       _isRefreshingStock = false;
       notifyListeners();

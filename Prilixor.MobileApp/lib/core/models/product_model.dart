@@ -1,3 +1,5 @@
+import '../utils/media_url.dart';
+
 class ProductModel {
   final String id;
   final String title;
@@ -46,7 +48,6 @@ class ProductModel {
   });
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
-    final rawImage = json['primaryImageUrl'] ?? json['PrimaryImageUrl'];
     return ProductModel(
       id: json['id']?.toString() ?? '',
       title: json['title'] ?? '',
@@ -63,7 +64,7 @@ class ProductModel {
       availableQuantity: json['availableQuantity'] ?? 0,
       productTotalAvailableQuantity: json['productTotalAvailableQuantity'] ?? 0,
       availabilityStatus: json['availabilityStatus'] ?? '',
-      primaryImageUrl: rawImage?.toString(),
+      primaryImageUrl: resolveItemImageUrl(json: json),
       buyPrice: json['buyPrice'] != null ? (json['buyPrice'] as num).toDouble() : null,
       isRentEnabled: json['isRentEnabled'] ?? true,
       isBuyEnabled: json['isBuyEnabled'] ?? false,

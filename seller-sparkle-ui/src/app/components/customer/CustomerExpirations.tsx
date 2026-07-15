@@ -74,7 +74,11 @@ const CustomerExpirations = () => {
                       </div>
                       <div className="flex items-center justify-start sm:justify-end gap-4 shrink-0 pt-3 sm:pt-0 border-t border-border/20 sm:border-none w-full sm:w-auto">
                         <Badge className="w-fit" variant={x.daysLeft <= 3 ? "destructive" : "secondary"}>
-                          {x.daysLeft} day(s) left
+                          {x.daysLeft <= 0
+                            ? "Due Today"
+                            : x.daysLeft === 1
+                              ? "1 day left"
+                              : `${x.daysLeft} days left`}
                         </Badge>
                       </div>
                     </div>

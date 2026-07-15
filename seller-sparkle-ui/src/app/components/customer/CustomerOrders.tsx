@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Search, Package } from "lucide-react";
+import { ChevronLeft, ChevronRight, Package } from "lucide-react";
 import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
-import { Input } from "@/app/components/ui/input";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
-import { cn } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
+import {
+  ActiveFilterChips,
+  FilterPanel,
+  FilterSearchBar,
+  FilterSection,
+  FilterSelectRow,
+  type ActiveFilterChip,
+} from "@/app/components/shared/ProfessionalFilters";
 
 const PAGE_SIZE = 8;
 
@@ -118,6 +125,8 @@ const CustomerOrders = () => {
   const [appliedFilter, setAppliedFilter] = useState<StatusFilter>(
     initialStatus && STATUS_FILTERS.includes(initialStatus) ? initialStatus : "All"
   );
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draftFilter, setDraftFilter] = useState<StatusFilter>("All");
 
   useEffect(() => {
     const s = searchParams.get("status") as StatusFilter;
@@ -136,6 +145,11 @@ const CustomerOrders = () => {
       searchParams.set("status", label);
     }
     setSearchParams(searchParams, { replace: true });
+  };
+
+  const openFilters = () => {
+    setDraftFilter(appliedFilter);
+    setFiltersOpen(true);
   };
 
   useEffect(() => {
@@ -196,6 +210,21 @@ const CustomerOrders = () => {
     }, {} as Record<StatusFilter, number>);
   }, [data, debouncedSearch]);
 
+  const statusOptions = STATUS_FILTERS.filter(
+    (label) => label !== "Bought Out" || (statusCounts["Bought Out"] ?? 0) > 0,
+  );
+
+  const activeChips: ActiveFilterChip[] =
+    appliedFilter === "All"
+      ? []
+      : [
+          {
+            key: "status",
+            label: `${appliedFilter} (${statusCounts[appliedFilter] ?? 0})`,
+            onClear: () => handleFilterChange("All"),
+          },
+        ];
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageSlice = useMemo(
@@ -214,39 +243,42 @@ const CustomerOrders = () => {
         <p className="mt-1 text-sm text-muted-foreground">Track every rental from request through return.</p>
       </div>
 
-      <div className="relative max-w-2xl">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
+      <div className="max-w-2xl space-y-3">
+        <FilterSearchBar
           value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
+          onChange={setSearchInput}
           placeholder="Search by order ID, item, or vendor"
-          className="pl-9"
+          activeCount={appliedFilter === "All" ? 0 : 1}
+          onOpenFilters={openFilters}
           aria-label="Search orders"
         />
+        <ActiveFilterChips chips={activeChips} />
       </div>
 
-      <div className="-mx-1 overflow-x-auto px-1 sm:-mx-2 sm:px-2">
-        <div className="flex min-h-9 gap-2 pb-1">
-          {STATUS_FILTERS.filter(label => label !== "Bought Out" || (statusCounts["Bought Out"] ?? 0) > 0).map((label) => {
-            const selected = appliedFilter === label;
-            return (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setAppliedFilter(label)}
-                className={cn(
-                  "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                  selected
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border bg-background hover:bg-accent",
-                )}
-              >
-                {label} ({statusCounts[label] ?? 0})
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <FilterPanel
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        title="Filter orders"
+        description="Show orders by current status."
+        onReset={() => setDraftFilter("All")}
+        resetLabel="Clear"
+        onApply={() => handleFilterChange(draftFilter)}
+        applyLabel={draftFilter === "All" ? "Show all orders" : `Show ${draftFilter.toLowerCase()}`}
+      >
+        <FilterSection title="Status">
+          {statusOptions.map((label, index) => (
+            <FilterSelectRow
+              key={label}
+              label={label}
+              count={statusCounts[label] ?? 0}
+              selected={draftFilter === label}
+              onClick={() => setDraftFilter(label)}
+              showDivider={index > 0}
+            />
+          ))}
+        </FilterSection>
+      </FilterPanel>
+
       <p className="text-xs text-muted-foreground">
         Status note: <span className="font-medium">Cancelled</span> means customer cancelled the request.
         {" "}
@@ -313,11 +345,13 @@ const CustomerOrders = () => {
 
                     {/* Group Items */}
                     <div className="space-y-4">
-                      {group.items.map((o) => (
+                      {group.items.map((o) => {
+                        const imageUrl = resolveItemImageUrl(o);
+                        return (
                         <div key={o.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/10 hover:border-border transition-all duration-300 shadow-sm gap-4">
                           <div className="flex items-center gap-4 flex-1">
-                            {o.primaryImageUrl ? (
-                              <img src={o.primaryImageUrl} alt={o.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" />
+                            {imageUrl ? (
+                              <img src={imageUrl} alt={o.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" />
                             ) : (
                               <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">
                                 <Package className="h-5 w-5 opacity-60" />
@@ -378,7 +412,8 @@ const CustomerOrders = () => {
                             </div>
                           </div>
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   </div>
                 ));
