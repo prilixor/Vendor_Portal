@@ -13,7 +13,7 @@ public static class MedicalDirectoryEndpoints
     {
         var group = app.MapGroup("api/medical-directory").WithTags("Medical Directory");
 
-        // Hospitals
+        // Hospitals — search is public (catalog browse); create requires a customer session.
         group.MapGet("/hospitals", async ([FromQuery] string? search, IMediator mediator) =>
         {
             var result = await mediator.Send(new SearchHospitalsQuery(search));
@@ -24,9 +24,9 @@ public static class MedicalDirectoryEndpoints
         {
             var result = await mediator.Send(command);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Errors);
-        });
+        }).RequireAuthorization("CustomerOnly");
 
-        // Doctors
+        // Doctors — search is public; create requires a customer session.
         group.MapGet("/doctors", async ([FromQuery] Guid? hospitalId, [FromQuery] string? search, IMediator mediator) =>
         {
             var result = await mediator.Send(new SearchDoctorsQuery(hospitalId, search));
@@ -37,6 +37,6 @@ public static class MedicalDirectoryEndpoints
         {
             var result = await mediator.Send(command);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Errors);
-        });
+        }).RequireAuthorization("CustomerOnly");
     }
 }

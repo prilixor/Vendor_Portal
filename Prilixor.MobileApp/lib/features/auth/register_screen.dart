@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../shared/widgets/required_field_ux.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -16,6 +17,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  String? _nameError;
+  String? _emailError;
+  String? _passwordError;
 
   @override
   void dispose() {
@@ -26,21 +30,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _register() async {
-    final fullName = _fullNameController.text.trim();
-    final email = _emailController.text.trim();
-    final phone = _phoneController.text.trim();
-    final password = _passwordController.text;
+  bool _validate() {
+    final nameErr = requiredMessage(_fullNameController.text, message: 'Full name is required');
+    final emailErr = requiredMessage(_emailController.text, message: 'Email is required');
+    final passwordErr = requiredMessage(_passwordController.text, message: 'Password is required');
+    setState(() {
+      _nameError = nameErr;
+      _emailError = emailErr;
+      _passwordError = passwordErr;
+    });
+    return nameErr == null && emailErr == null && passwordErr == null;
+  }
 
-    if (fullName.isEmpty || email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all required fields')),
-      );
+  void _register() async {
+    if (!_validate()) {
+      showRequiredFieldsBlocked(context);
       return;
     }
 
     final provider = Provider.of<AuthProvider>(context, listen: false);
-    final success = await provider.registerCustomer(email, password, fullName, phone);
+    final success = await provider.registerCustomer(
+      _emailController.text.trim(),
+      _passwordController.text,
+      _fullNameController.text.trim(),
+      _phoneController.text.trim(),
+    );
 
     if (!mounted) return;
 
@@ -99,17 +113,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 style: TextStyle(color: Colors.white60, fontSize: 16),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+              const RequiredFieldsNote(),
               TextField(
                 controller: _fullNameController,
                 style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Full Name *',
-                  labelStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.person_outline, color: Colors.white54),
-                  filled: true,
-                  fillColor: const Color(0xFF1E293B),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                onChanged: (_) {
+                  if (_nameError != null) setState(() => _nameError = null);
+                },
+                decoration: requiredInputDecoration(
+                  label: 'Full Name',
+                  required: true,
+                  errorText: _nameError,
+                  prefixIcon: Icons.person_outline,
                 ),
               ),
               const SizedBox(height: 16),
@@ -117,13 +133,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _emailController,
                 style: const TextStyle(color: Colors.white),
                 keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: 'Email *',
-                  labelStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.email_outlined, color: Colors.white54),
-                  filled: true,
-                  fillColor: const Color(0xFF1E293B),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                onChanged: (_) {
+                  if (_emailError != null) setState(() => _emailError = null);
+                },
+                decoration: requiredInputDecoration(
+                  label: 'Email',
+                  required: true,
+                  errorText: _emailError,
+                  prefixIcon: Icons.email_outlined,
                 ),
               ),
               const SizedBox(height: 16),
@@ -131,13 +148,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _phoneController,
                 style: const TextStyle(color: Colors.white),
                 keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: 'Phone Number (Optional)',
-                  labelStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.phone_outlined, color: Colors.white54),
-                  filled: true,
-                  fillColor: const Color(0xFF1E293B),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                decoration: requiredInputDecoration(
+                  label: 'Phone Number (Optional)',
+                  prefixIcon: Icons.phone_outlined,
                 ),
               ),
               const SizedBox(height: 16),
@@ -145,17 +158,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _passwordController,
                 style: const TextStyle(color: Colors.white),
                 obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  labelText: 'Password *',
-                  labelStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.lock_outline, color: Colors.white54),
+                onChanged: (_) {
+                  if (_passwordError != null) setState(() => _passwordError = null);
+                },
+                decoration: requiredInputDecoration(
+                  label: 'Password',
+                  required: true,
+                  errorText: _passwordError,
+                  prefixIcon: Icons.lock_outline,
                   suffixIcon: IconButton(
                     icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.white54),
                     onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                   ),
-                  filled: true,
-                  fillColor: const Color(0xFF1E293B),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
               ),
               const SizedBox(height: 32),

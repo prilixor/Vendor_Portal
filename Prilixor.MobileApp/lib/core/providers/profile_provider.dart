@@ -29,8 +29,13 @@ class ProfileProvider extends ChangeNotifier {
         _profile = ProfileModel.fromJson(response.data);
       }
     } on DioException catch (e) {
-      _errorMessage = 'Failed to load profile: ${e.message}';
-    } catch (e) {
+      if (e.response?.statusCode == 401) {
+        _profile = null;
+        _errorMessage = 'session_expired';
+      } else {
+        _errorMessage = 'Failed to load profile. Please try again.';
+      }
+    } catch (_) {
       _errorMessage = 'An unexpected error occurred.';
     } finally {
       _isLoading = false;
@@ -38,19 +43,37 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
+  void clearProfile() {
+    _profile = null;
+    _errorMessage = null;
+    notifyListeners();
+  }
+
   Future<bool> updateProfile(String name, String phone) async {
     _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
     bool success = false;
     try {
       final response = await _apiClient.dio.put(
         '/customers/me/profile',
-        data: {'name': name, 'phoneNumber': phone},
+        data: {
+          'fullName': name.trim(),
+          'phone': phone.trim().isEmpty ? null : phone.trim(),
+        },
       );
       if (response.statusCode == 200 || response.statusCode == 204) {
         success = true;
-        await fetchProfile();
+        if (response.data is Map<String, dynamic>) {
+          _profile = ProfileModel.fromJson(response.data as Map<String, dynamic>);
+        } else {
+          await fetchProfile();
+        }
       }
+    } on DioException catch (e) {
+      _errorMessage = e.response?.data?['detail']?.toString() ??
+          e.response?.data?['title']?.toString() ??
+          'Failed to update profile.';
     } catch (e) {
       _errorMessage = 'Failed to update profile.';
     } finally {

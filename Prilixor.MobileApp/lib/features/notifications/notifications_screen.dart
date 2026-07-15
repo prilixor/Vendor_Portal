@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/auth/auth_provider.dart';
 import '../../core/providers/notification_provider.dart';
 import '../../core/models/notification_model.dart';
 import '../../core/models/order_model.dart';
 import '../../core/providers/order_provider.dart';
+import '../../shared/widgets/guest_sign_in_prompt.dart';
 import '../orders/orders_screen.dart';
 import '../orders/order_detail_screen.dart';
 import '../../core/providers/product_provider.dart';
@@ -21,12 +23,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      if (!auth.isAuthenticated) return;
+      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications(silent: true);
+      Provider.of<OrderProvider>(context, listen: false).fetchOrders(silent: true);
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final auth = Provider.of<AuthProvider>(context);
     final provider = Provider.of<NotificationProvider>(context);
 
     return Scaffold(
@@ -36,14 +42,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         backgroundColor: const Color(0xFF0F172A),
         elevation: 0,
         actions: [
-          if (provider.unreadCount > 0)
+          if (auth.isAuthenticated && provider.unreadCount > 0)
             TextButton(
               onPressed: () => provider.markAllAsRead(),
               child: const Text('Mark all read', style: TextStyle(color: Color(0xFF6C63FF))),
             ),
         ],
       ),
-      body: provider.isLoading && provider.notifications.isEmpty
+      body: !auth.isAuthenticated || provider.errorMessage == 'auth_required'
+          ? const GuestSignInPrompt(
+              title: 'Sign in to view alerts',
+              message: 'Order updates and notifications appear here after you sign in.',
+            )
+          : provider.isLoading && provider.notifications.isEmpty
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
           : provider.errorMessage != null
               ? Center(child: Text(provider.errorMessage!, style: const TextStyle(color: Colors.redAccent)))
@@ -60,7 +71,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     )
                   : RefreshIndicator(
                       color: const Color(0xFF6C63FF),
-                      onRefresh: provider.fetchNotifications,
+                      onRefresh: () => provider.fetchNotifications(),
                       child: ListView.separated(
                         padding: const EdgeInsets.all(16),
                         itemCount: provider.notifications.length,
@@ -74,21 +85,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildNotificationCard(BuildContext context, NotificationModel notification) {
-    final isUnread = notification.readAt == null;
+    final provider = Provider.of<NotificationProvider>(context, listen: false);
+    final isUnread = provider.isUnread(notification);
 
     return GestureDetector(
       onTap: () async {
         if (isUnread) {
-          try {
-            await Provider.of<NotificationProvider>(context, listen: false).markAsRead(notification.id);
-          } catch (e) {
-            debugPrint('Failed to mark read: $e');
+          final ok = await provider.markAsRead(notification.id);
+          if (!ok && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Could not mark alert as read. It may reappear as unread.'),
+                backgroundColor: Colors.orange,
+              ),
+            );
           }
         }
 
         if (notification.relatedOrderId != null && notification.relatedOrderId!.isNotEmpty) {
           final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-          final relatedId = notification.relatedOrderId!; 
+          final relatedId = notification.relatedOrderId!;
+
+          // Always refresh so status matches vendor-side updates.
+          await orderProvider.fetchOrders(silent: true);
 
           List<OrderModel> getOrdersInGroup(OrderModel targetOrder) {
             String baseOrder = targetOrder.orderNumber;
@@ -114,13 +133,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           try {
             targetOrder = orderProvider.orders.firstWhere((o) => o.id == relatedId);
           } catch (_) {}
-
-          if (targetOrder == null) {
-            await orderProvider.fetchOrders();
-            try {
-              targetOrder = orderProvider.orders.firstWhere((o) => o.id == relatedId);
-            } catch (_) {}
-          }
 
           if (targetOrder != null) {
             final ordersInGroup = getOrdersInGroup(targetOrder);

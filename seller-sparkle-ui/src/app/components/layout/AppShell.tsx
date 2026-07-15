@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
-import { vendorNav, customerNav } from "@/app/helpers/navigation";
+import { vendorNav, customerNav, guestCustomerNav } from "@/app/helpers/navigation";
 import { getAdminNav } from "@/app/helpers/adminNav";
 import { adminApi } from "@/app/services/adminApi";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -131,7 +131,13 @@ export const AppShell = ({ variant }: AppShellProps) => {
   const isPending = accountStatus === "pending";
 
   const sections =
-    variant === "admin" ? getAdminNav(unreadAdminCount) : variant === "customer" ? customerNav : vendorNav;
+    variant === "admin"
+      ? getAdminNav(unreadAdminCount)
+      : variant === "customer"
+        ? user?.role === "customer"
+          ? customerNav
+          : guestCustomerNav
+        : vendorNav;
   const brandLabel =
     variant === "admin"
       ? "Admin Console"

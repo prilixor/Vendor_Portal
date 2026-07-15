@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'core/theme.dart';
-import 'core/auth/auth_provider.dart';
+import '../../core/auth/auth_provider.dart';
+import '../../core/theme.dart';
 import 'features/auth/login_screen.dart';
+import 'features/dashboard/customer_dashboard.dart';
 
 import 'core/providers/product_provider.dart';
 import 'core/providers/checkout_provider.dart';
@@ -15,6 +16,7 @@ import 'core/providers/favorite_provider.dart';
 import 'core/providers/location_provider.dart';
 import 'core/providers/address_provider.dart';
 import 'core/providers/cart_provider.dart';
+import 'core/providers/medical_provider.dart';
 
 void main() {
   runApp(
@@ -31,6 +33,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => LocationProvider()),
         ChangeNotifierProvider(create: (_) => AddressProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => MedicalProvider()),
         ChangeNotifierProxyProvider<ProfileProvider, ChatProvider>(
           create: (ctx) => ChatProvider(ctx.read<ProfileProvider>()),
           update: (ctx, profile, prev) => ChatProvider(profile),
@@ -49,9 +52,48 @@ class PrilixorMobileApp extends StatelessWidget {
     return MaterialApp(
       title: 'Prilixor',
       theme: AppTheme.darkTheme,
-      home: const WelcomeScreen(),
+      home: const AuthGate(),
       debugShowCheckedModeBanner: false,
     );
+  }
+}
+
+/// Restores JWT session (like web) or shows Welcome.
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final ok = await auth.tryRestoreSession();
+      if (!mounted) return;
+      if (ok) {
+        // Warm profile; interceptor/refresh handles expired access tokens.
+        Provider.of<ProfileProvider>(context, listen: false).fetchProfile();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = Provider.of<AuthProvider>(context);
+    if (auth.isBootstrapping) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0F172A),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))),
+      );
+    }
+    if (auth.isAuthenticated) {
+      return const CustomerDashboard();
+    }
+    return const WelcomeScreen();
   }
 }
 
@@ -103,13 +145,29 @@ class WelcomeScreen extends StatelessWidget {
                 const SizedBox(height: 48),
                 ElevatedButton(
                   onPressed: () {
-                    // Navigate to Login (Phase 3)
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(builder: (context) => const LoginScreen()),
                     );
                   },
-                  child: const Text('Get Started', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  child: const Text('Sign in', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                    side: const BorderSide(color: Colors.white24),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: () {
+                    // Guest browse: Discover + local cart only.
+                    // Checkout, medical refs, orders, and account require sign-in.
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (context) => const CustomerDashboard()),
+                    );
+                  },
+                  child: const Text('Browse catalog', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 ),
               ],
             ),

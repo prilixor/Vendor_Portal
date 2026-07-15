@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, type MouseEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Heart, ImageOff, Search } from "lucide-react";
 import { customerApi } from "@/app/services/customerApi";
 import { Input } from "@/app/components/ui/input";
@@ -99,6 +99,7 @@ const CustomerBrowse = () => {
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
   const [browseMode, setBrowseMode] = useState<"equipment" | "chemicals">("equipment");
   const { user } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const { data: favoritesData = [] } = useQuery({
@@ -235,8 +236,9 @@ const CustomerBrowse = () => {
   const toggleWishlist = (id: string, e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!user) {
-      toast.error("Please log in to save favorites.");
+    if (user?.role !== "customer") {
+      toast.message("Sign in to save favorites");
+      navigate("/customer/login", { state: { from: "/customer/browse" } });
       return;
     }
     if (wishlist.has(id)) {

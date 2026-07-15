@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/order_detail_provider.dart';
+import '../../core/providers/order_provider.dart';
 import '../../core/models/order_model.dart';
 import '../product/product_detail_screen.dart';
 import '../../core/providers/chat_provider.dart';
 import '../chat/chat_detail_screen.dart';
+import '../profile/support_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String orderNumber;
@@ -225,7 +227,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: TextStyle(color: color ?? Colors.white70, fontSize: isBold ? 16 : 14, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
-        Text('\$${amount.toStringAsFixed(2)}', style: TextStyle(color: color ?? Colors.white, fontSize: isBold ? 18 : 14, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+        Text('₹${amount.toStringAsFixed(2)}', style: TextStyle(color: color ?? Colors.white, fontSize: isBold ? 18 : 14, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
       ],
     );
   }
@@ -509,76 +511,133 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               ),
                             
                             const SizedBox(height: 24),
-                            
+
                             // Bottom Action Buttons
-                            if (provider.currentOrder!.status.toLowerCase() == 'active' && provider.currentOrder!.orderType.toLowerCase() == 'rent') ...[
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: OutlinedButton.icon(
-                                          style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white24), padding: const EdgeInsets.symmetric(vertical: 16)),
-                                          icon: const Icon(Icons.support_agent, size: 18),
-                                          label: const Text('Contact support', style: TextStyle(fontSize: 14)),
-                                          onPressed: () {
-                                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Support chat coming soon!')));
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: OutlinedButton.icon(
-                                          style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white24), padding: const EdgeInsets.symmetric(vertical: 16)),
-                                          icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                                          label: const Text('Chat with Vendor', style: TextStyle(fontSize: 14)),
-                                          onPressed: () async {
-                                            if (provider.currentOrder == null) return;
-                                            final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-                                            final sessionId = await chatProvider.createSession(provider.currentOrder!.vendorId, provider.currentOrder!.id);
-                                            if (sessionId != null && context.mounted) {
+                            Builder(
+                              builder: (context) {
+                                final order = provider.currentOrder!;
+                                final status = order.status.trim().toLowerCase();
+                                final canCancel = status == 'pending' || status == 'awaiting vendor acceptance';
+                                final canExtendBuyout = status == 'active' && order.orderType.toLowerCase() == 'rent';
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white24), padding: const EdgeInsets.symmetric(vertical: 16)),
+                                            icon: const Icon(Icons.support_agent, size: 18),
+                                            label: const Text('Contact support', style: TextStyle(fontSize: 14)),
+                                            onPressed: () {
                                               Navigator.push(
                                                 context,
                                                 MaterialPageRoute(
-                                                  builder: (context) => ChatDetailScreen(
-                                                    sessionId: sessionId,
-                                                    orderNumber: provider.currentOrder!.orderNumber,
-                                                    listingTitle: provider.currentOrder!.listingTitle,
-                                                  ),
+                                                  builder: (_) => SupportScreen(orderRef: order.orderNumber),
                                                 ),
                                               );
-                                            } else if (context.mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not start chat session.')));
-                                            }
-                                          },
+                                            },
+                                          ),
                                         ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white24), padding: const EdgeInsets.symmetric(vertical: 16)),
+                                            icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                                            label: const Text('Chat about Order', style: TextStyle(fontSize: 14)),
+                                            onPressed: () async {
+                                              final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+                                              final sessionId = await chatProvider.createSession(order.vendorId, order.id);
+                                              if (sessionId != null && context.mounted) {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) => ChatDetailScreen(
+                                                      sessionId: sessionId,
+                                                      orderNumber: order.orderNumber,
+                                                      listingTitle: order.listingTitle,
+                                                    ),
+                                                  ),
+                                                );
+                                              } else if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not start chat session.')));
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (canCancel) ...[
+                                      const SizedBox(height: 12),
+                                      OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.redAccent,
+                                          side: const BorderSide(color: Colors.redAccent),
+                                          padding: const EdgeInsets.symmetric(vertical: 16),
+                                        ),
+                                        icon: const Icon(Icons.cancel_outlined, size: 18),
+                                        label: const Text('Cancel item request', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                                        onPressed: provider.isActionLoading
+                                            ? null
+                                            : () async {
+                                                final confirm = await showDialog<bool>(
+                                                  context: context,
+                                                  builder: (ctx) => AlertDialog(
+                                                    backgroundColor: const Color(0xFF1E293B),
+                                                    title: const Text('Cancel request?', style: TextStyle(color: Colors.white)),
+                                                    content: const Text(
+                                                      'This will cancel this item request. This cannot be undone.',
+                                                      style: TextStyle(color: Colors.white70),
+                                                    ),
+                                                    actions: [
+                                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep', style: TextStyle(color: Colors.white54))),
+                                                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Cancel request', style: TextStyle(color: Colors.redAccent))),
+                                                    ],
+                                                  ),
+                                                );
+                                                if (confirm != true || !context.mounted) return;
+                                                final ok = await provider.cancelOrder(order.id);
+                                                if (!context.mounted) return;
+                                                if (ok) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(content: Text('Order cancelled.'), backgroundColor: Colors.green),
+                                                  );
+                                                  Provider.of<OrderProvider>(context, listen: false).fetchOrders(silent: true);
+                                                } else {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(content: Text(provider.errorMessage ?? 'Failed to cancel order'), backgroundColor: Colors.redAccent),
+                                                  );
+                                                }
+                                              },
                                       ),
                                     ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: ElevatedButton(
-                                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), padding: const EdgeInsets.symmetric(vertical: 16)),
-                                          onPressed: () => _showExtensionBottomSheet(context, provider),
-                                          child: const FittedBox(fit: BoxFit.scaleDown, child: Text('Extend Rental', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: ElevatedButton(
-                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.white10, padding: const EdgeInsets.symmetric(vertical: 16)),
-                                          onPressed: () => _showBuyoutBottomSheet(context, provider),
-                                          child: const FittedBox(fit: BoxFit.scaleDown, child: Text('Buyout Item', style: TextStyle(color: Colors.white))),
-                                        ),
+                                    if (canExtendBuyout) ...[
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: ElevatedButton(
+                                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), padding: const EdgeInsets.symmetric(vertical: 16)),
+                                              onPressed: () => _showExtensionBottomSheet(context, provider),
+                                              child: const FittedBox(fit: BoxFit.scaleDown, child: Text('Extend Rental', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: ElevatedButton(
+                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.white10, padding: const EdgeInsets.symmetric(vertical: 16)),
+                                              onPressed: () => _showBuyoutBottomSheet(context, provider),
+                                              child: const FittedBox(fit: BoxFit.scaleDown, child: Text('Buyout Item', style: TextStyle(color: Colors.white))),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
-                                  ),
-                                ],
-                              ),
-                            ],
+                                  ],
+                                );
+                              },
+                            ),
                             const SizedBox(height: 32),
                           ],
                         ),

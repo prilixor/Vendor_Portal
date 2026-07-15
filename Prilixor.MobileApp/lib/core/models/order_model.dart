@@ -1,3 +1,5 @@
+import '../utils/media_url.dart';
+
 class OrderModel {
   final String id;
   final String orderNumber;
@@ -61,7 +63,9 @@ class OrderModel {
       orderType: json['orderType'] ?? '',
       quantity: json['quantity'] ?? 0,
       rentalDays: json['rentalDays'] ?? 0,
-      listingPrimaryImageUrl: json['listingPrimaryImageUrl'],
+      listingPrimaryImageUrl: resolveMediaUrl(
+        (json['listingPrimaryImageUrl'] ?? json['primaryImageUrl'])?.toString(),
+      ),
     );
   }
 }

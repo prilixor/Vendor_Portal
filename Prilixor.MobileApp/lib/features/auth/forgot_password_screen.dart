@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../shared/widgets/required_field_ux.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -11,6 +12,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
+  String? _emailError;
 
   @override
   void dispose() {
@@ -19,11 +21,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   void _submit() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) return;
+    final emailErr = requiredMessage(_emailController.text, message: 'Email is required');
+    setState(() => _emailError = emailErr);
+    if (emailErr != null) {
+      showRequiredFieldsBlocked(context);
+      return;
+    }
 
     final provider = Provider.of<AuthProvider>(context, listen: false);
-    final success = await provider.forgotPassword(email);
+    final success = await provider.forgotPassword(_emailController.text.trim());
 
     if (!mounted) return;
 
@@ -79,18 +85,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 style: TextStyle(color: Colors.white60, fontSize: 16),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+              const RequiredFieldsNote(),
               TextField(
                 controller: _emailController,
                 style: const TextStyle(color: Colors.white),
                 keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: 'Email Address',
-                  labelStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.email_outlined, color: Colors.white54),
-                  filled: true,
-                  fillColor: const Color(0xFF1E293B),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                onChanged: (_) {
+                  if (_emailError != null) setState(() => _emailError = null);
+                },
+                decoration: requiredInputDecoration(
+                  label: 'Email Address',
+                  required: true,
+                  errorText: _emailError,
+                  prefixIcon: Icons.email_outlined,
                 ),
               ),
               const SizedBox(height: 32),

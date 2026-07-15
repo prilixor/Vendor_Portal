@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../api/api_client.dart';
 import 'package:dio/dio.dart';
+import 'package:jwt_decoder/jwt_decoder.dart';
+import '../api/api_client.dart';
 
 class AuthProvider extends ChangeNotifier {
   final ApiClient _apiClient = ApiClient();
@@ -13,10 +14,90 @@ class AuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;
   bool get isAuthenticated => _isAuthenticated;
 
+  bool _isBootstrapping = true;
+  bool get isBootstrapping => _isBootstrapping;
+
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
-  // Login Method
+  AuthProvider() {
+    // When API refresh fails, clear local session so AuthGate shows Welcome/Login.
+    _apiClient.onSessionExpired = () {
+      _isAuthenticated = false;
+      notifyListeners();
+    };
+  }
+
+  /// Restore session from stored JWT (web-like stay logged in).
+  /// If access token expired, tries refresh once.
+  Future<bool> tryRestoreSession() async {
+    _isBootstrapping = true;
+    notifyListeners();
+    try {
+      final token = await _storage.read(key: 'jwt_token');
+      if (token == null || token.trim().isEmpty) {
+        _isAuthenticated = false;
+        return false;
+      }
+
+      // Token still valid — keep session.
+      if (!JwtDecoder.isExpired(token)) {
+        _isAuthenticated = true;
+        return true;
+      }
+
+      // Access token expired — try refresh before forcing login.
+      final refresh = await _storage.read(key: 'refresh_token');
+      if (refresh == null || refresh.trim().isEmpty) {
+        await logout();
+        return false;
+      }
+
+      try {
+        final refreshDio = Dio(
+          BaseOptions(
+            baseUrl: _apiClient.baseUrl,
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+          ),
+        );
+        final response = await refreshDio.post(
+          '/auth/refresh',
+          data: {
+            'token': token,
+            'refreshToken': refresh,
+          },
+        );
+        if (response.statusCode == 200 && response.data is Map) {
+          final data = Map<String, dynamic>.from(response.data as Map);
+          final newToken = data['token']?.toString();
+          final newRefresh = data['refreshToken']?.toString();
+          if (newToken != null && newToken.isNotEmpty) {
+            await _storage.write(key: 'jwt_token', value: newToken);
+            if (newRefresh != null && newRefresh.isNotEmpty) {
+              await _storage.write(key: 'refresh_token', value: newRefresh);
+            }
+            _isAuthenticated = true;
+            return true;
+          }
+        }
+      } catch (_) {
+        // Fall through to logout.
+      }
+
+      await logout();
+      return false;
+    } catch (_) {
+      _isAuthenticated = false;
+      return false;
+    } finally {
+      _isBootstrapping = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> login(String email, String password) async {
     _isLoading = true;
     _errorMessage = null;
@@ -34,14 +115,13 @@ class AuthProvider extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = response.data;
-        
-        // Ensure properties match your .NET LoginResponse class
         final token = data['token'];
         final refreshToken = data['refreshToken'];
 
-        // Securely store both tokens on the device
         await _storage.write(key: 'jwt_token', value: token);
-        await _storage.write(key: 'refresh_token', value: refreshToken);
+        if (refreshToken != null) {
+          await _storage.write(key: 'refresh_token', value: refreshToken);
+        }
 
         _isAuthenticated = true;
         _isLoading = false;
@@ -61,7 +141,7 @@ class AuthProvider extends ChangeNotifier {
       } else {
         _errorMessage = 'An error occurred: ${e.message}';
       }
-    } catch (e) {
+    } catch (_) {
       _errorMessage = 'An unexpected error occurred.';
     }
 
@@ -70,7 +150,6 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // Logout Method
   Future<void> logout() async {
     await _storage.delete(key: 'jwt_token');
     await _storage.delete(key: 'refresh_token');
@@ -104,7 +183,7 @@ class AuthProvider extends ChangeNotifier {
       } else {
         _errorMessage = 'An error occurred: ${e.message}';
       }
-    } catch (e) {
+    } catch (_) {
       _errorMessage = 'An unexpected error occurred.';
     }
 
@@ -132,7 +211,7 @@ class AuthProvider extends ChangeNotifier {
       }
     } on DioException catch (e) {
       _errorMessage = e.response?.data?['message'] ?? 'Failed to request password reset.';
-    } catch (e) {
+    } catch (_) {
       _errorMessage = 'An unexpected error occurred.';
     }
 
@@ -141,7 +220,6 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // Change Password Method
   Future<bool> changePassword(String email, String currentPassword, String newPassword) async {
     _isLoading = true;
     _errorMessage = null;
@@ -163,7 +241,7 @@ class AuthProvider extends ChangeNotifier {
       }
     } on DioException catch (e) {
       _errorMessage = e.response?.data?['message'] ?? 'Failed to change password.';
-    } catch (e) {
+    } catch (_) {
       _errorMessage = 'An unexpected error occurred.';
     }
 

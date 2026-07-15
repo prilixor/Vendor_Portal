@@ -32,7 +32,16 @@ class OrderDetailProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _apiClient.dio.get('/customers/me/orders/$orderId');
+      final response = await _apiClient.dio.get(
+        '/customers/me/orders/$orderId',
+        queryParameters: {'_': DateTime.now().millisecondsSinceEpoch},
+        options: Options(
+          headers: const {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+          },
+        ),
+      );
       if (response.statusCode == 200) {
         _currentOrder = OrderModel.fromJson(response.data);
       }
@@ -51,7 +60,11 @@ class OrderDetailProvider extends ChangeNotifier {
     notifyListeners();
     bool success = false;
     try {
-      final response = await _apiClient.dio.patch('/customers/me/orders/$orderId/cancel');
+      final response = await _apiClient.dio.patch(
+        '/customers/me/orders/$orderId/cancel',
+        data: <String, dynamic>{},
+        options: Options(contentType: Headers.jsonContentType),
+      );
       if (response.statusCode == 200) {
         success = true;
         await fetchOrderDetail(orderId);

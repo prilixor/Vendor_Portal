@@ -15,6 +15,11 @@ class ProductModel {
   final int productTotalAvailableQuantity;
   final String availabilityStatus;
   final String? primaryImageUrl;
+  final double? buyPrice;
+  final bool isRentEnabled;
+  final bool isBuyEnabled;
+  final bool isChemical;
+  final String? baseUnit;
 
   ProductModel({
     required this.id,
@@ -33,11 +38,17 @@ class ProductModel {
     required this.productTotalAvailableQuantity,
     required this.availabilityStatus,
     this.primaryImageUrl,
+    this.buyPrice,
+    this.isRentEnabled = true,
+    this.isBuyEnabled = false,
+    this.isChemical = false,
+    this.baseUnit,
   });
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
+    final rawImage = json['primaryImageUrl'] ?? json['PrimaryImageUrl'];
     return ProductModel(
-      id: json['id'] ?? '',
+      id: json['id']?.toString() ?? '',
       title: json['title'] ?? '',
       vendorName: json['vendorName'] ?? '',
       vendorRating: (json['vendorRating'] ?? 0).toDouble(),
@@ -52,29 +63,34 @@ class ProductModel {
       availableQuantity: json['availableQuantity'] ?? 0,
       productTotalAvailableQuantity: json['productTotalAvailableQuantity'] ?? 0,
       availabilityStatus: json['availabilityStatus'] ?? '',
-      primaryImageUrl: json['primaryImageUrl'],
+      primaryImageUrl: rawImage?.toString(),
+      buyPrice: json['buyPrice'] != null ? (json['buyPrice'] as num).toDouble() : null,
+      isRentEnabled: json['isRentEnabled'] ?? true,
+      isBuyEnabled: json['isBuyEnabled'] ?? false,
+      isChemical: json['isChemical'] ?? false,
+      baseUnit: json['baseUnit'],
     );
   }
 
   Map<String, dynamic> getAvailabilityBadge() {
     final s = availabilityStatus.trim().toLowerCase();
     final ls = listingStatus.trim().toLowerCase();
-    
+
     if (ls != 'active' && ls != 'approved') {
-      return {'label': 'Unavailable', 'color': 0xFF9E9E9E}; // Colors.grey
+      return {'label': 'Unavailable', 'color': 0xFF9E9E9E};
     }
     if (availableQuantity <= 0 && productTotalAvailableQuantity > 0) {
-      return {'label': 'Out at this vendor', 'color': 0xFFFF5722}; // Colors.deepOrange
+      return {'label': 'Out here', 'color': 0xFFFF5722};
     }
     if (s == 'out_of_stock' || availableQuantity <= 0) {
-      return {'label': 'Out of stock', 'color': 0xFFF44336}; // Colors.red
+      return {'label': 'Out of stock', 'color': 0xFFF44336};
     }
     if (availableQuantity == 1) {
-      return {'label': 'Only 1 left', 'color': 0xFFEF6C00}; // Colors.orange[800]
+      return {'label': 'Only 1 left', 'color': 0xFFEF6C00};
     }
     if (s == 'low_stock' || availableQuantity <= 3) {
-      return {'label': 'Limited stock', 'color': 0xFFF57C00}; // Colors.orange[700]
+      return {'label': 'Low stock', 'color': 0xFFF57C00};
     }
-    return {'label': 'Available', 'color': 0xFF4CAF50}; // Colors.green
+    return {'label': 'Available', 'color': 0xFF4CAF50};
   }
 }

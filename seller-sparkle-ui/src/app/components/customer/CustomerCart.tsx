@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import { useCart } from "@/app/contexts/CartContext";
 import type { CartLine } from "@/app/contexts/CartContext";
@@ -11,6 +11,8 @@ import { cn } from "@/app/helpers/utils";
 import { useQueries } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
 import type { CustomerListingDetailApi } from "@/app/services/customerApi";
+import { useAuth } from "@/app/guards/AuthContext";
+import { toast } from "sonner";
 
 function CartThumb({ url }: { url?: string | null }) {
   const [failed, setFailed] = useState(false);
@@ -142,7 +144,21 @@ function CartLineCard({
 }
 
 const CustomerCart = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const { lines, updateLine, removeLine, totalEstimatedRent } = useCart();
+  const isCustomer = user?.role === "customer";
+
+  const goToCheckout = () => {
+    if (!isCustomer) {
+      toast.message("Sign in to checkout", {
+        description: "Create or sign in to your account to place an order.",
+      });
+      navigate("/customer/login", { state: { from: "/customer/checkout" } });
+      return;
+    }
+    navigate("/customer/checkout");
+  };
 
   const distinctListingIds = useMemo(
     () => Array.from(new Set(lines.map((l) => l.listingId))),
@@ -257,8 +273,12 @@ const CustomerCart = () => {
                   Proceed to checkout
                 </Button>
               ) : (
-                <Button className="w-full bg-foreground text-background hover:bg-foreground/90" asChild size="lg">
-                  <Link to="/customer/checkout">Proceed to checkout</Link>
+                <Button
+                  className="w-full bg-foreground text-background hover:bg-foreground/90"
+                  size="lg"
+                  onClick={goToCheckout}
+                >
+                  {isCustomer ? "Proceed to checkout" : "Sign in to checkout"}
                 </Button>
               )}
             </CardContent>

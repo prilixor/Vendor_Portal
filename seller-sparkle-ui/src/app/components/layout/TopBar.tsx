@@ -136,23 +136,24 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
                 </span>
               )}
             </Button>
-
-            {/* Customer Cart Icon with Badge */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/customer/cart")}
-              aria-label="Shopping Cart"
-              className="relative"
-            >
-              <ShoppingCart className="h-4 w-4" />
-              {cartCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shadow-glow">
-                  {cartCount > 99 ? "99+" : cartCount}
-                </span>
-              )}
-            </Button>
           </>
+        )}
+
+        {variant === "customer" && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/customer/cart")}
+            aria-label="Shopping Cart"
+            className="relative"
+          >
+            <ShoppingCart className="h-4 w-4" />
+            {cartCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shadow-glow">
+                {cartCount > 99 ? "99+" : cartCount}
+              </span>
+            )}
+          </Button>
         )}
 
         {variant === "customer" && user?.role !== "customer" && (

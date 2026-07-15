@@ -8,9 +8,19 @@ import {
   LifeBuoy,
   Settings,
   Clock3,
-  Heart,
 } from "lucide-react";
 import type { NavSection } from "@/app/helpers/navigation";
+
+/** Guest "Browse catalog" — shop only; account/order APIs require sign-in. */
+export const guestCustomerNav: NavSection[] = [
+  {
+    title: "Shop",
+    items: [
+      { label: "Browse", to: "/customer/browse", icon: Store },
+      { label: "Cart", to: "/customer/cart", icon: ShoppingCart },
+    ],
+  },
+];
 
 /** Mirrors the Lovable / my-rentals-hub customer shell sections. */
 export const customerNav: NavSection[] = [

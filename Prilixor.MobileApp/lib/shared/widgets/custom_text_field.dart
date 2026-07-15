@@ -1,23 +1,32 @@
 import 'package:flutter/material.dart';
+import 'required_field_ux.dart';
 
 class CustomTextField extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool isPassword;
+  final bool required;
+  final String? errorText;
   final TextEditingController controller;
   final Function(String)? onSubmitted;
+  final ValueChanged<String>? onChanged;
   final TextInputAction? textInputAction;
   final FocusNode? focusNode;
+  final TextInputType? keyboardType;
 
   const CustomTextField({
     super.key,
     required this.label,
     required this.icon,
     this.isPassword = false,
+    this.required = false,
+    this.errorText,
     required this.controller,
     this.onSubmitted,
+    this.onChanged,
     this.textInputAction,
     this.focusNode,
+    this.keyboardType,
   });
 
   @override
@@ -27,22 +36,17 @@ class CustomTextField extends StatelessWidget {
       focusNode: focusNode,
       obscureText: isPassword,
       onSubmitted: onSubmitted,
+      onChanged: onChanged,
       textInputAction: textInputAction,
+      keyboardType: keyboardType,
       style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.grey),
+      decoration: requiredInputDecoration(
+        label: label,
+        required: required,
+        errorText: errorText,
+        prefixIcon: icon,
+      ).copyWith(
         prefixIcon: Icon(icon, color: const Color(0xFF6C63FF)),
-        filled: true,
-        fillColor: const Color(0xFF1E293B),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 2),
-        ),
       ),
     );
   }

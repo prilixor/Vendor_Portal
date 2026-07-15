@@ -1,27 +1,41 @@
 class CartLineModel {
   final String listingId;
   final String title;
+  final String? vendorName;
   final String? primaryImageUrl;
   final double dailyRent;
+  final double monthlyRent;
   final double securityDeposit;
   int quantity;
   int rentalDays;
   String orderType; // 'rent' or 'buy'
+  final bool prescriptionRequired;
+  final String? productVariantId;
+  final double? buyPrice;
 
   CartLineModel({
     required this.listingId,
     required this.title,
+    this.vendorName,
     this.primaryImageUrl,
     required this.dailyRent,
+    this.monthlyRent = 0,
     required this.securityDeposit,
     this.quantity = 1,
     this.rentalDays = 1,
     this.orderType = 'rent',
+    this.prescriptionRequired = false,
+    this.productVariantId,
+    this.buyPrice,
   });
+
+  /// Unique key for cart line (listing + packaging size).
+  String get lineKey => '$listingId|${productVariantId ?? ''}';
 
   double get lineTotal {
     if (orderType == 'buy') {
-      return dailyRent * 30 * quantity; // Buy price estimate
+      final unit = buyPrice ?? (dailyRent * 30);
+      return unit * quantity;
     }
     return dailyRent * quantity * rentalDays;
   }
@@ -30,25 +44,36 @@ class CartLineModel {
     return {
       'listingId': listingId,
       'title': title,
+      'vendorName': vendorName,
       'primaryImageUrl': primaryImageUrl,
       'dailyRent': dailyRent,
+      'monthlyRent': monthlyRent,
       'securityDeposit': securityDeposit,
       'quantity': quantity,
       'rentalDays': rentalDays,
       'orderType': orderType,
+      'prescriptionRequired': prescriptionRequired,
+      'productVariantId': productVariantId,
+      'buyPrice': buyPrice,
     };
   }
 
   factory CartLineModel.fromJson(Map<String, dynamic> json) {
+    final orderType = json['orderType'] == 'buy' ? 'buy' : 'rent';
     return CartLineModel(
       listingId: json['listingId'],
       title: json['title'],
+      vendorName: json['vendorName'],
       primaryImageUrl: json['primaryImageUrl'],
       dailyRent: (json['dailyRent'] as num).toDouble(),
+      monthlyRent: (json['monthlyRent'] as num?)?.toDouble() ?? 0,
       securityDeposit: (json['securityDeposit'] as num).toDouble(),
-      quantity: json['quantity'],
-      rentalDays: json['rentalDays'],
-      orderType: json['orderType'],
+      quantity: json['quantity'] ?? 1,
+      rentalDays: orderType == 'buy' ? 0 : (json['rentalDays'] ?? 1),
+      orderType: orderType,
+      prescriptionRequired: json['prescriptionRequired'] ?? false,
+      productVariantId: json['productVariantId'],
+      buyPrice: (json['buyPrice'] as num?)?.toDouble(),
     );
   }
 }

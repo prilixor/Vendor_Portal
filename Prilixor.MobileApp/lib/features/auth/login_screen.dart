@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../shared/widgets/custom_text_field.dart';
+import '../../shared/widgets/required_field_ux.dart';
 import '../dashboard/customer_dashboard.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  /// When true, successful login pops with `true` so the caller can continue
+  /// (e.g. guest → checkout). Default replaces the stack with the dashboard.
+  final bool popOnSuccess;
+
+  const LoginScreen({super.key, this.popOnSuccess = false});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -18,6 +23,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _emailFocusNode = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
+  String? _emailError;
+  String? _passwordError;
 
   @override
   void dispose() {
@@ -28,37 +35,44 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  bool _validate() {
+    final emailErr = requiredMessage(_emailController.text, message: 'Email is required');
+    final passwordErr = requiredMessage(_passwordController.text, message: 'Password is required');
+    setState(() {
+      _emailError = emailErr;
+      _passwordError = passwordErr;
+    });
+    return emailErr == null && passwordErr == null;
+  }
+
   void _handleLogin() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-
-    if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter your email address'), backgroundColor: Colors.redAccent));
-      _emailFocusNode.requestFocus();
-      return;
-    }
-
-    if (password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter your password'), backgroundColor: Colors.redAccent));
-      _passwordFocusNode.requestFocus();
+    if (!_validate()) {
+      showRequiredFieldsBlocked(context);
+      if (_emailError != null) {
+        _emailFocusNode.requestFocus();
+      } else {
+        _passwordFocusNode.requestFocus();
+      }
       return;
     }
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    
-    // Attempt Login
-    final success = await authProvider.login(email, password);
+    final success = await authProvider.login(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+    );
 
     if (!mounted) return;
 
     if (success) {
-      if (context.mounted) {
+      if (widget.popOnSuccess) {
+        Navigator.of(context).pop(true);
+      } else {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const CustomerDashboard()),
         );
       }
     } else {
-      // Show Error
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(authProvider.errorMessage ?? 'Login failed'),
@@ -112,17 +126,24 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: Colors.grey,
                   ),
                 ),
-                const SizedBox(height: 48),
+                const SizedBox(height: 32),
+                const RequiredFieldsNote(),
                 CustomTextField(
                   label: 'Email Address',
                   icon: Icons.email_rounded,
+                  required: true,
+                  errorText: _emailError,
                   controller: _emailController,
                   focusNode: _emailFocusNode,
                   textInputAction: TextInputAction.next,
+                  onChanged: (_) {
+                    if (_emailError != null) setState(() => _emailError = null);
+                  },
                   onSubmitted: (_) {
                     if (_emailController.text.trim().isEmpty) {
+                      setState(() => _emailError = 'Email is required');
                       _emailFocusNode.requestFocus();
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter your email address'), backgroundColor: Colors.redAccent));
+                      showRequiredFieldsBlocked(context);
                     } else {
                       _passwordFocusNode.requestFocus();
                     }
@@ -133,16 +154,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   label: 'Password',
                   icon: Icons.lock_rounded,
                   isPassword: true,
+                  required: true,
+                  errorText: _passwordError,
                   controller: _passwordController,
                   focusNode: _passwordFocusNode,
                   textInputAction: TextInputAction.done,
+                  onChanged: (_) {
+                    if (_passwordError != null) setState(() => _passwordError = null);
+                  },
                   onSubmitted: (_) {
-                    if (_passwordController.text.trim().isEmpty) {
-                      _passwordFocusNode.requestFocus();
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter your password'), backgroundColor: Colors.redAccent));
-                    } else if (!authProvider.isLoading) {
-                      _handleLogin();
-                    }
+                    if (!authProvider.isLoading) _handleLogin();
                   },
                 ),
                 const SizedBox(height: 16),
@@ -176,8 +197,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                
-                // New customer? Create an account
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

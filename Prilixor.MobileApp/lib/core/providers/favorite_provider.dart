@@ -28,8 +28,13 @@ class FavoriteProvider extends ChangeNotifier {
         _favorites = data.map((json) => FavoriteModel.fromJson(json)).toList();
       }
     } on DioException catch (e) {
-      _errorMessage = 'Failed to load favorites: ${e.message}';
-    } catch (e) {
+      if (e.response?.statusCode == 401) {
+        _favorites = [];
+        _errorMessage = null;
+      } else {
+        _errorMessage = 'Failed to load favorites. Please try again.';
+      }
+    } catch (_) {
       _errorMessage = 'An unexpected error occurred.';
     }
 

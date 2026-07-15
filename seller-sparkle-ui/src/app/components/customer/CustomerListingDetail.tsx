@@ -1,8 +1,9 @@
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { customerApi } from "@/app/services/customerApi";
 import { useCart } from "@/app/contexts/CartContext";
+import { useAuth } from "@/app/guards/AuthContext";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
@@ -10,7 +11,6 @@ import { QuantityStepper } from "@/app/components/ui/quantity-stepper";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { toast } from "sonner";
-import { Link } from "react-router-dom";
 import { ShoppingCart } from "lucide-react";
 
 function availabilityBadge(status: string, qty: number): { label: string; className: string } {
@@ -48,6 +48,8 @@ function availabilityBadge(status: string, qty: number): { label: string; classN
 
 const CustomerListingDetail = () => {
   const { listingId } = useParams<{ listingId: string }>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const { addLine } = useCart();
   const [qty, setQty] = useState(1);
   const [days, setDays] = useState(7);
@@ -455,7 +457,15 @@ const CustomerListingDetail = () => {
                 variant="outline"
                 type="button"
                 onClick={() => {
-                  customerApi.addFavorite(data.id)
+                  if (user?.role !== "customer") {
+                    toast.message("Sign in to save favorites");
+                    navigate("/customer/login", {
+                      state: { from: `/customer/browse/${data.id}` },
+                    });
+                    return;
+                  }
+                  customerApi
+                    .addFavorite(data.id)
                     .then(() => toast.success("Added to favorites"))
                     .catch(() => toast.error("Failed to add favorite"));
                 }}

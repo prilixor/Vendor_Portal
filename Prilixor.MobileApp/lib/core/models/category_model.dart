@@ -5,6 +5,7 @@ class CategoryModel {
   final bool depositRequired;
   final bool installationRequired;
   final bool isActive;
+  final bool isChemical;
 
   CategoryModel({
     required this.id,
@@ -13,6 +14,7 @@ class CategoryModel {
     required this.depositRequired,
     required this.installationRequired,
     required this.isActive,
+    this.isChemical = false,
   });
 
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
@@ -23,6 +25,7 @@ class CategoryModel {
       depositRequired: json['depositRequired'] ?? false,
       installationRequired: json['installationRequired'] ?? false,
       isActive: json['isActive'] ?? true,
+      isChemical: json['isChemical'] ?? false,
     );
   }
 }

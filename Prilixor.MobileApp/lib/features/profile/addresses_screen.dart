@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/address_provider.dart';
 import '../../core/models/address_model.dart';
 import '../../core/providers/location_provider.dart';
+import '../../shared/widgets/required_field_ux.dart';
 import 'mock_map_picker_screen.dart';
 
 class AddressesScreen extends StatefulWidget {
@@ -25,14 +26,18 @@ class _AddressesScreenState extends State<AddressesScreen> {
     final labelCtrl = TextEditingController(text: existingAddress?.label ?? (existingAddress != null ? 'Address' : ''));
     final streetCtrl = TextEditingController(text: existingAddress?.line1 ?? '');
     final zipCtrl = TextEditingController(text: existingAddress?.postal ?? '');
-    
+
     final stateCtrl = TextEditingController(text: existingAddress?.state ?? '');
     final cityCtrl = TextEditingController(text: existingAddress?.city ?? '');
-    
+
     String? selectedStateIso2;
     String? selectedCityName = existingAddress?.city;
     double? latitude = existingAddress?.latitude;
     double? longitude = existingAddress?.longitude;
+    String? line1Error;
+    String? stateError;
+    String? cityError;
+    String? postalError;
 
     final locProvider = Provider.of<LocationProvider>(context, listen: false);
     locProvider.fetchStates().then((_) {
@@ -87,16 +92,22 @@ class _AddressesScreenState extends State<AddressesScreen> {
                     ),
                     if (latitude != null)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 16.0),
+                        padding: const EdgeInsets.only(bottom: 8.0),
                         child: Text('Map location selected: $latitude, $longitude', style: const TextStyle(color: Colors.green, fontSize: 12)),
                       ),
-                    const SizedBox(height: 16),
-                    _buildTextField(labelCtrl, 'Label (e.g. Home, Office)'),
+                    const RequiredFieldsNote(padding: EdgeInsets.only(top: 8, bottom: 12)),
+                    _buildTextField(labelCtrl, 'Label (optional)'),
                     const SizedBox(height: 12),
-                    _buildTextField(streetCtrl, 'Street Address'),
+                    _buildTextField(
+                      streetCtrl,
+                      'Address line',
+                      required: true,
+                      errorText: line1Error,
+                      onChanged: (_) {
+                        if (line1Error != null) setState(() => line1Error = null);
+                      },
+                    ),
                     const SizedBox(height: 12),
-                    
-                    // State Dropdown
                     Consumer<LocationProvider>(
                       builder: (context, loc, _) {
                         return GestureDetector(
@@ -112,26 +123,32 @@ class _AddressesScreenState extends State<AddressesScreen> {
                                   stateCtrl.text = label;
                                   selectedCityName = null;
                                   cityCtrl.clear();
+                                  stateError = null;
                                 });
                                 loc.fetchCities(val);
                               },
                             );
                           },
                           child: AbsorbPointer(
-                            child: _buildTextField(stateCtrl, 'State', hint: 'Select State'),
+                            child: _buildTextField(
+                              stateCtrl,
+                              'State',
+                              required: true,
+                              hint: 'Select State',
+                              errorText: stateError,
+                            ),
                           ),
                         );
                       },
                     ),
                     const SizedBox(height: 12),
-                    
-                    // City Dropdown
                     Consumer<LocationProvider>(
                       builder: (context, loc, _) {
                         return GestureDetector(
                           onTap: () {
                             if (selectedStateIso2 == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a state first')));
+                              setState(() => stateError = 'State is required');
+                              showRequiredFieldsBlocked(context, message: 'Please select a state first.');
                               return;
                             }
                             if (loc.isLoadingCities) return;
@@ -143,19 +160,34 @@ class _AddressesScreenState extends State<AddressesScreen> {
                                 setState(() {
                                   selectedCityName = val;
                                   cityCtrl.text = label;
+                                  cityError = null;
                                 });
                               },
                             );
                           },
                           child: AbsorbPointer(
-                            child: _buildTextField(cityCtrl, 'City', hint: loc.isLoadingCities ? 'Loading cities...' : 'Select City'),
+                            child: _buildTextField(
+                              cityCtrl,
+                              'City',
+                              required: true,
+                              hint: loc.isLoadingCities ? 'Loading cities...' : 'Select City',
+                              errorText: cityError,
+                            ),
                           ),
                         );
                       },
                     ),
-                    
                     const SizedBox(height: 12),
-                    _buildTextField(zipCtrl, 'Postal Code', isNumber: true),
+                    _buildTextField(
+                      zipCtrl,
+                      'Postal Code',
+                      required: true,
+                      isNumber: true,
+                      errorText: postalError,
+                      onChanged: (_) {
+                        if (postalError != null) setState(() => postalError = null);
+                      },
+                    ),
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
@@ -163,11 +195,21 @@ class _AddressesScreenState extends State<AddressesScreen> {
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
                         onPressed: () async {
-                          if (streetCtrl.text.isEmpty || selectedCityName == null || selectedStateIso2 == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all required fields')));
+                          final l1 = requiredMessage(streetCtrl.text, message: 'Address line is required');
+                          final st = selectedStateIso2 == null ? 'State is required' : null;
+                          final ct = selectedCityName == null || selectedCityName!.isEmpty ? 'City is required' : null;
+                          final zip = requiredMessage(zipCtrl.text, message: 'Postal code is required');
+                          setState(() {
+                            line1Error = l1;
+                            stateError = st;
+                            cityError = ct;
+                            postalError = zip;
+                          });
+                          if (l1 != null || st != null || ct != null || zip != null) {
+                            showRequiredFieldsBlocked(context);
                             return;
                           }
-                          
+
                           bool success;
                           if (existingAddress == null) {
                             success = await provider.addAddress(
@@ -193,7 +235,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
                               setAsDefault: existingAddress.isDefault,
                             );
                           }
-                          
+
                           if (success && context.mounted) {
                             Navigator.pop(context);
                           } else if (context.mounted) {
@@ -214,24 +256,26 @@ class _AddressesScreenState extends State<AddressesScreen> {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String label, {bool isNumber = false, String? hint}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white10,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-        style: const TextStyle(color: Colors.white),
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          labelStyle: const TextStyle(color: Colors.white70),
-          hintStyle: const TextStyle(color: Colors.white38),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        ),
+  Widget _buildTextField(
+    TextEditingController controller,
+    String label, {
+    bool isNumber = false,
+    String? hint,
+    bool required = false,
+    String? errorText,
+    ValueChanged<String>? onChanged,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+      style: const TextStyle(color: Colors.white),
+      onChanged: onChanged,
+      decoration: requiredInputDecoration(
+        label: label,
+        required: required,
+        hintText: hint,
+        errorText: errorText,
+        fillColor: Colors.white10,
       ),
     );
   }
@@ -250,8 +294,6 @@ class _AddressesScreenState extends State<AddressesScreen> {
       },
     );
   }
-
-
 
   @override
   Widget build(BuildContext context) {

@@ -1,3 +1,6 @@
+import 'product_variant_model.dart';
+import '../utils/media_url.dart';
+
 class ProductDetailModel {
   final String id;
   final String title;
@@ -15,6 +18,19 @@ class ProductDetailModel {
   final String availabilityStatus;
   final String description;
   final List<String> imageUrls;
+  final double? buyPrice;
+  final bool isRentEnabled;
+  final bool isBuyEnabled;
+  final bool isChemical;
+  final String? casNumber;
+  final String? chemicalFormula;
+  final double? purityPercentage;
+  final double? molecularWeight;
+  final String? baseUnit;
+  final String? sdsDocumentUrl;
+  final String? coaDocumentUrl;
+  final List<ProductVariantModel> variants;
+  final List<VariantInventoryModel> variantInventory;
 
   ProductDetailModel({
     required this.id,
@@ -33,9 +49,58 @@ class ProductDetailModel {
     required this.availabilityStatus,
     required this.description,
     required this.imageUrls,
+    this.buyPrice,
+    this.isRentEnabled = true,
+    this.isBuyEnabled = false,
+    this.isChemical = false,
+    this.casNumber,
+    this.chemicalFormula,
+    this.purityPercentage,
+    this.molecularWeight,
+    this.baseUnit,
+    this.sdsDocumentUrl,
+    this.coaDocumentUrl,
+    this.variants = const [],
+    this.variantInventory = const [],
   });
 
+  List<ProductVariantModel> get activeVariants =>
+      variants.where((v) => v.isActive).toList();
+
+  bool get canRent => !isChemical && isRentEnabled;
+  bool get canBuy => isChemical || isBuyEnabled;
+
+  bool get hasChemSpecs =>
+      isChemical &&
+      (casNumber != null ||
+          chemicalFormula != null ||
+          purityPercentage != null ||
+          molecularWeight != null);
+
+  int variantStockOf(String variantId) {
+    for (final v in activeVariants) {
+      if (v.id == variantId && v.availableQuantity != null) {
+        return v.availableQuantity!;
+      }
+    }
+    for (final vi in variantInventory) {
+      if (vi.productVariantId == variantId) return vi.availableQuantity;
+    }
+    return 0;
+  }
+
+  int availableForVariant(String? variantId) {
+    if (variantId == null || variantId.isEmpty) return availableQuantity;
+    for (final vi in variantInventory) {
+      if (vi.productVariantId == variantId) return vi.availableQuantity;
+    }
+    return variantStockOf(variantId);
+  }
+
   factory ProductDetailModel.fromJson(Map<String, dynamic> json) {
+    final variantsJson = json['variants'] as List<dynamic>? ?? [];
+    final invJson = json['variantInventory'] as List<dynamic>? ?? [];
+
     return ProductDetailModel(
       id: json['id'] ?? '',
       title: json['title'] ?? '',
@@ -52,26 +117,54 @@ class ProductDetailModel {
       availableQuantity: json['availableQuantity'] ?? 0,
       availabilityStatus: json['availabilityStatus'] ?? '',
       description: json['description'] ?? '',
-      imageUrls: List<String>.from(json['imageUrls'] ?? []),
+      imageUrls: List<String>.from(json['imageUrls'] ?? [])
+          .map((u) => resolveMediaUrl(u))
+          .whereType<String>()
+          .toList(),
+      buyPrice: json['buyPrice'] != null ? (json['buyPrice'] as num).toDouble() : null,
+      isRentEnabled: json['isRentEnabled'] ?? true,
+      isBuyEnabled: json['isBuyEnabled'] ?? false,
+      isChemical: json['isChemical'] ?? false,
+      casNumber: json['casNumber'],
+      chemicalFormula: json['chemicalFormula'],
+      purityPercentage: json['purityPercentage'] != null
+          ? (json['purityPercentage'] as num).toDouble()
+          : null,
+      molecularWeight: json['molecularWeight'] != null
+          ? (json['molecularWeight'] as num).toDouble()
+          : null,
+      baseUnit: json['baseUnit'],
+      sdsDocumentUrl: json['sdsDocumentUrl'],
+      coaDocumentUrl: json['coaDocumentUrl'],
+      variants: variantsJson
+          .map((e) => ProductVariantModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      variantInventory: invJson
+          .map((e) => VariantInventoryModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 
-  Map<String, dynamic> getAvailabilityBadge() {
+  Map<String, dynamic> getAvailabilityBadge({int? qtyOverride}) {
+    final qty = qtyOverride ?? availableQuantity;
     final s = availabilityStatus.trim().toLowerCase();
     final ls = listingStatus.trim().toLowerCase();
-    
-    if (ls != 'active' && ls != 'approved') {
-      return {'label': 'Unavailable', 'color': 0xFF9E9E9E}; // Colors.grey
+
+    if (ls != 'active' && ls != 'approved' && ls != 'available' && ls != 'low_stock' && ls != 'out_of_stock') {
+      // Mirror React: listingVisible when status is available/low_stock/out_of_stock
+      if (s != 'available' && s != 'low_stock' && s != 'out_of_stock') {
+        return {'label': 'Unavailable', 'color': 0xFF9E9E9E};
+      }
     }
-    if (s == 'out_of_stock' || availableQuantity <= 0) {
-      return {'label': 'Out of stock', 'color': 0xFFF44336}; // Colors.red
+    if (s == 'out_of_stock' || qty <= 0) {
+      return {'label': 'Out of stock', 'color': 0xFFF44336};
     }
-    if (availableQuantity == 1) {
-      return {'label': 'Only 1 left', 'color': 0xFFEF6C00}; // Colors.orange[800]
+    if (qty == 1) {
+      return {'label': 'Only 1 left', 'color': 0xFFEF6C00};
     }
-    if (s == 'low_stock' || availableQuantity <= 3) {
-      return {'label': 'Limited stock', 'color': 0xFFF57C00}; // Colors.orange[700]
+    if (s == 'low_stock' || qty <= 3) {
+      return {'label': 'Low stock', 'color': 0xFFF57C00};
     }
-    return {'label': 'Available', 'color': 0xFF4CAF50}; // Colors.green
+    return {'label': 'Available', 'color': 0xFF4CAF50};
   }
 }

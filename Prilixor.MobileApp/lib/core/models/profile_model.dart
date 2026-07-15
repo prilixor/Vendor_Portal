@@ -15,11 +15,12 @@ class ProfileModel {
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
     return ProfileModel(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
-      email: json['email'] ?? '',
-      phoneNumber: json['phoneNumber'] ?? '',
-      joinDate: json['createdAt'] ?? '',
+      id: json['id']?.toString() ?? '',
+      // API returns fullName / phone (matches web CustomerProfileDto).
+      name: (json['fullName'] ?? json['name'] ?? '').toString(),
+      email: json['email']?.toString() ?? '',
+      phoneNumber: (json['phone'] ?? json['phoneNumber'] ?? '').toString(),
+      joinDate: (json['createdAt'] ?? json['joinDate'] ?? '').toString(),
     );
   }
 }

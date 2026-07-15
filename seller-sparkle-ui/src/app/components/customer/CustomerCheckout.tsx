@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { customerApi } from "@/app/services/customerApi";
 import type { PlaceCustomerOrdersResultApi } from "@/app/services/customerApi";
 import { useCart } from "@/app/contexts/CartContext";
+import { useAuth } from "@/app/guards/AuthContext";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Label } from "@/app/components/ui/label";
@@ -31,6 +32,7 @@ function formatAddressOption(a: { label?: string | null; line1: string; city: st
 
 const CustomerCheckout = () => {
   const navigate = useNavigate();
+  const { user, isHydrating } = useAuth();
   const queryClient = useQueryClient();
   const { lines, totalEstimatedRent, clear } = useCart();
   const [addressId, setAddressId] = useState<string>("");
@@ -41,6 +43,13 @@ const CustomerCheckout = () => {
 
   type MedicalRef = { hospitalId: string; doctorId: string; contactNumber: string; referenceNumber: string };
   const [medicalRefs, setMedicalRefs] = useState<Record<string, MedicalRef>>({});
+
+  useEffect(() => {
+    if (isHydrating) return;
+    if (user?.role !== "customer") {
+      navigate("/customer/login", { replace: true, state: { from: "/customer/checkout" } });
+    }
+  }, [isHydrating, user, navigate]);
 
   const updateMedicalRef = (listingId: string, field: keyof MedicalRef, value: string) => {
     setMedicalRefs((prev) => ({
@@ -73,6 +82,7 @@ const CustomerCheckout = () => {
   const { data: addresses } = useQuery({
     queryKey: ["customer-addresses"],
     queryFn: () => customerApi.getAddresses(),
+    enabled: user?.role === "customer",
   });
 
   useEffect(() => {
@@ -114,7 +124,7 @@ const CustomerCheckout = () => {
   const { data: quote, isFetching: quoteLoading, error: quoteError } = useQuery({
     queryKey: ["customer-order-quote", addressId, deliveryChoice, lines],
     queryFn: () => customerApi.quoteOrders(quotePayload),
-    enabled: lines.length > 0,
+    enabled: user?.role === "customer" && lines.length > 0,
     retry: false,
   });
 
@@ -173,6 +183,14 @@ const CustomerCheckout = () => {
       `Buy suggestion for "${suggestion.listingTitle}": save ₹${suggestion.savingsAmount.toFixed(0)} if you buy.`,
     );
   }, [quote?.buySuggestions]);
+
+  if (isHydrating || user?.role !== "customer") {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+        Redirecting to sign in…
+      </div>
+    );
+  }
 
   if (lines.length === 0) {
     return (

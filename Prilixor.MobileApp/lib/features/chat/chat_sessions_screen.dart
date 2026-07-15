@@ -50,6 +50,13 @@ class _ChatSessionsScreenState extends State<ChatSessionsScreen> {
                   separatorBuilder: (context, index) => const Divider(color: Colors.white10, height: 1),
                   itemBuilder: (context, index) {
                     final session = provider.sessions[index];
+                    // Customer UI must not reveal vendor/store names — title by order only.
+                    final orderLabel = session.relatedOrderNumber != null
+                        ? 'Order #${session.relatedOrderNumber}'
+                        : 'Order support';
+                    final preview = session.subject?.trim().isNotEmpty == true
+                        ? session.subject!
+                        : 'No messages yet';
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                       leading: Container(
@@ -59,36 +66,36 @@ class _ChatSessionsScreenState extends State<ChatSessionsScreen> {
                           color: const Color(0xFF6C63FF).withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                         ),
-                        child: Center(
-                          child: Text(
-                            session.participantName.isNotEmpty ? session.participantName[0].toUpperCase() : 'V',
-                            style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, fontSize: 20),
-                          ),
+                        child: const Center(
+                          child: Icon(Icons.chat_bubble_outline, color: Color(0xFF6C63FF), size: 22),
                         ),
                       ),
                       title: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(session.participantName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          Expanded(
+                            child: Text(
+                              orderLabel,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           Text(
                             _formatDate(session.lastMessageAt),
                             style: const TextStyle(color: Colors.white38, fontSize: 12),
                           ),
                         ],
                       ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (session.relatedOrderNumber != null)
-                            Text('Order #${session.relatedOrderNumber}', style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Text(
-                            session.subject ?? 'No messages yet',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                        ],
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          preview,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white70),
+                        ),
                       ),
                       onTap: () {
                         Navigator.push(
@@ -97,7 +104,8 @@ class _ChatSessionsScreenState extends State<ChatSessionsScreen> {
                             builder: (_) => ChatDetailScreen(
                               sessionId: session.sessionId,
                               orderNumber: session.relatedOrderNumber ?? 'Unknown Order',
-                              listingTitle: session.subject ?? session.participantName,
+                              // Prefer subject (order/product context); never fall back to vendor name.
+                              listingTitle: session.subject ?? 'Order chat',
                             ),
                           ),
                         );
