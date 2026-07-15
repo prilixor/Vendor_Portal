@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Prilixor Mobile (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "args": [
+        "--web-port=3000"
+      ]
+    },
+    {
+      "name": "Prilixor Mobile (Web Server)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "web-server",
+      "args": [
+        "--web-hostname=localhost",
+        "--web-port=3000"
+      ]
+    }
+  ]
+}

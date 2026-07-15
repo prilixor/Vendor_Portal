@@ -278,28 +278,24 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
           </div>
 
           <div className="relative min-h-0 flex-1 overflow-hidden bg-black">
-            {safeImages.length > 1 && zoom <= 1 && (
+            {safeImages.length > 1 && (
               <>
-                <Button
+                <button
                   type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="absolute left-1 top-1/2 z-10 -translate-y-1/2 text-white hover:bg-white/10 hover:text-white"
+                  className="absolute left-2 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white shadow-md backdrop-blur-sm transition hover:bg-black/75"
                   onClick={() => changeImage(imgIx - 1)}
                   aria-label="Previous image"
                 >
                   <ChevronLeft className="h-7 w-7" />
-                </Button>
-                <Button
+                </button>
+                <button
                   type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="absolute right-1 top-1/2 z-10 -translate-y-1/2 text-white hover:bg-white/10 hover:text-white"
+                  className="absolute right-2 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white shadow-md backdrop-blur-sm transition hover:bg-black/75"
                   onClick={() => changeImage(imgIx + 1)}
                   aria-label="Next image"
                 >
                   <ChevronRight className="h-7 w-7" />
-                </Button>
+                </button>
               </>
             )}
 

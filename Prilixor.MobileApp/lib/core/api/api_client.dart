@@ -17,9 +17,9 @@ class ApiClient {
   final List<Completer<String?>> _refreshWaiters = [];
 
   // Live AWS API (same as production web).
-  // final String baseUrl = "https://localhost:5001/api";
-  final String baseUrl =
-      "http://ec2-13-63-165-183.eu-north-1.compute.amazonaws.com/api";
+  final String baseUrl = "https://localhost:5001/api";
+  // final String baseUrl =
+  //     "http://ec2-13-63-165-183.eu-north-1.compute.amazonaws.com/api";
 
   ApiClient._internal() {
     dio = Dio(
