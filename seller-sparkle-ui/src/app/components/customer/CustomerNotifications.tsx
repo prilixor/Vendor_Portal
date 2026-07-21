@@ -26,7 +26,7 @@ const getCustomerRoute = (notificationType?: string, title?: string): string | n
     return "/customer/orders";
   }
   if (type === "welcome" || type === "general") {
-    return "/customer/dashboard";
+    return "/customer/shop";
   }
   
   // Fallback to title matching
@@ -35,7 +35,7 @@ const getCustomerRoute = (notificationType?: string, title?: string): string | n
     return "/customer/orders";
   }
   if (t.includes("welcome") || t.includes("dashboard")) {
-    return "/customer/dashboard";
+    return "/customer/shop";
   }
   
   return null;
@@ -102,14 +102,14 @@ const CustomerNotifications = () => {
            try {
              const results = await customerApi.getCatalogListings(undefined, match[1]);
              if (results && results.length > 0) {
-               navigate(`/customer/browse/${encodeURIComponent(results[0].id)}`);
+               navigate(`/customer/shop/${encodeURIComponent(results[0].id)}`);
                return;
              }
            } catch (e) {
              console.error(e);
            }
         }
-        navigate("/customer/browse");
+        navigate("/customer/shop");
         return;
       }
 

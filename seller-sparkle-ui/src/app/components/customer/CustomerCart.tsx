@@ -57,7 +57,7 @@ function CartLineCard({
     line.orderType === "buy"
       ? linePrice * line.quantity
       : line.dailyRent * line.quantity * line.rentalDays;
-  const listingTo = `/customer/browse/${encodeURIComponent(line.listingId)}`;
+  const listingTo = `/customer/shop/${encodeURIComponent(line.listingId)}`;
   const thumbUrl = resolveItemImageUrl({
     primaryImageUrl: imageUrl ?? line.primaryImageUrl,
   });
@@ -229,7 +229,7 @@ const CustomerCart = () => {
           <CardContent className="flex flex-col items-center gap-4 py-12">
             <p className="text-sm text-muted-foreground">Your cart is empty.</p>
             <Button asChild className="bg-gradient-primary hover:opacity-95 shadow-glow">
-              <Link to="/customer/browse">Browse rentals</Link>
+              <Link to="/customer/shop">Continue shopping</Link>
             </Button>
           </CardContent>
         </Card>

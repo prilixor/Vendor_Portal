@@ -78,7 +78,7 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
     to === location.pathname ||
     (to !== "/vendor" &&
       to !== "/admin" &&
-      to !== "/customer/browse" &&
+      to !== "/customer/shop" &&
       to !== "/customer/dashboard" &&
       location.pathname.startsWith(to));
 
@@ -140,7 +140,7 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
                         item.to === "/vendor" ||
                         item.to === "/admin" ||
                         item.to === "/customer/dashboard" ||
-                        item.to === "/customer/browse"
+                        item.to === "/customer/shop"
                       }
                       onClick={() => onClose?.()}
                       className={cn(

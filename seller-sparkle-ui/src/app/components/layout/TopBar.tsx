@@ -17,6 +17,7 @@ import { useCart } from "@/app/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
 import { adminApi } from "@/app/services/adminApi";
+import { getVendorPortalHref } from "@/app/helpers/portalHost";
 
 interface TopBarProps {
   onMenuClick?: () => void;
@@ -27,6 +28,7 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
   const { unreadCount } = useNotificationContext();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const vendorPortalHref = getVendorPortalHref("/login");
   const [dark, setDark] = useState(() => {
     const saved = localStorage.getItem("theme");
     return saved === "dark";
@@ -153,6 +155,12 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
                 {cartCount > 99 ? "99+" : cartCount}
               </span>
             )}
+          </Button>
+        )}
+
+        {variant === "customer" && (
+          <Button variant="ghost" size="sm" asChild>
+            <a href={vendorPortalHref}>Vendor portal</a>
           </Button>
         )}
 

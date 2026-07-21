@@ -443,7 +443,7 @@ const CustomerOrderDetail = () => {
             <p className="text-xs text-muted-foreground mt-0.5">Tracking: <span className="font-semibold text-foreground">{activeItem.listingTitle}</span></p>
           </div>
           <Button variant="link" className="h-auto p-0 text-xs font-semibold text-primary" asChild>
-            <Link to={`/customer/browse/${encodeURIComponent(activeItem.listingId)}`}>
+            <Link to={`/customer/shop/${encodeURIComponent(activeItem.listingId)}`}>
               View listing
             </Link>
           </Button>

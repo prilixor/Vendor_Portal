@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useParams } from "react-router-dom";
 import { Toaster as Sonner } from "@/app/components/ui/sonner";
 import { Toaster } from "@/app/components/ui/toaster";
 import { TooltipProvider } from "@/app/components/ui/tooltip";
@@ -68,6 +68,12 @@ import CustomerExpirations from "@/app/components/customer/CustomerExpirations";
 
 const queryClient = new QueryClient();
 
+/** Keeps old /customer/browse/:id bookmarks working after rename to /shop. */
+function LegacyBrowseListingRedirect() {
+  const { listingId } = useParams();
+  return <Navigate to={`/customer/shop/${encodeURIComponent(listingId ?? "")}`} replace />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -130,8 +136,10 @@ const App = () => (
             <Route path="/customer" element={<AppShell variant="customer" />}>
               <Route index element={<CustomerHomeRedirect />} />
               <Route path="dashboard" element={<CustomerDashboard />} />
-              <Route path="browse" element={<CustomerBrowse />} />
-              <Route path="browse/:listingId" element={<CustomerListingDetail />} />
+              <Route path="shop" element={<CustomerBrowse />} />
+              <Route path="shop/:listingId" element={<CustomerListingDetail />} />
+              <Route path="browse" element={<Navigate to="/customer/shop" replace />} />
+              <Route path="browse/:listingId" element={<LegacyBrowseListingRedirect />} />
               <Route path="cart" element={<CustomerCart />} />
               <Route path="checkout" element={<CustomerCheckout />} />
               <Route path="orders" element={<CustomerOrders />} />

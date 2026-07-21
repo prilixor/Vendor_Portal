@@ -6,12 +6,14 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
 import { authApi } from "@/app/services/authApi";
+import { getCustomerPortalHref } from "@/app/helpers/portalHost";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const customerLoginHref = getCustomerPortalHref("/customer/login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -147,7 +149,9 @@ const Login = () => {
 
       <p className="mt-4 text-center text-xs text-muted-foreground">
         Looking to rent?{" "}
-        <Link to="/customer/login" className="font-medium text-primary hover:underline">Customer sign in</Link>
+        <a href={customerLoginHref} className="font-medium text-primary hover:underline">
+          Customer sign in
+        </a>
       </p>
 
     </AuthLayout>

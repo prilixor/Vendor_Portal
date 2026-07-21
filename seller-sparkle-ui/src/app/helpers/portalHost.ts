@@ -10,3 +10,25 @@ export function getPortalHostKind(
   if (host === "blinksmed.com" || host === "www.blinksmed.com") return "customer";
   return "local";
 }
+
+function normalizePath(path: string): string {
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+/** Absolute vendor URL on customer/admin hosts; same-origin path on vendor/local. */
+export function getVendorPortalHref(path = "/login"): string {
+  const kind = getPortalHostKind();
+  const normalized = normalizePath(path);
+  if (kind === "local" || kind === "vendor") return normalized;
+  const protocol = typeof window !== "undefined" ? window.location.protocol : "https:";
+  return `${protocol}//vendor.blinksmed.com${normalized}`;
+}
+
+/** Absolute customer URL on vendor/admin hosts; same-origin path on customer/local. */
+export function getCustomerPortalHref(path = "/customer/shop"): string {
+  const kind = getPortalHostKind();
+  const normalized = normalizePath(path);
+  if (kind === "local" || kind === "customer") return normalized;
+  const protocol = typeof window !== "undefined" ? window.location.protocol : "https:";
+  return `${protocol}//www.blinksmed.com${normalized}`;
+}

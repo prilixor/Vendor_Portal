@@ -10,12 +10,15 @@ const Index = () => {
 
   if (!user) {
     if (portal === "admin") return <Navigate to="/admin/login" replace />;
-    if (portal === "customer") return <Navigate to="/customer/login" replace />;
+    // Customer/www + local (localhost): storefront first. Vendor host stays login-first.
+    if (portal === "customer" || portal === "local") {
+      return <Navigate to="/customer/shop" replace />;
+    }
     return <Navigate to="/login" replace />;
   }
 
   if (user.role === "admin") return <Navigate to="/admin" replace />;
-  if (user.role === "customer") return <Navigate to="/customer/dashboard" replace />;
+  if (user.role === "customer") return <Navigate to="/customer/shop" replace />;
   return <Navigate to="/vendor" replace />;
 };
 

@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
+import { CustomerStoreHeader } from "./CustomerStoreHeader";
 import { vendorNav, customerNav, guestCustomerNav } from "@/app/helpers/navigation";
 import { getAdminNav } from "@/app/helpers/adminNav";
 import { adminApi } from "@/app/services/adminApi";
@@ -19,7 +20,7 @@ interface AppShellProps {
 
 function customerBrowseAndCartPaths(pathname: string): boolean {
   if (pathname === "/customer") return true;
-  if (pathname.startsWith("/customer/browse")) return true;
+  if (pathname.startsWith("/customer/shop")) return true;
   if (pathname === "/customer/cart") return true;
   return false;
 }
@@ -30,6 +31,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [statusCheckDone, setStatusCheckDone] = useState(false);
+  const isCustomerShell = variant === "customer";
 
   useEffect(() => {
     if (variant === "vendor" && user) {
@@ -149,42 +151,47 @@ export const AppShell = ({ variant }: AppShellProps) => {
   return (
     <NotificationProvider vendorId={variant === "vendor" ? user?.id : undefined}>
       <SupportChatProvider>
-        <div className="flex min-h-screen w-full bg-background">
-        {mobileSidebarOpen && (
-          <div
-            className="fixed inset-0 z-50 bg-black/50 lg:hidden"
-            onClick={() => setMobileSidebarOpen(false)}
-          />
-        )}
+        {isCustomerShell ? (
+          <div className="flex min-h-screen w-full flex-col bg-gradient-to-b from-muted/40 via-background to-background">
+            <CustomerStoreHeader />
+            <main className="flex-1 px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+              <div className="mx-auto w-full max-w-[1400px]">
+                <Outlet />
+              </div>
+            </main>
+          </div>
+        ) : (
+          <div className="flex min-h-screen w-full bg-background">
+            {mobileSidebarOpen && (
+              <div
+                className="fixed inset-0 z-50 bg-black/50 lg:hidden"
+                onClick={() => setMobileSidebarOpen(false)}
+              />
+            )}
 
-        <Sidebar
-          variant={variant}
-          sections={sections}
-          brandHeading={
-            variant === "customer"
-              ? "Customer Portal"
-              : variant === "admin"
-                ? "Admin Portal"
-                : undefined
-          }
-          brandLabel={brandLabel}
-          isOpen={mobileSidebarOpen}
-          onClose={() => setMobileSidebarOpen(false)}
-        />
+            <Sidebar
+              variant={variant}
+              sections={sections}
+              brandHeading={variant === "admin" ? "Admin Portal" : undefined}
+              brandLabel={brandLabel}
+              isOpen={mobileSidebarOpen}
+              onClose={() => setMobileSidebarOpen(false)}
+            />
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <TopBar variant={variant} onMenuClick={() => setMobileSidebarOpen(true)} />
-          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-            <div className="mx-auto max-w-7xl">
-              {variant === "vendor" && statusCheckDone && isPending && (
-                <PendingApprovalBanner className="mb-6" />
-              )}
-              <Outlet />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <TopBar variant={variant} onMenuClick={() => setMobileSidebarOpen(true)} />
+              <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-7xl">
+                  {variant === "vendor" && statusCheckDone && isPending && (
+                    <PendingApprovalBanner className="mb-6" />
+                  )}
+                  <Outlet />
+                </div>
+              </main>
+              {variant === "vendor" && user && <SupportChat vendorId={user.id} />}
             </div>
-          </main>
-          {variant === "vendor" && user && <SupportChat vendorId={user.id} />}
-        </div>
-        </div>
+          </div>
+        )}
       </SupportChatProvider>
     </NotificationProvider>
   );

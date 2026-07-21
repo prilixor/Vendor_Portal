@@ -36,7 +36,7 @@ const CustomerRegister = () => {
       await login(email.trim(), password, "customer");
       localStorage.removeItem("adminUser");
       toast.success("Welcome! Your account is ready.");
-      window.location.href = "/customer/dashboard";
+      window.location.href = "/customer/shop";
     } catch (error) {
       let message = error instanceof Error ? error.message : "Registration failed.";
       if (message.toLowerCase().includes("already exists") || message.toLowerCase().includes("in use") || message.toLowerCase().includes("taken")) {

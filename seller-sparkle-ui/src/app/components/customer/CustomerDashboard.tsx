@@ -79,7 +79,7 @@ const CustomerDashboard = () => {
             <p className="mt-1 text-sm text-muted-foreground">Here&apos;s a snapshot of your rentals and account activity.</p>
           </div>
           <Button asChild className="bg-gradient-primary hover:opacity-95 shadow-glow shrink-0">
-            <Link to="/customer/browse">
+            <Link to="/customer/shop">
               Browse listings <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
@@ -114,7 +114,7 @@ const CustomerDashboard = () => {
             label="Browse availability"
             value={inStockListings}
             hint={`${outOfStockListings} listings currently out of stock`}
-            to="/customer/browse"
+            to="/customer/shop"
           />
         </div>
       )}
@@ -136,7 +136,7 @@ const CustomerDashboard = () => {
           ) : activityRows.length === 0 ? (
             <p className="px-6 py-8 text-center text-sm text-muted-foreground">
               No recent orders yet.{" "}
-              <Link to="/customer/browse" className="font-medium text-primary hover:underline">
+              <Link to="/customer/shop" className="font-medium text-primary hover:underline">
                 Browse listings
               </Link>
             </p>

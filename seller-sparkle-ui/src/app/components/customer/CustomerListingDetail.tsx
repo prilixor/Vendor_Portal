@@ -80,7 +80,7 @@ const CustomerListingDetail = () => {
       <div className="space-y-4">
         <p className="text-sm text-destructive">{error instanceof Error ? error.message : "Listing not found."}</p>
         <Button variant="outline" asChild>
-          <Link to="/customer/browse">Back to browse</Link>
+          <Link to="/customer/shop">Back to shop</Link>
         </Button>
       </div>
     );
@@ -401,7 +401,7 @@ const CustomerListingDetail = () => {
                   if (user?.role !== "customer") {
                     toast.message("Sign in to save favorites");
                     navigate("/customer/login", {
-                      state: { from: `/customer/browse/${data.id}` },
+                      state: { from: `/customer/shop/${data.id}` },
                     });
                     return;
                   }
@@ -417,7 +417,7 @@ const CustomerListingDetail = () => {
                 <Link to="/customer/cart">View cart</Link>
               </Button>
               <Button variant="ghost" asChild>
-                <Link to="/customer/browse">More listings</Link>
+                <Link to="/customer/shop">More listings</Link>
               </Button>
             </div>
           </CardContent>

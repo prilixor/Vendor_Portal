@@ -426,8 +426,8 @@ const CustomerOrders = () => {
               {data?.length === 0 ? (
                 <>
                   No orders yet.{" "}
-                  <Link to="/customer/browse" className="font-medium text-primary hover:underline">
-                    Browse rentals
+                  <Link to="/customer/shop" className="font-medium text-primary hover:underline">
+                    Continue shopping
                   </Link>
                 </>
               ) : (

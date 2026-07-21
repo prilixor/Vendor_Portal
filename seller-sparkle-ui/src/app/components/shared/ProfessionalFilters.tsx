@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CheckCircle2, Circle, Search, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -142,35 +142,36 @@ export function FilterPanel({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
+        className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
       >
-        <SheetHeader className="space-y-1 border-b border-border px-6 py-5 text-left">
+        <SheetHeader className="shrink-0 space-y-0.5 border-b border-border px-5 py-4 text-left">
           <div className="flex items-start justify-between gap-3 pr-6">
-            <div className="min-w-0 space-y-1">
-              <SheetTitle className="text-xl font-bold tracking-tight">{title}</SheetTitle>
+            <div className="min-w-0 space-y-0.5">
+              <SheetTitle className="text-lg font-bold tracking-tight">{title}</SheetTitle>
               {description ? (
-                <SheetDescription>{description}</SheetDescription>
+                <SheetDescription className="text-xs">{description}</SheetDescription>
               ) : (
                 <SheetDescription className="sr-only">Refine results</SheetDescription>
               )}
             </div>
             {onReset ? (
-              <Button type="button" variant="ghost" size="sm" className="shrink-0 text-muted-foreground" onClick={onReset}>
+              <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 px-2 text-xs text-muted-foreground" onClick={onReset}>
                 {resetLabel}
               </Button>
             ) : null}
           </div>
         </SheetHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        {/* Children own their scroll regions (e.g. long category lists). */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-3">{children}</div>
 
-        <SheetFooter className="flex-row gap-3 border-t border-border px-6 py-4 sm:space-x-0">
-          <Button type="button" variant="outline" className="flex-1 rounded-xl" onClick={() => onOpenChange(false)}>
+        <SheetFooter className="shrink-0 flex-row gap-2 border-t border-border px-5 py-3 sm:space-x-0">
+          <Button type="button" variant="outline" className="h-10 flex-1 rounded-lg" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
             type="button"
-            className="flex-[2] rounded-xl"
+            className="h-10 flex-[2] rounded-lg"
             onClick={() => {
               onApply();
               onOpenChange(false);
@@ -184,13 +185,36 @@ export function FilterPanel({
   );
 }
 
-export function FilterSection({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
+export function FilterSection({
+  title,
+  children,
+  className,
+  hint,
+  fill,
+}: {
+  title: string;
+  children: ReactNode;
+  className?: string;
+  /** Optional helper text under the section title (e.g. "20 categories"). */
+  hint?: string;
+  /** Grow to fill remaining sheet height (use for long scrollable lists). */
+  fill?: boolean;
+}) {
   return (
-    <section className={cn("overflow-hidden rounded-2xl border border-border bg-card", className)}>
-      <div className="border-b border-border/80 px-4 py-3">
-        <h3 className="text-sm font-semibold tracking-tight text-foreground">{title}</h3>
+    <section
+      className={cn(
+        "overflow-hidden rounded-xl border border-border/80 bg-card",
+        fill && "flex min-h-0 flex-1 flex-col",
+        className,
+      )}
+    >
+      <div className="shrink-0 border-b border-border/70 px-3 py-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+          {hint ? <span className="text-[11px] tabular-nums text-muted-foreground">{hint}</span> : null}
+        </div>
       </div>
-      <div>{children}</div>
+      <div className={cn(fill && "flex min-h-0 flex-1 flex-col")}>{children}</div>
     </section>
   );
 }
@@ -206,12 +230,12 @@ type FilterSelectRowProps = {
 export function FilterSelectRow({ label, selected, onClick, count, showDivider }: FilterSelectRowProps) {
   return (
     <>
-      {showDivider ? <div className="h-px bg-border" /> : null}
+      {showDivider ? <div className="h-px bg-border/70" /> : null}
       <button
         type="button"
         onClick={onClick}
         className={cn(
-          "flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors",
+          "flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors",
           selected ? "bg-primary/10" : "hover:bg-muted/50",
         )}
       >
@@ -221,7 +245,7 @@ export function FilterSelectRow({ label, selected, onClick, count, showDivider }
         {typeof count === "number" ? (
           <span
             className={cn(
-              "rounded-full px-2 py-0.5 text-xs font-bold tabular-nums",
+              "rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
               selected ? "bg-primary/20 text-foreground" : "bg-muted text-muted-foreground",
             )}
           >
@@ -229,12 +253,132 @@ export function FilterSelectRow({ label, selected, onClick, count, showDivider }
           </span>
         ) : null}
         {selected ? (
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
         ) : (
-          <Circle className="h-5 w-5 shrink-0 text-muted-foreground/50" />
+          <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />
         )}
       </button>
     </>
+  );
+}
+
+type FilterCategoryListProps = {
+  options: string[];
+  /** `undefined` means "All categories". */
+  value: string | undefined;
+  onChange: (value: string | undefined) => void;
+  allLabel?: string;
+  searchPlaceholder?: string;
+  /** Show search once option count reaches this threshold. Default 8. */
+  searchThreshold?: number;
+  /** Max height of the scrollable list area. */
+  listClassName?: string;
+  /** Reset internal search when this becomes false (e.g. sheet closed). */
+  active?: boolean;
+};
+
+/**
+ * Category picker for filter sheets with many options (20+).
+ * Fills remaining sheet height and scrolls automatically when content exceeds the screen.
+ */
+export function FilterCategoryList({
+  options,
+  value,
+  onChange,
+  allLabel = "All categories",
+  searchPlaceholder = "Search categories…",
+  searchThreshold = 8,
+  listClassName,
+  active = true,
+}: FilterCategoryListProps) {
+  const [query, setQuery] = useState("");
+  const showSearch = options.length >= searchThreshold;
+
+  useEffect(() => {
+    if (!active) setQuery("");
+  }, [active]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((name) => name.toLowerCase().includes(q));
+  }, [options, query]);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {showSearch ? (
+        <div className="shrink-0 border-b border-border/70 px-2.5 py-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="h-8 rounded-lg pl-8 pr-8 text-sm"
+              aria-label="Search categories"
+            />
+            {query ? (
+              <button
+                type="button"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Clear category search"
+                onClick={() => setQuery("")}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
+          {query.trim() ? (
+            <p className="mt-1.5 text-[10px] text-muted-foreground">
+              {filtered.length} of {options.length} categories
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div
+        className={cn(
+          "min-h-[8rem] flex-1 overflow-y-auto overscroll-contain",
+          "[scrollbar-width:thin] [scrollbar-color:hsl(var(--muted-foreground)/0.35)_transparent]",
+          "[&::-webkit-scrollbar]:w-1.5",
+          "[&::-webkit-scrollbar-track]:bg-transparent",
+          "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/25",
+          "hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40",
+          listClassName,
+        )}
+      >
+        {!query.trim() ? (
+          <FilterSelectRow
+            label={allLabel}
+            selected={value === undefined}
+            onClick={() => onChange(undefined)}
+          />
+        ) : null}
+
+        {filtered.map((name, index) => (
+          <FilterSelectRow
+            key={name}
+            label={name}
+            selected={value === name}
+            onClick={() => {
+              onChange(name);
+              setQuery("");
+            }}
+            showDivider={!query.trim() || index > 0}
+          />
+        ))}
+
+        {filtered.length === 0 ? (
+          <div className="px-3 py-6 text-center">
+            <p className="text-sm font-medium text-foreground">No categories match</p>
+            <p className="mt-1 text-xs text-muted-foreground">Try a shorter search term.</p>
+            <Button type="button" variant="ghost" size="sm" className="mt-2 h-8" onClick={() => setQuery("")}>
+              Clear search
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -247,27 +391,32 @@ type FilterTileGridProps = {
   className?: string;
 };
 
+/** Compact pill / segmented control — preferred for 3–5 stock options. */
 export function FilterTileGrid({ options, value, onChange, className }: FilterTileGridProps) {
   return (
-    <div className={cn("grid grid-cols-2 gap-2.5 p-3", className)}>
-      {options.map((opt) => {
-        const selected = value === opt.id;
-        return (
-          <button
-            key={opt.id}
-            type="button"
-            onClick={() => onChange(opt.id)}
-            className={cn(
-              "rounded-xl border px-3 py-3 text-center text-sm transition-colors",
-              selected
-                ? "border-primary bg-primary font-semibold text-primary-foreground"
-                : "border-border bg-background font-medium text-foreground hover:bg-muted/60",
-            )}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
+    <div className={cn("p-2.5", className)} role="radiogroup" aria-label="Availability">
+      <div className="flex flex-wrap gap-1.5 rounded-lg bg-muted/60 p-1">
+        {options.map((opt) => {
+          const selected = value === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(opt.id)}
+              className={cn(
+                "inline-flex h-8 flex-1 items-center justify-center whitespace-nowrap rounded-md px-2.5 text-xs font-medium transition-all sm:text-[13px]",
+                selected
+                  ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

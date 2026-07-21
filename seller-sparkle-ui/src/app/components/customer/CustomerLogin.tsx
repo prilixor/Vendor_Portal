@@ -1,18 +1,19 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { AuthLayout } from "@/app/components/layout/AuthLayout";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
+import { getVendorPortalHref } from "@/app/helpers/portalHost";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 const CustomerLogin = () => {
-  const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? "/customer/dashboard";
+  const from = (location.state as { from?: string } | null)?.from ?? "/customer/shop";
   const { login } = useAuth();
+  const vendorLoginHref = getVendorPortalHref("/login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -36,7 +37,7 @@ const CustomerLogin = () => {
       await login(email.trim(), password, "customer");
       localStorage.removeItem("adminUser");
       toast.success("Welcome!");
-      window.location.href = from.startsWith("/customer") ? from : "/customer/dashboard";
+      window.location.href = from.startsWith("/customer") ? from : "/customer/shop";
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sign in failed.";
       toast.error(message);
@@ -111,9 +112,9 @@ const CustomerLogin = () => {
       </p>
       <p className="mt-4 text-center text-xs text-muted-foreground">
         Vendor?{" "}
-        <Link to="/login" className="font-medium text-primary hover:underline">
+        <a href={vendorLoginHref} className="font-medium text-primary hover:underline">
           Vendor sign in
-        </Link>
+        </a>
       </p>
     </AuthLayout>
   );

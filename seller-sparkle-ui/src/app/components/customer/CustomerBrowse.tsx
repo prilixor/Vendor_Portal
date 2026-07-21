@@ -14,10 +14,10 @@ import { cn } from "@/app/helpers/utils";
 import { useAuth } from "@/app/guards/AuthContext";
 import {
   ActiveFilterChips,
+  FilterCategoryList,
   FilterPanel,
   FilterSearchBar,
   FilterSection,
-  FilterSelectRow,
   FilterTileGrid,
   type ActiveFilterChip,
 } from "@/app/components/shared/ProfessionalFilters";
@@ -252,7 +252,7 @@ const CustomerBrowse = () => {
     e.stopPropagation();
     if (user?.role !== "customer") {
       toast.message("Sign in to save favorites");
-      navigate("/customer/login", { state: { from: "/customer/browse" } });
+      navigate("/customer/login", { state: { from: "/customer/shop" } });
       return;
     }
     if (wishlist.has(id)) {
@@ -317,47 +317,83 @@ const CustomerBrowse = () => {
   const modeCategoryNames = categoryPills.filter((label) => label !== "All");
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Browse Catalog</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Discover medical equipment and chemicals from verified vendors.
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
-          <button
-            onClick={() => setBrowseMode("equipment")}
-            className={cn(
-              "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
-              browseMode === "equipment" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-            )}
+    <div className="space-y-5">
+      {/* Storefront controls */}
+      <div className="rounded-2xl border border-border/80 bg-card/80 p-3 shadow-sm sm:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div
+            className="inline-flex w-full shrink-0 rounded-xl bg-muted p-1 lg:w-auto"
+            role="tablist"
+            aria-label="Shop category"
           >
-            Equipment Rentals
-          </button>
-          <button
-            onClick={() => setBrowseMode("chemicals")}
-            className={cn(
-              "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
-              browseMode === "chemicals" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-            )}
-          >
-            Chemicals (Buy)
-          </button>
-        </div>
-      </div>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={browseMode === "equipment"}
+              onClick={() => setBrowseMode("equipment")}
+              className={cn(
+                "flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all lg:flex-none",
+                browseMode === "equipment"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Equipment Rentals
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={browseMode === "chemicals"}
+              onClick={() => setBrowseMode("chemicals")}
+              className={cn(
+                "flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all lg:flex-none",
+                browseMode === "chemicals"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Chemicals (Buy)
+            </button>
+          </div>
 
-      <div className="space-y-3 max-w-2xl">
-        <FilterSearchBar
-          value={searchInput}
-          onChange={setSearchInput}
-          placeholder={browseMode === "chemicals" ? "Search acids, reagents, solvents..." : "Search beds, oxygen, wheelchairs..."}
-          activeCount={activeFilterCount}
-          onOpenFilters={openFilters}
-          aria-label="Search listings"
-        />
-        <ActiveFilterChips chips={activeChips} onClearAll={clearAllFilters} clearLabel="Clear all" />
+          <div className="min-w-0 flex-1">
+            <FilterSearchBar
+              value={searchInput}
+              onChange={setSearchInput}
+              placeholder={
+                browseMode === "chemicals"
+                  ? "Search acids, reagents, solvents..."
+                  : "Search beds, oxygen, wheelchairs..."
+              }
+              activeCount={activeFilterCount}
+              onOpenFilters={openFilters}
+              aria-label="Search listings"
+            />
+          </div>
+        </div>
+
+        {(activeChips.length > 0 || (!isLoading && filteredData.length > 0)) && (
+          <div className="mt-3 flex flex-col gap-2 border-t border-border/60 pt-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              {isLoading ? (
+                "Loading products…"
+              ) : (
+                <>
+                  <span className="font-medium text-foreground">{filteredData.length}</span>
+                  {` ${filteredData.length === 1 ? "product" : "products"}`}
+                  {browseMode === "chemicals" ? " for purchase" : " for rent"}
+                  {appliedCat ? (
+                    <>
+                      {" "}
+                      in <span className="font-medium text-foreground">{appliedCat}</span>
+                    </>
+                  ) : null}
+                </>
+              )}
+            </p>
+            <ActiveFilterChips chips={activeChips} onClearAll={clearAllFilters} clearLabel="Clear all" />
+          </div>
+        )}
       </div>
 
       <FilterPanel
@@ -374,35 +410,9 @@ const CustomerBrowse = () => {
             : "Show results"
         }
       >
-        <div className="space-y-4">
-          <FilterSection title="Category">
-            {catLoading ? (
-              <div className="space-y-2 p-4">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="h-10 w-full" />
-                ))}
-              </div>
-            ) : (
-              <>
-                <FilterSelectRow
-                  label="All categories"
-                  selected={draftCategory === undefined}
-                  onClick={() => setDraftCategory(undefined)}
-                />
-                {modeCategoryNames.map((name) => (
-                  <FilterSelectRow
-                    key={name}
-                    label={name}
-                    selected={draftCategory === name}
-                    onClick={() => setDraftCategory(name)}
-                    showDivider
-                  />
-                ))}
-              </>
-            )}
-          </FilterSection>
-
-          <FilterSection title="Availability">
+        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden">
+          {/* Compact filters first so they stay visible with long category lists */}
+          <FilterSection title="Availability" className="shrink-0">
             <FilterTileGrid
               options={availabilityPills}
               value={draftAvailability}
@@ -410,14 +420,11 @@ const CustomerBrowse = () => {
             />
           </FilterSection>
 
-          <FilterSection title="Saved">
-            <div className="flex items-center justify-between gap-4 px-4 py-4">
-              <div className="min-w-0 space-y-0.5">
-                <Label htmlFor="browse-favorites" className="text-sm font-semibold">
-                  Favorites only
-                </Label>
-                <p className="text-xs text-muted-foreground">Show items you have saved</p>
-              </div>
+          <FilterSection title="Saved" className="shrink-0">
+            <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+              <Label htmlFor="browse-favorites" className="text-sm font-medium">
+                Favorites only
+              </Label>
               <Switch
                 id="browse-favorites"
                 checked={draftFavorites}
@@ -431,175 +438,200 @@ const CustomerBrowse = () => {
               />
             </div>
           </FilterSection>
+
+          <FilterSection
+            title="Category"
+            hint={catLoading ? undefined : `${modeCategoryNames.length}`}
+            fill
+            className="min-h-0"
+          >
+            {catLoading ? (
+              <div className="space-y-2 p-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-8 w-full" />
+                ))}
+              </div>
+            ) : (
+              <FilterCategoryList
+                options={modeCategoryNames}
+                value={draftCategory}
+                onChange={setDraftCategory}
+                active={filtersOpen}
+              />
+            )}
+          </FilterSection>
         </div>
       </FilterPanel>
 
       {error && (
-        <p className="text-sm text-destructive">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {error instanceof Error ? error.message : "Could not load catalog."}
-        </p>
+        </div>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {isLoading &&
-          Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i} className="overflow-hidden border-border/80">
-              <div className="relative aspect-[4/3] w-full min-w-0 overflow-hidden rounded-t-lg bg-muted">
+          Array.from({ length: 8 }).map((_, i) => (
+            <Card key={i} className="overflow-hidden border-border/70 shadow-sm">
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
                 <Skeleton className="h-full w-full rounded-none" />
               </div>
-              <CardHeader className="space-y-2">
+              <CardHeader className="space-y-2 px-4 pb-2 pt-4">
                 <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="h-5 w-1/3" />
               </CardHeader>
-              <CardContent className="space-y-2 pb-3 pt-0">
-                <Skeleton className="h-6 w-full" />
+              <CardContent className="space-y-2 px-4 pb-4 pt-0">
+                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="h-9 w-full" />
               </CardContent>
             </Card>
           ))}
 
         {!isLoading &&
-          filteredData.map((item) => (
-            <Card
-              key={item.id}
-              className="group overflow-hidden border-border/80 p-0 shadow-sm transition hover:shadow-md"
-            >
-              <div className="relative">
-                {(() => {
-                  const ls = item.listingStatus.trim().toLowerCase();
-                  const isBrowsable = ls === "active" || ls === "approved";
-                  return isBrowsable ? (
+          filteredData.map((item) => {
+            const ls = item.listingStatus.trim().toLowerCase();
+            const isBrowsable = ls === "active" || ls === "approved";
+            const isChem = !!item.isChemical;
+            const showRent = !isChem && (item.isRentEnabled ?? true);
+            const showBuy = isChem || !!item.isBuyEnabled;
+            const badge = availabilityBadge(
+              item.availabilityStatus,
+              item.availableQuantity,
+              item.productTotalAvailableQuantity,
+              item.listingStatus,
+            );
+
+            const primaryPrice = (() => {
+              if (showRent) return { value: `₹${item.dailyRent.toFixed(0)}`, unit: "/day" };
+              if (showBuy && item.buyPrice != null && item.buyPrice > 0) {
+                return {
+                  value: `₹${item.buyPrice.toFixed(0)}`,
+                  unit: item.baseUnit ? ` / ${item.baseUnit}` : "",
+                };
+              }
+              return null;
+            })();
+
+            return (
+              <Card
+                key={item.id}
+                className="group flex flex-col overflow-hidden border-border/70 p-0 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md"
+              >
+                <div className="relative">
+                  {isBrowsable ? (
                     <Link
-                      to={`/customer/browse/${item.id}`}
+                      to={`/customer/shop/${item.id}`}
                       className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
-                      <div className="relative aspect-[4/3] w-full min-w-0 overflow-hidden rounded-t-lg bg-muted">
+                      <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
                         <BrowseCardImage src={item.primaryImageUrl ?? ""} />
-                        {(() => {
-                          const badge = availabilityBadge(
-                            item.availabilityStatus,
-                            item.availableQuantity,
-                            item.productTotalAvailableQuantity,
-                            item.listingStatus,
-                          );
-                          return <Badge className={badge.className}>{badge.label}</Badge>;
-                        })()}
+                        <Badge className={badge.className}>{badge.label}</Badge>
                       </div>
                     </Link>
                   ) : (
-                    <div className="relative aspect-[4/3] w-full min-w-0 overflow-hidden rounded-t-lg bg-muted">
+                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
                       <BrowseCardImage src={item.primaryImageUrl ?? ""} />
-                      {(() => {
-                        const badge = availabilityBadge(
-                          item.availabilityStatus,
-                          item.availableQuantity,
-                          item.productTotalAvailableQuantity,
-                          item.listingStatus,
-                        );
-                        return <Badge className={badge.className}>{badge.label}</Badge>;
-                      })()}
+                      <Badge className={badge.className}>{badge.label}</Badge>
                     </div>
-                  );
-                })()}
-                {item.listingStatus !== "product_only" && (
-                  <button
-                    type="button"
-                    aria-label={wishlist.has(item.id) ? "Remove from wishlist" : "Save to wishlist"}
-                    onClick={(e) => toggleWishlist(item.id, e)}
-                    className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/90 shadow-sm backdrop-blur-sm transition-colors hover:bg-background"
-                  >
-                    <Heart
-                      className={cn(
-                        "h-4 w-4",
-                        wishlist.has(item.id) ? "fill-destructive text-destructive" : "text-muted-foreground",
-                      )}
-                    />
-                  </button>
-                )}
-              </div>
+                  )}
+                  {item.listingStatus !== "product_only" && (
+                    <button
+                      type="button"
+                      aria-label={wishlist.has(item.id) ? "Remove from wishlist" : "Save to wishlist"}
+                      onClick={(e) => toggleWishlist(item.id, e)}
+                      className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/95 shadow-sm ring-1 ring-border/60 backdrop-blur-sm transition-colors hover:bg-background"
+                    >
+                      <Heart
+                        className={cn(
+                          "h-4 w-4",
+                          wishlist.has(item.id)
+                            ? "fill-destructive text-destructive"
+                            : "text-muted-foreground",
+                        )}
+                      />
+                    </button>
+                  )}
+                </div>
 
-              <CardHeader className="space-y-1 px-4 pb-2 pt-4">
-                {(() => {
-                  const ls = item.listingStatus.trim().toLowerCase();
-                  const isBrowsable = ls === "active" || ls === "approved";
-                  return isBrowsable ? (
+                <CardHeader className="space-y-2 px-4 pb-1 pt-4">
+                  {isBrowsable ? (
                     <Link
-                      to={`/customer/browse/${item.id}`}
+                      to={`/customer/shop/${item.id}`}
                       className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <p className="line-clamp-2 font-semibold leading-snug">{item.title}</p>
+                      <p className="line-clamp-2 min-h-[2.5rem] text-[15px] font-semibold leading-snug tracking-tight group-hover:text-primary">
+                        {item.title}
+                      </p>
                     </Link>
                   ) : (
-                    <p className="line-clamp-2 font-semibold leading-snug">{item.title}</p>
-                  );
-                })()}
-              </CardHeader>
-              <CardContent className="space-y-3 px-4 pb-4 pt-0">
-                <div className="flex flex-wrap gap-1.5">
-                  {(() => {
-                    const isChem = !!item.isChemical;
-                    const showRent = !isChem && (item.isRentEnabled ?? true);
-                    const showBuy = isChem || !!item.isBuyEnabled;
-                    return (
-                      <>
-                        {showRent && (
-                          <>
-                            <Badge variant="secondary" className="font-normal tabular-nums">
-                              ₹{item.dailyRent.toFixed(0)}/day
-                            </Badge>
-                            <Badge variant="secondary" className="font-normal tabular-nums">
-                              ₹{item.monthlyRent.toFixed(0)}/mo
-                            </Badge>
-                            {item.depositRequired && (
-                              <Badge variant="outline" className="font-normal tabular-nums">
-                                Deposit ₹{item.securityDeposit.toFixed(0)}
-                              </Badge>
-                            )}
-                          </>
-                        )}
-                        {showBuy && (
-                          <Badge variant="secondary" className="font-normal tabular-nums bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
-                            {(() => {
-                              const min = item.buyPrice;
-                              const max = item.maxBuyPrice;
-                              if (min == null || min <= 0) {
-                                return "Buy Price: See details";
-                              }
-                              const amount =
-                                max != null && max > min
-                                  ? `₹${min.toFixed(0)} – ₹${max.toFixed(0)}`
-                                  : `₹${min.toFixed(0)}`;
-                              return isChem
-                                ? `Buy from ${amount}`
-                                : `Buy Price: ${amount}${item.baseUnit ? ` / ${item.baseUnit}` : ""}`;
-                            })()}
-                          </Badge>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              </CardContent>
-              <CardFooter className="border-t bg-muted/30 px-4 pb-4 pt-3">
-                {(() => {
-                  const ls = item.listingStatus.trim().toLowerCase();
-                  const isBrowsable = ls === "active" || ls === "approved";
-                  return isBrowsable ? (
-                    <Button variant="outline" size="sm" className="w-full" asChild>
-                      <Link to={`/customer/browse/${item.id}`}>View details</Link>
+                    <p className="line-clamp-2 min-h-[2.5rem] text-[15px] font-semibold leading-snug tracking-tight">
+                      {item.title}
+                    </p>
+                  )}
+
+                  {primaryPrice ? (
+                    <p className="flex items-baseline gap-1">
+                      <span className="text-lg font-bold tabular-nums tracking-tight">
+                        {primaryPrice.value}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{primaryPrice.unit}</span>
+                    </p>
+                  ) : null}
+                </CardHeader>
+
+                <CardContent className="flex flex-1 flex-col gap-2 px-4 pb-3 pt-0">
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    {showRent && (
+                      <p className="tabular-nums">
+                        Monthly ₹{item.monthlyRent.toFixed(0)}
+                        {item.depositRequired ? ` · Deposit ₹${item.securityDeposit.toFixed(0)}` : ""}
+                      </p>
+                    )}
+                    {showBuy && showRent && item.buyPrice != null && item.buyPrice > 0 && (
+                      <p className="tabular-nums text-emerald-700 dark:text-emerald-400">
+                        Also buy for ₹{item.buyPrice.toFixed(0)}
+                        {item.maxBuyPrice != null && item.maxBuyPrice > item.buyPrice
+                          ? ` – ₹${item.maxBuyPrice.toFixed(0)}`
+                          : ""}
+                      </p>
+                    )}
+                    {showBuy && !showRent && item.buyPrice != null && item.buyPrice > 0 && item.maxBuyPrice != null && item.maxBuyPrice > item.buyPrice && (
+                      <p className="tabular-nums">Up to ₹{item.maxBuyPrice.toFixed(0)}</p>
+                    )}
+                  </div>
+                </CardContent>
+
+                <CardFooter className="mt-auto border-t border-border/70 bg-muted/20 px-4 py-3">
+                  {isBrowsable ? (
+                    <Button size="sm" className="w-full bg-gradient-primary shadow-glow hover:opacity-95" asChild>
+                      <Link to={`/customer/shop/${item.id}`}>View details</Link>
                     </Button>
                   ) : (
                     <Button variant="outline" size="sm" className="w-full" disabled>
                       Not available yet
                     </Button>
-                  );
-                })()}
-              </CardFooter>
-            </Card>
-          ))}
+                  )}
+                </CardFooter>
+              </Card>
+            );
+          })}
       </div>
 
       {!isLoading && filteredData.length === 0 && (
-        <p className="text-sm text-muted-foreground">No listings match your filters.</p>
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-16 text-center">
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <ImageOff className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <p className="text-base font-semibold">No products found</p>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            Try a different search, switch category, or clear filters.
+          </p>
+          {activeFilterCount > 0 && (
+            <Button variant="outline" size="sm" className="mt-4" onClick={clearAllFilters}>
+              Clear all filters
+            </Button>
+          )}
+        </div>
       )}
 
       <Dialog open={showLocationPrompt} onOpenChange={(open) => !open && handleDismissPrompt()}>

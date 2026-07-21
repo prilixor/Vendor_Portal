@@ -197,7 +197,7 @@ const CustomerCheckout = () => {
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">Your cart is empty.</p>
         <Button asChild variant="outline">
-          <Link to="/customer/browse">Browse rentals</Link>
+          <Link to="/customer/shop">Continue shopping</Link>
         </Button>
       </div>
     );
