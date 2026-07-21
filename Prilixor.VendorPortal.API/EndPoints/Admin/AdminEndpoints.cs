@@ -103,17 +103,91 @@ public sealed class RegisterAdminUserEndpoint(IMediator mediator)
     {
         Post("users");
         Group<AdminApiGroup>();
+        Policies("Perm:admins.manage");
     }
 
     public override async Task<Results<Ok<AdminUserDto>, ProblemHttpResult>> ExecuteAsync(RegisterAdminUserRequest req, CancellationToken ct)
     {
+        var actorIdStr = HttpContext.ResolveAdminUserId();
+        Guid? actorId = Guid.TryParse(actorIdStr, out var aid) ? aid : null;
+
         var result = await mediator.Send(new RegisterAdminUserCommand(
             req.Email,
             req.Password,
             req.FullName,
             req.Role,
-            req.IsActive), ct);
+            req.IsActive,
+            RoleId: null,
+            ActorAdminId: actorId), ct);
 
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class UpdateAdminUserRequest
+{
+    public string? FullName { get; set; }
+    public string? Email { get; set; }
+    public string? Role { get; set; }
+    public string? RoleId { get; set; }
+    public bool? IsActive { get; set; }
+}
+
+public sealed class UpdateAdminUserEndpoint(IMediator mediator)
+    : Endpoint<UpdateAdminUserRequest, Results<Ok<AdminUserDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("users/{adminId}");
+        Group<AdminApiGroup>();
+        Policies("Perm:admins.manage");
+    }
+
+    public override async Task<Results<Ok<AdminUserDto>, ProblemHttpResult>> ExecuteAsync(UpdateAdminUserRequest req, CancellationToken ct)
+    {
+        var actorIdStr = HttpContext.ResolveAdminUserId();
+        if (!Guid.TryParse(actorIdStr, out var actorId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Admin identity required.", statusCode: 401);
+
+        var targetStr = Route<string>("adminId");
+        if (!Guid.TryParse(targetStr, out var targetId))
+            return TypedResults.Problem(title: "validation.error", detail: "Invalid admin id.", statusCode: 400);
+
+        Guid? roleId = null;
+        if (!string.IsNullOrWhiteSpace(req.RoleId) && Guid.TryParse(req.RoleId, out var rid))
+            roleId = rid;
+
+        var result = await mediator.Send(new UpdateAdminUserCommand(
+            targetId, actorId, req.FullName, req.Email, req.Role, roleId, req.IsActive), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class UpdateOwnAdminProfileRequest
+{
+    public string? FullName { get; set; }
+    public string? Email { get; set; }
+    public string? CurrentPassword { get; set; }
+    public string? NewPassword { get; set; }
+}
+
+public sealed class UpdateOwnAdminProfileEndpoint(IMediator mediator)
+    : Endpoint<UpdateOwnAdminProfileRequest, Results<Ok<AdminUserDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("me");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<AdminUserDto>, ProblemHttpResult>> ExecuteAsync(UpdateOwnAdminProfileRequest req, CancellationToken ct)
+    {
+        var actorIdStr = HttpContext.ResolveAdminUserId();
+        if (!Guid.TryParse(actorIdStr, out var actorId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Admin identity required.", statusCode: 401);
+
+        var result = await mediator.Send(new UpdateOwnAdminProfileCommand(
+            actorId, req.FullName, req.Email, req.CurrentPassword, req.NewPassword), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -125,6 +199,7 @@ public sealed class GetAdminUsersEndpoint(IMediator mediator)
     {
         Get("users");
         Group<AdminApiGroup>();
+        Policies("Perm:admins.manage");
     }
 
     public override async Task<Results<Ok<List<AdminUserDto>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
@@ -141,6 +216,7 @@ public sealed class GetVendorsEndpoint(IMediator mediator)
     {
         Get("vendors");
         Group<AdminApiGroup>();
+        Policies("Perm:vendors.view");
     }
 
     public override async Task<Results<Ok<List<VendorDto>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
@@ -157,12 +233,13 @@ public sealed class AddAdminAuditLogEndpoint(IMediator mediator)
     {
         Post("audit-logs");
         Group<AdminApiGroup>();
+        Policies("Perm:audit.view");
     }
 
     public override async Task<Results<Ok<AdminAuditLogDto>, ProblemHttpResult>> ExecuteAsync(AddAdminAuditLogRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new AddAdminAuditLogCommand(
-            req.AdminUserId,
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
             req.ActionType,
             req.EntityType,
             req.EntityId,
@@ -181,6 +258,7 @@ public sealed class GetAdminAuditLogsEndpoint(IMediator mediator)
     {
         Get("audit-logs");
         Group<AdminApiGroup>();
+        Policies("Perm:audit.view");
     }
 
     public override async Task<Results<Ok<List<AdminAuditLogDto>>, ProblemHttpResult>> ExecuteAsync(GetAdminAuditLogsRequest req, CancellationToken ct)
@@ -197,12 +275,13 @@ public sealed class VerifyVendorBankAccountEndpoint(IMediator mediator)
     {
         Patch("vendors/{vendorId}/bank-accounts/{bankAccountId}/verification");
         Group<AdminApiGroup>();
+        Policies("Perm:vendors.verify");
     }
 
     public override async Task<Results<Ok<VendorBankAccountDto>, ProblemHttpResult>> ExecuteAsync(VerifyVendorBankAccountRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new VerifyVendorBankAccountCommand(
-            req.AdminUserId,
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
             req.VendorId,
             req.BankAccountId,
             req.VerificationStatus,
@@ -219,12 +298,13 @@ public sealed class VerifyVendorDocumentEndpoint(IMediator mediator)
     {
         Patch("vendors/{vendorId}/documents/{documentId}/verification");
         Group<AdminApiGroup>();
+        Policies("Perm:vendors.verify");
     }
 
     public override async Task<Results<Ok<VendorDocumentDto>, ProblemHttpResult>> ExecuteAsync(VerifyVendorDocumentRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new VerifyVendorDocumentCommand(
-            req.AdminUserId,
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
             req.VendorId,
             req.DocumentId,
             req.VerificationStatus,
@@ -241,12 +321,13 @@ public sealed class VerifyVendorListingEndpoint(IMediator mediator)
     {
         Patch("vendors/{vendorId}/listings/{listingId}/verification");
         Group<AdminApiGroup>();
+        Policies("Perm:vendors.verify");
     }
 
     public override async Task<Results<Ok<VendorProductListingDto>, ProblemHttpResult>> ExecuteAsync(VerifyVendorListingRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new VerifyVendorListingCommand(
-            req.AdminUserId,
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
             req.VendorId,
             req.ListingId,
             req.ListingStatus,
@@ -263,12 +344,13 @@ public sealed class ForceResetVendorPasswordEndpoint(IMediator mediator)
     {
         Patch("vendors/{vendorId}/password/reset");
         Group<AdminApiGroup>();
+        Policies("Perm:vendors.manage");
     }
 
     public override async Task<Results<Ok<AdminPasswordResetDto>, ProblemHttpResult>> ExecuteAsync(ForceResetVendorPasswordRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new ForceResetVendorPasswordCommand(
-            req.AdminUserId,
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
             req.VendorId,
             req.NewPassword,
             req.Notes), ct);
@@ -284,13 +366,14 @@ public sealed class ApproveVendorEndpoint(IMediator mediator)
     {
         Patch("vendors/{vendorId}/approve");
         Group<AdminApiGroup>();
+        Policies("Perm:vendors.verify");
     }
 
     public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(ApproveVendorRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new ApproveVendorCommand(
             req.VendorId,
-            req.AdminUserId), ct);
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -303,13 +386,14 @@ public sealed class RejectVendorEndpoint(IMediator mediator)
     {
         Patch("vendors/{vendorId}/reject");
         Group<AdminApiGroup>();
+        Policies("Perm:vendors.verify");
     }
 
     public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(RejectVendorRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new RejectVendorCommand(
             req.VendorId,
-            req.AdminUserId,
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
             req.Reason), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
@@ -323,13 +407,14 @@ public sealed class SuspendVendorEndpoint(IMediator mediator)
     {
         Patch("vendors/{vendorId}/suspend");
         Group<AdminApiGroup>();
+        Policies("Perm:vendors.manage");
     }
 
     public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(SuspendVendorRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new SuspendVendorCommand(
             req.VendorId,
-            req.AdminUserId,
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
             req.Reason), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
@@ -343,13 +428,14 @@ public sealed class BanVendorEndpoint(IMediator mediator)
     {
         Patch("vendors/{vendorId}/ban");
         Group<AdminApiGroup>();
+        Policies("Perm:vendors.manage");
     }
 
     public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(BanVendorRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new BanVendorCommand(
             req.VendorId,
-            req.AdminUserId,
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
             req.Reason), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
@@ -363,13 +449,14 @@ public sealed class ReactivateVendorEndpoint(IMediator mediator)
     {
         Patch("vendors/{vendorId}/reactivate");
         Group<AdminApiGroup>();
+        Policies("Perm:vendors.manage");
     }
 
     public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(ReactivateVendorRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new ReactivateVendorCommand(
             req.VendorId,
-            req.AdminUserId,
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
             req.Reason), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
@@ -383,6 +470,7 @@ public sealed class GetAdminOrderExpirationsEndpoint(IMediator mediator)
     {
         Get("orders/expirations");
         Group<AdminApiGroup>();
+        Policies("Perm:orders.view");
     }
 
     public override async Task<Results<Ok<List<ExpiringOrderDto>>, ProblemHttpResult>> ExecuteAsync(GetAdminOrderExpirationsRequest req, CancellationToken ct)
@@ -399,6 +487,7 @@ public sealed class GetAdminOrdersEndpoint(IMediator mediator)
     {
         Get("orders");
         Group<AdminApiGroup>();
+        Policies("Perm:orders.view");
     }
 
     public override async Task<Results<Ok<List<AdminOrderDto>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
@@ -422,12 +511,13 @@ public sealed class UpdateAdminOrderStatusEndpoint(IMediator mediator)
     {
         Patch("orders/{orderId}/status");
         Group<AdminApiGroup>();
+        Policies("Perm:orders.manage");
     }
 
     public override async Task<Results<Ok<AdminOrderDto>, ProblemHttpResult>> ExecuteAsync(UpdateAdminOrderStatusRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new UpdateAdminOrderStatusCommand(
-            req.AdminUserId,
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
             req.OrderId,
             req.Status,
             req.AssetTags), ct);
@@ -448,11 +538,12 @@ public sealed class AdminReassignVendorOrderEndpoint(IMediator mediator)
     {
         Post("orders/{orderId}/reassign");
         Group<AdminApiGroup>();
+        Policies("Perm:orders.manage");
     }
 
     public override async Task<Results<Ok<AdminOrderDto>, ProblemHttpResult>> ExecuteAsync(AdminReassignVendorOrderRequest req, CancellationToken ct)
     {
-        var result = await mediator.Send(new AdminReassignVendorOrderCommand(req.AdminUserId, req.OrderId), ct);
+        var result = await mediator.Send(new AdminReassignVendorOrderCommand(HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty, req.OrderId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -469,11 +560,12 @@ public sealed class AdminForceCancelRefundOrderEndpoint(IMediator mediator)
     {
         Post("orders/{orderId}/cancel-refund");
         Group<AdminApiGroup>();
+        Policies("Perm:orders.manage");
     }
 
     public override async Task<Results<Ok<AdminOrderDto>, ProblemHttpResult>> ExecuteAsync(AdminForceCancelRefundOrderRequest req, CancellationToken ct)
     {
-        var result = await mediator.Send(new AdminForceCancelRefundOrderCommand(req.AdminUserId, req.OrderId), ct);
+        var result = await mediator.Send(new AdminForceCancelRefundOrderCommand(HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty, req.OrderId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -490,11 +582,12 @@ public sealed class AdminRestartOrderDispatchEndpoint(IMediator mediator)
     {
         Post("orders/{orderId}/restart-dispatch");
         Group<AdminApiGroup>();
+        Policies("Perm:orders.manage");
     }
 
     public override async Task<Results<Ok<AdminOrderDto>, ProblemHttpResult>> ExecuteAsync(AdminRestartOrderDispatchRequest req, CancellationToken ct)
     {
-        var result = await mediator.Send(new AdminRestartOrderDispatchCommand(req.AdminUserId, req.OrderId), ct);
+        var result = await mediator.Send(new AdminRestartOrderDispatchCommand(HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty, req.OrderId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

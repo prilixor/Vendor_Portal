@@ -42,13 +42,15 @@ import VendorDetails from "@/app/components/admin/VendorDetails";
 import ProductManagement from "@/app/components/admin/ProductManagement";
 import ChemicalManagement from "@/app/components/admin/ChemicalManagement";
 import Admins from "@/app/components/admin/Admins";
+import AdminRoles from "@/app/components/admin/AdminRoles";
+import AdminCustomers, { AdminCustomerDetail } from "@/app/components/admin/AdminCustomers";
 import AuditLogs from "@/app/components/admin/AuditLogs";
-import AdminRegister from "@/app/components/admin/AdminRegister";
 import AdminLogin from "@/app/components/admin/AdminLogin";
 import SupportManagement from "@/app/components/admin/SupportManagement";
 import AdminOrders from "@/app/components/admin/AdminOrders";
 import AdminOrderDetail from "@/app/components/admin/AdminOrderDetail";
 import { AdminNotifications } from "@/app/components/admin/AdminNotifications";
+import ImpersonationConsume from "@/app/components/auth/ImpersonationConsume";
 
 import CustomerBrowse from "@/app/components/customer/CustomerBrowse";
 import CustomerListingDetail from "@/app/components/customer/CustomerListingDetail";
@@ -88,7 +90,8 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin/register" element={<AdminRegister />} />
+            <Route path="/admin/register" element={<Navigate to="/admin/login" replace />} />
+            <Route path="/impersonation/consume" element={<ImpersonationConsume />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/verify-email-sent" element={<VerifyEmailSent />} />
@@ -123,6 +126,9 @@ const App = () => (
               <Route path="products" element={<ProductManagement />} />
               <Route path="chemicals" element={<ChemicalManagement />} />
               <Route path="admins" element={<Admins />} />
+              <Route path="roles" element={<AdminRoles />} />
+              <Route path="customers" element={<AdminCustomers />} />
+              <Route path="customers/:customerId" element={<AdminCustomerDetail />} />
               <Route path="audit-logs" element={<AuditLogs />} />
               <Route path="support" element={<SupportManagement />} />
               <Route path="orders" element={<AdminOrders />} />

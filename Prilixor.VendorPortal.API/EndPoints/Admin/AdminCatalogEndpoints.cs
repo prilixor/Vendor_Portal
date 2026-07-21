@@ -122,7 +122,7 @@ public sealed class GetProductCategoriesEndpoint(IMediator mediator)
     {
         Get("catalog/categories");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
     }
 
     public override async Task<Results<Ok<List<ProductCategoryDto>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
@@ -139,7 +139,7 @@ public sealed class CreateProductCategoryEndpoint(IMediator mediator)
     {
         Post("catalog/categories");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
     }
 
     public override async Task<Results<Ok<ProductCategoryDto>, ProblemHttpResult>> ExecuteAsync(CreateProductCategoryRequest req, CancellationToken ct)
@@ -163,7 +163,7 @@ public sealed class UpdateProductCategoryEndpoint(IMediator mediator)
     {
         Put("catalog/categories/{id}");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
     }
 
     public override async Task<Results<Ok<ProductCategoryDto>, ProblemHttpResult>> ExecuteAsync(UpdateProductCategoryRequest req, CancellationToken ct)
@@ -188,7 +188,7 @@ public sealed class DeleteProductCategoryEndpoint(IMediator mediator)
     {
         Delete("catalog/categories/{id}");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
     }
 
     public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
@@ -217,7 +217,7 @@ public sealed class GetProductsEndpoint(IMediator mediator)
     {
         Get("catalog/products");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
     }
 
     public override async Task<Results<Ok<List<ProductDto>>, ProblemHttpResult>> ExecuteAsync(GetProductsRequest req, CancellationToken ct)
@@ -234,7 +234,7 @@ public sealed class CreateProductEndpoint(IMediator mediator)
     {
         Post("catalog/products");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
     }
 
     public override async Task<Results<Ok<ProductDto>, ProblemHttpResult>> ExecuteAsync(CreateProductRequest req, CancellationToken ct)
@@ -278,7 +278,7 @@ public sealed class UpdateProductEndpoint(IMediator mediator)
     {
         Put("catalog/products/{id}");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
     }
 
     public override async Task<Results<Ok<ProductDto>, ProblemHttpResult>> ExecuteAsync(UpdateProductRequest req, CancellationToken ct)
@@ -324,7 +324,7 @@ public sealed class DeleteProductEndpoint(IMediator mediator)
     {
         Delete("catalog/products/{id}");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
     }
 
     public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
@@ -347,7 +347,7 @@ public sealed class AddProductImageEndpoint(IMediator mediator)
     {
         Post("catalog/products/{productId}/images");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
     }
 
     public override async Task<Results<Ok<ProductImageDto>, ProblemHttpResult>> ExecuteAsync(AddProductImageRequest req, CancellationToken ct)
@@ -370,7 +370,7 @@ public sealed class GetProductImagesEndpoint(IMediator mediator)
     {
         Get("catalog/products/{productId}/images");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
     }
 
     public override async Task<Results<Ok<List<ProductImageDto>>, ProblemHttpResult>> ExecuteAsync(ProductImagesRequest req, CancellationToken ct)
@@ -388,7 +388,7 @@ public sealed class DeleteProductImageEndpoint(IMediator mediator)
     {
         Delete("catalog/products/{productId}/images/{imageId}");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
     }
 
     public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(DeleteProductImageRequest req, CancellationToken ct)
@@ -407,7 +407,7 @@ public sealed class SetPrimaryProductImageEndpoint(IMediator mediator)
     {
         Patch("catalog/products/{productId}/images/{imageId}/primary");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
     }
 
     public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(SetPrimaryProductImageRequest req, CancellationToken ct)
@@ -427,7 +427,7 @@ public sealed class UploadCatalogExcelEndpoint(IMediator mediator)
     {
         Post("catalog/upload-excel");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
         AllowFileUploads();
     }
 
@@ -458,7 +458,7 @@ public sealed class DownloadCatalogExcelEndpoint(IMediator mediator)
     {
         Get("catalog/download-excel");
         Group<AdminApiGroup>();
-        AllowAnonymous();
+        Policies("Perm:catalog.manage");
     }
 
     public override async Task<Results<FileStreamHttpResult, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)

@@ -20,6 +20,9 @@ try
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.ConfigureServices(builder.Configuration, builder.Environment);
+builder.Services.Configure<Prilixor.VendorPortal.Domain.Options.BootstrapSuperAdminOptions>(
+    builder.Configuration.GetSection(Prilixor.VendorPortal.Domain.Options.BootstrapSuperAdminOptions.SectionName));
+builder.Services.AddHostedService<Prilixor.VendorPortal.API.Services.BootstrapSuperAdminHostedService>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpClient();
@@ -54,7 +57,22 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("CustomerOnly", policy =>
         policy.RequireAuthenticatedUser().RequireRole("customer"));
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireAuthenticatedUser().RequireRole("admin"));
+    options.AddPolicy("VendorOnly", policy =>
+        policy.RequireAuthenticatedUser().RequireRole("vendor"));
+
+    foreach (var (code, _, _, _) in Prilixor.VendorPortal.Application.Onboarding.AdminPermissions.Catalog)
+    {
+        var permissionCode = code;
+        options.AddPolicy($"Perm:{permissionCode}", policy =>
+            policy.RequireAuthenticatedUser()
+                .RequireRole("admin")
+                .AddRequirements(new Prilixor.VendorPortal.API.Authorization.PermissionRequirement(permissionCode)));
+    }
 });
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+    Prilixor.VendorPortal.API.Authorization.PermissionAuthorizationHandler>();
 
 builder.Services.AddCors(options =>
 {

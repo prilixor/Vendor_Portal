@@ -2,7 +2,9 @@ using FastEndpoints;
 using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Prilixor.VendorPortal.API.Extensions;
+using Prilixor.VendorPortal.Application.Customers;
 using Prilixor.VendorPortal.Application.Onboarding;
+using System.Security.Claims;
 
 namespace Prilixor.VendorPortal.API.EndPoints.Vendors;
 
@@ -31,6 +33,9 @@ public sealed class CreateVendorBankAccountEndpoint(IMediator mediator)
 
     public override async Task<Results<Ok<VendorBankAccountDto>, ProblemHttpResult>> ExecuteAsync(CreateVendorBankAccountRequest req, CancellationToken ct)
     {
+        if (User.HasClaim("impersonation", "true"))
+            return TypedResults.Problem(title: "auth.impersonation_blocked", detail: "Bank account changes are not allowed during impersonation.", statusCode: 403);
+
         var command = new UpsertVendorBankAccountCommand(
             req.VendorId,
             null,
@@ -56,6 +61,9 @@ public sealed class UpdateVendorBankAccountEndpoint(IMediator mediator)
 
     public override async Task<Results<Ok<VendorBankAccountDto>, ProblemHttpResult>> ExecuteAsync(UpdateVendorBankAccountRequest req, CancellationToken ct)
     {
+        if (User.HasClaim("impersonation", "true"))
+            return TypedResults.Problem(title: "auth.impersonation_blocked", detail: "Bank account changes are not allowed during impersonation.", statusCode: 403);
+
         var command = new UpsertVendorBankAccountCommand(
             req.VendorId,
             req.BankAccountId,

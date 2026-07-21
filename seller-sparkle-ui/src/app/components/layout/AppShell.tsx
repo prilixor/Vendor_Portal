@@ -6,6 +6,7 @@ import { TopBar } from "./TopBar";
 import { CustomerStoreHeader } from "./CustomerStoreHeader";
 import { vendorNav, customerNav, guestCustomerNav } from "@/app/helpers/navigation";
 import { getAdminNav } from "@/app/helpers/adminNav";
+import { getAdminPortalHref } from "@/app/helpers/portalHost";
 import { adminApi } from "@/app/services/adminApi";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
@@ -135,7 +136,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
   const sections =
     variant === "admin"
-      ? getAdminNav(unreadAdminCount)
+      ? getAdminNav(unreadAdminCount, user?.permissions)
       : variant === "customer"
         ? user?.role === "customer"
           ? customerNav
@@ -154,6 +155,27 @@ export const AppShell = ({ variant }: AppShellProps) => {
         {isCustomerShell ? (
           <div className="flex min-h-screen w-full flex-col bg-gradient-to-b from-muted/40 via-background to-background">
             <CustomerStoreHeader />
+            {user?.role === "customer" && user.impersonation && (
+              <div className="border-b border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-2">
+                  <span>
+                    Impersonating <strong>{user.name}</strong>. Password changes are blocked.
+                  </span>
+                  <button
+                    type="button"
+                    className="font-semibold text-primary underline"
+                    onClick={() => {
+                      localStorage.removeItem("vendor_portal_user");
+                      localStorage.removeItem("vendor_portal_token");
+                      localStorage.removeItem("impersonation_meta");
+                      window.location.href = getAdminPortalHref("/admin/customers");
+                    }}
+                  >
+                    Exit to Admin
+                  </button>
+                </div>
+              </div>
+            )}
             <main className="flex-1 px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
               <div className="mx-auto w-full max-w-[1400px]">
                 <Outlet />
@@ -182,6 +204,25 @@ export const AppShell = ({ variant }: AppShellProps) => {
               <TopBar variant={variant} onMenuClick={() => setMobileSidebarOpen(true)} />
               <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
                 <div className="mx-auto max-w-7xl">
+                  {variant === "vendor" && user?.impersonation && (
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                      <span>
+                        Impersonating <strong>{user.name}</strong>. Sensitive actions (password/bank) are blocked.
+                      </span>
+                      <button
+                        type="button"
+                        className="font-semibold text-primary underline"
+                        onClick={() => {
+                          localStorage.removeItem("vendor_portal_user");
+                          localStorage.removeItem("vendor_portal_token");
+                          localStorage.removeItem("impersonation_meta");
+                          window.location.href = getAdminPortalHref("/admin/vendors");
+                        }}
+                      >
+                        Exit to Admin
+                      </button>
+                    </div>
+                  )}
                   {variant === "vendor" && statusCheckDone && isPending && (
                     <PendingApprovalBanner className="mb-6" />
                   )}

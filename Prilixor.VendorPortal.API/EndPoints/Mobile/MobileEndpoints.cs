@@ -54,6 +54,8 @@ public sealed class GetMobileAdminOrdersEndpoint(IMediator mediator)
     {
         Get("admin/orders");
         Group<MobileApiGroup>();
+        Policies("AdminOnly");
+        Policies("Perm:orders.view");
     }
 
     public override async Task<Results<Ok<PagedResult<AdminOrderDto>>, ProblemHttpResult>> ExecuteAsync(GetMobileAdminOrdersRequest req, CancellationToken ct)

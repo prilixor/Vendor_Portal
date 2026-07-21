@@ -92,6 +92,9 @@ export interface AdminUserDto {
   role: string;
   isActive: boolean;
   lastLoginAt?: string;
+  roleId?: string;
+  isSystemUser?: boolean;
+  mustChangePassword?: boolean;
 }
 
 export interface RegisterAdminUserRequest {
@@ -100,6 +103,81 @@ export interface RegisterAdminUserRequest {
   fullName: string;
   role: string;
   isActive?: boolean;
+  roleId?: string;
+}
+
+export interface AdminRoleDto {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  isSystem: boolean;
+  isActive: boolean;
+  permissionCodes: string[];
+}
+
+export interface AdminPermissionDto {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  category: string;
+}
+
+export interface AdminCustomerListItemDto {
+  id: string;
+  email: string;
+  fullName: string;
+  phone?: string;
+  isEmailVerified: boolean;
+  lastLoginAt?: string;
+  createdAt: string;
+  orderCount: number;
+}
+
+export interface AdminCustomerDetailDto {
+  id: string;
+  email: string;
+  fullName: string;
+  phone?: string;
+  isEmailVerified: boolean;
+  lastLoginAt?: string;
+  createdAt: string;
+  addresses: {
+    id: string;
+    label?: string;
+    line1: string;
+    city: string;
+    state: string;
+    postal: string;
+    isDefault: boolean;
+  }[];
+  recentOrders: {
+    id: string;
+    orderNumber: string;
+    status: string;
+    totalAmount: number;
+    createdAt: string;
+    placedByAdminId?: string;
+  }[];
+}
+
+export interface VendorImpersonationStartDto {
+  exchangeCode: string;
+  vendorId: string;
+  vendorName: string;
+  expiresAt: string;
+  targetType?: string;
+  targetId?: string;
+  targetName?: string;
+}
+
+export interface PortalImpersonationStartDto {
+  exchangeCode: string;
+  targetType: string;
+  targetId: string;
+  targetName: string;
+  expiresAt: string;
 }
 
 export interface AdminAuditLogDto {
@@ -487,6 +565,25 @@ export const adminApi = {
     return apiClient.post<AdminUserDto>('/admin/users', data);
   },
 
+  async updateAdminUser(adminId: string, data: {
+    fullName?: string;
+    email?: string;
+    role?: string;
+    roleId?: string;
+    isActive?: boolean;
+  }): Promise<AdminUserDto> {
+    return apiClient.patch<AdminUserDto>(`/admin/users/${adminId}`, data);
+  },
+
+  async updateOwnAdminProfile(data: {
+    fullName?: string;
+    email?: string;
+    currentPassword?: string;
+    newPassword?: string;
+  }): Promise<AdminUserDto> {
+    return apiClient.patch<AdminUserDto>('/admin/me', data);
+  },
+
   // Audit Logs
   async getAuditLogs(adminUserId?: string): Promise<AdminAuditLogDto[]> {
     const url = adminUserId ? `/admin/audit-logs?adminUserId=${adminUserId}` : '/admin/audit-logs';
@@ -666,5 +763,46 @@ export const adminApi = {
 
   async cancelAdminBuyout(orderId: string, buyoutId: string, adminUserId: string): Promise<void> {
     return apiClient.post(`/admin/orders/${orderId}/buyouts/${buyoutId}/cancel`, { adminUserId });
+  },
+
+  async getAdminRoles(): Promise<AdminRoleDto[]> {
+    return apiClient.get<AdminRoleDto[]>("/admin/roles");
+  },
+
+  async getAdminPermissions(): Promise<AdminPermissionDto[]> {
+    return apiClient.get<AdminPermissionDto[]>("/admin/permissions");
+  },
+
+  async createAdminRole(data: { code: string; name: string; description?: string; permissionCodes: string[] }): Promise<AdminRoleDto> {
+    return apiClient.post<AdminRoleDto>("/admin/roles", data);
+  },
+
+  async updateAdminRole(roleId: string, data: { name: string; description?: string; isActive: boolean; permissionCodes: string[] }): Promise<AdminRoleDto> {
+    return apiClient.put<AdminRoleDto>(`/admin/roles/${roleId}`, data);
+  },
+
+  async getAdminCustomers(search?: string): Promise<AdminCustomerListItemDto[]> {
+    const q = search ? `?search=${encodeURIComponent(search)}` : "";
+    return apiClient.get<AdminCustomerListItemDto[]>(`/admin/customers${q}`);
+  },
+
+  async getAdminCustomer(customerId: string): Promise<AdminCustomerDetailDto> {
+    return apiClient.get<AdminCustomerDetailDto>(`/admin/customers/${customerId}`);
+  },
+
+  async placeOrderForCustomer(customerId: string, data: {
+    customerAddressId?: string;
+    deliveryOption: string;
+    lines: { listingId: string; quantity: number; rentalDays: number; orderType: string; productVariantId?: string }[];
+  }): Promise<unknown> {
+    return apiClient.post(`/admin/customers/${customerId}/orders`, data);
+  },
+
+  async impersonateVendor(vendorId: string): Promise<VendorImpersonationStartDto> {
+    return apiClient.post<VendorImpersonationStartDto>(`/admin/vendors/${vendorId}/impersonate`, { vendorId });
+  },
+
+  async impersonateCustomer(customerId: string): Promise<PortalImpersonationStartDto> {
+    return apiClient.post<PortalImpersonationStartDto>(`/admin/customers/${customerId}/impersonate`, { customerId });
   },
 };

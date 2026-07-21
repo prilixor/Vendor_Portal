@@ -1,5 +1,6 @@
 using Prilixor.VendorPortal.Domain.Customers;
 using Prilixor.VendorPortal.Domain.Vendors;
+using Prilixor.VendorPortal.Application.Customers;
 
 namespace Prilixor.VendorPortal.Application.Abstractions;
 
@@ -86,6 +87,9 @@ public interface ICustomerRepository
     Task<List<Guid>> GetCustomersByFavoriteListingAsync(Guid vendorProductListingId, CancellationToken cancellationToken);
     Task<Dictionary<Guid, int>> GetFavoriteCountsByListingsAsync(List<Guid> listingIds, CancellationToken cancellationToken);
     Task<Dictionary<Guid, int>> GetFavoriteCountsByProductsAsync(CancellationToken cancellationToken);
+
+    Task<List<AdminCustomerListItemDto>> SearchCustomersForAdminAsync(string? search, int page, int pageSize, CancellationToken cancellationToken);
+    Task<AdminCustomerDetailDto?> GetCustomerDetailForAdminAsync(Guid customerId, CancellationToken cancellationToken);
 
     // --- Medical Directory ---
     Task<Prilixor.VendorPortal.Domain.Common.Hospital?> GetHospitalByIdAsync(Guid hospitalId, CancellationToken cancellationToken);

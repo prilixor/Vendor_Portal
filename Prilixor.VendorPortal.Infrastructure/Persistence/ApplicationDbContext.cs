@@ -39,6 +39,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<VendorNotification> VendorNotifications => Set<VendorNotification>();
     public DbSet<VendorPushSubscription> VendorPushSubscriptions => Set<VendorPushSubscription>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
+    public DbSet<AdminRole> AdminRoles => Set<AdminRole>();
+    public DbSet<AdminPermission> AdminPermissions => Set<AdminPermission>();
+    public DbSet<AdminRolePermission> AdminRolePermissions => Set<AdminRolePermission>();
+    public DbSet<AdminImpersonationExchange> AdminImpersonationExchanges => Set<AdminImpersonationExchange>();
     public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
@@ -602,6 +606,9 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.PasswordHash).HasColumnName("password_hash");
             entity.Property(x => x.FullName).HasColumnName("full_name");
             entity.Property(x => x.Role).HasColumnName("role");
+            entity.Property(x => x.RoleId).HasColumnName("role_id");
+            entity.Property(x => x.IsSystemUser).HasColumnName("is_system_user");
+            entity.Property(x => x.MustChangePassword).HasColumnName("must_change_password");
             entity.Property(x => x.IsActive).HasColumnName("is_active");
             entity.Property(x => x.LastLoginAt).HasColumnName("last_login_at");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
@@ -611,9 +618,80 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
             entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.HasOne(x => x.AdminRole)
+                .WithMany(x => x.Users)
+                .HasForeignKey(x => x.RoleId)
+                .IsRequired(false);
             entity.HasMany(x => x.AuditLogs)
                 .WithOne(x => x.AdminUser)
                 .HasForeignKey(x => x.AdminId);
+        });
+
+        modelBuilder.Entity<AdminRole>(entity =>
+        {
+            entity.ToTable("admin_roles");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.Code).HasColumnName("code");
+            entity.Property(x => x.Name).HasColumnName("name");
+            entity.Property(x => x.Description).HasColumnName("description");
+            entity.Property(x => x.IsSystem).HasColumnName("is_system");
+            entity.Property(x => x.IsActive).HasColumnName("is_active");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+        });
+
+        modelBuilder.Entity<AdminPermission>(entity =>
+        {
+            entity.ToTable("admin_permissions");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.Code).HasColumnName("code");
+            entity.Property(x => x.Name).HasColumnName("name");
+            entity.Property(x => x.Description).HasColumnName("description");
+            entity.Property(x => x.Category).HasColumnName("category");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+        });
+
+        modelBuilder.Entity<AdminRolePermission>(entity =>
+        {
+            entity.ToTable("admin_role_permissions");
+            entity.HasKey(x => new { x.RoleId, x.PermissionId });
+            entity.Property(x => x.RoleId).HasColumnName("role_id");
+            entity.Property(x => x.PermissionId).HasColumnName("permission_id");
+            entity.HasOne(x => x.Role)
+                .WithMany(x => x.RolePermissions)
+                .HasForeignKey(x => x.RoleId);
+            entity.HasOne(x => x.Permission)
+                .WithMany(x => x.RolePermissions)
+                .HasForeignKey(x => x.PermissionId);
+        });
+
+        modelBuilder.Entity<AdminImpersonationExchange>(entity =>
+        {
+            entity.ToTable("admin_impersonation_exchanges");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CodeHash).HasColumnName("code_hash");
+            entity.Property(x => x.AdminUserId).HasColumnName("admin_user_id");
+            entity.Property(x => x.TargetType).HasColumnName("target_type");
+            entity.Property(x => x.VendorId).HasColumnName("vendor_id");
+            entity.Property(x => x.CustomerId).HasColumnName("customer_id");
+            entity.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(x => x.ConsumedAt).HasColumnName("consumed_at");
+            entity.Property(x => x.IsConsumed).HasColumnName("is_consumed");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
         });
 
         modelBuilder.Entity<AdminAuditLog>(entity =>

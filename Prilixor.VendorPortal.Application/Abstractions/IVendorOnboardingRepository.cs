@@ -112,7 +112,24 @@ public interface IVendorOnboardingRepository
     Task<AdminUser?> GetAdminUserByIdAsync(Guid adminUserId, CancellationToken cancellationToken);
     Task<AdminUser?> GetAdminUserByEmailAsync(string email, CancellationToken cancellationToken);
     Task AddAdminUserAsync(AdminUser adminUser, CancellationToken cancellationToken);
+    Task UpdateAdminUserAsync(AdminUser adminUser, CancellationToken cancellationToken);
     Task<List<AdminUser>> GetAdminUsersAsync(CancellationToken cancellationToken);
+    Task<int> CountActiveSuperAdminsAsync(CancellationToken cancellationToken);
+    Task<List<string>> GetAdminPermissionCodesAsync(Guid adminUserId, CancellationToken cancellationToken);
+    Task<string?> GetAdminRoleCodeAsync(Guid adminUserId, CancellationToken cancellationToken);
+
+    Task<List<AdminRole>> GetAdminRolesAsync(CancellationToken cancellationToken);
+    Task<AdminRole?> GetAdminRoleByIdAsync(Guid roleId, CancellationToken cancellationToken);
+    Task<AdminRole?> GetAdminRoleByCodeAsync(string code, CancellationToken cancellationToken);
+    Task AddAdminRoleAsync(AdminRole role, CancellationToken cancellationToken);
+    Task UpdateAdminRoleAsync(AdminRole role, CancellationToken cancellationToken);
+    Task<List<AdminPermission>> GetAdminPermissionsAsync(CancellationToken cancellationToken);
+    Task SetAdminRolePermissionsAsync(Guid roleId, IReadOnlyList<Guid> permissionIds, CancellationToken cancellationToken);
+    Task<List<string>> GetPermissionCodesForRoleAsync(Guid roleId, CancellationToken cancellationToken);
+
+    Task AddImpersonationExchangeAsync(AdminImpersonationExchange exchange, CancellationToken cancellationToken);
+    Task<AdminImpersonationExchange?> GetImpersonationExchangeByCodeHashAsync(string codeHash, CancellationToken cancellationToken);
+    Task UpdateImpersonationExchangeAsync(AdminImpersonationExchange exchange, CancellationToken cancellationToken);
 
     Task AddAdminAuditLogAsync(AdminAuditLog auditLog, CancellationToken cancellationToken);
     Task<List<AdminAuditLog>> GetAdminAuditLogsAsync(Guid? adminId, CancellationToken cancellationToken);

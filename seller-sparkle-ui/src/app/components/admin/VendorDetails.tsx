@@ -152,10 +152,14 @@ import {
   Ban,
   ShieldAlert,
   RotateCcw,
+  LogIn,
 } from "lucide-react";
 
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { getVendorPortalHref } from "@/app/helpers/portalHost";
+import { useAuth } from "@/app/guards/AuthContext";
+import { ADMIN_PERMISSIONS } from "@/app/helpers/adminNav";
 
 
 const dayLabel: Record<number, string> = {
@@ -278,11 +282,15 @@ const VendorDetails = () => {
 
   const navigate = useNavigate();
 
+  const { hasPermission } = useAuth();
+
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(false);
 
   const [approving, setApproving] = useState(false);
+
+  const [impersonating, setImpersonating] = useState(false);
 
   const [rejecting, setRejecting] = useState(false);
 
@@ -891,6 +899,28 @@ const VendorDetails = () => {
 
                 {approving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />} Approve
 
+              </Button>
+            )}
+            {hasPermission(ADMIN_PERMISSIONS.vendorsImpersonate) && vendorId && (
+              <Button
+                variant="secondary"
+                disabled={impersonating}
+                onClick={async () => {
+                  setImpersonating(true);
+                  try {
+                    const result = await adminApi.impersonateVendor(vendorId);
+                    const href = getVendorPortalHref(`/impersonation/consume?code=${encodeURIComponent(result.exchangeCode)}`);
+                    window.open(href, "_blank", "noopener,noreferrer");
+                    toast.success(`Opening ${result.vendorName} in Vendor Portal`);
+                  } catch (e) {
+                    toast.error(getUserFriendlyMessage(e));
+                  } finally {
+                    setImpersonating(false);
+                  }
+                }}
+              >
+                {impersonating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
+                Open as Vendor
               </Button>
             )}
             <DropdownMenu>

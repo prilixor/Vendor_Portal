@@ -1,15 +1,15 @@
 using System.Security.Claims;
 using FastEndpoints;
 using MediatR;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Prilixor.VendorPortal.Application.Customers;
-
-namespace Prilixor.VendorPortal.API.EndPoints.Admin;
 using Prilixor.VendorPortal.API.EndPoints.Vendors;
 using Prilixor.VendorPortal.API.Extensions;
+using Prilixor.VendorPortal.Application.Customers;
+using Prilixor.VendorPortal.Application.Onboarding;
 
-public sealed class AdminApproveExtensionRequest : Prilixor.VendorPortal.API.EndPoints.Vendors.AdminUserIdRequest
+namespace Prilixor.VendorPortal.API.EndPoints.Admin;
+
+public sealed class AdminApproveExtensionRequest : AdminUserIdRequest
 {
     public string OrderId { get; set; } = string.Empty;
     public string ExtensionId { get; set; } = string.Empty;
@@ -27,13 +27,14 @@ public sealed class AdminApproveExtensionEndpoint(IMediator mediator)
     {
         Post("orders/{OrderId}/extensions/{ExtensionId}/approve");
         Group<Prilixor.VendorPortal.API.EndPoints.Vendors.AdminApiGroup>();
+        Policies("Perm:orders.manage");
         DontAutoTag();
         Options(x => x.WithTags("Admin"));
     }
 
     public override async Task<Results<Ok, ProblemHttpResult>> ExecuteAsync(AdminApproveExtensionRequest req, CancellationToken ct)
     {
-        if (!Guid.TryParse(req.AdminUserId, out var adminId))
+        if (!Guid.TryParse(HttpContext.ResolveAdminUserId(req.AdminUserId), out var adminId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid admin ID.", statusCode: 401);
 
         if (!Guid.TryParse(req.OrderId, out var orderId) || !Guid.TryParse(req.ExtensionId, out var extensionId))
@@ -62,13 +63,14 @@ public sealed class AdminCancelExtensionEndpoint(IMediator mediator)
     {
         Post("orders/{OrderId}/extensions/{ExtensionId}/cancel");
         Group<Prilixor.VendorPortal.API.EndPoints.Vendors.AdminApiGroup>();
+        Policies("Perm:orders.manage");
         DontAutoTag();
         Options(x => x.WithTags("Admin"));
     }
 
     public override async Task<Results<Ok, ProblemHttpResult>> ExecuteAsync(AdminCancelExtensionRequest req, CancellationToken ct)
     {
-        if (!Guid.TryParse(req.AdminUserId, out var adminId))
+        if (!Guid.TryParse(HttpContext.ResolveAdminUserId(req.AdminUserId), out var adminId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid admin ID.", statusCode: 401);
 
         if (!Guid.TryParse(req.OrderId, out var orderId) || !Guid.TryParse(req.ExtensionId, out var extensionId))
@@ -97,13 +99,14 @@ public sealed class AdminApproveBuyoutEndpoint(IMediator mediator)
     {
         Post("orders/{OrderId}/buyouts/{BuyoutId}/approve");
         Group<Prilixor.VendorPortal.API.EndPoints.Vendors.AdminApiGroup>();
+        Policies("Perm:orders.manage");
         DontAutoTag();
         Options(x => x.WithTags("Admin"));
     }
 
     public override async Task<Results<Ok, ProblemHttpResult>> ExecuteAsync(AdminApproveBuyoutRequest req, CancellationToken ct)
     {
-        if (!Guid.TryParse(req.AdminUserId, out var adminId))
+        if (!Guid.TryParse(HttpContext.ResolveAdminUserId(req.AdminUserId), out var adminId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid admin ID.", statusCode: 401);
 
         if (!Guid.TryParse(req.OrderId, out var orderId) || !Guid.TryParse(req.BuyoutId, out var buyoutId))
@@ -132,13 +135,14 @@ public sealed class AdminCancelBuyoutEndpoint(IMediator mediator)
     {
         Post("orders/{OrderId}/buyouts/{BuyoutId}/cancel");
         Group<Prilixor.VendorPortal.API.EndPoints.Vendors.AdminApiGroup>();
+        Policies("Perm:orders.manage");
         DontAutoTag();
         Options(x => x.WithTags("Admin"));
     }
 
     public override async Task<Results<Ok, ProblemHttpResult>> ExecuteAsync(AdminCancelBuyoutRequest req, CancellationToken ct)
     {
-        if (!Guid.TryParse(req.AdminUserId, out var adminId))
+        if (!Guid.TryParse(HttpContext.ResolveAdminUserId(req.AdminUserId), out var adminId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid admin ID.", statusCode: 401);
 
         if (!Guid.TryParse(req.OrderId, out var orderId) || !Guid.TryParse(req.BuyoutId, out var buyoutId))
@@ -156,6 +160,7 @@ public sealed class GetAdminOrderContinuationsEndpoint(IMediator mediator)
     {
         Get("orders/{OrderId}/continuations");
         Group<Prilixor.VendorPortal.API.EndPoints.Vendors.AdminApiGroup>();
+        Policies("Perm:orders.manage");
         DontAutoTag();
         Options(x => x.WithTags("Admin Orders"));
     }
@@ -178,6 +183,7 @@ public sealed class GetAdminAllPendingContinuationsEndpoint(IMediator mediator)
     {
         Get("orders/continuations/pending");
         Group<Prilixor.VendorPortal.API.EndPoints.Vendors.AdminApiGroup>();
+        Policies("Perm:orders.manage");
         DontAutoTag();
         Options(x => x.WithTags("Admin Orders"));
     }

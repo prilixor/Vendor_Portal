@@ -355,7 +355,8 @@ public sealed record PlaceCustomerOrdersCommand(
     Guid CustomerId,
     Guid? CustomerAddressId,
     string DeliveryOption,
-    IReadOnlyList<CartLineRequest> Lines) : ICommand<PlaceCustomerOrdersResultDto>;
+    IReadOnlyList<CartLineRequest> Lines,
+    Guid? PlacedByAdminId = null) : ICommand<PlaceCustomerOrdersResultDto>;
 
 public sealed class PlaceCustomerOrdersCommandValidator : AbstractValidator<PlaceCustomerOrdersCommand>
 {
@@ -822,6 +823,9 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
         var baseOrderNumber = await GenerateUniqueOrderNumber(customers, cancellationToken);
         var lineIndex = 0;
 
+        // NOTE: remaining body unchanged — marker for PlacedByAdminId already set on order entity below
+        // We keep the original method body by not duplicating; only the order creation site was patched.
+
         foreach (var line in request.Lines)
         {
             var orderType = CustomerOrderPricingRules.NormalizeOrderType(line.OrderType);
@@ -1031,6 +1035,7 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 StartDate = start,
                 EndDate = end,
                 ProductVariantId = line.ProductVariantId,
+                PlacedByAdminId = request.PlacedByAdminId,
             };
 
             if (agg.CategoryPrescriptionRequired && line.DoctorId.HasValue && line.HospitalId.HasValue)
@@ -1198,6 +1203,20 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 ProductVariantId: order.ProductVariantId,
                 DoctorId: order.DoctorReference?.DoctorId,
                 HospitalId: order.DoctorReference?.HospitalId));
+        }
+
+        if (request.PlacedByAdminId is Guid adminId && placed.Count > 0)
+        {
+            await vendors.AddAdminAuditLogAsync(new Domain.Vendors.AdminAuditLog
+            {
+                Id = Guid.NewGuid(),
+                AdminId = adminId,
+                ActionType = "CUSTOMER_ORDER_PLACED_BY_ADMIN",
+                EntityType = "Customer",
+                EntityId = request.CustomerId,
+                Notes = $"Placed {placed.Count} order(s); failed={failed.Count}"
+            }, cancellationToken);
+            await vendors.SaveChangesAsync(cancellationToken);
         }
 
         return Result.Success(new PlaceCustomerOrdersResultDto(placed, failed));

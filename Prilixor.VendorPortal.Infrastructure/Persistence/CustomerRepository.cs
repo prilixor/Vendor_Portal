@@ -1,12 +1,9 @@
-using Microsoft.EntityFrameworkCore;
-
 using Prilixor.VendorPortal.Application.Abstractions;
-
+using Prilixor.VendorPortal.Application.Customers;
 using Prilixor.VendorPortal.Domain.Customers;
-
 using Prilixor.VendorPortal.Domain.Vendors;
-
 using Prilixor.Shared.Abstractions.DI;
+using Microsoft.EntityFrameworkCore;
 
 
 
@@ -1575,6 +1572,76 @@ public sealed class CustomerRepository(
         }
 
         return result;
+    }
+
+    public async Task<List<AdminCustomerListItemDto>> SearchCustomersForAdminAsync(string? search, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 200);
+        var q = customerDb.Customers.AsNoTracking().Where(c => !c.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLowerInvariant();
+            q = q.Where(c => c.Email.Contains(s) || c.FullName.ToLower().Contains(s) || (c.Phone != null && c.Phone.Contains(s)));
+        }
+
+        var customers = await q
+            .OrderByDescending(c => c.CreatedOnUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        var ids = customers.Select(c => c.Id).ToList();
+        var orderCounts = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Where(o => ids.Contains(o.CustomerId) && !o.IsDeleted)
+            .GroupBy(o => o.CustomerId)
+            .Select(g => new { CustomerId = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+        var countMap = orderCounts.ToDictionary(x => x.CustomerId, x => x.Count);
+
+        return customers.Select(c => new AdminCustomerListItemDto(
+            c.Id.ToString(),
+            c.Email,
+            c.FullName,
+            c.Phone,
+            c.IsEmailVerified,
+            c.LastLoginAt,
+            c.CreatedOnUtc,
+            countMap.GetValueOrDefault(c.Id))).ToList();
+    }
+
+    public async Task<AdminCustomerDetailDto?> GetCustomerDetailForAdminAsync(Guid customerId, CancellationToken cancellationToken)
+    {
+        var c = await customerDb.Customers.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == customerId && !x.IsDeleted, cancellationToken);
+        if (c is null) return null;
+
+        var addresses = await customerDb.CustomerAddresses.AsNoTracking()
+            .Where(a => a.CustomerId == customerId && !a.IsDeleted)
+            .OrderByDescending(a => a.IsDefault)
+            .ThenBy(a => a.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+
+        var orders = await customerDb.CustomerRentalOrders.AsNoTracking()
+            .Where(o => o.CustomerId == customerId && !o.IsDeleted)
+            .OrderByDescending(o => o.CreatedOnUtc)
+            .Take(20)
+            .ToListAsync(cancellationToken);
+
+        return new AdminCustomerDetailDto(
+            c.Id.ToString(),
+            c.Email,
+            c.FullName,
+            c.Phone,
+            c.IsEmailVerified,
+            c.LastLoginAt,
+            c.CreatedOnUtc,
+            addresses.Select(a => new AdminCustomerAddressDto(
+                a.Id.ToString(), a.Label, a.Line1, a.City, a.State, a.Postal, a.IsDefault)).ToList(),
+            orders.Select(o => new AdminCustomerOrderSummaryDto(
+                o.Id.ToString(), o.OrderNumber, o.Status, o.TotalAmount, o.CreatedOnUtc,
+                o.PlacedByAdminId?.ToString())).ToList());
     }
 
     public Task<bool> HasActiveOrdersForListingAsync(Guid listingId, CancellationToken cancellationToken)

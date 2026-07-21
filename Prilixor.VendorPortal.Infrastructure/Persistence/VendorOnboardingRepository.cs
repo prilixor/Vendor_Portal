@@ -1,4 +1,6 @@
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Onboarding;
+using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.VendorPortal.Domain.Auth;
 using Prilixor.VendorPortal.Domain.Support;
@@ -869,6 +871,7 @@ public sealed class VendorOnboardingRepository(
     public Task<AdminUser?> GetAdminUserByIdAsync(Guid adminUserId, CancellationToken cancellationToken)
     {
         return adminDbContext.AdminUsers
+            .Include(x => x.AdminRole)
             .FirstOrDefaultAsync(x => x.Id == adminUserId && !x.IsDeleted, cancellationToken);
     }
 
@@ -876,6 +879,7 @@ public sealed class VendorOnboardingRepository(
     {
         var normalized = email.Trim().ToLowerInvariant();
         return adminDbContext.AdminUsers
+            .Include(x => x.AdminRole)
             .FirstOrDefaultAsync(x => x.Email == normalized && !x.IsDeleted, cancellationToken);
     }
 
@@ -884,12 +888,124 @@ public sealed class VendorOnboardingRepository(
         await adminDbContext.AdminUsers.AddAsync(adminUser, cancellationToken);
     }
 
+    public Task UpdateAdminUserAsync(AdminUser adminUser, CancellationToken cancellationToken)
+    {
+        adminDbContext.AdminUsers.Update(adminUser);
+        return Task.CompletedTask;
+    }
+
     public Task<List<AdminUser>> GetAdminUsersAsync(CancellationToken cancellationToken)
     {
         return adminDbContext.AdminUsers
+            .Include(x => x.AdminRole)
             .Where(x => !x.IsDeleted)
             .OrderBy(x => x.FullName)
             .ToListAsync(cancellationToken);
+    }
+
+    public Task<int> CountActiveSuperAdminsAsync(CancellationToken cancellationToken)
+    {
+        return adminDbContext.AdminUsers
+            .CountAsync(x => !x.IsDeleted
+                && x.IsActive
+                && x.Role == SuperAdminRules.RoleCode, cancellationToken);
+    }
+
+    public async Task<List<string>> GetAdminPermissionCodesAsync(Guid adminUserId, CancellationToken cancellationToken)
+    {
+        var admin = await adminDbContext.AdminUsers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == adminUserId && !x.IsDeleted, cancellationToken);
+        if (admin is null) return [];
+
+        if (admin.RoleId is Guid roleId)
+        {
+            return await GetPermissionCodesForRoleAsync(roleId, cancellationToken);
+        }
+
+        // Legacy fallback: map string role via seeded system matrix
+        if (AdminPermissions.SystemRolePermissions.TryGetValue(admin.Role, out var codes))
+            return codes.ToList();
+        return [];
+    }
+
+    public async Task<string?> GetAdminRoleCodeAsync(Guid adminUserId, CancellationToken cancellationToken)
+    {
+        var admin = await adminDbContext.AdminUsers
+            .AsNoTracking()
+            .Include(x => x.AdminRole)
+            .FirstOrDefaultAsync(x => x.Id == adminUserId && !x.IsDeleted, cancellationToken);
+        if (admin is null) return null;
+        return admin.AdminRole?.Code ?? admin.Role;
+    }
+
+    public Task<List<AdminRole>> GetAdminRolesAsync(CancellationToken cancellationToken) =>
+        adminDbContext.AdminRoles
+            .Where(x => !x.IsDeleted)
+            .OrderBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+
+    public Task<AdminRole?> GetAdminRoleByIdAsync(Guid roleId, CancellationToken cancellationToken) =>
+        adminDbContext.AdminRoles
+            .Include(x => x.RolePermissions)
+            .FirstOrDefaultAsync(x => x.Id == roleId && !x.IsDeleted, cancellationToken);
+
+    public Task<AdminRole?> GetAdminRoleByCodeAsync(string code, CancellationToken cancellationToken)
+    {
+        var normalized = code.Trim().ToLowerInvariant();
+        return adminDbContext.AdminRoles
+            .FirstOrDefaultAsync(x => x.Code == normalized && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task AddAdminRoleAsync(AdminRole role, CancellationToken cancellationToken) =>
+        await adminDbContext.AdminRoles.AddAsync(role, cancellationToken);
+
+    public Task UpdateAdminRoleAsync(AdminRole role, CancellationToken cancellationToken)
+    {
+        adminDbContext.AdminRoles.Update(role);
+        return Task.CompletedTask;
+    }
+
+    public Task<List<AdminPermission>> GetAdminPermissionsAsync(CancellationToken cancellationToken) =>
+        adminDbContext.AdminPermissions
+            .OrderBy(x => x.Category)
+            .ThenBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+
+    public async Task SetAdminRolePermissionsAsync(Guid roleId, IReadOnlyList<Guid> permissionIds, CancellationToken cancellationToken)
+    {
+        var existing = await adminDbContext.AdminRolePermissions
+            .Where(x => x.RoleId == roleId)
+            .ToListAsync(cancellationToken);
+        adminDbContext.AdminRolePermissions.RemoveRange(existing);
+        foreach (var pid in permissionIds.Distinct())
+        {
+            await adminDbContext.AdminRolePermissions.AddAsync(new AdminRolePermission
+            {
+                RoleId = roleId,
+                PermissionId = pid
+            }, cancellationToken);
+        }
+    }
+
+    public Task<List<string>> GetPermissionCodesForRoleAsync(Guid roleId, CancellationToken cancellationToken) =>
+        adminDbContext.AdminRolePermissions
+            .AsNoTracking()
+            .Where(x => x.RoleId == roleId)
+            .Join(adminDbContext.AdminPermissions, rp => rp.PermissionId, p => p.Id, (_, p) => p.Code)
+            .ToListAsync(cancellationToken);
+
+    public async Task AddImpersonationExchangeAsync(AdminImpersonationExchange exchange, CancellationToken cancellationToken) =>
+        await adminDbContext.AdminImpersonationExchanges.AddAsync(exchange, cancellationToken);
+
+    public Task<AdminImpersonationExchange?> GetImpersonationExchangeByCodeHashAsync(string codeHash, CancellationToken cancellationToken) =>
+        adminDbContext.AdminImpersonationExchanges
+            .FirstOrDefaultAsync(x => x.CodeHash == codeHash, cancellationToken);
+
+    public Task UpdateImpersonationExchangeAsync(AdminImpersonationExchange exchange, CancellationToken cancellationToken)
+    {
+        adminDbContext.AdminImpersonationExchanges.Update(exchange);
+        return Task.CompletedTask;
     }
 
     public async Task AddAdminAuditLogAsync(AdminAuditLog auditLog, CancellationToken cancellationToken)

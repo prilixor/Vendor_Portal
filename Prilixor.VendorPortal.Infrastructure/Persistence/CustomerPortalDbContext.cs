@@ -121,6 +121,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
             entity.Property(x => x.IsExtended).HasColumnName("is_extended");
             entity.Property(x => x.ProductVariantId).HasColumnName("product_variant_id");
+            entity.Property(x => x.PlacedByAdminId).HasColumnName("placed_by_admin_id");
             entity.HasOne(x => x.CustomerAddress)
                 .WithMany()
                 .HasForeignKey(x => x.CustomerAddressId)

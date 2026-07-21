@@ -25,6 +25,8 @@ public class CustomerRentalOrder : AuditableEntity<Guid>, ISoftDelete
     public DateOnly? EndDate { get; set; }
     public bool IsExtended { get; set; }
     public Guid? ProductVariantId { get; set; }
+    /// <summary>Set when an admin staff member placed the order on behalf of the customer.</summary>
+    public Guid? PlacedByAdminId { get; set; }
 
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

@@ -2,6 +2,7 @@ using FluentValidation;
 using MediatR;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Vendors;
+using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Prilixor.Shared.Extensions;
@@ -15,7 +16,9 @@ public sealed record RegisterAdminUserCommand(
     string Password,
     string FullName,
     string Role,
-    bool IsActive) : ICommand<AdminUserDto>;
+    bool IsActive,
+    Guid? RoleId = null,
+    Guid? ActorAdminId = null) : ICommand<AdminUserDto>;
 
 public sealed class RegisterAdminUserCommandValidator : AbstractValidator<RegisterAdminUserCommand>
 {
@@ -24,9 +27,7 @@ public sealed class RegisterAdminUserCommandValidator : AbstractValidator<Regist
         RuleFor(x => x.Email).NotEmpty().EmailAddress();
         RuleFor(x => x.Password).NotEmpty().MinimumLength(8);
         RuleFor(x => x.FullName).NotEmpty().MaximumLength(255);
-        RuleFor(x => x.Role).NotEmpty().MaximumLength(40)
-            .Must(role => role is "super_admin" or "verifier" or "operations_admin")
-            .WithMessage("Role must be 'super_admin', 'verifier', or 'operations_admin'.");
+        RuleFor(x => x.Role).MaximumLength(64);
     }
 }
 
@@ -43,26 +44,70 @@ internal sealed class RegisterAdminUserCommandHandler(
             return Result.Failure<AdminUserDto>(new Error("admin.email_exists", "Admin account already exists for this email.", ErrorCategory.Validation));
         }
 
+        AdminRole? roleEntity = null;
+        if (request.RoleId is Guid rid)
+            roleEntity = await repository.GetAdminRoleByIdAsync(rid, cancellationToken);
+        else if (!string.IsNullOrWhiteSpace(request.Role))
+            roleEntity = await repository.GetAdminRoleByCodeAsync(request.Role.Trim().ToLowerInvariant(), cancellationToken);
+
+        if (roleEntity is null || !roleEntity.IsActive)
+        {
+            return Result.Failure<AdminUserDto>(new Error("admin.role_invalid", "Role is required and must be an active admin role.", ErrorCategory.Validation));
+        }
+
+        var isSuperAdminRole = string.Equals(roleEntity.Code, SuperAdminRules.RoleCode, StringComparison.OrdinalIgnoreCase);
+        if (isSuperAdminRole)
+        {
+            var count = await repository.CountActiveSuperAdminsAsync(cancellationToken);
+            if (count >= SuperAdminRules.MaxSuperAdmins)
+            {
+                return Result.Failure<AdminUserDto>(new Error(
+                    "admin.super_admin_limit",
+                    $"At most {SuperAdminRules.MaxSuperAdmins} SuperAdmin accounts are allowed.",
+                    ErrorCategory.Validation));
+            }
+        }
+
         var entity = new AdminUser
         {
             Email = request.Email.Trim().ToLowerInvariant(),
             PasswordHash = passwordHasherService.HashPassword(request.Password),
             FullName = request.FullName,
-            Role = request.Role,
-            IsActive = request.IsActive
+            Role = roleEntity.Code,
+            RoleId = roleEntity.Id,
+            IsActive = request.IsActive,
+            IsSystemUser = isSuperAdminRole,
+            MustChangePassword = false
         };
 
         await repository.AddAdminUserAsync(entity, cancellationToken);
+        if (request.ActorAdminId is Guid actorId)
+        {
+            await repository.AddAdminAuditLogAsync(new AdminAuditLog
+            {
+                Id = Guid.NewGuid(),
+                AdminId = actorId,
+                ActionType = "ADMIN_USER_CREATED",
+                EntityType = "AdminUser",
+                EntityId = entity.Id,
+                Notes = $"role={roleEntity.Code}"
+            }, cancellationToken);
+        }
         await repository.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(new AdminUserDto(
-            entity.Id.ToString(),
-            entity.Email,
-            entity.FullName,
-            entity.Role,
-            entity.IsActive,
-            entity.LastLoginAt.ToSafeDateTimeOffset()));
+        return Result.Success(ToDto(entity));
     }
+
+    internal static AdminUserDto ToDto(AdminUser entity) => new(
+        entity.Id.ToString(),
+        entity.Email,
+        entity.FullName,
+        entity.AdminRole?.Code ?? entity.Role,
+        entity.IsActive,
+        entity.LastLoginAt.ToSafeDateTimeOffset(),
+        entity.RoleId?.ToString(),
+        entity.IsSystemUser,
+        entity.MustChangePassword);
 }
 
 public sealed record GetAdminUsersQuery : IQuery<List<AdminUserDto>>;
@@ -73,15 +118,221 @@ internal sealed class GetAdminUsersQueryHandler(IVendorOnboardingRepository repo
     public async Task<Result<List<AdminUserDto>>> Handle(GetAdminUsersQuery request, CancellationToken cancellationToken)
     {
         var rows = await repository.GetAdminUsersAsync(cancellationToken);
-        var result = rows.Select(x => new AdminUserDto(
-            x.Id.ToString(),
-            x.Email,
-            x.FullName,
-            x.Role,
-            x.IsActive,
-            x.LastLoginAt.ToSafeDateTimeOffset())).ToList();
-
+        var result = rows.Select(RegisterAdminUserCommandHandler.ToDto).ToList();
         return Result.Success(result);
+    }
+}
+
+public sealed record UpdateAdminUserCommand(
+    Guid TargetAdminId,
+    Guid ActorAdminId,
+    string? FullName,
+    string? Email,
+    string? RoleCode,
+    Guid? RoleId,
+    bool? IsActive) : ICommand<AdminUserDto>;
+
+internal sealed class UpdateAdminUserCommandHandler(IVendorOnboardingRepository repository)
+    : ICommandHandler<UpdateAdminUserCommand, AdminUserDto>
+{
+    public async Task<Result<AdminUserDto>> Handle(UpdateAdminUserCommand request, CancellationToken cancellationToken)
+    {
+        var target = await repository.GetAdminUserByIdAsync(request.TargetAdminId, cancellationToken);
+        if (target is null)
+            return Result.Failure<AdminUserDto>(new Error("admin.not_found", "Admin user not found.", ErrorCategory.NotFound));
+
+        var actor = await repository.GetAdminUserByIdAsync(request.ActorAdminId, cancellationToken);
+        if (actor is null || !actor.IsActive)
+            return Result.Failure<AdminUserDto>(new Error("auth.forbidden", "Actor is not an active admin.", ErrorCategory.Unauthorized));
+
+        var actorIsSuper = string.Equals(actor.AdminRole?.Code ?? actor.Role, SuperAdminRules.RoleCode, StringComparison.OrdinalIgnoreCase);
+        var targetIsSuper = string.Equals(target.AdminRole?.Code ?? target.Role, SuperAdminRules.RoleCode, StringComparison.OrdinalIgnoreCase);
+        var isSelf = request.TargetAdminId == request.ActorAdminId;
+
+        // Non-super cannot modify any SuperAdmin / system user
+        if ((target.IsSystemUser || targetIsSuper) && !actorIsSuper)
+        {
+            return Result.Failure<AdminUserDto>(new Error(
+                "admin.super_admin_protected",
+                "Only a SuperAdmin can modify a SuperAdmin account.",
+                ErrorCategory.Unauthorized));
+        }
+
+        // Self profile: name/email only (role/active changes not via this self path unless SuperAdmin editing another)
+        if (!string.IsNullOrWhiteSpace(request.FullName))
+            target.FullName = request.FullName.Trim();
+
+        if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            var email = request.Email.Trim().ToLowerInvariant();
+            if (!string.Equals(email, target.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                var clash = await repository.GetAdminUserByEmailAsync(email, cancellationToken);
+                if (clash is not null && clash.Id != target.Id)
+                    return Result.Failure<AdminUserDto>(new Error("admin.email_exists", "Email already in use.", ErrorCategory.Validation));
+                target.Email = email;
+            }
+        }
+
+        AdminRole? newRole = null;
+        if (request.RoleId is Guid rid)
+            newRole = await repository.GetAdminRoleByIdAsync(rid, cancellationToken);
+        else if (!string.IsNullOrWhiteSpace(request.RoleCode))
+            newRole = await repository.GetAdminRoleByCodeAsync(request.RoleCode.Trim().ToLowerInvariant(), cancellationToken);
+
+        if (newRole is not null)
+        {
+            var becomingSuper = string.Equals(newRole.Code, SuperAdminRules.RoleCode, StringComparison.OrdinalIgnoreCase);
+            var leavingSuper = targetIsSuper && !becomingSuper;
+
+            if (!actorIsSuper)
+            {
+                return Result.Failure<AdminUserDto>(new Error(
+                    "admin.role_change_forbidden",
+                    "Only a SuperAdmin can change admin roles.",
+                    ErrorCategory.Unauthorized));
+            }
+
+            if (leavingSuper)
+            {
+                // Cannot demote a system SuperAdmin via normal edit; and cannot demote last SuperAdmin
+                if (target.IsSystemUser && !isSelf)
+                {
+                    return Result.Failure<AdminUserDto>(new Error(
+                        "admin.system_super_admin_locked",
+                        "System SuperAdmin cannot be demoted. Transfer root via ops if required.",
+                        ErrorCategory.Validation));
+                }
+
+                var count = await repository.CountActiveSuperAdminsAsync(cancellationToken);
+                if (count <= 1)
+                {
+                    return Result.Failure<AdminUserDto>(new Error(
+                        "admin.last_super_admin",
+                        "Cannot demote the last active SuperAdmin.",
+                        ErrorCategory.Validation));
+                }
+            }
+
+            if (becomingSuper && !targetIsSuper)
+            {
+                var count = await repository.CountActiveSuperAdminsAsync(cancellationToken);
+                if (count >= SuperAdminRules.MaxSuperAdmins)
+                {
+                    return Result.Failure<AdminUserDto>(new Error(
+                        "admin.super_admin_limit",
+                        $"At most {SuperAdminRules.MaxSuperAdmins} SuperAdmin accounts are allowed.",
+                        ErrorCategory.Validation));
+                }
+            }
+
+            target.Role = newRole.Code;
+            target.RoleId = newRole.Id;
+            if (becomingSuper)
+                target.IsSystemUser = true;
+            else if (leavingSuper)
+                target.IsSystemUser = false;
+        }
+
+        if (request.IsActive is bool active)
+        {
+            if ((target.IsSystemUser || targetIsSuper) && !active)
+            {
+                var count = await repository.CountActiveSuperAdminsAsync(cancellationToken);
+                if (count <= 1 || (targetIsSuper && count <= 1))
+                {
+                    return Result.Failure<AdminUserDto>(new Error(
+                        "admin.last_super_admin",
+                        "Cannot deactivate the last active SuperAdmin.",
+                        ErrorCategory.Validation));
+                }
+                if (target.IsSystemUser && !actorIsSuper)
+                {
+                    return Result.Failure<AdminUserDto>(new Error(
+                        "admin.system_super_admin_locked",
+                        "System SuperAdmin cannot be deactivated by a non-SuperAdmin.",
+                        ErrorCategory.Unauthorized));
+                }
+            }
+            target.IsActive = active;
+        }
+
+        await repository.UpdateAdminUserAsync(target, cancellationToken);
+        await repository.AddAdminAuditLogAsync(new AdminAuditLog
+        {
+            Id = Guid.NewGuid(),
+            AdminId = request.ActorAdminId,
+            ActionType = "ADMIN_USER_UPDATED",
+            EntityType = "AdminUser",
+            EntityId = target.Id,
+            Notes = $"role={target.Role}; active={target.IsActive}"
+        }, cancellationToken);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return Result.Success(RegisterAdminUserCommandHandler.ToDto(target));
+    }
+}
+
+public sealed record UpdateOwnAdminProfileCommand(
+    Guid AdminId,
+    string? FullName,
+    string? Email,
+    string? CurrentPassword,
+    string? NewPassword) : ICommand<AdminUserDto>;
+
+internal sealed class UpdateOwnAdminProfileCommandHandler(
+    IVendorOnboardingRepository repository,
+    IPasswordHasherService passwordHasher)
+    : ICommandHandler<UpdateOwnAdminProfileCommand, AdminUserDto>
+{
+    public async Task<Result<AdminUserDto>> Handle(UpdateOwnAdminProfileCommand request, CancellationToken cancellationToken)
+    {
+        var admin = await repository.GetAdminUserByIdAsync(request.AdminId, cancellationToken);
+        if (admin is null || !admin.IsActive)
+            return Result.Failure<AdminUserDto>(new Error("admin.not_found", "Admin user not found.", ErrorCategory.NotFound));
+
+        if (!string.IsNullOrWhiteSpace(request.FullName))
+            admin.FullName = request.FullName.Trim();
+
+        if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            var email = request.Email.Trim().ToLowerInvariant();
+            if (!string.Equals(email, admin.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                var clash = await repository.GetAdminUserByEmailAsync(email, cancellationToken);
+                if (clash is not null)
+                    return Result.Failure<AdminUserDto>(new Error("admin.email_exists", "Email already in use.", ErrorCategory.Validation));
+                admin.Email = email;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            if (string.IsNullOrWhiteSpace(request.CurrentPassword) ||
+                !passwordHasher.VerifyPassword(request.CurrentPassword, admin.PasswordHash))
+            {
+                return Result.Failure<AdminUserDto>(new Error("auth.invalid_credentials", "Current password is incorrect.", ErrorCategory.Validation));
+            }
+            if (request.NewPassword.Length < 8)
+                return Result.Failure<AdminUserDto>(new Error("auth.invalid_password", "New password must be at least 8 characters.", ErrorCategory.Validation));
+
+            admin.PasswordHash = passwordHasher.HashPassword(request.NewPassword);
+            admin.MustChangePassword = false;
+        }
+
+        await repository.UpdateAdminUserAsync(admin, cancellationToken);
+        await repository.AddAdminAuditLogAsync(new AdminAuditLog
+        {
+            Id = Guid.NewGuid(),
+            AdminId = request.AdminId,
+            ActionType = "ADMIN_PROFILE_UPDATED",
+            EntityType = "AdminUser",
+            EntityId = admin.Id,
+            Notes = string.IsNullOrWhiteSpace(request.NewPassword) ? "profile" : "profile+password"
+        }, cancellationToken);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return Result.Success(RegisterAdminUserCommandHandler.ToDto(admin));
     }
 }
 

@@ -1,9 +1,13 @@
 using System.Collections.Concurrent;
 using FastEndpoints;
+using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using Prilixor.VendorPortal.API.Extensions;
+using Prilixor.VendorPortal.API.Services;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Auth;
 using Prilixor.VendorPortal.Domain.Options;
@@ -21,7 +25,14 @@ public sealed class LoginRequest
     public string Role { get; set; } = "vendor"; // vendor | admin
 }
 
-public sealed record AuthUserDto(string Id, string Email, string Name, string Role);
+public sealed record AuthUserDto(
+    string Id,
+    string Email,
+    string Name,
+    string Role,
+    string? AdminRole = null,
+    IReadOnlyList<string>? Permissions = null,
+    bool MustChangePassword = false);
 
 public sealed record LoginResponse(string Token, string RefreshToken, AuthUserDto User);
 
@@ -95,6 +106,10 @@ public sealed class LoginEndpoint(
 
         string userId;
         string name;
+        string portalRole = role;
+        string? adminRoleCode = null;
+        IReadOnlyList<string>? permissions = null;
+        var mustChangePassword = false;
 
         if (role == "admin" || role == "super_admin" || role == "verifier" || role == "operations_admin")
         {
@@ -106,6 +121,16 @@ public sealed class LoginEndpoint(
 
             userId = admin.Id.ToString();
             name = admin.FullName;
+            portalRole = "admin";
+            adminRoleCode = admin.AdminRole?.Code ?? admin.Role;
+            permissions = await repository.GetAdminPermissionCodesAsync(admin.Id, ct);
+            // Fallback if RBAC tables not yet migrated
+            if (permissions.Count == 0 && AdminPermissions.SystemRolePermissions.TryGetValue(adminRoleCode, out var seeded))
+                permissions = seeded;
+            mustChangePassword = admin.MustChangePassword;
+
+            admin.LastLoginAt = DateTimeOffset.UtcNow;
+            await repository.UpdateAdminUserAsync(admin, ct);
         }
         else if (role == "customer")
         {
@@ -161,32 +186,14 @@ public sealed class LoginEndpoint(
             return TypedResults.Problem(title: "auth.misconfigured", detail: "JWT signing key is not configured.", statusCode: 500);
         }
 
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, userId),
-            new(ClaimTypes.Email, email),
-            new(ClaimTypes.Role, role),
-        };
-
-        var now = DateTime.UtcNow;
-        var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey));
-        var creds = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
-
-        var token = new JwtSecurityToken(
-            issuer: jwt.Issuer,
-            audience: jwt.Audience,
-            claims: claims,
-            notBefore: now,
-            expires: now.AddMinutes(jwt.ExpirationMinutes),
-            signingCredentials: creds);
-
-        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+        var (tokenString, _) = AuthTokenFactory.CreateAccessToken(
+            jwt, userId, email, portalRole, adminRoleCode, permissions);
 
         var refreshToken = new RefreshToken
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            Token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(64)),
+            Token = AuthTokenFactory.CreateRefreshTokenValue(),
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
             IsRevoked = false,
             CreatedAt = DateTimeOffset.UtcNow
@@ -195,7 +202,10 @@ public sealed class LoginEndpoint(
         await repository.AddRefreshTokenAsync(refreshToken, ct);
         await repository.SaveChangesAsync(ct);
 
-        return TypedResults.Ok(new LoginResponse(tokenString, refreshToken.Token, new AuthUserDto(userId, email, name, role)));
+        return TypedResults.Ok(new LoginResponse(
+            tokenString,
+            refreshToken.Token,
+            new AuthUserDto(userId, email, name, portalRole, adminRoleCode, permissions, mustChangePassword)));
     }
 }
 
@@ -313,6 +323,11 @@ public sealed class ChangePasswordEndpoint(
 
     public override async Task<Results<Ok<ChangePasswordResponse>, ProblemHttpResult>> ExecuteAsync(ChangePasswordRequest req, CancellationToken ct)
     {
+        if (User.HasClaim("impersonation", "true"))
+        {
+            return TypedResults.Problem(title: "auth.impersonation_blocked", detail: "Password changes are not allowed during impersonation.", statusCode: 403);
+        }
+
         var email = (req.Email ?? string.Empty).Trim().ToLowerInvariant();
 
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(req.CurrentPassword) || string.IsNullOrWhiteSpace(req.NewPassword))
@@ -590,6 +605,12 @@ public sealed class RefreshTokenEndpoint(
             return TypedResults.Problem(title: "auth.invalid_refresh_token", detail: "Token mismatch.", statusCode: 401);
         }
 
+        // Block refresh of impersonation tokens
+        if (principal.HasClaim("impersonation", "true"))
+        {
+            return TypedResults.Problem(title: "auth.impersonation_no_refresh", detail: "Impersonation sessions cannot be refreshed.", statusCode: 401);
+        }
+
         // Revoke the old refresh token
         storedToken.IsRevoked = true;
         await repository.UpdateRefreshTokenAsync(storedToken, ct);
@@ -598,11 +619,24 @@ public sealed class RefreshTokenEndpoint(
         var email = principal.FindFirstValue(ClaimTypes.Email) ?? "";
         var role = principal.FindFirstValue(ClaimTypes.Role) ?? "";
         string name = email;
+        string portalRole = role;
+        string? adminRoleCode = null;
+        IReadOnlyList<string>? permissions = null;
 
         if (role == "admin" || role == "super_admin" || role == "verifier" || role == "operations_admin")
         {
-            var admin = await repository.GetAdminUserByEmailAsync(email, ct);
-            if (admin != null) name = admin.FullName;
+            var admin = Guid.TryParse(userId, out var adminId)
+                ? await repository.GetAdminUserByIdAsync(adminId, ct)
+                : await repository.GetAdminUserByEmailAsync(email, ct);
+            if (admin != null)
+            {
+                name = admin.FullName;
+                portalRole = "admin";
+                adminRoleCode = admin.AdminRole?.Code ?? admin.Role;
+                permissions = await repository.GetAdminPermissionCodesAsync(admin.Id, ct);
+                if (permissions.Count == 0 && AdminPermissions.SystemRolePermissions.TryGetValue(adminRoleCode, out var seeded))
+                    permissions = seeded;
+            }
         }
         else if (role == "customer")
         {
@@ -619,34 +653,15 @@ public sealed class RefreshTokenEndpoint(
             }
         }
 
-        // Generate new JWT
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, userId),
-            new(ClaimTypes.Email, email),
-            new(ClaimTypes.Role, role),
-        };
-
-        var now = DateTime.UtcNow;
-        var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey));
-        var creds = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
-
-        var newToken = new JwtSecurityToken(
-            issuer: jwtOptions.Issuer,
-            audience: jwtOptions.Audience,
-            claims: claims,
-            notBefore: now,
-            expires: now.AddMinutes(jwtOptions.ExpirationMinutes),
-            signingCredentials: creds);
-
-        var tokenString = tokenHandler.WriteToken(newToken);
+        var (tokenString, _) = AuthTokenFactory.CreateAccessToken(
+            jwtOptions, userId, email, portalRole, adminRoleCode, permissions);
 
         // Generate new Refresh Token
         var newRefreshToken = new RefreshToken
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            Token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(64)),
+            Token = AuthTokenFactory.CreateRefreshTokenValue(),
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
             IsRevoked = false,
             CreatedAt = DateTimeOffset.UtcNow
@@ -655,6 +670,64 @@ public sealed class RefreshTokenEndpoint(
         await repository.AddRefreshTokenAsync(newRefreshToken, ct);
         await repository.SaveChangesAsync(ct);
 
-        return TypedResults.Ok(new LoginResponse(tokenString, newRefreshToken.Token, new AuthUserDto(userId, email, name, role)));
+        return TypedResults.Ok(new LoginResponse(
+            tokenString,
+            newRefreshToken.Token,
+            new AuthUserDto(userId, email, name, portalRole, adminRoleCode, permissions)));
     }
 }
+
+public sealed class ExchangeImpersonationRequest
+{
+    public string Code { get; set; } = string.Empty;
+}
+
+public sealed class ExchangeImpersonationEndpoint(
+    IConfiguration configuration,
+    IMediator mediator)
+    : Endpoint<ExchangeImpersonationRequest, Results<Ok<LoginResponse>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("auth/exchange-impersonation");
+        AllowAnonymous();
+    }
+
+    public override async Task<Results<Ok<LoginResponse>, ProblemHttpResult>> ExecuteAsync(
+        ExchangeImpersonationRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new ExchangeImpersonationCodeCommand(req.Code), ct);
+        if (!result.IsSuccess)
+            return result.ToErrorResponse();
+
+        var jwt = configuration.GetSection("JwtOptions").Get<JwtOptions>() ?? new JwtOptions();
+        if (string.IsNullOrWhiteSpace(jwt.SigningKey))
+            return TypedResults.Problem(title: "auth.misconfigured", detail: "JWT signing key is not configured.", statusCode: 500);
+
+        var data = result.Value;
+        var portalRole = string.Equals(data.TargetType, "customer", StringComparison.OrdinalIgnoreCase)
+            ? "customer"
+            : "vendor";
+        var extra = new List<Claim>
+        {
+            new("impersonation", "true"),
+            new("impersonator_id", data.AdminUserId.ToString()),
+            new("impersonation_target", portalRole),
+        };
+
+        var (tokenString, _) = AuthTokenFactory.CreateAccessToken(
+            jwt,
+            data.TargetId.ToString(),
+            data.Email,
+            portalRole,
+            extraClaims: extra,
+            expirationMinutesOverride: 60);
+
+        // No refresh token for impersonation sessions
+        return TypedResults.Ok(new LoginResponse(
+            tokenString,
+            string.Empty,
+            new AuthUserDto(data.TargetId.ToString(), data.Email, data.Name, portalRole)));
+    }
+}
+

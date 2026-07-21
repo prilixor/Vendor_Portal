@@ -32,3 +32,12 @@ export function getCustomerPortalHref(path = "/customer/shop"): string {
   const protocol = typeof window !== "undefined" ? window.location.protocol : "https:";
   return `${protocol}//www.blinksmed.com${normalized}`;
 }
+
+/** Absolute admin URL on vendor/customer hosts; same-origin path on admin/local. */
+export function getAdminPortalHref(path = "/admin"): string {
+  const kind = getPortalHostKind();
+  const normalized = normalizePath(path);
+  if (kind === "local" || kind === "admin") return normalized;
+  const protocol = typeof window !== "undefined" ? window.location.protocol : "https:";
+  return `${protocol}//admin.blinksmed.com${normalized}`;
+}

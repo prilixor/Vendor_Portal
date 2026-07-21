@@ -228,7 +228,10 @@ public sealed record AdminUserDto(
     string FullName,
     string Role,
     bool IsActive,
-    DateTimeOffset? LastLoginAt);
+    DateTimeOffset? LastLoginAt,
+    string? RoleId = null,
+    bool IsSystemUser = false,
+    bool MustChangePassword = false);
 
 public sealed record AdminAuditLogDto(
     string Id,

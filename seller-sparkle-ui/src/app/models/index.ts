@@ -12,6 +12,10 @@ export interface User {
   name: string;
   role: Role;
   avatarUrl?: string;
+  adminRole?: string;
+  permissions?: string[];
+  impersonation?: boolean;
+  impersonatorId?: string;
 }
 
 export interface BusinessProfile {
