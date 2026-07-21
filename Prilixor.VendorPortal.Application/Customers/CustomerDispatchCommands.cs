@@ -58,7 +58,8 @@ public sealed record VendorOrderDto(
     Guid? HospitalId = null,
     string? HospitalName = null,
     string? HospitalCity = null,
-    string? DoctorContactNumber = null);
+    string? DoctorContactNumber = null,
+    IReadOnlyList<string>? AssignedAssetTags = null);
 
 public sealed record GetVendorOrdersQuery(string VendorId, string? Status) : IQuery<List<VendorOrderDto>>;
 
@@ -84,8 +85,12 @@ internal sealed class GetVendorOrdersQueryHandler(ICustomerRepository customers)
             rows = await customers.GetVendorOrdersAsync(vendorId, request.Status, cancellationToken);
         }
 
+        var orderIds = rows.Select(r => r.Order.Id).ToList();
+        var assetTagsMap = await customers.GetCustomerOrderAssetTagsByOrderIdsAsync(orderIds, cancellationToken);
         var result = rows
-            .Select(VendorOrderMapper.ToVendorOrderDto)
+            .Select(r => VendorOrderMapper.ToVendorOrderDto(
+                r,
+                assetTagsMap.TryGetValue(r.Order.Id, out var tags) ? tags : null))
             .OrderByDescending(x => x.OrderNumber)
             .ToList();
         return Result.Success(result);
@@ -110,7 +115,9 @@ internal sealed class GetVendorOrderByIdQueryHandler(ICustomerRepository custome
         if (row is null)
             return Result.Failure<VendorOrderDto>(new Error("vendors.order_not_found", "Order not found for vendor.", ErrorCategory.NotFound));
 
-        return Result.Success(VendorOrderMapper.ToVendorOrderDto(row));
+        var assetTagsMap = await customers.GetCustomerOrderAssetTagsByOrderIdsAsync([row.Order.Id], cancellationToken);
+        assetTagsMap.TryGetValue(row.Order.Id, out var assignedTags);
+        return Result.Success(VendorOrderMapper.ToVendorOrderDto(row, assignedTags));
     }
 }
 
@@ -446,7 +453,7 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
 
 internal static class VendorOrderMapper
 {
-    public static VendorOrderDto ToVendorOrderDto(CustomerRentalOrderWithListing row)
+    public static VendorOrderDto ToVendorOrderDto(CustomerRentalOrderWithListing row, IReadOnlyList<string>? assignedAssetTags = null)
     {
         var o = row.Order;
         return new VendorOrderDto(
@@ -477,7 +484,8 @@ internal static class VendorOrderMapper
             HospitalId: row.Hospital?.Id,
             HospitalName: row.Hospital?.Name,
             HospitalCity: row.Hospital?.City,
-            DoctorContactNumber: row.Doctor?.ContactNumber);
+            DoctorContactNumber: row.Doctor?.ContactNumber,
+            AssignedAssetTags: assignedAssetTags is { Count: > 0 } ? assignedAssetTags : null);
     }
 }
 

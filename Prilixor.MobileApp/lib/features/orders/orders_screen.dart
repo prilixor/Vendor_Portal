@@ -180,9 +180,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
         toolbarHeight: 64,
       ),
       body: !auth.isAuthenticated || provider.errorMessage == 'auth_required'
-          ? const GuestSignInPrompt(
+          ? GuestSignInPrompt.guest(
               title: 'Sign in to view orders',
               message: 'Track rentals and purchases after you sign in.',
+              icon: Icons.receipt_long_outlined,
             )
           : provider.isLoading && provider.orders.isEmpty
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))

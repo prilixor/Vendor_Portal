@@ -377,35 +377,81 @@ internal sealed class AiChatCommandHandler(
             CreatedOnUtc = DateTime.UtcNow
         };
         await repository.AddSupportMessageAsync(vendorMessage, cancellationToken);
+        await repository.SaveChangesAsync(cancellationToken);
 
-        // Get conversation history for context (last 10 messages)
-        var allMessages = await repository.GetSupportMessagesByTicketIdAsync(ticket.Id, cancellationToken);
-        var conversationHistory = allMessages
-            .OrderByDescending(m => m.CreatedOnUtc)
-            .Take(10)
+        var refreshedTicket = await repository.GetSupportTicketByIdAsync(ticket.Id, cancellationToken);
+        if (refreshedTicket is not null)
+        {
+            ticket = refreshedTicket;
+        }
+
+        var orderedMessages = (await repository.GetSupportMessagesByTicketIdAsync(ticket.Id, cancellationToken))
             .OrderBy(m => m.CreatedOnUtc)
-            .Select(m => new { m.SenderType, m.Message })
             .ToList();
 
-        // Get AI response with conversation history
-        var aiResponse = await aiSupportService.GenerateResponseAsync(
-            request.Message,
-            request.Category ?? ticket.Category,
-            request.Subject ?? ticket.Subject,
-            cancellationToken,
-            conversationHistory.Select(m => (m.SenderType, m.Message)).ToList());
-
-        // Save AI's response as a message
-        var aiMessage = new SupportMessage
+        if (SupportAiReplyPolicy.IsVendorHumanThread(ticket, orderedMessages))
         {
-            TicketId = ticket.Id,
-            Ticket = ticket,
-            SenderId = Guid.Empty,
-            SenderType = "AI",
-            Message = aiResponse.Message,
-            CreatedOnUtc = DateTime.UtcNow
-        };
-        await repository.AddSupportMessageAsync(aiMessage, cancellationToken);
+            if (ticket.Status == "Resolved")
+            {
+                ticket.Status = "Open";
+                await repository.UpdateSupportTicketAsync(ticket, cancellationToken);
+            }
+
+            await repository.SaveChangesAsync(cancellationToken);
+
+            var humanThreadTicketDto = new SupportTicketDto(
+                ticket.Id.ToString(),
+                ticket.TicketNumber,
+                ticket.Category,
+                ticket.Subject,
+                ticket.Status,
+                vendor.Email,
+                null,
+                ticket.CreatedOnUtc.ToSafeDateTimeOffset(),
+                ticket.ModifiedOnUtc.ToSafeDateTimeOffset());
+
+            return Result.Success(new AiChatResult(humanThreadTicketDto, null));
+        }
+
+        SupportMessage? aiMessage = null;
+
+        if (SupportAiReplyPolicy.ShouldGenerateAiReply(ticket, orderedMessages))
+        {
+            var conversationHistory = orderedMessages
+                .TakeLast(10)
+                .Select(m => (m.SenderType, m.Message))
+                .ToList();
+
+            var aiResponse = await aiSupportService.GenerateResponseAsync(
+                request.Message,
+                request.Category ?? ticket.Category,
+                request.Subject ?? ticket.Subject,
+                cancellationToken,
+                conversationHistory);
+
+            var shouldPersistAiReply = !SupportAiReplyPolicy.IsEscalationText(aiResponse.Message)
+                || !SupportAiReplyPolicy.HasEscalationReply(orderedMessages);
+
+            if (shouldPersistAiReply)
+            {
+                aiMessage = new SupportMessage
+                {
+                    TicketId = ticket.Id,
+                    Ticket = ticket,
+                    SenderId = Guid.Empty,
+                    SenderType = "AI",
+                    Message = aiResponse.Message,
+                    CreatedOnUtc = DateTime.UtcNow
+                };
+                await repository.AddSupportMessageAsync(aiMessage, cancellationToken);
+            }
+        }
+        else
+        {
+            logger.LogInformation(
+                "Skipping AI reply for ticket {TicketId} — human engaged or escalation already sent.",
+                ticket.Id);
+        }
 
         // Reopen resolved tickets when vendor sends new message (Closed tickets are never reused)
         if (activeTicket != null)
@@ -430,13 +476,15 @@ internal sealed class AiChatCommandHandler(
             ticket.CreatedOnUtc.ToSafeDateTimeOffset(),
             ticket.ModifiedOnUtc.ToSafeDateTimeOffset());
 
-        var aiMessageDto = new SupportMessageDto(
-            aiMessage.Id.ToString(),
-            aiMessage.TicketId.ToString(),
-            aiMessage.SenderId.ToString(),
-            aiMessage.SenderType,
-            aiMessage.Message,
-            aiMessage.CreatedOnUtc.ToSafeDateTimeOffset());
+        var aiMessageDto = aiMessage is null
+            ? null
+            : new SupportMessageDto(
+                aiMessage.Id.ToString(),
+                aiMessage.TicketId.ToString(),
+                aiMessage.SenderId.ToString(),
+                aiMessage.SenderType,
+                aiMessage.Message,
+                aiMessage.CreatedOnUtc.ToSafeDateTimeOffset());
 
         return Result.Success(new AiChatResult(ticketDto, aiMessageDto));
     }

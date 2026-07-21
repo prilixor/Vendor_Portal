@@ -40,7 +40,7 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
-        title: const Text('Item expirations', style: TextStyle(color: Colors.white)),
+        title: const Text('Rental expirations', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF0F172A),
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
@@ -61,7 +61,7 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
                             SizedBox(height: 16),
                             Center(
                               child: Text(
-                                'No upcoming expirations in the next 30 days.',
+                                'No upcoming rental end dates in the next 30 days.',
                                 style: TextStyle(color: Colors.white70),
                                 textAlign: TextAlign.center,
                               ),
@@ -72,7 +72,7 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
                           padding: const EdgeInsets.all(16),
                           children: [
                             const Text(
-                              'Upcoming order end dates for the next 30 days.',
+                              'Track rental end dates for the next 30 days.',
                               style: TextStyle(color: Colors.white54, fontSize: 13),
                             ),
                             const SizedBox(height: 16),

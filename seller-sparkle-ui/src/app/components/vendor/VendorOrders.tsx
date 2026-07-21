@@ -21,6 +21,24 @@ import {
 
 const PAGE_SIZE = 8;
 
+function getBaseOrderNumber(orderNumber: string): string {
+  return orderNumber.split("-").slice(0, 3).join("-");
+}
+
+function countOrderGroups(orders: VendorOrderApiDto[]): number {
+  const bases = new Set<string>();
+  for (const order of orders) {
+    bases.add(getBaseOrderNumber(order.orderNumber));
+  }
+  return bases.size;
+}
+
+function formatOrderItemSummary(groupCount: number, itemCount: number): string {
+  const ordersLabel = `${groupCount} order${groupCount !== 1 ? "s" : ""}`;
+  const itemsLabel = `${itemCount} item${itemCount !== 1 ? "s" : ""}`;
+  return `${ordersLabel} · ${itemsLabel}`;
+}
+
 const statusTabs = [
   { id: "all", label: "All" },
   { id: "awaiting_vendor_acceptance", label: "Awaiting Acceptance" },
@@ -167,6 +185,9 @@ const VendorOrders = () => {
     [filteredOrders],
   );
 
+  const orderGroupCount = useMemo(() => countOrderGroups(sortedOrders), [sortedOrders]);
+  const itemCount = sortedOrders.length;
+
   const totalPages = Math.max(1, Math.ceil(sortedOrders.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageSlice = useMemo(
@@ -281,6 +302,15 @@ const VendorOrders = () => {
           <span className="font-medium">Dispatch failed</span> means reassignment could not find an eligible vendor.
         </p>
 
+        {!loading && itemCount > 0 ? (
+          <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
+            <p className="text-sm font-semibold text-foreground">{formatOrderItemSummary(orderGroupCount, itemCount)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Grouped by order ID — each card is one checkout; rows inside are line items.
+            </p>
+          </div>
+        ) : null}
+
         {loading ? (
           <div className="space-y-3">
             {Array.from({ length: 6 }).map((_, idx) => (
@@ -300,8 +330,6 @@ const VendorOrders = () => {
         ) : (
           <div className="space-y-3">
             {(() => {
-              // Group pageSlice by their base order number
-              const getBaseOrderNumber = (num: string) => num.split('-').slice(0, 3).join('-');
               const groups: Array<{
                 baseOrderNumber: string;
                 items: VendorOrderApiDto[];
@@ -326,7 +354,9 @@ const VendorOrders = () => {
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-3 mb-4">
                     <div>
                       <p className="text-sm font-bold text-foreground">{group.baseOrderNumber}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Consolidated Fulfillment</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Consolidated fulfillment · {group.items.length} {group.items.length === 1 ? "item" : "items"}
+                      </p>
                     </div>
                     {group.items[0]?.createdAtUtc && (
                       <div className="text-left sm:text-right mt-1 sm:mt-0">
@@ -396,7 +426,7 @@ const VendorOrders = () => {
             })()}
             <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">
-                Page {safePage} of {totalPages} · {sortedOrders.length} order{sortedOrders.length !== 1 ? "s" : ""}
+                Page {safePage} of {totalPages} · {formatOrderItemSummary(orderGroupCount, itemCount)}
               </p>
               <div className="flex gap-2">
                 <Button

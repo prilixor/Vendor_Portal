@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:dio/dio.dart';
+
+import '../../core/utils/place_search.dart';
 
 class MockMapPickerScreen extends StatefulWidget {
   const MockMapPickerScreen({super.key});
@@ -13,42 +14,41 @@ class MockMapPickerScreen extends StatefulWidget {
 class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
   LatLng _center = const LatLng(23.0225, 72.5714);
   final MapController _mapController = MapController();
+  final PlaceSearch _placeSearch = PlaceSearch();
   bool _isSearching = false;
+
+  @override
+  void dispose() {
+    _placeSearch.close();
+    super.dispose();
+  }
 
   Future<void> _searchLocation(String query) async {
     if (query.trim().isEmpty) return;
     setState(() => _isSearching = true);
     try {
-      // Upgraded to Photon API (same as Web App) for fuzzy searching and better results
-      final response = await Dio().get(
-        'https://photon.komoot.io/api/',
-        queryParameters: {
-          'q': query,
-          'lat': _center.latitude,
-          'lon': _center.longitude,
-          'limit': 1,
-          'lang': 'en'
-        },
+      final results = await _placeSearch.search(
+        query: query,
+        latitude: _center.latitude,
+        longitude: _center.longitude,
+        limit: 5,
       );
-      if (response.statusCode == 200 && response.data != null) {
-        final features = response.data['features'] as List;
-        if (features.isNotEmpty) {
-          final coords = features[0]['geometry']['coordinates'];
-          // GeoJSON returns [longitude, latitude]
-          final lon = (coords[0] as num).toDouble();
-          final lat = (coords[1] as num).toDouble();
-          
-          final pos = LatLng(lat, lon);
-          _mapController.move(pos, 15.0);
-          setState(() => _center = pos);
-        } else {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location not found')));
-        }
-      } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location not found')));
+      if (!mounted) return;
+      if (results.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location not found')),
+        );
+        return;
       }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error searching location')));
+      final first = results.first;
+      final pos = LatLng(first.lat, first.lng);
+      _mapController.move(pos, 15.0);
+      setState(() => _center = pos);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to search right now.')),
+      );
     } finally {
       if (mounted) setState(() => _isSearching = false);
     }
@@ -80,18 +80,16 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.prilixor.vendorportal',
+                userAgentPackageName: 'com.prilixor.prilixor_mobile',
               ),
             ],
           ),
-          
           const Center(
             child: Padding(
               padding: EdgeInsets.only(bottom: 40.0),
               child: Icon(Icons.location_on, size: 50, color: Color(0xFF6C63FF)),
             ),
           ),
-          
           Positioned(
             top: 16,
             left: 16,
@@ -100,7 +98,13 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4))],
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black45,
+                    blurRadius: 10,
+                    offset: Offset(0, 4),
+                  ),
+                ],
               ),
               child: TextField(
                 style: const TextStyle(color: Colors.white),
@@ -109,15 +113,28 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
                   hintText: 'Search city, area, or zip...',
                   hintStyle: const TextStyle(color: Colors.white54),
                   prefixIcon: const Icon(Icons.search, color: Color(0xFF6C63FF)),
-                  suffixIcon: _isSearching ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF))) : null,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  suffixIcon: _isSearching
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF6C63FF),
+                          ),
+                        )
+                      : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                 ),
                 onSubmitted: _searchLocation,
               ),
             ),
           ),
-
           Positioned(
             bottom: 32,
             left: 24,
@@ -134,9 +151,18 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6C63FF),
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                child: const Text('Confirm Location', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                child: const Text(
+                  'Confirm Location',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ),
           ),

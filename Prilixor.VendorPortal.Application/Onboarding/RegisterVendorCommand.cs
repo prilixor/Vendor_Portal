@@ -101,7 +101,7 @@ internal sealed class RegisterVendorCommandHandler(
 
         try
         {
-            var frontendUrl = configuration["FrontendUrl"] ?? "https://vendor-portal-psi-amber.vercel.app";
+            var frontendUrl = configuration["FrontendUrl"] ?? "https://blinksmed.com";
             var verificationLink = $"{frontendUrl}/verify-email?token={Uri.EscapeDataString(vendor.EmailVerificationToken ?? string.Empty)}";
             var emailBody = EmailTemplates.VendorEmailVerificationRequested(vendor.Email, verificationLink);
             await emailService.SendEmailAsync(vendor.Email, "Verify Your Email Address", emailBody, cancellationToken);

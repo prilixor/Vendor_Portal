@@ -44,6 +44,7 @@ public interface ICustomerRepository
     
     Task AddCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderAsset>> GetCustomerRentalOrderAssetsAsync(Guid customerOrderId, CancellationToken cancellationToken);
+    Task<IReadOnlyDictionary<Guid, List<string>>> GetCustomerOrderAssetTagsByOrderIdsAsync(IEnumerable<Guid> orderIds, CancellationToken cancellationToken);
     Task RemoveCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetActiveCustomerOrderForAssetAsync(Guid assetId, CancellationToken cancellationToken);
 

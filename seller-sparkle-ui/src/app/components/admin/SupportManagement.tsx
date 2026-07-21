@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { 
   Ticket, 
   MessageSquare, 
@@ -21,6 +21,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
+import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea";
 import { Badge } from "@/app/components/ui/badge";
 import { ScrollArea } from "@/app/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
@@ -38,6 +39,9 @@ import { cn } from "@/app/helpers/utils";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
+const SUPPORT_CHAT_POLL_MS = 3000;
+const SUPPORT_TICKETS_POLL_MS = 10000;
+
 export default function SupportManagement() {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<SupportTicketDto[]>([]);
@@ -51,16 +55,74 @@ export default function SupportManagement() {
   const [statusFilter, setStatusFilter] = useState("all");
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const selectedTicketIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    loadTickets();
+    selectedTicketIdRef.current = selectedTicket?.id ?? null;
+  }, [selectedTicket?.id]);
+
+  useEffect(() => {
+    void loadTickets();
+    const interval = setInterval(() => {
+      void loadTickets(true);
+    }, SUPPORT_TICKETS_POLL_MS);
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadTickets = async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const data = await supportApi.getAllTickets();
+      setTickets(data);
+      const activeId = selectedTicketIdRef.current;
+      if (activeId) {
+        const refreshed = data.find((t) => t.id === activeId);
+        if (refreshed) {
+          setSelectedTicket((current) =>
+            current?.id === refreshed.id ? refreshed : current,
+          );
+        }
+      }
+    } catch (error) {
+      if (!silent) toast.error("Failed to load tickets.");
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
+  const loadMessages = useCallback(async (ticketId: string, silent = false) => {
+    if (!silent) setMessagesLoading(true);
+    try {
+      const data = await supportApi.getTicketMessages(ticketId);
+      setMessages(data);
+    } catch (error) {
+      if (!silent) toast.error("Failed to load messages.");
+    } finally {
+      if (!silent) setMessagesLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (selectedTicket) {
-      loadMessages(selectedTicket.id);
+    if (!selectedTicket) {
+      setMessages([]);
+      return;
     }
-  }, [selectedTicket]);
+
+    void loadMessages(selectedTicket.id);
+    const interval = setInterval(() => {
+      void loadMessages(selectedTicket.id, true);
+    }, SUPPORT_CHAT_POLL_MS);
+
+    const onFocus = () => {
+      void loadMessages(selectedTicket.id, true);
+    };
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [selectedTicket?.id, loadMessages]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -68,44 +130,19 @@ export default function SupportManagement() {
     }
   }, [messages]);
 
-  const loadTickets = async () => {
-    setLoading(true);
-    try {
-      const data = await supportApi.getAllTickets();
-      setTickets(data);
-    } catch (error) {
-      toast.error("Failed to load tickets.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadMessages = async (ticketId: string) => {
-    setMessagesLoading(true);
-    try {
-      const data = await supportApi.getTicketMessages(ticketId);
-      setMessages(data);
-    } catch (error) {
-      toast.error("Failed to load messages.");
-    } finally {
-      setMessagesLoading(false);
-    }
-  };
-
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedTicket || !user) return;
 
     setSending(true);
     try {
-      const msg = await supportApi.sendMessage(selectedTicket.id, {
+      await supportApi.sendMessage(selectedTicket.id, {
         senderId: user.id,
         senderType: "Admin",
         message: newMessage
       });
-      setMessages([...messages, msg]);
       setNewMessage("");
-      // Refresh tickets to update latest message/status
-      loadTickets();
+      await loadMessages(selectedTicket.id, true);
+      await loadTickets(true);
     } catch (error) {
       toast.error("Failed to send message.");
     } finally {
@@ -342,7 +379,7 @@ export default function SupportManagement() {
                       </div>
                       <div 
                         className={cn(
-                          "px-5 py-3 rounded-2xl text-[14px] shadow-sm leading-relaxed",
+                          "px-5 py-3 rounded-2xl text-[14px] shadow-sm leading-relaxed whitespace-pre-wrap",
                           m.senderType === "Admin" 
                             ? "bg-primary text-primary-foreground rounded-tr-none shadow-primary/10" 
                             : m.senderType === "AI"
@@ -380,13 +417,16 @@ export default function SupportManagement() {
                     </p>
                   </div>
                 ) : (
-                  <div className="flex gap-3 bg-muted/30 p-2 rounded-[2rem] border border-border focus-within:border-primary/30 focus-within:ring-4 focus-within:ring-primary/5 transition-all">
-                    <Input 
-                      placeholder="Type your reply to the vendor..."
-                      className="flex-1 border-none bg-transparent shadow-none focus-visible:ring-0 h-12 px-4 font-medium"
+                  <div className="flex gap-3 items-end bg-muted/30 p-2 rounded-[2rem] border border-border focus-within:border-primary/30 focus-within:ring-4 focus-within:ring-primary/5 transition-all">
+                    <ChatMessageTextarea
+                      placeholder="Type your reply... (Shift+Enter for new line)"
+                      className="flex-1 border-none bg-transparent shadow-none focus-visible:ring-0 min-h-[48px] px-4 font-medium"
                       value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                      onChange={setNewMessage}
+                      onSubmit={handleSendMessage}
+                      submitDisabled={sending}
+                      disabled={sending}
+                      rows={1}
                     />
                     <Button 
                       onClick={handleSendMessage}

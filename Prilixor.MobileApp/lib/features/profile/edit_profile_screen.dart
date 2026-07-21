@@ -106,6 +106,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         if (_nameError != null) setState(() => _nameError = null);
                       },
                       decoration: requiredInputDecoration(
+                        context,
                         label: 'Full name',
                         required: true,
                         errorText: _nameError,
@@ -118,6 +119,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       readOnly: true,
                       style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
                       decoration: requiredInputDecoration(
+                        context,
                         label: 'Email',
                         prefixIcon: Icons.email_outlined,
                         fillColor: const Color(0xFF0F172A),
@@ -132,6 +134,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       style: const TextStyle(color: Colors.white),
                       keyboardType: TextInputType.phone,
                       decoration: requiredInputDecoration(
+                        context,
                         label: 'Phone',
                         prefixIcon: Icons.phone_outlined,
                       ),

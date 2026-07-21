@@ -14,6 +14,12 @@ import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { toast } from "sonner";
 import { useNotificationContext } from "@/app/contexts/NotificationContext";
+import { AdminCommentHint } from "@/app/components/shared/AdminCommentHint";
+import {
+  extractAdminCommentFromNotification,
+  isVerificationRejectionNotification,
+  notificationDisplayMessage,
+} from "@/app/helpers/adminComment";
 import { getVendorRoute } from "@/app/helpers/vendorNav";
 
 const typeIcons = {
@@ -263,6 +269,16 @@ const Notifications = () => {
           <ul className="divide-y divide-border">
             {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((n) => {
               const { icon: Icon, cls } = typeIcons[n.type];
+              const isRejection = isVerificationRejectionNotification(
+                n.notificationType ?? "",
+              );
+              const adminComment = isRejection
+                ? extractAdminCommentFromNotification(n.message)
+                : null;
+              const body = notificationDisplayMessage(
+                n.message,
+                n.notificationType ?? "",
+              );
               return (
                 <li
                   key={n.id}
@@ -294,9 +310,15 @@ const Notifications = () => {
                       <p className="font-semibold text-sm">{n.title}</p>
                       {!n.read && <span className="h-2 w-2 rounded-full bg-primary" />}
                     </div>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                      {n.message.replace(/\s*\[?ID:\s*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\]?/i, "")}
-                    </p>
+                    {body && (
+                      <p className="mt-0.5 text-sm text-muted-foreground">{body}</p>
+                    )}
+                    {adminComment && (
+                      <AdminCommentHint
+                        className="mt-2"
+                        comment={adminComment}
+                      />
+                    )}
                     <p className="mt-1 text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
                     </p>

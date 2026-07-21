@@ -459,6 +459,8 @@ export interface VendorOrderApiDto {
   hospitalName?: string;
   hospitalCity?: string;
   doctorContactNumber?: string;
+  assignedAssetTags?: string[];
+  productVariantId?: string;
 }
 
 export interface VendorExpiringOrderApiDto {

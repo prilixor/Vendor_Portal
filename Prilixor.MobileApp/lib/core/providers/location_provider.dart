@@ -41,16 +41,19 @@ class LocationProvider extends ChangeNotifier {
   }
 
   Future<void> fetchCities(String stateIso2) async {
+    if (stateIso2.trim().isEmpty) return;
     _isLoadingCities = true;
     _errorMessage = null;
     _cities = [];
     notifyListeners();
 
     try {
-      final response = await _apiClient.dio.get('/vendors/locations/states/$stateIso2/cities');
+      final response = await _apiClient.dio.get(
+        '/vendors/locations/states/${Uri.encodeComponent(stateIso2)}/cities',
+      );
       if (response.statusCode == 200) {
-        final List<dynamic> data = response.data;
-        _cities = data.map((json) => CityModel.fromJson(json)).toList();
+        final List<dynamic> data = response.data is List ? response.data as List : const [];
+        _cities = data.map((json) => CityModel.fromJson(json as Map<String, dynamic>)).toList();
       }
     } on DioException catch (e) {
       _errorMessage = 'Failed to load cities: ${e.message}';
@@ -60,6 +63,30 @@ class LocationProvider extends ChangeNotifier {
 
     _isLoadingCities = false;
     notifyListeners();
+  }
+
+  String? resolveStateIso2(String stateValue) {
+    final value = stateValue.trim();
+    if (value.isEmpty) return null;
+    for (final state in _states) {
+      if (state.name.toLowerCase() == value.toLowerCase() ||
+          state.iso2.toLowerCase() == value.toLowerCase()) {
+        return state.iso2;
+      }
+    }
+    return null;
+  }
+
+  Future<String?> bootstrapSelection({
+    required String stateName,
+    required String cityName,
+  }) async {
+    await fetchStates();
+    final iso2 = resolveStateIso2(stateName);
+    if (iso2 != null) {
+      await fetchCities(iso2);
+    }
+    return iso2;
   }
 
   void clearCities() {

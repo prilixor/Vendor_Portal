@@ -9,6 +9,7 @@ import { adminApi } from "@/app/services/adminApi";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { NotificationProvider } from "@/app/contexts/NotificationContext";
+import { SupportChatProvider } from "@/app/contexts/SupportChatContext";
 import { PendingApprovalBanner } from "@/app/components/vendor/PendingApprovalBanner";
 import { SupportChat } from "@/app/components/support/SupportChat";
 
@@ -147,7 +148,8 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
   return (
     <NotificationProvider vendorId={variant === "vendor" ? user?.id : undefined}>
-      <div className="flex min-h-screen w-full bg-background">
+      <SupportChatProvider>
+        <div className="flex min-h-screen w-full bg-background">
         {mobileSidebarOpen && (
           <div
             className="fixed inset-0 z-50 bg-black/50 lg:hidden"
@@ -182,7 +184,8 @@ export const AppShell = ({ variant }: AppShellProps) => {
           </main>
           {variant === "vendor" && user && <SupportChat vendorId={user.id} />}
         </div>
-      </div>
+        </div>
+      </SupportChatProvider>
     </NotificationProvider>
   );
 };

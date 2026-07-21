@@ -284,7 +284,7 @@ public sealed class ResendVerificationEndpoint(
 
         try
         {
-            var frontendUrl = configuration["FrontendUrl"] ?? "https://vendor-portal-psi-amber.vercel.app";
+            var frontendUrl = configuration["FrontendUrl"] ?? "https://blinksmed.com";
             var verificationLink = $"{frontendUrl}/verify-email?token={Uri.EscapeDataString(vendor.EmailVerificationToken)}";
             var body = EmailTemplates.VendorEmailVerificationRequested(vendor.Email, verificationLink, vendor.Profile?.OwnerName ?? string.Empty);
             await emailService.SendEmailAsync(vendor.Email, "Verify Your Email Address", body, ct);
@@ -417,7 +417,7 @@ public sealed class ForgotPasswordEndpoint(
             await repository.SaveChangesAsync(ct);
 
             // Send reset link email (FrontendUrl in appsettings / env — must match deployed SPA host)
-            var frontendBase = configuration["FrontendUrl"]?.Trim().TrimEnd('/') ?? "https://vendor-portal-psi-amber.vercel.app";
+            var frontendBase = configuration["FrontendUrl"]?.Trim().TrimEnd('/') ?? "https://blinksmed.com";
             var resetLink = $"{frontendBase}/reset-password?token={Uri.EscapeDataString(token)}";
             var subject = "Reset Your Password";
             var body = $@"

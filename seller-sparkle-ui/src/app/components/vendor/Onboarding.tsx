@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -22,6 +22,10 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { BankDetails, BusinessProfile, VendorDocument, VerificationStatus } from "@/app/models";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { AdminCommentHint } from "@/app/components/shared/AdminCommentHint";
+import { OnboardingRejectedHelpBanner } from "@/app/components/shared/OnboardingRejectedHelpBanner";
+import { sanitizeAdminComment, buildVerificationSupportMessage } from "@/app/helpers/adminComment";
+import { useSupportChat } from "@/app/contexts/SupportChatContext";
 import { cn, toCamelCase } from "@/app/helpers/utils";
 
 const steps = [
@@ -58,6 +62,7 @@ const defaultBank: BankDetails = {
 
 const Onboarding = () => {
   const { user } = useAuth();
+  const { openSupportChat } = useSupportChat();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -684,6 +689,23 @@ const Onboarding = () => {
     setEditingSection(null);
   };
 
+  const rejectedDocuments = useMemo(
+    () => documents.filter((doc) => doc.status === "rejected"),
+    [documents],
+  );
+  const hasRejectedVerificationItems = useMemo(
+    () => rejectedDocuments.length > 0 || bank.status === "rejected",
+    [rejectedDocuments, bank.status],
+  );
+
+  const openVerificationSupportHelp = useCallback(() => {
+    const { message, category } = buildVerificationSupportMessage(
+      rejectedDocuments,
+      bank.status === "rejected",
+    );
+    openSupportChat({ message, category });
+  }, [rejectedDocuments, bank.status, openSupportChat]);
+
   // Show loading state until data is fully loaded to prevent UI flicker
   if (!hasLoaded) {
     return (
@@ -838,6 +860,14 @@ const Onboarding = () => {
             </div>
           </Card>
 
+          {hasRejectedVerificationItems && (
+            <OnboardingRejectedHelpBanner
+              rejectedDocuments={rejectedDocuments}
+              rejectedBank={bank.status === "rejected"}
+              onGetHelp={openVerificationSupportHelp}
+            />
+          )}
+
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
             <TabsList className="h-auto w-full flex-nowrap justify-start overflow-x-auto rounded-lg p-1">
               <TabsTrigger value="profile">Profile</TabsTrigger>
@@ -986,8 +1016,12 @@ const Onboarding = () => {
                                 </Button>
                               </div>
                             </div>
-                            {doc.status === "rejected" && doc.rejectionReason && (
-                              <p className="text-xs text-destructive mt-2">{doc.rejectionReason}</p>
+                            {doc.status === "rejected" && (
+                              <AdminCommentHint
+                                className="mt-2"
+                                itemLabel={doc.type}
+                                comment={sanitizeAdminComment(doc.rejectionReason)}
+                              />
                             )}
                           </div>
                         </div>
@@ -1029,8 +1063,11 @@ const Onboarding = () => {
                             <td className="px-4 py-3">
                               <div className="space-y-1">
                                 <StatusBadge status={doc.status} />
-                                {doc.status === "rejected" && doc.rejectionReason && (
-                                  <p className="text-xs text-destructive">{doc.rejectionReason}</p>
+                                {doc.status === "rejected" && (
+                                  <AdminCommentHint
+                                    itemLabel={doc.type}
+                                    comment={sanitizeAdminComment(doc.rejectionReason)}
+                                  />
                                 )}
                               </div>
                             </td>
@@ -1232,6 +1269,13 @@ const Onboarding = () => {
         {/* STEP 3 */}
         {step === 2 && (
           <div className="space-y-5 animate-fade-in">
+            {hasRejectedVerificationItems && (
+              <OnboardingRejectedHelpBanner
+                rejectedDocuments={rejectedDocuments}
+                rejectedBank={bank.status === "rejected"}
+                onGetHelp={openVerificationSupportHelp}
+              />
+            )}
             <div className="space-y-3">
               <h2 className="text-lg font-semibold">Document verification</h2>
               <div className="grid grid-cols-1 gap-3 rounded-xl border border-border p-3 sm:grid-cols-3">
@@ -1289,8 +1333,12 @@ const Onboarding = () => {
                           </Button>
                         </div>
                       </div>
-                      {doc.status === "rejected" && doc.rejectionReason && (
-                        <p className="text-xs text-destructive mt-2">{doc.rejectionReason}</p>
+                      {doc.status === "rejected" && (
+                        <AdminCommentHint
+                          className="mt-2"
+                          itemLabel={doc.type}
+                          comment={sanitizeAdminComment(doc.rejectionReason)}
+                        />
                       )}
                     </div>
                   </div>
@@ -1332,8 +1380,11 @@ const Onboarding = () => {
                       <td className="px-4 py-3">
                         <div className="space-y-1">
                           <StatusBadge status={doc.status} />
-                          {doc.status === "rejected" && doc.rejectionReason && (
-                            <p className="text-xs text-destructive">{doc.rejectionReason}</p>
+                          {doc.status === "rejected" && (
+                            <AdminCommentHint
+                              itemLabel={doc.type}
+                              comment={sanitizeAdminComment(doc.rejectionReason)}
+                            />
                           )}
                         </div>
                       </td>

@@ -104,6 +104,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                   if (_currentError != null) setState(() => _currentError = null);
                 },
                 decoration: requiredInputDecoration(
+                  context,
                   label: 'Current Password',
                   required: true,
                   errorText: _currentError,
@@ -119,6 +120,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                   if (_newError != null) setState(() => _newError = null);
                 },
                 decoration: requiredInputDecoration(
+                  context,
                   label: 'New Password',
                   required: true,
                   errorText: _newError,
@@ -134,6 +136,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                   if (_confirmError != null) setState(() => _confirmError = null);
                 },
                 decoration: requiredInputDecoration(
+                  context,
                   label: 'Confirm New Password',
                   required: true,
                   errorText: _confirmError,

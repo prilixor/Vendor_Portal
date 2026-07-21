@@ -14,6 +14,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import type { VerificationStatus } from "@/app/models";
 import { getVendorRoute } from "@/app/helpers/vendorNav";
+import { notificationDisplayMessage } from "@/app/helpers/adminComment";
 
 type DashboardNotification = {
   id: string;
@@ -473,7 +474,9 @@ const Dashboard = () => {
                 }`} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{n.title}</p>
-                  <p className="text-xs text-muted-foreground line-clamp-1">{n.message}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-1">
+                    {notificationDisplayMessage(n.message, n.notificationType ?? "")}
+                  </p>
                 </div>
                 <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
                   <Clock className="h-3 w-3" />

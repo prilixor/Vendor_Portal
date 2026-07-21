@@ -29,9 +29,9 @@ class ProfileProvider extends ChangeNotifier {
         _profile = ProfileModel.fromJson(response.data);
       }
     } on DioException catch (e) {
-      if (e.response?.statusCode == 401) {
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
         _profile = null;
-        _errorMessage = 'session_expired';
+        _errorMessage = 'auth_required';
       } else {
         _errorMessage = 'Failed to load profile. Please try again.';
       }

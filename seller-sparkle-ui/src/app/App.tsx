@@ -9,6 +9,7 @@ import { AppShell } from "@/app/components/layout/AppShell";
 
 import Index from "@/app/components/common/Index";
 import NotFound from "@/app/components/common/NotFound";
+import { PortalHostGuard } from "@/app/components/common/PortalHostGuard";
 import Login from "@/app/components/auth/Login";
 import Register from "@/app/components/auth/Register";
 import ForgotPassword from "@/app/components/auth/ForgotPassword";
@@ -75,6 +76,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <CartProvider>
+            <PortalHostGuard>
             <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
@@ -144,6 +146,7 @@ const App = () => (
 
             <Route path="*" element={<NotFound />} />
           </Routes>
+            </PortalHostGuard>
           </CartProvider>
         </AuthProvider>
       </BrowserRouter>

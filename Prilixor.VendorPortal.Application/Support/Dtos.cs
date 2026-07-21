@@ -33,4 +33,4 @@ public sealed record AiChatCommand(
 
 public sealed record AiChatResult(
     SupportTicketDto Ticket,
-    SupportMessageDto AiMessage);
+    SupportMessageDto? AiMessage);

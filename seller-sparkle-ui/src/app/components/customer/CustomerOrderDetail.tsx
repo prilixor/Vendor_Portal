@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/app/components/ui/sheet";
 import { Input } from "@/app/components/ui/input";
+import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea";
 import { toast } from "sonner";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
@@ -743,7 +744,7 @@ const CustomerOrderDetail = () => {
                             : "bg-muted text-muted-foreground mr-auto rounded-tl-none border"
                         )}
                       >
-                        <p className="break-words font-medium leading-relaxed">{msg.messageText}</p>
+                        <p className="break-words whitespace-pre-wrap font-medium leading-relaxed">{msg.messageText}</p>
                         <span className="text-[10px] opacity-75 mt-1.5 self-end font-semibold">
                           {new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
@@ -767,12 +768,17 @@ const CustomerOrderDetail = () => {
                   if (!newMessageText.trim()) return;
                   sendMessageMut.mutate(newMessageText.trim());
                 }}
-                className="flex items-center gap-2"
+                className="flex items-end gap-2"
               >
-                <Input
-                  placeholder="Type a message..."
+                <ChatMessageTextarea
+                  placeholder="Type a message... (Shift+Enter for new line)"
                   value={newMessageText}
-                  onChange={(e) => setNewMessageText(e.target.value)}
+                  onChange={setNewMessageText}
+                  onSubmit={() => {
+                    if (!newMessageText.trim() || sendMessageMut.isPending) return;
+                    sendMessageMut.mutate(newMessageText.trim());
+                  }}
+                  submitDisabled={sendMessageMut.isPending}
                   disabled={sendMessageMut.isPending}
                   className="flex-1"
                 />

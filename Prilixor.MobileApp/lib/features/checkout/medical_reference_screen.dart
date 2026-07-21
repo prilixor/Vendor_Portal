@@ -341,6 +341,7 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
           controller: _newHospitalName,
           style: const TextStyle(color: Colors.white),
           decoration: requiredInputDecoration(
+            context,
             label: 'Hospital Name',
             required: true,
             errorText: _newHospitalNameError,
@@ -354,7 +355,9 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
         TextField(
           controller: _newHospitalCity,
           style: const TextStyle(color: Colors.white),
-          decoration: requiredInputDecoration(label: 'City (Optional)'),
+          decoration: requiredInputDecoration(
+            context,
+            label: 'City (Optional)'),
         ),
         const SizedBox(height: 24),
         SizedBox(
@@ -501,6 +504,7 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
           controller: _newDoctorName,
           style: const TextStyle(color: Colors.white),
           decoration: requiredInputDecoration(
+            context,
             label: 'Doctor Full Name',
             required: true,
             errorText: _newDoctorNameError,
@@ -514,7 +518,8 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
         TextField(
           controller: _newDoctorSpec,
           style: const TextStyle(color: Colors.white),
-          decoration: requiredInputDecoration(label: 'Specialization (Optional)'),
+          decoration: requiredInputDecoration(
+            context,label: 'Specialization (Optional)'),
         ),
         const SizedBox(height: 24),
         SizedBox(

@@ -24,6 +24,19 @@ internal sealed class VendorUploadStorageService(
         VendorFileFolderType folderType = VendorFileFolderType.Documents)
     {
         var extension = Path.GetExtension(originalFileName);
+        if (string.IsNullOrWhiteSpace(extension) && !string.IsNullOrWhiteSpace(contentType))
+        {
+            extension = contentType.Trim().ToLowerInvariant() switch
+            {
+                "application/pdf" => ".pdf",
+                "image/png" => ".png",
+                "image/jpeg" => ".jpg",
+                "image/jpg" => ".jpg",
+                "image/webp" => ".webp",
+                "image/gif" => ".gif",
+                _ => extension
+            };
+        }
         var storedFileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
         var localRelativePath = VendorStoragePaths.LocalVendorUploadPath(vendorId, storedFileName, folderType);
 

@@ -122,6 +122,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   if (_nameError != null) setState(() => _nameError = null);
                 },
                 decoration: requiredInputDecoration(
+                  context,
                   label: 'Full Name',
                   required: true,
                   errorText: _nameError,
@@ -137,6 +138,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   if (_emailError != null) setState(() => _emailError = null);
                 },
                 decoration: requiredInputDecoration(
+                  context,
                   label: 'Email',
                   required: true,
                   errorText: _emailError,
@@ -149,6 +151,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 style: const TextStyle(color: Colors.white),
                 keyboardType: TextInputType.phone,
                 decoration: requiredInputDecoration(
+                  context,
                   label: 'Phone Number (Optional)',
                   prefixIcon: Icons.phone_outlined,
                 ),
@@ -162,6 +165,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   if (_passwordError != null) setState(() => _passwordError = null);
                 },
                 decoration: requiredInputDecoration(
+                  context,
                   label: 'Password',
                   required: true,
                   errorText: _passwordError,

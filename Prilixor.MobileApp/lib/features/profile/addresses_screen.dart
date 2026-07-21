@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/address_provider.dart';
 import '../../core/models/address_model.dart';
-import '../../core/providers/location_provider.dart';
 import '../../shared/widgets/required_field_ux.dart';
+import '../../shared/widgets/state_city_picker.dart';
 import 'mock_map_picker_screen.dart';
 
 class AddressesScreen extends StatefulWidget {
@@ -30,31 +30,12 @@ class _AddressesScreenState extends State<AddressesScreen> {
     final stateCtrl = TextEditingController(text: existingAddress?.state ?? '');
     final cityCtrl = TextEditingController(text: existingAddress?.city ?? '');
 
-    String? selectedStateIso2;
-    String? selectedCityName = existingAddress?.city;
     double? latitude = existingAddress?.latitude;
     double? longitude = existingAddress?.longitude;
     String? line1Error;
     String? stateError;
     String? cityError;
     String? postalError;
-
-    final locProvider = Provider.of<LocationProvider>(context, listen: false);
-    locProvider.fetchStates().then((_) {
-      if (existingAddress != null && existingAddress.state.isNotEmpty) {
-        try {
-          final match = locProvider.states.firstWhere(
-            (s) => s.name.toLowerCase() == existingAddress.state.toLowerCase() || s.iso2.toLowerCase() == existingAddress.state.toLowerCase(),
-          );
-          selectedStateIso2 = match.iso2;
-        } catch (_) {
-          selectedStateIso2 = existingAddress.state;
-        }
-        if (selectedStateIso2 != null) {
-          locProvider.fetchCities(selectedStateIso2!);
-        }
-      }
-    });
 
     showModalBottomSheet(
       context: context,
@@ -108,74 +89,13 @@ class _AddressesScreenState extends State<AddressesScreen> {
                       },
                     ),
                     const SizedBox(height: 12),
-                    Consumer<LocationProvider>(
-                      builder: (context, loc, _) {
-                        return GestureDetector(
-                          onTap: () {
-                            if (loc.states.isEmpty) return;
-                            _showPickerSheet(
-                              context,
-                              title: 'Select State',
-                              items: loc.states.map((s) => {'value': s.iso2, 'label': s.name}).toList(),
-                              onSelected: (val, label) {
-                                setState(() {
-                                  selectedStateIso2 = val;
-                                  stateCtrl.text = label;
-                                  selectedCityName = null;
-                                  cityCtrl.clear();
-                                  stateError = null;
-                                });
-                                loc.fetchCities(val);
-                              },
-                            );
-                          },
-                          child: AbsorbPointer(
-                            child: _buildTextField(
-                              stateCtrl,
-                              'State',
-                              required: true,
-                              hint: 'Select State',
-                              errorText: stateError,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    Consumer<LocationProvider>(
-                      builder: (context, loc, _) {
-                        return GestureDetector(
-                          onTap: () {
-                            if (selectedStateIso2 == null) {
-                              setState(() => stateError = 'State is required');
-                              showRequiredFieldsBlocked(context, message: 'Please select a state first.');
-                              return;
-                            }
-                            if (loc.isLoadingCities) return;
-                            _showPickerSheet(
-                              context,
-                              title: 'Select City',
-                              items: loc.cities.map((c) => {'value': c.name, 'label': c.name}).toList(),
-                              onSelected: (val, label) {
-                                setState(() {
-                                  selectedCityName = val;
-                                  cityCtrl.text = label;
-                                  cityError = null;
-                                });
-                              },
-                            );
-                          },
-                          child: AbsorbPointer(
-                            child: _buildTextField(
-                              cityCtrl,
-                              'City',
-                              required: true,
-                              hint: loc.isLoadingCities ? 'Loading cities...' : 'Select City',
-                              errorText: cityError,
-                            ),
-                          ),
-                        );
-                      },
+                    StateCityPickerFields(
+                      stateController: stateCtrl,
+                      cityController: cityCtrl,
+                      initialStateName: existingAddress?.state,
+                      initialCityName: existingAddress?.city,
+                      stateError: stateError,
+                      cityError: cityError,
                     ),
                     const SizedBox(height: 12),
                     _buildTextField(
@@ -196,8 +116,8 @@ class _AddressesScreenState extends State<AddressesScreen> {
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
                         onPressed: () async {
                           final l1 = requiredMessage(streetCtrl.text, message: 'Address line is required');
-                          final st = selectedStateIso2 == null ? 'State is required' : null;
-                          final ct = selectedCityName == null || selectedCityName!.isEmpty ? 'City is required' : null;
+                          final st = requiredMessage(stateCtrl.text, message: 'State is required');
+                          final ct = requiredMessage(cityCtrl.text, message: 'City is required');
                           final zip = requiredMessage(zipCtrl.text, message: 'Postal code is required');
                           setState(() {
                             line1Error = l1;
@@ -215,8 +135,8 @@ class _AddressesScreenState extends State<AddressesScreen> {
                             success = await provider.addAddress(
                               label: labelCtrl.text.isNotEmpty ? labelCtrl.text : 'Home',
                               line1: streetCtrl.text,
-                              city: cityCtrl.text.isNotEmpty ? cityCtrl.text : selectedCityName!,
-                              state: stateCtrl.text.isNotEmpty ? stateCtrl.text : selectedStateIso2!,
+                              city: cityCtrl.text.trim(),
+                              state: stateCtrl.text.trim(),
                               postal: zipCtrl.text,
                               latitude: latitude,
                               longitude: longitude,
@@ -227,8 +147,8 @@ class _AddressesScreenState extends State<AddressesScreen> {
                               existingAddress.id,
                               label: labelCtrl.text.isNotEmpty ? labelCtrl.text : 'Home',
                               line1: streetCtrl.text,
-                              city: cityCtrl.text.isNotEmpty ? cityCtrl.text : selectedCityName!,
-                              state: stateCtrl.text.isNotEmpty ? stateCtrl.text : selectedStateIso2!,
+                              city: cityCtrl.text.trim(),
+                              state: stateCtrl.text.trim(),
                               postal: zipCtrl.text,
                               latitude: latitude,
                               longitude: longitude,
@@ -271,27 +191,13 @@ class _AddressesScreenState extends State<AddressesScreen> {
       style: const TextStyle(color: Colors.white),
       onChanged: onChanged,
       decoration: requiredInputDecoration(
+        context,
         label: label,
         required: required,
         hintText: hint,
         errorText: errorText,
         fillColor: Colors.white10,
       ),
-    );
-  }
-
-  void _showPickerSheet(BuildContext context, {required String title, required List<Map<String, String>> items, required Function(String, String) onSelected}) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E293B),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-          child: _PickerSheet(title: title, items: items, onSelected: onSelected),
-        );
-      },
     );
   }
 
@@ -389,66 +295,6 @@ class _AddressesScreenState extends State<AddressesScreen> {
               child: const Icon(Icons.add, color: Colors.white),
             )
           : null,
-    );
-  }
-}
-
-class _PickerSheet extends StatefulWidget {
-  final String title;
-  final List<Map<String, String>> items;
-  final Function(String, String) onSelected;
-
-  const _PickerSheet({required this.title, required this.items, required this.onSelected});
-
-  @override
-  State<_PickerSheet> createState() => _PickerSheetState();
-}
-
-class _PickerSheetState extends State<_PickerSheet> {
-  String _searchQuery = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final filteredItems = widget.items.where((i) => i['label']!.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
-
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.6,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Text(widget.title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          TextField(
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: 'Search...',
-              hintStyle: const TextStyle(color: Colors.white54),
-              prefixIcon: const Icon(Icons.search, color: Colors.white54),
-              filled: true,
-              fillColor: Colors.white10,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            ),
-            onChanged: (val) => setState(() => _searchQuery = val),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.builder(
-              itemCount: filteredItems.length,
-              itemBuilder: (context, index) {
-                final item = filteredItems[index];
-                return ListTile(
-                  title: Text(item['label']!, style: const TextStyle(color: Colors.white)),
-                  onTap: () {
-                    widget.onSelected(item['value']!, item['label']!);
-                    Navigator.pop(context);
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

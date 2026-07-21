@@ -59,7 +59,7 @@ class NotificationProvider extends ChangeNotifier {
       }
     } on DioException catch (e) {
       if (_notifications.isEmpty) {
-        if (e.response?.statusCode == 401) {
+        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
           _errorMessage = 'auth_required';
         } else {
           _errorMessage = 'Failed to load alerts. Please try again.';

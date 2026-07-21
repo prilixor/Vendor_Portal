@@ -95,6 +95,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   if (_emailError != null) setState(() => _emailError = null);
                 },
                 decoration: requiredInputDecoration(
+                  context,
                   label: 'Email Address',
                   required: true,
                   errorText: _emailError,

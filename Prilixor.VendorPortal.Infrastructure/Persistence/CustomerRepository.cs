@@ -806,6 +806,46 @@ public sealed class CustomerRepository(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, List<string>>> GetCustomerOrderAssetTagsByOrderIdsAsync(
+        IEnumerable<Guid> orderIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = orderIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new Dictionary<Guid, List<string>>();
+
+        var links = await customerDb.CustomerRentalOrderAssets
+            .AsNoTracking()
+            .Where(x => ids.Contains(x.CustomerRentalOrderId))
+            .ToListAsync(cancellationToken);
+
+        if (links.Count == 0)
+            return new Dictionary<Guid, List<string>>();
+
+        var assetIds = links.Select(x => x.VendorProductAssetId).Distinct().ToList();
+        var assetTags = await vendorDb.VendorProductAssets
+            .AsNoTracking()
+            .Where(a => assetIds.Contains(a.Id))
+            .ToDictionaryAsync(a => a.Id, a => a.AssetTag, cancellationToken);
+
+        var result = new Dictionary<Guid, List<string>>();
+        foreach (var link in links)
+        {
+            if (!assetTags.TryGetValue(link.VendorProductAssetId, out var tag))
+                continue;
+
+            if (!result.TryGetValue(link.CustomerRentalOrderId, out var tags))
+            {
+                tags = [];
+                result[link.CustomerRentalOrderId] = tags;
+            }
+
+            tags.Add(tag);
+        }
+
+        return result;
+    }
+
     public Task RemoveCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken)
     {
         customerDb.CustomerRentalOrderAssets.Remove(asset);
@@ -890,6 +930,7 @@ public sealed class CustomerRepository(
                 o.EndDate.HasValue &&
                 o.EndDate.Value >= fromDate &&
                 o.EndDate.Value <= toDate &&
+                o.OrderType.ToLower() != "buy" &&
                 (o.Status == "confirmed" || o.Status == "active" || o.Status == "in_transit"))
             .OrderBy(o => o.EndDate)
             .ToListAsync(cancellationToken);
@@ -923,6 +964,7 @@ public sealed class CustomerRepository(
                 o.EndDate.HasValue &&
                 o.EndDate.Value >= fromDate &&
                 o.EndDate.Value <= toDate &&
+                o.OrderType.ToLower() != "buy" &&
                 (o.Status == "confirmed" || o.Status == "active" || o.Status == "in_transit"))
             .OrderBy(o => o.EndDate)
             .ToListAsync(cancellationToken);
@@ -943,6 +985,7 @@ public sealed class CustomerRepository(
                 o.EndDate.HasValue &&
                 o.EndDate.Value >= fromDate &&
                 o.EndDate.Value <= toDate &&
+                o.OrderType.ToLower() != "buy" &&
                 (o.Status == "confirmed" || o.Status == "active" || o.Status == "in_transit"))
             .OrderBy(o => o.EndDate)
             .ToListAsync(cancellationToken);

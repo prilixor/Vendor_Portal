@@ -1,17 +1,21 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MessageCircle, X, Send, Loader2, Paperclip, Bot, User, FileText, Plus, Ticket, ChevronLeft, AlertCircle, CheckCircle2, RefreshCw, XCircle } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
-import { Input } from "@/app/components/ui/input";
+import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea";
 import { Badge } from "@/app/components/ui/badge";
 import { supportApi, SupportMessageDto, SupportTicketDto, AiChatResult } from "@/app/services/supportApi";
+import { useSupportChat } from "@/app/contexts/SupportChatContext";
 import { cn } from "@/app/helpers/utils";
+import { shouldUseAiChat } from "@/app/helpers/supportChatRouting";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
 interface SupportChatProps {
   vendorId: string;
 }
+
+const SUPPORT_CHAT_POLL_MS = 3000;
 
 const QUICK_REPLIES = [
   { label: "Product Issue", icon: "📦", category: "Products" },
@@ -42,6 +46,7 @@ const getStatusIcon = (status: string) => {
 };
 
 export const SupportChat = ({ vendorId }: SupportChatProps) => {
+  const { pendingRequest, consumePendingRequest } = useSupportChat();
   const [isOpen, setIsOpen] = useState(false);
   const [view, setView] = useState<"welcome" | "chat" | "tickets">("welcome");
   const [messages, setMessages] = useState<SupportMessageDto[]>([]);
@@ -54,7 +59,6 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // Load tickets when widget opens or ticket list view is shown
   useEffect(() => {
@@ -63,21 +67,42 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
     }
   }, [isOpen, view]);
 
-  // Poll for new messages when a ticket is active
+  const refreshActiveConversation = useCallback(async () => {
+    if (!ticketId) return;
+    try {
+      const [msgs, ticketList] = await Promise.all([
+        supportApi.getTicketMessages(ticketId),
+        supportApi.getVendorTickets(vendorId),
+      ]);
+      setMessages(msgs);
+      const active = ticketList.find((t) => t.id === ticketId);
+      if (active) {
+        setTicketStatus(active.status);
+      }
+    } catch {
+      // silent background refresh
+    }
+  }, [ticketId, vendorId]);
+
+  // Poll for new messages while chat is open (admin replies, etc.)
   useEffect(() => {
     if (!ticketId || !isOpen || view !== "chat") return;
 
-    const interval = setInterval(async () => {
-      try {
-        const msgs = await supportApi.getTicketMessages(ticketId);
-        setMessages(msgs);
-      } catch {
-        // silent
-      }
-    }, 8000);
+    void refreshActiveConversation();
+    const interval = setInterval(() => {
+      void refreshActiveConversation();
+    }, SUPPORT_CHAT_POLL_MS);
 
-    return () => clearInterval(interval);
-  }, [ticketId, isOpen, view]);
+    const onFocus = () => {
+      void refreshActiveConversation();
+    };
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [ticketId, isOpen, view, refreshActiveConversation]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -120,10 +145,22 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
 
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
 
-  const handleSendMessage = async (text: string, category?: string, fileUrls?: string[]) => {
+  const handleSendMessage = async (
+    text: string,
+    category?: string,
+    fileUrls?: string[],
+    forceNewTicket = false,
+  ) => {
     if (!text.trim() || vendorId === "undefined") return;
 
-    setAiThinking(true);
+    const useAi = shouldUseAiChat({
+      ticketId,
+      ticketStatus,
+      messages,
+      forceNewTicket,
+    });
+
+    setAiThinking(useAi);
 
     // Add optimistic user message
     const optimisticMsg: SupportMessageDto = {
@@ -138,20 +175,44 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
     setNewMessage("");
 
     try {
-      const result = await supportApi.aiChat({
-        vendorId,
-        message: text.trim(),
-        category: category,
-        forceNewTicket: ticketId === null,
-        attachmentUrls: fileUrls,
-      });
+      let activeTicketId = ticketId;
 
-      setTicketId(result.ticket.id);
-      setTicketStatus(result.ticket.status);
+      if (useAi) {
+        const result = await supportApi.aiChat({
+          vendorId,
+          message: text.trim(),
+          category: category,
+          forceNewTicket: forceNewTicket && ticketId === null,
+          attachmentUrls: fileUrls,
+        });
+
+        activeTicketId = result.ticket.id;
+        setTicketId(result.ticket.id);
+        setTicketStatus(result.ticket.status);
+      } else {
+        if (!ticketId) {
+          throw new Error("Missing active ticket.");
+        }
+
+        await supportApi.sendMessage(ticketId, {
+          senderId: vendorId,
+          senderType: "Vendor",
+          message: text.trim(),
+        });
+
+        const tickets = await supportApi.getVendorTickets(vendorId);
+        const active = tickets.find((ticket) => ticket.id === ticketId);
+        if (active) {
+          setTicketStatus(active.status);
+        }
+      }
+
       setView("chat");
 
-      const msgs = await supportApi.getTicketMessages(result.ticket.id);
-      setMessages(msgs);
+      if (activeTicketId) {
+        const msgs = await supportApi.getTicketMessages(activeTicketId);
+        setMessages(msgs);
+      }
     } catch {
       toast.error("Failed to send message. Please try again.");
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
@@ -165,6 +226,28 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
     handleSendMessage(label, category);
   };
 
+  useEffect(() => {
+    if (!pendingRequest) return;
+
+    const request = pendingRequest;
+    consumePendingRequest();
+
+    setIsOpen(true);
+    setView("chat");
+    setTicketId(null);
+    setTicketStatus(null);
+    setMessages([]);
+    setNewMessage("");
+    setAiThinking(false);
+
+    void handleSendMessage(
+      request.message,
+      request.category,
+      undefined,
+      true,
+    );
+  }, [pendingRequest, consumePendingRequest]);
+
   const handleNewConversation = () => {
     setTicketId(null);
     setTicketStatus(null);
@@ -176,14 +259,18 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
 
   const isTicketLocked = ticketStatus === "Closed";
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (newMessage.trim() && !aiThinking) {
-        handleSendMessage(newMessage);
-      }
-    }
-  };
+  const waitingForHumanSupport = useMemo(() => {
+    if (messages.length === 0 || aiThinking) return false;
+    const hasAdmin = messages.some((m) => m.senderType === "Admin");
+    if (hasAdmin) return false;
+    const hasEscalation = messages.some(
+      (m) =>
+        m.senderType === "AI"
+        && m.message.toLowerCase().includes("support team will assist"),
+    );
+    const last = messages[messages.length - 1];
+    return hasEscalation && last?.senderType === "Vendor";
+  }, [messages, aiThinking]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -429,7 +516,7 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
                     </div>
                     <div
                       className={cn(
-                        "px-4 py-2.5 rounded-2xl text-sm shadow-sm leading-relaxed break-words",
+                        "px-4 py-2.5 rounded-2xl text-sm shadow-sm leading-relaxed break-words whitespace-pre-wrap",
                         msg.senderType === "Vendor"
                           ? "bg-primary text-primary-foreground rounded-tr-none"
                           : msg.senderType === "AI"
@@ -454,6 +541,12 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
                   </div>
                 )}
 
+                {waitingForHumanSupport && (
+                  <p className="text-center text-xs text-muted-foreground pb-1">
+                    Message received · waiting for support team
+                  </p>
+                )}
+
                 {/* AI Typing Indicator */}
                 {aiThinking && view === "chat" && (
                   <div className="flex flex-col items-start gap-2">
@@ -474,56 +567,63 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
               </div>
 
               {/* Input Bar */}
-              <div className="p-3 bg-background border-t border-border shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
+              <div className="shrink-0 border-t border-border bg-background px-4 py-3 space-y-2">
                 {isTicketLocked ? (
-                  <div className="flex items-center justify-center py-2 text-xs text-muted-foreground font-medium italic bg-muted/30 rounded-2xl border border-dashed border-border">
+                  <div className="flex items-center justify-center py-3 text-xs text-muted-foreground font-medium italic bg-muted/30 rounded-2xl border border-dashed border-border">
                     <XCircle className="h-3.5 w-3.5 mr-1.5" />
                     This ticket is {ticketStatus?.toLowerCase()}. Start a new conversation for further help.
                   </div>
                 ) : (
-                <div className="flex items-center gap-2 bg-muted/50 rounded-2xl border border-border focus-within:border-primary/30 focus-within:ring-4 focus-within:ring-primary/5 transition-all p-1.5">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="h-9 w-9 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/5 shrink-0"
-                    disabled={aiThinking}
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                  <Input
-                    ref={inputRef}
-                    placeholder="Type your question..."
-                    className="flex-1 border-none bg-transparent shadow-none focus-visible:ring-0 h-9 px-1 text-sm placeholder:text-muted-foreground/60"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    disabled={aiThinking}
-                  />
-                  <Button
-                    size="icon"
-                    onClick={() => handleSendMessage(newMessage)}
-                    disabled={aiThinking || !newMessage.trim()}
-                    className="h-9 w-9 rounded-full bg-primary text-white hover:bg-primary/90 shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none shrink-0 transition-all active:scale-95"
-                  >
-                    {aiThinking ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
+                  <div className="flex items-end gap-2.5">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="mb-0.5 h-10 w-10 shrink-0 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/5"
+                      disabled={aiThinking}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                    <div className="flex min-w-0 flex-1 items-end gap-2 rounded-2xl border border-border bg-muted/30 px-3 py-2 focus-within:border-primary/30 focus-within:ring-2 focus-within:ring-primary/10">
+                      <ChatMessageTextarea
+                        placeholder="Type your question…"
+                        className="min-h-[48px] max-h-[120px] flex-1 border-none bg-transparent px-0 py-2 text-sm shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/60"
+                        value={newMessage}
+                        onChange={setNewMessage}
+                        onSubmit={() => {
+                          if (newMessage.trim() && !aiThinking) {
+                            handleSendMessage(newMessage);
+                          }
+                        }}
+                        submitDisabled={aiThinking}
+                        disabled={aiThinking}
+                        rows={2}
+                      />
+                      <Button
+                        size="icon"
+                        onClick={() => handleSendMessage(newMessage)}
+                        disabled={aiThinking || !newMessage.trim()}
+                        className="mb-0.5 h-10 w-10 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-md disabled:opacity-50"
+                      >
+                        {aiThinking ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 )}
-                <p className="text-[9px] text-muted-foreground/50 text-center mt-1.5 font-medium">
-                  Powered by AI · For urgent issues, admin will respond
+                <p className="text-center text-[10px] leading-relaxed text-muted-foreground/55">
+                  Powered by AI · Admin may reply for urgent issues
                 </p>
               </div>
             </>

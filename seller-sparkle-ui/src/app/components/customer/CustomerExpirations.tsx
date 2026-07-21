@@ -27,14 +27,14 @@ const CustomerExpirations = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Item expirations</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Upcoming order end dates for the next 30 days.</p>
+        <h1 className="text-2xl font-bold tracking-tight">Rental expirations</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Track rental end dates for the next 30 days.</p>
       </div>
 
       {!data?.length ? (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No upcoming expirations in the selected window.
+            No upcoming rental end dates in the selected window.
           </CardContent>
         </Card>
       ) : (

@@ -5,6 +5,7 @@ import { chatApi, type ChatSessionApi, type ChatMessageApi } from "@/app/service
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
+import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea";
 import { ScrollArea } from "@/app/components/ui/scroll-area";
 import { Separator } from "@/app/components/ui/separator";
 import { Skeleton } from "@/app/components/ui/skeleton";
@@ -265,7 +266,7 @@ const VendorChats = () => {
                                 : "bg-muted text-muted-foreground rounded-bl-none border border-border"
                             )}
                           >
-                            <p className="break-words font-medium leading-relaxed">
+                            <p className="break-words whitespace-pre-wrap font-medium leading-relaxed">
                               {msg.messageText}
                             </p>
                             <div className="flex items-center justify-between gap-2 mt-1">
@@ -287,11 +288,16 @@ const VendorChats = () => {
 
               {/* Thread Reply Input Footer */}
               <div className="p-4 border-t border-border bg-muted/10">
-                <form onSubmit={handleSend} className="flex gap-2 items-center">
-                  <Input
-                    placeholder="Type a message..."
+                <form onSubmit={handleSend} className="flex gap-2 items-end">
+                  <ChatMessageTextarea
+                    placeholder="Type a message... (Shift+Enter for new line)"
                     value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
+                    onChange={setReplyText}
+                    onSubmit={() => {
+                      if (!replyText.trim() || sendReplyMut.isPending) return;
+                      sendReplyMut.mutate(replyText.trim());
+                    }}
+                    submitDisabled={sendReplyMut.isPending}
                     disabled={sendReplyMut.isPending}
                     className="flex-1"
                   />

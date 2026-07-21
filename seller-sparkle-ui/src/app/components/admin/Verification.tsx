@@ -118,6 +118,22 @@ const downloadUrl = async (url: string) => {
   }
 };
 
+const VerificationDetail = ({ label, value }: { label: string; value: string }) => (
+  <div>
+    <p className="mb-1 text-xs text-muted-foreground">{label}</p>
+    <p className="text-sm font-medium break-all">{value || "—"}</p>
+  </div>
+);
+
+const BankAccountDetailsGrid = ({ bank }: { bank: VendorBankAccountDto }) => (
+  <div className="grid grid-cols-1 gap-3 rounded-md border border-border/60 bg-muted/20 p-3 sm:grid-cols-2">
+    <VerificationDetail label="Account holder" value={bank.accountHolderName} />
+    <VerificationDetail label="Bank name" value={bank.bankName} />
+    <VerificationDetail label="Account number" value={bank.accountNumber} />
+    <VerificationDetail label="IFSC code" value={bank.ifscCode} />
+  </div>
+);
+
 const Verification = () => {
   const [vendors, setVendors] = useState<VendorDto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -162,6 +178,7 @@ const Verification = () => {
   const [bankAccounts, setBankAccounts] = useState<VendorBankAccountDto[]>([]);
   const [loadingBanks, setLoadingBanks] = useState(false);
   const [previewDocument, setPreviewDocument] = useState<{ url: string; type: string } | null>(null);
+  const [previewBank, setPreviewBank] = useState<VendorBankAccountDto | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [vendorProfile, setVendorProfile] = useState<VendorProfileDto | null>(null);
   const [vendorProfiles, setVendorProfiles] = useState<Map<string, VendorProfileDto>>(new Map());
@@ -841,7 +858,7 @@ const Verification = () => {
                   <div className="space-y-2">
                     {bankAccounts.map((b) => (
                       <div key={b.id} className="rounded-lg border border-border p-3">
-                        {/* Desktop: horizontal layout */}
+                        {/* Desktop: horizontal layout — same pattern as documents */}
                         <div className="hidden sm:flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2 min-w-0 flex-1">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
@@ -849,7 +866,10 @@ const Verification = () => {
                             </div>
                             <div className="min-w-0">
                               <p className="text-sm font-medium truncate">{b.bankName}</p>
-                              <p className="text-xs text-muted-foreground truncate">{b.accountHolderName} ···{b.accountNumber.slice(-4)}</p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {b.accountHolderName}
+                                {b.accountNumber.length > 4 ? ` ···${b.accountNumber.slice(-4)}` : ""}
+                              </p>
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
@@ -886,6 +906,15 @@ const Verification = () => {
                                 )}
                               </Button>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setPreviewBank(b)}
+                              className="h-8 w-8"
+                              aria-label="View bank details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                         {/* Mobile: vertical layout with actions below */}
@@ -899,11 +928,14 @@ const Verification = () => {
                                 <p className="text-sm font-medium leading-tight flex-1">{b.bankName}</p>
                                 <StatusBadge status={b.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} className="text-[10px] px-2 py-0.5 shrink-0" />
                               </div>
-                              <p className="text-xs text-muted-foreground mt-0.5 break-all line-clamp-1">{b.accountHolderName} ···{b.accountNumber.slice(-4)}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5 break-all line-clamp-1">
+                                {b.accountHolderName}
+                                {b.accountNumber.length > 4 ? ` ···${b.accountNumber.slice(-4)}` : ""}
+                              </p>
                             </div>
                           </div>
-                          <div className="mt-3 grid grid-cols-2 gap-2">
-                            {selected && b.verificationStatus !== "approved" && (
+                          <div className="mt-3 grid grid-cols-3 gap-2">
+                            {selected && b.verificationStatus !== "approved" ? (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -918,8 +950,10 @@ const Verification = () => {
                                 )}
                                 <span className="ml-1">Approve</span>
                               </Button>
+                            ) : (
+                              <div />
                             )}
-                            {selected && b.verificationStatus !== "rejected" && (
+                            {selected && b.verificationStatus !== "rejected" ? (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -934,7 +968,18 @@ const Verification = () => {
                                 )}
                                 <span className="ml-1">Reject</span>
                               </Button>
+                            ) : (
+                              <div />
                             )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPreviewBank(b)}
+                              className="h-8 px-1 text-[10px]"
+                            >
+                              <Eye className="h-3 w-3" />
+                              <span className="ml-1">Preview</span>
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -1124,6 +1169,38 @@ const Verification = () => {
                 Download
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bank account details modal — opened via eye icon, like document preview */}
+      <Dialog open={previewBank !== null} onOpenChange={(open) => { if (!open) setPreviewBank(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Bank account details — {previewBank?.bankName}</DialogTitle>
+          </DialogHeader>
+          {previewBank && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                  <Building className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold truncate">{previewBank.bankName}</p>
+                  <p className="text-sm text-muted-foreground truncate">{previewBank.accountHolderName}</p>
+                </div>
+                <StatusBadge
+                  status={previewBank.verificationStatus as "pending" | "approved" | "rejected" | "under_review"}
+                  className="shrink-0"
+                />
+              </div>
+              <BankAccountDetailsGrid bank={previewBank} />
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewBank(null)}>
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

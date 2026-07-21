@@ -50,9 +50,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ],
       ),
       body: !auth.isAuthenticated || provider.errorMessage == 'auth_required'
-          ? const GuestSignInPrompt(
+          ? GuestSignInPrompt.guest(
               title: 'Sign in to view alerts',
               message: 'Order updates and notifications appear here after you sign in.',
+              icon: Icons.notifications_none_rounded,
             )
           : provider.isLoading && provider.notifications.isEmpty
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))

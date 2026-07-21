@@ -8,6 +8,19 @@ namespace Prilixor.VendorPortal.API.Extensions
     {
         public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
         {
+            // Browser reload/navigation aborts the HTTP request while EF/Npgsql is still connecting.
+            // That surfaces as OperationCanceledException — not a server bug.
+            if (exception is OperationCanceledException &&
+                (httpContext.RequestAborted.IsCancellationRequested || cancellationToken.IsCancellationRequested))
+            {
+                if (!httpContext.Response.HasStarted)
+                {
+                    httpContext.Response.StatusCode = 499; // Client Closed Request
+                }
+
+                return true;
+            }
+
             var errorId = Guid.NewGuid().ToString();
             logger.LogError(exception, "An unhandled exception has occurred: {ErrorId}. {ExceptionMessage}", errorId, exception.Message);
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/auth/auth_provider.dart';
-import '../../core/theme.dart';
+import 'core/auth/auth_provider.dart';
+import 'core/theme.dart';
 import 'features/auth/login_screen.dart';
 import 'features/dashboard/customer_dashboard.dart';
 
@@ -52,6 +52,8 @@ class PrilixorMobileApp extends StatelessWidget {
     return MaterialApp(
       title: 'Prilixor',
       theme: AppTheme.darkTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.dark,
       home: const AuthGate(),
       debugShowCheckedModeBanner: false,
     );
@@ -85,9 +87,10 @@ class _AuthGateState extends State<AuthGate> {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     if (auth.isBootstrapping) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF0F172A),
-        body: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))),
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
+        ),
       );
     }
     if (auth.isAuthenticated) {
@@ -102,11 +105,12 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+            colors: [colors.background, colors.surface],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -118,28 +122,28 @@ class WelcomeScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(
+                Icon(
                   Icons.storefront_rounded,
                   size: 100,
-                  color: Color(0xFF6C63FF),
+                  color: colors.accent,
                 ),
                 const SizedBox(height: 32),
-                const Text(
+                Text(
                   'Prilixor Mobile',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: colors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Browse, rent, and buy premium products seamlessly on the go.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.grey,
+                    color: colors.textMuted,
                   ),
                 ),
                 const SizedBox(height: 48),
@@ -155,8 +159,8 @@ class WelcomeScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white70,
-                    side: const BorderSide(color: Colors.white24),
+                    foregroundColor: colors.textSecondary,
+                    side: BorderSide(color: colors.border),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   onPressed: () {

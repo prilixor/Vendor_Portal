@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/profile_provider.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../shared/utils/require_auth.dart';
+import '../../shared/widgets/guest_sign_in_prompt.dart';
 import '../auth/login_screen.dart';
 import 'addresses_screen.dart';
 import '../chat/chat_sessions_screen.dart';
@@ -43,6 +44,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
+  Future<void> _signInAgain() async {
+    final profile = Provider.of<ProfileProvider>(context, listen: false);
+    profile.clearProfile();
+    await Provider.of<AuthProvider>(context, listen: false).logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final profileProvider = Provider.of<ProfileProvider>(context);
@@ -56,28 +68,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           backgroundColor: const Color(0xFF0F172A),
           elevation: 0,
         ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.person_outline, size: 64, color: Colors.white24),
-                const SizedBox(height: 16),
-                const Text('Sign in to manage your account', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                const Text('Addresses, messages, and settings require login.', style: TextStyle(color: Colors.white54), textAlign: TextAlign.center),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginScreen(popOnSuccess: true)),
-                  ),
-                  child: const Text('Sign in', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ),
+        body: GuestSignInPrompt.guest(
+          title: 'Sign in to manage your account',
+          message: 'Addresses, messages, expirations, and settings are available after you sign in.',
+          icon: Icons.person_outline,
         ),
       );
     }
@@ -99,49 +93,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: profileProvider.isLoading && profileProvider.profile == null
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
           : profileProvider.profile == null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.lock_outline, size: 48, color: Colors.white24),
-                        const SizedBox(height: 16),
-                        Text(
-                          profileProvider.errorMessage == 'session_expired'
-                              ? 'Your session expired'
-                              : (profileProvider.errorMessage ?? 'Failed to load profile'),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Please sign in again to continue.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white54),
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton(
-                          onPressed: () async {
-                            final profile = Provider.of<ProfileProvider>(context, listen: false);
-                            profile.clearProfile();
-                            await authProvider.logout();
-                            if (!context.mounted) return;
-                            Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(builder: (_) => const LoginScreen()),
-                              (_) => false,
-                            );
-                          },
-                          child: const Text('Sign in again', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                        const SizedBox(height: 12),
-                        TextButton(
-                          onPressed: () => profileProvider.fetchProfile(),
-                          child: const Text('Retry', style: TextStyle(color: Colors.white70)),
-                        ),
-                      ],
-                    ),
+              ? Scaffold(
+                  backgroundColor: const Color(0xFF0F172A),
+                  appBar: AppBar(
+                    title: const Text('My Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    backgroundColor: const Color(0xFF0F172A),
+                    elevation: 0,
                   ),
+                  body: profileProvider.errorMessage == 'auth_required' ||
+                          profileProvider.errorMessage == 'session_expired'
+                      ? GuestSignInPrompt.sessionExpired(onSignInAgain: _signInAgain)
+                      : GuestSignInPrompt.loadError(
+                          title: 'Could not load profile',
+                          message: profileProvider.errorMessage ??
+                              'Something went wrong while loading your account. Please try again.',
+                          onRetry: () => profileProvider.fetchProfile(),
+                          onSignInAgain: _signInAgain,
+                        ),
                 )
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
@@ -197,7 +165,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             const Divider(color: Colors.white10, height: 1),
                             _buildMenuItem(
                               icon: Icons.event_busy_outlined,
-                              title: 'Item expirations',
+                              title: 'Rental expirations',
                               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExpirationsScreen())),
                             ),
                             const Divider(color: Colors.white10, height: 1),

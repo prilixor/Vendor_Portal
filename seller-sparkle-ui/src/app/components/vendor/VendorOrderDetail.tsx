@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check } from "lucide-react";
+import { Check, Barcode, CheckCircle2 } from "lucide-react";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -12,6 +12,134 @@ import { Input } from "@/app/components/ui/input";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto, type VendorProductAssetApiDto, type OrderContinuationsDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
+
+const filterAssetsForOrder = (
+  assets: VendorProductAssetApiDto[],
+  listingId: string,
+  productVariantId?: string,
+) =>
+  assets.filter((asset) => {
+    if (asset.vendorProductListingId !== listingId) return false;
+    if (asset.status.trim().toLowerCase() !== "available") return false;
+    if (productVariantId && asset.productVariantId && asset.productVariantId !== productVariantId) {
+      return false;
+    }
+    return true;
+  });
+
+const normalizeAssetTag = (tag: string) => tag.trim().toLowerCase();
+
+const getUsedAssetTags = (tags: string[], excludeIndex: number) =>
+  new Set(
+    tags
+      .map((tag, index) => (index === excludeIndex ? "" : tag))
+      .map(normalizeAssetTag)
+      .filter(Boolean),
+  );
+
+const filterAvailableAssets = (
+  assets: VendorProductAssetApiDto[],
+  usedTags: Set<string>,
+  query: string,
+) => {
+  const q = query.trim().toLowerCase();
+  return assets.filter((asset) => {
+    const tag = normalizeAssetTag(asset.assetTag);
+    if (usedTags.has(tag)) return false;
+    if (q && !tag.includes(q)) return false;
+    return true;
+  });
+};
+
+const countRemainingAssets = (assets: VendorProductAssetApiDto[], tags: string[]) => {
+  const used = new Set(tags.map(normalizeAssetTag).filter(Boolean));
+  return assets.filter((asset) => !used.has(normalizeAssetTag(asset.assetTag))).length;
+};
+
+const hasDuplicateAssetTags = (tags: string[]) => {
+  const seen = new Set<string>();
+  for (const tag of tags) {
+    const normalized = normalizeAssetTag(tag);
+    if (!normalized) continue;
+    if (seen.has(normalized)) return true;
+    seen.add(normalized);
+  }
+  return false;
+};
+
+const AssignedSerialNumbersCard = ({ tags }: { tags: string[] }) => {
+  const assigned = tags.map((tag) => tag.trim()).filter(Boolean);
+  if (assigned.length === 0) return null;
+
+  return (
+    <Card className="border-border/80 shadow-sm overflow-hidden">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Barcode className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-lg font-semibold leading-tight">Assigned serial numbers</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Linked to this line item for dispatch and inventory tracking.
+              </p>
+            </div>
+          </div>
+          <Badge variant="secondary" className="shrink-0 font-normal tabular-nums">
+            {assigned.length} {assigned.length === 1 ? "unit" : "units"}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {assigned.map((tag, idx) => (
+            <div
+              key={`${tag}-${idx}`}
+              className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5 transition-colors hover:bg-muted/50"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background text-xs font-semibold text-muted-foreground">
+                {idx + 1}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Serial</p>
+                <p className="font-mono text-sm font-semibold truncate" title={tag}>
+                  {tag}
+                </p>
+              </div>
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+const AssignedSerialNumbersList = ({ tags }: { tags: string[] }) => {
+  const assigned = tags.map((tag) => tag.trim()).filter(Boolean);
+  if (assigned.length === 0) return null;
+
+  return (
+    <div className="grid gap-2">
+      {assigned.map((tag, idx) => (
+        <div
+          key={`${tag}-${idx}`}
+          className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5"
+        >
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background text-xs font-semibold text-muted-foreground">
+            {idx + 1}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Item {idx + 1}</p>
+            <p className="font-mono text-sm font-semibold truncate">{tag}</p>
+          </div>
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const getTimelineSteps = (orderType?: string) => {
   const isBuy = orderType?.toLowerCase() === "buy";
@@ -240,8 +368,71 @@ const VendorOrderDetail = () => {
     [order],
   );
 
+  const activeOrder = useMemo(
+    () => orderGroupItems.find((item) => item.orderId === currentItemId) ?? order,
+    [orderGroupItems, currentItemId, order],
+  );
+
+  const resetDispatchState = useCallback(() => {
+    setDispatchAssetTags([]);
+    setAvailableAssets([]);
+    setOpenDropdowns({});
+    setLoadingAssets(false);
+  }, []);
+
+  const loadDispatchAssets = useCallback(
+    async (listingId: string, productVariantId?: string) => {
+      if (!user) return;
+      setLoadingAssets(true);
+      setAvailableAssets([]);
+      try {
+        const data = await vendorOnboardingApi.getVendorProductAssets(user.id, listingId);
+        setAvailableAssets(filterAssetsForOrder(data, listingId, productVariantId));
+      } catch (error) {
+        console.error("Failed to load dispatch assets", error);
+        setAvailableAssets([]);
+      } finally {
+        setLoadingAssets(false);
+      }
+    },
+    [user?.id],
+  );
+
+  useEffect(() => {
+    if (!dispatchDialogOpen || !activeOrder || !user) return;
+
+    const existingTags = (activeOrder.assignedAssetTags ?? []).filter((tag) => tag.trim() !== "");
+    setDispatchAssetTags(
+      existingTags.length > 0 ? existingTags : new Array(activeOrder.quantity).fill(""),
+    );
+    setOpenDropdowns({});
+
+    if (existingTags.length > 0) {
+      setAvailableAssets([]);
+      setLoadingAssets(false);
+      return;
+    }
+
+    void loadDispatchAssets(activeOrder.listingId, activeOrder.productVariantId);
+  }, [
+    dispatchDialogOpen,
+    activeOrder?.orderId,
+    activeOrder?.listingId,
+    activeOrder?.productVariantId,
+    activeOrder?.quantity,
+    activeOrder?.assignedAssetTags,
+    user?.id,
+    loadDispatchAssets,
+  ]);
+
+  const handleDispatchDialogChange = (open: boolean) => {
+    setDispatchDialogOpen(open);
+    if (!open) resetDispatchState();
+  };
+
   const handleSelectItem = (itemId: string) => {
     if (itemId === currentItemId) return;
+    handleDispatchDialogChange(false);
     const fromList = allOrders.find((o) => o.orderId === itemId);
     if (fromList) {
       setOrder(fromList);
@@ -251,32 +442,41 @@ const VendorOrderDetail = () => {
   };
 
   const handleStatusChange = async (status: "in_transit" | "active" | "returned") => {
+    const dispatchOrder = activeOrder ?? order;
+    if (!dispatchOrder) return;
+
+    const existingTags = (dispatchOrder.assignedAssetTags ?? []).filter((t) => t.trim() !== "");
+
     if (status === "in_transit" && !dispatchDialogOpen) {
       setDispatchDialogOpen(true);
-      setDispatchAssetTags(new Array(order!.quantity).fill(""));
-
-      try {
-        setLoadingAssets(true);
-        const data = await vendorOnboardingApi.getVendorProductAssets(user!.id, order!.listingId);
-        setAvailableAssets(data.filter((a) => a.status.toLowerCase() === "available"));
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoadingAssets(false);
-      }
       return;
     }
 
     if (!user || !currentItemId) return;
+
+    const tagsToAssign =
+      status === "in_transit" || status === "active"
+        ? existingTags.length > 0
+          ? []
+          : dispatchAssetTags.filter((t) => t.trim() !== "")
+        : [];
+
+    if (tagsToAssign.length > 0 && hasDuplicateAssetTags(tagsToAssign)) {
+      toast.error("Each item needs a unique serial number. Remove duplicates and try again.");
+      return;
+    }
+
     try {
       setUpdating(true);
       const assetTagsToSubmit =
         status === "in_transit" || status === "active"
-          ? dispatchAssetTags.filter((t) => t.trim() !== "")
+          ? existingTags.length > 0
+            ? undefined
+            : tagsToAssign
           : undefined;
       await vendorOnboardingApi.updateVendorOrderStatus(user.id, currentItemId, status, assetTagsToSubmit);
       toast.success("Order status updated.");
-      setDispatchDialogOpen(false);
+      handleDispatchDialogChange(false);
       await Promise.all([loadOrder(currentItemId), loadAllOrders()]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update status.";
@@ -458,6 +658,12 @@ const VendorOrderDetail = () => {
                           <span className="ml-2 tabular-nums">· {item.orderNumber}</span>
                         ) : null}
                       </p>
+                      {item.assignedAssetTags && item.assignedAssetTags.length > 0 ? (
+                        <p className="mt-1.5 text-[10px] font-medium text-primary">
+                          {item.assignedAssetTags.length} serial number
+                          {item.assignedAssetTags.length === 1 ? "" : "s"} assigned
+                        </p>
+                      ) : null}
                     </div>
                   </div>
 
@@ -659,6 +865,10 @@ const VendorOrderDetail = () => {
             </CardContent>
           </Card>
 
+          {order.assignedAssetTags && order.assignedAssetTags.length > 0 && (
+            <AssignedSerialNumbersCard tags={order.assignedAssetTags} />
+          )}
+
           {/* Medical Reference */}
           {(order.doctorId || order.hospitalId) && (
             <Card className="border-border/80 shadow-sm">
@@ -717,69 +927,110 @@ const VendorOrderDetail = () => {
         </>
       )}
 
-      <Dialog open={dispatchDialogOpen} onOpenChange={setDispatchDialogOpen}>
+      <Dialog open={dispatchDialogOpen} onOpenChange={handleDispatchDialogChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Dispatch Details</DialogTitle>
+            {activeOrder ? (
+              <p className="text-xs text-muted-foreground pt-1">{activeOrder.listingTitle}</p>
+            ) : null}
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <p className="text-sm text-muted-foreground">
-              Please enter the serial numbers or asset tags for the {order?.quantity} items being dispatched. 
-              You can select from pre-registered available stock or type new ones.
-            </p>
-            {loadingAssets ? (
-                <p className="text-sm">Loading available stock...</p>
+            {(activeOrder?.assignedAssetTags ?? []).filter((t) => t.trim() !== "").length > 0 ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  These serial numbers are already assigned to this item. Review them and confirm dispatch.
+                </p>
+                <AssignedSerialNumbersList tags={activeOrder?.assignedAssetTags ?? []} />
+              </>
             ) : (
-                <div className="space-y-3">
-                  {dispatchAssetTags.map((tag, idx) => {
-                    const matchingAssets = availableAssets.filter((a) =>
-                      a.assetTag.toLowerCase().includes(tag.toLowerCase())
-                    );
-                    const isOpen = openDropdowns[idx] && matchingAssets.length > 0;
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Enter serial numbers or asset tags for {activeOrder?.quantity ?? 1}{" "}
+                  {(activeOrder?.quantity ?? 1) === 1 ? "item" : "items"} being dispatched. Optional —
+                  pick from this product&apos;s registered stock or type new ones.
+                </p>
+                {loadingAssets ? (
+                  <p className="text-sm">Loading available stock for this product...</p>
+                ) : (
+                  <div className="space-y-3">
+                    {availableAssets.length > 0 ? (
+                      <p className="text-xs font-medium text-primary">
+                        {countRemainingAssets(availableAssets, dispatchAssetTags)} of {availableAssets.length}{" "}
+                        serial number(s) still available for {activeOrder?.listingTitle}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        No pre-registered stock for this product. You can type a serial or batch number, or leave blank.
+                      </p>
+                    )}
+                    {dispatchAssetTags.map((tag, idx) => {
+                      const query = tag.trim().toLowerCase();
+                      const usedTags = getUsedAssetTags(dispatchAssetTags, idx);
+                      const matchingAssets = filterAvailableAssets(availableAssets, usedTags, query);
+                      const isOpen = openDropdowns[idx] && matchingAssets.length > 0;
 
-                    return (
-                      <div key={idx} className="space-y-1.5 relative">
-                        <Label>Item {idx + 1} Serial Number (Optional)</Label>
-                        <Input
-                          placeholder="Enter or select serial number..."
-                          value={tag}
-                          onChange={(e) => {
-                            const newTags = [...dispatchAssetTags];
-                            newTags[idx] = e.target.value;
-                            setDispatchAssetTags(newTags);
-                            setOpenDropdowns({ ...openDropdowns, [idx]: true });
-                          }}
-                          onFocus={() => setOpenDropdowns({ ...openDropdowns, [idx]: true })}
-                          onBlur={() => setTimeout(() => setOpenDropdowns({ ...openDropdowns, [idx]: false }), 150)}
-                        />
-                        {isOpen && (
-                          <div className="absolute top-full left-0 z-[100] mt-1 w-full max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md outline-none">
-                            {matchingAssets.map((a) => (
-                              <div
-                                key={a.id}
-                                className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-                                onClick={() => {
-                                  const newTags = [...dispatchAssetTags];
-                                  newTags[idx] = a.assetTag;
-                                  setDispatchAssetTags(newTags);
-                                  setOpenDropdowns({ ...openDropdowns, [idx]: false });
-                                }}
-                              >
-                                {a.assetTag}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                      return (
+                        <div key={`${activeOrder?.orderId ?? "dispatch"}-${idx}`} className="space-y-1.5 relative">
+                          <Label>Item {idx + 1} Serial Number (Optional)</Label>
+                          <Input
+                            placeholder={
+                              availableAssets.length > 0
+                                ? "Enter or select serial number..."
+                                : "Enter serial or batch number (optional)..."
+                            }
+                            value={tag}
+                            onChange={(e) => {
+                              const newTags = [...dispatchAssetTags];
+                              newTags[idx] = e.target.value;
+                              setDispatchAssetTags(newTags);
+                              setOpenDropdowns({ ...openDropdowns, [idx]: true });
+                            }}
+                            onFocus={() => {
+                              if (availableAssets.length > 0) {
+                                setOpenDropdowns({ ...openDropdowns, [idx]: true });
+                              }
+                            }}
+                            onBlur={() => setTimeout(() => setOpenDropdowns({ ...openDropdowns, [idx]: false }), 150)}
+                          />
+                          {isOpen ? (
+                            <div className="absolute top-full left-0 z-[100] mt-1 w-full max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md outline-none">
+                              {matchingAssets.map((a) => (
+                                <div
+                                  key={a.id}
+                                  className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => {
+                                    const newTags = [...dispatchAssetTags];
+                                    newTags[idx] = a.assetTag;
+                                    setDispatchAssetTags(newTags);
+                                    setOpenDropdowns({ ...openDropdowns, [idx]: false });
+                                  }}
+                                >
+                                  {a.assetTag}
+                                  {a.variantLabel ? (
+                                    <span className="ml-2 text-xs text-muted-foreground">{a.variantLabel}</span>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          ) : openDropdowns[idx] && availableAssets.length > 0 && usedTags.size > 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              All remaining serial numbers are already assigned to other items.
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDispatchDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => void handleStatusChange("in_transit")} disabled={updating}>
-                Confirm Dispatch
+            <Button onClick={() => void handleStatusChange("in_transit")} disabled={updating || loadingAssets}>
+              Confirm Dispatch
             </Button>
           </DialogFooter>
         </DialogContent>

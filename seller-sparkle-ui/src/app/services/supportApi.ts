@@ -52,7 +52,7 @@ export interface AiChatRequest {
 
 export interface AiChatResult {
   ticket: SupportTicketDto;
-  aiMessage: SupportMessageDto;
+  aiMessage?: SupportMessageDto | null;
 }
 
 export interface UploadResult {

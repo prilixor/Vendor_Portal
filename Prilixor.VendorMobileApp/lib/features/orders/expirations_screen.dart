@@ -1,0 +1,396 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../core/auth/auth_provider.dart';
+import '../../core/models/expiring_order_model.dart';
+import '../../core/providers/vendor_order_provider.dart';
+import '../../core/theme.dart';
+import 'order_detail_screen.dart';
+import 'order_group_utils.dart';
+
+/// Vendor Web parity — expirations grouped by order, latest window filters.
+class ExpirationsScreen extends StatefulWidget {
+  const ExpirationsScreen({super.key});
+
+  @override
+  State<ExpirationsScreen> createState() => _ExpirationsScreenState();
+}
+
+class _ExpirationsScreenState extends State<ExpirationsScreen> {
+  int _withinDays = 7;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    final vendorId =
+        Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null) return;
+    await Provider.of<VendorOrderProvider>(context, listen: false)
+        .fetchExpirations(vendorId, withinDays: _withinDays, silent: silent);
+  }
+
+  String _formatEnd(String value) {
+    final d = DateTime.tryParse(value);
+    if (d == null) return value.isEmpty ? '—' : value;
+    return formatDetailDate(value);
+  }
+
+  Map<String, List<ExpiringOrder>> _group(List<ExpiringOrder> rows) {
+    final map = <String, List<ExpiringOrder>>{};
+    for (final row in rows) {
+      final base = getBaseOrderNumber(row.orderNumber);
+      map.putIfAbsent(base, () => []).add(row);
+    }
+    for (final items in map.values) {
+      items.sort((a, b) => a.orderNumber.compareTo(b.orderNumber));
+    }
+    return map;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<VendorOrderProvider>(context);
+    final groups = _group(provider.expirations);
+    final keys = groups.keys.toList()..sort();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Expirations'),
+        actions: [
+          IconButton(
+            onPressed: provider.expirationsLoading ? null : () => _load(),
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child:             Text(
+              'Track rental end dates for timely returns and follow-up.',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.48),
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _WindowFilterBar(
+              withinDays: _withinDays,
+              onChanged: (d) async {
+                setState(() => _withinDays = d);
+                await _load();
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: RefreshIndicator(
+              color: AppTheme.accent,
+              onRefresh: () => _load(),
+              child: provider.expirationsLoading && provider.expirations.isEmpty
+                  ? ListView(
+                      children: const [
+                        SizedBox(height: 120),
+                        Center(
+                          child: CircularProgressIndicator(color: AppTheme.accent),
+                        ),
+                      ],
+                    )
+                  : keys.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            const SizedBox(height: 72),
+                            Icon(
+                              Icons.event_available_outlined,
+                              size: 56,
+                              color: Colors.white.withValues(alpha: 0.2),
+                            ),
+                            const SizedBox(height: 14),
+                            Center(
+                              child: Text(
+                                'No expiring orders in selected window.',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.55),
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView.separated(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                          itemCount: keys.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 10),
+                          itemBuilder: (context, index) {
+                            final base = keys[index];
+                            final items = groups[base]!;
+                            return _OrderGroupCard(
+                              baseOrderNumber: base,
+                              items: items,
+                              formatEnd: _formatEnd,
+                            );
+                          },
+                        ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WindowFilterBar extends StatelessWidget {
+  final int withinDays;
+  final ValueChanged<int> onChanged;
+
+  const _WindowFilterBar({
+    required this.withinDays,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: AppTheme.card(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        children: [7, 15, 30].map((d) {
+          final selected = withinDays == d;
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(right: d == 30 ? 0 : 6),
+              child: Material(
+                color: selected
+                    ? AppTheme.accent
+                    : Colors.white.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(10),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => onChanged(d),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Center(
+                      child: Text(
+                        '$d days',
+                        style: TextStyle(
+                          color: selected ? Colors.white : Colors.white60,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _OrderGroupCard extends StatelessWidget {
+  final String baseOrderNumber;
+  final List<ExpiringOrder> items;
+  final String Function(String) formatEnd;
+
+  const _OrderGroupCard({
+    required this.baseOrderNumber,
+    required this.items,
+    required this.formatEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.card(context),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ORDER GROUP',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  baseOrderNumber,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: Colors.white.withValues(alpha: 0.06)),
+          ...List.generate(items.length, (index) {
+            final row = items[index];
+            return Column(
+              children: [
+                if (index > 0)
+                  Divider(height: 1, color: Colors.white.withValues(alpha: 0.06)),
+                _ExpirationTile(
+                  row: row,
+                  formatEnd: formatEnd,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => OrderDetailScreen(orderId: row.orderId),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExpirationTile extends StatelessWidget {
+  final ExpiringOrder row;
+  final String Function(String) formatEnd;
+  final VoidCallback onTap;
+
+  const _ExpirationTile({
+    required this.row,
+    required this.formatEnd,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final urgent = row.isUrgentBadge;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.listingTitle,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        OrderTypeChip(orderType: row.orderType),
+                        Text(
+                          row.orderNumber,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.45),
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${row.customerName} · Ends ${formatEnd(row.endDate)}',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.48),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _DaysLeftBadge(
+                label: row.daysLeftLabel,
+                urgent: urgent,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DaysLeftBadge extends StatelessWidget {
+  final String label;
+  final bool urgent;
+
+  const _DaysLeftBadge({
+    required this.label,
+    required this.urgent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: urgent
+            ? Colors.redAccent.withValues(alpha: 0.16)
+            : Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: urgent
+              ? Colors.redAccent.withValues(alpha: 0.45)
+              : Colors.white.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: urgent ? Colors.redAccent : Colors.white.withValues(alpha: 0.72),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}

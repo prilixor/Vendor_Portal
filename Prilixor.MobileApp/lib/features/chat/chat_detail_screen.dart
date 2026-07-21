@@ -133,11 +133,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               border: Border(top: BorderSide(color: Colors.white10)),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
                   child: TextField(
                     controller: _messageController,
                     style: const TextStyle(color: Colors.white),
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    minLines: 1,
+                    maxLines: 5,
                     decoration: InputDecoration(
                       hintText: 'Type a message...',
                       hintStyle: const TextStyle(color: Colors.white38),
@@ -146,7 +151,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
                     ),
-                    onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
                 const SizedBox(width: 12),

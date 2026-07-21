@@ -50,7 +50,7 @@ const VendorExpirations = () => {
     <div>
       <PageHeader
         title="Expirations"
-        description="Track rentals nearing end date for timely returns and follow-up."
+        description="Track rental end dates for timely returns and follow-up."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant={withinDays === 7 ? "default" : "outline"} onClick={() => setWithinDays(7)}>7 days</Button>

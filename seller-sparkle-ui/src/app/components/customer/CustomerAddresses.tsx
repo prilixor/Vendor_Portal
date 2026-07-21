@@ -236,6 +236,34 @@ const CustomerAddresses = () => {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
+                <Label htmlFor="addr-state" required>State</Label>
+                <Select
+                  value={selectedStateIso2 || "none"}
+                  onValueChange={(value) => {
+                    const iso2 = value === "none" ? "" : value;
+                    setSelectedStateIso2(iso2);
+                    const selected = states.find((s) => s.iso2 === iso2);
+                    setState(selected?.name ?? "");
+                    setCity("");
+                    clearFieldError("state");
+                  }}
+                  disabled={statesLoading}
+                >
+                  <SelectTrigger id="addr-state" className={fieldErrors.state ? "border-destructive" : ""}>
+                    <SelectValue placeholder={statesLoading ? "Loading states..." : "Select state"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {states.map((s) => (
+                      <SelectItem key={s.iso2} value={s.iso2}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldError message={fieldErrors.state} />
+              </div>
+              <div className="space-y-1.5">
                 <Label htmlFor="addr-city" required>City</Label>
                 <Select
                   value={city || "none"}
@@ -266,34 +294,6 @@ const CustomerAddresses = () => {
                   </SelectContent>
                 </Select>
                 <FieldError message={fieldErrors.city} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="addr-state" required>State</Label>
-                <Select
-                  value={selectedStateIso2 || "none"}
-                  onValueChange={(value) => {
-                    const iso2 = value === "none" ? "" : value;
-                    setSelectedStateIso2(iso2);
-                    const selected = states.find((s) => s.iso2 === iso2);
-                    setState(selected?.name ?? "");
-                    setCity("");
-                    clearFieldError("state");
-                  }}
-                  disabled={statesLoading}
-                >
-                  <SelectTrigger id="addr-state" className={fieldErrors.state ? "border-destructive" : ""}>
-                    <SelectValue placeholder={statesLoading ? "Loading states..." : "Select state"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {states.map((s) => (
-                      <SelectItem key={s.iso2} value={s.iso2}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FieldError message={fieldErrors.state} />
               </div>
             </div>
             {(statesError || citiesError) && (
