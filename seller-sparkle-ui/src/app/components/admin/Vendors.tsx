@@ -15,6 +15,7 @@ import { Building2, ArrowRight, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { toast } from "sonner";
+import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 
 
 
@@ -172,7 +173,9 @@ const Vendors = () => {
 
                         <p className="font-semibold truncate" title={profile?.businessName || v.email}>{profile?.businessName || v.email}</p>
 
-                        <p className="text-xs text-muted-foreground truncate" title={v.email}>{v.email}</p>
+                        <p className="text-xs text-muted-foreground truncate" title={v.email}>
+                          <CopyableEmail email={v.email} textClassName="text-xs text-muted-foreground" />
+                        </p>
 
                       </div>
 

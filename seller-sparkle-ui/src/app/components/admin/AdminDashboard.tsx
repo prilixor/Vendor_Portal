@@ -10,6 +10,7 @@ import { Building2, Clock, CheckCircle2, ScrollText, ArrowUpRight, Loader2 } fro
 import { useNavigate } from "react-router-dom";
 import { safeFormatDistance } from "@/app/utils/dateUtils";
 import { toast } from "sonner";
+import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -132,7 +133,9 @@ const AdminDashboard = () => {
                 <li key={vendor.id} className="p-4 hover:bg-muted/50 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{vendor.email}</p>
+                      <p className="font-medium text-sm truncate">
+                        <CopyableEmail email={vendor.email} textClassName="font-medium text-sm" />
+                      </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {vendor.registrationStage} · {vendor.isEmailVerified ? "Email verified" : "Email not verified"}
                       </p>

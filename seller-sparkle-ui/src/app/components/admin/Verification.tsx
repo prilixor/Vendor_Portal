@@ -17,6 +17,7 @@ import { safeFormatDate } from "@/app/utils/dateUtils";
 import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto } from "@/app/services/adminApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 
 const getApiOrigin = (): string | null => {
   const configured = import.meta.env.VITE_API_BASE_URL as string | undefined;
@@ -627,7 +628,9 @@ const Verification = () => {
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium truncate" title={profile?.businessName || v.email}>{profile?.businessName || v.email}</p>
-                            <p className="text-xs text-muted-foreground truncate" title={v.email}>{v.email}</p>
+                            <p className="text-xs text-muted-foreground truncate" title={v.email}>
+                              <CopyableEmail email={v.email} textClassName="text-xs text-muted-foreground" />
+                            </p>
                           </div>
                         </div>
                       </td>
@@ -665,7 +668,11 @@ const Verification = () => {
                 <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="truncate" title={selected.email}>{selected.email}</span>
+                    <CopyableEmail
+                      email={selected.email}
+                      compact={false}
+                      textClassName="text-sm truncate"
+                    />
                   </div>
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />

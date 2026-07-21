@@ -72,6 +72,43 @@ internal sealed class GetAdminCustomerDetailQueryHandler(ICustomerRepository cus
     }
 }
 
+public sealed record AdminOrderableListingDto(
+    string ListingId,
+    string VendorId,
+    string ProductId,
+    string Title,
+    string VendorName,
+    string CategoryName,
+    bool IsChemical,
+    bool IsRentEnabled,
+    bool IsBuyEnabled,
+    decimal DailyRent,
+    decimal MonthlyRent,
+    decimal SecurityDeposit,
+    decimal? BuyPrice,
+    decimal? MaxBuyPrice,
+    int AvailableQuantity,
+    string AvailabilityStatus,
+    string ListingStatus,
+    string? PrimaryImageUrl,
+    bool PrescriptionRequired = false);
+
+public sealed record GetAdminOrderableListingsQuery(string? Search, int Take = 40, bool? IsChemical = null)
+    : IQuery<List<AdminOrderableListingDto>>;
+
+internal sealed class GetAdminOrderableListingsQueryHandler(ICustomerRepository customers)
+    : IQueryHandler<GetAdminOrderableListingsQuery, List<AdminOrderableListingDto>>
+{
+    public async Task<Result<List<AdminOrderableListingDto>>> Handle(
+        GetAdminOrderableListingsQuery request, CancellationToken cancellationToken)
+    {
+        var take = request.Take <= 0 ? 40 : Math.Min(request.Take, 100);
+        var rows = await customers.SearchOrderableListingsForAdminAsync(
+            request.Search, take, request.IsChemical, cancellationToken);
+        return Result.Success(rows);
+    }
+}
+
 public sealed record AdminPlaceCustomerOrdersCommand(
     Guid AdminUserId,
     Guid CustomerId,

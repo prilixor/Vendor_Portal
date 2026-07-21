@@ -251,6 +251,14 @@ public sealed record AdminPasswordResetDto(
     string Message,
     DateTimeOffset UpdatedAt);
 
+/// <summary>One-time temporary password shown to SuperAdmin after force reset. Never stored in plain text.</summary>
+public sealed record ForceResetAdminPasswordDto(
+    string AdminUserId,
+    string Message,
+    string TemporaryPassword,
+    bool MustChangePassword,
+    DateTimeOffset UpdatedAt);
+
 public sealed record ExcelUploadErrorDto(
     int Row,
     string Sheet,

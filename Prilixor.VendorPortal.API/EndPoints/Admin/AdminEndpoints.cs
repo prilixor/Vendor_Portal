@@ -171,6 +171,13 @@ public sealed class UpdateOwnAdminProfileRequest
     public string? NewPassword { get; set; }
 }
 
+public sealed class ForceResetAdminPasswordRequest
+{
+    /// <summary>Optional. If omitted, API generates a secure temporary password.</summary>
+    public string? NewPassword { get; set; }
+    public string? Notes { get; set; }
+}
+
 public sealed class UpdateOwnAdminProfileEndpoint(IMediator mediator)
     : Endpoint<UpdateOwnAdminProfileRequest, Results<Ok<AdminUserDto>, ProblemHttpResult>>
 {
@@ -188,6 +195,34 @@ public sealed class UpdateOwnAdminProfileEndpoint(IMediator mediator)
 
         var result = await mediator.Send(new UpdateOwnAdminProfileCommand(
             actorId, req.FullName, req.Email, req.CurrentPassword, req.NewPassword), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class ForceResetAdminPasswordEndpoint(IMediator mediator)
+    : Endpoint<ForceResetAdminPasswordRequest, Results<Ok<ForceResetAdminPasswordDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("users/{adminId}/password/reset");
+        Group<AdminApiGroup>();
+        Policies("Perm:admins.manage");
+    }
+
+    public override async Task<Results<Ok<ForceResetAdminPasswordDto>, ProblemHttpResult>> ExecuteAsync(
+        ForceResetAdminPasswordRequest req,
+        CancellationToken ct)
+    {
+        var actorIdStr = HttpContext.ResolveAdminUserId();
+        if (!Guid.TryParse(actorIdStr, out var actorId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Admin identity required.", statusCode: 401);
+
+        var targetStr = Route<string>("adminId");
+        if (!Guid.TryParse(targetStr, out var targetId))
+            return TypedResults.Problem(title: "validation.error", detail: "Invalid admin id.", statusCode: 400);
+
+        var result = await mediator.Send(new ForceResetAdminPasswordCommand(
+            actorId, targetId, req.NewPassword, req.Notes), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

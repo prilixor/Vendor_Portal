@@ -54,6 +54,31 @@ public sealed class GetAdminCustomerDetailEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminOrderableListingsRequest
+{
+    public string? Search { get; set; }
+    public int Take { get; set; } = 40;
+    public bool? IsChemical { get; set; }
+}
+
+public sealed class GetAdminOrderableListingsEndpoint(IMediator mediator)
+    : Endpoint<GetAdminOrderableListingsRequest, Results<Ok<List<AdminOrderableListingDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("orderable-listings");
+        Group<AdminApiGroup>();
+        Policies($"Perm:{AdminPermissions.CustomersPlaceOrder}");
+    }
+
+    public override async Task<Results<Ok<List<AdminOrderableListingDto>>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminOrderableListingsRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetAdminOrderableListingsQuery(req.Search, req.Take, req.IsChemical), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class AdminPlaceCustomerOrdersRequest
 {
     public string? CustomerAddressId { get; set; }

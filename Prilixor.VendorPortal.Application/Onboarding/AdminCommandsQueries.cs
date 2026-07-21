@@ -158,6 +158,37 @@ internal sealed class UpdateAdminUserCommandHandler(IVendorOnboardingRepository 
                 ErrorCategory.Unauthorized));
         }
 
+        // Self-service via this endpoint: name/email only (password via PATCH /admin/me).
+        // Ignore same role/active payloads; reject only if the caller tries to change them.
+        if (isSelf)
+        {
+            var currentRoleCode = (target.AdminRole?.Code ?? target.Role ?? string.Empty).Trim().ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(request.RoleCode)
+                && !string.Equals(request.RoleCode.Trim(), currentRoleCode, StringComparison.OrdinalIgnoreCase))
+            {
+                return Result.Failure<AdminUserDto>(new Error(
+                    "admin.self_role_active_forbidden",
+                    "You cannot change your own role or active status. Update name/email here, or password from your profile.",
+                    ErrorCategory.Validation));
+            }
+
+            if (request.RoleId is Guid selfRoleId && target.RoleId != selfRoleId)
+            {
+                return Result.Failure<AdminUserDto>(new Error(
+                    "admin.self_role_active_forbidden",
+                    "You cannot change your own role or active status. Update name/email here, or password from your profile.",
+                    ErrorCategory.Validation));
+            }
+
+            if (request.IsActive is bool selfActive && selfActive != target.IsActive)
+            {
+                return Result.Failure<AdminUserDto>(new Error(
+                    "admin.self_role_active_forbidden",
+                    "You cannot change your own role or active status. Update name/email here, or password from your profile.",
+                    ErrorCategory.Validation));
+            }
+        }
+
         // Self profile: name/email only (role/active changes not via this self path unless SuperAdmin editing another)
         if (!string.IsNullOrWhiteSpace(request.FullName))
             target.FullName = request.FullName.Trim();
@@ -333,6 +364,119 @@ internal sealed class UpdateOwnAdminProfileCommandHandler(
         await repository.SaveChangesAsync(cancellationToken);
 
         return Result.Success(RegisterAdminUserCommandHandler.ToDto(admin));
+    }
+}
+
+public sealed record ForceResetAdminPasswordCommand(
+    Guid ActorAdminId,
+    Guid TargetAdminId,
+    string? NewPassword,
+    string? Notes) : ICommand<ForceResetAdminPasswordDto>;
+
+public sealed class ForceResetAdminPasswordCommandValidator : AbstractValidator<ForceResetAdminPasswordCommand>
+{
+    public ForceResetAdminPasswordCommandValidator()
+    {
+        RuleFor(x => x.ActorAdminId).NotEmpty();
+        RuleFor(x => x.TargetAdminId).NotEmpty();
+        RuleFor(x => x.NewPassword)
+            .MinimumLength(8)
+            .When(x => !string.IsNullOrWhiteSpace(x.NewPassword));
+    }
+}
+
+internal sealed class ForceResetAdminPasswordCommandHandler(
+    IVendorOnboardingRepository repository,
+    IPasswordHasherService passwordHasher)
+    : ICommandHandler<ForceResetAdminPasswordCommand, ForceResetAdminPasswordDto>
+{
+    public async Task<Result<ForceResetAdminPasswordDto>> Handle(
+        ForceResetAdminPasswordCommand request,
+        CancellationToken cancellationToken)
+    {
+        var actor = await repository.GetAdminUserByIdAsync(request.ActorAdminId, cancellationToken);
+        if (actor is null || !actor.IsActive)
+        {
+            return Result.Failure<ForceResetAdminPasswordDto>(new Error(
+                "auth.forbidden",
+                "Actor is not an active admin.",
+                ErrorCategory.Unauthorized));
+        }
+
+        var actorIsSuper = string.Equals(
+            actor.AdminRole?.Code ?? actor.Role,
+            SuperAdminRules.RoleCode,
+            StringComparison.OrdinalIgnoreCase);
+        if (!actorIsSuper)
+        {
+            return Result.Failure<ForceResetAdminPasswordDto>(new Error(
+                "admin.super_admin_required",
+                "Only a SuperAdmin can reset another admin's password.",
+                ErrorCategory.Unauthorized));
+        }
+
+        if (request.TargetAdminId == request.ActorAdminId)
+        {
+            return Result.Failure<ForceResetAdminPasswordDto>(new Error(
+                "admin.self_password_reset_forbidden",
+                "Use Settings to change your own password.",
+                ErrorCategory.Validation));
+        }
+
+        var target = await repository.GetAdminUserByIdAsync(request.TargetAdminId, cancellationToken);
+        if (target is null || target.IsDeleted)
+        {
+            return Result.Failure<ForceResetAdminPasswordDto>(new Error(
+                "admin.not_found",
+                "Admin user not found.",
+                ErrorCategory.NotFound));
+        }
+
+        var temporaryPassword = string.IsNullOrWhiteSpace(request.NewPassword)
+            ? GenerateTemporaryPassword()
+            : request.NewPassword.Trim();
+
+        if (temporaryPassword.Length < 8)
+        {
+            return Result.Failure<ForceResetAdminPasswordDto>(new Error(
+                "auth.invalid_password",
+                "New password must be at least 8 characters.",
+                ErrorCategory.Validation));
+        }
+
+        target.PasswordHash = passwordHasher.HashPassword(temporaryPassword);
+        target.MustChangePassword = true;
+        await repository.UpdateAdminUserAsync(target, cancellationToken);
+        await repository.AddAdminAuditLogAsync(new AdminAuditLog
+        {
+            Id = Guid.NewGuid(),
+            AdminId = request.ActorAdminId,
+            ActionType = "ADMIN_PASSWORD_FORCE_RESET",
+            EntityType = "AdminUser",
+            EntityId = target.Id,
+            Notes = string.IsNullOrWhiteSpace(request.Notes)
+                ? $"Password reset for {target.Email}; must_change_password=true"
+                : request.Notes.Trim()
+        }, cancellationToken);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return Result.Success(new ForceResetAdminPasswordDto(
+            target.Id.ToString(),
+            "Temporary password created. Share it securely — it is shown only once. The user must change it on next login.",
+            temporaryPassword,
+            true,
+            DateTimeOffset.UtcNow));
+    }
+
+    private static string GenerateTemporaryPassword()
+    {
+        const string alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$";
+        Span<byte> bytes = stackalloc byte[16];
+        System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
+        var chars = new char[16];
+        for (var i = 0; i < chars.Length; i++)
+            chars[i] = alphabet[bytes[i] % alphabet.Length];
+        return new string(chars);
     }
 }
 

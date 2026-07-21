@@ -162,6 +162,28 @@ export interface AdminCustomerDetailDto {
   }[];
 }
 
+export interface AdminOrderableListingDto {
+  listingId: string;
+  vendorId: string;
+  productId: string;
+  title: string;
+  vendorName: string;
+  categoryName: string;
+  isChemical: boolean;
+  isRentEnabled: boolean;
+  isBuyEnabled: boolean;
+  dailyRent: number;
+  monthlyRent: number;
+  securityDeposit: number;
+  buyPrice?: number;
+  maxBuyPrice?: number;
+  availableQuantity: number;
+  availabilityStatus: string;
+  listingStatus: string;
+  primaryImageUrl?: string | null;
+  prescriptionRequired?: boolean;
+}
+
 export interface VendorImpersonationStartDto {
   exchangeCode: string;
   vendorId: string;
@@ -267,6 +289,14 @@ export interface VerifyVendorListingRequest {
 export interface AdminPasswordResetDto {
   vendorId: string;
   message: string;
+  updatedAt: string;
+}
+
+export interface ForceResetAdminPasswordDto {
+  adminUserId: string;
+  message: string;
+  temporaryPassword: string;
+  mustChangePassword: boolean;
   updatedAt: string;
 }
 
@@ -584,6 +614,16 @@ export const adminApi = {
     return apiClient.patch<AdminUserDto>('/admin/me', data);
   },
 
+  async forceResetAdminPassword(
+    adminId: string,
+    data?: { newPassword?: string; notes?: string },
+  ): Promise<ForceResetAdminPasswordDto> {
+    return apiClient.patch<ForceResetAdminPasswordDto>(
+      `/admin/users/${adminId}/password/reset`,
+      data ?? {},
+    );
+  },
+
   // Audit Logs
   async getAuditLogs(adminUserId?: string): Promise<AdminAuditLogDto[]> {
     const url = adminUserId ? `/admin/audit-logs?adminUserId=${adminUserId}` : '/admin/audit-logs';
@@ -790,11 +830,32 @@ export const adminApi = {
     return apiClient.get<AdminCustomerDetailDto>(`/admin/customers/${customerId}`);
   },
 
+  async searchOrderableListings(search?: string, take = 40, isChemical?: boolean): Promise<AdminOrderableListingDto[]> {
+    const params = new URLSearchParams();
+    if (search?.trim()) params.set("search", search.trim());
+    params.set("take", String(take));
+    if (typeof isChemical === "boolean") params.set("isChemical", String(isChemical));
+    return apiClient.get<AdminOrderableListingDto[]>(`/admin/orderable-listings?${params.toString()}`);
+  },
+
   async placeOrderForCustomer(customerId: string, data: {
     customerAddressId?: string;
     deliveryOption: string;
-    lines: { listingId: string; quantity: number; rentalDays: number; orderType: string; productVariantId?: string }[];
-  }): Promise<unknown> {
+    lines: {
+      listingId: string;
+      quantity: number;
+      rentalDays: number;
+      orderType: string;
+      productVariantId?: string;
+      doctorId?: string;
+      hospitalId?: string;
+      contactNumber?: string;
+      referenceNumber?: string;
+    }[];
+  }): Promise<{
+    placedOrders: { id: string; orderNumber: string; listingTitle?: string }[];
+    failedLines: { listingId: string; reasonCode: string; message: string }[];
+  }> {
     return apiClient.post(`/admin/customers/${customerId}/orders`, data);
   },
 

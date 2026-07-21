@@ -1,5 +1,5 @@
 import { useNavigate, Link } from "react-router-dom";
-import { Bell, LogOut, Sun, Moon, ChevronDown, ShoppingCart } from "lucide-react";
+import { Bell, LogOut, Sun, Moon, ChevronDown, ShoppingCart, Settings } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/app/guards/AuthContext";
 import { Button } from "@/app/components/ui/button";
@@ -216,6 +216,11 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              {variant === "admin" && (
+                <DropdownMenuItem onClick={() => navigate("/admin/settings")}>
+                  <Settings className="mr-2 h-4 w-4" /> Settings
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onClick={() => {
                   logout();

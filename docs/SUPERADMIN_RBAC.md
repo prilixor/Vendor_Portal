@@ -23,7 +23,15 @@ psql "$CUSTOMER_PORTAL_CONNECTION" -f Prilixor.VendorPortal.Infrastructure/Datab
   - Non–SuperAdmin cannot modify them
   - Cannot demote/deactivate the **last** SuperAdmin
   - `super_admin` **role** permissions are always full / immutable
-- SuperAdmin **may** update own name, email, and password (`PATCH /api/admin/me`)
+- Any admin may update own name, email, and password via **Settings** (`PATCH /api/admin/me`)
+- SuperAdmin may **force-reset** another admin's password (`PATCH /api/admin/users/{id}/password/reset`):
+  - Generates (or accepts) a **temporary password** shown once in the UI
+  - Sets `must_change_password=true` — target is redirected to Settings on next login
+  - Cannot reset their own password this way (use Settings)
+  - Audit: `ADMIN_PASSWORD_FORCE_RESET` (password never logged)
+- Editing **yourself** via Admin Users (`PATCH /api/admin/users/{id}`): **name and email only** — role and active status cannot be changed on your own account
+- Editing **another** admin (as SuperAdmin): name, email, role, and active — except system SuperAdmin demotion and last SuperAdmin demote/deactivate are blocked
+- Non–SuperAdmin with `admins.manage`: may edit name/email/active on non-SuperAdmin accounts; **cannot** change roles or touch SuperAdmin accounts
 - Second SuperAdmin can be created by an existing SuperAdmin until the cap of 2
 
 ## Bootstrap first SuperAdmin (recommended)

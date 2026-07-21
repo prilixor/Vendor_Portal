@@ -11,6 +11,7 @@ import {
   FlaskConical,
   Shield,
   UserRound,
+  Settings,
 } from "lucide-react";
 import type { NavSection } from "@/app/helpers/navigation";
 
@@ -71,6 +72,8 @@ const adminNavBase: { title: string; items: AdminNavItem[] }[] = [
       { label: "Roles & Permissions", to: "/admin/roles", icon: Shield, permission: ADMIN_PERMISSIONS.rolesManage },
       { label: "Audit Logs", to: "/admin/audit-logs", icon: ScrollText, permission: ADMIN_PERMISSIONS.auditView },
       { label: "Support", to: "/admin/support", icon: MessageSquare, permission: ADMIN_PERMISSIONS.supportManage },
+      // Available to every signed-in admin (no extra permission)
+      { label: "Settings", to: "/admin/settings", icon: Settings },
     ],
   },
 ];

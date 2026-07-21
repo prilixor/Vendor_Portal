@@ -1644,6 +1644,170 @@ public sealed class CustomerRepository(
                 o.PlacedByAdminId?.ToString())).ToList());
     }
 
+    public async Task<List<AdminOrderableListingDto>> SearchOrderableListingsForAdminAsync(
+        string? search, int take, bool? isChemical, CancellationToken cancellationToken)
+    {
+        var q = vendorDb.VendorProductListings
+            .AsNoTracking()
+            .Include(l => l.Vendor)
+            .ThenInclude(v => v.Profile)
+            .Include(l => l.Images)
+            .Include(l => l.Inventory)
+            .Where(l =>
+                !l.IsDeleted &&
+                (EF.Functions.ILike(l.ListingStatus, "active") ||
+                 EF.Functions.ILike(l.ListingStatus, "approved")) &&
+                !l.Vendor.IsDeleted &&
+                EF.Functions.ILike(l.Vendor.AccountStatus, "active"));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim();
+            q = q.Where(l =>
+                EF.Functions.ILike(l.ListingTitle, $"%{s}%") ||
+                (l.Vendor.Profile != null && EF.Functions.ILike(l.Vendor.Profile.BusinessName, $"%{s}%")));
+        }
+
+        var rows = await q
+            .OrderByDescending(l => l.CreatedOnUtc)
+            .Take(Math.Max(take * 4, 80))
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count == 0 && string.IsNullOrWhiteSpace(search))
+            return [];
+
+        var productIds = rows.Select(r => r.ProductId).Distinct().ToList();
+        var productQuery = commonDb.Products
+            .AsNoTracking()
+            .Include(p => p.Category)
+            .Include(p => p.ProductImages)
+            .Include(p => p.Variants)
+            .Where(p => !p.IsDeleted && p.IsActive && productIds.Contains(p.Id));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim();
+            // Also pull products matching name/brand so we can include their vendor listings
+            var matchedProductIds = await commonDb.Products
+                .AsNoTracking()
+                .Where(p => !p.IsDeleted && p.IsActive && (
+                    EF.Functions.ILike(p.ProductName, $"%{s}%") ||
+                    (p.BrandName != null && EF.Functions.ILike(p.BrandName, $"%{s}%")) ||
+                    (p.ModelName != null && EF.Functions.ILike(p.ModelName, $"%{s}%")) ||
+                    (p.Category != null && EF.Functions.ILike(p.Category.CategoryName, $"%{s}%"))))
+                .Select(p => p.Id)
+                .Take(100)
+                .ToListAsync(cancellationToken);
+
+            if (matchedProductIds.Count > 0)
+            {
+                var extraRows = await vendorDb.VendorProductListings
+                    .AsNoTracking()
+                    .Include(l => l.Vendor)
+                    .ThenInclude(v => v.Profile)
+                    .Include(l => l.Images)
+                    .Include(l => l.Inventory)
+                    .Where(l =>
+                        !l.IsDeleted &&
+                        matchedProductIds.Contains(l.ProductId) &&
+                        (EF.Functions.ILike(l.ListingStatus, "active") ||
+                         EF.Functions.ILike(l.ListingStatus, "approved")) &&
+                        !l.Vendor.IsDeleted &&
+                        EF.Functions.ILike(l.Vendor.AccountStatus, "active"))
+                    .OrderByDescending(l => l.CreatedOnUtc)
+                    .Take(200)
+                    .ToListAsync(cancellationToken);
+
+                rows = rows
+                    .Concat(extraRows)
+                    .GroupBy(r => r.Id)
+                    .Select(g => g.First())
+                    .ToList();
+
+                productIds = rows.Select(r => r.ProductId).Distinct().ToList();
+                productQuery = commonDb.Products
+                    .AsNoTracking()
+                    .Include(p => p.Category)
+                    .Include(p => p.ProductImages)
+                    .Include(p => p.Variants)
+                    .Where(p => !p.IsDeleted && p.IsActive && productIds.Contains(p.Id));
+            }
+        }
+
+        var products = await productQuery.ToListAsync(cancellationToken);
+        var productMap = products.ToDictionary(p => p.Id);
+
+        IEnumerable<VendorProductListing> filtered = rows;
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim();
+            filtered = filtered.Where(r =>
+            {
+                var product = productMap.GetValueOrDefault(r.ProductId);
+                var productName = product?.ProductName ?? string.Empty;
+                var brand = product?.BrandName ?? string.Empty;
+                var model = product?.ModelName ?? string.Empty;
+                var category = product?.Category?.CategoryName ?? string.Empty;
+                return productName.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                       brand.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                       model.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                       category.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                       r.ListingTitle.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                       (r.Vendor.Profile?.BusinessName?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false);
+            });
+        }
+
+        if (isChemical.HasValue)
+        {
+            filtered = filtered.Where(r =>
+            {
+                var product = productMap.GetValueOrDefault(r.ProductId);
+                return (product?.Category?.IsChemical ?? false) == isChemical.Value;
+            });
+        }
+
+        return filtered
+            .OrderByDescending(r => Math.Max(0, r.Inventory?.AvailableQuantity ?? r.AvailableQuantity) > 0 ? 1 : 0)
+            .ThenBy(r => r.ListingTitle)
+            .Take(take)
+            .Select(l =>
+            {
+                var product = productMap.GetValueOrDefault(l.ProductId);
+                var vendorName = l.Vendor.Profile?.BusinessName;
+                if (string.IsNullOrWhiteSpace(vendorName))
+                    vendorName = l.Vendor.Email;
+                var primaryUrl = ResolvePrimaryListingImageUrl(l.Images)
+                    ?? ResolvePrimaryProductImageUrl(product?.ProductImages ?? []);
+                var availableQuantity = Math.Max(0, l.Inventory?.AvailableQuantity ?? l.AvailableQuantity);
+                var availabilityStatus = availableQuantity <= 0
+                    ? "out_of_stock"
+                    : (availableQuantity <= 3 ? "low_stock" : "available");
+                var (buyPrice, maxBuyPrice) = ResolveCatalogBuyPrices(product);
+
+                return new AdminOrderableListingDto(
+                    l.Id.ToString(),
+                    l.VendorId.ToString(),
+                    l.ProductId.ToString(),
+                    string.IsNullOrWhiteSpace(l.ListingTitle) ? (product?.ProductName ?? "Listing") : l.ListingTitle,
+                    vendorName ?? "Vendor",
+                    product?.Category?.CategoryName ?? "General",
+                    product?.Category?.IsChemical ?? false,
+                    product?.IsRentEnabled ?? true,
+                    product?.IsBuyEnabled ?? false,
+                    product?.DailyRent ?? l.DailyRent,
+                    product?.MonthlyRent ?? l.MonthlyRent,
+                    product?.SecurityDeposit ?? l.SecurityDeposit,
+                    buyPrice,
+                    maxBuyPrice,
+                    availableQuantity,
+                    availabilityStatus,
+                    l.ListingStatus,
+                    primaryUrl,
+                    product?.Category?.PrescriptionRequired ?? false);
+            })
+            .ToList();
+    }
+
     public Task<bool> HasActiveOrdersForListingAsync(Guid listingId, CancellationToken cancellationToken)
     {
         var activeStatuses = new[] { "pending", "awaiting_vendor_acceptance", "confirmed", "in_transit", "active" };

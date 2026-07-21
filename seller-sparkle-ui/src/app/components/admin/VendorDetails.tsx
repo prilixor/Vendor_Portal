@@ -30,6 +30,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 
 import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto, VendorWorkingHourDto, VendorProductListingDto, ProductDto } from "@/app/services/adminApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 
 const getApiOrigin = (): string | null => {
   const configured = import.meta.env.VITE_API_BASE_URL as string | undefined;
@@ -977,7 +978,12 @@ const VendorDetails = () => {
 
               <p className="text-lg font-semibold">{profile?.businessName || vendor?.email}</p>
 
-              <p className="text-sm text-muted-foreground">{profile?.ownerName || ""} · {vendor?.email}</p>
+              <p className="text-sm text-muted-foreground flex flex-wrap items-center gap-1">
+                {profile?.ownerName ? <span>{profile.ownerName} · </span> : null}
+                {vendor?.email ? (
+                  <CopyableEmail email={vendor.email} textClassName="text-sm text-muted-foreground" />
+                ) : null}
+              </p>
 
             </div>
 

@@ -90,6 +90,8 @@ public interface ICustomerRepository
 
     Task<List<AdminCustomerListItemDto>> SearchCustomersForAdminAsync(string? search, int page, int pageSize, CancellationToken cancellationToken);
     Task<AdminCustomerDetailDto?> GetCustomerDetailForAdminAsync(Guid customerId, CancellationToken cancellationToken);
+    Task<List<AdminOrderableListingDto>> SearchOrderableListingsForAdminAsync(
+        string? search, int take, bool? isChemical, CancellationToken cancellationToken);
 
     // --- Medical Directory ---
     Task<Prilixor.VendorPortal.Domain.Common.Hospital?> GetHospitalByIdAsync(Guid hospitalId, CancellationToken cancellationToken);

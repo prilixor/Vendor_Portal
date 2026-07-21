@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { adminApi } from "@/app/services/adminApi";
 import { PageHeader } from "@/app/components/shared/PageHeader";
+import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
@@ -480,7 +481,14 @@ const AlertCard = ({
               <>
                 <p>Company: <span className="text-foreground">{alert.meta.company || "Not provided"}</span></p>
                 <p>Owner: <span className="text-foreground">{alert.meta.name}</span></p>
-                <p>Email: <span className="text-foreground">{alert.meta.email}</span></p>
+                <p className="flex items-center gap-1 flex-wrap">
+                  Email:{" "}
+                  {alert.meta.email ? (
+                    <CopyableEmail email={alert.meta.email} textClassName="text-foreground" />
+                  ) : (
+                    <span className="text-foreground">—</span>
+                  )}
+                </p>
               </>
             )}
             <p className="flex items-center gap-1"><Clock className="h-3.5 w-3.5 shrink-0" /> {new Date(alert.timestamp).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</p>

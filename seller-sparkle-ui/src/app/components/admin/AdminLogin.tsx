@@ -40,6 +40,7 @@ const AdminLogin = () => {
           role: string;
           adminRole?: string;
           permissions?: string[];
+          mustChangePassword?: boolean;
         };
       }>('/auth/login', {
         email,
@@ -57,6 +58,7 @@ const AdminLogin = () => {
         role: response.user.adminRole || response.user.role,
         adminRole: response.user.adminRole || response.user.role,
         permissions: response.user.permissions ?? [],
+        mustChangePassword: !!response.user.mustChangePassword,
       };
       localStorage.setItem("adminUser", JSON.stringify(adminUser));
       localStorage.setItem("vendor_portal_token", response.token);
@@ -64,7 +66,12 @@ const AdminLogin = () => {
         localStorage.setItem("vendor_portal_refresh_token", response.refreshToken);
       }
       apiClient.setAuthToken(response.token);
-      window.location.href = "/admin";
+      if (response.user.mustChangePassword) {
+        toast.message("Please change your temporary password.");
+        window.location.href = "/admin/settings";
+      } else {
+        window.location.href = "/admin";
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sign in failed. Please try again.";
       toast.error(message);
