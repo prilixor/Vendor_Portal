@@ -182,6 +182,18 @@ class ApiClient {
   }
 
   async downloadBlob(endpoint: string, filename: string): Promise<void> {
+    const blob = await this.fetchBlob(endpoint);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }
+
+  async fetchBlob(endpoint: string): Promise<Blob> {
     const token = this.getToken();
     const headers: HeadersInit = {};
     if (token) {
@@ -197,15 +209,7 @@ class ApiClient {
       throw new Error(`Download failed: ${response.statusText}`);
     }
 
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    return response.blob();
   }
 }
 

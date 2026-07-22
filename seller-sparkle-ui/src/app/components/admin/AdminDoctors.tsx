@@ -20,7 +20,7 @@ import {
   CreateAdminDoctorRequest,
   UpdateAdminDoctorRequest,
 } from "@/app/services/adminApi";
-import { Copy, Download, Loader2, Mail, Pencil, Plus, Search, Stethoscope, Trash2, X } from "lucide-react";
+import { Copy, Download, ExternalLink, Loader2, Mail, Pencil, Plus, Search, Stethoscope, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
@@ -70,6 +70,9 @@ const AdminDoctors = () => {
   const [form, setForm] = useState<DoctorForm>(emptyForm());
   const [newHospitals, setNewHospitals] = useState<NewHospitalDraft[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [qrDoctor, setQrDoctor] = useState<AdminDoctorDto | null>(null);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -223,6 +226,27 @@ const AdminDoctors = () => {
     }
   };
 
+  const openQrPreview = async (d: AdminDoctorDto) => {
+    setQrDoctor(d);
+    setQrLoading(true);
+    setQrUrl(null);
+    try {
+      const url = await adminApi.getDoctorQrObjectUrl(d.id);
+      setQrUrl(url);
+    } catch (e) {
+      toast.error(getUserFriendlyMessage(e, "Failed to load QR"));
+      setQrDoctor(null);
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  const closeQrPreview = () => {
+    if (qrUrl) URL.revokeObjectURL(qrUrl);
+    setQrUrl(null);
+    setQrDoctor(null);
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -307,7 +331,7 @@ const AdminDoctors = () => {
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => void downloadQr(d)}>
+                  <Button size="sm" variant="outline" onClick={() => void openQrPreview(d)}>
                     <Download className="mr-1.5 h-3.5 w-3.5" />
                     QR
                   </Button>
@@ -494,6 +518,75 @@ const AdminDoctors = () => {
               {editing ? "Save changes" : "Create doctor"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!qrDoctor}
+        onOpenChange={(open) => {
+          if (!open) closeQrPreview();
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Doctor QR card</DialogTitle>
+          </DialogHeader>
+          {qrDoctor && (
+            <div className="space-y-4">
+              <div className="overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-700 to-emerald-900 p-5 text-white">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-teal-100/80">Prilixor Doctor</p>
+                <p className="mt-2 text-xl font-bold">{qrDoctor.fullName}</p>
+                {qrDoctor.specialization && (
+                  <p className="mt-1 text-sm text-teal-50/85">{qrDoctor.specialization}</p>
+                )}
+                <div className="mt-4 rounded-xl bg-white/10 px-3 py-2 backdrop-blur">
+                  <p className="text-[10px] uppercase tracking-wider text-teal-100/70">Unique ID</p>
+                  <p className="font-mono text-lg font-bold tracking-wider">{qrDoctor.uniqueCode}</p>
+                </div>
+              </div>
+
+              <div className="flex justify-center rounded-2xl border bg-white p-4">
+                {qrLoading || !qrUrl ? (
+                  <div className="flex h-[220px] w-[220px] items-center justify-center text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : (
+                  <img
+                    src={qrUrl}
+                    alt={`QR for ${qrDoctor.uniqueCode}`}
+                    className="h-[220px] w-[220px] rounded-lg border"
+                  />
+                )}
+              </div>
+
+              <p className="text-center text-xs text-muted-foreground">
+                Patients scan this code to open the doctor share page and copy the Unique ID for checkout.
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  className="flex-1"
+                  variant="outline"
+                  onClick={() => void copyCode(qrDoctor.uniqueCode)}
+                >
+                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  Copy ID
+                </Button>
+                <Button className="flex-1" variant="outline" onClick={() => void downloadQr(qrDoctor)}>
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                  Download PNG
+                </Button>
+                {qrDoctor.publicPageUrl && (
+                  <Button className="w-full" asChild>
+                    <a href={qrDoctor.publicPageUrl} target="_blank" rel="noreferrer">
+                      <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                      Open share page
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

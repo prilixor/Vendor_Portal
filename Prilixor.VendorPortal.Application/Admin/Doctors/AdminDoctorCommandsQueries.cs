@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 using Prilixor.Shared.Abstractions.CQRS;
@@ -6,6 +5,7 @@ using Prilixor.Shared.Models;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Admin.Hospitals;
 using Prilixor.VendorPortal.Application.Common.MedicalDirectory;
+using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Common;
 
 namespace Prilixor.VendorPortal.Application.Admin.Doctors;
@@ -200,24 +200,20 @@ internal sealed class CreateAdminDoctorCommandHandler(
         string pageUrl,
         CancellationToken cancellationToken)
     {
-        var subject = $"Your Prilixor Doctor ID: {doctor.UniqueCode}";
-        var body = new StringBuilder()
-            .AppendLine($"Dear {doctor.FullName},")
-            .AppendLine()
-            .AppendLine("Your doctor profile has been registered on Prilixor.")
-            .AppendLine($"Unique ID: {doctor.UniqueCode}")
-            .AppendLine($"Share page: {pageUrl}")
-            .AppendLine()
-            .AppendLine("Please share your Unique ID or QR code with patients so they can add you as a doctor reference when placing orders.")
-            .AppendLine()
-            .AppendLine("— Prilixor Team")
-            .ToString();
+        var qrPng = qrCodeService.GeneratePng(pageUrl, pixelsPerModule: 10);
+        var qrDataUri = $"data:image/png;base64,{Convert.ToBase64String(qrPng)}";
 
-        _ = qrCodeService.GeneratePng(pageUrl);
+        var subject = $"Your Prilixor Doctor ID: {doctor.UniqueCode}";
+        var body = EmailTemplates.DoctorShareInvite(
+            doctor.FullName,
+            doctor.UniqueCode,
+            pageUrl,
+            doctor.Specialization,
+            qrDataUri);
+
         await emailService.SendEmailAsync(doctor.Email, subject, body, cancellationToken);
     }
 }
-
 public sealed record UpdateAdminDoctorCommand(
     Guid Id,
     string FullName,
@@ -320,7 +316,7 @@ internal sealed class GetAdminDoctorQrQueryHandler(
 
         var baseUrl = (configuration["FrontendUrl"] ?? "https://blinksmed.com").Trim().TrimEnd('/');
         var pageUrl = $"{baseUrl}/dr/{doctor.UniqueCode}";
-        var png = qrCodeService.GeneratePng(pageUrl);
+        var png = qrCodeService.GeneratePng(pageUrl, pixelsPerModule: 12);
         return Result.Success(png);
     }
 }

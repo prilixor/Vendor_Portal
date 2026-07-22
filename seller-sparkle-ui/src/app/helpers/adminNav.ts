@@ -13,7 +13,6 @@ import {
   UserRound,
   Settings,
   Stethoscope,
-  Building2,
 } from "lucide-react";
 import type { NavSection } from "@/app/helpers/navigation";
 

@@ -969,6 +969,11 @@ export const adminApi = {
     return apiClient.downloadBlob(`/admin/doctors/${id}/qr.png`, `doctor-${uniqueCode}-qr.png`);
   },
 
+  async getDoctorQrObjectUrl(id: string): Promise<string> {
+    const blob = await apiClient.fetchBlob(`/admin/doctors/${id}/qr.png`);
+    return URL.createObjectURL(blob);
+  },
+
   async getHospitals(search?: string, isActive?: boolean): Promise<AdminHospitalDto[]> {
     const qs = new URLSearchParams();
     if (search?.trim()) qs.set("search", search.trim());

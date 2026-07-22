@@ -303,4 +303,79 @@ public static class EmailTemplates
 </body>
 </html>";
     }
+
+    /// <param name="qrCodeDataUri">Optional data URI (e.g. data:image/png;base64,...) for inline QR.</param>
+    public static string DoctorShareInvite(
+        string doctorName,
+        string uniqueCode,
+        string sharePageUrl,
+        string? specialization = null,
+        string? qrCodeDataUri = null)
+    {
+        var name = string.IsNullOrWhiteSpace(doctorName) ? "Doctor" : doctorName.Trim();
+        var specialtyLine = string.IsNullOrWhiteSpace(specialization)
+            ? ""
+            : $"<p style='margin: 4px 0 0; font-size: 14px; color: #64748b;'>{specialization.Trim()}</p>";
+
+        var qrBlock = string.IsNullOrWhiteSpace(qrCodeDataUri)
+            ? ""
+            : $@"
+            <div style='text-align: center; margin: 28px 0 8px;'>
+                <p style='font-size: 13px; color: #64748b; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.06em;'>Your patient QR code</p>
+                <div style='display: inline-block; padding: 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;'>
+                    <img src='{qrCodeDataUri}' alt='Doctor QR Code' width='200' height='200' style='display: block; width: 200px; height: 200px;' />
+                </div>
+                <p style='font-size: 12px; color: #94a3b8; margin: 10px 0 0;'>Patients can scan this to open your Prilixor profile</p>
+            </div>";
+
+        return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Your Prilixor Doctor ID</title>
+</head>
+<body style='margin: 0; padding: 0; background: #f1f5f9; font-family: Arial, Helvetica, sans-serif; line-height: 1.6; color: #0f172a;'>
+    <div style='max-width: 600px; margin: 0 auto; padding: 24px 16px;'>
+        <div style='background: linear-gradient(135deg, #0f766e 0%, #115e59 55%, #134e4a 100%); padding: 32px 24px; border-radius: 16px 16px 0 0; text-align: center;'>
+            <p style='margin: 0 0 8px; color: #99f6e4; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: bold;'>Prilixor</p>
+            <h1 style='color: #ffffff; margin: 0; font-size: 26px; font-weight: 700;'>Your Doctor Reference ID</h1>
+            <p style='margin: 10px 0 0; color: #ccfbf1; font-size: 15px;'>Share with patients when they order on Prilixor</p>
+        </div>
+        <div style='background: #ffffff; padding: 28px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 16px 16px;'>
+            <p style='font-size: 16px; margin: 0 0 16px;'>Dear {name},</p>
+            <p style='font-size: 15px; margin: 0 0 20px; color: #334155;'>
+                Your doctor profile is ready on Prilixor. Patients can use your Unique ID or scan your QR code to add you as their doctor reference on orders.
+            </p>
+
+            <div style='background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 12px; padding: 18px 16px; text-align: center; margin: 0 0 20px;'>
+                <p style='margin: 0; font-size: 12px; color: #0f766e; text-transform: uppercase; letter-spacing: 0.08em; font-weight: bold;'>Unique ID</p>
+                <p style='margin: 8px 0 0; font-size: 28px; font-family: Consolas, Monaco, monospace; font-weight: 700; color: #134e4a; letter-spacing: 0.06em;'>{uniqueCode}</p>
+                {specialtyLine}
+            </div>
+
+            {qrBlock}
+
+            <div style='text-align: center; margin: 28px 0 8px;'>
+                <a href='{sharePageUrl}' style='display: inline-block; background: #0f766e; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-size: 15px; font-weight: bold;'>Open your share page</a>
+            </div>
+            <p style='font-size: 12px; color: #94a3b8; text-align: center; word-break: break-all; margin: 0 0 24px;'>{sharePageUrl}</p>
+
+            <div style='background: #f8fafc; border-radius: 10px; padding: 16px; margin: 0 0 20px;'>
+                <p style='margin: 0 0 8px; font-size: 14px; font-weight: bold; color: #0f172a;'>How to share with patients</p>
+                <ol style='margin: 0; padding-left: 18px; font-size: 14px; color: #475569;'>
+                    <li style='margin-bottom: 6px;'>Show or send them your Unique ID <strong>{uniqueCode}</strong></li>
+                    <li style='margin-bottom: 6px;'>Or let them scan the QR code above</li>
+                    <li>They enter the ID at checkout when placing a Prilixor order</li>
+                </ol>
+            </div>
+
+            <p style='font-size: 13px; color: #64748b; margin: 0;'>If you did not expect this email, please contact Prilixor support.</p>
+            <p style='font-size: 14px; color: #64748b; margin: 24px 0 0;'>Warm regards,<br><strong style='color: #0f172a;'>The Prilixor Team</strong></p>
+        </div>
+    </div>
+</body>
+</html>";
+    }
 }
