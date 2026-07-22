@@ -17,6 +17,7 @@ import ResetPassword from "@/app/components/auth/ResetPassword";
 import VerifyEmailSent from "@/app/components/auth/VerifyEmailSent";
 import VerifyEmail from "@/app/components/auth/VerifyEmail";
 import ContactUs from "@/app/components/common/ContactUs";
+import DoctorPublicPage from "@/app/components/common/DoctorPublicPage";
 import TermsAndConditions from "@/app/components/legal/TermsAndConditions";
 import PrivacyPolicy from "@/app/components/legal/PrivacyPolicy";
 
@@ -41,6 +42,7 @@ import Vendors from "@/app/components/admin/Vendors";
 import VendorDetails from "@/app/components/admin/VendorDetails";
 import ProductManagement from "@/app/components/admin/ProductManagement";
 import ChemicalManagement from "@/app/components/admin/ChemicalManagement";
+import AdminDoctors from "@/app/components/admin/AdminDoctors";
 import Admins from "@/app/components/admin/Admins";
 import AdminRoles from "@/app/components/admin/AdminRoles";
 import AdminCustomers, { AdminCustomerDetail } from "@/app/components/admin/AdminCustomers";
@@ -100,6 +102,7 @@ const App = () => (
             <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/contact-us" element={<ContactUs />} />
+            <Route path="/dr/:code" element={<DoctorPublicPage />} />
 
             <Route path="/vendor" element={<AppShell variant="vendor" />}>
               <Route index element={<VendorDashboard />} />
@@ -126,6 +129,7 @@ const App = () => (
               <Route path="vendors/:vendorId" element={<VendorDetails />} />
               <Route path="products" element={<ProductManagement />} />
               <Route path="chemicals" element={<ChemicalManagement />} />
+              <Route path="doctors" element={<AdminDoctors />} />
               <Route path="admins" element={<Admins />} />
               <Route path="roles" element={<AdminRoles />} />
               <Route path="customers" element={<AdminCustomers />} />

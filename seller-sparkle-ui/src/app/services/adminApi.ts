@@ -432,6 +432,34 @@ export interface UpdateProductCategoryRequest {
   isActive: boolean;
 }
 
+export interface AdminDoctorDto {
+  id: string;
+  fullName: string;
+  uniqueCode: string;
+  email: string;
+  specialization?: string | null;
+  contactNumber?: string | null;
+  isActive: boolean;
+  publicPageUrl?: string | null;
+}
+
+export interface CreateAdminDoctorRequest {
+  fullName: string;
+  email: string;
+  specialization?: string;
+  contactNumber?: string;
+  sendEmail?: boolean;
+}
+
+export interface UpdateAdminDoctorRequest {
+  id: string;
+  fullName: string;
+  email: string;
+  specialization?: string;
+  contactNumber?: string;
+  isActive: boolean;
+}
+
 export interface CreateProductRequest {
   categoryId: string;
   productName: string;
@@ -865,5 +893,38 @@ export const adminApi = {
 
   async impersonateCustomer(customerId: string): Promise<PortalImpersonationStartDto> {
     return apiClient.post<PortalImpersonationStartDto>(`/admin/customers/${customerId}/impersonate`, { customerId });
+  },
+
+  // Doctors (Admin-owned medical directory)
+  async getDoctors(search?: string, isActive?: boolean): Promise<AdminDoctorDto[]> {
+    const qs = new URLSearchParams();
+    if (search?.trim()) qs.set("search", search.trim());
+    if (typeof isActive === "boolean") qs.set("isActive", String(isActive));
+    const q = qs.toString();
+    return apiClient.get<AdminDoctorDto[]>(`/admin/doctors${q ? `?${q}` : ""}`);
+  },
+
+  async getDoctor(id: string): Promise<AdminDoctorDto> {
+    return apiClient.get<AdminDoctorDto>(`/admin/doctors/${id}`);
+  },
+
+  async createDoctor(data: CreateAdminDoctorRequest): Promise<AdminDoctorDto> {
+    return apiClient.post<AdminDoctorDto>("/admin/doctors", data);
+  },
+
+  async updateDoctor(id: string, data: UpdateAdminDoctorRequest): Promise<AdminDoctorDto> {
+    return apiClient.put<AdminDoctorDto>(`/admin/doctors/${id}`, { ...data, id });
+  },
+
+  async deleteDoctor(id: string): Promise<void> {
+    return apiClient.delete<void>(`/admin/doctors/${id}`);
+  },
+
+  async resendDoctorEmail(id: string): Promise<void> {
+    return apiClient.post<void>(`/admin/doctors/${id}/resend-email`, {});
+  },
+
+  async downloadDoctorQr(id: string, uniqueCode: string): Promise<void> {
+    return apiClient.downloadBlob(`/admin/doctors/${id}/qr.png`, `doctor-${uniqueCode}-qr.png`);
   },
 };

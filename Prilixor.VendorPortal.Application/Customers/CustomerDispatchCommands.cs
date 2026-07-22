@@ -481,9 +481,9 @@ internal static class VendorOrderMapper
             DoctorId: row.Doctor?.Id,
             DoctorName: row.Doctor?.FullName,
             DoctorSpecialization: row.Doctor?.Specialization,
-            HospitalId: row.Hospital?.Id,
-            HospitalName: row.Hospital?.Name,
-            HospitalCity: row.Hospital?.City,
+            HospitalId: null,
+            HospitalName: null,
+            HospitalCity: null,
             DoctorContactNumber: row.Doctor?.ContactNumber,
             AssignedAssetTags: assignedAssetTags is { Count: > 0 } ? assignedAssetTags : null);
     }
@@ -596,9 +596,9 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
                 DoctorId: orderWithListing.Doctor?.Id,
                 DoctorName: orderWithListing.Doctor?.FullName,
                 DoctorSpecialization: orderWithListing.Doctor?.Specialization,
-                HospitalId: orderWithListing.Hospital?.Id,
-                HospitalName: orderWithListing.Hospital?.Name,
-                HospitalCity: orderWithListing.Hospital?.City,
+                HospitalId: null,
+                HospitalName: null,
+                HospitalCity: null,
                 DoctorContactNumber: orderWithListing.Doctor?.ContactNumber));
 
             changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, order.Id, now, cancellationToken);

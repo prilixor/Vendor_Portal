@@ -1050,75 +1050,91 @@ public sealed class CustomerRepository(
 
 
 
-    // --- Medical Directory ---
-
-    public async Task<Prilixor.VendorPortal.Domain.Common.Hospital?> GetHospitalByIdAsync(Guid hospitalId, CancellationToken cancellationToken)
-    {
-        return await commonDb.Set<Prilixor.VendorPortal.Domain.Common.Hospital>()
-            .FirstOrDefaultAsync(x => x.Id == hospitalId && !x.IsDeleted, cancellationToken);
-    }
-
-    public async Task<List<Prilixor.VendorPortal.Domain.Common.Hospital>> SearchHospitalsAsync(string searchTerm, CancellationToken cancellationToken)
-    {
-        var query = commonDb.Set<Prilixor.VendorPortal.Domain.Common.Hospital>()
-            .Where(x => !x.IsDeleted);
-
-        if (!string.IsNullOrWhiteSpace(searchTerm))
-        {
-            var term = $"%{searchTerm}%";
-            query = query.Where(x => EF.Functions.ILike(x.Name, term));
-        }
-
-        return await query.Take(50).ToListAsync(cancellationToken);
-    }
-
-    public async Task AddHospitalAsync(Prilixor.VendorPortal.Domain.Common.Hospital hospital, CancellationToken cancellationToken)
-    {
-        commonDb.Set<Prilixor.VendorPortal.Domain.Common.Hospital>().Add(hospital);
-        await commonDb.SaveChangesAsync(cancellationToken);
-    }
+    // --- Medical Directory (Admin-owned doctors) ---
 
     public async Task<Prilixor.VendorPortal.Domain.Common.Doctor?> GetDoctorByIdAsync(Guid doctorId, CancellationToken cancellationToken)
     {
-        return await commonDb.Set<Prilixor.VendorPortal.Domain.Common.Doctor>()
+        return await commonDb.Doctors
             .FirstOrDefaultAsync(x => x.Id == doctorId && !x.IsDeleted, cancellationToken);
     }
 
-    public async Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> SearchDoctorsAsync(Guid? hospitalId, string searchTerm, CancellationToken cancellationToken)
+    public async Task<Prilixor.VendorPortal.Domain.Common.Doctor?> GetDoctorByUniqueCodeAsync(string uniqueCode, CancellationToken cancellationToken)
     {
-        var query = commonDb.Set<Prilixor.VendorPortal.Domain.Common.Doctor>()
-            .Where(x => !x.IsDeleted);
+        var code = uniqueCode.Trim().ToUpperInvariant();
+        return await commonDb.Doctors
+            .FirstOrDefaultAsync(x => !x.IsDeleted && x.IsActive && x.UniqueCode == code, cancellationToken);
+    }
 
-        if (hospitalId.HasValue)
-        {
-            query = query.Where(d => d.Hospitals.Any(h => h.HospitalId == hospitalId.Value));
-        }
+    public async Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> SearchDoctorsAsync(string searchTerm, CancellationToken cancellationToken)
+    {
+        var query = commonDb.Doctors.Where(x => !x.IsDeleted && x.IsActive);
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
-            var term = $"%{searchTerm}%";
-            query = query.Where(x => EF.Functions.ILike(x.FullName, term) || EF.Functions.ILike(x.Specialization ?? "", term));
+            var term = $"%{searchTerm.Trim()}%";
+            var code = searchTerm.Trim().ToUpperInvariant();
+            query = query.Where(x =>
+                x.UniqueCode == code
+                || EF.Functions.ILike(x.FullName, term)
+                || EF.Functions.ILike(x.Specialization ?? "", term));
         }
 
-        return await query.Take(50).ToListAsync(cancellationToken);
+        return await query.OrderBy(x => x.FullName).Take(50).ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> ListDoctorsForAdminAsync(string? searchTerm, bool? isActive, CancellationToken cancellationToken)
+    {
+        var query = commonDb.Doctors.Where(x => !x.IsDeleted);
+
+        if (isActive.HasValue)
+            query = query.Where(x => x.IsActive == isActive.Value);
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = $"%{searchTerm.Trim()}%";
+            var code = searchTerm.Trim().ToUpperInvariant();
+            query = query.Where(x =>
+                x.UniqueCode == code
+                || EF.Functions.ILike(x.FullName, term)
+                || EF.Functions.ILike(x.Email, term)
+                || EF.Functions.ILike(x.Specialization ?? "", term));
+        }
+
+        return await query.OrderByDescending(x => x.CreatedOnUtc).Take(200).ToListAsync(cancellationToken);
     }
 
     public async Task AddDoctorAsync(Prilixor.VendorPortal.Domain.Common.Doctor doctor, CancellationToken cancellationToken)
     {
-        commonDb.Set<Prilixor.VendorPortal.Domain.Common.Doctor>().Add(doctor);
+        commonDb.Doctors.Add(doctor);
         await commonDb.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task LinkDoctorToHospitalAsync(Guid hospitalId, Guid doctorId, CancellationToken cancellationToken)
+    public async Task UpdateDoctorAsync(Prilixor.VendorPortal.Domain.Common.Doctor doctor, CancellationToken cancellationToken)
     {
-        var link = new Prilixor.VendorPortal.Domain.Common.HospitalDoctor
-        {
-            HospitalId = hospitalId,
-            DoctorId = doctorId
-        };
-        commonDb.Set<Prilixor.VendorPortal.Domain.Common.HospitalDoctor>().Add(link);
+        commonDb.Doctors.Update(doctor);
         await commonDb.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task SoftDeleteDoctorAsync(Guid doctorId, Guid? deletedBy, CancellationToken cancellationToken)
+    {
+        var doctor = await commonDb.Doctors.FirstOrDefaultAsync(x => x.Id == doctorId && !x.IsDeleted, cancellationToken);
+        if (doctor is null) return;
+        doctor.IsDeleted = true;
+        doctor.DeletedAt = DateTimeOffset.UtcNow;
+        doctor.DeletedBy = deletedBy;
+        doctor.IsActive = false;
+        await commonDb.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<int> CountDoctorsWithUniqueCodePrefixAsync(string prefix, CancellationToken cancellationToken)
+    {
+        var p = prefix.Trim().ToUpperInvariant();
+        return await commonDb.Doctors
+            .CountAsync(x => x.UniqueCode.StartsWith(p), cancellationToken);
+    }
+
+    public Task SaveCommonChangesAsync(CancellationToken cancellationToken) =>
+        commonDb.SaveChangesAsync(cancellationToken);
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken) =>
 
@@ -1919,23 +1935,20 @@ public sealed class CustomerRepository(
     {
         var orderIds = items.Select(x => x.Order.Id).ToList();
         var refs = await customerDb.CustomerOrderDoctorReferences.Where(r => orderIds.Contains(r.CustomerRentalOrderId) && !r.IsDeleted).ToListAsync(cancellationToken);
-        
-        var doctorIds = refs.Select(r => r.DoctorId).Distinct().ToList();
-        var hospitalIds = refs.Select(r => r.HospitalId).Distinct().ToList();
 
-        var doctors = doctorIds.Count > 0 ? await commonDb.Doctors.Where(d => doctorIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, cancellationToken) : new();
-        var hospitals = hospitalIds.Count > 0 ? await commonDb.Hospitals.Where(h => hospitalIds.Contains(h.Id)).ToDictionaryAsync(h => h.Id, cancellationToken) : new();
+        var doctorIds = refs.Select(r => r.DoctorId).Distinct().ToList();
+        var doctors = doctorIds.Count > 0
+            ? await commonDb.Doctors.Where(d => doctorIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, cancellationToken)
+            : new();
 
         return items.Select(item =>
         {
             var r = refs.FirstOrDefault(x => x.CustomerRentalOrderId == item.Order.Id);
             var doctor = r != null ? doctors.GetValueOrDefault(r.DoctorId) : null;
-            var hospital = r != null ? hospitals.GetValueOrDefault(r.HospitalId) : null;
-            
-            // Re-attach the fetched DoctorReference so it's available in Handlers
+
             if (r != null) item.Order.DoctorReference = r;
-            
-            return item with { Doctor = doctor, Hospital = hospital };
+
+            return item with { Doctor = doctor };
         }).ToList();
     }
 
