@@ -6,6 +6,20 @@ using Prilixor.Shared.Models;
 
 namespace Prilixor.VendorPortal.Application.Common.MedicalDirectory;
 
+public sealed record HospitalDto(
+    Guid Id,
+    string Name,
+    string? AddressLine1,
+    string? City,
+    string? State,
+    string? PostalCode,
+    decimal? Latitude,
+    decimal? Longitude,
+    string? ContactNumber,
+    bool IsActive,
+    IReadOnlyList<Guid>? DoctorIds = null,
+    IReadOnlyList<string>? DoctorNames = null);
+
 public sealed record DoctorDto(
     Guid Id,
     string FullName,
@@ -14,7 +28,8 @@ public sealed record DoctorDto(
     string? Specialization,
     string? ContactNumber,
     bool IsActive,
-    string? PublicPageUrl = null);
+    string? PublicPageUrl = null,
+    IReadOnlyList<HospitalDto>? Hospitals = null);
 
 public sealed record SearchDoctorsQuery(string? SearchTerm) : IQuery<List<DoctorDto>>;
 
@@ -50,6 +65,41 @@ internal sealed class GetDoctorByUniqueCodeQueryHandler(ICustomerRepository repo
 
 internal static class DoctorDtoMapper
 {
-    public static DoctorDto Map(Doctor d, string? publicPageUrl = null) =>
-        new(d.Id, d.FullName, d.UniqueCode, d.Email, d.Specialization, d.ContactNumber, d.IsActive, publicPageUrl);
+    public static DoctorDto Map(Doctor d, string? publicPageUrl = null)
+    {
+        var hospitals = d.Hospitals?
+            .Where(hd => hd.Hospital is not null && !hd.Hospital.IsDeleted)
+            .Select(hd => HospitalDtoMapper.Map(hd.Hospital))
+            .OrderBy(h => h.Name)
+            .ToList() ?? [];
+
+        return new DoctorDto(
+            d.Id,
+            d.FullName,
+            d.UniqueCode,
+            d.Email,
+            d.Specialization,
+            d.ContactNumber,
+            d.IsActive,
+            publicPageUrl,
+            hospitals);
+    }
+}
+
+internal static class HospitalDtoMapper
+{
+    public static HospitalDto Map(Hospital h) =>
+        new(
+            h.Id,
+            h.Name,
+            h.AddressLine1,
+            h.City,
+            h.State,
+            h.PostalCode,
+            h.Latitude,
+            h.Longitude,
+            h.ContactNumber,
+            h.IsActive,
+            h.Doctors?.Where(x => x.Doctor is not null && !x.Doctor.IsDeleted).Select(x => x.DoctorId).ToList(),
+            h.Doctors?.Where(x => x.Doctor is not null && !x.Doctor.IsDeleted).Select(x => x.Doctor.FullName).OrderBy(n => n).ToList());
 }

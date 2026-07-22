@@ -4,9 +4,22 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Prilixor.VendorPortal.API.EndPoints.Vendors;
 using Prilixor.VendorPortal.API.Extensions;
 using Prilixor.VendorPortal.Application.Admin.Doctors;
+using Prilixor.VendorPortal.Application.Admin.Hospitals;
 using Prilixor.VendorPortal.Application.Common.MedicalDirectory;
 
 namespace Prilixor.VendorPortal.API.EndPoints.Admin;
+
+public sealed class AdminHospitalInputDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string? AddressLine1 { get; set; }
+    public string? City { get; set; }
+    public string? State { get; set; }
+    public string? PostalCode { get; set; }
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
+    public string? ContactNumber { get; set; }
+}
 
 public sealed class CreateAdminDoctorRequest
 {
@@ -15,6 +28,8 @@ public sealed class CreateAdminDoctorRequest
     public string? Specialization { get; set; }
     public string? ContactNumber { get; set; }
     public bool SendEmail { get; set; } = true;
+    public List<Guid>? HospitalIds { get; set; }
+    public List<AdminHospitalInputDto>? NewHospitals { get; set; }
 }
 
 public sealed class UpdateAdminDoctorRequest
@@ -25,6 +40,8 @@ public sealed class UpdateAdminDoctorRequest
     public string? Specialization { get; set; }
     public string? ContactNumber { get; set; }
     public bool IsActive { get; set; } = true;
+    public List<Guid>? HospitalIds { get; set; }
+    public List<AdminHospitalInputDto>? NewHospitals { get; set; }
 }
 
 public sealed class ListAdminDoctorsEndpoint(IMediator mediator)
@@ -84,9 +101,14 @@ public sealed class CreateAdminDoctorEndpoint(IMediator mediator)
             req.Email,
             req.Specialization,
             req.ContactNumber,
-            req.SendEmail), ct);
+            req.SendEmail,
+            req.HospitalIds,
+            req.NewHospitals?.Select(MapHospitalInput).ToList()), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
+
+    internal static CreateHospitalInput MapHospitalInput(AdminHospitalInputDto h) =>
+        new(h.Name, h.AddressLine1, h.City, h.State, h.PostalCode, h.Latitude, h.Longitude, h.ContactNumber);
 }
 
 public sealed class UpdateAdminDoctorEndpoint(IMediator mediator)
@@ -111,7 +133,9 @@ public sealed class UpdateAdminDoctorEndpoint(IMediator mediator)
             req.Email,
             req.Specialization,
             req.ContactNumber,
-            req.IsActive), ct);
+            req.IsActive,
+            req.HospitalIds,
+            req.NewHospitals?.Select(CreateAdminDoctorEndpoint.MapHospitalInput).ToList()), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

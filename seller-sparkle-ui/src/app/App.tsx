@@ -43,6 +43,7 @@ import VendorDetails from "@/app/components/admin/VendorDetails";
 import ProductManagement from "@/app/components/admin/ProductManagement";
 import ChemicalManagement from "@/app/components/admin/ChemicalManagement";
 import AdminDoctors from "@/app/components/admin/AdminDoctors";
+import AdminHospitals from "@/app/components/admin/AdminHospitals";
 import Admins from "@/app/components/admin/Admins";
 import AdminRoles from "@/app/components/admin/AdminRoles";
 import AdminCustomers, { AdminCustomerDetail } from "@/app/components/admin/AdminCustomers";
@@ -130,6 +131,7 @@ const App = () => (
               <Route path="products" element={<ProductManagement />} />
               <Route path="chemicals" element={<ChemicalManagement />} />
               <Route path="doctors" element={<AdminDoctors />} />
+              <Route path="hospitals" element={<AdminHospitals />} />
               <Route path="admins" element={<Admins />} />
               <Route path="roles" element={<AdminRoles />} />
               <Route path="customers" element={<AdminCustomers />} />

@@ -93,7 +93,7 @@ public interface ICustomerRepository
     Task<List<AdminOrderableListingDto>> SearchOrderableListingsForAdminAsync(
         string? search, int take, bool? isChemical, CancellationToken cancellationToken);
 
-    // --- Medical Directory (Admin-owned doctors) ---
+    // --- Medical Directory (Admin-owned doctors + hospitals) ---
     Task<Prilixor.VendorPortal.Domain.Common.Doctor?> GetDoctorByIdAsync(Guid doctorId, CancellationToken cancellationToken);
     Task<Prilixor.VendorPortal.Domain.Common.Doctor?> GetDoctorByUniqueCodeAsync(string uniqueCode, CancellationToken cancellationToken);
     Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> SearchDoctorsAsync(string searchTerm, CancellationToken cancellationToken);
@@ -102,6 +102,17 @@ public interface ICustomerRepository
     Task UpdateDoctorAsync(Prilixor.VendorPortal.Domain.Common.Doctor doctor, CancellationToken cancellationToken);
     Task SoftDeleteDoctorAsync(Guid doctorId, Guid? deletedBy, CancellationToken cancellationToken);
     Task<int> CountDoctorsWithUniqueCodePrefixAsync(string prefix, CancellationToken cancellationToken);
+    Task SetDoctorHospitalLinksAsync(Guid doctorId, IReadOnlyList<Guid> hospitalIds, CancellationToken cancellationToken);
+    Task<List<Prilixor.VendorPortal.Domain.Common.Hospital>> GetHospitalsForDoctorAsync(Guid doctorId, CancellationToken cancellationToken);
+
+    Task<Prilixor.VendorPortal.Domain.Common.Hospital?> GetHospitalByIdAsync(Guid hospitalId, CancellationToken cancellationToken);
+    Task<List<Prilixor.VendorPortal.Domain.Common.Hospital>> ListHospitalsForAdminAsync(string? searchTerm, bool? isActive, CancellationToken cancellationToken);
+    Task AddHospitalAsync(Prilixor.VendorPortal.Domain.Common.Hospital hospital, CancellationToken cancellationToken);
+    Task UpdateHospitalAsync(Prilixor.VendorPortal.Domain.Common.Hospital hospital, CancellationToken cancellationToken);
+    Task SoftDeleteHospitalAsync(Guid hospitalId, Guid? deletedBy, CancellationToken cancellationToken);
+    Task SetHospitalDoctorLinksAsync(Guid hospitalId, IReadOnlyList<Guid> doctorIds, CancellationToken cancellationToken);
+    Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> GetDoctorsForHospitalAsync(Guid hospitalId, CancellationToken cancellationToken);
+
     Task SaveCommonChangesAsync(CancellationToken cancellationToken);
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);

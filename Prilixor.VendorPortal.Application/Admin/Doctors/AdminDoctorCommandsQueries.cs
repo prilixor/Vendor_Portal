@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Admin.Hospitals;
 using Prilixor.VendorPortal.Application.Common.MedicalDirectory;
 using Prilixor.VendorPortal.Domain.Common;
 
@@ -13,9 +14,6 @@ public static class DoctorUniqueCodeGenerator
 {
     private static readonly Regex TitlePrefix = new(@"^(dr\.?|doctor)\s+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    /// <summary>
-    /// Builds name code prefix e.g. Dr. Aditi Patel → DRAP
-    /// </summary>
     public static string BuildNameCode(string fullName)
     {
         var cleaned = TitlePrefix.Replace((fullName ?? string.Empty).Trim(), string.Empty).Trim();
@@ -54,6 +52,46 @@ public static class DoctorUniqueCodeGenerator
         $"{prefix}{sequence:D3}";
 }
 
+internal static class DoctorHospitalLinkHelper
+{
+    public static async Task<Result<List<Guid>>> ResolveHospitalIdsAsync(
+        ICustomerRepository repository,
+        IReadOnlyList<Guid>? existingHospitalIds,
+        IReadOnlyList<CreateHospitalInput>? newHospitals,
+        CancellationToken cancellationToken)
+    {
+        var ids = new List<Guid>();
+        if (existingHospitalIds is not null)
+            ids.AddRange(existingHospitalIds);
+
+        if (newHospitals is not null)
+        {
+            foreach (var input in newHospitals)
+            {
+                if (string.IsNullOrWhiteSpace(input.Name))
+                    return Result.Failure<List<Guid>>(new Error("directory.hospital_name_required", "Hospital name is required.", ErrorCategory.Validation));
+
+                var hospital = new Hospital
+                {
+                    Name = input.Name.Trim(),
+                    AddressLine1 = string.IsNullOrWhiteSpace(input.AddressLine1) ? null : input.AddressLine1.Trim(),
+                    City = string.IsNullOrWhiteSpace(input.City) ? null : input.City.Trim(),
+                    State = string.IsNullOrWhiteSpace(input.State) ? null : input.State.Trim(),
+                    PostalCode = string.IsNullOrWhiteSpace(input.PostalCode) ? null : input.PostalCode.Trim(),
+                    Latitude = input.Latitude,
+                    Longitude = input.Longitude,
+                    ContactNumber = string.IsNullOrWhiteSpace(input.ContactNumber) ? null : input.ContactNumber.Trim(),
+                    IsActive = true,
+                };
+                await repository.AddHospitalAsync(hospital, cancellationToken);
+                ids.Add(hospital.Id);
+            }
+        }
+
+        return Result.Success(ids.Distinct().ToList());
+    }
+}
+
 public sealed record ListAdminDoctorsQuery(string? Search, bool? IsActive) : IQuery<List<DoctorDto>>;
 
 internal sealed class ListAdminDoctorsQueryHandler(ICustomerRepository repository, IConfiguration configuration)
@@ -88,7 +126,9 @@ public sealed record CreateAdminDoctorCommand(
     string Email,
     string? Specialization,
     string? ContactNumber,
-    bool SendEmail = true) : ICommand<DoctorDto>;
+    bool SendEmail = true,
+    IReadOnlyList<Guid>? HospitalIds = null,
+    IReadOnlyList<CreateHospitalInput>? NewHospitals = null) : ICommand<DoctorDto>;
 
 internal sealed class CreateAdminDoctorCommandHandler(
     ICustomerRepository repository,
@@ -104,12 +144,16 @@ internal sealed class CreateAdminDoctorCommandHandler(
         if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
             return Result.Failure<DoctorDto>(new Error("directory.email_required", "A valid doctor email is required.", ErrorCategory.Validation));
 
+        var hospitalIdsResult = await DoctorHospitalLinkHelper.ResolveHospitalIdsAsync(
+            repository, request.HospitalIds, request.NewHospitals, cancellationToken);
+        if (!hospitalIdsResult.IsSuccess)
+            return Result.Failure<DoctorDto>(hospitalIdsResult.Errors);
+
         var now = DateTimeOffset.UtcNow;
         var prefix = DoctorUniqueCodeGenerator.BuildPrefix(request.FullName, now);
         var nextSeq = await repository.CountDoctorsWithUniqueCodePrefixAsync(prefix, cancellationToken) + 1;
         var uniqueCode = DoctorUniqueCodeGenerator.FormatCode(prefix, nextSeq);
 
-        // Extremely unlikely collision retry
         for (var i = 0; i < 5; i++)
         {
             var existing = await repository.GetDoctorByUniqueCodeAsync(uniqueCode, cancellationToken);
@@ -129,7 +173,9 @@ internal sealed class CreateAdminDoctorCommandHandler(
         };
 
         await repository.AddDoctorAsync(doctor, cancellationToken);
+        await repository.SetDoctorHospitalLinksAsync(doctor.Id, hospitalIdsResult.Value!, cancellationToken);
 
+        var saved = await repository.GetDoctorByIdAsync(doctor.Id, cancellationToken);
         var baseUrl = (configuration["FrontendUrl"] ?? "https://blinksmed.com").Trim().TrimEnd('/');
         var pageUrl = $"{baseUrl}/dr/{doctor.UniqueCode}";
 
@@ -141,11 +187,10 @@ internal sealed class CreateAdminDoctorCommandHandler(
             }
             catch
             {
-                // Doctor is created even if email fails; admin can resend.
             }
         }
 
-        return Result.Success(DoctorDtoMapper.Map(doctor, pageUrl));
+        return Result.Success(DoctorDtoMapper.Map(saved!, pageUrl));
     }
 
     internal static async Task SendDoctorShareEmailAsync(
@@ -168,7 +213,6 @@ internal sealed class CreateAdminDoctorCommandHandler(
             .AppendLine("— Prilixor Team")
             .ToString();
 
-        // QR is available via admin download; email body carries the URL (SMTP sends HTML/text only today).
         _ = qrCodeService.GeneratePng(pageUrl);
         await emailService.SendEmailAsync(doctor.Email, subject, body, cancellationToken);
     }
@@ -180,7 +224,9 @@ public sealed record UpdateAdminDoctorCommand(
     string Email,
     string? Specialization,
     string? ContactNumber,
-    bool IsActive) : ICommand<DoctorDto>;
+    bool IsActive,
+    IReadOnlyList<Guid>? HospitalIds = null,
+    IReadOnlyList<CreateHospitalInput>? NewHospitals = null) : ICommand<DoctorDto>;
 
 internal sealed class UpdateAdminDoctorCommandHandler(ICustomerRepository repository, IConfiguration configuration)
     : ICommandHandler<UpdateAdminDoctorCommand, DoctorDto>
@@ -201,12 +247,22 @@ internal sealed class UpdateAdminDoctorCommandHandler(ICustomerRepository reposi
         doctor.Specialization = string.IsNullOrWhiteSpace(request.Specialization) ? null : request.Specialization.Trim();
         doctor.ContactNumber = string.IsNullOrWhiteSpace(request.ContactNumber) ? null : request.ContactNumber.Trim();
         doctor.IsActive = request.IsActive;
-        // UniqueCode is immutable
 
         await repository.UpdateDoctorAsync(doctor, cancellationToken);
 
+        if (request.HospitalIds is not null || request.NewHospitals is not null)
+        {
+            var hospitalIdsResult = await DoctorHospitalLinkHelper.ResolveHospitalIdsAsync(
+                repository, request.HospitalIds ?? [], request.NewHospitals, cancellationToken);
+            if (!hospitalIdsResult.IsSuccess)
+                return Result.Failure<DoctorDto>(hospitalIdsResult.Errors);
+
+            await repository.SetDoctorHospitalLinksAsync(doctor.Id, hospitalIdsResult.Value!, cancellationToken);
+        }
+
+        var saved = await repository.GetDoctorByIdAsync(doctor.Id, cancellationToken);
         var baseUrl = (configuration["FrontendUrl"] ?? "https://blinksmed.com").Trim().TrimEnd('/');
-        return Result.Success(DoctorDtoMapper.Map(doctor, $"{baseUrl}/dr/{doctor.UniqueCode}"));
+        return Result.Success(DoctorDtoMapper.Map(saved!, $"{baseUrl}/dr/{doctor.UniqueCode}"));
     }
 }
 

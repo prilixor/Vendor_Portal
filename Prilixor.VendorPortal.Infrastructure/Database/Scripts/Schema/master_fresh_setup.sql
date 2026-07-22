@@ -101,6 +101,7 @@ CREATE DATABASE customer_portal_db;
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/060_customer_impersonation.sql'
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/061_superadmin_protection.sql'
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/062_admin_doctor_references.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/063_admin_hospitals.sql'
 
 \c customer_portal_db
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/059_customer_orders_placed_by_admin.sql'

@@ -11,13 +11,16 @@ import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { MapPicker } from "@/app/components/shared/MapPicker";
 import {
   adminApi,
   AdminDoctorDto,
+  AdminHospitalDto,
+  AdminHospitalInput,
   CreateAdminDoctorRequest,
   UpdateAdminDoctorRequest,
 } from "@/app/services/adminApi";
-import { Copy, Download, Loader2, Mail, Pencil, Plus, Search, Stethoscope, Trash2 } from "lucide-react";
+import { Copy, Download, Loader2, Mail, Pencil, Plus, Search, Stethoscope, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
@@ -28,7 +31,10 @@ type DoctorForm = {
   contactNumber: string;
   isActive: boolean;
   sendEmail: boolean;
+  hospitalIds: string[];
 };
+
+type NewHospitalDraft = AdminHospitalInput & { key: string };
 
 const emptyForm = (): DoctorForm => ({
   fullName: "",
@@ -37,10 +43,24 @@ const emptyForm = (): DoctorForm => ({
   contactNumber: "",
   isActive: true,
   sendEmail: true,
+  hospitalIds: [],
+});
+
+const emptyNewHospital = (): NewHospitalDraft => ({
+  key: crypto.randomUUID(),
+  name: "",
+  addressLine1: "",
+  city: "",
+  state: "",
+  postalCode: "",
+  contactNumber: "",
+  latitude: 23.0225,
+  longitude: 72.5714,
 });
 
 const AdminDoctors = () => {
   const [doctors, setDoctors] = useState<AdminDoctorDto[]>([]);
+  const [hospitals, setHospitals] = useState<AdminHospitalDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -48,14 +68,19 @@ const AdminDoctors = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AdminDoctorDto | null>(null);
   const [form, setForm] = useState<DoctorForm>(emptyForm());
+  const [newHospitals, setNewHospitals] = useState<NewHospitalDraft[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const load = async () => {
     setLoading(true);
     try {
       const isActive = statusFilter === "all" ? undefined : statusFilter === "active";
-      const data = await adminApi.getDoctors(search, isActive);
-      setDoctors(data);
+      const [docs, hosps] = await Promise.all([
+        adminApi.getDoctors(search, isActive),
+        adminApi.getHospitals(undefined, true),
+      ]);
+      setDoctors(docs);
+      setHospitals(hosps);
     } catch (e) {
       toast.error(getUserFriendlyMessage(e, "Failed to load doctors"));
     } finally {
@@ -73,6 +98,7 @@ const AdminDoctors = () => {
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm());
+    setNewHospitals([]);
     setFieldErrors({});
     setDialogOpen(true);
   };
@@ -86,15 +112,27 @@ const AdminDoctors = () => {
       contactNumber: d.contactNumber || "",
       isActive: d.isActive,
       sendEmail: false,
+      hospitalIds: (d.hospitals || []).map((h) => h.id),
     });
+    setNewHospitals([]);
     setFieldErrors({});
     setDialogOpen(true);
+  };
+
+  const toggleHospital = (id: string) => {
+    setForm((f) => ({
+      ...f,
+      hospitalIds: f.hospitalIds.includes(id) ? f.hospitalIds.filter((x) => x !== id) : [...f.hospitalIds, id],
+    }));
   };
 
   const validate = () => {
     const errors: Record<string, string> = {};
     if (!form.fullName.trim()) errors.fullName = "Full name is required";
     if (!form.email.trim() || !form.email.includes("@")) errors.email = "Valid email is required";
+    newHospitals.forEach((h, i) => {
+      if (!h.name.trim()) errors[`newHospital_${i}`] = "Hospital name is required";
+    });
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -103,6 +141,16 @@ const AdminDoctors = () => {
     if (!validate()) return;
     setSaving(true);
     try {
+      const newHospitalPayload = newHospitals.map(({ key: _k, ...rest }) => ({
+        ...rest,
+        name: rest.name.trim(),
+        addressLine1: rest.addressLine1?.trim() || undefined,
+        city: rest.city?.trim() || undefined,
+        state: rest.state?.trim() || undefined,
+        postalCode: rest.postalCode?.trim() || undefined,
+        contactNumber: rest.contactNumber?.trim() || undefined,
+      }));
+
       if (editing) {
         const payload: UpdateAdminDoctorRequest = {
           id: editing.id,
@@ -111,6 +159,8 @@ const AdminDoctors = () => {
           specialization: form.specialization.trim() || undefined,
           contactNumber: form.contactNumber.trim() || undefined,
           isActive: form.isActive,
+          hospitalIds: form.hospitalIds,
+          newHospitals: newHospitalPayload.length ? newHospitalPayload : undefined,
         };
         await adminApi.updateDoctor(editing.id, payload);
         toast.success("Doctor updated");
@@ -121,6 +171,8 @@ const AdminDoctors = () => {
           specialization: form.specialization.trim() || undefined,
           contactNumber: form.contactNumber.trim() || undefined,
           sendEmail: form.sendEmail,
+          hospitalIds: form.hospitalIds,
+          newHospitals: newHospitalPayload.length ? newHospitalPayload : undefined,
         };
         const created = await adminApi.createDoctor(payload);
         toast.success(`Doctor created — Unique ID ${created.uniqueCode}`);
@@ -175,7 +227,7 @@ const AdminDoctors = () => {
     <div className="space-y-6">
       <PageHeader
         title="Doctor References"
-        description="Admin-curated doctors with Unique IDs and QR share pages for patients."
+        description="Admin-curated doctors with Unique IDs, QR pages, and linked hospitals."
         actions={
           <Button onClick={openCreate}>
             <Plus className="mr-2 h-4 w-4" />
@@ -247,17 +299,11 @@ const AdminDoctors = () => {
                   <p className="text-sm text-muted-foreground">
                     {d.email}
                     {d.specialization ? ` · ${d.specialization}` : ""}
-                    {d.contactNumber ? ` · ${d.contactNumber}` : ""}
                   </p>
-                  {d.publicPageUrl && (
-                    <a
-                      href={d.publicPageUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-primary underline-offset-2 hover:underline"
-                    >
-                      {d.publicPageUrl}
-                    </a>
+                  {d.hospitals && d.hospitals.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Hospitals: {d.hospitals.map((h) => h.name).join(", ")}
+                    </p>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -285,7 +331,7 @@ const AdminDoctors = () => {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Doctor" : "Add Doctor"}</DialogTitle>
           </DialogHeader>
@@ -298,11 +344,6 @@ const AdminDoctors = () => {
                 placeholder="Dr. Aditi Patel"
               />
               <FieldError message={fieldErrors.fullName} />
-              {!editing && (
-                <p className="text-xs text-muted-foreground">
-                  Unique ID is generated on save (e.g. Dr. Aditi Patel → DRAP2601).
-                </p>
-              )}
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label>Email *</Label>
@@ -310,7 +351,6 @@ const AdminDoctors = () => {
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="doctor@clinic.com"
               />
               <FieldError message={fieldErrors.email} />
             </div>
@@ -319,7 +359,6 @@ const AdminDoctors = () => {
               <Input
                 value={form.specialization}
                 onChange={(e) => setForm((f) => ({ ...f, specialization: e.target.value }))}
-                placeholder="Orthopedics"
               />
             </div>
             <div className="space-y-2">
@@ -327,9 +366,111 @@ const AdminDoctors = () => {
               <Input
                 value={form.contactNumber}
                 onChange={(e) => setForm((f) => ({ ...f, contactNumber: e.target.value }))}
-                placeholder="+91…"
               />
             </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Link existing hospitals</Label>
+              <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border p-2">
+                {hospitals.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No hospitals yet — add one below.</p>
+                ) : (
+                  hospitals.map((h) => (
+                    <label key={h.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={form.hospitalIds.includes(h.id)}
+                        onChange={() => toggleHospital(h.id)}
+                      />
+                      <span>
+                        {h.name}
+                        {h.city ? ` · ${h.city}` : ""}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3 sm:col-span-2">
+              <div className="flex items-center justify-between">
+                <Label>Add new hospital(s)</Label>
+                <Button type="button" size="sm" variant="outline" onClick={() => setNewHospitals((x) => [...x, emptyNewHospital()])}>
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  New hospital
+                </Button>
+              </div>
+              {newHospitals.map((h, index) => (
+                <div key={h.key} className="space-y-2 rounded-lg border p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">New hospital #{index + 1}</p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setNewHospitals((list) => list.filter((x) => x.key !== h.key))}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Input
+                    placeholder="Hospital name *"
+                    value={h.name}
+                    onChange={(e) =>
+                      setNewHospitals((list) => list.map((x) => (x.key === h.key ? { ...x, name: e.target.value } : x)))
+                    }
+                  />
+                  <FieldError message={fieldErrors[`newHospital_${index}`]} />
+                  <Input
+                    placeholder="Address"
+                    value={h.addressLine1 || ""}
+                    onChange={(e) =>
+                      setNewHospitals((list) =>
+                        list.map((x) => (x.key === h.key ? { ...x, addressLine1: e.target.value } : x)),
+                      )
+                    }
+                  />
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <Input
+                      placeholder="City"
+                      value={h.city || ""}
+                      onChange={(e) =>
+                        setNewHospitals((list) => list.map((x) => (x.key === h.key ? { ...x, city: e.target.value } : x)))
+                      }
+                    />
+                    <Input
+                      placeholder="State"
+                      value={h.state || ""}
+                      onChange={(e) =>
+                        setNewHospitals((list) =>
+                          list.map((x) => (x.key === h.key ? { ...x, state: e.target.value } : x)),
+                        )
+                      }
+                    />
+                    <Input
+                      placeholder="Postal"
+                      value={h.postalCode || ""}
+                      onChange={(e) =>
+                        setNewHospitals((list) =>
+                          list.map((x) => (x.key === h.key ? { ...x, postalCode: e.target.value } : x)),
+                        )
+                      }
+                    />
+                  </div>
+                  <MapPicker
+                    latitude={h.latitude ?? 23.0225}
+                    longitude={h.longitude ?? 72.5714}
+                    onChange={(lat, lng) =>
+                      setNewHospitals((list) =>
+                        list.map((x) => (x.key === h.key ? { ...x, latitude: lat, longitude: lng } : x)),
+                      )
+                    }
+                    height="h-44"
+                  />
+                </div>
+              ))}
+            </div>
+
             {editing ? (
               <div className="flex items-center justify-between sm:col-span-2">
                 <Label>Active</Label>
@@ -339,7 +480,6 @@ const AdminDoctors = () => {
               <div className="flex items-center justify-between sm:col-span-2">
                 <div>
                   <Label>Email Unique ID &amp; QR link to doctor</Label>
-                  <p className="text-xs text-muted-foreground">Sent to the registered email on create.</p>
                 </div>
                 <Switch checked={form.sendEmail} onCheckedChange={(v) => setForm((f) => ({ ...f, sendEmail: v }))} />
               </div>

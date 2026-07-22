@@ -1,5 +1,5 @@
--- Medical directory schema (dual-DB) — Admin-owned doctors
--- common_portal_db: doctors (unique_code + email)
+-- Medical directory schema (dual-DB) — Admin-owned doctors + hospitals
+-- common_portal_db: doctors, hospitals, hospital_doctors
 -- customer_portal_db: customer_order_doctor_references (doctor only)
 
 \c common_portal_db
@@ -29,6 +29,39 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_doctors_unique_code
 
 CREATE INDEX IF NOT EXISTS ix_doctors_email
     ON public.doctors (lower(email));
+
+CREATE TABLE IF NOT EXISTS public.hospitals (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    name varchar(255) NOT NULL,
+    address_line_1 varchar(500) NULL,
+    city varchar(120) NULL,
+    state varchar(120) NULL,
+    postal_code varchar(20) NULL,
+    latitude numeric(9,6) NULL,
+    longitude numeric(9,6) NULL,
+    contact_number varchar(30) NULL,
+    is_active boolean NOT NULL DEFAULT true,
+
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    created_by uuid NULL,
+    updated_by uuid NULL,
+    is_deleted boolean NOT NULL DEFAULT false,
+    deleted_at timestamptz NULL,
+    deleted_by uuid NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_hospitals_name
+    ON public.hospitals (lower(name));
+
+CREATE TABLE IF NOT EXISTS public.hospital_doctors (
+    hospital_id uuid NOT NULL REFERENCES public.hospitals(id),
+    doctor_id uuid NOT NULL REFERENCES public.doctors(id),
+    PRIMARY KEY (hospital_id, doctor_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_hospital_doctors_doctor_id
+    ON public.hospital_doctors(doctor_id);
 
 \c customer_portal_db
 

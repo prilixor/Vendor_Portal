@@ -1,7 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Stethoscope, Loader2 } from "lucide-react";
+import { Stethoscope, Loader2, MapPin, ExternalLink } from "lucide-react";
 import { apiClient } from "@/app/services/apiClient";
+
+type PublicHospital = {
+  id: string;
+  name: string;
+  addressLine1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+};
 
 type PublicDoctor = {
   id: string;
@@ -9,6 +20,18 @@ type PublicDoctor = {
   uniqueCode: string;
   specialization?: string | null;
   isActive: boolean;
+  hospitals?: PublicHospital[] | null;
+};
+
+const formatAddress = (h: PublicHospital) =>
+  [h.addressLine1, h.city, h.state, h.postalCode].filter(Boolean).join(", ");
+
+const mapsUrl = (h: PublicHospital) => {
+  if (typeof h.latitude === "number" && typeof h.longitude === "number") {
+    return `https://www.google.com/maps?q=${h.latitude},${h.longitude}`;
+  }
+  const q = formatAddress(h) || h.name;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 };
 
 /**
@@ -81,6 +104,33 @@ const DoctorPublicPage = () => {
               <p className="text-xs text-muted-foreground">Unique ID</p>
               <p className="font-mono text-lg font-semibold tracking-wide">{doctor.uniqueCode}</p>
             </div>
+
+            {doctor.hospitals && doctor.hospitals.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Hospitals</p>
+                {doctor.hospitals.map((h) => (
+                  <div key={h.id} className="rounded-lg border px-3 py-2.5">
+                    <p className="font-medium">{h.name}</p>
+                    {formatAddress(h) && (
+                      <p className="mt-0.5 flex items-start gap-1.5 text-xs text-muted-foreground">
+                        <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
+                        {formatAddress(h)}
+                      </p>
+                    )}
+                    <a
+                      href={mapsUrl(h)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline"
+                    >
+                      Open in maps
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <p className="text-sm text-muted-foreground">
               Share this Unique ID with patients so they can add you as a doctor reference when ordering on Prilixor.
             </p>

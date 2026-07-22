@@ -12,6 +12,8 @@ public class Doctor : AuditableEntity<Guid>, ISoftDelete
     public string? ContactNumber { get; set; }
     public bool IsActive { get; set; } = true;
 
+    public ICollection<HospitalDoctor> Hospitals { get; set; } = [];
+
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }

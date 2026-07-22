@@ -441,6 +441,33 @@ export interface AdminDoctorDto {
   contactNumber?: string | null;
   isActive: boolean;
   publicPageUrl?: string | null;
+  hospitals?: AdminHospitalDto[] | null;
+}
+
+export interface AdminHospitalDto {
+  id: string;
+  name: string;
+  addressLine1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  contactNumber?: string | null;
+  isActive: boolean;
+  doctorIds?: string[] | null;
+  doctorNames?: string[] | null;
+}
+
+export interface AdminHospitalInput {
+  name: string;
+  addressLine1?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  latitude?: number;
+  longitude?: number;
+  contactNumber?: string;
 }
 
 export interface CreateAdminDoctorRequest {
@@ -449,6 +476,8 @@ export interface CreateAdminDoctorRequest {
   specialization?: string;
   contactNumber?: string;
   sendEmail?: boolean;
+  hospitalIds?: string[];
+  newHospitals?: AdminHospitalInput[];
 }
 
 export interface UpdateAdminDoctorRequest {
@@ -458,6 +487,18 @@ export interface UpdateAdminDoctorRequest {
   specialization?: string;
   contactNumber?: string;
   isActive: boolean;
+  hospitalIds?: string[];
+  newHospitals?: AdminHospitalInput[];
+}
+
+export interface CreateAdminHospitalRequest extends AdminHospitalInput {
+  doctorIds?: string[];
+}
+
+export interface UpdateAdminHospitalRequest extends AdminHospitalInput {
+  id: string;
+  isActive: boolean;
+  doctorIds?: string[];
 }
 
 export interface CreateProductRequest {
@@ -926,5 +967,25 @@ export const adminApi = {
 
   async downloadDoctorQr(id: string, uniqueCode: string): Promise<void> {
     return apiClient.downloadBlob(`/admin/doctors/${id}/qr.png`, `doctor-${uniqueCode}-qr.png`);
+  },
+
+  async getHospitals(search?: string, isActive?: boolean): Promise<AdminHospitalDto[]> {
+    const qs = new URLSearchParams();
+    if (search?.trim()) qs.set("search", search.trim());
+    if (typeof isActive === "boolean") qs.set("isActive", String(isActive));
+    const q = qs.toString();
+    return apiClient.get<AdminHospitalDto[]>(`/admin/hospitals${q ? `?${q}` : ""}`);
+  },
+
+  async createHospital(data: CreateAdminHospitalRequest): Promise<AdminHospitalDto> {
+    return apiClient.post<AdminHospitalDto>("/admin/hospitals", data);
+  },
+
+  async updateHospital(id: string, data: UpdateAdminHospitalRequest): Promise<AdminHospitalDto> {
+    return apiClient.put<AdminHospitalDto>(`/admin/hospitals/${id}`, { ...data, id });
+  },
+
+  async deleteHospital(id: string): Promise<void> {
+    return apiClient.delete<void>(`/admin/hospitals/${id}`);
   },
 };
