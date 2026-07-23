@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Barcode, CheckCircle2 } from "lucide-react";
+import { Check, Barcode, CheckCircle2, Stethoscope } from "lucide-react";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -12,6 +12,8 @@ import { Input } from "@/app/components/ui/input";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto, type VendorProductAssetApiDto, type OrderContinuationsDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
+import { VendorDoctorLookupDialog } from "@/app/components/vendor/VendorDoctorLookupDialog";
+import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
 
 const filterAssetsForOrder = (
   assets: VendorProductAssetApiDto[],
@@ -296,6 +298,8 @@ const VendorOrderDetail = () => {
   const [availableAssets, setAvailableAssets] = useState<VendorProductAssetApiDto[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [openDropdowns, setOpenDropdowns] = useState<Record<number, boolean>>({});
+  const [doctorLookupOpen, setDoctorLookupOpen] = useState(false);
+  const [doctorLookupCode, setDoctorLookupCode] = useState("");
 
   const currentItemId = selectedItemId || orderId;
 
@@ -870,43 +874,32 @@ const VendorOrderDetail = () => {
           )}
 
           {/* Medical Reference */}
-          {(order.doctorId || order.hospitalId) && (
-            <Card className="border-border/80 shadow-sm">
-              <CardHeader className="pb-4">
-                <p className="text-lg font-semibold">Medical reference</p>
-              </CardHeader>
-              <CardContent className="grid gap-6 sm:grid-cols-2">
-                {order.doctorName && (
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Doctor</p>
-                    <p className="text-sm font-medium">
-                      {order.doctorName}
-                      {order.doctorSpecialization && (
-                        <span className="text-muted-foreground font-normal ml-1">
-                          - {order.doctorSpecialization}
-                        </span>
-                      )}
-                    </p>
-                    {order.doctorContactNumber && (
-                      <p className="text-xs text-muted-foreground">{order.doctorContactNumber}</p>
-                    )}
-                  </div>
-                )}
-                {order.hospitalName && (
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hospital</p>
-                    <p className="text-sm font-medium">
-                      {order.hospitalName}
-                      {order.hospitalCity && (
-                        <span className="text-muted-foreground font-normal ml-1">
-                          ({order.hospitalCity})
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          {(order.doctorId || order.hospitalId || order.doctorName || order.doctorUniqueCode) && (
+            <OrderMedicalReferenceCard
+              doctorName={order.doctorName}
+              doctorSpecialization={order.doctorSpecialization}
+              doctorUniqueCode={order.doctorUniqueCode}
+              doctorContactNumber={order.doctorContactNumber}
+              hospitalName={order.hospitalName}
+              hospitalCity={order.hospitalCity}
+              action={
+                order.doctorUniqueCode ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={() => {
+                      setDoctorLookupCode(order.doctorUniqueCode || "");
+                      setDoctorLookupOpen(true);
+                    }}
+                  >
+                    <Stethoscope className="mr-1.5 h-3.5 w-3.5" />
+                    View doctor
+                  </Button>
+                ) : null
+              }
+            />
           )}
 
           <div className="flex flex-wrap gap-2">
@@ -1035,6 +1028,12 @@ const VendorOrderDetail = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <VendorDoctorLookupDialog
+        open={doctorLookupOpen}
+        onOpenChange={setDoctorLookupOpen}
+        initialCode={doctorLookupCode}
+      />
     </div>
   );
 };

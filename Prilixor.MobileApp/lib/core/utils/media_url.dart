@@ -2,9 +2,8 @@ import '../api/api_client.dart';
 
 /// Resolves catalog/media URLs for Mobile.
 ///
-/// React Vite proxies `/api/*` → API host, so relative image paths work there.
-/// Flutter web-server on :3000 has no proxy — relative `/api/...` paths must be
-/// rewritten to the absolute API base (e.g. https://localhost:5001/api/...).
+/// Relative `/api/...` paths are rewritten to the absolute API base
+/// ([AppUrls.apiBaseUrl] / `https://api.blinksmed.com/api` in production).
 String? resolveMediaUrl(String? raw) {
   if (raw == null) return null;
   final url = raw.trim();
@@ -14,7 +13,7 @@ String? resolveMediaUrl(String? raw) {
     return url;
   }
 
-  final apiBase = ApiClient().baseUrl; // e.g. https://localhost:5001/api
+  final apiBase = ApiClient().baseUrl; // production: https://api.blinksmed.com/api
   final origin = apiBase.replaceFirst(RegExp(r'/api/?$', caseSensitive: false), '');
 
   if (url.startsWith('/api/') || url == '/api') {

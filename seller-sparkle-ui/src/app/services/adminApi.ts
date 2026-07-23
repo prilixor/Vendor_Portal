@@ -598,6 +598,7 @@ export interface AdminOrderDto {
   doctorId?: string;
   doctorName?: string;
   doctorSpecialization?: string;
+  doctorUniqueCode?: string;
   hospitalId?: string;
   hospitalName?: string;
   hospitalCity?: string;

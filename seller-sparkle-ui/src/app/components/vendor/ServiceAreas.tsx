@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
 
 const blank: ServiceArea = { id: "", name: "", city: "", latitude: 19.07, longitude: 72.87, radiusKm: 5 };
 
@@ -298,6 +299,25 @@ const ServiceAreas = () => {
                   showRadius
                   height="h-48 sm:h-72"
                   onChange={(lat, lng) => setEditing({ ...editing, latitude: lat, longitude: lng })}
+                  onAddressResolved={(address) => {
+                    const nextCity = address?.city || editing.city;
+                    if (address?.city) {
+                      setEditing((prev) => ({ ...prev, city: address.city! }));
+                      clearFieldError("city");
+                    }
+                    const missing = missingAddressFieldLabels({
+                      city: nextCity,
+                      requireLine1: false,
+                      requireState: false,
+                      requirePostal: false,
+                      requireCity: true,
+                    });
+                    if (missing.length === 0) {
+                      toast.success("Location applied from map.");
+                    } else {
+                      toast.message(`Map pin saved. Please fill required ${missing.join(", ")}.`);
+                    }
+                  }}
                   onRadiusChange={(km) => setEditing({ ...editing, radiusKm: km })}
                 />
               </div>

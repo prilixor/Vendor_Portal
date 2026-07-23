@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
+import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import {
@@ -746,39 +747,18 @@ const AdminOrderDetail = () => {
             </CardContent>
           </Card>
 
-          {(selectedOrder.doctorId || selectedOrder.hospitalId) && (
-            <Card className="border-border/80 shadow-sm">
-              <CardHeader className="pb-4">
-                <p className="text-lg font-semibold">Medical reference</p>
-              </CardHeader>
-              <CardContent className="space-y-4 text-sm">
-                {selectedOrder.doctorName && (
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Doctor</p>
-                    <p className="font-medium">
-                      {selectedOrder.doctorName}
-                      {selectedOrder.doctorSpecialization ? (
-                        <span className="font-normal text-muted-foreground"> — {selectedOrder.doctorSpecialization}</span>
-                      ) : null}
-                    </p>
-                    {selectedOrder.doctorContactNumber ? (
-                      <p className="text-xs text-muted-foreground">{selectedOrder.doctorContactNumber}</p>
-                    ) : null}
-                  </div>
-                )}
-                {selectedOrder.hospitalName && (
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hospital</p>
-                    <p className="font-medium">
-                      {selectedOrder.hospitalName}
-                      {selectedOrder.hospitalCity ? (
-                        <span className="font-normal text-muted-foreground"> ({selectedOrder.hospitalCity})</span>
-                      ) : null}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          {(selectedOrder.doctorId ||
+            selectedOrder.hospitalId ||
+            selectedOrder.doctorName ||
+            selectedOrder.doctorUniqueCode) && (
+            <OrderMedicalReferenceCard
+              doctorName={selectedOrder.doctorName}
+              doctorSpecialization={selectedOrder.doctorSpecialization}
+              doctorUniqueCode={selectedOrder.doctorUniqueCode}
+              doctorContactNumber={selectedOrder.doctorContactNumber}
+              hospitalName={selectedOrder.hospitalName}
+              hospitalCity={selectedOrder.hospitalCity}
+            />
           )}
         </div>
       </div>

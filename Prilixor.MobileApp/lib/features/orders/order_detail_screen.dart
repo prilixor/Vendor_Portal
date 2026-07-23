@@ -517,6 +517,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   ],
                                 ),
                               ),
+
+                            if (provider.currentOrder!.hasMedicalReference) ...[
+                              const SizedBox(height: 24),
+                              _MedicalReferenceCard(order: provider.currentOrder!),
+                            ],
                             
                             const SizedBox(height: 24),
 
@@ -749,4 +754,100 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
+}
+
+class _MedicalReferenceCard extends StatelessWidget {
+  final OrderModel order;
+
+  const _MedicalReferenceCard({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    final doctorName = order.doctorName?.trim();
+    final specialization = order.doctorSpecialization?.trim();
+    final uniqueCode = order.doctorUniqueCode?.trim();
+    final contact = order.doctorContactNumber?.trim();
+    final hospitalName = order.hospitalName?.trim();
+    final hospitalCity = order.hospitalCity?.trim();
+
+    String? doctorValue;
+    if (doctorName != null && doctorName.isNotEmpty) {
+      doctorValue = specialization != null && specialization.isNotEmpty
+          ? '$doctorName — $specialization'
+          : doctorName;
+    }
+
+    String? hospitalValue;
+    if (hospitalName != null && hospitalName.isNotEmpty) {
+      hospitalValue = hospitalCity != null && hospitalCity.isNotEmpty
+          ? '$hospitalName ($hospitalCity)'
+          : hospitalName;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Medical reference',
+            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          if (doctorValue != null) _labeledRow('Doctor', doctorValue),
+          if (uniqueCode != null && uniqueCode.isNotEmpty) ...[
+            if (doctorValue != null) const SizedBox(height: 12),
+            _labeledRow(
+              'Unique ID',
+              uniqueCode,
+              valueStyle: const TextStyle(
+                color: Color(0xFF2DD4BF),
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'monospace',
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
+          if (contact != null && contact.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _labeledRow('Contact', contact),
+          ],
+          if (hospitalValue != null) ...[
+            const SizedBox(height: 12),
+            _labeledRow('Hospital', hospitalValue),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _labeledRow(String label, String value, {TextStyle? valueStyle}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            color: Colors.white54,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: valueStyle ??
+              const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
 }

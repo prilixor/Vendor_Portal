@@ -68,15 +68,8 @@ class CheckoutProvider extends ChangeNotifier {
         'productVariantId': line.productVariantId,
     };
 
-    if (line.prescriptionRequired && medicalRef != null) {
-      if (medicalRef.doctorId.isNotEmpty) payload['doctorId'] = medicalRef.doctorId;
-      if (medicalRef.hospitalId.isNotEmpty) payload['hospitalId'] = medicalRef.hospitalId;
-      if (medicalRef.contactNumber.isNotEmpty) {
-        payload['contactNumber'] = medicalRef.contactNumber;
-      }
-      if (medicalRef.referenceNumber.isNotEmpty) {
-        payload['referenceNumber'] = medicalRef.referenceNumber;
-      }
+    if (line.prescriptionRequired && medicalRef != null && medicalRef.doctorId.isNotEmpty) {
+      payload['doctorId'] = medicalRef.doctorId;
     }
 
     return payload;

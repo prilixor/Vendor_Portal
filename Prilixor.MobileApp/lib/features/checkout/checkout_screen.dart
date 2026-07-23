@@ -62,19 +62,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  bool get _prescriptionsComplete {
-    final cart = Provider.of<CartProvider>(context, listen: false);
-    return cart.lines
-        .where((l) => l.prescriptionRequired)
-        .every((l) => _medicalRefs[l.listingId]?.isComplete == true);
-  }
+  // Doctor Unique ID is optional — never block place-order.
 
   Future<void> _openMedicalRef(String listingId, String title) async {
     final result = await Navigator.push<MedicalRefModel>(
       context,
       MaterialPageRoute(
         builder: (_) => MedicalReferenceScreen(
-          title: 'Prescription: $title',
+          title: 'Doctor for $title',
           initial: _medicalRefs[listingId] ?? const MedicalRefModel(),
         ),
       ),
@@ -95,7 +90,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Applied to all items requiring a prescription')),
+      const SnackBar(content: Text('Applied doctor reference to all prescription items')),
     );
   }
 
@@ -276,12 +271,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            'Action Required: Prescriptions',
+                                            'Doctor reference (optional)',
                                             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                                           ),
                                           SizedBox(height: 4),
                                           Text(
-                                            'Some items require a doctor\'s reference. Please attach them below.',
+                                            'Enter a doctor Unique ID from their QR / share page, or skip and place the order without one.',
                                             style: TextStyle(color: Colors.white70, fontSize: 13),
                                           ),
                                         ],
@@ -289,14 +284,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                     ),
                                   ],
                                 ),
-                                SizedBox(height: 8),
-                                RequiredFieldsNote(padding: EdgeInsets.zero),
                               ],
                             ),
                           ),
                           ...rxLines.map((line) {
                             final ref = _medicalRefs[line.listingId];
-                            final filled = ref?.isComplete == true;
+                            final filled = ref?.hasDoctor == true;
                             return Padding(
                               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                               child: Row(
@@ -309,14 +302,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                         const SizedBox(height: 4),
                                         Text(
                                           filled
-                                              ? 'Prescription attached${ref?.doctorName != null ? ' · ${ref!.doctorName}' : ''}'
-                                              : 'Pending details',
+                                              ? 'Linked · ${ref!.doctorName ?? 'Doctor'} (${ref.uniqueCode})'
+                                              : 'No doctor linked yet',
                                           style: TextStyle(
                                             color: filled ? const Color(0xFF34D399) : Colors.amber,
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
+                                        if (filled && ref!.hospitals.isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            ref.hospitals.length == 1
+                                                ? (ref.hospitals.first.placeLabel != null
+                                                    ? '${ref.hospitals.first.name} · ${ref.hospitals.first.placeLabel}'
+                                                    : ref.hospitals.first.name)
+                                                : '${ref.hospitals.length} affiliated hospitals',
+                                            style: const TextStyle(color: Colors.white54, fontSize: 11),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),
@@ -324,7 +328,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                     onPressed: () async {
                                       await _openMedicalRef(line.listingId, line.title);
                                       if (rxLines.length > 1 &&
-                                          _medicalRefs[line.listingId]?.isComplete == true &&
+                                          _medicalRefs[line.listingId]?.hasDoctor == true &&
                                           mounted) {
                                         final apply = await showDialog<bool>(
                                           context: context,
@@ -332,7 +336,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                             backgroundColor: const Color(0xFF1E293B),
                                             title: const Text('Apply to all?', style: TextStyle(color: Colors.white)),
                                             content: const Text(
-                                              'Use the same hospital and doctor for all prescription items?',
+                                              'Use the same doctor Unique ID for all prescription items?',
                                               style: TextStyle(color: Colors.white70),
                                             ),
                                             actions: [
@@ -353,7 +357,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                       }
                                     },
                                     child: Text(
-                                      filled ? 'Edit Details' : 'Add Doctor',
+                                      filled ? 'Change' : 'Add Unique ID',
                                       style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold),
                                     ),
                                   ),
@@ -479,13 +483,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             );
                             return;
                           }
-                          if (needsPrescription && !_prescriptionsComplete) {
-                            showRequiredFieldsBlocked(
-                              context,
-                              message: 'Please fill in the required fields. Attach hospital and doctor details for prescription items.',
-                            );
-                            return;
-                          }
                           final success = await provider.placeOrder(
                             cart.lines,
                             addressId: _selectedAddressId,
@@ -510,9 +507,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   child: provider.isPlacingOrder
                       ? const CircularProgressIndicator(color: Colors.white)
                       : Text(
-                          needsPrescription && !_prescriptionsComplete
-                              ? 'Add prescriptions to continue'
-                              : 'Place Order',
+                          'Place Order',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                 ),

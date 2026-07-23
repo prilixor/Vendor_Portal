@@ -427,6 +427,7 @@ export interface VendorDispatchOfferApiDto {
   doctorId?: string;
   doctorName?: string;
   doctorSpecialization?: string;
+  doctorUniqueCode?: string;
   hospitalId?: string;
   hospitalName?: string;
   hospitalCity?: string;
@@ -455,6 +456,7 @@ export interface VendorOrderApiDto {
   doctorId?: string;
   doctorName?: string;
   doctorSpecialization?: string;
+  doctorUniqueCode?: string;
   hospitalId?: string;
   hospitalName?: string;
   hospitalCity?: string;

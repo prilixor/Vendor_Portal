@@ -94,7 +94,7 @@ class _CartScreenState extends State<CartScreen> {
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Some items need a doctor reference at checkout.',
+                            'Some items support an optional doctor Unique ID at checkout.',
                             style: TextStyle(color: Color(0xFF93C5FD), fontSize: 13),
                           ),
                         ),
@@ -250,7 +250,7 @@ class _CartLineCard extends StatelessWidget {
                     ),
                     if (line.prescriptionRequired) ...[
                       const SizedBox(height: 4),
-                      const Text('Rx required', style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w600)),
+                      const Text('Rx optional', style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w600)),
                     ],
                   ],
                 ),

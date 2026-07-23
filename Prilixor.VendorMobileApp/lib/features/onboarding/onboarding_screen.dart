@@ -15,9 +15,11 @@ import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/device_location.dart';
 import '../../core/utils/multipart_file_util.dart';
+import '../../core/utils/place_search.dart';
 import 'document_preview_screen.dart';
 import '../../shared/widgets/admin_comment_hint.dart';
 import 'onboarding_widgets.dart';
+import '../service_areas/service_area_map_picker.dart';
 import '../support/support_chat_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -211,6 +213,17 @@ class _ProfileTabState extends State<_ProfileTab> {
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
   bool _locating = false;
+  bool _resolvingAddress = false;
+  int _stateCityKey = 0;
+  final PlaceSearch _placeSearch = PlaceSearch();
+
+  static const double _defaultLat = 23.0225;
+  static const double _defaultLng = 72.5714;
+
+  double get _mapLat =>
+      double.tryParse(_latController.text.trim()) ?? _defaultLat;
+  double get _mapLng =>
+      double.tryParse(_lngController.text.trim()) ?? _defaultLng;
 
   @override
   void initState() {
@@ -254,7 +267,79 @@ class _ProfileTabState extends State<_ProfileTab> {
     _postalController.dispose();
     _latController.dispose();
     _lngController.dispose();
+    _placeSearch.close();
     super.dispose();
+  }
+
+  Future<void> _applyReverseGeocode(
+    double lat,
+    double lng, {
+    bool announceIfComplete = false,
+  }) async {
+    setState(() => _resolvingAddress = true);
+    final rev = await _placeSearch.reverse(latitude: lat, longitude: lng);
+    if (!mounted) return;
+
+    final line1 = rev?.line1?.trim();
+    final state = rev?.state?.trim();
+    final city = rev?.city?.trim();
+    final postal = rev?.postal?.trim();
+    var remountPicker = false;
+
+    if (line1 != null && line1.isNotEmpty) {
+      _address1Controller.text = line1;
+    }
+    if (postal != null && postal.isNotEmpty) {
+      _postalController.text = postal;
+    }
+    if (state != null && state.isNotEmpty) {
+      _stateController.text = state;
+      remountPicker = true;
+    }
+    if (city != null && city.isNotEmpty) {
+      _cityController.text = city;
+      remountPicker = true;
+    }
+    if (remountPicker) _stateCityKey++;
+
+    setState(() => _resolvingAddress = false);
+
+    final missing = <String>[];
+    if (_address1Controller.text.trim().isEmpty) missing.add('address line');
+    if (_stateController.text.trim().isEmpty) missing.add('state');
+    if (_cityController.text.trim().isEmpty) missing.add('city');
+    if (_postalController.text.trim().isEmpty) missing.add('postal code');
+
+    if (!mounted) return;
+    if (missing.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Map pin saved. Please fill required ${missing.join(', ')}.',
+          ),
+        ),
+      );
+    } else if (announceIfComplete) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location applied from map.')),
+      );
+    }
+  }
+
+  Future<void> _setMapLocation(
+    double lat,
+    double lng, {
+    bool announceIfComplete = false,
+  }) async {
+    setState(() {
+      _latController.text = lat.toStringAsFixed(6);
+      _lngController.text = lng.toStringAsFixed(6);
+    });
+    await _applyReverseGeocode(
+      lat,
+      lng,
+      announceIfComplete: announceIfComplete,
+    );
   }
 
   Future<void> _save() async {
@@ -319,12 +404,10 @@ class _ProfileTabState extends State<_ProfileTab> {
         );
         return;
       }
-      setState(() {
-        _latController.text = result.latitude!.toStringAsFixed(6);
-        _lngController.text = result.longitude!.toStringAsFixed(6);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location captured. Save profile to keep it.')),
+      await _setMapLocation(
+        result.latitude!,
+        result.longitude!,
+        announceIfComplete: true,
       );
     } finally {
       if (mounted) setState(() => _locating = false);
@@ -405,11 +488,34 @@ class _ProfileTabState extends State<_ProfileTab> {
               OnboardingTextField(controller: _address1Controller, label: 'Address line 1 *'),
               OnboardingTextField(controller: _address2Controller, label: 'Address line 2'),
               StateCityPickerFields(
+                key: ValueKey('onboarding-state-city-$_stateCityKey'),
                 stateController: _stateController,
                 cityController: _cityController,
-                initialStateName: widget.profile?.state,
-                initialCityName: widget.profile?.city,
+                initialStateName: _stateController.text.isNotEmpty
+                    ? _stateController.text
+                    : widget.profile?.state,
+                initialCityName: _cityController.text.isNotEmpty
+                    ? _cityController.text
+                    : widget.profile?.city,
               ),
+              if (_resolvingAddress)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Resolving address from pin…',
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
               OnboardingTextField(
                 controller: _postalController,
                 label: 'Postal code *',
@@ -421,7 +527,7 @@ class _ProfileTabState extends State<_ProfileTab> {
         OnboardingFormSection(
           title: 'Map location',
           subtitle:
-              'Used for service area matching. Use GPS or paste from Google Maps.',
+              'Used for service area matching. Pin on map, GPS, or paste from Google Maps — pin fills address when available.',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -453,6 +559,15 @@ class _ProfileTabState extends State<_ProfileTab> {
                 ),
               ),
               const SizedBox(height: 12),
+              ServiceAreaMapPicker(
+                latitude: _mapLat,
+                longitude: _mapLng,
+                showRadius: false,
+                height: 260,
+                onLocationChanged: (point) =>
+                    _setMapLocation(point.latitude, point.longitude),
+              ),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
@@ -476,7 +591,8 @@ class _ProfileTabState extends State<_ProfileTab> {
               ),
               Text(
                 'How to set coordinates:\n'
-                '• Tap "Use my current location" (allow GPS in the browser)\n'
+                '• Tap the map or search to drop a pin (fills address when available)\n'
+                '• Tap "Use my current location" (allow GPS)\n'
                 '• Or open Google Maps → long-press your shop → copy lat/long\n'
                 '• Paste the numbers below, then Save profile',
                 style: TextStyle(

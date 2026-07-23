@@ -425,7 +425,8 @@ public sealed record CustomerOrderDto(
     Guid? HospitalId = null,
     string? HospitalName = null,
     string? HospitalCity = null,
-    string? DoctorContactNumber = null);
+    string? DoctorContactNumber = null,
+    string? DoctorUniqueCode = null);
 internal static class CustomerOrderPricingRules
 {
     public static string NormalizeDeliveryOption(string? option) =>
@@ -1316,7 +1317,8 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
                 HospitalId: null,
                 HospitalName: null,
                 HospitalCity: null,
-                DoctorContactNumber: row.Doctor?.ContactNumber));
+                DoctorContactNumber: row.Doctor?.ContactNumber,
+                DoctorUniqueCode: row.Doctor?.UniqueCode));
         }
 
         return Result.Success(list);
@@ -1373,7 +1375,8 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
             HospitalId: null,
             HospitalName: null,
             HospitalCity: null,
-            DoctorContactNumber: row.Doctor?.ContactNumber));
+            DoctorContactNumber: row.Doctor?.ContactNumber,
+            DoctorUniqueCode: row.Doctor?.UniqueCode));
     }
 }
 
@@ -1550,6 +1553,7 @@ internal sealed class CancelCustomerOrderCommandHandler(ICustomerRepository cust
             HospitalId: null,
             HospitalName: null,
             HospitalCity: null,
-            DoctorContactNumber: row.Doctor?.ContactNumber));
+            DoctorContactNumber: row.Doctor?.ContactNumber,
+            DoctorUniqueCode: row.Doctor?.UniqueCode));
     }
 }

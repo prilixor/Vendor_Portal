@@ -12,6 +12,8 @@ import { FieldError } from "@/app/components/shared/FieldError";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { MapPicker } from "@/app/components/shared/MapPicker";
+import { StateCityFields } from "@/app/components/shared/StateCityFields";
+import { SearchableMultiSelect } from "@/app/components/shared/SearchableMultiSelect";
 import {
   adminApi,
   AdminHospitalDto,
@@ -19,6 +21,7 @@ import {
   CreateAdminHospitalRequest,
   UpdateAdminHospitalRequest,
 } from "@/app/services/adminApi";
+import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
 import { Building2, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
@@ -110,12 +113,19 @@ const AdminHospitals = () => {
     setDialogOpen(true);
   };
 
-  const toggleDoctor = (id: string) => {
-    setForm((f) => ({
-      ...f,
-      doctorIds: f.doctorIds.includes(id) ? f.doctorIds.filter((x) => x !== id) : [...f.doctorIds, id],
-    }));
-  };
+  const doctorOptions = useMemo(
+    () =>
+      doctors.map((d) => ({
+        id: d.id,
+        label: d.fullName,
+        badge: d.uniqueCode || undefined,
+        secondary: d.specialization || undefined,
+        searchText: [d.fullName, d.uniqueCode, d.email, d.specialization, d.contactNumber]
+          .filter(Boolean)
+          .join(" "),
+      })),
+    [doctors],
+  );
 
   const validate = () => {
     const errors: Record<string, string> = {};
@@ -284,13 +294,13 @@ const AdminHospitals = () => {
                 onChange={(e) => setForm((f) => ({ ...f, addressLine1: e.target.value }))}
               />
             </div>
-            <div className="space-y-2">
-              <Label>City</Label>
-              <Input value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>State</Label>
-              <Input value={form.state} onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} />
+            <div className="sm:col-span-2">
+              <StateCityFields
+                state={form.state}
+                city={form.city}
+                onStateChange={(state) => setForm((f) => ({ ...f, state }))}
+                onCityChange={(city) => setForm((f) => ({ ...f, city }))}
+              />
             </div>
             <div className="space-y-2">
               <Label>Postal code</Label>
@@ -309,29 +319,47 @@ const AdminHospitals = () => {
                 latitude={form.latitude}
                 longitude={form.longitude}
                 onChange={(lat, lng) => setForm((f) => ({ ...f, latitude: lat, longitude: lng }))}
+                onAddressResolved={(address) => {
+                  const nextLine1 = address?.line1 || form.addressLine1;
+                  const nextCity = address?.city || form.city;
+                  const nextState = address?.state || form.state;
+                  const nextPostal = address?.postal || form.postalCode;
+
+                  if (address && (address.line1 || address.state || address.city || address.postal)) {
+                    setForm((f) => ({
+                      ...f,
+                      ...(address.line1 ? { addressLine1: address.line1 } : {}),
+                      ...(address.state ? { state: address.state } : {}),
+                      ...(address.city ? { city: address.city } : {}),
+                      ...(address.postal ? { postalCode: address.postal } : {}),
+                    }));
+                  }
+
+                  const missing = missingAddressFieldLabels({
+                    line1: nextLine1,
+                    city: nextCity,
+                    state: nextState,
+                    postal: nextPostal,
+                  });
+                  if (missing.length === 0) {
+                    toast.success("Location applied from map.");
+                  } else {
+                    toast.message(`Map pin saved. Please fill required ${missing.join(", ")}.`);
+                  }
+                }}
                 height="h-56"
               />
             </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Linked doctors</Label>
-              <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
-                {doctors.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No active doctors yet.</p>
-                ) : (
-                  doctors.map((d) => (
-                    <label key={d.id} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={form.doctorIds.includes(d.id)}
-                        onChange={() => toggleDoctor(d.id)}
-                      />
-                      <span>
-                        {d.fullName} <span className="font-mono text-xs text-muted-foreground">({d.uniqueCode})</span>
-                      </span>
-                    </label>
-                  ))
-                )}
-              </div>
+            <div className="sm:col-span-2">
+              <SearchableMultiSelect
+                label="Linked doctors"
+                options={doctorOptions}
+                selectedIds={form.doctorIds}
+                onChange={(doctorIds) => setForm((f) => ({ ...f, doctorIds }))}
+                placeholder="Select doctors…"
+                searchPlaceholder="Search by name, Unique ID, or specialization…"
+                emptyMessage="No active doctors yet."
+              />
             </div>
             {editing && (
               <div className="flex items-center justify-between sm:col-span-2">

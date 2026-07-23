@@ -504,7 +504,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
-                                            'Prescription / doctor reference required at checkout.',
+                                            'Doctor Unique ID can be added optionally at checkout.',
                                             style: TextStyle(color: Colors.amber, fontSize: 13),
                                           ),
                                         ),

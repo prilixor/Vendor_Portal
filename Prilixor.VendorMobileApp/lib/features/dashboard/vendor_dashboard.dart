@@ -11,6 +11,7 @@ import '../../core/providers/vendor_support_provider.dart';
 import '../../shared/widgets/pending_approval_banner.dart';
 import '../../shared/widgets/support_fab.dart';
 import '../../shared/widgets/vendor_app_bar_badge.dart';
+import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
 import '../home/home_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../orders/order_requests_screen.dart';
@@ -143,7 +144,14 @@ class _VendorDashboardState extends State<VendorDashboard>
       appBar: AppBar(
         centerTitle: true,
         title: Text(_titles[_index]),
-        actions: const [VendorAppBarBadge()],
+        actions: [
+          IconButton(
+            tooltip: 'Find doctor by Unique ID',
+            icon: const Icon(Icons.medical_services_outlined),
+            onPressed: () => showVendorDoctorLookupSheet(context),
+          ),
+          const VendorAppBarBadge(),
+        ],
       ),
       floatingActionButton: _index == 0
           ? AnimatedSlide(

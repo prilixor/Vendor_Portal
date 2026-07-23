@@ -21,6 +21,8 @@ class VendorOrder {
   final bool isExtended;
   final String? doctorName;
   final String? doctorSpecialization;
+  final String? doctorUniqueCode;
+  final String? doctorContactNumber;
   final String? hospitalName;
   final String? hospitalCity;
   final List<String> assignedAssetTags;
@@ -47,6 +49,8 @@ class VendorOrder {
     required this.isExtended,
     this.doctorName,
     this.doctorSpecialization,
+    this.doctorUniqueCode,
+    this.doctorContactNumber,
     this.hospitalName,
     this.hospitalCity,
     this.assignedAssetTags = const [],
@@ -95,6 +99,8 @@ class VendorOrder {
       isExtended: json['isExtended'] == true,
       doctorName: json['doctorName']?.toString(),
       doctorSpecialization: json['doctorSpecialization']?.toString(),
+      doctorUniqueCode: json['doctorUniqueCode']?.toString(),
+      doctorContactNumber: json['doctorContactNumber']?.toString(),
       hospitalName: json['hospitalName']?.toString(),
       hospitalCity: json['hospitalCity']?.toString(),
       assignedAssetTags: (json['assignedAssetTags'] as List<dynamic>?)

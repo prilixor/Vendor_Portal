@@ -16,6 +16,7 @@ import {
 } from "@/app/components/ui/select";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { FieldError } from "@/app/components/shared/FieldError";
+import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
 import { toast } from "sonner";
 import { Trash2, Edit2 } from "lucide-react";
 
@@ -326,6 +327,57 @@ const CustomerAddresses = () => {
                 onChange={(lat, lng) => {
                   setLatitude(lat);
                   setLongitude(lng);
+                }}
+                onAddressResolved={(address) => {
+                  let nextLine1 = line1;
+                  let nextCity = city;
+                  let nextState = state;
+                  let nextPostal = postal;
+
+                  if (address?.line1) {
+                    nextLine1 = address.line1;
+                    setLine1(address.line1);
+                    clearFieldError("line1");
+                  }
+                  if (address?.postal) {
+                    nextPostal = address.postal;
+                    setPostal(address.postal);
+                    clearFieldError("postal");
+                  }
+                  if (address?.state) {
+                    const matched = states.find(
+                      (s) => s.name.toLowerCase() === address.state!.toLowerCase(),
+                    );
+                    if (matched) {
+                      nextState = matched.name;
+                      setState(matched.name);
+                      setSelectedStateIso2(matched.iso2);
+                    } else {
+                      nextState = address.state;
+                      setState(address.state);
+                    }
+                    clearFieldError("state");
+                  }
+                  if (address?.city) {
+                    const exact = cities.find(
+                      (c) => c.toLowerCase() === address.city!.toLowerCase(),
+                    );
+                    nextCity = exact ?? address.city;
+                    setCity(nextCity);
+                    clearFieldError("city");
+                  }
+
+                  const missing = missingAddressFieldLabels({
+                    line1: nextLine1,
+                    city: nextCity,
+                    state: nextState,
+                    postal: nextPostal,
+                  });
+                  if (missing.length === 0) {
+                    toast.success("Location applied from map.");
+                  } else {
+                    toast.message(`Map pin saved. Please fill required ${missing.join(", ")}.`);
+                  }
                 }}
                 height="h-56"
               />

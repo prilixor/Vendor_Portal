@@ -6,6 +6,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_onboarding_model.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/utils/device_location.dart';
+import '../../core/utils/place_search.dart';
 import '../../shared/widgets/state_city_picker.dart';
 import '../../core/providers/vendor_service_area_provider.dart';
 import '../../core/theme.dart';
@@ -384,6 +385,9 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
   late double _longitude;
   late double _radius;
   bool _locating = false;
+  bool _resolvingAddress = false;
+  int _stateCityKey = 0;
+  final PlaceSearch _placeSearch = PlaceSearch();
 
   @override
   void initState() {
@@ -413,19 +417,53 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
     _cityController.dispose();
     _latController.dispose();
     _lngController.dispose();
+    _placeSearch.close();
     super.dispose();
   }
 
-  void _setLocation(double lat, double lng) {
+  Future<void> _setLocation(double lat, double lng) async {
     setState(() {
       _latitude = lat;
       _longitude = lng;
       _latController.text = lat.toStringAsFixed(6);
       _lngController.text = lng.toStringAsFixed(6);
+      _resolvingAddress = true;
     });
+
+    final rev = await _placeSearch.reverse(latitude: lat, longitude: lng);
+    if (!mounted) return;
+
+    final state = rev?.state?.trim();
+    final city = rev?.city?.trim();
+    var remountPicker = false;
+
+    if (state != null && state.isNotEmpty) {
+      _stateController.text = state;
+      remountPicker = true;
+    }
+    if (city != null && city.isNotEmpty) {
+      _cityController.text = city;
+      remountPicker = true;
+    }
+    if (remountPicker) _stateCityKey++;
+
+    setState(() => _resolvingAddress = false);
+
+    final missing = <String>[];
+    if (_cityController.text.trim().isEmpty) missing.add('city');
+    if (_stateController.text.trim().isEmpty) missing.add('state');
+
+    if (!mounted || missing.isEmpty) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Map pin saved. Please fill required ${missing.join(', ')}.',
+        ),
+      ),
+    );
   }
 
-  void _applyManualCoordinates() {
+  Future<void> _applyManualCoordinates() async {
     final lat = double.tryParse(_latController.text.trim());
     final lng = double.tryParse(_lngController.text.trim());
     if (lat == null || lng == null) {
@@ -434,7 +472,7 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
       );
       return;
     }
-    _setLocation(lat, lng);
+    await _setLocation(lat, lng);
   }
 
   Future<void> _useCurrentLocation() async {
@@ -458,10 +496,7 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
         );
         return;
       }
-      _setLocation(result.latitude!, result.longitude!);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location updated on map.')),
-      );
+      await _setLocation(result.latitude!, result.longitude!);
     } finally {
       if (mounted) setState(() => _locating = false);
     }
@@ -514,6 +549,7 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
               children: [
                 OnboardingTextField(controller: _nameController, label: 'Area name *'),
                 StateCityPickerFields(
+                  key: ValueKey('service-area-state-city-$_stateCityKey'),
                   stateController: _stateController,
                   cityController: _cityController,
                   initialStateName: _stateController.text,
@@ -521,12 +557,31 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
                   hintLatitude: _latitude,
                   hintLongitude: _longitude,
                 ),
+                if (_resolvingAddress)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Resolving address from pin…',
+                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
           OnboardingFormSection(
             title: 'Pin on map',
-            subtitle: 'Search, tap the map, or use GPS — same as vendor web.',
+            subtitle:
+                'Search, tap the map, or use GPS — pin fills state/city when available.',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -553,7 +608,8 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
                   radiusKm: _radius,
                   showRadius: true,
                   height: 280,
-                  onLocationChanged: (point) => _setLocation(point.latitude, point.longitude),
+                  onLocationChanged: (point) =>
+                      _setLocation(point.latitude, point.longitude),
                 ),
                 const SizedBox(height: 12),
                 Row(

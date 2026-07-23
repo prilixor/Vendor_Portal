@@ -18,6 +18,8 @@ class VendorDispatchOffer {
   final String? listingPrimaryImageUrl;
   final String? doctorName;
   final String? doctorSpecialization;
+  final String? doctorUniqueCode;
+  final String? doctorContactNumber;
   final String? hospitalName;
   final String? hospitalCity;
 
@@ -39,6 +41,8 @@ class VendorDispatchOffer {
     this.listingPrimaryImageUrl,
     this.doctorName,
     this.doctorSpecialization,
+    this.doctorUniqueCode,
+    this.doctorContactNumber,
     this.hospitalName,
     this.hospitalCity,
   });
@@ -71,6 +75,8 @@ class VendorDispatchOffer {
       listingPrimaryImageUrl: json['listingPrimaryImageUrl']?.toString(),
       doctorName: json['doctorName']?.toString(),
       doctorSpecialization: json['doctorSpecialization']?.toString(),
+      doctorUniqueCode: json['doctorUniqueCode']?.toString(),
+      doctorContactNumber: json['doctorContactNumber']?.toString(),
       hospitalName: json['hospitalName']?.toString(),
       hospitalCity: json['hospitalCity']?.toString(),
     );

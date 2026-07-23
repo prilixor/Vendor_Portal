@@ -1,5 +1,5 @@
 import { useNavigate, Link } from "react-router-dom";
-import { Bell, LogOut, Sun, Moon, ChevronDown, ShoppingCart, Settings } from "lucide-react";
+import { Bell, LogOut, Sun, Moon, ChevronDown, ShoppingCart, Settings, Stethoscope } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/app/guards/AuthContext";
 import { Button } from "@/app/components/ui/button";
@@ -18,6 +18,8 @@ import { useQuery } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
 import { adminApi } from "@/app/services/adminApi";
 import { getVendorPortalHref } from "@/app/helpers/portalHost";
+import { VendorDoctorLookupDialog } from "@/app/components/vendor/VendorDoctorLookupDialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 
 interface TopBarProps {
   onMenuClick?: () => void;
@@ -89,8 +91,10 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
     variant === "admin" ? "/admin/login" : variant === "customer" ? "/customer/login" : "/login";
 
   const showVendorBell = variant === "vendor" && user?.role === "vendor";
+  const [doctorLookupOpen, setDoctorLookupOpen] = useState(false);
 
   return (
+    <>
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border bg-background/80 px-4 backdrop-blur-xl sm:px-6">
       {onMenuClick && (
         <Button variant="ghost" size="icon" onClick={onMenuClick} className="lg:hidden" aria-label="Menu">
@@ -176,6 +180,24 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
         )}
 
         {showVendorBell && (
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setDoctorLookupOpen(true)}
+                  aria-label="Find doctor by Unique ID"
+                >
+                  <Stethoscope className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Find doctor by Unique ID</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+
+        {showVendorBell && (
           <Button
             variant="ghost"
             size="icon"
@@ -235,5 +257,9 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
         )}
       </div>
     </header>
+    {showVendorBell && (
+      <VendorDoctorLookupDialog open={doctorLookupOpen} onOpenChange={setDoctorLookupOpen} />
+    )}
+    </>
   );
 };

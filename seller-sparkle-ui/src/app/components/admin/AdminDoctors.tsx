@@ -12,6 +12,8 @@ import { FieldError } from "@/app/components/shared/FieldError";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { MapPicker } from "@/app/components/shared/MapPicker";
+import { StateCityFields } from "@/app/components/shared/StateCityFields";
+import { SearchableMultiSelect } from "@/app/components/shared/SearchableMultiSelect";
 import {
   adminApi,
   AdminDoctorDto,
@@ -20,9 +22,11 @@ import {
   CreateAdminDoctorRequest,
   UpdateAdminDoctorRequest,
 } from "@/app/services/adminApi";
+import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
 import { Copy, Download, ExternalLink, Loader2, Mail, Pencil, Plus, Search, Stethoscope, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { downloadDoctorQrCard } from "@/app/helpers/downloadDoctorQrCard";
 
 type DoctorForm = {
   fullName: string;
@@ -122,12 +126,16 @@ const AdminDoctors = () => {
     setDialogOpen(true);
   };
 
-  const toggleHospital = (id: string) => {
-    setForm((f) => ({
-      ...f,
-      hospitalIds: f.hospitalIds.includes(id) ? f.hospitalIds.filter((x) => x !== id) : [...f.hospitalIds, id],
-    }));
-  };
+  const hospitalOptions = useMemo(
+    () =>
+      hospitals.map((h) => ({
+        id: h.id,
+        label: h.name,
+        secondary: [h.city, h.state].filter(Boolean).join(", ") || h.addressLine1 || undefined,
+        searchText: [h.name, h.city, h.state, h.addressLine1, h.postalCode].filter(Boolean).join(" "),
+      })),
+    [hospitals],
+  );
 
   const validate = () => {
     const errors: Record<string, string> = {};
@@ -219,10 +227,21 @@ const AdminDoctors = () => {
   };
 
   const downloadQr = async (d: AdminDoctorDto) => {
+    let objectUrl: string | null = null;
     try {
-      await adminApi.downloadDoctorQr(d.id, d.uniqueCode);
+      objectUrl = qrDoctor?.id === d.id && qrUrl ? qrUrl : await adminApi.getDoctorQrObjectUrl(d.id);
+      await downloadDoctorQrCard({
+        qrImageUrl: objectUrl,
+        fullName: d.fullName,
+        uniqueCode: d.uniqueCode,
+        specialization: d.specialization,
+        fileName: `doctor-${d.uniqueCode}-card.png`,
+      });
+      toast.success("Doctor QR card downloaded");
     } catch (e) {
-      toast.error(getUserFriendlyMessage(e, "Failed to download QR"));
+      toast.error(getUserFriendlyMessage(e) || "Failed to download QR card");
+    } finally {
+      if (objectUrl && objectUrl !== qrUrl) URL.revokeObjectURL(objectUrl);
     }
   };
 
@@ -393,27 +412,16 @@ const AdminDoctors = () => {
               />
             </div>
 
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Link existing hospitals</Label>
-              <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border p-2">
-                {hospitals.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No hospitals yet — add one below.</p>
-                ) : (
-                  hospitals.map((h) => (
-                    <label key={h.id} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={form.hospitalIds.includes(h.id)}
-                        onChange={() => toggleHospital(h.id)}
-                      />
-                      <span>
-                        {h.name}
-                        {h.city ? ` · ${h.city}` : ""}
-                      </span>
-                    </label>
-                  ))
-                )}
-              </div>
+            <div className="sm:col-span-2">
+              <SearchableMultiSelect
+                label="Link existing hospitals"
+                options={hospitalOptions}
+                selectedIds={form.hospitalIds}
+                onChange={(hospitalIds) => setForm((f) => ({ ...f, hospitalIds }))}
+                placeholder="Select hospitals…"
+                searchPlaceholder="Search by name, city, or address…"
+                emptyMessage="No hospitals yet — add one below."
+              />
             </div>
 
             <div className="space-y-3 sm:col-span-2">
@@ -454,25 +462,23 @@ const AdminDoctors = () => {
                       )
                     }
                   />
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <Input
-                      placeholder="City"
-                      value={h.city || ""}
-                      onChange={(e) =>
-                        setNewHospitals((list) => list.map((x) => (x.key === h.key ? { ...x, city: e.target.value } : x)))
-                      }
-                    />
-                    <Input
-                      placeholder="State"
-                      value={h.state || ""}
-                      onChange={(e) =>
+                  <div className="space-y-2">
+                    <StateCityFields
+                      state={h.state || ""}
+                      city={h.city || ""}
+                      onStateChange={(state) =>
                         setNewHospitals((list) =>
-                          list.map((x) => (x.key === h.key ? { ...x, state: e.target.value } : x)),
+                          list.map((x) => (x.key === h.key ? { ...x, state } : x)),
+                        )
+                      }
+                      onCityChange={(city) =>
+                        setNewHospitals((list) =>
+                          list.map((x) => (x.key === h.key ? { ...x, city } : x)),
                         )
                       }
                     />
                     <Input
-                      placeholder="Postal"
+                      placeholder="Postal code"
                       value={h.postalCode || ""}
                       onChange={(e) =>
                         setNewHospitals((list) =>
@@ -489,6 +495,40 @@ const AdminDoctors = () => {
                         list.map((x) => (x.key === h.key ? { ...x, latitude: lat, longitude: lng } : x)),
                       )
                     }
+                    onAddressResolved={(address) => {
+                      const nextLine1 = address?.line1 || h.addressLine1 || "";
+                      const nextCity = address?.city || h.city || "";
+                      const nextState = address?.state || h.state || "";
+                      const nextPostal = address?.postal || h.postalCode || "";
+
+                      if (address && (address.line1 || address.state || address.city || address.postal)) {
+                        setNewHospitals((list) =>
+                          list.map((x) =>
+                            x.key === h.key
+                              ? {
+                                  ...x,
+                                  ...(address.line1 ? { addressLine1: address.line1 } : {}),
+                                  ...(address.state ? { state: address.state } : {}),
+                                  ...(address.city ? { city: address.city } : {}),
+                                  ...(address.postal ? { postalCode: address.postal } : {}),
+                                }
+                              : x,
+                          ),
+                        );
+                      }
+
+                      const missing = missingAddressFieldLabels({
+                        line1: nextLine1,
+                        city: nextCity,
+                        state: nextState,
+                        postal: nextPostal,
+                      });
+                      if (missing.length === 0) {
+                        toast.success("Location applied from map.");
+                      } else {
+                        toast.message(`Map pin saved. Please fill required ${missing.join(", ")}.`);
+                      }
+                    }}
                     height="h-44"
                   />
                 </div>
@@ -563,6 +603,15 @@ const AdminDoctors = () => {
                 Patients scan this code to open the doctor share page and copy the Unique ID for checkout.
               </p>
 
+              {qrDoctor.publicPageUrl && /localhost|127\.0\.0\.1/i.test(qrDoctor.publicPageUrl) && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  Share URL uses <span className="font-semibold">localhost</span>, so phones cannot open it.
+                  Set API <code className="rounded bg-amber-100 px-1">FrontendUrl</code> to your PC LAN IP
+                  (e.g. <code className="rounded bg-amber-100 px-1">http://192.168.x.x:5173</code>) or a
+                  deployed host, restart the API, then regenerate / resend this QR.
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2">
                 <Button
                   className="flex-1"
@@ -574,7 +623,7 @@ const AdminDoctors = () => {
                 </Button>
                 <Button className="flex-1" variant="outline" onClick={() => void downloadQr(qrDoctor)}>
                   <Download className="mr-1.5 h-3.5 w-3.5" />
-                  Download PNG
+                  Download card
                 </Button>
                 {qrDoctor.publicPageUrl && (
                   <Button className="w-full" asChild>

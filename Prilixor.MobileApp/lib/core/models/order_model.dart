@@ -20,6 +20,13 @@ class OrderModel {
   final int quantity;
   final int rentalDays;
   final String? listingPrimaryImageUrl;
+  final String? doctorId;
+  final String? doctorName;
+  final String? doctorSpecialization;
+  final String? doctorUniqueCode;
+  final String? doctorContactNumber;
+  final String? hospitalName;
+  final String? hospitalCity;
 
   OrderModel({
     required this.id,
@@ -41,7 +48,22 @@ class OrderModel {
     required this.quantity,
     required this.rentalDays,
     this.listingPrimaryImageUrl,
+    this.doctorId,
+    this.doctorName,
+    this.doctorSpecialization,
+    this.doctorUniqueCode,
+    this.doctorContactNumber,
+    this.hospitalName,
+    this.hospitalCity,
   });
+
+  bool get hasMedicalReference {
+    final id = doctorId?.trim() ?? '';
+    final name = doctorName?.trim() ?? '';
+    final code = doctorUniqueCode?.trim() ?? '';
+    final hospital = hospitalName?.trim() ?? '';
+    return id.isNotEmpty || name.isNotEmpty || code.isNotEmpty || hospital.isNotEmpty;
+  }
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     return OrderModel(
@@ -64,6 +86,13 @@ class OrderModel {
       quantity: json['quantity'] ?? 0,
       rentalDays: json['rentalDays'] ?? 0,
       listingPrimaryImageUrl: resolveItemImageUrl(json: json),
+      doctorId: json['doctorId']?.toString(),
+      doctorName: json['doctorName']?.toString(),
+      doctorSpecialization: json['doctorSpecialization']?.toString(),
+      doctorUniqueCode: json['doctorUniqueCode']?.toString(),
+      doctorContactNumber: json['doctorContactNumber']?.toString(),
+      hospitalName: json['hospitalName']?.toString(),
+      hospitalCity: json['hospitalCity']?.toString(),
     );
   }
 }

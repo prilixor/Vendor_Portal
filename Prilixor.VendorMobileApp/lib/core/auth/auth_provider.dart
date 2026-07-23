@@ -192,7 +192,7 @@ class AuthProvider extends ChangeNotifier {
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.unknown) {
         _errorMessage =
-            'Cannot reach API (${_apiClient.baseUrl}). Use the live AWS URL or start local API.';
+            'Cannot reach API (${_apiClient.baseUrl}). Use the live API URL (api.blinksmed.com) or start local API.';
       } else if (status == 401) {
         _errorMessage = detail ?? 'Invalid email or password';
       } else if (status == 403) {
@@ -436,7 +436,7 @@ class AuthProvider extends ChangeNotifier {
     if (e.type == DioExceptionType.connectionError ||
         e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.unknown) {
-      return 'Cannot reach API (${_apiClient.baseUrl}). Use the live AWS URL or start local API.';
+      return 'Cannot reach API (${_apiClient.baseUrl}). Use the live API URL (api.blinksmed.com) or start local API.';
     }
     return fallback;
   }
