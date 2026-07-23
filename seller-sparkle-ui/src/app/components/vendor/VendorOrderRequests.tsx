@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { useNavigate } from "react-router-dom";
+import { VendorDoctorLookupDialog } from "@/app/components/vendor/VendorDoctorLookupDialog";
 
 const COLLAPSE_AFTER = 3;
 
@@ -83,6 +84,7 @@ function matchesSearch(offer: VendorDispatchOfferApiDto, query: string): boolean
     offer.orderNumber.toLowerCase().includes(q) ||
     offer.listingTitle.toLowerCase().includes(q) ||
     (offer.doctorName?.toLowerCase().includes(q) ?? false) ||
+    (offer.doctorUniqueCode?.toLowerCase().includes(q) ?? false) ||
     (offer.hospitalName?.toLowerCase().includes(q) ?? false) ||
     (offer.hospitalCity?.toLowerCase().includes(q) ?? false)
   );
@@ -102,6 +104,8 @@ const VendorOrderRequests = () => {
   const [workingOrderId, setWorkingOrderId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [searchQuery, setSearchQuery] = useState("");
+  const [doctorLookupOpen, setDoctorLookupOpen] = useState(false);
+  const [doctorLookupCode, setDoctorLookupCode] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [rejectOffer, setRejectOffer] = useState<VendorDispatchOfferApiDto | null>(null);
@@ -220,18 +224,30 @@ const VendorOrderRequests = () => {
         description="Review incoming dispatch offers and accept or reject before the timer expires."
         showBreadcrumbs={false}
         actions={
-          <Button
-            variant="outline"
-            onClick={() => void loadOffers(false)}
-            disabled={initialLoading || refreshing}
-          >
-            {refreshing ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
-            )}
-            Refresh
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDoctorLookupCode("");
+                setDoctorLookupOpen(true);
+              }}
+            >
+              <Stethoscope className="mr-2 h-4 w-4" />
+              Find doctor
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void loadOffers(false)}
+              disabled={initialLoading || refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Refresh
+            </Button>
+          </div>
         }
       />
 
@@ -401,13 +417,23 @@ const VendorOrderRequests = () => {
                               </Badge>
                             </div>
 
-                            {(offer.doctorName || offer.hospitalName) && (
-                              <div className="mt-3 flex items-start gap-2 rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                            {(offer.doctorName || offer.hospitalName || offer.doctorUniqueCode) && (
+                              <button
+                                type="button"
+                                className="mt-3 flex w-full items-start gap-2 rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-left text-sm text-muted-foreground transition hover:border-teal-300 hover:bg-teal-50/50 hover:text-foreground"
+                                onClick={() => {
+                                  if (!offer.doctorUniqueCode) return;
+                                  setDoctorLookupCode(offer.doctorUniqueCode);
+                                  setDoctorLookupOpen(true);
+                                }}
+                                disabled={!offer.doctorUniqueCode}
+                                title={offer.doctorUniqueCode ? "View doctor profile" : undefined}
+                              >
                                 <Stethoscope className="mt-0.5 h-4 w-4 shrink-0" />
                                 <span className="line-clamp-2">
                                   {[
                                     offer.doctorName
-                                      ? `Dr. ${offer.doctorName}${offer.doctorSpecialization ? ` · ${offer.doctorSpecialization}` : ""}`
+                                      ? `Dr. ${offer.doctorName}${offer.doctorSpecialization ? ` · ${offer.doctorSpecialization}` : ""}${offer.doctorUniqueCode ? ` · ${offer.doctorUniqueCode}` : ""}`
                                       : null,
                                     offer.hospitalName
                                       ? `${offer.hospitalName}${offer.hospitalCity ? ` (${offer.hospitalCity})` : ""}`
@@ -415,8 +441,9 @@ const VendorOrderRequests = () => {
                                   ]
                                     .filter(Boolean)
                                     .join(" · ")}
+                                  {offer.doctorUniqueCode ? " · Tap to view" : ""}
                                 </span>
-                              </div>
+                              </button>
                             )}
 
                             {itemExpired && (
@@ -502,6 +529,12 @@ const VendorOrderRequests = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <VendorDoctorLookupDialog
+        open={doctorLookupOpen}
+        onOpenChange={setDoctorLookupOpen}
+        initialCode={doctorLookupCode}
+      />
     </div>
   );
 };

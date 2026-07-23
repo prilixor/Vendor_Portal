@@ -138,10 +138,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.Id).HasColumnName("id");
             entity.Property(x => x.CustomerRentalOrderId).HasColumnName("customer_rental_order_id");
             entity.Property(x => x.DoctorId).HasColumnName("doctor_id");
-            entity.Property(x => x.HospitalId).HasColumnName("hospital_id");
-            entity.Property(x => x.ContactNumber).HasColumnName("contact_number");
-            entity.Property(x => x.ReferenceNumber).HasColumnName("reference_number");
-            
+
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
             entity.Property(x => x.CreatedBy).HasColumnName("created_by");

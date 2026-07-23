@@ -6,6 +6,7 @@ import { customerApi } from "@/app/services/customerApi";
 import { chatApi } from "@/app/services/chatApi";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
+import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/app/components/ui/sheet";
 import { Input } from "@/app/components/ui/input";
@@ -494,43 +495,18 @@ const CustomerOrderDetail = () => {
       </Card>
 
       {/* Medical Reference */}
-      {(activeItem.doctorId || activeItem.hospitalId) && (
-        <Card className="border-border/80 shadow-sm">
-          <CardHeader className="pb-4">
-            <p className="text-lg font-semibold">Medical reference</p>
-          </CardHeader>
-          <CardContent className="grid gap-6 sm:grid-cols-2">
-            {activeItem.doctorName && (
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Doctor</p>
-                <p className="text-sm font-medium">
-                  {activeItem.doctorName}
-                  {activeItem.doctorSpecialization && (
-                    <span className="text-muted-foreground font-normal ml-1">
-                      - {activeItem.doctorSpecialization}
-                    </span>
-                  )}
-                </p>
-                {activeItem.doctorContactNumber && (
-                  <p className="text-xs text-muted-foreground">{activeItem.doctorContactNumber}</p>
-                )}
-              </div>
-            )}
-            {activeItem.hospitalName && (
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hospital</p>
-                <p className="text-sm font-medium">
-                  {activeItem.hospitalName}
-                  {activeItem.hospitalCity && (
-                    <span className="text-muted-foreground font-normal ml-1">
-                      ({activeItem.hospitalCity})
-                    </span>
-                  )}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {(activeItem.doctorId ||
+        activeItem.hospitalId ||
+        activeItem.doctorName ||
+        activeItem.doctorUniqueCode) && (
+        <OrderMedicalReferenceCard
+          doctorName={activeItem.doctorName}
+          doctorSpecialization={activeItem.doctorSpecialization}
+          doctorUniqueCode={activeItem.doctorUniqueCode}
+          doctorContactNumber={activeItem.doctorContactNumber}
+          hospitalName={activeItem.hospitalName}
+          hospitalCity={activeItem.hospitalCity}
+        />
       )}
 
       {/* Support and Cancellation Actions for Selected Item */}

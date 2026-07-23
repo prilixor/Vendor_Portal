@@ -16,6 +16,7 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
   final MapController _mapController = MapController();
   final PlaceSearch _placeSearch = PlaceSearch();
   bool _isSearching = false;
+  bool _isConfirming = false;
 
   @override
   void dispose() {
@@ -51,6 +52,37 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
       );
     } finally {
       if (mounted) setState(() => _isSearching = false);
+    }
+  }
+
+  Future<void> _confirmLocation() async {
+    if (_isConfirming) return;
+    setState(() => _isConfirming = true);
+    try {
+      final rev = await _placeSearch.reverse(
+        latitude: _center.latitude,
+        longitude: _center.longitude,
+      );
+      if (!mounted) return;
+      Navigator.pop(context, {
+        'latitude': _center.latitude,
+        'longitude': _center.longitude,
+        'line1': rev?.line1,
+        'city': rev?.city,
+        'state': rev?.state,
+        'postal': rev?.postal,
+        'resolved': rev?.hasAnyField == true,
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // Still return pin — form fields stay mandatory for the user.
+      Navigator.pop(context, {
+        'latitude': _center.latitude,
+        'longitude': _center.longitude,
+        'resolved': false,
+      });
+    } finally {
+      if (mounted) setState(() => _isConfirming = false);
     }
   }
 
@@ -142,27 +174,32 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
             child: SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context, {
-                    'latitude': _center.latitude,
-                    'longitude': _center.longitude,
-                  });
-                },
+                onPressed: _isConfirming ? null : _confirmLocation,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6C63FF),
+                  disabledBackgroundColor: const Color(0xFF6C63FF).withValues(alpha: 0.5),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
-                  'Confirm Location',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
+                child: _isConfirming
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Confirm Location',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
               ),
             ),
           ),

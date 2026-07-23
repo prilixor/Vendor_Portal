@@ -32,10 +32,65 @@ class _AddressesScreenState extends State<AddressesScreen> {
 
     double? latitude = existingAddress?.latitude;
     double? longitude = existingAddress?.longitude;
+    // Remount State→City pickers when map fills new state/city values.
+    int stateCityKey = 0;
     String? line1Error;
     String? stateError;
     String? cityError;
     String? postalError;
+
+    void applyMapResult(Map result, void Function(void Function()) setState) {
+      latitude = (result['latitude'] as num?)?.toDouble();
+      longitude = (result['longitude'] as num?)?.toDouble();
+
+      final line1 = result['line1']?.toString().trim();
+      final state = result['state']?.toString().trim();
+      final city = result['city']?.toString().trim();
+      final postal = result['postal']?.toString().trim();
+
+      if (line1 != null && line1.isNotEmpty) {
+        streetCtrl.text = line1;
+        line1Error = null;
+      }
+      if (postal != null && postal.isNotEmpty) {
+        zipCtrl.text = postal;
+        postalError = null;
+      }
+      if (state != null && state.isNotEmpty) {
+        stateCtrl.text = state;
+        stateError = null;
+      }
+      if (city != null && city.isNotEmpty) {
+        cityCtrl.text = city;
+        cityError = null;
+      }
+      if ((state != null && state.isNotEmpty) || (city != null && city.isNotEmpty)) {
+        stateCityKey++;
+      }
+
+      final missing = <String>[];
+      if (streetCtrl.text.trim().isEmpty) missing.add('address line');
+      if (stateCtrl.text.trim().isEmpty) missing.add('state');
+      if (cityCtrl.text.trim().isEmpty) missing.add('city');
+      if (zipCtrl.text.trim().isEmpty) missing.add('postal code');
+
+      setState(() {});
+
+      if (!context.mounted) return;
+      if (missing.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location applied from map.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Map pin saved. Please fill required ${missing.join(', ')}.',
+            ),
+          ),
+        );
+      }
+    }
 
     showModalBottomSheet(
       context: context,
@@ -58,12 +113,12 @@ class _AddressesScreenState extends State<AddressesScreen> {
                         Text(existingAddress == null ? 'Add New Address' : 'Edit Address', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                         TextButton.icon(
                           onPressed: () async {
-                            final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MockMapPickerScreen()));
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const MockMapPickerScreen()),
+                            );
                             if (result != null && result is Map) {
-                              setState(() {
-                                latitude = result['latitude'] as double?;
-                                longitude = result['longitude'] as double?;
-                              });
+                              applyMapResult(Map<String, dynamic>.from(result), setState);
                             }
                           },
                           icon: const Icon(Icons.map, color: Color(0xFF6C63FF)),
@@ -90,10 +145,11 @@ class _AddressesScreenState extends State<AddressesScreen> {
                     ),
                     const SizedBox(height: 12),
                     StateCityPickerFields(
+                      key: ValueKey('state-city-$stateCityKey-${stateCtrl.text}-${cityCtrl.text}'),
                       stateController: stateCtrl,
                       cityController: cityCtrl,
-                      initialStateName: existingAddress?.state,
-                      initialCityName: existingAddress?.city,
+                      initialStateName: stateCtrl.text.trim().isNotEmpty ? stateCtrl.text : existingAddress?.state,
+                      initialCityName: cityCtrl.text.trim().isNotEmpty ? cityCtrl.text : existingAddress?.city,
                       stateError: stateError,
                       cityError: cityError,
                     ),

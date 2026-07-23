@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Circle,
   MapContainer,
@@ -9,11 +9,16 @@ import {
 } from "react-leaflet";
 import L, { LatLngExpression } from "leaflet";
 import { cn } from "@/app/helpers/utils";
+import {
+  reverseGeocode,
+  type ResolvedMapAddress,
+} from "@/app/helpers/reverseGeocode";
 
 interface MapPickerProps {
   latitude: number;
   longitude: number;
   onChange?: (lat: number, lng: number) => void;
+  onAddressResolved?: (address: ResolvedMapAddress | null) => void;
   radiusKm?: number;
   onRadiusChange?: (km: number) => void;
   height?: string;
@@ -34,6 +39,7 @@ export const MapPicker = ({
   latitude,
   longitude,
   onChange,
+  onAddressResolved,
   radiusKm,
   onRadiusChange,
   height = "h-72",
@@ -47,6 +53,70 @@ export const MapPicker = ({
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [isResolvingAddress, setIsResolvingAddress] = useState(false);
+
+  const onChangeRef = useRef(onChange);
+  const onAddressResolvedRef = useRef(onAddressResolved);
+  const reverseAbortRef = useRef<AbortController | null>(null);
+  const reverseTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    onAddressResolvedRef.current = onAddressResolved;
+  }, [onAddressResolved]);
+
+  useEffect(() => {
+    return () => {
+      if (reverseTimerRef.current != null) {
+        window.clearTimeout(reverseTimerRef.current);
+      }
+      reverseAbortRef.current?.abort();
+    };
+  }, []);
+
+  const scheduleReverseGeocode = useCallback((lat: number, lng: number) => {
+    if (!onAddressResolvedRef.current) return;
+
+    if (reverseTimerRef.current != null) {
+      window.clearTimeout(reverseTimerRef.current);
+    }
+    reverseAbortRef.current?.abort();
+
+    reverseTimerRef.current = window.setTimeout(() => {
+      const controller = new AbortController();
+      reverseAbortRef.current = controller;
+      setIsResolvingAddress(true);
+      void reverseGeocode(lat, lng, controller.signal)
+        .then((result) => {
+          if (controller.signal.aborted) return;
+          onAddressResolvedRef.current?.(result);
+        })
+        .catch((error) => {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          if (!controller.signal.aborted) {
+            onAddressResolvedRef.current?.(null);
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setIsResolvingAddress(false);
+          }
+        });
+    }, 400);
+  }, []);
+
+  const emitChange = useCallback(
+    (lat: number, lng: number, resolveAddress = true) => {
+      onChangeRef.current?.(lat, lng);
+      if (resolveAddress) {
+        scheduleReverseGeocode(lat, lng);
+      }
+    },
+    [scheduleReverseGeocode],
+  );
 
   const searchPlaces = async (searchQuery: string, signal?: AbortSignal) => {
     setIsSearching(true);
@@ -80,7 +150,7 @@ export const MapPicker = ({
           const lat = Number(first.lat);
           const lng = Number(first.lon);
           if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
-            onChange(parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6)));
+            emitChange(parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6)));
           }
         }
         return;
@@ -128,7 +198,7 @@ export const MapPicker = ({
         const lat = Number(first.lat);
         const lng = Number(first.lon);
         if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
-          onChange(parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6)));
+          emitChange(parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6)));
         }
       }
       if (limited.length === 0) {
@@ -170,7 +240,7 @@ export const MapPicker = ({
     const lat = Number(result.lat);
     const lng = Number(result.lon);
     if (Number.isNaN(lat) || Number.isNaN(lng)) return;
-    onChange(parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6)));
+    emitChange(parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6)));
     setQuery(result.display_name);
     setResults([]);
   };
@@ -229,11 +299,20 @@ export const MapPicker = ({
           />
           <MapResizeHandler />
           <MapCenterUpdater latitude={latitude} longitude={longitude} />
-          <LocationSelector onChange={onChange} />
+          <LocationSelector onChange={onChange ? emitChange : undefined} />
           <DraggableMarker
             latitude={latitude}
             longitude={longitude}
-            onChange={onChange}
+            onChange={
+              onChange
+                ? (lat, lng) => emitChange(lat, lng, false)
+                : undefined
+            }
+            onDragEnd={
+              onChange
+                ? (lat, lng) => emitChange(lat, lng, true)
+                : undefined
+            }
           />
           {showRadius && radiusKm && (
             <Circle
@@ -246,6 +325,9 @@ export const MapPicker = ({
 
         <div className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-background/90 px-2 py-1 text-xs font-medium backdrop-blur">
           {latitude.toFixed(4)}, {longitude.toFixed(4)}
+          {isResolvingAddress && onAddressResolved && (
+            <span className="ml-1.5 font-normal text-muted-foreground">Looking up address…</span>
+          )}
         </div>
         {onChange && (
           <div className="pointer-events-none absolute right-2 top-2 rounded-md bg-background/90 px-2 py-1 text-xs text-muted-foreground backdrop-blur">
@@ -293,10 +375,12 @@ const DraggableMarker = ({
   latitude,
   longitude,
   onChange,
+  onDragEnd,
 }: {
   latitude: number;
   longitude: number;
   onChange?: (lat: number, lng: number) => void;
+  onDragEnd?: (lat: number, lng: number) => void;
 }) => {
   const markerRef = useRef<L.Marker | null>(null);
   const eventHandlers = useMemo(
@@ -309,19 +393,20 @@ const DraggableMarker = ({
         onChange(parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6)));
       },
       dragend() {
-        if (!onChange) return;
+        const handler = onDragEnd ?? onChange;
+        if (!handler) return;
         const marker = markerRef.current;
         if (!marker) return;
         const { lat, lng } = marker.getLatLng();
-        onChange(parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6)));
+        handler(parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6)));
       },
     }),
-    [onChange]
+    [onChange, onDragEnd]
   );
 
   return (
     <Marker
-      draggable={Boolean(onChange)}
+      draggable={Boolean(onChange || onDragEnd)}
       eventHandlers={eventHandlers}
       position={[latitude, longitude]}
       icon={markerIcon}
@@ -417,5 +502,3 @@ const formatPhotonLabel = (properties: PhotonResponse["features"][number]["prope
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : "Unnamed place";
 };
-
-

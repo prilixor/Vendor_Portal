@@ -425,7 +425,8 @@ public sealed record CustomerOrderDto(
     Guid? HospitalId = null,
     string? HospitalName = null,
     string? HospitalCity = null,
-    string? DoctorContactNumber = null);
+    string? DoctorContactNumber = null,
+    string? DoctorUniqueCode = null);
 internal static class CustomerOrderPricingRules
 {
     public static string NormalizeDeliveryOption(string? option) =>
@@ -953,20 +954,8 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 }
             }
 
-            if (agg.CategoryPrescriptionRequired)
-            {
-                if (line.DoctorId is null || line.HospitalId is null)
-                {
-                    failed.Add(new FailedCustomerOrderLineDto(
-                        line.ListingId,
-                        line.Quantity,
-                        line.RentalDays,
-                        orderType,
-                        "customers.prescription_required",
-                        "Doctor and Hospital reference are required for this product category."));
-                    continue;
-                }
-            }
+            // Doctor reference is optional (Admin-curated Unique ID lookup on customer side later).
+            // Do not block place-order when category has prescription_required.
 
             var depositPerUnit = agg.CategoryDepositRequired ? agg.SecurityDeposit : 0m;
             var subtotal = CustomerOrderPricingRules.CalculateLineSubtotal(orderType, agg, line, options);
@@ -1038,14 +1027,24 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 PlacedByAdminId = request.PlacedByAdminId,
             };
 
-            if (agg.CategoryPrescriptionRequired && line.DoctorId.HasValue && line.HospitalId.HasValue)
+            if (line.DoctorId.HasValue)
             {
+                var doctor = await customers.GetDoctorByIdAsync(line.DoctorId.Value, cancellationToken);
+                if (doctor is null || !doctor.IsActive)
+                {
+                    failed.Add(new FailedCustomerOrderLineDto(
+                        line.ListingId,
+                        line.Quantity,
+                        line.RentalDays,
+                        orderType,
+                        "customers.doctor_not_found",
+                        "Doctor reference was not found or is inactive."));
+                    continue;
+                }
+
                 order.DoctorReference = new CustomerOrderDoctorReference
                 {
-                    DoctorId = line.DoctorId.Value,
-                    HospitalId = line.HospitalId.Value,
-                    ContactNumber = line.ContactNumber,
-                    ReferenceNumber = line.ReferenceNumber
+                    DoctorId = doctor.Id,
                 };
             }
 
@@ -1202,7 +1201,7 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 primaryImg,
                 ProductVariantId: order.ProductVariantId,
                 DoctorId: order.DoctorReference?.DoctorId,
-                HospitalId: order.DoctorReference?.HospitalId));
+                HospitalId: null));
         }
 
         if (request.PlacedByAdminId is Guid adminId && placed.Count > 0)
@@ -1315,10 +1314,11 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
                 DoctorId: row.Doctor?.Id,
                 DoctorName: row.Doctor?.FullName,
                 DoctorSpecialization: row.Doctor?.Specialization,
-                HospitalId: row.Hospital?.Id,
-                HospitalName: row.Hospital?.Name,
-                HospitalCity: row.Hospital?.City,
-                DoctorContactNumber: row.Doctor?.ContactNumber));
+                HospitalId: null,
+                HospitalName: null,
+                HospitalCity: null,
+                DoctorContactNumber: row.Doctor?.ContactNumber,
+                DoctorUniqueCode: row.Doctor?.UniqueCode));
         }
 
         return Result.Success(list);
@@ -1372,10 +1372,11 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
             DoctorId: row.Doctor?.Id,
             DoctorName: row.Doctor?.FullName,
             DoctorSpecialization: row.Doctor?.Specialization,
-            HospitalId: row.Hospital?.Id,
-            HospitalName: row.Hospital?.Name,
-            HospitalCity: row.Hospital?.City,
-            DoctorContactNumber: row.Doctor?.ContactNumber));
+            HospitalId: null,
+            HospitalName: null,
+            HospitalCity: null,
+            DoctorContactNumber: row.Doctor?.ContactNumber,
+            DoctorUniqueCode: row.Doctor?.UniqueCode));
     }
 }
 
@@ -1549,9 +1550,10 @@ internal sealed class CancelCustomerOrderCommandHandler(ICustomerRepository cust
             DoctorId: row.Doctor?.Id,
             DoctorName: row.Doctor?.FullName,
             DoctorSpecialization: row.Doctor?.Specialization,
-            HospitalId: row.Hospital?.Id,
-            HospitalName: row.Hospital?.Name,
-            HospitalCity: row.Hospital?.City,
-            DoctorContactNumber: row.Doctor?.ContactNumber));
+            HospitalId: null,
+            HospitalName: null,
+            HospitalCity: null,
+            DoctorContactNumber: row.Doctor?.ContactNumber,
+            DoctorUniqueCode: row.Doctor?.UniqueCode));
     }
 }

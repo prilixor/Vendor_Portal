@@ -31,6 +31,7 @@ namespace Prilixor.VendorPortal.Application
             // Configure SMTP options
             services.Configure<Domain.Options.SmtpOptions>(configuration.GetSection("SmtpOptions"));
             services.AddTransient<IEmailService, SmtpEmailService>();
+            services.AddSingleton<IQrCodeService, QrCodeService>();
 
             return services;
         }

@@ -8,6 +8,7 @@ import 'open_document_bytes_stub.dart'
     if (dart.library.html) 'open_document_bytes_web.dart' as opener;
 
 /// Resolves catalog/media URLs for Vendor mobile (same rules as Customer app).
+/// Relative `/api/...` paths use [ApiClient.baseUrl] (`https://api.blinksmed.com/api` in production).
 String? resolveMediaUrl(String? raw) {
   if (raw == null) return null;
   final url = raw.trim();

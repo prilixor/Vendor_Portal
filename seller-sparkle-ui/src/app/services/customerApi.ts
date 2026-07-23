@@ -152,6 +152,7 @@ export interface CustomerOrderApi {
   doctorId?: string;
   doctorName?: string;
   doctorSpecialization?: string;
+  doctorUniqueCode?: string;
   hospitalId?: string;
   hospitalName?: string;
   hospitalCity?: string;
@@ -182,15 +183,22 @@ export interface HospitalApi {
   city?: string | null;
   state?: string | null;
   postalCode?: string | null;
-  isVerified: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  contactNumber?: string | null;
+  isActive?: boolean;
 }
 
 export interface DoctorApi {
   id: string;
   fullName: string;
+  uniqueCode: string;
+  email?: string | null;
   specialization?: string | null;
   contactNumber?: string | null;
-  isVerified: boolean;
+  isActive: boolean;
+  publicPageUrl?: string | null;
+  hospitals?: HospitalApi[] | null;
 }
 
 export interface CartLinePayload {
@@ -199,10 +207,8 @@ export interface CartLinePayload {
   rentalDays: number;
   orderType?: "rent" | "buy";
   productVariantId?: string;
+  /** Optional Admin-curated doctor reference (Unique ID lookup). */
   doctorId?: string;
-  hospitalId?: string;
-  contactNumber?: string;
-  referenceNumber?: string;
 }
 
 export interface VariantStockSuggestionApi {
@@ -325,36 +331,15 @@ export const customerApi = {
     return apiClient.delete(`/customers/me/addresses/${encodeURIComponent(addressId)}`);
   },
 
-  searchHospitals(search?: string): Promise<HospitalDto[]> {
+  getDoctorByCode(uniqueCode: string): Promise<DoctorApi> {
+    return apiClient.get<DoctorApi>(
+      `/medical-directory/doctors/by-code/${encodeURIComponent(uniqueCode.trim())}`,
+    );
+  },
+
+  searchDoctors(search?: string): Promise<DoctorApi[]> {
     const qs = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : "";
-    return apiClient.get<HospitalDto[]>(`/medical-directory/hospitals${qs}`);
-  },
-
-  createHospital(payload: {
-    name: string;
-    addressLine1?: string;
-    city?: string;
-    state?: string;
-    postalCode?: string;
-  }): Promise<HospitalDto> {
-    return apiClient.post<HospitalDto>("/medical-directory/hospitals", payload);
-  },
-
-  searchDoctors(hospitalId?: string, search?: string): Promise<DoctorDto[]> {
-    const qs = new URLSearchParams();
-    if (hospitalId) qs.set("hospitalId", hospitalId);
-    if (search?.trim()) qs.set("search", search.trim());
-    const queryStr = qs.toString();
-    return apiClient.get<DoctorDto[]>(`/medical-directory/doctors${queryStr ? "?" + queryStr : ""}`);
-  },
-
-  createDoctor(payload: {
-    hospitalId: string;
-    fullName: string;
-    specialization?: string;
-    contactNumber?: string;
-  }): Promise<DoctorDto> {
-    return apiClient.post<DoctorDto>("/medical-directory/doctors", payload);
+    return apiClient.get<DoctorApi[]>(`/medical-directory/doctors${qs}`);
   },
 
   getOrders(): Promise<CustomerOrderApi[]> {
@@ -379,10 +364,7 @@ export const customerApi = {
         rentalDays: l.rentalDays,
         orderType: l.orderType ?? "rent",
         productVariantId: l.productVariantId,
-        doctorId: l.doctorId,
-        hospitalId: l.hospitalId,
-        contactNumber: l.contactNumber,
-        referenceNumber: l.referenceNumber,
+        doctorId: l.doctorId || undefined,
       })),
     });
   },
@@ -401,10 +383,7 @@ export const customerApi = {
         rentalDays: l.rentalDays,
         orderType: l.orderType ?? "rent",
         productVariantId: l.productVariantId,
-        doctorId: l.doctorId,
-        hospitalId: l.hospitalId,
-        contactNumber: l.contactNumber,
-        referenceNumber: l.referenceNumber,
+        doctorId: l.doctorId || undefined,
       })),
     });
   },
@@ -499,21 +478,7 @@ export interface CustomerNotificationPreferenceApi {
   marketingEmailsEnabled: boolean;
 }
 
-export interface HospitalDto {
-  id: string;
-  name: string;
-  addressLine1?: string;
-  city?: string;
-  state?: string;
-  postalCode?: string;
-  isVerified: boolean;
-}
-
-export interface DoctorDto {
-  id: string;
-  fullName: string;
-  specialization?: string;
-  contactNumber?: string;
-  isVerified: boolean;
-}
+/** @deprecated Use HospitalApi / DoctorApi */
+export type HospitalDto = HospitalApi;
+export type DoctorDto = DoctorApi;
 

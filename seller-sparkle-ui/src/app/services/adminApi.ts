@@ -432,6 +432,75 @@ export interface UpdateProductCategoryRequest {
   isActive: boolean;
 }
 
+export interface AdminDoctorDto {
+  id: string;
+  fullName: string;
+  uniqueCode: string;
+  email: string;
+  specialization?: string | null;
+  contactNumber?: string | null;
+  isActive: boolean;
+  publicPageUrl?: string | null;
+  hospitals?: AdminHospitalDto[] | null;
+}
+
+export interface AdminHospitalDto {
+  id: string;
+  name: string;
+  addressLine1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  contactNumber?: string | null;
+  isActive: boolean;
+  doctorIds?: string[] | null;
+  doctorNames?: string[] | null;
+}
+
+export interface AdminHospitalInput {
+  name: string;
+  addressLine1?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  latitude?: number;
+  longitude?: number;
+  contactNumber?: string;
+}
+
+export interface CreateAdminDoctorRequest {
+  fullName: string;
+  email: string;
+  specialization?: string;
+  contactNumber?: string;
+  sendEmail?: boolean;
+  hospitalIds?: string[];
+  newHospitals?: AdminHospitalInput[];
+}
+
+export interface UpdateAdminDoctorRequest {
+  id: string;
+  fullName: string;
+  email: string;
+  specialization?: string;
+  contactNumber?: string;
+  isActive: boolean;
+  hospitalIds?: string[];
+  newHospitals?: AdminHospitalInput[];
+}
+
+export interface CreateAdminHospitalRequest extends AdminHospitalInput {
+  doctorIds?: string[];
+}
+
+export interface UpdateAdminHospitalRequest extends AdminHospitalInput {
+  id: string;
+  isActive: boolean;
+  doctorIds?: string[];
+}
+
 export interface CreateProductRequest {
   categoryId: string;
   productName: string;
@@ -529,6 +598,7 @@ export interface AdminOrderDto {
   doctorId?: string;
   doctorName?: string;
   doctorSpecialization?: string;
+  doctorUniqueCode?: string;
   hospitalId?: string;
   hospitalName?: string;
   hospitalCity?: string;
@@ -865,5 +935,63 @@ export const adminApi = {
 
   async impersonateCustomer(customerId: string): Promise<PortalImpersonationStartDto> {
     return apiClient.post<PortalImpersonationStartDto>(`/admin/customers/${customerId}/impersonate`, { customerId });
+  },
+
+  // Doctors (Admin-owned medical directory)
+  async getDoctors(search?: string, isActive?: boolean): Promise<AdminDoctorDto[]> {
+    const qs = new URLSearchParams();
+    if (search?.trim()) qs.set("search", search.trim());
+    if (typeof isActive === "boolean") qs.set("isActive", String(isActive));
+    const q = qs.toString();
+    return apiClient.get<AdminDoctorDto[]>(`/admin/doctors${q ? `?${q}` : ""}`);
+  },
+
+  async getDoctor(id: string): Promise<AdminDoctorDto> {
+    return apiClient.get<AdminDoctorDto>(`/admin/doctors/${id}`);
+  },
+
+  async createDoctor(data: CreateAdminDoctorRequest): Promise<AdminDoctorDto> {
+    return apiClient.post<AdminDoctorDto>("/admin/doctors", data);
+  },
+
+  async updateDoctor(id: string, data: UpdateAdminDoctorRequest): Promise<AdminDoctorDto> {
+    return apiClient.put<AdminDoctorDto>(`/admin/doctors/${id}`, { ...data, id });
+  },
+
+  async deleteDoctor(id: string): Promise<void> {
+    return apiClient.delete<void>(`/admin/doctors/${id}`);
+  },
+
+  async resendDoctorEmail(id: string): Promise<void> {
+    return apiClient.post<void>(`/admin/doctors/${id}/resend-email`, {});
+  },
+
+  async downloadDoctorQr(id: string, uniqueCode: string): Promise<void> {
+    return apiClient.downloadBlob(`/admin/doctors/${id}/qr.png`, `doctor-${uniqueCode}-qr.png`);
+  },
+
+  async getDoctorQrObjectUrl(id: string): Promise<string> {
+    const blob = await apiClient.fetchBlob(`/admin/doctors/${id}/qr.png`);
+    return URL.createObjectURL(blob);
+  },
+
+  async getHospitals(search?: string, isActive?: boolean): Promise<AdminHospitalDto[]> {
+    const qs = new URLSearchParams();
+    if (search?.trim()) qs.set("search", search.trim());
+    if (typeof isActive === "boolean") qs.set("isActive", String(isActive));
+    const q = qs.toString();
+    return apiClient.get<AdminHospitalDto[]>(`/admin/hospitals${q ? `?${q}` : ""}`);
+  },
+
+  async createHospital(data: CreateAdminHospitalRequest): Promise<AdminHospitalDto> {
+    return apiClient.post<AdminHospitalDto>("/admin/hospitals", data);
+  },
+
+  async updateHospital(id: string, data: UpdateAdminHospitalRequest): Promise<AdminHospitalDto> {
+    return apiClient.put<AdminHospitalDto>(`/admin/hospitals/${id}`, { ...data, id });
+  },
+
+  async deleteHospital(id: string): Promise<void> {
+    return apiClient.delete<void>(`/admin/hospitals/${id}`);
   },
 };

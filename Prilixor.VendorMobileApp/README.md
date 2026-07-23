@@ -17,12 +17,21 @@ Goal: **all Vendor Portal web pages** on mobile, with Customer-like mobile UX (f
 ```bash
 cd Prilixor.VendorMobileApp
 flutter pub get
-flutter run -d web-server --web-port=3000
+flutter run -d web-server --web-port=3001
 ```
 
 Use a **vendor** account (same as web Vendor portal). Login sends `role: vendor`.
 
-**API base URL** must be `https://api.blinksmed.com/api` (same as Customer), not `localhost:5001`, unless your local API is running.
+## Production URLs (Web Option 2 parity)
+
+| Use | URL |
+|-----|-----|
+| API | `https://api.blinksmed.com/api` |
+| Portal web (terms / privacy) | `https://vendor.blinksmed.com` |
+
+Defined in `lib/core/config/app_urls.dart` and wired through `ApiClient`.
+
+**API base URL** must be `https://api.blinksmed.com/api` (same as Customer), not `localhost:5001`, unless your local API is running. Rebuild APK/IPA after URL changes.
 
 ## Web → Mobile parity
 

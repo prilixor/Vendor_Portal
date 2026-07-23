@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/config/app_urls.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import 'login_screen.dart';
@@ -305,7 +306,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 fontWeight: FontWeight.w600,
                               ),
                               recognizer: TapGestureRecognizer()
-                                ..onTap = () => _openPortalPage('/terms-and-conditions'),
+                                ..onTap = () => _openPortalPage(AppUrls.termsPath),
                             ),
                             const TextSpan(text: ' and '),
                             TextSpan(
@@ -315,7 +316,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 fontWeight: FontWeight.w600,
                               ),
                               recognizer: TapGestureRecognizer()
-                                ..onTap = () => _openPortalPage('/privacy-policy'),
+                                ..onTap = () => _openPortalPage(AppUrls.privacyPath),
                             ),
                             const TextSpan(text: '.'),
                           ],

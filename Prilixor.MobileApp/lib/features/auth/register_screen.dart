@@ -1,6 +1,11 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/config/app_urls.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import 'login_screen.dart';
 
@@ -17,6 +22,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _agreedToTerms = false;
   String? _nameError;
   String? _emailError;
   String? _passwordError;
@@ -39,12 +45,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _emailError = emailErr;
       _passwordError = passwordErr;
     });
-    return nameErr == null && emailErr == null && passwordErr == null;
+    if (nameErr != null || emailErr != null || passwordErr != null) return false;
+    if (!_agreedToTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please agree to the Terms & Conditions and Privacy Policy.'),
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _openPortalPage(String path) async {
+    final uri = Uri.parse('${ApiClient().portalWebBaseUrl}$path');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open $uri')),
+      );
+    }
   }
 
   void _register() async {
     if (!_validate()) {
-      showRequiredFieldsBlocked(context);
+      if (_nameError != null || _emailError != null || _passwordError != null) {
+        showRequiredFieldsBlocked(context);
+      }
       return;
     }
 
@@ -176,9 +203,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Checkbox(
+                    value: _agreedToTerms,
+                    activeColor: const Color(0xFF6C63FF),
+                    onChanged: (value) {
+                      setState(() => _agreedToTerms = value == true);
+                    },
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text.rich(
+                        TextSpan(
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.55),
+                            fontSize: 12,
+                            height: 1.45,
+                          ),
+                          children: [
+                            const TextSpan(text: 'By creating an account, you agree to our '),
+                            TextSpan(
+                              text: 'Terms & Conditions',
+                              style: const TextStyle(
+                                color: Color(0xFF6C63FF),
+                                fontWeight: FontWeight.w600,
+                              ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () => _openPortalPage(AppUrls.termsPath),
+                            ),
+                            const TextSpan(text: ' and '),
+                            TextSpan(
+                              text: 'Privacy Policy',
+                              style: const TextStyle(
+                                color: Color(0xFF6C63FF),
+                                fontWeight: FontWeight.w600,
+                              ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () => _openPortalPage(AppUrls.privacyPath),
+                            ),
+                            const TextSpan(text: '.'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: provider.isLoading ? null : _register,
+                onPressed: provider.isLoading || !_agreedToTerms ? null : _register,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6C63FF),
                   padding: const EdgeInsets.symmetric(vertical: 16),

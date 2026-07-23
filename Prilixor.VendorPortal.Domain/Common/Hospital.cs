@@ -9,13 +9,13 @@ public class Hospital : AuditableEntity<Guid>, ISoftDelete
     public string? City { get; set; }
     public string? State { get; set; }
     public string? PostalCode { get; set; }
-    
-    // Auto-approval means this will default to true, or we don't even need the flag. 
-    // We'll keep it true by default to indicate it's active and usable.
-    public bool IsVerified { get; set; } = true;
-    
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
+    public string? ContactNumber { get; set; }
+    public bool IsActive { get; set; } = true;
+
     public ICollection<HospitalDoctor> Doctors { get; set; } = [];
-    
+
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }

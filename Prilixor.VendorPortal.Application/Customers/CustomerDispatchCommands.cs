@@ -30,7 +30,8 @@ public sealed record VendorDispatchOfferDto(
     Guid? HospitalId = null,
     string? HospitalName = null,
     string? HospitalCity = null,
-    string? DoctorContactNumber = null);
+    string? DoctorContactNumber = null,
+    string? DoctorUniqueCode = null);
 
 public sealed record VendorOrderDto(
     Guid OrderId,
@@ -59,6 +60,7 @@ public sealed record VendorOrderDto(
     string? HospitalName = null,
     string? HospitalCity = null,
     string? DoctorContactNumber = null,
+    string? DoctorUniqueCode = null,
     IReadOnlyList<string>? AssignedAssetTags = null);
 
 public sealed record GetVendorOrdersQuery(string VendorId, string? Status) : IQuery<List<VendorOrderDto>>;
@@ -481,10 +483,11 @@ internal static class VendorOrderMapper
             DoctorId: row.Doctor?.Id,
             DoctorName: row.Doctor?.FullName,
             DoctorSpecialization: row.Doctor?.Specialization,
-            HospitalId: row.Hospital?.Id,
-            HospitalName: row.Hospital?.Name,
-            HospitalCity: row.Hospital?.City,
+            HospitalId: null,
+            HospitalName: null,
+            HospitalCity: null,
             DoctorContactNumber: row.Doctor?.ContactNumber,
+            DoctorUniqueCode: row.Doctor?.UniqueCode,
             AssignedAssetTags: assignedAssetTags is { Count: > 0 } ? assignedAssetTags : null);
     }
 }
@@ -596,10 +599,11 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
                 DoctorId: orderWithListing.Doctor?.Id,
                 DoctorName: orderWithListing.Doctor?.FullName,
                 DoctorSpecialization: orderWithListing.Doctor?.Specialization,
-                HospitalId: orderWithListing.Hospital?.Id,
-                HospitalName: orderWithListing.Hospital?.Name,
-                HospitalCity: orderWithListing.Hospital?.City,
-                DoctorContactNumber: orderWithListing.Doctor?.ContactNumber));
+                HospitalId: null,
+                HospitalName: null,
+                HospitalCity: null,
+                DoctorContactNumber: orderWithListing.Doctor?.ContactNumber,
+                DoctorUniqueCode: orderWithListing.Doctor?.UniqueCode));
 
             changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, order.Id, now, cancellationToken);
         }

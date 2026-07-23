@@ -18,6 +18,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye, Building2, ChevronLeft, MoreVertical, ChevronDown, Check, Loader2 } from "lucide-react";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { toast } from "sonner";
+import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
 import { useAuth } from "@/app/guards/AuthContext";
 import { BankDetails, BusinessProfile, VendorDocument, VerificationStatus } from "@/app/models";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
@@ -936,6 +937,41 @@ const Onboarding = () => {
                           updateProfile("latitude", lat);
                           updateProfile("longitude", lng);
                         }}
+                        onAddressResolved={(address) => {
+                          const nextLine1 = address?.line1 || profile.addressLine1;
+                          const nextCity = address?.city || profile.city;
+                          let nextState = profile.state;
+                          const nextPostal = address?.postal || profile.postalCode;
+
+                          if (address?.line1) updateProfile("addressLine1", address.line1);
+                          if (address?.city) updateProfile("city", address.city);
+                          if (address?.postal) updateProfile("postalCode", address.postal);
+                          if (address?.state) {
+                            const matched = states.find(
+                              (s) => s.name.toLowerCase() === address.state!.toLowerCase(),
+                            );
+                            if (matched) {
+                              nextState = matched.name;
+                              updateProfile("state", matched.name);
+                              setSelectedStateIso2(matched.iso2);
+                            } else {
+                              nextState = address.state;
+                              updateProfile("state", address.state);
+                            }
+                          }
+
+                          const missing = missingAddressFieldLabels({
+                            line1: nextLine1,
+                            city: nextCity,
+                            state: nextState,
+                            postal: nextPostal,
+                          });
+                          if (missing.length === 0) {
+                            toast.success("Location applied from map.");
+                          } else {
+                            toast.message(`Map pin saved. Please fill required ${missing.join(", ")}.`);
+                          }
+                        }}
                       />
                     </div>
                     <div className="flex gap-2 pt-2">
@@ -1260,6 +1296,41 @@ const Onboarding = () => {
                 onChange={(lat, lng) => {
                   updateProfile("latitude", lat);
                   updateProfile("longitude", lng);
+                }}
+                onAddressResolved={(address) => {
+                  const nextLine1 = address?.line1 || profile.addressLine1;
+                  const nextCity = address?.city || profile.city;
+                  let nextState = profile.state;
+                  const nextPostal = address?.postal || profile.postalCode;
+
+                  if (address?.line1) updateProfile("addressLine1", address.line1);
+                  if (address?.city) updateProfile("city", address.city);
+                  if (address?.postal) updateProfile("postalCode", address.postal);
+                  if (address?.state) {
+                    const matched = states.find(
+                      (s) => s.name.toLowerCase() === address.state!.toLowerCase(),
+                    );
+                    if (matched) {
+                      nextState = matched.name;
+                      updateProfile("state", matched.name);
+                      setSelectedStateIso2(matched.iso2);
+                    } else {
+                      nextState = address.state;
+                      updateProfile("state", address.state);
+                    }
+                  }
+
+                  const missing = missingAddressFieldLabels({
+                    line1: nextLine1,
+                    city: nextCity,
+                    state: nextState,
+                    postal: nextPostal,
+                  });
+                  if (missing.length === 0) {
+                    toast.success("Location applied from map.");
+                  } else {
+                    toast.message(`Map pin saved. Please fill required ${missing.join(", ")}.`);
+                  }
                 }}
               />
             </div>

@@ -1,17 +1,28 @@
-# prilixor_mobile
+# Prilixor Customer Mobile
 
-A new Flutter project.
+Flutter app for **customers** (`com.prilixor.prilixor_mobile`).
 
-## Getting Started
+## Production URLs (Web Option 2 parity)
 
-This project is a starting point for a Flutter application.
+| Use | URL |
+|-----|-----|
+| API | `https://api.blinksmed.com/api` |
+| Portal web (terms / privacy) | `https://blinksmed.com` |
 
-A few resources to get you started if this is your first Flutter project:
+Defined in `lib/core/config/app_urls.dart` and wired through `ApiClient`.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+For local API only, temporarily override `ApiClient.baseUrl` to `https://localhost:5001/api` (keep commented in source).
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Run
+
+```bash
+cd Prilixor.MobileApp
+flutter pub get
+flutter run
+```
+
+Use a **customer** account. Login sends `role: customer`.
+
+## Rebuild after URL changes
+
+Old installs keep the previous API host until you ship a new APK/IPA.

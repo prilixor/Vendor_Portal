@@ -27,7 +27,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { CustomerMedicalReference } from "@/app/components/customer/CustomerMedicalReference";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
 type Step = "search" | "configure" | "cart" | "success";
@@ -591,16 +590,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
         return;
       }
     }
-    for (const line of prescriptionLines) {
-      const ref = medicalRefs[line.listingId];
-      if (!ref?.hospitalId || !ref?.doctorId) {
-        setPlaceErrors([
-          `“${line.title}” requires hospital and doctor reference before placing the order.`,
-        ]);
-        toast.error("Attach hospital and doctor for prescription items");
-        return;
-      }
-    }
+    // Doctor reference is optional (Admin-curated Unique ID flow). Hospital is no longer used.
 
     setSaving(true);
     setPlaceErrors([]);
@@ -1056,37 +1046,16 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                         )}
 
                         {prescriptionLines.length > 0 && (
-                          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3.5 space-y-3">
+                          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3.5 space-y-2">
                             <div className="flex items-start gap-2">
                               <AlertCircle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
                               <div>
-                                <p className="text-sm font-semibold text-amber-900">Prescription reference required</p>
+                                <p className="text-sm font-semibold text-amber-900">Doctor reference (optional)</p>
                                 <p className="text-xs text-amber-800/90 mt-0.5">
-                                  Attach hospital and doctor for each item below before placing the order.
+                                  Doctors are managed under Catalog → Doctor References. Customers will attach a doctor by Unique ID at checkout (optional). Hospital selection has been removed.
                                 </p>
                               </div>
                             </div>
-                            {prescriptionLines.map((line) => {
-                              const ref = medicalRefs[line.listingId] ?? {
-                                hospitalId: "",
-                                doctorId: "",
-                                referenceNumber: "",
-                              };
-                              return (
-                                <div key={line.key} className="rounded-lg border bg-background p-3 space-y-2">
-                                  <p className="text-sm font-medium">{line.title}</p>
-                                  <CustomerMedicalReference
-                                    title="Hospital & doctor"
-                                    hospitalId={ref.hospitalId}
-                                    setHospitalId={(v) => updateMedicalRef(line.listingId, "hospitalId", v)}
-                                    doctorId={ref.doctorId}
-                                    setDoctorId={(v) => updateMedicalRef(line.listingId, "doctorId", v)}
-                                    referenceNumber={ref.referenceNumber}
-                                    setReferenceNumber={(v) => updateMedicalRef(line.listingId, "referenceNumber", v)}
-                                  />
-                                </div>
-                              );
-                            })}
                           </div>
                         )}
                       </>

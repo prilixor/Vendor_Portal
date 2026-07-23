@@ -45,9 +45,9 @@ internal sealed class GetMobileAdminAllOrdersQueryHandler(
                 DoctorId: r.Doctor?.Id,
                 DoctorName: r.Doctor?.FullName,
                 DoctorSpecialization: r.Doctor?.Specialization,
-                HospitalId: r.Hospital?.Id,
-                HospitalName: r.Hospital?.Name,
-                HospitalCity: r.Hospital?.City,
+                HospitalId: null,
+                HospitalName: null,
+                HospitalCity: null,
                 DoctorContactNumber: r.Doctor?.ContactNumber
             )).ToList();
 

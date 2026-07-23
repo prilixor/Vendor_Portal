@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
 import 'dispatch_details_sheet.dart';
 import 'order_group_utils.dart';
 
@@ -478,7 +479,8 @@ class _ItemDetailsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isBuy = order.orderType.toLowerCase() == 'buy';
-    final hasMedical = order.doctorName != null || order.hospitalName != null;
+    final hasMedical =
+        order.doctorName != null || order.hospitalName != null || order.doctorUniqueCode != null;
 
     return _SectionCard(
       title: 'Selected item details',
@@ -538,11 +540,28 @@ class _ItemDetailsPanel extends StatelessWidget {
             const SizedBox(height: 4),
             _CompactDetailList(rows: [
               if (order.doctorName != null) ('Doctor', order.doctorName!),
+              if (order.doctorUniqueCode != null) ('Unique ID', order.doctorUniqueCode!),
+              if (order.doctorContactNumber != null)
+                ('Contact', order.doctorContactNumber!),
               if (order.doctorSpecialization != null)
                 ('Specialization', order.doctorSpecialization!),
               if (order.hospitalName != null) ('Hospital', order.hospitalName!),
               if (order.hospitalCity != null) ('City', order.hospitalCity!),
             ]),
+            if (order.doctorUniqueCode != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => showVendorDoctorLookupSheet(
+                    context,
+                    initialCode: order.doctorUniqueCode,
+                  ),
+                  icon: const Icon(Icons.medical_services_outlined, size: 16, color: Color(0xFF2DD4BF)),
+                  label: const Text('View doctor profile', style: TextStyle(color: Color(0xFF2DD4BF))),
+                ),
+              ),
+            ],
           ],
         ],
       ),

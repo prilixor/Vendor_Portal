@@ -14,6 +14,27 @@ class PlaceSearchResult {
   });
 }
 
+/// Structured fields from reverse geocode — any may be null when OSM has no match.
+class ReverseGeocodeResult {
+  final String? line1;
+  final String? city;
+  final String? state;
+  final String? postal;
+
+  const ReverseGeocodeResult({
+    this.line1,
+    this.city,
+    this.state,
+    this.postal,
+  });
+
+  bool get hasAnyField =>
+      (line1 != null && line1!.isNotEmpty) ||
+      (city != null && city!.isNotEmpty) ||
+      (state != null && state!.isNotEmpty) ||
+      (postal != null && postal!.isNotEmpty);
+}
+
 /// Client-side geocoding used by map pickers.
 /// Photon first, then Nominatim nearby + global — mirrors seller-sparkle-ui MapPicker.
 class PlaceSearch {
@@ -36,8 +57,8 @@ class PlaceSearch {
 
   void close() => _dio.close();
 
-  /// Reverse-geocode pin coordinates → state/city (used when editing areas that only store city).
-  Future<({String? state, String? city})?> reverse({
+  /// Reverse-geocode pin → address line / state / city / postal when available.
+  Future<ReverseGeocodeResult?> reverse({
     required double latitude,
     required double longitude,
   }) async {
@@ -51,25 +72,55 @@ class PlaceSearch {
           'addressdetails': 1,
         },
       );
-      final address = response.data?['address'];
+      final data = response.data;
+      if (data == null) return null;
+      final address = data['address'];
       if (address is! Map) return null;
-      final state = address['state']?.toString().trim();
-      final city = (address['city'] ??
-              address['town'] ??
-              address['village'] ??
-              address['municipality'] ??
-              address['county'] ??
-              address['state_district'])
-          ?.toString()
-          .trim();
-      return (
-        state: (state == null || state.isEmpty) ? null : state,
-        city: (city == null || city.isEmpty) ? null : city,
+
+      final state = _trim(address['state']?.toString());
+      final city = _trim(
+        (address['city'] ??
+                address['town'] ??
+                address['village'] ??
+                address['municipality'] ??
+                address['county'] ??
+                address['state_district'])
+            ?.toString(),
+      );
+      final postal = _trim(address['postcode']?.toString());
+      final line1 = _buildLine1(address, data['name']?.toString());
+
+      return ReverseGeocodeResult(
+        line1: line1,
+        city: city,
+        state: state,
+        postal: postal,
       );
     } catch (e, st) {
       debugPrint('Reverse geocode failed: $e\n$st');
       return null;
     }
+  }
+
+  static String? _trim(String? value) {
+    final t = value?.trim();
+    if (t == null || t.isEmpty) return null;
+    return t;
+  }
+
+  static String? _buildLine1(Map address, String? placeName) {
+    final house = _trim(address['house_number']?.toString());
+    final road = _trim(address['road']?.toString());
+    if (road != null) {
+      return house != null ? '$house $road' : road;
+    }
+    final named = _trim(placeName) ??
+        _trim(address['neighbourhood']?.toString()) ??
+        _trim(address['suburb']?.toString()) ??
+        _trim(address['residential']?.toString()) ??
+        _trim(address['hamlet']?.toString()) ??
+        _trim(address['locality']?.toString());
+    return named;
   }
 
   Future<List<PlaceSearchResult>> search({

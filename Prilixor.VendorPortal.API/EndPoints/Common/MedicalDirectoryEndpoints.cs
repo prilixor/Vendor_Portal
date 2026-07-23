@@ -13,30 +13,19 @@ public static class MedicalDirectoryEndpoints
     {
         var group = app.MapGroup("api/medical-directory").WithTags("Medical Directory");
 
-        // Hospitals — search is public (catalog browse); create requires a customer session.
-        group.MapGet("/hospitals", async ([FromQuery] string? search, IMediator mediator) =>
+        // Public lookup — customers search by Unique ID (or name) among Admin-curated doctors.
+        group.MapGet("/doctors", async ([FromQuery] string? search, IMediator mediator) =>
         {
-            var result = await mediator.Send(new SearchHospitalsQuery(search));
+            var result = await mediator.Send(new SearchDoctorsQuery(search));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Errors);
         });
 
-        group.MapPost("/hospitals", async ([FromBody] CreateHospitalCommand command, IMediator mediator) =>
+        group.MapGet("/doctors/by-code/{code}", async (string code, IMediator mediator) =>
         {
-            var result = await mediator.Send(command);
-            return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Errors);
-        }).RequireAuthorization("CustomerOnly");
-
-        // Doctors — search is public; create requires a customer session.
-        group.MapGet("/doctors", async ([FromQuery] Guid? hospitalId, [FromQuery] string? search, IMediator mediator) =>
-        {
-            var result = await mediator.Send(new SearchDoctorsQuery(hospitalId, search));
-            return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Errors);
+            var result = await mediator.Send(new GetDoctorByUniqueCodeQuery(code));
+            if (!result.IsSuccess)
+                return Results.NotFound(result.Errors);
+            return Results.Ok(result.Value);
         });
-
-        group.MapPost("/doctors", async ([FromBody] CreateDoctorCommand command, IMediator mediator) =>
-        {
-            var result = await mediator.Send(command);
-            return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Errors);
-        }).RequireAuthorization("CustomerOnly");
     }
 }

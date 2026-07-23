@@ -48,8 +48,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<VendorProductAsset> VendorProductAssets => Set<VendorProductAsset>();
-    public DbSet<Hospital> Hospitals => Set<Hospital>();
     public DbSet<Doctor> Doctors => Set<Doctor>();
+    public DbSet<Hospital> Hospitals => Set<Hospital>();
     public DbSet<HospitalDoctor> HospitalDoctors => Set<HospitalDoctor>();
     public DbSet<ChemicalProperty> ChemicalProperties => Set<ChemicalProperty>();
     public DbSet<VendorVariantInventory> VendorVariantInventories => Set<VendorVariantInventory>();
@@ -774,18 +774,18 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(x => x.TicketId);
         });
 
-        modelBuilder.Entity<Hospital>(entity =>
+        modelBuilder.Entity<Doctor>(entity =>
         {
-            entity.ToTable("hospitals");
+            entity.ToTable("doctors");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id).HasColumnName("id");
-            entity.Property(x => x.Name).HasColumnName("name");
-            entity.Property(x => x.AddressLine1).HasColumnName("address_line_1");
-            entity.Property(x => x.City).HasColumnName("city");
-            entity.Property(x => x.State).HasColumnName("state");
-            entity.Property(x => x.PostalCode).HasColumnName("postal_code");
-            entity.Property(x => x.IsVerified).HasColumnName("is_verified");
-            
+            entity.Property(x => x.FullName).HasColumnName("full_name").HasMaxLength(200);
+            entity.Property(x => x.UniqueCode).HasColumnName("unique_code").HasMaxLength(20);
+            entity.Property(x => x.Email).HasColumnName("email").HasMaxLength(255);
+            entity.Property(x => x.Specialization).HasColumnName("specialization").HasMaxLength(150);
+            entity.Property(x => x.ContactNumber).HasColumnName("contact_number").HasMaxLength(30);
+            entity.Property(x => x.IsActive).HasColumnName("is_active");
+
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
             entity.Property(x => x.CreatedBy).HasColumnName("created_by");
@@ -793,18 +793,25 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
             entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+
+            entity.HasIndex(x => x.UniqueCode).IsUnique().HasFilter("is_deleted = false");
         });
 
-        modelBuilder.Entity<Doctor>(entity =>
+        modelBuilder.Entity<Hospital>(entity =>
         {
-            entity.ToTable("doctors");
+            entity.ToTable("hospitals");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id).HasColumnName("id");
-            entity.Property(x => x.FullName).HasColumnName("full_name");
-            entity.Property(x => x.Specialization).HasColumnName("specialization");
-            entity.Property(x => x.ContactNumber).HasColumnName("contact_number");
-            entity.Property(x => x.IsVerified).HasColumnName("is_verified");
-            
+            entity.Property(x => x.Name).HasColumnName("name").HasMaxLength(255);
+            entity.Property(x => x.AddressLine1).HasColumnName("address_line_1").HasMaxLength(500);
+            entity.Property(x => x.City).HasColumnName("city").HasMaxLength(120);
+            entity.Property(x => x.State).HasColumnName("state").HasMaxLength(120);
+            entity.Property(x => x.PostalCode).HasColumnName("postal_code").HasMaxLength(20);
+            entity.Property(x => x.Latitude).HasColumnName("latitude").HasPrecision(9, 6);
+            entity.Property(x => x.Longitude).HasColumnName("longitude").HasPrecision(9, 6);
+            entity.Property(x => x.ContactNumber).HasColumnName("contact_number").HasMaxLength(30);
+            entity.Property(x => x.IsActive).HasColumnName("is_active");
+
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
             entity.Property(x => x.CreatedBy).HasColumnName("created_by");
@@ -818,7 +825,6 @@ public class ApplicationDbContext : DbContext
         {
             entity.ToTable("hospital_doctors");
             entity.HasKey(x => new { x.HospitalId, x.DoctorId });
-            
             entity.Property(x => x.HospitalId).HasColumnName("hospital_id");
             entity.Property(x => x.DoctorId).HasColumnName("doctor_id");
 

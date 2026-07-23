@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { toast } from "sonner";
 import { Loader2, Plus, FileText, CheckCircle2 } from "lucide-react";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
-import { CustomerMedicalReference } from "./CustomerMedicalReference";
+import { CustomerMedicalReference, type DoctorRefSelection } from "./CustomerMedicalReference";
 import { Checkbox } from "@/app/components/ui/checkbox";
 
 type DeliveryChoice = "standard" | "express" | "vendor_pickup";
@@ -40,9 +40,7 @@ const CustomerCheckout = () => {
   const [hasInitializedAddress, setHasInitializedAddress] = useState(false);
   const [applyToAll, setApplyToAll] = useState(false);
   const [failedLines, setFailedLines] = useState<PlaceCustomerOrdersResultApi["failedLines"]>([]);
-
-  type MedicalRef = { hospitalId: string; doctorId: string; contactNumber: string; referenceNumber: string };
-  const [medicalRefs, setMedicalRefs] = useState<Record<string, MedicalRef>>({});
+  const [medicalRefs, setMedicalRefs] = useState<Record<string, DoctorRefSelection | null>>({});
 
   useEffect(() => {
     if (isHydrating) return;
@@ -51,20 +49,14 @@ const CustomerCheckout = () => {
     }
   }, [isHydrating, user, navigate]);
 
-  const updateMedicalRef = (listingId: string, field: keyof MedicalRef, value: string) => {
-    setMedicalRefs((prev) => ({
-      ...prev,
-      [listingId]: {
-        ...(prev[listingId] || { hospitalId: "", doctorId: "", contactNumber: "", referenceNumber: "" }),
-        [field]: value,
-      },
-    }));
+  const setMedicalRef = (listingId: string, value: DoctorRefSelection | null) => {
+    setMedicalRefs((prev) => ({ ...prev, [listingId]: value }));
   };
 
   const applyMedicalRefToAll = (sourceListingId: string) => {
     const source = medicalRefs[sourceListingId];
     if (!source) return;
-    
+
     setMedicalRefs((prev) => {
       const next = { ...prev };
       lines
@@ -74,7 +66,7 @@ const CustomerCheckout = () => {
         });
       return next;
     });
-    toast.success("Applied to all items requiring a prescription");
+    toast.success("Applied doctor reference to all prescription items");
   };
 
   const needsPrescription = lines.some((l) => l.prescriptionRequired);
@@ -110,12 +102,9 @@ const CustomerCheckout = () => {
         rentalDays: l.rentalDays,
         orderType: l.orderType,
         productVariantId: l.productVariantId || undefined,
-        ...(l.prescriptionRequired ? {
-          doctorId: medicalRefs[l.listingId]?.doctorId || undefined,
-          hospitalId: medicalRefs[l.listingId]?.hospitalId || undefined,
-          contactNumber: medicalRefs[l.listingId]?.contactNumber || undefined,
-          referenceNumber: medicalRefs[l.listingId]?.referenceNumber || undefined,
-        } : {})
+        ...(l.prescriptionRequired && medicalRefs[l.listingId]?.doctorId
+          ? { doctorId: medicalRefs[l.listingId]!.doctorId }
+          : {}),
       })),
     }),
     [addressId, deliveryChoice, lines, medicalRefs],
@@ -145,12 +134,9 @@ const CustomerCheckout = () => {
           rentalDays: l.rentalDays,
           orderType: l.orderType,
           productVariantId: l.productVariantId || undefined,
-          ...(l.prescriptionRequired ? {
-            doctorId: medicalRefs[l.listingId]?.doctorId || undefined,
-            hospitalId: medicalRefs[l.listingId]?.hospitalId || undefined,
-            contactNumber: medicalRefs[l.listingId]?.contactNumber || undefined,
-            referenceNumber: medicalRefs[l.listingId]?.referenceNumber || undefined,
-          } : {})
+          ...(l.prescriptionRequired && medicalRefs[l.listingId]?.doctorId
+            ? { doctorId: medicalRefs[l.listingId]!.doctorId }
+            : {}),
         })),
       }),
     onSuccess: (result) => {
@@ -341,16 +327,14 @@ const CustomerCheckout = () => {
           </Card>
 
           {needsPrescription && (
-            <Card className="border-blue-200 shadow-sm overflow-hidden bg-white">
-              <div className="bg-blue-50/60 px-5 py-4 border-b border-blue-100/60 flex items-start gap-3">
-                <FileText className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+            <Card className="border-teal-200 shadow-sm overflow-hidden bg-white">
+              <div className="bg-teal-50/70 px-5 py-4 border-b border-teal-100/70 flex items-start gap-3">
+                <FileText className="h-5 w-5 text-teal-700 shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-blue-900">Action Required: Prescriptions</h3>
-                  <p className="text-sm text-blue-700/80 mt-0.5 leading-relaxed">
-                    Some items in your cart require a doctor's reference. Please attach them below.
-                  </p>
-                  <p className="text-xs text-blue-700/70 mt-1">
-                    Hospital and doctor (<span className="text-destructive">*</span>) are required for these items.
+                  <h3 className="font-semibold text-teal-950">Doctor reference (optional)</h3>
+                  <p className="text-sm text-teal-800/80 mt-0.5 leading-relaxed">
+                    Some items can include a doctor reference. Enter the Unique ID from your doctor or their QR share page.
+                    You can also skip this and place the order without one.
                   </p>
                 </div>
               </div>
@@ -358,59 +342,71 @@ const CustomerCheckout = () => {
                 {lines.map((l) => {
                   if (!l.prescriptionRequired) return null;
                   const mRef = medicalRefs[l.listingId];
-                  const hasFilled = !!(mRef?.hospitalId && mRef?.doctorId);
+                  const hasFilled = !!mRef?.doctorId;
                   const hasOthers = lines.filter((x) => x.prescriptionRequired).length > 1;
-                  const isFirst = lines.filter((x) => x.prescriptionRequired)[0]?.listingId === l.listingId;
 
                   return (
                     <div key={l.listingId} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
                         <p className="font-medium">{l.title}</p>
                         {hasFilled ? (
-                          <div className="flex items-center gap-1.5 mt-2 text-[13px] text-green-700 font-medium bg-green-50/80 w-fit px-2.5 py-1 rounded-md border border-green-200/60">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            <span>Prescription attached</span>
+                          <div className="mt-2 space-y-1">
+                            <div className="flex items-center gap-1.5 text-[13px] text-green-700 font-medium bg-green-50/80 w-fit px-2.5 py-1 rounded-md border border-green-200/60">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              <span>
+                                {mRef!.doctorName}
+                                <span className="ml-1 font-mono text-xs tracking-wide">({mRef!.uniqueCode})</span>
+                              </span>
+                            </div>
+                            {(mRef!.hospitals?.length ?? 0) > 0 && (
+                              <p className="text-[12px] text-muted-foreground pl-0.5">
+                                {(mRef!.hospitals!.length === 1
+                                  ? mRef!.hospitals![0].name
+                                  : `${mRef!.hospitals!.length} affiliated hospitals`)}
+                                {mRef!.hospitals!.length === 1 && mRef!.hospitals![0].city
+                                  ? ` · ${mRef!.hospitals![0].city}`
+                                  : ""}
+                              </p>
+                            )}
                           </div>
                         ) : (
-                          <p className="text-[13px] text-amber-600 mt-1 font-medium">Pending details</p>
+                          <p className="text-[13px] text-muted-foreground mt-1">No doctor linked yet</p>
                         )}
                       </div>
-                      
+
                       <div className="flex items-center gap-2 shrink-0">
                         <Dialog onOpenChange={(open) => { if (open) setApplyToAll(false); }}>
                           <DialogTrigger asChild>
                             <Button variant={hasFilled ? "outline" : "default"} size="sm" className="h-8">
-                              {hasFilled ? "Edit Details" : (
+                              {hasFilled ? "Change" : (
                                 <>
-                                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Doctor
+                                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Unique ID
                                 </>
                               )}
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden border-blue-100">
-                            <DialogTitle className="sr-only">Prescription details</DialogTitle>
-                            <DialogDescription className="sr-only">Add or edit prescription details for {l.title}</DialogDescription>
+                          <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto p-0 border-teal-100">
+                            <DialogTitle className="sr-only">Doctor Unique ID</DialogTitle>
+                            <DialogDescription className="sr-only">
+                              Look up doctor by Unique ID for {l.title}
+                            </DialogDescription>
                             <div className="p-4 sm:p-6 pb-2">
                               <CustomerMedicalReference
-                                title={`Prescription: ${l.title}`}
-                                hospitalId={mRef?.hospitalId || ""}
-                                setHospitalId={(v) => updateMedicalRef(l.listingId, "hospitalId", v)}
-                                doctorId={mRef?.doctorId || ""}
-                                setDoctorId={(v) => updateMedicalRef(l.listingId, "doctorId", v)}
-                                referenceNumber={mRef?.referenceNumber || ""}
-                                setReferenceNumber={(v) => updateMedicalRef(l.listingId, "referenceNumber", v)}
+                                title={`Doctor for ${l.title}`}
+                                value={mRef || null}
+                                onChange={(v) => setMedicalRef(l.listingId, v)}
                               />
                             </div>
                             <div className="bg-muted/40 p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between border-t border-border/40 gap-4">
                               {hasOthers ? (
                                 <div className="flex items-center space-x-2">
-                                  <Checkbox 
-                                    id={`apply-all-${l.listingId}`} 
-                                    checked={applyToAll} 
-                                    onCheckedChange={(c) => setApplyToAll(!!c)} 
+                                  <Checkbox
+                                    id={`apply-all-${l.listingId}`}
+                                    checked={applyToAll}
+                                    onCheckedChange={(c) => setApplyToAll(!!c)}
                                   />
-                                  <label 
-                                    htmlFor={`apply-all-${l.listingId}`} 
+                                  <label
+                                    htmlFor={`apply-all-${l.listingId}`}
                                     className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none"
                                   >
                                     Apply to all items
@@ -418,7 +414,7 @@ const CustomerCheckout = () => {
                                 </div>
                               ) : <div />}
                               <DialogClose asChild>
-                                <Button 
+                                <Button
                                   className="w-full sm:w-auto shrink-0"
                                   onClick={() => {
                                     if (applyToAll) {
@@ -426,7 +422,7 @@ const CustomerCheckout = () => {
                                     }
                                   }}
                                 >
-                                  Save & Close
+                                  Done
                                 </Button>
                               </DialogClose>
                             </div>
@@ -534,13 +530,6 @@ const CustomerCheckout = () => {
               size="lg"
               disabled={placeMutation.isPending || !!quoteError || quoteLoading}
               onClick={() => {
-                const missingPrescription = lines.some(
-                  (l) => l.prescriptionRequired && (!medicalRefs[l.listingId]?.hospitalId || !medicalRefs[l.listingId]?.doctorId),
-                );
-                if (missingPrescription) {
-                  toast.error("Please fill in the required fields. Attach hospital and doctor details for prescription items.");
-                  return;
-                }
                 placeMutation.mutate();
               }}
             >

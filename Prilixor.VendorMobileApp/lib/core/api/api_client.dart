@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../config/app_urls.dart';
 import '../storage/secure_storage.dart';
 
 class ApiClient {
@@ -18,13 +19,12 @@ class ApiClient {
   bool _isRefreshing = false;
   final List<Completer<String?>> _refreshWaiters = [];
 
-  // Live production API (blinksmed.com).
-  // Switch to local only when the API is running on your machine:
-  // final String baseUrl = "https://localhost:5001/api";
-  final String baseUrl = "https://api.blinksmed.com/api";
+  // Production API from [AppUrls]. Local override (when API runs on your machine):
+  //final String baseUrl = "https://localhost:5001/api";
+  final String baseUrl = AppUrls.apiBaseUrl;
 
   /// Vendor portal web UI (terms, privacy) — vendor subdomain, not api host.
-  String get portalWebBaseUrl => "https://vendor.blinksmed.com";
+  String get portalWebBaseUrl => AppUrls.portalWebBaseUrl;
 
   ApiClient._internal() {
     dio = Dio(
