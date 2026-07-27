@@ -202,6 +202,199 @@ internal sealed class VendorUploadStorageService(
         TryDeleteLocalRelativePath(s);
     }
 
+    public async Task<string?> CreateThumbnailForExistingImageAsync(
+        string storedImageReference,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(storedImageReference))
+            return null;
+
+        var originalBytes = await TryReadStoredBytesAsync(storedImageReference.Trim(), cancellationToken);
+        if (originalBytes is null || originalBytes.Length == 0)
+            return null;
+
+        await using var sourceMs = new MemoryStream(originalBytes);
+        var thumbBytes = TryCreateThumbnailJpeg(sourceMs, originalBytes.Length);
+        if (thumbBytes is null || thumbBytes.Length == 0)
+            return null;
+
+        var thumbRelativeOrUrl = await StoreThumbnailBesideOriginalAsync(
+            storedImageReference.Trim(),
+            thumbBytes,
+            cancellationToken);
+        return thumbRelativeOrUrl;
+    }
+
+    private async Task<byte[]?> TryReadStoredBytesAsync(string storedReference, CancellationToken cancellationToken)
+    {
+        var opts = s3Options.Value;
+        if (amazonS3 is not null && opts.Enabled && !string.IsNullOrWhiteSpace(opts.BucketName))
+        {
+            try
+            {
+                var relativeKey = NormalizeToS3RelativeKey(storedReference);
+                var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, relativeKey);
+                using var response = await amazonS3.GetObjectAsync(opts.BucketName, key, cancellationToken);
+                await using var ms = new MemoryStream();
+                await response.ResponseStream.CopyToAsync(ms, cancellationToken);
+                return ms.ToArray();
+            }
+            catch
+            {
+                // Fall through to local read for mixed environments.
+            }
+        }
+
+        var localPath = ResolveLocalFullPath(storedReference);
+        if (localPath is not null && File.Exists(localPath))
+            return await File.ReadAllBytesAsync(localPath, cancellationToken);
+
+        // Absolute http URL — download (presigned or public).
+        if (storedReference.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            storedReference.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                using var http = new HttpClient();
+                return await http.GetByteArrayAsync(storedReference, cancellationToken);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<string?> StoreThumbnailBesideOriginalAsync(
+        string storedImageReference,
+        byte[] thumbnailBytes,
+        CancellationToken cancellationToken)
+    {
+        var thumbFileName = BuildThumbFileName(storedImageReference);
+        var opts = s3Options.Value;
+
+        if (amazonS3 is not null && opts.Enabled && !string.IsNullOrWhiteSpace(opts.BucketName))
+        {
+            try
+            {
+                var originalRelative = NormalizeToS3RelativeKey(storedImageReference);
+                var directory = originalRelative.Contains('/')
+                    ? originalRelative[..originalRelative.LastIndexOf('/')]
+                    : string.Empty;
+                var thumbRelative = string.IsNullOrEmpty(directory)
+                    ? thumbFileName
+                    : $"{directory}/{thumbFileName}";
+                var thumbKey = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, thumbRelative);
+
+                await using var thumbMs = new MemoryStream(thumbnailBytes);
+                await amazonS3.PutObjectAsync(new PutObjectRequest
+                {
+                    BucketName = opts.BucketName,
+                    Key = thumbKey,
+                    InputStream = thumbMs,
+                    ContentType = "image/jpeg",
+                    ServerSideEncryptionMethod = ServerSideEncryptionMethod.AES256
+                }, cancellationToken);
+
+                return thumbRelative;
+            }
+            catch (Exception ex)
+            {
+                throw new S3StorageException("S3 thumbnail backfill upload failed.", ex);
+            }
+        }
+
+        var localFull = ResolveLocalFullPath(storedImageReference);
+        if (localFull is null)
+            return null;
+
+        var thumbFull = Path.Combine(Path.GetDirectoryName(localFull)!, thumbFileName);
+        await File.WriteAllBytesAsync(thumbFull, thumbnailBytes, cancellationToken);
+
+        // Persist the same style as the original (absolute URL vs uploads/... relative).
+        if (storedImageReference.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            storedImageReference.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Uri.TryCreate(storedImageReference, UriKind.Absolute, out var uri))
+                return null;
+            var originalPath = uri.AbsolutePath.TrimEnd('/');
+            var dir = originalPath.Contains('/') ? originalPath[..originalPath.LastIndexOf('/')] : string.Empty;
+            return $"{uri.Scheme}://{uri.Authority}{dir}/{thumbFileName}";
+        }
+
+        var relative = storedImageReference.TrimStart('/', '\\').Replace('\\', '/');
+        if (relative.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+        {
+            var dir = relative.Contains('/') ? relative[..relative.LastIndexOf('/')] : "uploads";
+            return $"{dir}/{thumbFileName}";
+        }
+
+        return thumbFull;
+    }
+
+    private static string BuildThumbFileName(string storedImageReference)
+    {
+        string fileName;
+        if (storedImageReference.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            storedImageReference.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            fileName = Path.GetFileName(new Uri(storedImageReference).AbsolutePath);
+        }
+        else
+        {
+            fileName = Path.GetFileName(storedImageReference.Replace('\\', '/'));
+        }
+
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        if (baseName.EndsWith("_thumb", StringComparison.OrdinalIgnoreCase))
+            return $"{baseName}.jpg";
+        return $"{baseName}_thumb.jpg";
+    }
+
+    private static string NormalizeToS3RelativeKey(string storedReference)
+    {
+        var s = storedReference.Trim();
+        if (s.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            s.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Uri.TryCreate(s, UriKind.Absolute, out var uri))
+                s = uri.AbsolutePath.TrimStart('/', '\\').Replace('\\', '/');
+        }
+
+        s = s.TrimStart('/', '\\').Replace('\\', '/');
+        while (s.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+            s = s["uploads/".Length..];
+        return s;
+    }
+
+    private string? ResolveLocalFullPath(string storedReference)
+    {
+        var s = storedReference.Trim();
+        if (s.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            s.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Uri.TryCreate(s, UriKind.Absolute, out var uri))
+                return null;
+            s = uri.AbsolutePath.TrimStart('/');
+        }
+
+        s = s.TrimStart('/', '\\').Replace('\\', '/');
+        if (s.StartsWith("api/", StringComparison.OrdinalIgnoreCase))
+            s = s["api/".Length..];
+
+        if (!s.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var wwwrootFull = Path.GetFullPath(Path.Combine(environment.ContentRootPath, "wwwroot"));
+        var combined = Path.Combine(environment.ContentRootPath, "wwwroot", s.Replace('/', Path.DirectorySeparatorChar));
+        var fullPath = Path.GetFullPath(combined);
+        if (!fullPath.StartsWith(wwwrootFull, StringComparison.OrdinalIgnoreCase))
+            return null;
+        return fullPath;
+    }
+
     private string CreatePresignedGetUrl(string bucketName, string key, int expiryMinutes)
     {
         var clamped = Math.Clamp(expiryMinutes, 1, 10080);

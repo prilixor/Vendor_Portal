@@ -3,6 +3,11 @@
 -- Adds nullable thumbnail_url alongside image_url.
 -- New uploads generate a ~400px JPEG thumb in S3/local.
 -- Existing rows stay NULL (UI falls back to image_url).
+--
+-- Prod backfill for already-uploaded images (S3/local):
+--   POST /api/admin/catalog/images/backfill-thumbnails?limit=50
+-- Re-run until response.moreRemaining is false.
+-- Requires admin permission: catalog.manage
 -- ----------------------------------------------------
 
 -- ====================================================

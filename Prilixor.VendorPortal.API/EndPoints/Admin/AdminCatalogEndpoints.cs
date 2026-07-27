@@ -489,3 +489,32 @@ public sealed class DownloadCatalogExcelEndpoint(IMediator mediator)
         );
     }
 }
+
+public sealed class BackfillProductImageThumbnailsRequest
+{
+    public int Limit { get; set; } = 50;
+}
+
+/// <summary>
+/// One-time / repeatable Prod job: create missing _thumb files for existing S3/local product images.
+/// POST /api/admin/catalog/images/backfill-thumbnails?limit=50
+/// Re-run until response moreRemaining = false.
+/// </summary>
+public sealed class BackfillProductImageThumbnailsEndpoint(IMediator mediator)
+    : Endpoint<BackfillProductImageThumbnailsRequest, Results<Ok<BackfillProductImageThumbnailsResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("catalog/images/backfill-thumbnails");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<BackfillProductImageThumbnailsResult>, ProblemHttpResult>> ExecuteAsync(
+        BackfillProductImageThumbnailsRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new BackfillProductImageThumbnailsCommand(req.Limit <= 0 ? 50 : req.Limit), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}

@@ -460,6 +460,16 @@ public sealed class VendorOnboardingRepository(
             .ToListAsync(cancellationToken);
     }
 
+    public Task<List<ProductImage>> GetProductImagesMissingThumbnailsAsync(int limit, CancellationToken cancellationToken)
+    {
+        var take = Math.Clamp(limit, 1, 500);
+        return commonDbContext.ProductImages
+            .Where(x => !x.IsDeleted && (x.ThumbnailUrl == null || x.ThumbnailUrl == ""))
+            .OrderBy(x => x.CreatedOnUtc)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<VendorProductListing?> GetVendorProductListingByIdAsync(Guid vendorId, Guid listingId, CancellationToken cancellationToken)
     {
         return dbContext.VendorProductListings
@@ -577,6 +587,16 @@ public sealed class VendorOnboardingRepository(
         return dbContext.VendorProductImages
             .Where(x => x.VendorProductListingId == listingId && !x.IsDeleted)
             .OrderBy(x => x.DisplayOrder)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<List<VendorProductImage>> GetVendorProductImagesMissingThumbnailsAsync(int limit, CancellationToken cancellationToken)
+    {
+        var take = Math.Clamp(limit, 1, 500);
+        return dbContext.VendorProductImages
+            .Where(x => !x.IsDeleted && (x.ThumbnailUrl == null || x.ThumbnailUrl == ""))
+            .OrderBy(x => x.CreatedOnUtc)
+            .Take(take)
             .ToListAsync(cancellationToken);
     }
 

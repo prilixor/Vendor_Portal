@@ -30,4 +30,10 @@ public interface IVendorUploadStorageService
         VendorFileFolderType folderType = VendorFileFolderType.Documents);
 
     Task DeleteStoredFileAsync(string storedFileReference, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// For existing originals (Prod backfill): download, create thumb if worthwhile, store beside original.
+    /// Returns thumbnail stored reference, or null when skipped/failed.
+    /// </summary>
+    Task<string?> CreateThumbnailForExistingImageAsync(string storedImageReference, CancellationToken cancellationToken);
 }
