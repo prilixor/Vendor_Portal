@@ -31,7 +31,7 @@ type TopListingRow = {
   id: string;
   title: string;
   category: string;
-  dailyRent: number;
+  weeklyRent: number;
   stock: number;
   status: VerificationStatus;
 };
@@ -179,7 +179,7 @@ const Dashboard = () => {
               id: l.id,
               title: l.listingTitle,
               category: categoryName,
-              dailyRent: l.dailyRent,
+              weeklyRent: product?.weeklyRent ?? l.weeklyRent ?? 0,
               stock: l.availableQuantity,
               status: normalizeListingStatus(l.listingStatus),
             };
@@ -519,7 +519,7 @@ const Dashboard = () => {
                 <tr key={p.id} className="align-middle">
                   <td className="px-4 py-3 font-medium">{p.title}</td>
                   <td className="px-4 py-3 text-muted-foreground">{p.category}</td>
-                  <td className="px-4 py-3 text-right font-mono">₹{(p as { weeklyRent?: number }).weeklyRent ?? p.dailyRent}</td>
+                  <td className="px-4 py-3 text-right font-mono">₹{p.weeklyRent}</td>
                   <td className="px-4 py-3 text-right">{p.stock}</td>
                 </tr>
               ))}

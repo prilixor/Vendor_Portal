@@ -52,6 +52,7 @@ type CatalogProduct = {
   categoryId: string;
   name: string;
   dailyRent: number;
+  weeklyRent: number;
   monthlyRent: number;
   securityDeposit: number;
   buyPrice?: number;
@@ -78,9 +79,10 @@ const blankListing = (category?: CatalogCategory, product?: CatalogProduct): Loc
   category: category?.name ?? "",
   productName: product?.name ?? "",
   title: "",
-  dailyRent: 0,
-  monthlyRent: 0,
-  securityDeposit: 0,
+  dailyRent: product?.dailyRent ?? 0,
+  weeklyRent: product?.weeklyRent ?? 0,
+  monthlyRent: product?.monthlyRent ?? 0,
+  securityDeposit: product?.securityDeposit ?? 0,
   buyPrice: product?.buyPrice,
   gstPercent: product?.gstPercent ?? 18,
   isRentEnabled: product?.isRentEnabled ?? true,
@@ -447,6 +449,7 @@ const Products = () => {
       categoryId: p.categoryId,
       name: p.productName,
       dailyRent: p.dailyRent,
+      weeklyRent: p.weeklyRent ?? 0,
       monthlyRent: p.monthlyRent,
       securityDeposit: p.securityDeposit,
       buyPrice: p.buyPrice,
@@ -502,6 +505,7 @@ const Products = () => {
           productName: product?.name ?? "Unknown",
           title: l.listingTitle,
           dailyRent: product?.dailyRent ?? l.dailyRent,
+          weeklyRent: product?.weeklyRent ?? l.weeklyRent ?? 0,
           monthlyRent: product?.monthlyRent ?? l.monthlyRent,
           securityDeposit: product?.securityDeposit ?? l.securityDeposit,
           buyPrice: product?.buyPrice,
@@ -1329,6 +1333,7 @@ const Products = () => {
                       productId: v,
                       productName: selected?.name ?? "",
                       dailyRent: selected?.dailyRent ?? 0,
+                      weeklyRent: selected?.weeklyRent ?? 0,
                       monthlyRent: selected?.monthlyRent ?? 0,
                       securityDeposit: selected?.securityDeposit ?? 0,
                       buyPrice: selected?.buyPrice,
