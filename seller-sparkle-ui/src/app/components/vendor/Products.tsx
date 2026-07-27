@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/ta
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Switch } from "@/app/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/app/components/ui/pagination";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
@@ -312,7 +312,6 @@ const Products = () => {
     return m && s && f;
   });
 
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const paginatedProducts = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const toggleListingStatus = async (listing: LocalListing) => {
@@ -1258,40 +1257,15 @@ const Products = () => {
           )}
         </div>
 
-        {true && (
-          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between border-t border-border pt-4 gap-4">
-            <p className="text-sm text-muted-foreground whitespace-nowrap">
-              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} products
-            </p>
-            <Pagination className="w-auto mx-0">
-              <PaginationContent className="flex-wrap justify-center">
-                <PaginationItem>
-                  <PaginationPrevious 
-                    href="#" 
-                    onClick={(e) => { e.preventDefault(); if (currentPage > 1) setCurrentPage(currentPage - 1); }}
-                    className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
-                  />
-                </PaginationItem>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <PaginationItem key={page} className="hidden sm:block">
-                    <PaginationLink 
-                      href="#" 
-                      onClick={(e) => { e.preventDefault(); setCurrentPage(page); }}
-                      isActive={currentPage === page}
-                    >
-                      {page}
-                    </PaginationLink>
-                  </PaginationItem>
-                ))}
-                <PaginationItem>
-                  <PaginationNext 
-                    href="#" 
-                    onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) setCurrentPage(currentPage + 1); }}
-                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
+        {filtered.length > 0 && (
+          <div className="px-0">
+            <TablePagination
+              page={currentPage}
+              pageSize={itemsPerPage}
+              total={filtered.length}
+              onPageChange={setCurrentPage}
+              label="products"
+            />
           </div>
         )}
       </Card>
