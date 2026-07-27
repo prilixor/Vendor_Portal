@@ -51,6 +51,39 @@ export function estimateRent(
   return rateForUnit(unit, rates) * Math.max(1, periods) * Math.max(1, quantity);
 }
 
+export type RentVsBuyCheck = {
+  /** True when rental total meets or exceeds buy total (and buy price is known). */
+  shouldForceBuy: boolean;
+  rentalTotal: number;
+  buyTotal: number;
+  durationLabel: string;
+};
+
+/**
+ * When renting long enough that rent ≥ buy price, the order should switch to Buy.
+ * Example: buy ₹10,000 · weekly ₹1,000 · 10 weeks → force Buy.
+ */
+export function evaluateRentVsBuy(params: {
+  buyPrice?: number | null;
+  quantity: number;
+  periods: number;
+  unit: RentalPeriodUnit;
+  rates: { dailyRent?: number; weeklyRent?: number; monthlyRent?: number };
+}): RentVsBuyCheck {
+  const qty = Math.max(1, params.quantity || 1);
+  const periods = Math.max(1, params.periods || 1);
+  const unitBuy = params.buyPrice ?? 0;
+  const buyTotal = unitBuy > 0 ? unitBuy * qty : 0;
+  const rentalTotal = estimateRent(params.unit, periods, qty, params.rates);
+  const durationLabel = formatRentalDuration(periods, params.unit);
+  return {
+    shouldForceBuy: buyTotal > 0 && rentalTotal >= buyTotal,
+    rentalTotal,
+    buyTotal,
+    durationLabel,
+  };
+}
+
 /** Primary display rate for browse cards (first visible unit with a positive price). */
 export function primaryDisplayRate(rates: {
   dailyRent?: number;

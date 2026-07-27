@@ -7,6 +7,7 @@ import { chatApi } from "@/app/services/chatApi";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
+import { BackLink } from "@/app/components/shared/BackLink";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/app/components/ui/sheet";
 import { Input } from "@/app/components/ui/input";
@@ -358,9 +359,7 @@ const CustomerOrderDetail = () => {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <Button variant="ghost" className="-ml-2 h-auto px-2 text-sm text-muted-foreground hover:text-foreground" asChild>
-        <Link to="/customer/orders">← Back to orders</Link>
-      </Button>
+      <BackLink to="/customer/orders" label="Back to orders" />
 
       {/* Group Master Card */}
       <Card className="overflow-hidden border-border/80 shadow-sm">

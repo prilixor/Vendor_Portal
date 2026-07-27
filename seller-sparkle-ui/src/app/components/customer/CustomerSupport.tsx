@@ -2,6 +2,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { LifeBuoy, Mail, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
+import { BackLink } from "@/app/components/shared/BackLink";
 
 const CustomerSupport = () => {
   const [searchParams] = useSearchParams();
@@ -10,7 +11,8 @@ const CustomerSupport = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Support</h1>
+        {orderRef ? <BackLink to="/customer/orders" label="Back to orders" /> : null}
+        <h1 className={orderRef ? "mt-1 text-2xl font-bold tracking-tight" : "text-2xl font-bold tracking-tight"}>Support</h1>
         <p className="mt-1 text-sm text-muted-foreground">Get help with rentals, orders, or your account.</p>
         {orderRef ? (
           <p className="mt-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground">

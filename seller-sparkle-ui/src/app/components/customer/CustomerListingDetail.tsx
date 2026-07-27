@@ -11,6 +11,8 @@ import { QuantityStepper } from "@/app/components/ui/quantity-stepper";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { ProductImageGallery } from "@/app/components/shared/ProductImageGallery";
+import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
+import { BackLink } from "@/app/components/shared/BackLink";
 import { toast } from "sonner";
 import { ShoppingCart } from "lucide-react";
 import {
@@ -18,6 +20,7 @@ import {
   RENTAL_UNIT_LABELS,
   RENTAL_UNITS_VISIBLE_IN_UI,
   estimateRent,
+  evaluateRentVsBuy,
   type RentalPeriodUnit,
 } from "@/app/helpers/rentalPeriod";
 
@@ -64,6 +67,12 @@ const CustomerListingDetail = () => {
   const [periodUnit, setPeriodUnit] = useState<RentalPeriodUnit>(DEFAULT_UI_RENTAL_UNIT);
   const [orderType, setOrderType] = useState<"rent" | "buy">("rent");
   const [selectedVariantId, setSelectedVariantId] = useState<string>("");
+  const [rentToBuyOpen, setRentToBuyOpen] = useState(false);
+  const [rentToBuyInfo, setRentToBuyInfo] = useState<{
+    rentalTotal: number;
+    buyTotal: number;
+    durationLabel: string;
+  } | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["customer-listing", listingId],
@@ -137,14 +146,58 @@ const CustomerListingDetail = () => {
   const canAddToCart = currentAvailableQuantity > 0;
   
   const unitPrice = selectedVariant ? selectedVariant.buyPrice : (data.buyPrice ?? 0);
+  const rentRates = {
+    dailyRent: data.dailyRent,
+    weeklyRent: data.weeklyRent ?? 0,
+    monthlyRent: data.monthlyRent,
+  };
   const rentEstimate =
     actualOrderType === "buy"
       ? unitPrice * qty
-      : estimateRent(periodUnit, periods, qty, {
-          dailyRent: data.dailyRent,
-          weeklyRent: data.weeklyRent ?? 0,
-          monthlyRent: data.monthlyRent,
-        });
+      : estimateRent(periodUnit, periods, qty, rentRates);
+
+  const promptRentToBuyIfNeeded = (next: {
+    periods?: number;
+    periodUnit?: RentalPeriodUnit;
+    qty?: number;
+  }): boolean => {
+    if (unitPrice <= 0) return false;
+    const check = evaluateRentVsBuy({
+      buyPrice: unitPrice,
+      quantity: next.qty ?? qty,
+      periods: next.periods ?? periods,
+      unit: next.periodUnit ?? periodUnit,
+      rates: rentRates,
+    });
+    if (!check.shouldForceBuy) return false;
+    setRentToBuyInfo({
+      rentalTotal: check.rentalTotal,
+      buyTotal: check.buyTotal,
+      durationLabel: check.durationLabel,
+    });
+    setRentToBuyOpen(true);
+    return true;
+  };
+
+  const handlePeriodsChange = (next: number) => {
+    if (promptRentToBuyIfNeeded({ periods: next })) return;
+    setPeriods(next);
+  };
+
+  const handlePeriodUnitChange = (next: RentalPeriodUnit) => {
+    if (promptRentToBuyIfNeeded({ periodUnit: next })) return;
+    setPeriodUnit(next);
+  };
+
+  const handleQtyChange = (next: number) => {
+    if (actualOrderType === "rent" && promptRentToBuyIfNeeded({ qty: next })) return;
+    setQty(next);
+  };
+
+  const handleOrderTypeChange = (next: "rent" | "buy") => {
+    if (next === "rent" && promptRentToBuyIfNeeded({})) return;
+    setOrderType(next);
+  };
 
   const variantStockOf = (variantId: string) =>
     activeVariants.find((v) => v.id === variantId)?.availableQuantity ??
@@ -178,6 +231,10 @@ const CustomerListingDetail = () => {
       toast.error(`Only ${currentAvailableQuantity} unit(s) available in stock.`);
       return;
     }
+
+    if (actualOrderType === "rent" && promptRentToBuyIfNeeded({})) {
+      return;
+    }
     
     const displayTitle = selectedVariant 
       ? `${data.title} (${selectedVariant.sizeValue} ${selectedVariant.sizeUnit})`
@@ -204,7 +261,9 @@ const CustomerListingDetail = () => {
   };
 
   return (
-    <div className="grid gap-10 lg:grid-cols-2">
+    <div className="space-y-4">
+      <BackLink to="/customer/shop" label="Back to shop" />
+      <div className="grid gap-10 lg:grid-cols-2">
       <ProductImageGallery images={images} alt={data.title} />
 
       <div className="space-y-6">
@@ -370,7 +429,7 @@ const CustomerListingDetail = () => {
               {canRent && canBuy && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground">Order type</p>
-                  <Select value={orderType} onValueChange={(v) => setOrderType(v as "rent" | "buy")}>
+                  <Select value={orderType} onValueChange={(v) => handleOrderTypeChange(v as "rent" | "buy")}>
                     <SelectTrigger className="h-10 w-[140px]">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
@@ -381,12 +440,12 @@ const CustomerListingDetail = () => {
                   </Select>
                 </div>
               )}
-              <QuantityStepper label="Qty" required value={qty} min={1} max={Math.max(1, currentAvailableQuantity)} onChange={setQty} />
+              <QuantityStepper label="Qty" required value={qty} min={1} max={Math.max(1, currentAvailableQuantity)} onChange={handleQtyChange} />
               {actualOrderType === "rent" ? (
                 <>
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground">Period</p>
-                    <Select value={periodUnit} onValueChange={(v) => setPeriodUnit(v as RentalPeriodUnit)}>
+                    <Select value={periodUnit} onValueChange={(v) => handlePeriodUnitChange(v as RentalPeriodUnit)}>
                       <SelectTrigger className="h-10 w-[140px]">
                         <SelectValue />
                       </SelectTrigger>
@@ -405,7 +464,7 @@ const CustomerListingDetail = () => {
                     value={periods}
                     min={1}
                     max={366}
-                    onChange={setPeriods}
+                    onChange={handlePeriodsChange}
                   />
                 </>
               ) : null}
@@ -457,6 +516,22 @@ const CustomerListingDetail = () => {
           </CardContent>
         </Card>
       </div>
+      </div>
+
+      <RentExceedsBuyDialog
+        open={rentToBuyOpen}
+        onOpenChange={setRentToBuyOpen}
+        itemTitle={data.title}
+        rentalTotal={rentToBuyInfo?.rentalTotal ?? 0}
+        buyTotal={rentToBuyInfo?.buyTotal ?? 0}
+        durationLabel={rentToBuyInfo?.durationLabel ?? ""}
+        buyAvailable={canBuy && unitPrice > 0}
+        onConfirmBuy={() => {
+          if (!canBuy || unitPrice <= 0) return;
+          setOrderType("buy");
+          setPeriods(1);
+        }}
+      />
     </div>
   );
 };

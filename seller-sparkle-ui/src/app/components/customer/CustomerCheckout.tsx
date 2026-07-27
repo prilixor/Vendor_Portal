@@ -22,6 +22,9 @@ import { Loader2, Plus, FileText, CheckCircle2 } from "lucide-react";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { CustomerMedicalReference, type DoctorRefSelection } from "./CustomerMedicalReference";
 import { Checkbox } from "@/app/components/ui/checkbox";
+import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
+import { BackLink } from "@/app/components/shared/BackLink";
+import { formatRentalDuration } from "@/app/helpers/rentalPeriod";
 
 type DeliveryChoice = "standard" | "express" | "vendor_pickup";
 
@@ -34,13 +37,20 @@ const CustomerCheckout = () => {
   const navigate = useNavigate();
   const { user, isHydrating } = useAuth();
   const queryClient = useQueryClient();
-  const { lines, totalEstimatedRent, clear } = useCart();
+  const { lines, totalEstimatedRent, clear, updateLine } = useCart();
   const [addressId, setAddressId] = useState<string>("");
   const [deliveryChoice, setDeliveryChoice] = useState<DeliveryChoice>("standard");
   const [hasInitializedAddress, setHasInitializedAddress] = useState(false);
   const [applyToAll, setApplyToAll] = useState(false);
   const [failedLines, setFailedLines] = useState<PlaceCustomerOrdersResultApi["failedLines"]>([]);
   const [medicalRefs, setMedicalRefs] = useState<Record<string, DoctorRefSelection | null>>({});
+  const [rentToBuyOpen, setRentToBuyOpen] = useState(false);
+  const [rentToBuySuggestion, setRentToBuySuggestion] = useState<{
+    listingId: string;
+    listingTitle: string;
+    rentAmount: number;
+    buyAmount: number;
+  } | null>(null);
 
   useEffect(() => {
     if (isHydrating) return;
@@ -166,11 +176,18 @@ const CustomerCheckout = () => {
 
   useEffect(() => {
     if (!quote?.buySuggestions?.length) return;
-    const suggestion = quote.buySuggestions[0];
-    toast.message(
-      `Buy suggestion for "${suggestion.listingTitle}": save ₹${suggestion.savingsAmount.toFixed(0)} if you buy.`,
+    const stillRent = quote.buySuggestions.find((s) =>
+      lines.some((l) => l.listingId === s.listingId && l.orderType === "rent"),
     );
-  }, [quote?.buySuggestions]);
+    if (!stillRent) return;
+    setRentToBuySuggestion({
+      listingId: stillRent.listingId,
+      listingTitle: stillRent.listingTitle,
+      rentAmount: stillRent.rentAmount,
+      buyAmount: stillRent.buyAmount,
+    });
+    setRentToBuyOpen(true);
+  }, [quote?.buySuggestions, lines]);
 
   if (isHydrating || user?.role !== "customer") {
     return (
@@ -194,7 +211,8 @@ const CustomerCheckout = () => {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Checkout</h1>
+        <BackLink to="/customer/cart" label="Back to cart" />
+        <h1 className="mt-1 text-2xl font-bold tracking-tight">Checkout</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Confirm delivery details and place your rental request.
         </p>
@@ -523,8 +541,8 @@ const CustomerCheckout = () => {
                   <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900">
                     {quote.buySuggestions.map((s) => (
                       <p key={s.listingId} className="leading-relaxed">
-                        <span className="font-medium">{s.listingTitle}:</span> Rent ₹{s.rentAmount.toFixed(0)} is higher than
-                        Buy ₹{s.buyAmount.toFixed(0)} (save ₹{s.savingsAmount.toFixed(0)}).
+                        <span className="font-medium">{s.listingTitle}:</span> Rent ₹{s.rentAmount.toFixed(0)} meets or
+                        exceeds Buy ₹{s.buyAmount.toFixed(0)} — switched to Buy.
                       </p>
                     ))}
                   </div>
@@ -554,6 +572,32 @@ const CustomerCheckout = () => {
           </CardContent>
         </Card>
       </div>
+
+      <RentExceedsBuyDialog
+        open={rentToBuyOpen}
+        onOpenChange={setRentToBuyOpen}
+        itemTitle={rentToBuySuggestion?.listingTitle}
+        rentalTotal={rentToBuySuggestion?.rentAmount ?? 0}
+        buyTotal={rentToBuySuggestion?.buyAmount ?? 0}
+        durationLabel={(() => {
+          const line = lines.find((l) => l.listingId === rentToBuySuggestion?.listingId);
+          return line ? formatRentalDuration(line.rentalDays, line.rentalPeriodUnit) : "this rental";
+        })()}
+        buyAvailable
+        compulsory
+        onConfirmBuy={() => {
+          for (const s of quote?.buySuggestions ?? []) {
+            const line = lines.find((l) => l.listingId === s.listingId && l.orderType === "rent");
+            if (line) updateLine(line.listingId, { orderType: "buy" });
+          }
+          if (rentToBuySuggestion) {
+            const line = lines.find((l) => l.listingId === rentToBuySuggestion.listingId && l.orderType === "rent");
+            if (line) updateLine(line.listingId, { orderType: "buy" });
+          }
+          setRentToBuySuggestion(null);
+          toast.success("Order type updated to Buy");
+        }}
+      />
     </div>
   );
 };

@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { evaluateRentVsBuy } from "@/app/helpers/rentalPeriod";
+import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
 
 type Step = "search" | "configure" | "cart" | "success";
 type BrowseMode = "equipment" | "chemicals";
@@ -346,6 +348,16 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
   const [medicalRefs, setMedicalRefs] = useState<Record<string, MedicalRef>>({});
   const [placeErrors, setPlaceErrors] = useState<string[]>([]);
   const [placedOrders, setPlacedOrders] = useState<{ id: string; orderNumber: string; listingTitle?: string }[]>([]);
+  const [rentToBuyOpen, setRentToBuyOpen] = useState(false);
+  const [rentToBuyInfo, setRentToBuyInfo] = useState<{
+    title: string;
+    rentalTotal: number;
+    buyTotal: number;
+    durationLabel: string;
+    buyAvailable: boolean;
+    /** After confirm, apply buy — either on configure form or a cart line key */
+    target: "configure" | { cartKey: string };
+  } | null>(null);
 
   const updateMedicalRef = (listingId: string, field: keyof MedicalRef, value: string) => {
     setMedicalRefs((prev) => ({
@@ -540,6 +552,33 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     const qty = Math.max(1, Number(quantity) || 1);
     const days = orderType === "rent" ? Math.max(1, Number(rentalDays) || 1) : 0;
     const buyUnit = selectedVariant?.buyPrice ?? detail?.buyPrice ?? selected.buyPrice;
+
+    if (orderType === "rent" && (buyUnit ?? 0) > 0) {
+      const check = evaluateRentVsBuy({
+        buyPrice: buyUnit,
+        quantity: qty,
+        periods: days,
+        unit: rentalPeriodUnit,
+        rates: {
+          dailyRent: detail?.dailyRent ?? selected.dailyRent,
+          weeklyRent: (detail as { weeklyRent?: number } | null)?.weeklyRent ?? selected.weeklyRent ?? 0,
+          monthlyRent: detail?.monthlyRent ?? selected.monthlyRent ?? 0,
+        },
+      });
+      if (check.shouldForceBuy) {
+        setRentToBuyInfo({
+          title: selected.title,
+          rentalTotal: check.rentalTotal,
+          buyTotal: check.buyTotal,
+          durationLabel: check.durationLabel,
+          buyAvailable: buyEnabled,
+          target: "configure",
+        });
+        setRentToBuyOpen(true);
+        return;
+      }
+    }
+
     const variantLabel = selectedVariant
       ? `${selectedVariant.sizeValue} ${selectedVariant.sizeUnit}${selectedVariant.sku ? ` · ${selectedVariant.sku}` : ""}`
       : undefined;
@@ -617,6 +656,36 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
         next.quantity = Math.max(1, next.quantity);
         if (next.orderType === "rent") next.rentalDays = Math.max(1, next.rentalDays);
         else next.rentalDays = 0;
+
+        if (next.orderType === "rent" && (next.buyPrice ?? 0) > 0) {
+          const check = evaluateRentVsBuy({
+            buyPrice: next.buyPrice,
+            quantity: next.quantity,
+            periods: next.rentalDays,
+            unit: next.rentalPeriodUnit,
+            rates: {
+              dailyRent: next.dailyRent,
+              weeklyRent: next.weeklyRent,
+              monthlyRent: next.monthlyRent,
+            },
+          });
+          if (check.shouldForceBuy) {
+            // Defer dialog to after state update via microtask so we don't setState during render map
+            queueMicrotask(() => {
+              setRentToBuyInfo({
+                title: next.title,
+                rentalTotal: check.rentalTotal,
+                buyTotal: check.buyTotal,
+                durationLabel: check.durationLabel,
+                buyAvailable: true,
+                target: { cartKey: key },
+              });
+              setRentToBuyOpen(true);
+            });
+            // Keep previous line until user confirms
+            return line;
+          }
+        }
         return next;
       }),
     );
@@ -1345,6 +1414,30 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
           )}
         </DialogFooter>
       </DialogContent>
+
+      <RentExceedsBuyDialog
+        open={rentToBuyOpen}
+        onOpenChange={setRentToBuyOpen}
+        itemTitle={rentToBuyInfo?.title}
+        rentalTotal={rentToBuyInfo?.rentalTotal ?? 0}
+        buyTotal={rentToBuyInfo?.buyTotal ?? 0}
+        durationLabel={rentToBuyInfo?.durationLabel ?? ""}
+        buyAvailable={rentToBuyInfo?.buyAvailable ?? true}
+        onConfirmBuy={() => {
+          if (!rentToBuyInfo) return;
+          if (rentToBuyInfo.target === "configure") {
+            setOrderType("buy");
+            setRentalDays("1");
+            toast.message("Order type set to Buy — add to cart again");
+            return;
+          }
+          const key = rentToBuyInfo.target.cartKey;
+          setCart((prev) =>
+            prev.map((l) => (l.key === key ? { ...l, orderType: "buy" as const, rentalDays: 0 } : l)),
+          );
+          toast.success("Cart line switched to Buy");
+        }}
+      />
     </Dialog>
   );
 }

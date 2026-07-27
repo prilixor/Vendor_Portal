@@ -13,10 +13,13 @@ import { customerApi } from "@/app/services/customerApi";
 import type { CustomerListingDetailApi } from "@/app/services/customerApi";
 import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
+import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
+import { BackLink } from "@/app/components/shared/BackLink";
 import {
   RENTAL_UNIT_LABELS,
   RENTAL_UNITS_VISIBLE_IN_UI,
   estimateRent,
+  evaluateRentVsBuy,
   formatRentalDuration,
   rateForUnit,
   type RentalPeriodUnit,
@@ -46,6 +49,7 @@ function CartLineCard({
   line,
   availableQuantity,
   imageUrl,
+  buyEnabled,
   onUpdateQty,
   onUpdateDays,
   onUpdatePeriodUnit,
@@ -55,6 +59,7 @@ function CartLineCard({
   line: CartLine;
   availableQuantity?: number;
   imageUrl?: string | null;
+  buyEnabled: boolean;
   onUpdateQty: (listingId: string, qty: number) => void;
   onUpdateDays: (listingId: string, days: number) => void;
   onUpdatePeriodUnit: (listingId: string, unit: RentalPeriodUnit) => void;
@@ -76,6 +81,42 @@ function CartLineCard({
   const thumbUrl = resolveItemImageUrl({
     primaryImageUrl: imageUrl ?? line.primaryImageUrl,
   });
+
+  const [rentToBuyOpen, setRentToBuyOpen] = useState(false);
+  const [rentToBuyInfo, setRentToBuyInfo] = useState<{
+    rentalTotal: number;
+    buyTotal: number;
+    durationLabel: string;
+  } | null>(null);
+
+  const rates = {
+    dailyRent: line.dailyRent,
+    weeklyRent: line.weeklyRent,
+    monthlyRent: line.monthlyRent,
+  };
+
+  const promptIfNeeded = (next: {
+    periods?: number;
+    unit?: RentalPeriodUnit;
+    qty?: number;
+  }): boolean => {
+    if ((line.buyPrice ?? 0) <= 0) return false;
+    const check = evaluateRentVsBuy({
+      buyPrice: line.buyPrice,
+      quantity: next.qty ?? line.quantity,
+      periods: next.periods ?? line.rentalDays,
+      unit: next.unit ?? line.rentalPeriodUnit,
+      rates,
+    });
+    if (!check.shouldForceBuy) return false;
+    setRentToBuyInfo({
+      rentalTotal: check.rentalTotal,
+      buyTotal: check.buyTotal,
+      durationLabel: check.durationLabel,
+    });
+    setRentToBuyOpen(true);
+    return true;
+  };
 
   return (
     <div
@@ -128,11 +169,21 @@ function CartLineCard({
               value={line.quantity}
               min={1}
               max={availableQuantity ?? 999}
-              onChange={(qty) => onUpdateQty(line.listingId, qty)}
+              onChange={(qty) => {
+                if (line.orderType === "rent" && promptIfNeeded({ qty })) return;
+                onUpdateQty(line.listingId, qty);
+              }}
             />
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground">Type</p>
-              <Select value={line.orderType} onValueChange={(v) => onUpdateOrderType(line.listingId, v as "rent" | "buy")}>
+              <Select
+                value={line.orderType}
+                onValueChange={(v) => {
+                  const next = v as "rent" | "buy";
+                  if (next === "rent" && promptIfNeeded({})) return;
+                  onUpdateOrderType(line.listingId, next);
+                }}
+              >
                 <SelectTrigger className="h-9 w-[120px]">
                   <SelectValue />
                 </SelectTrigger>
@@ -148,7 +199,11 @@ function CartLineCard({
                   <p className="text-xs font-medium text-muted-foreground">Period</p>
                   <Select
                     value={line.rentalPeriodUnit}
-                    onValueChange={(v) => onUpdatePeriodUnit(line.listingId, v as RentalPeriodUnit)}
+                    onValueChange={(v) => {
+                      const unit = v as RentalPeriodUnit;
+                      if (promptIfNeeded({ unit })) return;
+                      onUpdatePeriodUnit(line.listingId, unit);
+                    }}
                   >
                     <SelectTrigger className="h-9 w-[120px]">
                       <SelectValue />
@@ -167,7 +222,10 @@ function CartLineCard({
                   value={line.rentalDays}
                   min={1}
                   max={366}
-                  onChange={(days) => onUpdateDays(line.listingId, days)}
+                  onChange={(days) => {
+                    if (promptIfNeeded({ periods: days })) return;
+                    onUpdateDays(line.listingId, days);
+                  }}
                 />
               </>
             ) : null}
@@ -179,6 +237,20 @@ function CartLineCard({
           )}
         </div>
       </div>
+
+      <RentExceedsBuyDialog
+        open={rentToBuyOpen}
+        onOpenChange={setRentToBuyOpen}
+        itemTitle={line.title}
+        rentalTotal={rentToBuyInfo?.rentalTotal ?? 0}
+        buyTotal={rentToBuyInfo?.buyTotal ?? 0}
+        durationLabel={rentToBuyInfo?.durationLabel ?? ""}
+        buyAvailable={buyEnabled && (line.buyPrice ?? 0) > 0}
+        onConfirmBuy={() => {
+          if (!buyEnabled || (line.buyPrice ?? 0) <= 0) return;
+          onUpdateOrderType(line.listingId, "buy");
+        }}
+      />
     </div>
   );
 }
@@ -255,7 +327,8 @@ const CustomerCart = () => {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Your cart</h1>
+        <BackLink to="/customer/shop" label="Back to shop" />
+        <h1 className="mt-1 text-2xl font-bold tracking-tight">Your cart</h1>
         <p className="mt-1 text-sm text-muted-foreground">Review items and proceed to checkout.</p>
       </div>
 
@@ -277,6 +350,7 @@ const CustomerCart = () => {
                 line={line}
                 availableQuantity={lineAvailability(line)}
                 imageUrl={resolveItemImageUrl(detailMap.get(line.listingId))}
+                buyEnabled={detailMap.get(line.listingId)?.isBuyEnabled === true}
                 onUpdateQty={(listingId, qty) => updateLine(listingId, { quantity: qty })}
                 onUpdateDays={(listingId, rentalDays) => updateLine(listingId, { rentalDays })}
                 onUpdatePeriodUnit={(listingId, rentalPeriodUnit) => updateLine(listingId, { rentalPeriodUnit })}

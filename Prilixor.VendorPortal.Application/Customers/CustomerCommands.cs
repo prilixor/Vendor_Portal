@@ -440,6 +440,47 @@ internal static class CustomerOrderPricingRules
     public static string NormalizeOrderType(string? orderType) =>
         string.Equals(orderType?.Trim(), "buy", StringComparison.OrdinalIgnoreCase) ? "buy" : "rent";
 
+    /// <summary>
+    /// Unit buy price used for rent-vs-buy comparison (variant price when selected).
+    /// </summary>
+    public static decimal ResolveUnitBuyPrice(
+        VendorProductListingAggregate aggregate,
+        CartLineRequest line,
+        CustomerPricingOptions options)
+    {
+        if (line.ProductVariantId.HasValue && line.ProductVariantId.Value != Guid.Empty)
+        {
+            var variant = aggregate.Variants.FirstOrDefault(v => v.Id == line.ProductVariantId.Value.ToString());
+            if (variant != null)
+                return variant.BuyPrice;
+        }
+
+        return aggregate.BuyPrice ?? (aggregate.DailyRent * options.BuyPriceMultiplierFromDailyRent);
+    }
+
+    /// <summary>
+    /// When rental subtotal ≥ buy total and buy is enabled, force Buy (customer owns the item).
+    /// </summary>
+    public static CartLineRequest ApplyRentExceedsBuyRule(
+        VendorProductListingAggregate aggregate,
+        CartLineRequest line,
+        CustomerPricingOptions options,
+        out bool convertedToBuy)
+    {
+        convertedToBuy = false;
+        var orderType = NormalizeOrderType(line.OrderType);
+        if (orderType != "rent" || !aggregate.IsBuyEnabled)
+            return line;
+
+        var rentSubtotal = CalculateLineSubtotal("rent", aggregate, line, options);
+        var buyTotal = ResolveUnitBuyPrice(aggregate, line, options) * line.Quantity;
+        if (buyTotal <= 0m || rentSubtotal < buyTotal)
+            return line;
+
+        convertedToBuy = true;
+        return line with { OrderType = "buy", RentalDays = 0, RentalPeriodUnit = RentalPeriod.Day };
+    }
+
     public static bool RequiresAddress(string deliveryOption) =>
         !string.Equals(deliveryOption, "vendor_pickup", StringComparison.OrdinalIgnoreCase);
 
@@ -728,17 +769,17 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
             if (orderType == "rent")
             {
                 var equivalentBuyAmount = decimal.Round(
-                    (agg.BuyPrice ?? (agg.DailyRent * options.BuyPriceMultiplierFromDailyRent)) * line.Quantity,
+                    CustomerOrderPricingRules.ResolveUnitBuyPrice(agg, line, options) * line.Quantity,
                     2,
                     MidpointRounding.AwayFromZero);
-                if (lineSubtotal > equivalentBuyAmount)
+                if (equivalentBuyAmount > 0 && lineSubtotal >= equivalentBuyAmount)
                 {
                     buySuggestions.Add(new CustomerBuySuggestionDto(
                         agg.ListingId,
                         trackedListing.ListingTitle,
                         decimal.Round(lineSubtotal, 2, MidpointRounding.AwayFromZero),
                         equivalentBuyAmount,
-                        decimal.Round(lineSubtotal - equivalentBuyAmount, 2, MidpointRounding.AwayFromZero)));
+                        decimal.Round(Math.Max(0, lineSubtotal - equivalentBuyAmount), 2, MidpointRounding.AwayFromZero)));
                 }
             }
             var lineDeposit = orderType == "buy" ? 0m : depositPerUnit * line.Quantity;
@@ -838,8 +879,22 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
 
         foreach (var line in request.Lines)
         {
-            var orderType = CustomerOrderPricingRules.NormalizeOrderType(line.OrderType);
-            if (orderType == "rent" && line.RentalDays <= 0)
+            var agg = await customers.GetListingForCustomerAsync(line.ListingId, cancellationToken);
+            if (agg is null)
+            {
+                failed.Add(new FailedCustomerOrderLineDto(
+                    line.ListingId,
+                    line.Quantity,
+                    line.RentalDays,
+                    CustomerOrderPricingRules.NormalizeOrderType(line.OrderType),
+                    "customers.listing_not_found",
+                    "Listing not found."));
+                continue;
+            }
+
+            var effectiveLine = CustomerOrderPricingRules.ApplyRentExceedsBuyRule(agg, line, options, out _);
+            var orderType = CustomerOrderPricingRules.NormalizeOrderType(effectiveLine.OrderType);
+            if (orderType == "rent" && effectiveLine.RentalDays <= 0)
             {
                 failed.Add(new FailedCustomerOrderLineDto(
                     line.ListingId,
@@ -851,17 +906,24 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 continue;
             }
 
-            var agg = await customers.GetListingForCustomerAsync(line.ListingId, cancellationToken);
-            if (agg is null)
+            // Reject rent when cost ≥ buy but buy is disabled (cannot auto-convert).
+            if (CustomerOrderPricingRules.NormalizeOrderType(line.OrderType) == "rent"
+                && !agg.IsBuyEnabled
+                && CustomerOrderPricingRules.ResolveUnitBuyPrice(agg, line, options) > 0)
             {
-                failed.Add(new FailedCustomerOrderLineDto(
-                    line.ListingId,
-                    line.Quantity,
-                    line.RentalDays,
-                    orderType,
-                    "customers.listing_not_found",
-                    "Listing not found."));
-                continue;
+                var rentSub = CustomerOrderPricingRules.CalculateLineSubtotal("rent", agg, line, options);
+                var buyTot = CustomerOrderPricingRules.ResolveUnitBuyPrice(agg, line, options) * line.Quantity;
+                if (rentSub >= buyTot)
+                {
+                    failed.Add(new FailedCustomerOrderLineDto(
+                        line.ListingId,
+                        line.Quantity,
+                        line.RentalDays,
+                        "rent",
+                        "customers.rent_exceeds_buy",
+                        $"Rental cost for \"{agg.ListingTitle}\" meets or exceeds the item value. Choose a shorter rental period."));
+                    continue;
+                }
             }
 
             if (orderType == "buy" && !agg.IsBuyEnabled)
@@ -967,9 +1029,9 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
             // Do not block place-order when category has prescription_required.
 
             var depositPerUnit = agg.CategoryDepositRequired ? agg.SecurityDeposit : 0m;
-            var subtotal = CustomerOrderPricingRules.CalculateLineSubtotal(orderType, agg, line, options);
-            var vendorSubtotal = CustomerOrderPricingRules.CalculateVendorLineSubtotal(orderType, agg, line, options);
-            var deposit = orderType == "buy" ? 0m : depositPerUnit * line.Quantity;
+            var subtotal = CustomerOrderPricingRules.CalculateLineSubtotal(orderType, agg, effectiveLine, options);
+            var vendorSubtotal = CustomerOrderPricingRules.CalculateVendorLineSubtotal(orderType, agg, effectiveLine, options);
+            var deposit = orderType == "buy" ? 0m : depositPerUnit * effectiveLine.Quantity;
             var expressFee = CustomerOrderPricingRules.CalculateExpressFee(deliveryOption, options);
 
             decimal distanceFee = 0m;
@@ -1009,10 +1071,10 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
             var orderNumber = $"{baseOrderNumber}-{lineIndex + 1:D2}";
             lineIndex++;
             var start = DateOnly.FromDateTime(DateTime.UtcNow.Date);
-            var periodUnit = RentalPeriod.Normalize(line.RentalPeriodUnit);
+            var periodUnit = RentalPeriod.Normalize(effectiveLine.RentalPeriodUnit);
             var end = orderType == "buy"
                 ? start
-                : RentalPeriod.AddPeriods(start, periodUnit, line.RentalDays);
+                : RentalPeriod.AddPeriods(start, periodUnit, effectiveLine.RentalDays);
 
             var order = new CustomerRentalOrder
             {
@@ -1020,8 +1082,8 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 CustomerId = request.CustomerId,
                 VendorProductListingId = agg.ListingId,
                 CustomerAddressId = request.CustomerAddressId,
-                Quantity = line.Quantity,
-                RentalDays = orderType == "buy" ? 0 : line.RentalDays,
+                Quantity = effectiveLine.Quantity,
+                RentalDays = orderType == "buy" ? 0 : effectiveLine.RentalDays,
                 RentalPeriodUnit = orderType == "buy" ? RentalPeriod.Day : periodUnit,
                 OrderType = orderType,
                 DeliveryOption = deliveryOption,
@@ -1036,13 +1098,13 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 TotalAmount = total,
                 StartDate = start,
                 EndDate = end,
-                ProductVariantId = line.ProductVariantId,
+                ProductVariantId = effectiveLine.ProductVariantId,
                 PlacedByAdminId = request.PlacedByAdminId,
             };
 
-            if (line.DoctorId.HasValue)
+            if (effectiveLine.DoctorId.HasValue)
             {
-                var doctor = await customers.GetDoctorByIdAsync(line.DoctorId.Value, cancellationToken);
+                var doctor = await customers.GetDoctorByIdAsync(effectiveLine.DoctorId.Value, cancellationToken);
                 if (doctor is null || !doctor.IsActive)
                 {
                     failed.Add(new FailedCustomerOrderLineDto(
