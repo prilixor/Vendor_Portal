@@ -737,7 +737,14 @@ const ProductManagement = () => {
               <th className="px-4 py-3 font-semibold">Category</th>
               <th className="px-4 py-3 font-semibold">Brand</th>
               {activeTab === "equipment" && <th className="px-4 py-3 font-semibold">Model</th>}
-              <th className="px-4 py-3 font-semibold">{activeTab === "equipment" ? "Weekly" : "Buy Price"}</th>
+              {activeTab === "equipment" ? (
+                <>
+                  <th className="px-4 py-3 font-semibold text-right">Weekly</th>
+                  <th className="px-4 py-3 font-semibold text-right">Monthly</th>
+                </>
+              ) : (
+                <th className="px-4 py-3 font-semibold">Buy Price</th>
+              )}
               <th className="px-4 py-3 font-semibold">GST %</th>
               <th className="px-4 py-3 font-semibold">Status</th>
               <th className="px-4 py-3 font-semibold text-center">Favorites</th>
@@ -751,7 +758,14 @@ const ProductManagement = () => {
                 <td className="px-4 py-3 text-muted-foreground">{getCategoryName(p.categoryId)}</td>
                 <td className="px-4 py-3">{p.brandName || "-"}</td>
                 {activeTab === "equipment" && <td className="px-4 py-3">{p.modelName || "-"}</td>}
-                <td className="px-4 py-3">₹{(activeTab === "equipment" ? (p.weeklyRent ?? 0) : (p.buyPrice || 0)).toFixed(0)}</td>
+                {activeTab === "equipment" ? (
+                  <>
+                    <td className="px-4 py-3 text-right font-mono tabular-nums">₹{(p.weeklyRent ?? 0).toFixed(0)}</td>
+                    <td className="px-4 py-3 text-right font-mono tabular-nums">₹{(p.monthlyRent ?? 0).toFixed(0)}</td>
+                  </>
+                ) : (
+                  <td className="px-4 py-3">₹{(p.buyPrice || 0).toFixed(0)}</td>
+                )}
                 <td className="px-4 py-3">{p.gstPercent.toFixed(0)}%</td>
                 <td className="px-4 py-3">
                   <Switch

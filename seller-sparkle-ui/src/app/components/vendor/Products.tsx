@@ -1077,8 +1077,9 @@ const Products = () => {
                   </td>
                   <td className="px-3 py-3 text-muted-foreground sm:px-4">{p.category}</td>
                   {activeTab === "equipment" && (
-                    <td className="px-3 py-3 text-right font-mono sm:px-4">
-                      ₹{p.weeklyRent ?? 0}/w
+                    <td className="px-3 py-3 text-right sm:px-4">
+                      <div className="font-mono tabular-nums text-sm">₹{p.weeklyRent ?? 0}<span className="text-muted-foreground">/w</span></div>
+                      <div className="font-mono tabular-nums text-xs text-muted-foreground mt-0.5">₹{p.monthlyRent ?? 0}/mo</div>
                     </td>
                   )}
                   {activeTab === "chemical" && (
@@ -1206,7 +1207,8 @@ const Products = () => {
                     <>
                       <div className="min-w-0">
                         <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Rent (Admin)</dt>
-                        <dd className="font-mono tabular-nums">₹{p.weeklyRent ?? 0}/w</dd>
+                        <dd className="font-mono tabular-nums text-sm">₹{p.weeklyRent ?? 0}/w</dd>
+                        <dd className="font-mono tabular-nums text-xs text-muted-foreground">₹{p.monthlyRent ?? 0}/mo</dd>
                       </div>
                       <div className="min-w-0 text-right">
                         <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Deposit</dt>

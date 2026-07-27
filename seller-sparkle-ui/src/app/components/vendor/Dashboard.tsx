@@ -32,6 +32,7 @@ type TopListingRow = {
   title: string;
   category: string;
   weeklyRent: number;
+  monthlyRent: number;
   stock: number;
   status: VerificationStatus;
 };
@@ -180,6 +181,7 @@ const Dashboard = () => {
               title: l.listingTitle,
               category: categoryName,
               weeklyRent: product?.weeklyRent ?? l.weeklyRent ?? 0,
+              monthlyRent: product?.monthlyRent ?? l.monthlyRent ?? 0,
               stock: l.availableQuantity,
               status: normalizeListingStatus(l.listingStatus),
             };
@@ -510,7 +512,7 @@ const Dashboard = () => {
               <tr>
                 <th className="px-4 py-3 font-semibold">Product</th>
                 <th className="px-4 py-3 font-semibold">Category</th>
-                <th className="px-4 py-3 font-semibold text-right">Weekly</th>
+                <th className="px-4 py-3 font-semibold text-right">Rent</th>
                 <th className="px-4 py-3 font-semibold text-right">Stock</th>
               </tr>
             </thead>
@@ -519,7 +521,10 @@ const Dashboard = () => {
                 <tr key={p.id} className="align-middle">
                   <td className="px-4 py-3 font-medium">{p.title}</td>
                   <td className="px-4 py-3 text-muted-foreground">{p.category}</td>
-                  <td className="px-4 py-3 text-right font-mono">₹{p.weeklyRent}</td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="font-mono tabular-nums text-sm">₹{p.weeklyRent}<span className="text-muted-foreground">/w</span></div>
+                    <div className="font-mono tabular-nums text-xs text-muted-foreground">₹{p.monthlyRent}/mo</div>
+                  </td>
                   <td className="px-4 py-3 text-right">{p.stock}</td>
                 </tr>
               ))}
