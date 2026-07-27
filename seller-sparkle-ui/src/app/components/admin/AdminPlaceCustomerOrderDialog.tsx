@@ -12,6 +12,7 @@ import {
 } from "@/app/services/adminApi";
 import { customerApi, CustomerListingDetailApi, ProductVariantDto } from "@/app/services/customerApi";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { FilterCategoryList } from "@/app/components/shared/ProfessionalFilters";
 import {
   AlertCircle,
   ArrowLeft,
@@ -31,6 +32,9 @@ import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
 type Step = "search" | "configure" | "cart" | "success";
 type BrowseMode = "equipment" | "chemicals";
+
+/** Max listings loaded per browse request (Equipment or Chemicals tab). */
+const ADMIN_BROWSE_LISTING_LIMIT = 100;
 
 interface AdminCartLine {
   key: string;
@@ -313,7 +317,8 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
   const [addressId, setAddressId] = useState("");
   const [deliveryOption, setDeliveryOption] = useState("standard");
   const [saving, setSaving] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false);
   const [medicalRefs, setMedicalRefs] = useState<Record<string, MedicalRef>>({});
   const [placeErrors, setPlaceErrors] = useState<string[]>([]);
   const [placedOrders, setPlacedOrders] = useState<{ id: string; orderNumber: string; listingTitle?: string }[]>([]);
@@ -337,7 +342,8 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     setBrowseMode("equipment");
     setSearch("");
     setDebouncedSearch("");
-    setCategoryFilter("all");
+    setCategoryFilter(undefined);
+    setCategoriesExpanded(false);
     setCart([]);
     setSelected(null);
     setDetail(null);
@@ -365,7 +371,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
       try {
         const rows = await adminApi.searchOrderableListings(
           debouncedSearch || undefined,
-          40,
+          ADMIN_BROWSE_LISTING_LIMIT,
           browseMode === "chemicals",
         );
         if (!cancelled) setResults(rows);
@@ -406,7 +412,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
   const cartCount = useMemo(() => cart.reduce((sum, line) => sum + line.quantity, 0), [cart]);
 
   useEffect(() => {
-    setCategoryFilter("all");
+    setCategoryFilter(undefined);
   }, [browseMode, debouncedSearch]);
 
   const categories = useMemo(() => {
@@ -418,8 +424,20 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [results]);
 
+  const categoryCounts = useMemo(() => Object.fromEntries(categories), [categories]);
+  const categoryNames = useMemo(() => categories.map(([name]) => name), [categories]);
+  const singleCategoryLabel = categoryNames.length === 1 ? categoryNames[0] : undefined;
+
+  useEffect(() => {
+    if (debouncedSearch) {
+      setCategoriesExpanded(false);
+      return;
+    }
+    if (categoryNames.length > 5) setCategoriesExpanded(true);
+  }, [debouncedSearch, categoryNames.length]);
+
   const visibleResults = useMemo(() => {
-    if (categoryFilter === "all") return results;
+    if (!categoryFilter) return results;
     return results.filter((r) => (r.categoryName?.trim() || "General") === categoryFilter);
   }, [results, categoryFilter]);
 
@@ -745,37 +763,104 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                 />
               </div>
 
-              {categories.length > 1 && (
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setCategoryFilter("all")}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                      categoryFilter === "all"
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    All ({results.length})
-                  </button>
-                  {categories.map(([name, count]) => (
+              {!searching && results.length > 0 && categoryNames.length > 0 ? (
+                singleCategoryLabel ? (
+                  <p className="text-xs text-muted-foreground">
+                    Category:{" "}
+                    <span className="font-medium text-foreground">{singleCategoryLabel}</span> (
+                    {categoryCounts[singleCategoryLabel] ?? results.length})
+                  </p>
+                ) : categoryNames.length <= 5 ? (
+                  <div className="flex flex-wrap gap-1.5">
                     <button
-                      key={name}
                       type="button"
-                      onClick={() => setCategoryFilter(name)}
+                      onClick={() => setCategoryFilter(undefined)}
                       className={cn(
                         "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                        categoryFilter === name
+                        categoryFilter === undefined
                           ? "border-primary bg-primary/10 text-primary"
                           : "border-border text-muted-foreground hover:text-foreground",
                       )}
                     >
-                      {name} ({count})
+                      All ({results.length})
                     </button>
-                  ))}
-                </div>
-              )}
+                    {categories.map(([name, count]) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => setCategoryFilter(name)}
+                        className={cn(
+                          "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                          categoryFilter === name
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {name} ({count})
+                      </button>
+                    ))}
+                  </div>
+                ) : !categoriesExpanded ? (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-border/80 bg-muted/30 px-3 py-2">
+                    <p className="min-w-0 truncate text-xs text-muted-foreground">
+                      Category:{" "}
+                      <span className="font-medium text-foreground">
+                        {categoryFilter ?? "All categories"}
+                      </span>
+                      {" · "}
+                      {visibleResults.length} items
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 shrink-0 text-xs"
+                      onClick={() => setCategoriesExpanded(true)}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="overflow-hidden rounded-xl border border-border/80 bg-card">
+                    <div className="flex items-center justify-between border-b border-border/70 px-3 py-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Categories ({categoryNames.length})
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setCategoriesExpanded(false)}
+                      >
+                        Collapse
+                      </Button>
+                    </div>
+                    <FilterCategoryList
+                      options={categoryNames}
+                      counts={categoryCounts}
+                      allCount={results.length}
+                      value={categoryFilter}
+                      onChange={(name) => {
+                        setCategoryFilter(name);
+                        setCategoriesExpanded(false);
+                      }}
+                      active={open && step === "search"}
+                      compact
+                      searchThreshold={8}
+                      listClassName="max-h-[min(10rem,24vh)]"
+                    />
+                  </div>
+                )
+              ) : null}
+
+              {!searching && results.length >= ADMIN_BROWSE_LISTING_LIMIT ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Showing the first {ADMIN_BROWSE_LISTING_LIMIT}{" "}
+                  {browseMode === "chemicals" ? "chemical" : "equipment"} listings — use search or category to narrow
+                  further.
+                </p>
+              ) : null}
 
               {searching ? (
                 <div className="flex justify-center py-12">

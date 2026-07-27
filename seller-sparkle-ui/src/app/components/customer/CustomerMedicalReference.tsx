@@ -204,7 +204,7 @@ export function CustomerMedicalReference({ title, value, onChange }: CustomerMed
           </div>
           <FieldError message={error || undefined} />
           <p className="text-xs text-muted-foreground">
-            Ask your doctor for their Prilixor Unique ID, or scan their QR code to open the share page and copy it.
+            Ask your doctor for their BlinksMed Unique ID, or scan their QR code to open the share page and copy it.
           </p>
         </div>
       )}

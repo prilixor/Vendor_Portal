@@ -264,6 +264,10 @@ export function FilterSelectRow({ label, selected, onClick, count, showDivider }
 
 type FilterCategoryListProps = {
   options: string[];
+  /** Optional item counts per category name (e.g. Baby Care → 21). */
+  counts?: Record<string, number>;
+  /** Total count for the "All categories" row. */
+  allCount?: number;
   /** `undefined` means "All categories". */
   value: string | undefined;
   onChange: (value: string | undefined) => void;
@@ -275,6 +279,8 @@ type FilterCategoryListProps = {
   listClassName?: string;
   /** Reset internal search when this becomes false (e.g. sheet closed). */
   active?: boolean;
+  /** Fit list height to rows (no min-height filler). Use in modals with few categories. */
+  compact?: boolean;
 };
 
 /**
@@ -283,6 +289,8 @@ type FilterCategoryListProps = {
  */
 export function FilterCategoryList({
   options,
+  counts,
+  allCount,
   value,
   onChange,
   allLabel = "All categories",
@@ -290,6 +298,7 @@ export function FilterCategoryList({
   searchThreshold = 8,
   listClassName,
   active = true,
+  compact = false,
 }: FilterCategoryListProps) {
   const [query, setQuery] = useState("");
   const showSearch = options.length >= searchThreshold;
@@ -305,7 +314,7 @@ export function FilterCategoryList({
   }, [options, query]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className={cn("flex flex-col", !compact && "min-h-0 flex-1")}>
       {showSearch ? (
         <div className="shrink-0 border-b border-border/70 px-2.5 py-2">
           <div className="relative">
@@ -338,7 +347,8 @@ export function FilterCategoryList({
 
       <div
         className={cn(
-          "min-h-[8rem] flex-1 overflow-y-auto overscroll-contain",
+          "overflow-y-auto overscroll-contain",
+          !compact && "min-h-[8rem] flex-1",
           "[scrollbar-width:thin] [scrollbar-color:hsl(var(--muted-foreground)/0.35)_transparent]",
           "[&::-webkit-scrollbar]:w-1.5",
           "[&::-webkit-scrollbar-track]:bg-transparent",
@@ -352,6 +362,7 @@ export function FilterCategoryList({
             label={allLabel}
             selected={value === undefined}
             onClick={() => onChange(undefined)}
+            count={allCount}
           />
         ) : null}
 
@@ -364,6 +375,7 @@ export function FilterCategoryList({
               onChange(name);
               setQuery("");
             }}
+            count={counts?.[name]}
             showDivider={!query.trim() || index > 0}
           />
         ))}
@@ -394,7 +406,7 @@ type FilterTileGridProps = {
 /** Compact pill / segmented control — preferred for 3–5 stock options. */
 export function FilterTileGrid({ options, value, onChange, className }: FilterTileGridProps) {
   return (
-    <div className={cn("p-2.5", className)} role="radiogroup" aria-label="Availability">
+    <div className={cn("p-2.5", className)} role="radiogroup" aria-label="Stock">
       <div className="flex flex-wrap gap-1.5 rounded-lg bg-muted/60 p-1">
         {options.map((opt) => {
           const selected = value === opt.id;

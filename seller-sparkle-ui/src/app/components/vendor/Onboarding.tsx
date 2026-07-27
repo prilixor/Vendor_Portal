@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -25,8 +26,16 @@ import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { AdminCommentHint } from "@/app/components/shared/AdminCommentHint";
 import { OnboardingRejectedHelpBanner } from "@/app/components/shared/OnboardingRejectedHelpBanner";
+import { RequiredDocumentsChecklist } from "@/app/components/shared/RequiredDocumentsChecklist";
+import { DocumentUploadPanel } from "@/app/components/shared/DocumentUploadPanel";
+import {
+  buildDocumentChecklist,
+  getMissingDocumentTypes,
+  REQUIRED_DOCUMENT_TYPES,
+} from "@/app/helpers/vendorVerification";
 import { sanitizeAdminComment, buildVerificationSupportMessage } from "@/app/helpers/adminComment";
 import { useSupportChat } from "@/app/contexts/SupportChatContext";
+import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
 import { cn, toCamelCase } from "@/app/helpers/utils";
 
 const steps = [
@@ -63,6 +72,8 @@ const defaultBank: BankDetails = {
 
 const Onboarding = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { refresh: refreshVerification } = useVendorVerification();
   const { openSupportChat } = useSupportChat();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
@@ -434,6 +445,34 @@ const Onboarding = () => {
     void loadOnboardingData();
   }, [user]);
 
+  const syncVerificationState = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["vendor-verification"] }),
+      refreshVerification(),
+    ]);
+  }, [queryClient, refreshVerification]);
+
+  useEffect(() => {
+    const nextMissing = getMissingDocumentTypes(documents)[0];
+    if (nextMissing) {
+      setDocumentType(nextMissing);
+    }
+  }, [documents]);
+
+  const validateDocumentsForProgress = useCallback(() => {
+    const missing = getMissingDocumentTypes(documents);
+    const rejected = documents.filter((doc) => doc.status === "rejected");
+    if (missing.length > 0) {
+      toast.error(`Upload all required documents before continuing: ${missing.join(", ")}`);
+      return false;
+    }
+    if (rejected.length > 0) {
+      toast.error(`Re-upload rejected documents before continuing: ${rejected.map((doc) => doc.type).join(", ")}`);
+      return false;
+    }
+    return true;
+  }, [documents]);
+
   const handleFileUpload = async () => {
     if (!user) return;
     if (!selectedFile) {
@@ -463,6 +502,7 @@ const Onboarding = () => {
       // Reset file input value
       if (fileInputRef.current) fileInputRef.current.value = "";
       if (fileInputRefMobile.current) fileInputRefMobile.current.value = "";
+      await syncVerificationState();
       toast.success("Document uploaded. Awaiting verification.");
     } catch (error) {
       const message = getUserFriendlyMessage(error);
@@ -484,6 +524,7 @@ const Onboarding = () => {
       await vendorOnboardingApi.deleteVendorDocument(user.id, deleteDocConfirmId);
       const latestDocs = await vendorOnboardingApi.getVendorDocuments(user.id);
       setDocuments(mapDocuments(latestDocs));
+      await syncVerificationState();
       toast.success("Document deleted.");
       setDeleteDocConfirmId(null);
     } catch (error) {
@@ -579,6 +620,10 @@ const Onboarding = () => {
       }
     }
 
+    if (step === 2) {
+      if (!validateDocumentsForProgress()) return;
+    }
+
     if (step === 3) {
       // Validate required bank details fields
       if (!validateBankFields()) return;
@@ -611,6 +656,8 @@ const Onboarding = () => {
   const submit = async () => {
     if (!user) return;
 
+    if (!validateDocumentsForProgress()) return;
+
     // Validate bank details before final submission
     if (!validateBankFields()) return;
     if (!bank.bankName.trim()) { toast.error("Please enter a valid IFSC code to auto-fill bank name"); return; }
@@ -624,6 +671,7 @@ const Onboarding = () => {
       setSubmission(mapStatus(verification.reviewStatus));
       setHasSubmittedBefore(true);
       setViewMode("profile");
+      await syncVerificationState();
       toast.success("Application submitted! Our team will review within 24 hours.");
     } catch (error) {
       const message = getUserFriendlyMessage(error);
@@ -693,6 +741,18 @@ const Onboarding = () => {
   const rejectedDocuments = useMemo(
     () => documents.filter((doc) => doc.status === "rejected"),
     [documents],
+  );
+  const documentChecklist = useMemo(() => buildDocumentChecklist(documents), [documents]);
+  const missingDocuments = useMemo(() => getMissingDocumentTypes(documents), [documents]);
+  const uploadedDocumentTypes = useMemo(() => new Set(documents.map((doc) => doc.type)), [documents]);
+  const documentTypeOptions = useMemo(
+    () =>
+      REQUIRED_DOCUMENT_TYPES.map((type) => ({
+        value: type,
+        label: uploadedDocumentTypes.has(type) ? `${type} (uploaded)` : `${type} (required)`,
+        disabled: uploadedDocumentTypes.has(type),
+      })),
+    [uploadedDocumentTypes],
   );
   const hasRejectedVerificationItems = useMemo(
     () => rejectedDocuments.length > 0 || bank.status === "rejected",
@@ -997,38 +1057,18 @@ const Onboarding = () => {
             <TabsContent value="docs">
               <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
                 <h2 className="text-lg font-semibold mb-4">Documents</h2>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 gap-3 rounded-xl border border-border p-3 sm:grid-cols-3">
-                    <div className="space-y-1.5 min-w-0">
-                      <Label>Document type</Label>
-                      <Select value={documentType} onValueChange={setDocumentType}>
-                        <SelectTrigger className="h-10 w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent position="popper" className="max-w-[calc(100vw-2rem)]">
-                          {["GST Certificate", "PAN Card", "Trade License", "Address Proof", "Cancelled Cheque"].map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {type}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>File</Label>
-                      <Input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".pdf,.png,.jpg,.jpeg,.webp"
-                        onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-                      />
-                    </div>
-                    <div className="flex items-end">
-                      <Button onClick={handleFileUpload} variant="outline" className="w-full" disabled={busy}>
-                        <Upload className="mr-2 h-4 w-4" /> Upload document
-                      </Button>
-                    </div>
-                  </div>
+                <RequiredDocumentsChecklist items={documentChecklist} className="mb-4" />
+                <DocumentUploadPanel
+                  documentType={documentType}
+                  documentTypeOptions={documentTypeOptions}
+                  onDocumentTypeChange={setDocumentType}
+                  selectedFile={selectedFile}
+                  onFileSelect={setSelectedFile}
+                  onUpload={() => void handleFileUpload()}
+                  inputRef={fileInputRef}
+                  busy={busy}
+                />
+                <div className="space-y-3 mt-4">
                   {/* Mobile card view */}
                   <div className="block sm:hidden space-y-3">
                     {documents.map((doc) => (
@@ -1349,37 +1389,20 @@ const Onboarding = () => {
             )}
             <div className="space-y-3">
               <h2 className="text-lg font-semibold">Document verification</h2>
-              <div className="grid grid-cols-1 gap-3 rounded-xl border border-border p-3 sm:grid-cols-3">
-                <div className="space-y-1.5 min-w-0">
-                  <Label>Document type</Label>
-                  <Select value={documentType} onValueChange={setDocumentType}>
-                    <SelectTrigger className="h-10 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent position="popper" className="max-w-[calc(100vw-2rem)]">
-                      {["GST Certificate", "PAN Card", "Trade License", "Address Proof", "Cancelled Cheque"].map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>File</Label>
-                  <Input
-                    ref={fileInputRefMobile}
-                    type="file"
-                    accept=".pdf,.png,.jpg,.jpeg,.webp"
-                    onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-                  />
-                </div>
-                <div className="flex items-end">
-                  <Button onClick={handleFileUpload} variant="outline" className="w-full" disabled={busy}>
-                    <Upload className="mr-2 h-4 w-4" /> Upload document
-                  </Button>
-                </div>
-              </div>
+              <p className="text-sm text-muted-foreground">
+                Upload all five required documents. Each document is reviewed individually — you can see what is missing, pending, or rejected below.
+              </p>
+              <RequiredDocumentsChecklist items={documentChecklist} />
+              <DocumentUploadPanel
+                documentType={documentType}
+                documentTypeOptions={documentTypeOptions}
+                onDocumentTypeChange={setDocumentType}
+                selectedFile={selectedFile}
+                onFileSelect={setSelectedFile}
+                onUpload={() => void handleFileUpload()}
+                inputRef={fileInputRefMobile}
+                busy={busy}
+              />
             </div>
             {/* Mobile card view */}
             <div className="block sm:hidden space-y-3">

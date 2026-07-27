@@ -35,6 +35,7 @@ import VendorExpirations from "@/app/components/vendor/VendorExpirations";
 import Notifications from "@/app/components/vendor/Notifications";
 import Settings from "@/app/components/vendor/Settings";
 import VendorChats from "@/app/components/vendor/VendorChats";
+import { VendorOperationsGuard } from "@/app/components/vendor/VendorOperationsGuard";
 
 import AdminDashboard from "@/app/components/admin/AdminDashboard";
 import Verification from "@/app/components/admin/Verification";
@@ -112,12 +113,12 @@ const App = () => (
               {/* Temporarily disabled */}
               {/* <Route path="working-hours" element={<WorkingHours />} /> */}
               {/* <Route path="availability" element={<Availability />} /> */}
-              <Route path="products" element={<Products />} />
-              <Route path="inventory" element={<Inventory />} />
-              <Route path="order-requests" element={<VendorOrderRequests />} />
-              <Route path="orders" element={<VendorOrders />} />
-              <Route path="orders/:orderId" element={<VendorOrderDetail />} />
-              <Route path="expirations" element={<VendorExpirations />} />
+              <Route path="products" element={<VendorOperationsGuard><Products /></VendorOperationsGuard>} />
+              <Route path="inventory" element={<VendorOperationsGuard><Inventory /></VendorOperationsGuard>} />
+              <Route path="order-requests" element={<VendorOperationsGuard><VendorOrderRequests /></VendorOperationsGuard>} />
+              <Route path="orders" element={<VendorOperationsGuard><VendorOrders /></VendorOperationsGuard>} />
+              <Route path="orders/:orderId" element={<VendorOperationsGuard><VendorOrderDetail /></VendorOperationsGuard>} />
+              <Route path="expirations" element={<VendorOperationsGuard><VendorExpirations /></VendorOperationsGuard>} />
               <Route path="notifications" element={<Notifications />} />
               <Route path="settings" element={<Settings />} />
               <Route path="chats" element={<VendorChats />} />

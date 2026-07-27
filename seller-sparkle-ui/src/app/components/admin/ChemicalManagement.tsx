@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { TablePagination } from "@/app/components/shared/TablePagination";
+import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Textarea } from "@/app/components/ui/textarea";
 import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest } from "@/app/services/adminApi";
@@ -783,10 +784,7 @@ const ChemicalManagement = () => {
     }
   };
 
-  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const uploadExcelFile = async (file: File) => {
     try {
       setLoading(true);
       const result = await adminApi.uploadCatalogExcel(file, true);
@@ -1886,21 +1884,15 @@ const ChemicalManagement = () => {
 
                 {editingProduct ? (
                   <>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        disabled={uploadingImage || productImagesLoading}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          void handleProductImageUpload(file);
-                          e.currentTarget.value = "";
-                        }}
-                      />
-                      <span className="text-xs text-muted-foreground">
-                        Upload image
-                      </span>
-                    </div>
+                    <FileUploadZone
+                      accept="image/*"
+                      label="Upload image"
+                      hint="PNG, JPG, JPEG, WEBP"
+                      showPreview={false}
+                      loading={uploadingImage}
+                      disabled={uploadingImage || productImagesLoading}
+                      onFilesSelected={(files) => void handleProductImageUpload(files[0])}
+                    />
 
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">
                       <Input
@@ -2038,12 +2030,15 @@ const ChemicalManagement = () => {
               Upload an Excel file containing three sheets: "Categories", "Chemicals", and "Variants".<br />
               <strong>Need a template?</strong> Use the "Download Sample Excel" option above to get started.
             </p>
-            <input
-              ref={fileInputRef}
-              type="file"
+            <FileUploadZone
               accept=".xlsx,.xls"
-              onChange={handleExcelUpload}
-              className="w-full"
+              label="Excel file"
+              hint="XLSX or XLS format"
+              showPreview={false}
+              loading={loading}
+              disabled={loading}
+              inputRef={fileInputRef}
+              onFilesSelected={(files) => void uploadExcelFile(files[0])}
             />
           </div>
           <DialogFooter>

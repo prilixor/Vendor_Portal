@@ -1,15 +1,15 @@
 import { useState, useMemo } from "react";
 import { NavLink } from "@/app/components/shared/NavLink";
 import { useLocation, Link } from "react-router-dom";
-import { ChevronLeft, Sparkles, X } from "lucide-react";
+import { ChevronLeft, Lock, Sparkles, X } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
 import { NavSection } from "@/app/helpers/navigation";
 import { Badge } from "@/app/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { useAuth } from "@/app/guards/AuthContext";
 import { useCart } from "@/app/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
-import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { useNotificationContext } from "@/app/contexts/NotificationContext";
 
 interface SidebarProps {
@@ -132,41 +132,72 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
             <ul className="space-y-0.5">
               {section.items.map((item) => {
                 const active = isActive(item.to);
+                const disabled = !!item.disabled;
+
+                const linkContent = (
+                  <>
+                    <item.icon
+                      className={cn(
+                        "h-[18px] w-[18px] shrink-0 transition-colors",
+                        active && !disabled && "text-primary",
+                        disabled && "text-muted-foreground/70",
+                      )}
+                    />
+                    {!collapsed && (
+                      <>
+                        <span className="flex-1 truncate">{item.label}</span>
+                        {disabled && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />}
+                        {item.badge && (
+                          <Badge variant="secondary" className="h-5 bg-primary/10 px-1.5 text-[10px] text-primary">
+                            {item.badge}
+                          </Badge>
+                        )}
+                      </>
+                    )}
+                  </>
+                );
+
+                const className = cn(
+                  "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
+                  disabled
+                    ? "cursor-not-allowed text-muted-foreground/70"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  collapsed && "justify-center",
+                );
+
                 return (
                   <li key={item.to}>
-                    <NavLink
-                      to={item.to}
-                      end={
-                        item.to === "/vendor" ||
-                        item.to === "/admin" ||
-                        item.to === "/customer/dashboard" ||
-                        item.to === "/customer/shop"
-                      }
-                      onClick={() => onClose?.()}
-                      className={cn(
-                        "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
-                        "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        collapsed && "justify-center"
-                      )}
-                      activeClassName="!bg-sidebar-accent !text-sidebar-accent-foreground"
-                    >
-                      <item.icon
-                        className={cn(
-                          "h-[18px] w-[18px] shrink-0 transition-colors",
-                          active && "text-primary"
-                        )}
-                      />
-                      {!collapsed && (
-                        <>
-                          <span className="flex-1 truncate">{item.label}</span>
-                          {item.badge && (
-                            <Badge variant="secondary" className="h-5 bg-primary/10 px-1.5 text-[10px] text-primary">
-                              {item.badge}
-                            </Badge>
-                          )}
-                        </>
-                      )}
-                    </NavLink>
+                    {disabled ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className={className}
+                            aria-disabled="true"
+                            title={item.disabledReason}
+                          >
+                            {linkContent}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-xs">
+                          {item.disabledReason ?? "This section is currently unavailable."}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <NavLink
+                        to={item.to}
+                        end={
+                          item.to === "/vendor" ||
+                          item.to === "/admin" ||
+                          item.to === "/customer/dashboard" ||
+                          item.to === "/customer/shop"
+                        }
+                        onClick={() => onClose?.()}
+                        className={className}
+                        activeClassName="!bg-sidebar-accent !text-sidebar-accent-foreground"
+                      >
+                        {linkContent}
+                      </NavLink>
+                    )}
                   </li>
                 );
               })}

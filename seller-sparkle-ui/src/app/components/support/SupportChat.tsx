@@ -3,7 +3,9 @@ import { MessageCircle, X, Send, Loader2, Paperclip, Bot, User, FileText, Plus, 
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea";
+import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { Badge } from "@/app/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import { supportApi, SupportMessageDto, SupportTicketDto, AiChatResult } from "@/app/services/supportApi";
 import { useSupportChat } from "@/app/contexts/SupportChatContext";
 import { cn } from "@/app/helpers/utils";
@@ -56,9 +58,9 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
   const [aiThinking, setAiThinking] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [ticketStatus, setTicketStatus] = useState<string | null>(null);
+  const [attachOpen, setAttachOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load tickets when widget opens or ticket list view is shown
   useEffect(() => {
@@ -272,19 +274,14 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
     return hasEscalation && last?.senderType === "Vendor";
   }, [messages, aiThinking]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const uploadAttachment = async (file: File) => {
     try {
       const result = await supportApi.uploadFile(vendorId, file);
       const fileUrls = [result.fileUrl];
       await handleSendMessage(`📎 Attached: ${result.originalFileName}`, undefined, fileUrls);
+      setAttachOpen(false);
     } catch {
       toast.error("Failed to upload file.");
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
     }
   };
 
@@ -330,7 +327,7 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
               </div>
               <div>
                 <h3 className="font-bold text-sm leading-tight">
-                  {view === "tickets" ? "My Tickets" : "Prilixor Support"}
+                  {view === "tickets" ? "My Tickets" : "BlinksMed Support"}
                 </h3>
                 <p className="text-[10px] opacity-80 font-medium">We typically reply instantly</p>
               </div>
@@ -456,12 +453,12 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
                         <Bot className="h-4 w-4 text-primary" />
                       </div>
                       <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                        Prilixor Assistant
+                        BlinksMed Assistant
                       </span>
                     </div>
                     <div className="bg-card border border-primary/10 rounded-2xl rounded-tl-none px-5 py-3.5 text-sm shadow-sm max-w-[90%]">
                       <p className="font-medium text-foreground">
-                        👋 Hi! I'm <strong>Prilixor Support Assistant</strong>.
+                        👋 Hi! I'm <strong>BlinksMed Support Assistant</strong>.
                       </p>
                       <p className="text-muted-foreground mt-1">
                         How can I help you today? You can choose a topic below or just type your question.
@@ -575,23 +572,34 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
                   </div>
                 ) : (
                   <div className="flex items-end gap-2.5">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="mb-0.5 h-10 w-10 shrink-0 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/5"
-                      disabled={aiThinking}
-                    >
-                      <Paperclip className="h-4 w-4" />
-                    </Button>
+                    <Popover open={attachOpen} onOpenChange={setAttachOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="mb-0.5 h-10 w-10 shrink-0 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/5"
+                          disabled={aiThinking}
+                          aria-label="Attach file"
+                        >
+                          <Paperclip className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent side="top" align="start" className="w-[min(92vw,320px)] p-3">
+                        <FileUploadZone
+                          compact
+                          hideLabel
+                          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                          hint="Images, PDF, DOC, XLS, TXT"
+                          showPreview={false}
+                          disabled={aiThinking}
+                          onFilesSelected={(files) => void uploadAttachment(files[0])}
+                          dropTitle="Attach a file"
+                          dropDescription="Drag & drop or click to browse from your device"
+                          browseButtonLabel="Browse attachment"
+                        />
+                      </PopoverContent>
+                    </Popover>
                     <div className="flex min-w-0 flex-1 items-end gap-2 rounded-2xl border border-border bg-muted/30 px-3 py-2 focus-within:border-primary/30 focus-within:ring-2 focus-within:ring-primary/10">
                       <ChatMessageTextarea
                         placeholder="Type your question…"

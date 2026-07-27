@@ -100,17 +100,44 @@ export const vendorNav: NavSection[] = [
   },
 ];
 
-export const getVendorNav = (unreadCount: number): NavSection[] => {
-  return vendorNav.map(section => ({
+const VENDOR_OPERATIONS_LABELS = new Set([
+  "Products",
+  "Inventory",
+  "Order Requests",
+  "Orders",
+  "Expirations",
+]);
+
+export const getVendorNav = (
+  unreadCount: number,
+  options?: { operationsBlocked?: boolean; blockedReason?: string },
+): NavSection[] => {
+  const operationsBlocked = options?.operationsBlocked ?? false;
+  const blockedReason =
+    options?.blockedReason ??
+    "Complete document verification to unlock catalog and order management.";
+
+  return vendorNav.map((section) => ({
     ...section,
-    items: section.items.map(item => {
+    items: section.items.map((item) => {
+      let nextItem = { ...item };
+
       if (item.label === "Notifications" && unreadCount > 0) {
-        return {
-          ...item,
+        nextItem = {
+          ...nextItem,
           badge: unreadCount.toString(),
         };
       }
-      return item;
+
+      if (operationsBlocked && VENDOR_OPERATIONS_LABELS.has(item.label)) {
+        nextItem = {
+          ...nextItem,
+          disabled: true,
+          disabledReason: blockedReason,
+        };
+      }
+
+      return nextItem;
     }),
   }));
 };

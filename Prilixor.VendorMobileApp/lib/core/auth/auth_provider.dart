@@ -5,6 +5,7 @@ import 'package:jwt_decoder/jwt_decoder.dart';
 
 import '../api/api_client.dart';
 import '../storage/secure_storage.dart';
+import 'vendor_auth_storage.dart';
 
 class AuthProvider extends ChangeNotifier {
   final ApiClient _apiClient = ApiClient();
@@ -61,12 +62,17 @@ class AuthProvider extends ChangeNotifier {
     _isBootstrapping = true;
     notifyListeners();
     try {
-      final token = await _storage.read(key: 'jwt_token').timeout(
+      final token = await _storage.read(key: VendorAuthStorage.jwtToken).timeout(
             const Duration(seconds: 4),
             onTimeout: () => null,
           );
       if (token == null || token.trim().isEmpty) {
         _isAuthenticated = false;
+        return false;
+      }
+
+      if (!_tokenIsVendorRole(token)) {
+        await logout();
         return false;
       }
 
@@ -76,7 +82,7 @@ class AuthProvider extends ChangeNotifier {
         return true;
       }
 
-      final refresh = await _storage.read(key: 'refresh_token').timeout(
+      final refresh = await _storage.read(key: VendorAuthStorage.refreshToken).timeout(
             const Duration(seconds: 4),
             onTimeout: () => null,
           );
@@ -109,9 +115,9 @@ class AuthProvider extends ChangeNotifier {
           final newToken = data['token']?.toString();
           final newRefresh = data['refreshToken']?.toString();
           if (newToken != null && newToken.isNotEmpty) {
-            await _storage.write(key: 'jwt_token', value: newToken);
+            await _storage.write(key: VendorAuthStorage.jwtToken, value: newToken);
             if (newRefresh != null && newRefresh.isNotEmpty) {
-              await _storage.write(key: 'refresh_token', value: newRefresh);
+              await _storage.write(key: VendorAuthStorage.refreshToken, value: newRefresh);
             }
             await _hydrateUserFromStorageOrJwt(newToken);
             _isAuthenticated = true;
@@ -163,9 +169,16 @@ class AuthProvider extends ChangeNotifier {
           return false;
         }
 
-        await _storage.write(key: 'jwt_token', value: token);
+        if (!_tokenIsVendorRole(token)) {
+          _errorMessage = 'This account is not a vendor. Use the customer app to sign in.';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+
+        await _storage.write(key: VendorAuthStorage.jwtToken, value: token);
         if (refreshToken != null && refreshToken.isNotEmpty) {
-          await _storage.write(key: 'refresh_token', value: refreshToken);
+          await _storage.write(key: VendorAuthStorage.refreshToken, value: refreshToken);
         }
 
         final id = user?['id']?.toString();
@@ -213,8 +226,8 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await _storage.delete(key: 'jwt_token');
-    await _storage.delete(key: 'refresh_token');
+    await _storage.delete(key: VendorAuthStorage.jwtToken);
+    await _storage.delete(key: VendorAuthStorage.refreshToken);
     await _storage.delete(key: _kVendorId);
     await _storage.delete(key: _kVendorEmail);
     await _storage.delete(key: _kVendorName);
@@ -425,6 +438,20 @@ class AuthProvider extends ChangeNotifier {
       if (value != null && value.isNotEmpty) return value;
     }
     return null;
+  }
+
+  bool _tokenIsVendorRole(String token) {
+    try {
+      final decoded = JwtDecoder.decode(token);
+      final role = _firstClaim(decoded, const [
+        'http://schemas.microsoft.com/ws/2008/06/identity/claims/role',
+        'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role',
+        'role',
+      ])?.trim().toLowerCase();
+      return role == 'vendor';
+    } catch (_) {
+      return false;
+    }
   }
 
   String _extractApiMessage(DioException e, {required String fallback}) {

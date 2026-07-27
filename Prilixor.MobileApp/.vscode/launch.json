@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Prilixor Mobile (Chrome)",
+      "name": "BlinksMed Mobile (Chrome)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
@@ -12,7 +12,7 @@
       ]
     },
     {
-      "name": "Prilixor Mobile (Web Server)",
+      "name": "BlinksMed Mobile (Web Server)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",

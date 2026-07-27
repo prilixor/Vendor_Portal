@@ -20,17 +20,6 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      if (!auth.isAuthenticated) return;
-      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications(silent: true);
-      Provider.of<OrderProvider>(context, listen: false).fetchOrders(silent: true);
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     final provider = Provider.of<NotificationProvider>(context);

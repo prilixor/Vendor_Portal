@@ -25,7 +25,13 @@ import {
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-type AvailabilityFilter = "all" | "available" | "low_stock" | "out_of_stock";
+/** Filters by inventory level on active listings (not listing active/inactive). */
+type StockFilter = "all" | "low_stock" | "out_of_stock";
+
+function isActiveCatalogListing(listingStatus: string): boolean {
+  const status = listingStatus.trim().toLowerCase();
+  return status === "active" || status === "approved";
+}
 
 export function availabilityBadge(
   status: string,
@@ -104,13 +110,13 @@ const CustomerBrowse = () => {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState<string | undefined>(undefined);
   const [appliedCat, setAppliedCat] = useState<string | undefined>(undefined);
-  const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>("all");
+  const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
   const [browseMode, setBrowseMode] = useState<"equipment" | "chemicals">("equipment");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftCategory, setDraftCategory] = useState<string | undefined>(undefined);
-  const [draftAvailability, setDraftAvailability] = useState<AvailabilityFilter>("all");
+  const [draftStock, setDraftStock] = useState<StockFilter>("all");
   const [draftFavorites, setDraftFavorites] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -181,8 +187,8 @@ const CustomerBrowse = () => {
   });
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["customer-catalog", appliedCat, debouncedSearch],
-    queryFn: () => customerApi.getCatalogListings(appliedCat, debouncedSearch),
+    queryKey: ["customer-catalog", debouncedSearch],
+    queryFn: () => customerApi.getCatalogListings(undefined, debouncedSearch),
   });
 
   const { data: addresses = [], isLoading: addressesLoading } = useQuery({
@@ -213,28 +219,43 @@ const CustomerBrowse = () => {
     );
     return ["All", ...modeCategories.map((c) => c.categoryName)];
   }, [categories, browseMode]);
-  const availabilityPills: Array<{ id: AvailabilityFilter; label: string }> = [
+  const stockPills: Array<{ id: StockFilter; label: string }> = [
     { id: "all", label: "All stock" },
-    { id: "available", label: "Available" },
     { id: "low_stock", label: "Low stock" },
     { id: "out_of_stock", label: "Out of stock" },
   ];
-  const filteredData = useMemo(() => {
+  /** Active listings for the current tab (+ stock/favorites); category applied separately for the grid. */
+  const catalogBeforeCategory = useMemo(() => {
     if (!data) return [];
-    let result = data;
+    let result = data.filter((item) => isActiveCatalogListing(item.listingStatus));
     if (browseMode === "equipment") {
       result = result.filter((item) => item.baseUnit == null);
     } else {
       result = result.filter((item) => item.baseUnit != null);
     }
-    if (availabilityFilter !== "all") {
-      result = result.filter((item) => item.availabilityStatus.toLowerCase() === availabilityFilter);
+    if (stockFilter !== "all") {
+      result = result.filter((item) => item.availabilityStatus.toLowerCase() === stockFilter);
     }
     if (showFavoritesOnly) {
       result = result.filter((item) => wishlist.has(item.id));
     }
     return result;
-  }, [data, availabilityFilter, showFavoritesOnly, wishlist, browseMode]);
+  }, [data, stockFilter, showFavoritesOnly, wishlist, browseMode]);
+
+  const categoryItemCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const item of catalogBeforeCategory) {
+      const name = item.categoryName?.trim();
+      if (!name) continue;
+      counts[name] = (counts[name] ?? 0) + 1;
+    }
+    return counts;
+  }, [catalogBeforeCategory]);
+
+  const filteredData = useMemo(() => {
+    if (!appliedCat) return catalogBeforeCategory;
+    return catalogBeforeCategory.filter((item) => item.categoryName === appliedCat);
+  }, [catalogBeforeCategory, appliedCat]);
 
   // Drop category selection when switching tabs if it doesn't belong to the new mode.
   useEffect(() => {
@@ -264,31 +285,31 @@ const CustomerBrowse = () => {
 
   const openFilters = () => {
     setDraftCategory(appliedCat);
-    setDraftAvailability(availabilityFilter);
+    setDraftStock(stockFilter);
     setDraftFavorites(showFavoritesOnly);
     setFiltersOpen(true);
   };
 
   const applyFilters = () => {
     setAppliedCat(draftCategory);
-    setAvailabilityFilter(draftAvailability);
+    setStockFilter(draftStock);
     setShowFavoritesOnly(draftFavorites);
   };
 
   const resetDraftFilters = () => {
     setDraftCategory(undefined);
-    setDraftAvailability("all");
+    setDraftStock("all");
     setDraftFavorites(false);
   };
 
   const clearAllFilters = () => {
     setAppliedCat(undefined);
-    setAvailabilityFilter("all");
+    setStockFilter("all");
     setShowFavoritesOnly(false);
   };
 
   const activeFilterCount =
-    (appliedCat ? 1 : 0) + (availabilityFilter !== "all" ? 1 : 0) + (showFavoritesOnly ? 1 : 0);
+    (appliedCat ? 1 : 0) + (stockFilter !== "all" ? 1 : 0) + (showFavoritesOnly ? 1 : 0);
 
   const activeChips: ActiveFilterChip[] = [];
   if (appliedCat) {
@@ -298,12 +319,12 @@ const CustomerBrowse = () => {
       onClear: () => setAppliedCat(undefined),
     });
   }
-  if (availabilityFilter !== "all") {
-    const label = availabilityPills.find((p) => p.id === availabilityFilter)?.label ?? availabilityFilter;
+  if (stockFilter !== "all") {
+    const label = stockPills.find((p) => p.id === stockFilter)?.label ?? stockFilter;
     activeChips.push({
-      key: "availability",
+      key: "stock",
       label,
-      onClear: () => setAvailabilityFilter("all"),
+      onClear: () => setStockFilter("all"),
     });
   }
   if (showFavoritesOnly) {
@@ -400,23 +421,22 @@ const CustomerBrowse = () => {
         open={filtersOpen}
         onOpenChange={setFiltersOpen}
         title="Filters"
-        description="Narrow by category, stock, and saved items."
+        description="Filter by stock level, category, and saved items. Only active listings are shown."
         onReset={resetDraftFilters}
         resetLabel="Clear all"
         onApply={applyFilters}
         applyLabel={
-          (draftCategory ? 1 : 0) + (draftAvailability !== "all" ? 1 : 0) + (draftFavorites ? 1 : 0) > 0
-            ? `Show results (${(draftCategory ? 1 : 0) + (draftAvailability !== "all" ? 1 : 0) + (draftFavorites ? 1 : 0)})`
+          (draftCategory ? 1 : 0) + (draftStock !== "all" ? 1 : 0) + (draftFavorites ? 1 : 0) > 0
+            ? `Show results (${(draftCategory ? 1 : 0) + (draftStock !== "all" ? 1 : 0) + (draftFavorites ? 1 : 0)})`
             : "Show results"
         }
       >
         <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden">
-          {/* Compact filters first so they stay visible with long category lists */}
-          <FilterSection title="Availability" className="shrink-0">
+          <FilterSection title="Stock" className="shrink-0">
             <FilterTileGrid
-              options={availabilityPills}
-              value={draftAvailability}
-              onChange={(id) => setDraftAvailability(id as AvailabilityFilter)}
+              options={stockPills}
+              value={draftStock}
+              onChange={(id) => setDraftStock(id as StockFilter)}
             />
           </FilterSection>
 
@@ -441,7 +461,7 @@ const CustomerBrowse = () => {
 
           <FilterSection
             title="Category"
-            hint={catLoading ? undefined : `${modeCategoryNames.length}`}
+            hint={catLoading ? undefined : `${modeCategoryNames.length} categories`}
             fill
             className="min-h-0"
           >
@@ -454,6 +474,8 @@ const CustomerBrowse = () => {
             ) : (
               <FilterCategoryList
                 options={modeCategoryNames}
+                counts={categoryItemCounts}
+                allCount={catalogBeforeCategory.length}
                 value={draftCategory}
                 onChange={setDraftCategory}
                 active={filtersOpen}

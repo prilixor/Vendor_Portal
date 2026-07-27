@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import '../api/api_client.dart';
 import '../models/order_model.dart';
 import '../models/expiring_order_model.dart';
@@ -28,6 +28,12 @@ class OrderProvider extends ChangeNotifier {
   DateTime? _lastFetchedAt;
   DateTime? get lastFetchedAt => _lastFetchedAt;
 
+  /// Prevents stampede from dashboard + IndexedStack tab inits + polling.
+  Future<void>? _inFlightOrders;
+  DateTime? _lastSilentAttemptAt;
+
+  static const _silentCooldown = Duration(seconds: 8);
+
   int get activeRentalsCount => _orders.where((o) => o.status.toLowerCase() == 'active').length;
   double get activeRentalsTotal =>
       _orders.where((o) => o.status.toLowerCase() == 'active').fold(0, (sum, item) => sum + item.totalAmount);
@@ -38,11 +44,35 @@ class OrderProvider extends ChangeNotifier {
       }).length;
 
   Future<void> fetchOrders({bool silent = false}) async {
+    // Match web React Query: coalesce concurrent reads; skip noisy silent polls.
+    if (_inFlightOrders != null) return _inFlightOrders!;
+    if (silent &&
+        _orders.isNotEmpty &&
+        _lastSilentAttemptAt != null &&
+        DateTime.now().difference(_lastSilentAttemptAt!) < _silentCooldown) {
+      return;
+    }
+
+    final future = _doFetchOrders(silent: silent);
+    _inFlightOrders = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_inFlightOrders, future)) {
+        _inFlightOrders = null;
+      }
+    }
+  }
+
+  Future<void> _doFetchOrders({required bool silent}) async {
     final showLoading = !silent || _orders.isEmpty;
     if (showLoading) {
       _isLoading = true;
       _errorMessage = null;
       notifyListeners();
+    }
+    if (silent) {
+      _lastSilentAttemptAt = DateTime.now();
     }
 
     try {
@@ -50,6 +80,10 @@ class OrderProvider extends ChangeNotifier {
         '/customers/me/orders',
         queryParameters: {'_': DateTime.now().millisecondsSinceEpoch},
         options: Options(
+          // Heavy join endpoint — allow more time than default so Dio does not
+          // abort mid-query (API then surfaces OperationCanceledException).
+          sendTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 60),
           headers: const {
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache',
@@ -63,6 +97,13 @@ class OrderProvider extends ChangeNotifier {
         _errorMessage = null;
       }
     } on DioException catch (e) {
+      // Client abort / timeout is expected during rebuilds; don't wipe UI.
+      if (e.type == DioExceptionType.cancel ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        return;
+      }
       if (_orders.isEmpty) {
         if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
           _errorMessage = 'auth_required';
@@ -96,6 +137,8 @@ class OrderProvider extends ChangeNotifier {
           '_': DateTime.now().millisecondsSinceEpoch,
         },
         options: Options(
+          sendTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 60),
           headers: const {
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache',
@@ -108,6 +151,12 @@ class OrderProvider extends ChangeNotifier {
         _expirationsError = null;
       }
     } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        return;
+      }
       if (_expirations.isEmpty) {
         _expirationsError = 'Failed to load expirations: ${e.message}';
       }

@@ -19,8 +19,8 @@ class ApiClient {
   final List<Completer<String?>> _refreshWaiters = [];
 
   // Production API from [AppUrls]. Local override (when API runs on your machine):
-  final String baseUrl = "https://localhost:5001/api";
-  //final String baseUrl = AppUrls.apiBaseUrl;
+  //final String baseUrl = "https://localhost:5001/api";
+  final String baseUrl = AppUrls.apiBaseUrl;
 
   /// Customer portal web UI (terms, privacy) — root host, not api host.
   String get portalWebBaseUrl => AppUrls.portalWebBaseUrl;
@@ -29,8 +29,8 @@ class ApiClient {
     dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 20),
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 45),
         headers: {'Accept': 'application/json'},
       ),
     );
@@ -107,8 +107,8 @@ class ApiClient {
       final refreshDio = Dio(
         BaseOptions(
           baseUrl: baseUrl,
-          connectTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 15),
+          connectTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 30),
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',

@@ -40,7 +40,7 @@ export async function downloadDoctorQrCard(options: {
 
   ctx.fillStyle = "rgba(204, 251, 241, 0.92)";
   ctx.font = "700 18px Arial, Helvetica, sans-serif";
-  ctx.fillText("PRILIXOR", cardX + 40, cardY + 48);
+  ctx.fillText("BLINKSMED", cardX + 40, cardY + 48);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "700 36px Arial, Helvetica, sans-serif";
@@ -87,14 +87,14 @@ export async function downloadDoctorQrCard(options: {
   ctx.fillStyle = "#475569";
   ctx.font = "500 18px Arial, Helvetica, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("Scan to open doctor profile on Prilixor", W / 2, qrY + qrSize + 56);
+  ctx.fillText("Scan to open doctor profile on BlinksMed", W / 2, qrY + qrSize + 56);
   ctx.fillStyle = "#94a3b8";
   ctx.font = "500 14px Arial, Helvetica, sans-serif";
   ctx.fillText("Patients use this Unique ID at checkout (optional)", W / 2, qrY + qrSize + 84);
 
   ctx.fillStyle = "rgba(153, 246, 225, 0.55)";
   ctx.font = "600 13px Arial, Helvetica, sans-serif";
-  ctx.fillText("prilixor · medical equipment rentals", W / 2, H - 28);
+  ctx.fillText("blinksmed · medical equipment rentals", W / 2, H - 28);
   ctx.textAlign = "left";
 
   const blob = await new Promise<Blob>((resolve, reject) => {

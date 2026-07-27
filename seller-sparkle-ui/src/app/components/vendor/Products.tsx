@@ -19,6 +19,9 @@ import { ProductListing } from "@/app/models";
 import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText, Loader2, Package, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
+import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
+import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
+import { TypedFileUploadPanel } from "@/app/components/shared/TypedFileUploadPanel";
 import { apiClient } from "@/app/services/apiClient";
 import { vendorOnboardingApi, VendorFileFolderType, VendorVariantInventoryDto } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
@@ -185,7 +188,6 @@ const Products = () => {
   const [deleteDocConfirmId, setDeleteDocConfirmId] = useState<string | null>(null);
   const [deleteImageConfirmId, setDeleteImageConfirmId] = useState<string | null>(null);
   const [previewDocument, setPreviewDocument] = useState<{ id: string; type: string; url: string } | null>(null);
-  const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   // Variant-level stock for the chemical listing currently being edited
   const [variantStocks, setVariantStocks] = useState<Record<string, number>>({});
@@ -282,17 +284,8 @@ const Products = () => {
     }
   };
 
-  useEffect(() => {
-    if (user) {
-      vendorOnboardingApi.getVendorStatus(user.id).then(status => {
-        setAccountStatus(status.accountStatus);
-      }).catch(() => {
-        setAccountStatus(null);
-      });
-    }
-  }, [user]);
-
-  const isPending = accountStatus === "pending";
+  const { operationsBlocked } = useVendorVerification();
+  const isPending = operationsBlocked;
   const [statusConfirmId, setStatusConfirmId] = useState<string | null>(null);
   const [statusConfirmAction, setStatusConfirmAction] = useState<'activate' | 'deactivate' | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -800,13 +793,14 @@ const Products = () => {
     }
   };
 
-  const addImg = async (files: FileList | null) => {
+  const addImg = async (files: FileList | File[] | null) => {
     if (!user || !mediaFor) return;
-    if (!files || files.length === 0) return;
+    const fileList = files ? (Array.isArray(files) ? files : Array.from(files)) : [];
+    if (fileList.length === 0) return;
     try {
       setBusy(true);
       const uploaded = await Promise.all(
-        Array.from(files).map(async (file) => {
+        fileList.map(async (file) => {
           const fileResult = await vendorOnboardingApi.uploadVendorFile(user.id, file, VendorFileFolderType.ProductImages);
           return {
             id: `temp-${Date.now()}-${file.name}`,
@@ -1635,18 +1629,15 @@ const Products = () => {
               </TabsList>
 
               <TabsContent value="images" className="space-y-4">
-                <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={busy} className="w-full sm:w-auto">
-                  <Upload className="mr-2 h-4 w-4" /> Upload images
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
+                <FileUploadZone
                   multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    void addImg(e.target.files);
-                  }}
+                  accept="image/*"
+                  label="Product images"
+                  hint="PNG, JPG, JPEG, WEBP · You can select multiple files"
+                  showPreview={false}
+                  disabled={busy}
+                  loading={busy}
+                  onFilesSelected={(files) => void addImg(files)}
                 />
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                   {tempImages.map((img, idx) => (
@@ -1692,131 +1683,24 @@ const Products = () => {
                 <div className="rounded-lg border border-border p-4">
                   <h3 className="mb-4 font-medium">Listing documents</h3>
                   
-                  {/* Upload Section */}
-                  <div className="space-y-4">
-                    {/* Desktop Layout */}
-                    <div className="hidden sm:block">
-                      <div className="grid grid-cols-12 gap-4 items-end">
-                        {/* Document Type */}
-                        <div className="col-span-3">
-                          <label className="text-sm font-medium text-foreground mb-2 block">Document Type</label>
-                          <Select value={docType} onValueChange={setDocType}>
-                            <SelectTrigger className="h-10">
-                              <SelectValue placeholder="Select type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="spec_sheet">Spec Sheet</SelectItem>
-                              <SelectItem value="warranty">Warranty</SelectItem>
-                              <SelectItem value="compliance">Compliance</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        {/* File Upload */}
-                        <div className="col-span-6">
-                          <label className="text-sm font-medium text-foreground mb-2 block">Choose File</label>
-                          <div className="relative">
-                            <Input
-                              ref={docFileInputRef}
-                              type="file"
-                              accept=".pdf,.png,.jpg,.jpeg,.webp"
-                              onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
-                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                            />
-                            <div className="flex items-center h-10 px-3 py-2 border border-border rounded-md bg-background text-sm shadow-sm">
-                              <Upload className="mr-2 h-4 w-4 text-muted-foreground flex-shrink-0" />
-                              <span className="text-muted-foreground flex-1 truncate">
-                                {docFile ? docFile.name : "Choose file"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Upload Button */}
-                        <div className="col-span-3">
-                          <Button 
-                            onClick={() => void uploadListingDoc()} 
-                            disabled={busy || !docFile} 
-                            className="w-full h-10"
-                          >
-                            <Upload className="h-4 w-4" />
-                            Upload
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Mobile Layout */}
-                    <div className="sm:hidden space-y-4">
-                      {/* Document Type */}
-                      <div>
-                        <label className="text-sm font-medium text-foreground mb-2 block">Document Type</label>
-                        <Select value={docType} onValueChange={setDocType}>
-                          <SelectTrigger className="h-10">
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="spec_sheet">Spec Sheet</SelectItem>
-                            <SelectItem value="warranty">Warranty</SelectItem>
-                            <SelectItem value="compliance">Compliance</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      {/* File Upload */}
-                      <div>
-                        <label className="text-sm font-medium text-foreground mb-2 block">Choose File</label>
-                        <div className="relative">
-                          <Input
-                            ref={docFileInputRef}
-                            type="file"
-                            accept=".pdf,.png,.jpg,.jpeg,.webp"
-                            onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                          />
-                          <div className="flex items-center h-10 px-3 py-2 border border-border rounded-md bg-background text-sm shadow-sm">
-                            <Upload className="mr-2 h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <span className="text-muted-foreground flex-1 truncate">
-                              {docFile ? docFile.name : "Choose file"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Upload Button */}
-                      <Button 
-                        onClick={() => void uploadListingDoc()} 
-                        disabled={busy || !docFile} 
-                        className="w-full h-10"
-                      >
-                        <Upload className="h-4 w-4" />
-                        Upload
-                      </Button>
-                    </div>
-                    
-                    {/* File Info Display */}
-                    {docFile && (
-                      <div className="rounded-md bg-muted/30 p-3 border border-border/50">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium truncate">{docFile.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                Size: {(docFile.size / 1024 / 1024).toFixed(2)} MB
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => setDocFile(null)}
-                            className="text-muted-foreground hover:text-foreground ml-2"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <TypedFileUploadPanel
+                    title="Add listing document"
+                    description="Choose the document type, then browse or drag a file into the upload area."
+                    typeLabel="Document type"
+                    typeValue={docType}
+                    typeOptions={[
+                      { value: "spec_sheet", label: "Spec Sheet" },
+                      { value: "warranty", label: "Warranty" },
+                      { value: "compliance", label: "Compliance" },
+                    ]}
+                    onTypeChange={setDocType}
+                    selectedFile={docFile}
+                    onFileSelect={setDocFile}
+                    onUpload={() => void uploadListingDoc()}
+                    inputRef={docFileInputRef}
+                    busy={busy}
+                    uploadButtonLabel="Upload document"
+                  />
 
                   {/* Documents List */}
                   <div className="mt-6">

@@ -33,17 +33,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
   ];
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      if (auth.isAuthenticated) {
-        Provider.of<OrderProvider>(context, listen: false).fetchOrders(silent: true);
-      }
-    });
-  }
-
-  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();

@@ -6,7 +6,7 @@ import '../../features/support/support_chat_screen.dart';
 ///
 /// Shown only on the Home tab (see [VendorDashboard]) so list screens
 /// (Alerts, Orders, Requests) stay unobstructed. Full access remains under
-/// Profile → Prilixor Support.
+/// Profile → BlinksMed Support.
 class SupportFab extends StatelessWidget {
   const SupportFab({super.key});
 
@@ -21,7 +21,7 @@ class SupportFab extends StatelessWidget {
           );
         },
         backgroundColor: const Color(0xFF6C63FF),
-        tooltip: 'Prilixor Support',
+        tooltip: 'BlinksMed Support',
         child: Stack(
           alignment: Alignment.center,
           children: [

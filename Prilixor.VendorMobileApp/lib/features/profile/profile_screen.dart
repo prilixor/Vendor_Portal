@@ -146,7 +146,7 @@ class ProfileScreen extends StatelessWidget {
           ),
           _MenuTile(
             icon: Icons.support_agent_rounded,
-            title: 'Prilixor Support',
+            title: 'BlinksMed Support',
             subtitle: supportUnread > 0
                 ? '$supportUnread new support ${supportUnread == 1 ? 'reply' : 'replies'}'
                 : 'AI help & admin tickets',

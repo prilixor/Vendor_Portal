@@ -64,7 +64,7 @@ const ContactUs = () => {
             <h3 className="text-lg lg:text-xl font-bold mb-1 lg:mb-2">Email Support</h3>
             <p className="text-xs lg:text-sm text-muted-foreground mb-4 lg:mb-6">Average response: 24h</p>
             <span className="text-base lg:text-lg font-bold text-primary transition-all">
-              support@prilixor.com
+              support@blinksmed.com
             </span>
           </div>
 
@@ -122,7 +122,7 @@ const ContactUs = () => {
 
         <footer className="mt-12 lg:mt-20 pt-6 lg:pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 lg:gap-6 pb-8 lg:pb-12">
           <p className="text-[12px] lg:text-[13px] text-muted-foreground font-semibold order-2 sm:order-1">
-            © 2026 Prilixor Vendor Portal.
+            © 2026 BlinksMed Vendor Portal.
           </p>
           <div className="flex items-center gap-6 lg:gap-8 order-1 sm:order-2">
              <Link to="/terms-and-conditions" className="text-[12px] lg:text-[13px] font-bold text-muted-foreground/80 hover:text-primary transition-colors">Terms</Link>

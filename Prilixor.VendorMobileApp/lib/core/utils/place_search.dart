@@ -39,7 +39,7 @@ class ReverseGeocodeResult {
 /// Photon first, then Nominatim nearby + global — mirrors seller-sparkle-ui MapPicker.
 class PlaceSearch {
   PlaceSearch({
-    this.userAgent = 'PrilixorVendor/1.0 (com.prilixor.vendor; support@prilixor.com)',
+    this.userAgent = 'BlinksMedVendor/1.0 (com.prilixor.vendor; support@blinksmed.com)',
   }) : _dio = Dio(
           BaseOptions(
             connectTimeout: const Duration(seconds: 12),

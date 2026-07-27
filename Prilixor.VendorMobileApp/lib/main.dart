@@ -75,7 +75,7 @@ class PrilixorVendorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Prilixor Vendor',
+      title: 'BlinksMed Vendor',
       theme: AppTheme.darkTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.dark,
@@ -158,14 +158,20 @@ class WelcomeScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(
-                  Icons.storefront_rounded,
-                  size: 100,
-                  color: colors.accent,
+                Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Image.asset(
+                      'assets/branding/app_icon.png',
+                      width: 112,
+                      height: 112,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 32),
                 Text(
-                  'Prilixor Vendor',
+                  'BlinksMed Vendor',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 32,

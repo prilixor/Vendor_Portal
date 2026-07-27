@@ -6,7 +6,7 @@ class SupportScreen extends StatelessWidget {
 
   const SupportScreen({super.key, this.orderRef});
 
-  static const _supportEmail = 'support@prilixor.com';
+  static const _supportEmail = 'support@blinksmed.com';
 
   Future<void> _copyEmail(BuildContext context) async {
     await Clipboard.setData(const ClipboardData(text: _supportEmail));

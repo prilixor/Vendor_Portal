@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import type { VerificationStatus } from "@/app/models";
 import { getVendorRoute } from "@/app/helpers/vendorNav";
 import { notificationDisplayMessage } from "@/app/helpers/adminComment";
+import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
 
 type DashboardNotification = {
   id: string;
@@ -67,27 +68,8 @@ const Dashboard = () => {
   const [businessName, setBusinessName] = useState<string>("");
   const [isVerified, setIsVerified] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState("Complete your onboarding verifications.");
-  const [accountStatus, setAccountStatus] = useState<string | null>(null);
-  const [statusLoading, setStatusLoading] = useState(true);
-
-  useEffect(() => {
-    if (user) {
-      vendorOnboardingApi.getVendorStatus(user.id)
-        .then(status => {
-          setAccountStatus(status.accountStatus);
-        })
-        .catch(() => {
-          setAccountStatus(null);
-        })
-        .finally(() => {
-          setStatusLoading(false);
-        });
-    } else {
-      setStatusLoading(false);
-    }
-  }, [user]);
-
-  const isPending = accountStatus === "pending" || statusLoading;
+  const { operationsBlocked, isLoading: statusLoading } = useVendorVerification();
+  const isPending = operationsBlocked || statusLoading;
 
   const [totalListings, setTotalListings] = useState(0);
   const [activeListings, setActiveListings] = useState(0);

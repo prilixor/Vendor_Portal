@@ -203,7 +203,7 @@ internal sealed class CreateAdminDoctorCommandHandler(
         var qrPng = qrCodeService.GeneratePng(pageUrl, pixelsPerModule: 10);
         var qrDataUri = $"data:image/png;base64,{Convert.ToBase64String(qrPng)}";
 
-        var subject = $"Your Prilixor Doctor ID: {doctor.UniqueCode}";
+        var subject = $"Your BlinksMed Doctor ID: {doctor.UniqueCode}";
         var body = EmailTemplates.DoctorShareInvite(
             doctor.FullName,
             doctor.UniqueCode,

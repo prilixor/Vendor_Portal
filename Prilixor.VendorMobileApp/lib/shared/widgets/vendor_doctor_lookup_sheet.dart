@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../api/api_client.dart';
+import '../../core/api/api_client.dart';
 
 /// Lightweight Unique ID lookup for vendors (view-only, no listing page).
 Future<void> showVendorDoctorLookupSheet(

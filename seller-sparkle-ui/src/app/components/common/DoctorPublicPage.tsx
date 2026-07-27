@@ -96,7 +96,7 @@ const DoctorPublicPage = () => {
             <Stethoscope className="h-5 w-5 text-white" />
           </div>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-200/80">Prilixor</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-200/80">BlinksMed</p>
             <p className="text-sm text-teal-50/70">Doctor reference</p>
           </div>
         </header>
@@ -117,7 +117,7 @@ const DoctorPublicPage = () => {
                 to="/customer/shop"
                 className="mt-6 inline-flex items-center justify-center rounded-xl bg-teal-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-400"
               >
-                Go to Prilixor shop
+                Go to BlinksMed shop
               </Link>
             </div>
           )}
@@ -151,7 +151,7 @@ const DoctorPublicPage = () => {
                     </button>
                   </div>
                   <p className="mt-3 text-xs leading-relaxed text-teal-800/80">
-                    Use this ID at checkout to attach this doctor as your medical reference on a Prilixor order.
+                    Use this ID at checkout to attach this doctor as your medical reference on a BlinksMed order.
                   </p>
                 </div>
 
@@ -186,7 +186,7 @@ const DoctorPublicPage = () => {
                 <div className="rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-600">
                   <p className="font-semibold text-slate-800">For patients</p>
                   <p className="mt-1">
-                    Continue to Prilixor, add items to your cart, and enter this Unique ID when placing your order
+                    Continue to BlinksMed, add items to your cart, and enter this Unique ID when placing your order
                     (optional). No hospital form is required.
                   </p>
                 </div>
@@ -196,7 +196,7 @@ const DoctorPublicPage = () => {
                   className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-700 px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-teal-900/20 transition hover:bg-teal-600"
                 >
                   <ShoppingBag className="h-4 w-4" />
-                  Continue to Prilixor shop
+                  Continue to BlinksMed shop
                 </Link>
               </div>
             </div>
@@ -204,7 +204,7 @@ const DoctorPublicPage = () => {
         </main>
 
         <footer className="mt-8 pb-2 text-center text-[11px] text-teal-100/50">
-          © {new Date().getFullYear()} Prilixor · Medical equipment rentals
+          © {new Date().getFullYear()} BlinksMed · Medical equipment rentals
         </footer>
       </div>
     </div>

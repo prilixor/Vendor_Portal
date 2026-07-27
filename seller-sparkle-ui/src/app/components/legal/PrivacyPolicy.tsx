@@ -123,7 +123,7 @@ const PrivacyPolicy = () => {
             </div>
             <div className="text-[15px] text-muted-foreground leading-[1.8] space-y-4 max-w-[75ch]">
               <p>
-                Prilixor operates on a zero-sale data policy. Your business intelligence is never sold to third parties. 
+                BlinksMed operates on a zero-sale data policy. Your business intelligence is never sold to third parties. 
                 Disclosure occurs only under strictly defined operational requirements:
               </p>
               <ul className="grid gap-2 pl-1">
@@ -150,7 +150,7 @@ const PrivacyPolicy = () => {
               Our dedicated privacy team is available to address your concerns or handle data rights requests.
             </p>
             <a 
-              href="mailto:privacy@prilixor.com" 
+              href="mailto:privacy@blinksmed.com" 
               className="inline-flex items-center justify-center rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-glow hover:opacity-90 transition-all"
             >
               Contact Privacy Team
@@ -160,7 +160,7 @@ const PrivacyPolicy = () => {
 
         <div className="mt-20 pt-10 border-t flex flex-col sm:flex-row items-center justify-between gap-6 pb-12">
           <p className="text-xs text-muted-foreground/60 font-medium">
-            © 2026 Prilixor Inc. All rights reserved.
+            © 2026 BlinksMed Inc. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
              <Link to="/terms-and-conditions" className="text-xs font-bold text-muted-foreground/60 hover:text-primary transition-colors">Terms of Service</Link>

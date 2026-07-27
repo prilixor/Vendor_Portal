@@ -34,8 +34,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> with WidgetsBindi
       _refreshLiveData(silent: false);
     });
 
-    // Keep order statuses + alert badge in sync while the app is open.
-    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    // Match web CustomerStoreHeader: poll alerts ~30s (not every 15s + orders stampede).
+    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) _refreshLiveData(silent: true);
     });
   }
@@ -62,9 +62,18 @@ class _CustomerDashboardState extends State<CustomerDashboard> with WidgetsBindi
     if (!_isLoggedIn) return;
     final orders = Provider.of<OrderProvider>(context, listen: false);
     final notifs = Provider.of<NotificationProvider>(context, listen: false);
+    // Web dashboard loads orders once; header polls notifications. Keep orders
+    // on first load / tab open, but silent polls prioritize alerts badge.
+    if (!silent) {
+      await Future.wait([
+        orders.fetchOrders(silent: false),
+        notifs.fetchNotifications(silent: false),
+      ]);
+      return;
+    }
     await Future.wait([
-      orders.fetchOrders(silent: silent),
-      notifs.fetchNotifications(silent: silent),
+      notifs.fetchNotifications(silent: true),
+      orders.fetchOrders(silent: true),
     ]);
   }
 

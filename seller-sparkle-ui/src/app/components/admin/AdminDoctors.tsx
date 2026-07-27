@@ -574,7 +574,7 @@ const AdminDoctors = () => {
           {qrDoctor && (
             <div className="space-y-4">
               <div className="overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-700 to-emerald-900 p-5 text-white">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-teal-100/80">Prilixor Doctor</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-teal-100/80">BlinksMed Doctor</p>
                 <p className="mt-2 text-xl font-bold">{qrDoctor.fullName}</p>
                 {qrDoctor.specialization && (
                   <p className="mt-1 text-sm text-teal-50/85">{qrDoctor.specialization}</p>

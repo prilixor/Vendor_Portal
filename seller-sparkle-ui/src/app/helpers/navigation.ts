@@ -5,6 +5,8 @@ export interface NavItem {
   to: string;
   icon: LucideIcon;
   badge?: string;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export interface NavSection {

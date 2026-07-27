@@ -13,7 +13,7 @@ import '../../core/utils/support_chat_routing.dart';
 
 enum SupportView { welcome, chat, tickets }
 
-/// Prilixor Support — AI assistant + admin tickets (Vendor Web SupportChat parity).
+/// BlinksMed Support — AI assistant + admin tickets (Vendor Web SupportChat parity).
 class SupportChatScreen extends StatefulWidget {
   final String? initialCategory;
   final String? initialMessage;
@@ -201,7 +201,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     final provider = Provider.of<VendorSupportProvider>(context);
     final title = switch (_view) {
       SupportView.tickets => 'My Tickets',
-      _ => 'Prilixor Support',
+      _ => 'BlinksMed Support',
     };
 
     return Scaffold(
@@ -344,7 +344,7 @@ class _WelcomeView extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             const Text(
-              'PRILIXOR ASSISTANT',
+              'BLINKSMED ASSISTANT',
               style: TextStyle(
                 color: Colors.white54,
                 fontSize: 10,
@@ -370,7 +370,7 @@ class _WelcomeView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '👋 Hi! I\'m Prilixor Support Assistant.',
+                '👋 Hi! I\'m BlinksMed Support Assistant.',
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
               ),
               SizedBox(height: 6),

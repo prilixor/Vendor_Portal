@@ -20,6 +20,8 @@ flutter pub get
 flutter run -d web-server --web-port=3001
 ```
 
+Open [http://localhost:3001](http://localhost:3001). Run Customer web on **3000** in parallel (see `Prilixor.MobileApp/README.md`).
+
 Use a **vendor** account (same as web Vendor portal). Login sends `role: vendor`.
 
 ## Production URLs (Web Option 2 parity)
@@ -43,7 +45,7 @@ Defined in `lib/core/config/app_urls.dart` and wired through `ApiClient`.
 | Expirations | From Orders (timer icon) | Done |
 | Notifications | Alerts tab | Done — unread badge, mark read, web deep links |
 | Chats | Profile → Chats | Done — customer order chat |
-| Prilixor Support | Home FAB (scroll-aware) + Profile badge + onboarding help | Done — AI chat + admin tickets |
+| BlinksMed Support | Home FAB (scroll-aware) + Profile badge + onboarding help | Done — AI chat + admin tickets |
 | Settings / Profile | Profile → Settings | Done (owner name, phone, password) |
 | Pending approval banner | Shell banner | Done |
 | Dashboard | Home tab | Done — KPI strip, activity, top listings |

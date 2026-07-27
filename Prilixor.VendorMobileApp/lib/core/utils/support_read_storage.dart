@@ -1,7 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
 import '../storage/secure_storage.dart';
 
 /// Persists per-ticket "last read" timestamps for support reply badges.

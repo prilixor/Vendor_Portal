@@ -165,7 +165,12 @@ public sealed class CustomerRepository(
             .Include(p => p.ProductImages)
             .Include(p => p.ChemicalProperty)
             .Include(p => p.Variants)
-            .Where(p => !p.IsDeleted && p.IsActive);
+            .Where(p =>
+                !p.IsDeleted &&
+                p.IsActive &&
+                p.Category != null &&
+                !p.Category.IsDeleted &&
+                p.Category.IsActive);
 
         if (!string.IsNullOrWhiteSpace(categoryFilter))
         {
@@ -214,6 +219,7 @@ public sealed class CustomerRepository(
         }
 
         var filteredRows = filtered
+            .Where(r => productMap.ContainsKey(r.ProductId))
             .OrderByDescending(r => r.CreatedOnUtc)
             .Take(500)
             .ToList();
@@ -336,45 +342,6 @@ public sealed class CustomerRepository(
 
         }).ToList();
 
-        var listedProductIds = filteredRows
-            .Select(x => x.ProductId)
-            .ToHashSet();
-
-        var placeholders = products
-            .Where(p => !listedProductIds.Contains(p.Id))
-            .Select(p =>
-            {
-                var (buyPrice, maxBuyPrice) = ResolveCatalogBuyPrices(p);
-                return new CustomerCatalogListingDto(
-                    p.Id,
-                    p.ProductName,
-                    "No vendor assigned",
-                    0m,
-                    "Vendor assignment pending",
-                    p.Category?.CategoryName ?? "General",
-                    p.DailyRent,
-                    p.MonthlyRent,
-                    p.SecurityDeposit,
-                    p.Category?.PrescriptionRequired ?? false,
-                    p.Category?.DepositRequired ?? false,
-                    "product_only",
-                    0,
-                    0,
-                    "out_of_stock",
-                    ResolvePrimaryProductImageUrl(p.ProductImages),
-                    buyPrice,
-                    p.IsRentEnabled,
-                    p.IsBuyEnabled,
-                    p.ChemicalProperty?.CasNumber,
-                    p.ChemicalProperty?.ChemicalFormula,
-                    p.ChemicalProperty?.PurityPercentage,
-                    p.ChemicalProperty?.MolecularWeight,
-                    p.ChemicalProperty?.BaseUnit,
-                    p.Category?.IsChemical ?? false,
-                    maxBuyPrice);
-            })
-            .ToList();
-
         var listingDistanceMap = new Dictionary<Guid, decimal>();
         if (sortingAddress is not null)
         {
@@ -395,7 +362,6 @@ public sealed class CustomerRepository(
         }
 
         var combined = listingDtos
-            .Concat(placeholders)
             .OrderBy(x => x.CategoryName)
             .ThenBy(x => x.Title)
             .ToList();

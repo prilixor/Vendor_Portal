@@ -172,7 +172,7 @@ const TermsAndConditions = () => {
                 </h2>
                 <div className="text-[15px] text-muted-foreground leading-[1.8] max-w-[75ch] space-y-5">
                   <p>
-                    Welcome to the Prilixor Vendor Portal. These Terms & Conditions ("Terms") govern your access to and use of our platform, 
+                    Welcome to the BlinksMed Vendor Portal. These Terms & Conditions ("Terms") govern your access to and use of our platform, 
                     including onboarding, product management, and fulfillment services.
                   </p>
                   <p>
@@ -212,7 +212,7 @@ const TermsAndConditions = () => {
                 </h2>
                 <div className="text-[15px] text-muted-foreground leading-[1.8] max-w-[75ch] space-y-5">
                   <p>
-                    Account security is your primary responsibility. Prilixor employs robust encryption, but vendor-side 
+                    Account security is your primary responsibility. BlinksMed employs robust encryption, but vendor-side 
                     credential management is critical for platform integrity.
                   </p>
                   <div className="p-5 rounded-xl bg-muted/30 border border-border/50">
@@ -301,7 +301,7 @@ const TermsAndConditions = () => {
                 </h2>
                 <div className="text-[15px] text-muted-foreground leading-[1.8] max-w-[75ch]">
                   <p>
-                    Prilixor reserves the right to suspend accounts for investigations or terminate access 
+                    BlinksMed reserves the right to suspend accounts for investigations or terminate access 
                     for breaches of these Terms. Vendors may terminate their account by providing 30 days 
                     written notice, subject to fulfillment of existing orders.
                   </p>
@@ -316,7 +316,7 @@ const TermsAndConditions = () => {
                 <div className="text-[15px] text-muted-foreground leading-[1.8] max-w-[75ch] p-5 border-l-2 border-primary/20 italic bg-primary/[0.01]">
                   <p>
                     Our total liability for any claim arising out of these Terms shall not exceed the 
-                    total commissions paid by the vendor to Prilixor during the 12 months preceding 
+                    total commissions paid by the vendor to BlinksMed during the 12 months preceding 
                     the claim.
                   </p>
                 </div>
@@ -345,7 +345,7 @@ const TermsAndConditions = () => {
                   <div className="grid gap-6 sm:grid-cols-2">
                     <div>
                       <p className="text-[11px] font-bold uppercase tracking-widest text-primary mb-2">Inquiries</p>
-                      <p className="font-semibold text-foreground">vendors@prilixor.com</p>
+                      <p className="font-semibold text-foreground">vendors@blinksmed.com</p>
                       <p className="text-sm">+1 (555) 012-3456</p>
                     </div>
                     <div>
@@ -359,7 +359,7 @@ const TermsAndConditions = () => {
             </div>
             
             <footer className="mt-24 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 pb-12">
-              <p className="text-[12px] text-muted-foreground/60">© 2026 Prilixor Inc. All rights reserved.</p>
+              <p className="text-[12px] text-muted-foreground/60">© 2026 BlinksMed Inc. All rights reserved.</p>
               <div className="flex items-center gap-8">
                 <Link to="/privacy-policy" className="text-[12px] font-medium text-muted-foreground/60 hover:text-primary transition-colors">Privacy Policy</Link>
               </div>

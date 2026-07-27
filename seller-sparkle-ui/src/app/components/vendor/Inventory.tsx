@@ -16,6 +16,7 @@ import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight
 import { format } from "date-fns";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/app/components/ui/pagination";
 import { useAuth } from "@/app/guards/AuthContext";
+import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
 import { vendorOnboardingApi, type VendorProductAssetApiDto, type TrackedAssetDto, type VendorVariantInventoryDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 
@@ -59,7 +60,9 @@ const Inventory = () => {
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
-  const [accountStatus, setAccountStatus] = useState<string | null>(null);
+
+  const { operationsBlocked } = useVendorVerification();
+  const isPending = operationsBlocked;
 
   const [assetRow, setAssetRow] = useState<InventoryRecord | null>(null);
   const [assets, setAssets] = useState<VendorProductAssetApiDto[]>([]);
@@ -115,17 +118,6 @@ const Inventory = () => {
   const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
   const paginatedInventory = filteredInventory.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  useEffect(() => {
-    if (user) {
-      vendorOnboardingApi.getVendorStatus(user.id).then(status => {
-        setAccountStatus(status.accountStatus);
-      }).catch(() => {
-        setAccountStatus(null);
-      });
-    }
-  }, [user]);
-
-  const isPending = accountStatus === "pending";
 
   const loadInventory = async () => {
     if (!user) return;

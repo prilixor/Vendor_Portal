@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../config/app_urls.dart';
 import '../storage/secure_storage.dart';
+import '../auth/vendor_auth_storage.dart';
 
 class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
@@ -39,7 +40,7 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final token = await _storage.read(key: 'jwt_token');
+          final token = await _storage.read(key: VendorAuthStorage.jwtToken);
           if (token != null && token.trim().isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
@@ -82,8 +83,8 @@ class ApiClient {
   }
 
   Future<void> _forceSessionExpired() async {
-    await _storage.delete(key: 'jwt_token');
-    await _storage.delete(key: 'refresh_token');
+    await _storage.delete(key: VendorAuthStorage.jwtToken);
+    await _storage.delete(key: VendorAuthStorage.refreshToken);
     onSessionExpired?.call();
   }
 
@@ -96,8 +97,8 @@ class ApiClient {
 
     _isRefreshing = true;
     try {
-      final access = await _storage.read(key: 'jwt_token');
-      final refresh = await _storage.read(key: 'refresh_token');
+      final access = await _storage.read(key: VendorAuthStorage.jwtToken);
+      final refresh = await _storage.read(key: VendorAuthStorage.refreshToken);
       if (access == null ||
           access.trim().isEmpty ||
           refresh == null ||
@@ -128,9 +129,15 @@ class ApiClient {
         final newToken = data['token']?.toString();
         final newRefresh = data['refreshToken']?.toString();
         if (newToken != null && newToken.isNotEmpty) {
-          await _storage.write(key: 'jwt_token', value: newToken);
+          await _storage.write(
+            key: VendorAuthStorage.jwtToken,
+            value: newToken,
+          );
           if (newRefresh != null && newRefresh.isNotEmpty) {
-            await _storage.write(key: 'refresh_token', value: newRefresh);
+            await _storage.write(
+              key: VendorAuthStorage.refreshToken,
+              value: newRefresh,
+            );
           }
           _notifyWaiters(newToken);
           return newToken;

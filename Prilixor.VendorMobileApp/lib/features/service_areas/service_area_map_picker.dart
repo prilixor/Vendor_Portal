@@ -1,10 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../core/theme.dart';
+import '../../core/utils/debouncer.dart';
 import '../../core/utils/place_search.dart';
 
 class ServiceAreaMapPicker extends StatefulWidget {
@@ -36,7 +35,7 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
   final TextEditingController _searchController = TextEditingController();
   final PlaceSearch _placeSearch = PlaceSearch();
 
-  Timer? _searchDebounce;
+  final Debouncer _placeSearchDebouncer = Debouncer(duration: placeSearchDebounce);
   bool _searching = false;
   List<PlaceSearchResult> _results = [];
   String? _searchError;
@@ -58,7 +57,7 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
 
   @override
   void dispose() {
-    _searchDebounce?.cancel();
+    _placeSearchDebouncer.dispose();
     _searchController.dispose();
     _placeSearch.close();
     super.dispose();
@@ -73,7 +72,6 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
   }
 
   void _onSearchChanged(String value) {
-    _searchDebounce?.cancel();
     final trimmed = value.trim();
     if (trimmed.length < 2) {
       setState(() {
@@ -82,9 +80,7 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
       });
       return;
     }
-    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
-      _runSearch(trimmed);
-    });
+    _placeSearchDebouncer.run(() => _runSearch(trimmed));
   }
 
   Future<void> _runSearch(String query) async {
@@ -136,7 +132,13 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
             style: const TextStyle(color: Colors.white),
             textInputAction: TextInputAction.search,
             onChanged: _onSearchChanged,
-            onSubmitted: _onSearchChanged,
+            onSubmitted: (value) {
+              _placeSearchDebouncer.cancel();
+              final trimmed = value.trim();
+              if (trimmed.length >= 2) {
+                _runSearch(trimmed);
+              }
+            },
             decoration: InputDecoration(
               hintText: 'Search area, landmark, shop or address',
               hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.35)),

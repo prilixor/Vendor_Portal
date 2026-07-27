@@ -21,6 +21,14 @@ flutter pub get
 flutter run
 ```
 
+**Web (local, port 3000)** — use a different port than Vendor web so login storage does not collide:
+
+```bash
+flutter run -d web-server --web-hostname=localhost --web-port=3000
+```
+
+Open [http://localhost:3000](http://localhost:3000). Run Vendor on **3001** in a second terminal (see `Prilixor.VendorMobileApp/README.md`).
+
 Use a **customer** account. Login sends `role: customer`.
 
 ## Rebuild after URL changes

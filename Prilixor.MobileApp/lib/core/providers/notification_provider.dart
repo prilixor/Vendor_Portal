@@ -20,6 +20,11 @@ class NotificationProvider extends ChangeNotifier {
   /// Prevents 15s poll / tab refresh from snapping the badge back to unread.
   final Set<String> _optimisticReadIds = {};
 
+  /// Prevents stampede from dashboard + IndexedStack tab inits + polling.
+  Future<void>? _inFlightNotifications;
+  DateTime? _lastSilentAttemptAt;
+  static const _silentCooldown = Duration(seconds: 8);
+
   int get unreadCount => _notifications.where((n) => _isEffectivelyUnread(n)).length;
 
   bool _isEffectivelyUnread(NotificationModel n) {
@@ -31,11 +36,34 @@ class NotificationProvider extends ChangeNotifier {
 
   /// [silent] avoids loading flicker during background/tab refresh.
   Future<void> fetchNotifications({bool silent = false}) async {
+    if (_inFlightNotifications != null) return _inFlightNotifications!;
+    if (silent &&
+        _notifications.isNotEmpty &&
+        _lastSilentAttemptAt != null &&
+        DateTime.now().difference(_lastSilentAttemptAt!) < _silentCooldown) {
+      return;
+    }
+
+    final future = _doFetchNotifications(silent: silent);
+    _inFlightNotifications = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_inFlightNotifications, future)) {
+        _inFlightNotifications = null;
+      }
+    }
+  }
+
+  Future<void> _doFetchNotifications({required bool silent}) async {
     final showLoading = !silent || _notifications.isEmpty;
     if (showLoading) {
       _isLoading = true;
       _errorMessage = null;
       notifyListeners();
+    }
+    if (silent) {
+      _lastSilentAttemptAt = DateTime.now();
     }
 
     try {
@@ -43,6 +71,8 @@ class NotificationProvider extends ChangeNotifier {
         '/customers/me/notifications',
         queryParameters: {'_': DateTime.now().millisecondsSinceEpoch},
         options: Options(
+          sendTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 45),
           headers: const {
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache',
@@ -58,6 +88,12 @@ class NotificationProvider extends ChangeNotifier {
         _errorMessage = null;
       }
     } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        return;
+      }
       if (_notifications.isEmpty) {
         if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
           _errorMessage = 'auth_required';

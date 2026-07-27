@@ -362,7 +362,7 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
             ],
             const SizedBox(height: 12),
             const Text(
-              'Ask your doctor for their Prilixor Unique ID, or scan their QR code to open the share page and copy it.',
+              'Ask your doctor for their BlinksMed Unique ID, or scan their QR code to open the share page and copy it.',
               style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.4),
             ),
           ],

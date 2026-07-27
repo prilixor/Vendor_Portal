@@ -136,7 +136,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Join Prilixor to start renting equipment',
+                'Join BlinksMed to start renting equipment',
                 style: TextStyle(color: Colors.white60, fontSize: 16),
                 textAlign: TextAlign.center,
               ),

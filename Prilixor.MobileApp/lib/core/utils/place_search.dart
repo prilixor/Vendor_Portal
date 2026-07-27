@@ -39,7 +39,7 @@ class ReverseGeocodeResult {
 class PlaceSearch {
   PlaceSearch({
     this.userAgent =
-        'PrilixorCustomer/1.0 (com.prilixor.prilixor_mobile; support@prilixor.com)',
+        'BlinksMedCustomer/1.0 (com.prilixor.prilixor_mobile; support@blinksmed.com)',
   }) : _dio = Dio(
           BaseOptions(
             connectTimeout: const Duration(seconds: 12),

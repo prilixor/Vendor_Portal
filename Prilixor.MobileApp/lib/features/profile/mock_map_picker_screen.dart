@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../core/utils/debouncer.dart';
 import '../../core/utils/place_search.dart';
 
 class MockMapPickerScreen extends StatefulWidget {
@@ -15,11 +18,28 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
   LatLng _center = const LatLng(23.0225, 72.5714);
   final MapController _mapController = MapController();
   final PlaceSearch _placeSearch = PlaceSearch();
+  final TextEditingController _searchController = TextEditingController();
+  final Debouncer _placeSearchDebouncer = Debouncer(duration: placeSearchDebounce);
   bool _isSearching = false;
   bool _isConfirming = false;
 
   @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onPlaceSearchTextChanged);
+  }
+
+  void _onPlaceSearchTextChanged() {
+    final trimmed = _searchController.text.trim();
+    if (trimmed.length < 2) return;
+    _placeSearchDebouncer.run(() => _searchLocation(trimmed));
+  }
+
+  @override
   void dispose() {
+    _placeSearchDebouncer.dispose();
+    _searchController.removeListener(_onPlaceSearchTextChanged);
+    _searchController.dispose();
     _placeSearch.close();
     super.dispose();
   }
@@ -139,6 +159,7 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
                 ],
               ),
               child: TextField(
+                controller: _searchController,
                 style: const TextStyle(color: Colors.white),
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
@@ -163,7 +184,10 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
                     vertical: 14,
                   ),
                 ),
-                onSubmitted: _searchLocation,
+                onSubmitted: (value) {
+                  _placeSearchDebouncer.cancel();
+                  _searchLocation(value);
+                },
               ),
             ),
           ),
