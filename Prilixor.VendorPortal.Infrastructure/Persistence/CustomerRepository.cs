@@ -318,6 +318,8 @@ public sealed class CustomerRepository(
 
                 product?.DailyRent ?? l.DailyRent,
 
+                product?.WeeklyRent ?? l.WeeklyRent,
+
                 product?.MonthlyRent ?? l.MonthlyRent,
 
                 product?.SecurityDeposit ?? l.SecurityDeposit,
@@ -1420,10 +1422,12 @@ public sealed class CustomerRepository(
             ListingTitle = listing.ListingTitle,
             ListingStatus = listing.ListingStatus,
             DailyRent = product.DailyRent,
+            WeeklyRent = product.WeeklyRent,
             MonthlyRent = product.MonthlyRent,
             SecurityDeposit = product.SecurityDeposit,
             BuyPrice = product.BuyPrice,
             VendorDailyRent = product.VendorDailyRent,
+            VendorWeeklyRent = product.VendorWeeklyRent,
             VendorMonthlyRent = product.VendorMonthlyRent,
             VendorSecurityDeposit = product.VendorSecurityDeposit,
             VendorBuyPrice = product.VendorBuyPrice,
@@ -1899,6 +1903,7 @@ public sealed class CustomerRepository(
                     product?.IsRentEnabled ?? true,
                     product?.IsBuyEnabled ?? false,
                     product?.DailyRent ?? l.DailyRent,
+                    product?.WeeklyRent ?? l.WeeklyRent,
                     product?.MonthlyRent ?? l.MonthlyRent,
                     product?.SecurityDeposit ?? l.SecurityDeposit,
                     buyPrice,

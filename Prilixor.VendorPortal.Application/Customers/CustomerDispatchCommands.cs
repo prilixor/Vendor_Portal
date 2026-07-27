@@ -829,6 +829,7 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
             o.OrderType,
             o.Quantity,
             o.RentalDays,
+            o.RentalPeriodUnit,
             row.ListingPrimaryImageUrl));
     }
 }

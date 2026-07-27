@@ -88,6 +88,7 @@ export interface ProductListing {
   productName: string;
   title: string;
   dailyRent: number;
+  weeklyRent: number;
   monthlyRent: number;
   securityDeposit: number;
   quantity: number;

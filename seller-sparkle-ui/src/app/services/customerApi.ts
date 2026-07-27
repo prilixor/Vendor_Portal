@@ -8,6 +8,7 @@ export interface CustomerCatalogListingApi {
   serviceAreaHint: string;
   categoryName: string;
   dailyRent: number;
+  weeklyRent: number;
   monthlyRent: number;
   securityDeposit: number;
   prescriptionRequired: boolean;
@@ -65,6 +66,7 @@ export interface CustomerListingDetailApi {
   serviceAreaHint: string;
   categoryName: string;
   dailyRent: number;
+  weeklyRent: number;
   monthlyRent: number;
   securityDeposit: number;
   prescriptionRequired: boolean;
@@ -145,6 +147,7 @@ export interface CustomerOrderApi {
   orderType: string;
   quantity: number;
   rentalDays: number;
+  rentalPeriodUnit?: "day" | "week" | "month";
   listingPrimaryImageUrl?: string | null;
   /** Alias some responses may use; prefer listingPrimaryImageUrl. */
   primaryImageUrl?: string | null;
@@ -205,6 +208,7 @@ export interface CartLinePayload {
   listingId: string;
   quantity: number;
   rentalDays: number;
+  rentalPeriodUnit?: "day" | "week" | "month";
   orderType?: "rent" | "buy";
   productVariantId?: string;
   /** Optional Admin-curated doctor reference (Unique ID lookup). */
@@ -362,6 +366,7 @@ export const customerApi = {
         listingId: l.listingId,
         quantity: l.quantity,
         rentalDays: l.rentalDays,
+        rentalPeriodUnit: l.rentalPeriodUnit ?? "day",
         orderType: l.orderType ?? "rent",
         productVariantId: l.productVariantId,
         doctorId: l.doctorId || undefined,
@@ -381,6 +386,7 @@ export const customerApi = {
         listingId: l.listingId,
         quantity: l.quantity,
         rentalDays: l.rentalDays,
+        rentalPeriodUnit: l.rentalPeriodUnit ?? "day",
         orderType: l.orderType ?? "rent",
         productVariantId: l.productVariantId,
         doctorId: l.doctorId || undefined,

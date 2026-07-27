@@ -108,6 +108,7 @@ export interface ProductApiDto {
   shortDescription?: string;
   longDescription?: string;
   dailyRent: number;
+  weeklyRent: number;
   monthlyRent: number;
   securityDeposit: number;
   buyPrice?: number;
@@ -131,6 +132,7 @@ export interface VendorProductListingApiDto {
   productId: string;
   listingTitle: string;
   dailyRent: number;
+  weeklyRent: number;
   monthlyRent: number;
   securityDeposit: number;
   availableQuantity: number;
@@ -313,6 +315,7 @@ export interface CreateProductPayload {
   shortDescription?: string;
   longDescription?: string;
   dailyRent?: number;
+  weeklyRent?: number;
   monthlyRent?: number;
   securityDeposit?: number;
   buyPrice?: number;
@@ -417,6 +420,7 @@ export interface VendorDispatchOfferApiDto {
   orderType: string;
   quantity: number;
   rentalDays: number;
+  rentalPeriodUnit?: "day" | "week" | "month";
   expiresAt: string;
   status: string;
   totalAmount: number;
@@ -441,6 +445,7 @@ export interface VendorOrderApiDto {
   orderType: string;
   quantity: number;
   rentalDays: number;
+  rentalPeriodUnit?: "day" | "week" | "month";
   totalAmount: number;
   vendorSubtotalAmount: number;
   startDate?: string;

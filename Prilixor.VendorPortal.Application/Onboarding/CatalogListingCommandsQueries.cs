@@ -90,10 +90,12 @@ public sealed record CreateProductCommand(
     string? ShortDescription,
     string? LongDescription,
     decimal DailyRent,
+    decimal WeeklyRent,
     decimal MonthlyRent,
     decimal SecurityDeposit,
     decimal? BuyPrice,
     decimal VendorDailyRent,
+    decimal VendorWeeklyRent,
     decimal VendorMonthlyRent,
     decimal VendorSecurityDeposit,
     decimal? VendorBuyPrice,
@@ -117,6 +119,7 @@ public sealed class CreateProductCommandValidator : AbstractValidator<CreateProd
         RuleFor(x => x.CategoryId).NotEmpty();
         RuleFor(x => x.ProductName).NotEmpty().MaximumLength(255);
         RuleFor(x => x.DailyRent).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.WeeklyRent).GreaterThanOrEqualTo(0);
         RuleFor(x => x.MonthlyRent).GreaterThanOrEqualTo(0);
         RuleFor(x => x.SecurityDeposit).GreaterThanOrEqualTo(0);
         RuleFor(x => x.BuyPrice).GreaterThanOrEqualTo(0).When(x => x.BuyPrice.HasValue);
@@ -150,10 +153,12 @@ internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository re
             ShortDescription = request.ShortDescription,
             LongDescription = request.LongDescription,
             DailyRent = request.DailyRent,
+            WeeklyRent = request.WeeklyRent,
             MonthlyRent = request.MonthlyRent,
             SecurityDeposit = request.SecurityDeposit,
             BuyPrice = request.BuyPrice,
             VendorDailyRent = request.VendorDailyRent,
+            VendorWeeklyRent = request.VendorWeeklyRent,
             VendorMonthlyRent = request.VendorMonthlyRent,
             VendorSecurityDeposit = request.VendorSecurityDeposit,
             VendorBuyPrice = request.VendorBuyPrice,
@@ -215,10 +220,12 @@ internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository re
             entity.ShortDescription,
             entity.LongDescription,
             entity.DailyRent,
+            entity.WeeklyRent,
             entity.MonthlyRent,
             entity.SecurityDeposit,
             entity.BuyPrice,
             entity.VendorDailyRent,
+            entity.VendorWeeklyRent,
             entity.VendorMonthlyRent,
             entity.VendorSecurityDeposit,
             entity.VendorBuyPrice,
@@ -285,10 +292,12 @@ internal sealed class GetProductsQueryHandler(
             x.ShortDescription,
             x.LongDescription,
             x.DailyRent,
+            x.WeeklyRent,
             x.MonthlyRent,
             x.SecurityDeposit,
             x.BuyPrice,
             x.VendorDailyRent,
+            x.VendorWeeklyRent,
             x.VendorMonthlyRent,
             x.VendorSecurityDeposit,
             x.VendorBuyPrice,
@@ -588,6 +597,7 @@ internal sealed class UpsertVendorProductListingCommandHandler(
 
         entity.ListingTitle = request.ListingTitle;
         entity.DailyRent = product.DailyRent;
+        entity.WeeklyRent = product.WeeklyRent;
         entity.MonthlyRent = product.MonthlyRent;
         entity.SecurityDeposit = product.SecurityDeposit;
         entity.AvailableQuantity = request.AvailableQuantity;
@@ -638,6 +648,7 @@ internal sealed class UpsertVendorProductListingCommandHandler(
             entity.ProductId.ToString(),
             entity.ListingTitle,
             entity.DailyRent,
+            entity.WeeklyRent,
             entity.MonthlyRent,
             entity.SecurityDeposit,
             entity.AvailableQuantity,
@@ -724,6 +735,7 @@ internal sealed class GetVendorProductListingsQueryHandler(
             x.ProductId.ToString(),
             x.ListingTitle,
             x.DailyRent,
+            x.WeeklyRent,
             x.MonthlyRent,
             x.SecurityDeposit,
             x.AvailableQuantity,
@@ -1196,10 +1208,12 @@ public sealed record UpdateProductCommand(
     string? ShortDescription,
     string? LongDescription,
     decimal DailyRent,
+    decimal WeeklyRent,
     decimal MonthlyRent,
     decimal SecurityDeposit,
     decimal? BuyPrice,
     decimal VendorDailyRent,
+    decimal VendorWeeklyRent,
     decimal VendorMonthlyRent,
     decimal VendorSecurityDeposit,
     decimal? VendorBuyPrice,
@@ -1224,6 +1238,7 @@ public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProd
         RuleFor(x => x.CategoryId).NotEmpty();
         RuleFor(x => x.ProductName).NotEmpty().MaximumLength(255);
         RuleFor(x => x.DailyRent).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.WeeklyRent).GreaterThanOrEqualTo(0);
         RuleFor(x => x.MonthlyRent).GreaterThanOrEqualTo(0);
         RuleFor(x => x.SecurityDeposit).GreaterThanOrEqualTo(0);
         RuleFor(x => x.BuyPrice).GreaterThanOrEqualTo(0).When(x => x.BuyPrice.HasValue);
@@ -1265,10 +1280,12 @@ internal sealed class UpdateProductCommandHandler(IVendorOnboardingRepository re
         entity.ShortDescription = request.ShortDescription;
         entity.LongDescription = request.LongDescription;
         entity.DailyRent = request.DailyRent;
+        entity.WeeklyRent = request.WeeklyRent;
         entity.MonthlyRent = request.MonthlyRent;
         entity.SecurityDeposit = request.SecurityDeposit;
         entity.BuyPrice = request.BuyPrice;
         entity.VendorDailyRent = request.VendorDailyRent;
+        entity.VendorWeeklyRent = request.VendorWeeklyRent;
         entity.VendorMonthlyRent = request.VendorMonthlyRent;
         entity.VendorSecurityDeposit = request.VendorSecurityDeposit;
         entity.VendorBuyPrice = request.VendorBuyPrice;
@@ -1363,10 +1380,12 @@ internal sealed class UpdateProductCommandHandler(IVendorOnboardingRepository re
             entity.ShortDescription,
             entity.LongDescription,
             entity.DailyRent,
+            entity.WeeklyRent,
             entity.MonthlyRent,
             entity.SecurityDeposit,
             entity.BuyPrice,
             entity.VendorDailyRent,
+            entity.VendorWeeklyRent,
             entity.VendorMonthlyRent,
             entity.VendorSecurityDeposit,
             entity.VendorBuyPrice,
@@ -1730,10 +1749,12 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                                 ShortDescription = string.IsNullOrEmpty(shortDescription) ? null : shortDescription,
                                 LongDescription = string.IsNullOrEmpty(longDescription) ? null : longDescription,
                                 DailyRent = Math.Max(0m, dailyRent),
+                                WeeklyRent = 0m,
                                 MonthlyRent = Math.Max(0m, monthlyRent),
                                 SecurityDeposit = Math.Max(0m, securityDeposit),
                                 BuyPrice = buyPrice is > 0m ? buyPrice : null,
                                 VendorDailyRent = Math.Max(0m, vendorDailyRent ?? dailyRent),
+                                VendorWeeklyRent = 0m,
                                 VendorMonthlyRent = Math.Max(0m, vendorMonthlyRent ?? monthlyRent),
                                 VendorSecurityDeposit = Math.Max(0m, vendorSecurityDeposit ?? securityDeposit),
                                 VendorBuyPrice = vendorBuyPrice ?? buyPrice,

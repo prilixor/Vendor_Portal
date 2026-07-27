@@ -1074,7 +1074,7 @@ const Products = () => {
                   <td className="px-3 py-3 text-muted-foreground sm:px-4">{p.category}</td>
                   {activeTab === "equipment" && (
                     <td className="px-3 py-3 text-right font-mono sm:px-4">
-                      ₹{p.dailyRent}/d
+                      ₹{p.weeklyRent ?? 0}/w
                     </td>
                   )}
                   {activeTab === "chemical" && (
@@ -1202,7 +1202,7 @@ const Products = () => {
                     <>
                       <div className="min-w-0">
                         <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Rent (Admin)</dt>
-                        <dd className="font-mono tabular-nums">₹{p.dailyRent}/d</dd>
+                        <dd className="font-mono tabular-nums">₹{p.weeklyRent ?? 0}/w</dd>
                       </div>
                       <div className="min-w-0 text-right">
                         <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Deposit</dt>
@@ -1365,8 +1365,8 @@ const Products = () => {
               </div>
               {activeTab === "equipment" && (
                 <div className="space-y-1.5">
-                  <Label>Daily rent (Admin-set)</Label>
-                  <Input value={`₹${editing.dailyRent}`} readOnly />
+                  <Label>Weekly rent (Admin-set)</Label>
+                  <Input value={`₹${editing.weeklyRent ?? 0}`} readOnly />
                 </div>
               )}
               {activeTab === "equipment" && (

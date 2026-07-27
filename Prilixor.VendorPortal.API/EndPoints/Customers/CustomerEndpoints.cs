@@ -114,6 +114,7 @@ public sealed class CustomerListingDetailResponse
     public string ServiceAreaHint { get; set; } = string.Empty;
     public string CategoryName { get; set; } = string.Empty;
     public decimal DailyRent { get; set; }
+    public decimal WeeklyRent { get; set; }
     public decimal MonthlyRent { get; set; }
     public decimal SecurityDeposit { get; set; }
     public bool PrescriptionRequired { get; set; }
@@ -209,6 +210,7 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
             ServiceAreaHint = hint,
             CategoryName = agg.CategoryName,
             DailyRent = agg.DailyRent,
+            WeeklyRent = agg.WeeklyRent,
             MonthlyRent = agg.MonthlyRent,
             SecurityDeposit = agg.SecurityDeposit,
             PrescriptionRequired = agg.CategoryPrescriptionRequired,
@@ -463,7 +465,10 @@ public sealed class CartLineDto
 {
     public Guid ListingId { get; set; }
     public int Quantity { get; set; }
+    /// <summary>Number of periods for <see cref="RentalPeriodUnit"/>.</summary>
     public int RentalDays { get; set; }
+    /// <summary>day | week | month. Defaults to day for backward compatibility.</summary>
+    public string RentalPeriodUnit { get; set; } = "day";
     public string OrderType { get; set; } = "rent";
     public Guid? ProductVariantId { get; set; }
     public Guid? DoctorId { get; set; }
@@ -503,7 +508,7 @@ public sealed class QuoteCustomerOrdersEndpoint(IMediator mediator)
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
 
         var lines = req.Lines.ConvertAll(l => new CartLineRequest(
-            l.ListingId, l.Quantity, l.RentalDays, l.OrderType, l.ProductVariantId,
+            l.ListingId, l.Quantity, l.RentalDays, l.RentalPeriodUnit, l.OrderType, l.ProductVariantId,
             l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber));
         var result = await mediator.Send(new QuoteCustomerOrdersCommand(
             customerId,
@@ -534,7 +539,7 @@ public sealed class PlaceCustomerOrdersEndpoint(IMediator mediator)
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
 
         var lines = req.Lines.ConvertAll(l => new CartLineRequest(
-            l.ListingId, l.Quantity, l.RentalDays, l.OrderType, l.ProductVariantId,
+            l.ListingId, l.Quantity, l.RentalDays, l.RentalPeriodUnit, l.OrderType, l.ProductVariantId,
             l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber));
         var result = await mediator.Send(new PlaceCustomerOrdersCommand(
             customerId,

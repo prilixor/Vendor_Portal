@@ -13,6 +13,13 @@ import { Skeleton } from "@/app/components/ui/skeleton";
 import { ProductImageGallery } from "@/app/components/shared/ProductImageGallery";
 import { toast } from "sonner";
 import { ShoppingCart } from "lucide-react";
+import {
+  DEFAULT_UI_RENTAL_UNIT,
+  RENTAL_UNIT_LABELS,
+  RENTAL_UNITS_VISIBLE_IN_UI,
+  estimateRent,
+  type RentalPeriodUnit,
+} from "@/app/helpers/rentalPeriod";
 
 function availabilityBadge(status: string, qty: number): { label: string; className: string } {
   const s = status.trim().toLowerCase();
@@ -53,7 +60,8 @@ const CustomerListingDetail = () => {
   const { user } = useAuth();
   const { addLine } = useCart();
   const [qty, setQty] = useState(1);
-  const [days, setDays] = useState(7);
+  const [periods, setPeriods] = useState(1);
+  const [periodUnit, setPeriodUnit] = useState<RentalPeriodUnit>(DEFAULT_UI_RENTAL_UNIT);
   const [orderType, setOrderType] = useState<"rent" | "buy">("rent");
   const [selectedVariantId, setSelectedVariantId] = useState<string>("");
 
@@ -129,7 +137,14 @@ const CustomerListingDetail = () => {
   const canAddToCart = currentAvailableQuantity > 0;
   
   const unitPrice = selectedVariant ? selectedVariant.buyPrice : (data.buyPrice ?? 0);
-  const rentEstimate = actualOrderType === "buy" ? unitPrice * qty : data.dailyRent * qty * days;
+  const rentEstimate =
+    actualOrderType === "buy"
+      ? unitPrice * qty
+      : estimateRent(periodUnit, periods, qty, {
+          dailyRent: data.dailyRent,
+          weeklyRent: data.weeklyRent ?? 0,
+          monthlyRent: data.monthlyRent,
+        });
 
   const variantStockOf = (variantId: string) =>
     activeVariants.find((v) => v.id === variantId)?.availableQuantity ??
@@ -155,7 +170,7 @@ const CustomerListingDetail = () => {
       toast.error("Please select a packaging size.");
       return;
     }
-    if (qty < 1 || (actualOrderType === "rent" && days < 1)) {
+    if (qty < 1 || (actualOrderType === "rent" && periods < 1)) {
       toast.error("Please fill in the required fields.");
       return;
     }
@@ -173,11 +188,13 @@ const CustomerListingDetail = () => {
       title: displayTitle,
       vendorName: data.vendorName,
       dailyRent: data.dailyRent,
+      weeklyRent: data.weeklyRent ?? 0,
       monthlyRent: data.monthlyRent,
       securityDeposit: data.securityDeposit,
       primaryImageUrl: images[0],
       quantity: qty,
-      rentalDays: actualOrderType === "buy" ? 0 : days,
+      rentalDays: actualOrderType === "buy" ? 0 : periods,
+      rentalPeriodUnit: actualOrderType === "buy" ? "day" : periodUnit,
       orderType: actualOrderType,
       prescriptionRequired: data.prescriptionRequired,
       productVariantId: selectedVariantId || undefined,
@@ -276,8 +293,8 @@ const CustomerListingDetail = () => {
                 {canRent && (
                   <>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Daily rent</span>
-                      <span className="font-semibold tabular-nums">₹{data.dailyRent.toFixed(0)}</span>
+                      <span className="text-muted-foreground">Weekly rent</span>
+                      <span className="font-semibold tabular-nums">₹{(data.weeklyRent ?? 0).toFixed(0)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Monthly rent</span>
@@ -366,14 +383,31 @@ const CustomerListingDetail = () => {
               )}
               <QuantityStepper label="Qty" required value={qty} min={1} max={Math.max(1, currentAvailableQuantity)} onChange={setQty} />
               {actualOrderType === "rent" ? (
-                <QuantityStepper
-                  label="Days"
-                  required
-                  value={days}
-                  min={1}
-                  max={366}
-                  onChange={setDays}
-                />
+                <>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Period</p>
+                    <Select value={periodUnit} onValueChange={(v) => setPeriodUnit(v as RentalPeriodUnit)}>
+                      <SelectTrigger className="h-10 w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RENTAL_UNITS_VISIBLE_IN_UI.map((u) => (
+                          <SelectItem key={u} value={u}>
+                            {RENTAL_UNIT_LABELS[u].singular}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <QuantityStepper
+                    label={RENTAL_UNIT_LABELS[periodUnit].plural}
+                    required
+                    value={periods}
+                    min={1}
+                    max={366}
+                    onChange={setPeriods}
+                  />
+                </>
               ) : null}
             </div>
             <p className="text-xs text-muted-foreground">

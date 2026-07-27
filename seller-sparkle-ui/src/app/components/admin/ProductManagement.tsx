@@ -65,8 +65,13 @@ const ProductManagement = () => {
     shortDescription: "",
     longDescription: "",
     dailyRent: 0,
+    weeklyRent: 0,
     monthlyRent: 0,
     securityDeposit: 0,
+    vendorDailyRent: 0,
+    vendorWeeklyRent: 0,
+    vendorMonthlyRent: 0,
+    vendorSecurityDeposit: 0,
     buyPrice: undefined,
     gstPercent: 18,
     isRentEnabled: true,
@@ -235,6 +240,7 @@ const ProductManagement = () => {
         shortDescription: product.shortDescription,
         longDescription: product.longDescription,
         dailyRent: product.dailyRent,
+        weeklyRent: product.weeklyRent ?? 0,
         monthlyRent: product.monthlyRent,
         securityDeposit: product.securityDeposit,
         buyPrice: product.buyPrice,
@@ -371,8 +377,8 @@ const ProductManagement = () => {
       }
     }
     if (step === 1) {
-      if (productForm.isRentEnabled && !(productForm.dailyRent > 0 || productForm.monthlyRent > 0)) {
-        errors.dailyRent = "Enter daily or monthly rent when rent is enabled.";
+      if (productForm.isRentEnabled && !(productForm.weeklyRent > 0 || productForm.monthlyRent > 0 || productForm.dailyRent > 0)) {
+        errors.weeklyRent = "Enter weekly or monthly rent when rent is enabled.";
       }
     }
     if (step === 2) {
@@ -401,10 +407,12 @@ const ProductManagement = () => {
         shortDescription: product.shortDescription,
         longDescription: product.longDescription,
         dailyRent: product.dailyRent,
+        weeklyRent: product.weeklyRent ?? 0,
         monthlyRent: product.monthlyRent,
         securityDeposit: product.securityDeposit,
         buyPrice: product.buyPrice,
         vendorDailyRent: product.vendorDailyRent || 0,
+        vendorWeeklyRent: product.vendorWeeklyRent || 0,
         vendorMonthlyRent: product.vendorMonthlyRent || 0,
         vendorSecurityDeposit: product.vendorSecurityDeposit || 0,
         vendorBuyPrice: product.vendorBuyPrice,
@@ -425,10 +433,12 @@ const ProductManagement = () => {
         shortDescription: "",
         longDescription: "",
         dailyRent: 0,
+        weeklyRent: 0,
         monthlyRent: 0,
         securityDeposit: 0,
         buyPrice: undefined,
         vendorDailyRent: 0,
+        vendorWeeklyRent: 0,
         vendorMonthlyRent: 0,
         vendorSecurityDeposit: 0,
         vendorBuyPrice: undefined,
@@ -531,8 +541,8 @@ const ProductManagement = () => {
     if (!productForm.productName?.trim()) {
       errors.productName = "Please enter a product name.";
     }
-    if (productForm.isRentEnabled && !(productForm.dailyRent > 0 || productForm.monthlyRent > 0)) {
-      errors.dailyRent = "Enter daily or monthly rent when rent is enabled.";
+    if (productForm.isRentEnabled && !(productForm.weeklyRent > 0 || productForm.monthlyRent > 0 || productForm.dailyRent > 0)) {
+      errors.weeklyRent = "Enter weekly or monthly rent when rent is enabled.";
     }
     if (productForm.gstPercent == null || Number.isNaN(Number(productForm.gstPercent))) {
       errors.gstPercent = "Please enter GST %.";
@@ -540,7 +550,7 @@ const ProductManagement = () => {
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       if (errors.categoryId || errors.productName) setProductFormStep(0);
-      else if (errors.dailyRent) setProductFormStep(1);
+      else if (errors.weeklyRent) setProductFormStep(1);
       else setProductFormStep(2);
       toast.error("Please fill in the required fields.");
       return;
@@ -1453,19 +1463,20 @@ const ProductManagement = () => {
                 <p className="text-xs text-muted-foreground">What customers see and pay on the marketplace.</p>
               </div>
               <FormGrid cols={2}>
+                {/* Daily rent kept in form/API state; hidden in UI — re-enable via RENTAL_UNITS_VISIBLE_IN_UI */}
                 <div className="space-y-1.5">
-                  <Label required={productForm.isRentEnabled}>Daily Rent (INR)</Label>
+                  <Label required={productForm.isRentEnabled}>Weekly Rent (INR)</Label>
                   <Input
                     type="number"
                     min={0}
-                    value={productForm.dailyRent}
+                    value={productForm.weeklyRent}
                     onChange={(e) => {
-                      setProductForm({ ...productForm, dailyRent: Number(e.target.value) || 0 });
-                      clearFieldError("dailyRent");
+                      setProductForm({ ...productForm, weeklyRent: Number(e.target.value) || 0 });
+                      clearFieldError("weeklyRent");
                     }}
-                    className={fieldErrors.dailyRent ? "border-destructive" : ""}
+                    className={fieldErrors.weeklyRent ? "border-destructive" : ""}
                   />
-                  <FieldError message={fieldErrors.dailyRent} />
+                  <FieldError message={fieldErrors.weeklyRent} />
                   <p className="text-[11px] text-muted-foreground">Required when Rent is enabled (or set Monthly Rent).</p>
                 </div>
                 <div className="space-y-1.5">
@@ -1524,12 +1535,12 @@ const ProductManagement = () => {
               </div>
               <FormGrid cols={2}>
                 <div className="space-y-1.5">
-                  <Label>Vendor Daily Rent (INR)</Label>
+                  <Label>Vendor Weekly Rent (INR)</Label>
                   <Input
                     type="number"
                     min={0}
-                    value={productForm.vendorDailyRent}
-                    onChange={(e) => setProductForm({ ...productForm, vendorDailyRent: Number(e.target.value) || 0 })}
+                    value={productForm.vendorWeeklyRent}
+                    onChange={(e) => setProductForm({ ...productForm, vendorWeeklyRent: Number(e.target.value) || 0 })}
                   />
                 </div>
                 <div className="space-y-1.5">

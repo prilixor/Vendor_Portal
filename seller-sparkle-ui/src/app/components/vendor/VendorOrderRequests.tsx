@@ -403,7 +403,7 @@ const VendorOrderRequests = () => {
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               <MetaChip label={`Qty ${offer.quantity}`} />
                               {offer.orderType.toLowerCase() !== "buy" && (
-                                <MetaChip label={`${offer.rentalDays} days`} />
+                                <MetaChip label={`${offer.rentalDays} ${offer.rentalPeriodUnit === "week" ? "weeks" : offer.rentalPeriodUnit === "month" ? "months" : "days"}`} />
                               )}
                               <MetaChip label={`₹${getPayoutAmount(offer).toFixed(0)}`} highlight />
                               <Badge

@@ -47,10 +47,13 @@ interface AdminCartLine {
   primaryImageUrl?: string | null;
   quantity: number;
   rentalDays: number;
+  rentalPeriodUnit: "day" | "week" | "month";
   orderType: "rent" | "buy";
   productVariantId?: string;
   variantLabel?: string;
   dailyRent: number;
+  weeklyRent: number;
+  monthlyRent: number;
   buyPrice?: number;
 }
 
@@ -73,7 +76,13 @@ function lineEstimate(line: AdminCartLine) {
   if (line.orderType === "buy") {
     return (line.buyPrice ?? 0) * qty;
   }
-  return (line.dailyRent || 0) * Math.max(1, line.rentalDays) * qty;
+  const rate =
+    line.rentalPeriodUnit === "week"
+      ? line.weeklyRent
+      : line.rentalPeriodUnit === "month"
+        ? line.monthlyRent
+        : line.dailyRent;
+  return (rate || 0) * Math.max(1, line.rentalDays) * qty;
 }
 
 function stockBadge(status: string, qty: number) {
@@ -312,7 +321,8 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
 
   const [orderType, setOrderType] = useState<"rent" | "buy">("rent");
   const [quantity, setQuantity] = useState("1");
-  const [rentalDays, setRentalDays] = useState("7");
+  const [rentalDays, setRentalDays] = useState("1");
+  const [rentalPeriodUnit, setRentalPeriodUnit] = useState<"week" | "month">("week");
   const [variantId, setVariantId] = useState("");
   const [addressId, setAddressId] = useState("");
   const [deliveryOption, setDeliveryOption] = useState("standard");
@@ -399,14 +409,17 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
 
   const configureEstimate = useMemo(() => {
     const qty = Math.max(1, Number(quantity) || 1);
-    const days = Math.max(0, Number(rentalDays) || 0);
+    const periods = Math.max(0, Number(rentalDays) || 0);
     if (orderType === "buy") {
       const unit = selectedVariant?.buyPrice ?? detail?.buyPrice ?? selected?.buyPrice ?? 0;
       return unit * qty;
     }
+    const weekly = (detail as { weeklyRent?: number } | null)?.weeklyRent ?? selected?.weeklyRent ?? 0;
+    const monthly = detail?.monthlyRent ?? selected?.monthlyRent ?? 0;
     const daily = detail?.dailyRent ?? selected?.dailyRent ?? 0;
-    return daily * Math.max(1, days) * qty;
-  }, [orderType, quantity, rentalDays, selectedVariant, detail, selected]);
+    const rate = rentalPeriodUnit === "week" ? weekly : rentalPeriodUnit === "month" ? monthly : daily;
+    return rate * Math.max(1, periods) * qty;
+  }, [orderType, quantity, rentalDays, rentalPeriodUnit, selectedVariant, detail, selected]);
 
   const cartTotal = useMemo(() => cart.reduce((sum, line) => sum + lineEstimate(line), 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((sum, line) => sum + line.quantity, 0), [cart]);
@@ -494,7 +507,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
   const addToCart = (andContinue: boolean) => {
     if (!selected) return;
     if (orderType === "rent" && (!Number(rentalDays) || Number(rentalDays) < 1)) {
-      toast.error("Rental days must be at least 1");
+      toast.error("Rental period must be at least 1");
       return;
     }
     if (variants.length > 0 && !variantId) {
@@ -530,9 +543,12 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
           ...next[ix],
           quantity: next[ix].quantity + qty,
           rentalDays: days,
+          rentalPeriodUnit: orderType === "rent" ? rentalPeriodUnit : "day",
           orderType,
           buyPrice: buyUnit,
           dailyRent: detail?.dailyRent ?? selected.dailyRent,
+          weeklyRent: (detail as { weeklyRent?: number } | null)?.weeklyRent ?? selected.weeklyRent ?? 0,
+          monthlyRent: detail?.monthlyRent ?? selected.monthlyRent ?? 0,
           title: selected.title,
           vendorName: selected.vendorName,
           primaryImageUrl: image,
@@ -556,10 +572,13 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
           primaryImageUrl: image,
           quantity: qty,
           rentalDays: days,
+          rentalPeriodUnit: orderType === "rent" ? rentalPeriodUnit : "day",
           orderType,
           productVariantId: variantId || undefined,
           variantLabel,
           dailyRent: detail?.dailyRent ?? selected.dailyRent,
+          weeklyRent: (detail as { weeklyRent?: number } | null)?.weeklyRent ?? selected.weeklyRent ?? 0,
+          monthlyRent: detail?.monthlyRent ?? selected.monthlyRent ?? 0,
           buyPrice: buyUnit,
         },
       ];
@@ -622,6 +641,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
             listingId: line.listingId,
             quantity: line.quantity,
             rentalDays: line.orderType === "rent" ? line.rentalDays : 0,
+            rentalPeriodUnit: line.orderType === "rent" ? line.rentalPeriodUnit : "day",
             orderType: line.orderType,
             productVariantId: line.productVariantId,
             doctorId: line.prescriptionRequired ? ref?.doctorId : undefined,
@@ -1037,10 +1057,24 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                 </div>
 
                 {orderType === "rent" && (
-                  <div className="space-y-1.5">
-                    <Label>Rental days</Label>
-                    <Input type="number" min={1} value={rentalDays} onChange={(e) => setRentalDays(e.target.value)} />
-                  </div>
+                  <>
+                    <div className="space-y-1.5">
+                      <Label>Period</Label>
+                      <Select value={rentalPeriodUnit} onValueChange={(v) => setRentalPeriodUnit(v as "week" | "month")}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="week">Week</SelectItem>
+                          <SelectItem value="month">Month</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>{rentalPeriodUnit === "month" ? "Months" : "Weeks"}</Label>
+                      <Input type="number" min={1} value={rentalDays} onChange={(e) => setRentalDays(e.target.value)} />
+                    </div>
+                  </>
                 )}
               </div>
 

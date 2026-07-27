@@ -37,10 +37,12 @@ public sealed class CreateProductRequest
     public string? ShortDescription { get; set; }
     public string? LongDescription { get; set; }
     public decimal DailyRent { get; set; }
+    public decimal WeeklyRent { get; set; }
     public decimal MonthlyRent { get; set; }
     public decimal SecurityDeposit { get; set; }
     public decimal? BuyPrice { get; set; }
     public decimal VendorDailyRent { get; set; }
+    public decimal VendorWeeklyRent { get; set; }
     public decimal VendorMonthlyRent { get; set; }
     public decimal VendorSecurityDeposit { get; set; }
     public decimal? VendorBuyPrice { get; set; }
@@ -68,10 +70,12 @@ public sealed class UpdateProductRequest
     public string? ShortDescription { get; set; }
     public string? LongDescription { get; set; }
     public decimal DailyRent { get; set; }
+    public decimal WeeklyRent { get; set; }
     public decimal MonthlyRent { get; set; }
     public decimal SecurityDeposit { get; set; }
     public decimal? BuyPrice { get; set; }
     public decimal VendorDailyRent { get; set; }
+    public decimal VendorWeeklyRent { get; set; }
     public decimal VendorMonthlyRent { get; set; }
     public decimal VendorSecurityDeposit { get; set; }
     public decimal? VendorBuyPrice { get; set; }
@@ -247,10 +251,12 @@ public sealed class CreateProductEndpoint(IMediator mediator)
             req.ShortDescription,
             req.LongDescription,
             req.DailyRent,
+            req.WeeklyRent,
             req.MonthlyRent,
             req.SecurityDeposit,
             req.BuyPrice,
             req.VendorDailyRent,
+            req.VendorWeeklyRent,
             req.VendorMonthlyRent,
             req.VendorSecurityDeposit,
             req.VendorBuyPrice,
@@ -293,10 +299,12 @@ public sealed class UpdateProductEndpoint(IMediator mediator)
             req.ShortDescription,
             req.LongDescription,
             req.DailyRent,
+            req.WeeklyRent,
             req.MonthlyRent,
             req.SecurityDeposit,
             req.BuyPrice,
             req.VendorDailyRent,
+            req.VendorWeeklyRent,
             req.VendorMonthlyRent,
             req.VendorSecurityDeposit,
             req.VendorBuyPrice,

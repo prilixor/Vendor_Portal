@@ -135,6 +135,7 @@ public sealed record CustomerCatalogListingDto(
     string ServiceAreaHint,
     string CategoryName,
     decimal DailyRent,
+    decimal WeeklyRent,
     decimal MonthlyRent,
     decimal SecurityDeposit,
     bool PrescriptionRequired,
@@ -169,10 +170,12 @@ public sealed class VendorProductListingAggregate
     public string ListingTitle { get; init; } = string.Empty;
     public string ListingStatus { get; init; } = string.Empty;
     public decimal DailyRent { get; init; }
+    public decimal WeeklyRent { get; init; }
     public decimal MonthlyRent { get; init; }
     public decimal SecurityDeposit { get; init; }
     public decimal? BuyPrice { get; init; }
     public decimal VendorDailyRent { get; init; }
+    public decimal VendorWeeklyRent { get; init; }
     public decimal VendorMonthlyRent { get; init; }
     public decimal VendorSecurityDeposit { get; init; }
     public decimal? VendorBuyPrice { get; init; }

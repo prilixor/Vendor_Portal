@@ -100,6 +100,7 @@ const CustomerCheckout = () => {
         listingId: l.listingId,
         quantity: l.quantity,
         rentalDays: l.rentalDays,
+        rentalPeriodUnit: l.rentalPeriodUnit,
         orderType: l.orderType,
         productVariantId: l.productVariantId || undefined,
         ...(l.prescriptionRequired && medicalRefs[l.listingId]?.doctorId
@@ -132,6 +133,7 @@ const CustomerCheckout = () => {
           listingId: l.listingId,
           quantity: l.quantity,
           rentalDays: l.rentalDays,
+          rentalPeriodUnit: l.rentalPeriodUnit,
           orderType: l.orderType,
           productVariantId: l.productVariantId || undefined,
           ...(l.prescriptionRequired && medicalRefs[l.listingId]?.doctorId
@@ -468,7 +470,11 @@ const CustomerCheckout = () => {
                   <span className="shrink-0 tabular-nums font-medium">
                     ₹{(l.orderType === "buy"
                       ? (l.buyPrice ?? 0) * l.quantity
-                      : l.dailyRent * l.quantity * l.rentalDays).toFixed(0)}
+                      : (l.rentalPeriodUnit === "week"
+                          ? l.weeklyRent
+                          : l.rentalPeriodUnit === "month"
+                            ? l.monthlyRent
+                            : l.dailyRent) * l.quantity * l.rentalDays).toFixed(0)}
                   </span>
                 </div>
                 );

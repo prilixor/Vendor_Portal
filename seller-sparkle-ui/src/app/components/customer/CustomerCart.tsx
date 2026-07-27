@@ -13,6 +13,14 @@ import { customerApi } from "@/app/services/customerApi";
 import type { CustomerListingDetailApi } from "@/app/services/customerApi";
 import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
+import {
+  RENTAL_UNIT_LABELS,
+  RENTAL_UNITS_VISIBLE_IN_UI,
+  estimateRent,
+  formatRentalDuration,
+  rateForUnit,
+  type RentalPeriodUnit,
+} from "@/app/helpers/rentalPeriod";
 
 function CartThumb({ url }: { url?: string | null }) {
   const [failed, setFailed] = useState(false);
@@ -40,6 +48,7 @@ function CartLineCard({
   imageUrl,
   onUpdateQty,
   onUpdateDays,
+  onUpdatePeriodUnit,
   onUpdateOrderType,
   onRemove,
 }: {
@@ -48,6 +57,7 @@ function CartLineCard({
   imageUrl?: string | null;
   onUpdateQty: (listingId: string, qty: number) => void;
   onUpdateDays: (listingId: string, days: number) => void;
+  onUpdatePeriodUnit: (listingId: string, unit: RentalPeriodUnit) => void;
   onUpdateOrderType: (listingId: string, orderType: "rent" | "buy") => void;
   onRemove: (listingId: string) => void;
 }) {
@@ -56,7 +66,12 @@ function CartLineCard({
   const lineRent =
     line.orderType === "buy"
       ? linePrice * line.quantity
-      : line.dailyRent * line.quantity * line.rentalDays;
+      : estimateRent(line.rentalPeriodUnit, line.rentalDays, line.quantity, {
+          dailyRent: line.dailyRent,
+          weeklyRent: line.weeklyRent,
+          monthlyRent: line.monthlyRent,
+        });
+  const unitRate = rateForUnit(line.rentalPeriodUnit, line);
   const listingTo = `/customer/shop/${encodeURIComponent(line.listingId)}`;
   const thumbUrl = resolveItemImageUrl({
     primaryImageUrl: imageUrl ?? line.primaryImageUrl,
@@ -90,7 +105,7 @@ function CartLineCard({
               <p className="text-xs text-muted-foreground tabular-nums">
                 {line.orderType === "buy"
                   ? `Buy Price: ₹${linePrice.toFixed(0)}`
-                  : `₹${line.dailyRent.toFixed(0)} / day · ${line.rentalDays} days · deposit ₹${line.securityDeposit.toFixed(0)}`}
+                  : `₹${unitRate.toFixed(0)}${RENTAL_UNIT_LABELS[line.rentalPeriodUnit].per} · ${formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)} · deposit ₹${line.securityDeposit.toFixed(0)}`}
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">
@@ -128,13 +143,33 @@ function CartLineCard({
               </Select>
             </div>
             {line.orderType === "rent" ? (
-              <QuantityStepper
-                label="Days"
-                value={line.rentalDays}
-                min={1}
-                max={366}
-                onChange={(days) => onUpdateDays(line.listingId, days)}
-              />
+              <>
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Period</p>
+                  <Select
+                    value={line.rentalPeriodUnit}
+                    onValueChange={(v) => onUpdatePeriodUnit(line.listingId, v as RentalPeriodUnit)}
+                  >
+                    <SelectTrigger className="h-9 w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RENTAL_UNITS_VISIBLE_IN_UI.map((u) => (
+                        <SelectItem key={u} value={u}>
+                          {RENTAL_UNIT_LABELS[u].singular}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <QuantityStepper
+                  label={RENTAL_UNIT_LABELS[line.rentalPeriodUnit].plural}
+                  value={line.rentalDays}
+                  min={1}
+                  max={366}
+                  onChange={(days) => onUpdateDays(line.listingId, days)}
+                />
+              </>
             ) : null}
           </div>
           {isOverStock && (
@@ -244,6 +279,7 @@ const CustomerCart = () => {
                 imageUrl={resolveItemImageUrl(detailMap.get(line.listingId))}
                 onUpdateQty={(listingId, qty) => updateLine(listingId, { quantity: qty })}
                 onUpdateDays={(listingId, rentalDays) => updateLine(listingId, { rentalDays })}
+                onUpdatePeriodUnit={(listingId, rentalPeriodUnit) => updateLine(listingId, { rentalPeriodUnit })}
                 onUpdateOrderType={(listingId, orderType) => updateLine(listingId, { orderType })}
                 onRemove={removeLine}
               />

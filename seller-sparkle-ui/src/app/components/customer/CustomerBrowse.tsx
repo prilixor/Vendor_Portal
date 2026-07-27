@@ -524,7 +524,13 @@ const CustomerBrowse = () => {
             );
 
             const primaryPrice = (() => {
-              if (showRent) return { value: `₹${item.dailyRent.toFixed(0)}`, unit: "/day" };
+              if (showRent) {
+                const weekly = item.weeklyRent ?? 0;
+                const monthly = item.monthlyRent ?? 0;
+                if (weekly > 0) return { value: `₹${weekly.toFixed(0)}`, unit: "/week" };
+                if (monthly > 0) return { value: `₹${monthly.toFixed(0)}`, unit: "/month" };
+                if (item.dailyRent > 0) return { value: `₹${item.dailyRent.toFixed(0)}`, unit: "/day" };
+              }
               if (showBuy && item.buyPrice != null && item.buyPrice > 0) {
                 return {
                   value: `₹${item.buyPrice.toFixed(0)}`,
@@ -605,7 +611,13 @@ const CustomerBrowse = () => {
                   <div className="space-y-1 text-xs text-muted-foreground">
                     {showRent && (
                       <p className="tabular-nums">
-                        Monthly ₹{item.monthlyRent.toFixed(0)}
+                        {(item.weeklyRent ?? 0) > 0 && (item.monthlyRent ?? 0) > 0
+                          ? `Weekly ₹${(item.weeklyRent ?? 0).toFixed(0)} · Monthly ₹${item.monthlyRent.toFixed(0)}`
+                          : (item.monthlyRent ?? 0) > 0
+                            ? `Monthly ₹${item.monthlyRent.toFixed(0)}`
+                            : (item.weeklyRent ?? 0) > 0
+                              ? `Weekly ₹${(item.weeklyRent ?? 0).toFixed(0)}`
+                              : null}
                         {item.depositRequired ? ` · Deposit ₹${item.securityDeposit.toFixed(0)}` : ""}
                       </p>
                     )}

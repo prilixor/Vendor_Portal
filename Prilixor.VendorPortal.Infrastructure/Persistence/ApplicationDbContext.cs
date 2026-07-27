@@ -288,10 +288,12 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.ShortDescription).HasColumnName("short_description");
             entity.Property(x => x.LongDescription).HasColumnName("long_description");
             entity.Property(x => x.DailyRent).HasColumnName("daily_rent");
+            entity.Property(x => x.WeeklyRent).HasColumnName("weekly_rent");
             entity.Property(x => x.MonthlyRent).HasColumnName("monthly_rent");
             entity.Property(x => x.SecurityDeposit).HasColumnName("security_deposit");
             entity.Property(x => x.BuyPrice).HasColumnName("buy_price");
             entity.Property(x => x.VendorDailyRent).HasColumnName("vendor_daily_rent");
+            entity.Property(x => x.VendorWeeklyRent).HasColumnName("vendor_weekly_rent");
             entity.Property(x => x.VendorMonthlyRent).HasColumnName("vendor_monthly_rent");
             entity.Property(x => x.VendorSecurityDeposit).HasColumnName("vendor_security_deposit");
             entity.Property(x => x.VendorBuyPrice).HasColumnName("vendor_buy_price");
@@ -390,6 +392,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.ProductId).HasColumnName("product_id");
             entity.Property(x => x.ListingTitle).HasColumnName("listing_title");
             entity.Property(x => x.DailyRent).HasColumnName("daily_rent");
+            entity.Property(x => x.WeeklyRent).HasColumnName("weekly_rent");
             entity.Property(x => x.MonthlyRent).HasColumnName("monthly_rent");
             entity.Property(x => x.SecurityDeposit).HasColumnName("security_deposit");
             entity.Property(x => x.AvailableQuantity).HasColumnName("available_quantity");

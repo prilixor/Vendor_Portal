@@ -9,7 +9,10 @@ public class CustomerRentalOrder : AuditableEntity<Guid>, ISoftDelete
     public Guid VendorProductListingId { get; set; }
     public Guid? CustomerAddressId { get; set; }
     public int Quantity { get; set; }
+    /// <summary>Number of periods for <see cref="RentalPeriodUnit"/> (days, weeks, or months).</summary>
     public int RentalDays { get; set; }
+    /// <summary>Billing unit: day | week | month. Daily remains supported for future UI enablement.</summary>
+    public string RentalPeriodUnit { get; set; } = "day";
     public string OrderType { get; set; } = "rent";
     public string DeliveryOption { get; set; } = "standard";
     public string Status { get; set; } = "pending";

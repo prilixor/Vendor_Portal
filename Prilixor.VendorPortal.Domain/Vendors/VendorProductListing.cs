@@ -8,6 +8,7 @@ public class VendorProductListing : AuditableEntity<Guid>, ISoftDelete
     public Guid ProductId { get; set; }
     public string ListingTitle { get; set; } = string.Empty;
     public decimal DailyRent { get; set; }
+    public decimal WeeklyRent { get; set; }
     public decimal MonthlyRent { get; set; }
     public decimal SecurityDeposit { get; set; }
     public int AvailableQuantity { get; set; }

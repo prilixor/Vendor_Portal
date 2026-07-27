@@ -1171,10 +1171,12 @@ public sealed class VendorOnboardingRepository(
             ShortDescription = source.ShortDescription,
             LongDescription = source.LongDescription,
             DailyRent = source.DailyRent,
+            WeeklyRent = source.WeeklyRent,
             MonthlyRent = source.MonthlyRent,
             SecurityDeposit = source.SecurityDeposit,
             BuyPrice = source.BuyPrice,
             VendorDailyRent = source.VendorDailyRent,
+            VendorWeeklyRent = source.VendorWeeklyRent,
             VendorMonthlyRent = source.VendorMonthlyRent,
             VendorSecurityDeposit = source.VendorSecurityDeposit,
             VendorBuyPrice = source.VendorBuyPrice,
@@ -1223,10 +1225,12 @@ public sealed class VendorOnboardingRepository(
         destination.ShortDescription = source.ShortDescription;
         destination.LongDescription = source.LongDescription;
         destination.DailyRent = source.DailyRent;
+        destination.WeeklyRent = source.WeeklyRent;
         destination.MonthlyRent = source.MonthlyRent;
         destination.SecurityDeposit = source.SecurityDeposit;
         destination.BuyPrice = source.BuyPrice;
         destination.VendorDailyRent = source.VendorDailyRent;
+        destination.VendorWeeklyRent = source.VendorWeeklyRent;
         destination.VendorMonthlyRent = source.VendorMonthlyRent;
         destination.VendorSecurityDeposit = source.VendorSecurityDeposit;
         destination.VendorBuyPrice = source.VendorBuyPrice;

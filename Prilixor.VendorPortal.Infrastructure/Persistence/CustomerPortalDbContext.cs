@@ -99,6 +99,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.CustomerAddressId).HasColumnName("customer_address_id");
             entity.Property(x => x.Quantity).HasColumnName("quantity");
             entity.Property(x => x.RentalDays).HasColumnName("rental_days");
+            entity.Property(x => x.RentalPeriodUnit).HasColumnName("rental_period_unit");
             entity.Property(x => x.OrderType).HasColumnName("order_type");
             entity.Property(x => x.DeliveryOption).HasColumnName("delivery_option");
             entity.Property(x => x.Status).HasColumnName("status");

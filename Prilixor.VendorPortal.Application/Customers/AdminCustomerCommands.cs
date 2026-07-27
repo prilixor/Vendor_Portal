@@ -83,6 +83,7 @@ public sealed record AdminOrderableListingDto(
     bool IsRentEnabled,
     bool IsBuyEnabled,
     decimal DailyRent,
+    decimal WeeklyRent,
     decimal MonthlyRent,
     decimal SecurityDeposit,
     decimal? BuyPrice,

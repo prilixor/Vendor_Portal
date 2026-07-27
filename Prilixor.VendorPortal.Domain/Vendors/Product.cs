@@ -11,10 +11,12 @@ public class Product : AuditableEntity<Guid>, ISoftDelete
     public string? ShortDescription { get; set; }
     public string? LongDescription { get; set; }
     public decimal DailyRent { get; set; }
+    public decimal WeeklyRent { get; set; }
     public decimal MonthlyRent { get; set; }
     public decimal SecurityDeposit { get; set; }
     public decimal? BuyPrice { get; set; }
     public decimal VendorDailyRent { get; set; }
+    public decimal VendorWeeklyRent { get; set; }
     public decimal VendorMonthlyRent { get; set; }
     public decimal VendorSecurityDeposit { get; set; }
     public decimal? VendorBuyPrice { get; set; }

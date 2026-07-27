@@ -930,6 +930,7 @@ internal sealed class VerifyVendorListingCommandHandler(IVendorOnboardingReposit
             listing.ProductId.ToString(),
             listing.ListingTitle,
             listing.DailyRent,
+            listing.WeeklyRent,
             listing.MonthlyRent,
             listing.SecurityDeposit,
             listing.AvailableQuantity,

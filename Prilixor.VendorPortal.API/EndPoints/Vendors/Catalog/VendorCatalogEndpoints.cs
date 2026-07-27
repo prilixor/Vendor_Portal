@@ -139,11 +139,13 @@ public sealed class CreateProductEndpoint(IMediator mediator)
             req.ModelName,
             req.ShortDescription,
             req.LongDescription,
-            0m,
-            0m,
-            0m,
+            0m, // DailyRent
+            0m, // WeeklyRent
+            0m, // MonthlyRent
+            0m, // SecurityDeposit
             null,
             0m, // VendorDailyRent
+            0m, // VendorWeeklyRent
             0m, // VendorMonthlyRent
             0m, // VendorSecurityDeposit
             null, // VendorBuyPrice

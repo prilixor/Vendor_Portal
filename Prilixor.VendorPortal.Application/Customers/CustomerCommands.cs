@@ -321,6 +321,7 @@ public sealed record CartLineRequest(
     Guid ListingId,
     int Quantity,
     int RentalDays,
+    string RentalPeriodUnit = "day",
     string OrderType = "rent",
     Guid? ProductVariantId = null,
     Guid? DoctorId = null,
@@ -369,6 +370,8 @@ public sealed class PlaceCustomerOrdersCommandValidator : AbstractValidator<Plac
             l.RuleFor(x => x.ListingId).NotEmpty();
             l.RuleFor(x => x.Quantity).GreaterThan(0);
             l.RuleFor(x => x.RentalDays).GreaterThanOrEqualTo(0).LessThanOrEqualTo(366);
+            l.RuleFor(x => x.RentalPeriodUnit).Must(RentalPeriod.IsValid)
+                .WithMessage("Rental period unit must be day, week, or month.");
             l.RuleFor(x => x.OrderType).NotEmpty().Must(x =>
                 string.Equals(x, "rent", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(x, "buy", StringComparison.OrdinalIgnoreCase));
@@ -383,7 +386,8 @@ public sealed record FailedCustomerOrderLineDto(
     string OrderType,
     string ReasonCode,
     string Message,
-    IReadOnlyList<VariantStockSuggestionDto>? VariantSuggestions = null);
+    IReadOnlyList<VariantStockSuggestionDto>? VariantSuggestions = null,
+    string RentalPeriodUnit = "day");
 
 /// <summary>Alternate packaging size (SKU) that has stock, offered when the requested size cannot be fulfilled.</summary>
 public sealed record VariantStockSuggestionDto(
@@ -417,6 +421,7 @@ public sealed record CustomerOrderDto(
     string OrderType,
     int Quantity,
     int RentalDays,
+    string RentalPeriodUnit,
     string? ListingPrimaryImageUrl,
     Guid? ProductVariantId = null,
     Guid? DoctorId = null,
@@ -490,7 +495,9 @@ internal static class CustomerOrderPricingRules
             return unitBuyPrice * line.Quantity;
         }
 
-        return aggregate.DailyRent * line.RentalDays * line.Quantity;
+        var customerRate = RentalPeriod.SelectCustomerRate(
+            line.RentalPeriodUnit, aggregate.DailyRent, aggregate.WeeklyRent, aggregate.MonthlyRent);
+        return customerRate * line.RentalDays * line.Quantity;
     }
 
     public static decimal CalculateVendorLineSubtotal(
@@ -518,7 +525,9 @@ internal static class CustomerOrderPricingRules
             return unitVendorBuyPrice * line.Quantity;
         }
 
-        return aggregate.VendorDailyRent * line.RentalDays * line.Quantity;
+        var vendorRate = RentalPeriod.SelectVendorRate(
+            line.RentalPeriodUnit, aggregate.VendorDailyRent, aggregate.VendorWeeklyRent, aggregate.VendorMonthlyRent);
+        return vendorRate * line.RentalDays * line.Quantity;
     }
 
     public static decimal CalculateDistanceKm(decimal lat1, decimal lon1, decimal lat2, decimal lon2)
@@ -1000,7 +1009,10 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
             var orderNumber = $"{baseOrderNumber}-{lineIndex + 1:D2}";
             lineIndex++;
             var start = DateOnly.FromDateTime(DateTime.UtcNow.Date);
-            var end = orderType == "buy" ? start : start.AddDays(line.RentalDays);
+            var periodUnit = RentalPeriod.Normalize(line.RentalPeriodUnit);
+            var end = orderType == "buy"
+                ? start
+                : RentalPeriod.AddPeriods(start, periodUnit, line.RentalDays);
 
             var order = new CustomerRentalOrder
             {
@@ -1010,6 +1022,7 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 CustomerAddressId = request.CustomerAddressId,
                 Quantity = line.Quantity,
                 RentalDays = orderType == "buy" ? 0 : line.RentalDays,
+                RentalPeriodUnit = orderType == "buy" ? RentalPeriod.Day : periodUnit,
                 OrderType = orderType,
                 DeliveryOption = deliveryOption,
                 Status = "awaiting_vendor_acceptance",
@@ -1198,6 +1211,7 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 order.OrderType,
                 order.Quantity,
                 order.RentalDays,
+                order.RentalPeriodUnit,
                 primaryImg,
                 ProductVariantId: order.ProductVariantId,
                 DoctorId: order.DoctorReference?.DoctorId,
@@ -1309,6 +1323,7 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
                 o.OrderType,
                 o.Quantity,
                 o.RentalDays,
+                o.RentalPeriodUnit,
                 row.ListingPrimaryImageUrl,
                 ProductVariantId: o.ProductVariantId,
                 DoctorId: row.Doctor?.Id,
@@ -1367,6 +1382,7 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
             o.OrderType,
             o.Quantity,
             o.RentalDays,
+            o.RentalPeriodUnit,
             row.ListingPrimaryImageUrl,
             ProductVariantId: o.ProductVariantId,
             DoctorId: row.Doctor?.Id,
@@ -1545,6 +1561,7 @@ internal sealed class CancelCustomerOrderCommandHandler(ICustomerRepository cust
             o.OrderType,
             o.Quantity,
             o.RentalDays,
+            o.RentalPeriodUnit,
             row.ListingPrimaryImageUrl,
             ProductVariantId: o.ProductVariantId,
             DoctorId: row.Doctor?.Id,

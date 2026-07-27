@@ -77,6 +77,7 @@ export interface VendorProductListingDto {
   productId: string;
   listingTitle: string;
   dailyRent: number;
+  weeklyRent: number;
   monthlyRent: number;
   securityDeposit: number;
   availableQuantity: number;
@@ -173,6 +174,7 @@ export interface AdminOrderableListingDto {
   isRentEnabled: boolean;
   isBuyEnabled: boolean;
   dailyRent: number;
+  weeklyRent: number;
   monthlyRent: number;
   securityDeposit: number;
   buyPrice?: number;
@@ -270,6 +272,7 @@ export interface VendorProductListingDto {
   productId: string;
   listingTitle: string;
   dailyRent: number;
+  weeklyRent: number;
   monthlyRent: number;
   securityDeposit: number;
   availableQuantity: number;
@@ -367,10 +370,12 @@ export interface ProductDto {
   shortDescription?: string;
   longDescription?: string;
   dailyRent: number;
+  weeklyRent: number;
   monthlyRent: number;
   securityDeposit: number;
   buyPrice?: number;
   vendorDailyRent: number;
+  vendorWeeklyRent: number;
   vendorMonthlyRent: number;
   vendorSecurityDeposit: number;
   vendorBuyPrice?: number;
@@ -509,10 +514,12 @@ export interface CreateProductRequest {
   shortDescription?: string;
   longDescription?: string;
   dailyRent: number;
+  weeklyRent: number;
   monthlyRent: number;
   securityDeposit: number;
   buyPrice?: number;
   vendorDailyRent: number;
+  vendorWeeklyRent: number;
   vendorMonthlyRent: number;
   vendorSecurityDeposit: number;
   vendorBuyPrice?: number;
@@ -539,10 +546,12 @@ export interface UpdateProductRequest {
   shortDescription?: string;
   longDescription?: string;
   dailyRent: number;
+  weeklyRent: number;
   monthlyRent: number;
   securityDeposit: number;
   buyPrice?: number;
   vendorDailyRent: number;
+  vendorWeeklyRent: number;
   vendorMonthlyRent: number;
   vendorSecurityDeposit: number;
   vendorBuyPrice?: number;
@@ -915,6 +924,7 @@ export const adminApi = {
       listingId: string;
       quantity: number;
       rentalDays: number;
+      rentalPeriodUnit?: "day" | "week" | "month";
       orderType: string;
       productVariantId?: string;
       doctorId?: string;

@@ -519,7 +519,7 @@ const Dashboard = () => {
                 <tr key={p.id} className="align-middle">
                   <td className="px-4 py-3 font-medium">{p.title}</td>
                   <td className="px-4 py-3 text-muted-foreground">{p.category}</td>
-                  <td className="px-4 py-3 text-right font-mono">₹{p.dailyRent}</td>
+                  <td className="px-4 py-3 text-right font-mono">₹{(p as { weeklyRent?: number }).weeklyRent ?? p.dailyRent}</td>
                   <td className="px-4 py-3 text-right">{p.stock}</td>
                 </tr>
               ))}
