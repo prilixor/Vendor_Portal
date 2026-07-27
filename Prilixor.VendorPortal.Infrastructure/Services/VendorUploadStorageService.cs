@@ -18,7 +18,7 @@ internal sealed class VendorUploadStorageService(
     IAmazonS3? amazonS3) : IVendorUploadStorageService
 {
     private const int ThumbnailMaxWidth = 400;
-    private const int ThumbnailJpegQuality = 80;
+    private const int ThumbnailJpegQuality = 72;
 
     public async Task<VendorFilePersistResult> PersistVendorUploadAsync(
         string vendorId,
@@ -55,7 +55,7 @@ internal sealed class VendorUploadStorageService(
         string? thumbnailFileName = null;
         if (folderType == VendorFileFolderType.ProductImages && LooksLikeImage(contentType, extension))
         {
-            thumbnailBytes = TryCreateThumbnailJpeg(sourceMs);
+            thumbnailBytes = TryCreateThumbnailJpeg(sourceMs, sourceMs.Length);
             sourceMs.Position = 0;
             if (thumbnailBytes is { Length: > 0 })
             {
@@ -224,7 +224,7 @@ internal sealed class VendorUploadStorageService(
         return ext is ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif" or ".bmp";
     }
 
-    private static byte[]? TryCreateThumbnailJpeg(Stream source)
+    private static byte[]? TryCreateThumbnailJpeg(Stream source, long originalByteLength)
     {
         try
         {
@@ -234,15 +234,22 @@ internal sealed class VendorUploadStorageService(
             if (width <= 0 || height <= 0)
                 return null;
 
-            if (width > ThumbnailMaxWidth)
-            {
-                var newHeight = (int)Math.Round(height * (ThumbnailMaxWidth / (double)width));
-                image.Mutate(x => x.Resize(ThumbnailMaxWidth, Math.Max(1, newHeight)));
-            }
+            // Already small enough for list cards — don't invent a second file that can end up larger after re-encode.
+            if (width <= ThumbnailMaxWidth && height <= ThumbnailMaxWidth)
+                return null;
+
+            var newHeight = (int)Math.Round(height * (ThumbnailMaxWidth / (double)width));
+            image.Mutate(x => x.Resize(ThumbnailMaxWidth, Math.Max(1, newHeight)));
 
             using var outMs = new MemoryStream();
             image.Save(outMs, new JpegEncoder { Quality = ThumbnailJpegQuality });
-            return outMs.ToArray();
+            var bytes = outMs.ToArray();
+
+            // Only keep a thumb when it is meaningfully smaller than the original payload.
+            if (originalByteLength > 0 && bytes.Length >= originalByteLength)
+                return null;
+
+            return bytes;
         }
         catch
         {
