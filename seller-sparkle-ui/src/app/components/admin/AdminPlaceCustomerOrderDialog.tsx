@@ -121,8 +121,12 @@ function priceHint(listing: AdminOrderableListingDto, mode: BrowseMode) {
     return "Buy pricing on select";
   }
   const parts: string[] = [];
-  if (listing.isRentEnabled && listing.dailyRent > 0) {
-    parts.push(`${formatMoney(listing.dailyRent)}/day rent`);
+  if (listing.isRentEnabled) {
+    const weekly = listing.weeklyRent ?? 0;
+    const monthly = listing.monthlyRent ?? 0;
+    if (weekly > 0) parts.push(`${formatMoney(weekly)}/week rent`);
+    else if (monthly > 0) parts.push(`${formatMoney(monthly)}/month rent`);
+    // Daily kept in API but not shown while UI hides day unit
   }
   if (listing.isBuyEnabled && listing.buyPrice != null && listing.buyPrice > 0) {
     parts.push(`Buy ${formatMoney(listing.buyPrice)}`);
@@ -157,7 +161,14 @@ function unitPriceLabel(line: AdminCartLine) {
   if (line.orderType === "buy") {
     return `${formatMoney(line.buyPrice ?? 0)} each`;
   }
-  return `${formatMoney(line.dailyRent)}/day`;
+  const rate =
+    line.rentalPeriodUnit === "week"
+      ? line.weeklyRent
+      : line.rentalPeriodUnit === "month"
+        ? line.monthlyRent
+        : line.dailyRent;
+  const per = line.rentalPeriodUnit === "week" ? "/week" : line.rentalPeriodUnit === "month" ? "/month" : "/day";
+  return `${formatMoney(rate || 0)}${per}`;
 }
 
 function CartItemTile({
@@ -286,7 +297,10 @@ function CartItemTile({
               <div className="text-left sm:text-right pt-2.5 sm:pt-0 sm:pl-3">
                 <p className="text-[11px] text-muted-foreground">
                   {unitPriceLabel(line)}
-                  {isRent ? ` × ${line.rentalDays}d` : ""} × {line.quantity}
+                  {isRent
+                    ? ` × ${line.rentalDays}${line.rentalPeriodUnit === "week" ? "w" : line.rentalPeriodUnit === "month" ? "mo" : "d"}`
+                    : ""}{" "}
+                  × {line.quantity}
                 </p>
                 <p className="text-base sm:text-lg font-bold tabular-nums tracking-tight">{formatMoney(total)}</p>
               </div>

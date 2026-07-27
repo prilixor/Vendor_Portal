@@ -1641,7 +1641,8 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                             string? modelName = null;
                             string? shortDescription;
                             string? longDescription;
-                            string? dailyRentText = null;
+                            // Daily rent kept in domain (defaults to 0); Excel exposes weekly/monthly only (UI parity).
+                            string? weeklyRentText = null;
                             string? monthlyRentText = null;
                             string? securityDepositText = null;
                             string? buyPriceText;
@@ -1650,8 +1651,8 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                             string? isBuyEnabledText = null;
                             string? isActiveText;
                             
-                            // New fields for vendor pricing
-                            string? vendorDailyRentText = null;
+                            // Vendor pricing (weekly/monthly only in Excel)
+                            string? vendorWeeklyRentText = null;
                             string? vendorMonthlyRentText = null;
                             string? vendorSecurityDepositText = null;
                             string? vendorBuyPriceText = null;
@@ -1685,10 +1686,17 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                             }
                             else
                             {
+                                // Equipment columns (no daily_* — matches Admin UI):
+                                // 1 category_name, 2 product_name, 3 brand_name, 4 model_name,
+                                // 5 short_description, 6 long_description,
+                                // 7 weekly_rent, 8 monthly_rent, 9 security_deposit, 10 buy_price,
+                                // 11 gst_percent, 12 is_rent_enabled, 13 is_buy_enabled, 14 is_active,
+                                // 15 vendor_weekly_rent, 16 vendor_monthly_rent,
+                                // 17 vendor_security_deposit, 18 vendor_buy_price
                                 modelName = productsSheet.Cells[row, 4].Text?.Trim();
                                 shortDescription = productsSheet.Cells[row, 5].Text?.Trim();
                                 longDescription = productsSheet.Cells[row, 6].Text?.Trim();
-                                dailyRentText = productsSheet.Cells[row, 7].Text?.Trim();
+                                weeklyRentText = productsSheet.Cells[row, 7].Text?.Trim();
                                 monthlyRentText = productsSheet.Cells[row, 8].Text?.Trim();
                                 securityDepositText = productsSheet.Cells[row, 9].Text?.Trim();
                                 buyPriceText = productsSheet.Cells[row, 10].Text?.Trim();
@@ -1696,7 +1704,7 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                                 isRentEnabledText = productsSheet.Cells[row, 12].Text?.Trim();
                                 isBuyEnabledText = productsSheet.Cells[row, 13].Text?.Trim();
                                 isActiveText = productsSheet.Cells[row, 14].Text?.Trim();
-                                vendorDailyRentText = productsSheet.Cells[row, 15].Text?.Trim();
+                                vendorWeeklyRentText = productsSheet.Cells[row, 15].Text?.Trim();
                                 vendorMonthlyRentText = productsSheet.Cells[row, 16].Text?.Trim();
                                 vendorSecurityDepositText = productsSheet.Cells[row, 17].Text?.Trim();
                                 vendorBuyPriceText = productsSheet.Cells[row, 18].Text?.Trim();
@@ -1726,13 +1734,13 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                             bool isActive = string.IsNullOrEmpty(isActiveText) || isActiveText?.ToLower() == "true" || isActiveText?.ToLower() == "yes" || isActiveText == "1";
                             bool isRentEnabled = string.IsNullOrEmpty(isRentEnabledText) || isRentEnabledText?.ToLower() == "true" || isRentEnabledText?.ToLower() == "yes" || isRentEnabledText == "1";
                             bool isBuyEnabled = string.IsNullOrEmpty(isBuyEnabledText) || isBuyEnabledText?.ToLower() == "true" || isBuyEnabledText?.ToLower() == "yes" || isBuyEnabledText == "1";
-                            if (!decimal.TryParse(dailyRentText, out var dailyRent)) dailyRent = 0m;
+                            if (!decimal.TryParse(weeklyRentText, out var weeklyRent)) weeklyRent = 0m;
                             if (!decimal.TryParse(monthlyRentText, out var monthlyRent)) monthlyRent = 0m;
                             if (!decimal.TryParse(securityDepositText, out var securityDeposit)) securityDeposit = 0m;
                             decimal? buyPrice = null;
                             if (decimal.TryParse(buyPriceText, out var buyPriceParsed)) buyPrice = buyPriceParsed;
 
-                            decimal? vendorDailyRent = decimal.TryParse(vendorDailyRentText, out var vdr) ? vdr : (decimal?)null;
+                            decimal? vendorWeeklyRent = decimal.TryParse(vendorWeeklyRentText, out var vwr) ? vwr : (decimal?)null;
                             decimal? vendorMonthlyRent = decimal.TryParse(vendorMonthlyRentText, out var vmr) ? vmr : (decimal?)null;
                             decimal? vendorSecurityDeposit = decimal.TryParse(vendorSecurityDepositText, out var vsd) ? vsd : (decimal?)null;
                             decimal? vendorBuyPrice = decimal.TryParse(vendorBuyPriceText, out var vbp) ? vbp : (decimal?)null;
@@ -1748,13 +1756,13 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                                 ModelName = string.IsNullOrEmpty(modelName) ? null : modelName,
                                 ShortDescription = string.IsNullOrEmpty(shortDescription) ? null : shortDescription,
                                 LongDescription = string.IsNullOrEmpty(longDescription) ? null : longDescription,
-                                DailyRent = Math.Max(0m, dailyRent),
-                                WeeklyRent = 0m,
+                                DailyRent = 0m, // Hidden from Excel/UI; retained for future enablement
+                                WeeklyRent = Math.Max(0m, weeklyRent),
                                 MonthlyRent = Math.Max(0m, monthlyRent),
                                 SecurityDeposit = Math.Max(0m, securityDeposit),
                                 BuyPrice = buyPrice is > 0m ? buyPrice : null,
-                                VendorDailyRent = Math.Max(0m, vendorDailyRent ?? dailyRent),
-                                VendorWeeklyRent = 0m,
+                                VendorDailyRent = 0m,
+                                VendorWeeklyRent = Math.Max(0m, vendorWeeklyRent ?? weeklyRent),
                                 VendorMonthlyRent = Math.Max(0m, vendorMonthlyRent ?? monthlyRent),
                                 VendorSecurityDeposit = Math.Max(0m, vendorSecurityDeposit ?? securityDeposit),
                                 VendorBuyPrice = vendorBuyPrice ?? buyPrice,
@@ -1923,13 +1931,14 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
             }
             else
             {
+                // Daily rent omitted from Excel (UI parity); values remain 0 in DB unless set via API later.
                 productsSheet.Cells[1, 1].Value = "category_name";
                 productsSheet.Cells[1, 2].Value = "product_name";
                 productsSheet.Cells[1, 3].Value = "brand_name";
                 productsSheet.Cells[1, 4].Value = "model_name";
                 productsSheet.Cells[1, 5].Value = "short_description";
                 productsSheet.Cells[1, 6].Value = "long_description";
-                productsSheet.Cells[1, 7].Value = "daily_rent";
+                productsSheet.Cells[1, 7].Value = "weekly_rent";
                 productsSheet.Cells[1, 8].Value = "monthly_rent";
                 productsSheet.Cells[1, 9].Value = "security_deposit";
                 productsSheet.Cells[1, 10].Value = "buy_price";
@@ -1937,7 +1946,7 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
                 productsSheet.Cells[1, 12].Value = "is_rent_enabled";
                 productsSheet.Cells[1, 13].Value = "is_buy_enabled";
                 productsSheet.Cells[1, 14].Value = "is_active";
-                productsSheet.Cells[1, 15].Value = "vendor_daily_rent";
+                productsSheet.Cells[1, 15].Value = "vendor_weekly_rent";
                 productsSheet.Cells[1, 16].Value = "vendor_monthly_rent";
                 productsSheet.Cells[1, 17].Value = "vendor_security_deposit";
                 productsSheet.Cells[1, 18].Value = "vendor_buy_price";
@@ -1959,7 +1968,7 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
                     productsSheet.Cells[row, 4].Value = product.ModelName;
                     productsSheet.Cells[row, 5].Value = product.ShortDescription;
                     productsSheet.Cells[row, 6].Value = product.LongDescription;
-                    productsSheet.Cells[row, 7].Value = product.DailyRent;
+                    productsSheet.Cells[row, 7].Value = product.WeeklyRent;
                     productsSheet.Cells[row, 8].Value = product.MonthlyRent;
                     productsSheet.Cells[row, 9].Value = product.SecurityDeposit;
                     productsSheet.Cells[row, 10].Value = product.BuyPrice;
@@ -1967,7 +1976,7 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
                     productsSheet.Cells[row, 12].Value = product.IsRentEnabled;
                     productsSheet.Cells[row, 13].Value = product.IsBuyEnabled;
                     productsSheet.Cells[row, 14].Value = product.IsActive;
-                    productsSheet.Cells[row, 15].Value = product.VendorDailyRent;
+                    productsSheet.Cells[row, 15].Value = product.VendorWeeklyRent;
                     productsSheet.Cells[row, 16].Value = product.VendorMonthlyRent;
                     productsSheet.Cells[row, 17].Value = product.VendorSecurityDeposit;
                     productsSheet.Cells[row, 18].Value = product.VendorBuyPrice;

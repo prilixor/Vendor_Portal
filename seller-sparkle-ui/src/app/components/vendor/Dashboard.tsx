@@ -510,7 +510,7 @@ const Dashboard = () => {
               <tr>
                 <th className="px-4 py-3 font-semibold">Product</th>
                 <th className="px-4 py-3 font-semibold">Category</th>
-                <th className="px-4 py-3 font-semibold text-right">Daily</th>
+                <th className="px-4 py-3 font-semibold text-right">Weekly</th>
                 <th className="px-4 py-3 font-semibold text-right">Stock</th>
               </tr>
             </thead>

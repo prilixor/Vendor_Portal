@@ -850,8 +850,21 @@ const VendorOrderDetail = () => {
                     <p className="text-sm font-medium tabular-nums">{formatDetailDate(order.endDate)}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rental days</p>
-                    <p className="text-sm font-medium">{order.rentalDays}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rental period</p>
+                    <p className="text-sm font-medium">
+                      {order.rentalDays}{" "}
+                      {order.rentalPeriodUnit === "week"
+                        ? order.rentalDays === 1
+                          ? "week"
+                          : "weeks"
+                        : order.rentalPeriodUnit === "month"
+                          ? order.rentalDays === 1
+                            ? "month"
+                            : "months"
+                          : order.rentalDays === 1
+                            ? "day"
+                            : "days"}
+                    </p>
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">

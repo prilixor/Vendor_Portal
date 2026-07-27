@@ -486,8 +486,21 @@ const CustomerOrderDetail = () => {
                 <p className="text-sm font-medium">{activeItem.quantity}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rental days</p>
-                <p className="text-sm font-medium">{activeItem.rentalDays}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rental period</p>
+                <p className="text-sm font-medium">
+                  {activeItem.rentalDays}{" "}
+                  {activeItem.rentalPeriodUnit === "week"
+                    ? activeItem.rentalDays === 1
+                      ? "week"
+                      : "weeks"
+                    : activeItem.rentalPeriodUnit === "month"
+                      ? activeItem.rentalDays === 1
+                        ? "month"
+                        : "months"
+                      : activeItem.rentalDays === 1
+                        ? "day"
+                        : "days"}
+                </p>
               </div>
             </>
           )}

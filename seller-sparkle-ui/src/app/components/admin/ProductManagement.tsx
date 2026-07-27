@@ -661,7 +661,7 @@ const ProductManagement = () => {
       XLSX.utils.book_append_sheet(wb, categoriesWs, "Categories");
 
       const productsHeaders = [
-        ["category_name", "product_name", "brand_name", "model_name", "short_description", "long_description", "daily_rent", "monthly_rent", "security_deposit", "buy_price", "gst_percent", "is_rent_enabled", "is_buy_enabled", "is_active", "vendor_daily_rent", "vendor_monthly_rent", "vendor_security_deposit", "vendor_buy_price"]
+        ["category_name", "product_name", "brand_name", "model_name", "short_description", "long_description", "weekly_rent", "monthly_rent", "security_deposit", "buy_price", "gst_percent", "is_rent_enabled", "is_buy_enabled", "is_active", "vendor_weekly_rent", "vendor_monthly_rent", "vendor_security_deposit", "vendor_buy_price"]
       ];
       
       const productsWs = XLSX.utils.aoa_to_sheet(productsHeaders);
@@ -737,7 +737,7 @@ const ProductManagement = () => {
               <th className="px-4 py-3 font-semibold">Category</th>
               <th className="px-4 py-3 font-semibold">Brand</th>
               {activeTab === "equipment" && <th className="px-4 py-3 font-semibold">Model</th>}
-              <th className="px-4 py-3 font-semibold">{activeTab === "equipment" ? "Daily" : "Buy Price"}</th>
+              <th className="px-4 py-3 font-semibold">{activeTab === "equipment" ? "Weekly" : "Buy Price"}</th>
               <th className="px-4 py-3 font-semibold">GST %</th>
               <th className="px-4 py-3 font-semibold">Status</th>
               <th className="px-4 py-3 font-semibold text-center">Favorites</th>
@@ -751,7 +751,7 @@ const ProductManagement = () => {
                 <td className="px-4 py-3 text-muted-foreground">{getCategoryName(p.categoryId)}</td>
                 <td className="px-4 py-3">{p.brandName || "-"}</td>
                 {activeTab === "equipment" && <td className="px-4 py-3">{p.modelName || "-"}</td>}
-                <td className="px-4 py-3">₹{(activeTab === "equipment" ? p.dailyRent : (p.buyPrice || 0)).toFixed(0)}</td>
+                <td className="px-4 py-3">₹{(activeTab === "equipment" ? (p.weeklyRent ?? 0) : (p.buyPrice || 0)).toFixed(0)}</td>
                 <td className="px-4 py-3">{p.gstPercent.toFixed(0)}%</td>
                 <td className="px-4 py-3">
                   <Switch

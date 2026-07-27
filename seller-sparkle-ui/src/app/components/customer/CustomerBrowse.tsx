@@ -529,7 +529,6 @@ const CustomerBrowse = () => {
                 const monthly = item.monthlyRent ?? 0;
                 if (weekly > 0) return { value: `₹${weekly.toFixed(0)}`, unit: "/week" };
                 if (monthly > 0) return { value: `₹${monthly.toFixed(0)}`, unit: "/month" };
-                if (item.dailyRent > 0) return { value: `₹${item.dailyRent.toFixed(0)}`, unit: "/day" };
               }
               if (showBuy && item.buyPrice != null && item.buyPrice > 0) {
                 return {

@@ -1358,7 +1358,7 @@ const Products = () => {
                     setEditing({ ...editing, title: e.target.value });
                     clearFieldError("title");
                   }}
-                  placeholder="E.g. Sony A7 III — Daily Rental"
+                  placeholder="E.g. Sony A7 III — Weekly Rental"
                   className={fieldErrors.title ? "border-destructive" : ""}
                 />
                 <FieldError message={fieldErrors.title} />
