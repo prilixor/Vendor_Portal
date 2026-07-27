@@ -401,17 +401,21 @@ export interface ProductImageDto {
   imageUrl: string;
   displayOrder: number;
   isPrimary: boolean;
+  thumbnailUrl?: string | null;
 }
 
 export interface AddProductImageRequest {
   imageUrl: string;
   displayOrder: number;
   isPrimary: boolean;
+  thumbnailUrl?: string | null;
 }
 
 export interface UploadedFileResponse {
   fileUrl: string;
   storageKey?: string | null;
+  thumbnailUrl?: string | null;
+  thumbnailStorageKey?: string | null;
   fileName?: string;
   originalFileName?: string;
   contentType?: string;

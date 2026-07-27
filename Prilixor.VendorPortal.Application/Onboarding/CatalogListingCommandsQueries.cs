@@ -305,7 +305,13 @@ internal sealed class GetProductsQueryHandler(
             x.IsRentEnabled,
             x.IsBuyEnabled,
             x.IsActive,
-            x.ProductImages?.Select(i => new ProductImageDto(i.Id.ToString(), i.ProductId.ToString(), i.ImageUrl, i.DisplayOrder, i.IsPrimary)).ToList() ?? [],
+            x.ProductImages?.Select(i => new ProductImageDto(
+                i.Id.ToString(),
+                i.ProductId.ToString(),
+                i.ImageUrl,
+                i.DisplayOrder,
+                i.IsPrimary,
+                i.ThumbnailUrl)).ToList() ?? [],
             x.Variants?.Select(v => new ProductVariantDto(
                 v.Id.ToString(),
                 v.ProductId.ToString(),
@@ -332,7 +338,8 @@ public sealed record AddProductImageCommand(
     string ProductId,
     string ImageUrl,
     int DisplayOrder,
-    bool IsPrimary) : ICommand<ProductImageDto>;
+    bool IsPrimary,
+    string? ThumbnailUrl = null) : ICommand<ProductImageDto>;
 
 public sealed class AddProductImageCommandValidator : AbstractValidator<AddProductImageCommand>
 {
@@ -377,6 +384,7 @@ internal sealed class AddProductImageCommandHandler(
             Id = Guid.CreateVersion7(),
             ProductId = productId,
             ImageUrl = request.ImageUrl,
+            ThumbnailUrl = string.IsNullOrWhiteSpace(request.ThumbnailUrl) ? null : request.ThumbnailUrl.Trim(),
             DisplayOrder = request.DisplayOrder,
             IsPrimary = request.IsPrimary
         };
@@ -389,7 +397,8 @@ internal sealed class AddProductImageCommandHandler(
             entity.ProductId.ToString(),
             fileUrlResolver.Resolve(entity.ImageUrl),
             entity.DisplayOrder,
-            entity.IsPrimary));
+            entity.IsPrimary,
+            string.IsNullOrWhiteSpace(entity.ThumbnailUrl) ? null : fileUrlResolver.Resolve(entity.ThumbnailUrl)));
     }
 }
 
@@ -419,7 +428,8 @@ internal sealed class GetProductImagesQueryHandler(
             x.ProductId.ToString(),
             fileUrlResolver.Resolve(x.ImageUrl),
             x.DisplayOrder,
-            x.IsPrimary)).ToList();
+            x.IsPrimary,
+            string.IsNullOrWhiteSpace(x.ThumbnailUrl) ? null : fileUrlResolver.Resolve(x.ThumbnailUrl))).ToList();
 
         return Result.Success(result);
     }
@@ -462,6 +472,8 @@ internal sealed class DeleteProductImageCommandHandler(
         }
 
         await uploadStorage.DeleteStoredFileAsync(image.ImageUrl, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(image.ThumbnailUrl))
+            await uploadStorage.DeleteStoredFileAsync(image.ThumbnailUrl, cancellationToken);
 
         var wasPrimary = image.IsPrimary;
         image.IsDeleted = true;
@@ -752,7 +764,8 @@ public sealed record AddVendorProductImageCommand(
     string ListingId,
     string ImageUrl,
     int DisplayOrder,
-    bool IsPrimary) : ICommand<VendorProductImageDto>;
+    bool IsPrimary,
+    string? ThumbnailUrl = null) : ICommand<VendorProductImageDto>;
 
 public sealed class AddVendorProductImageCommandValidator : AbstractValidator<AddVendorProductImageCommand>
 {
@@ -797,6 +810,7 @@ internal sealed class AddVendorProductImageCommandHandler(
         {
             VendorProductListingId = listingId,
             ImageUrl = request.ImageUrl,
+            ThumbnailUrl = string.IsNullOrWhiteSpace(request.ThumbnailUrl) ? null : request.ThumbnailUrl.Trim(),
             DisplayOrder = request.DisplayOrder,
             IsPrimary = request.IsPrimary
         };
@@ -809,7 +823,8 @@ internal sealed class AddVendorProductImageCommandHandler(
             entity.VendorProductListingId.ToString(),
             fileUrlResolver.Resolve(entity.ImageUrl),
             entity.DisplayOrder,
-            entity.IsPrimary));
+            entity.IsPrimary,
+            string.IsNullOrWhiteSpace(entity.ThumbnailUrl) ? null : fileUrlResolver.Resolve(entity.ThumbnailUrl)));
     }
 }
 
@@ -839,7 +854,8 @@ internal sealed class GetVendorProductImagesQueryHandler(
             x.VendorProductListingId.ToString(),
             fileUrlResolver.Resolve(x.ImageUrl),
             x.DisplayOrder,
-            x.IsPrimary)).ToList();
+            x.IsPrimary,
+            string.IsNullOrWhiteSpace(x.ThumbnailUrl) ? null : fileUrlResolver.Resolve(x.ThumbnailUrl))).ToList();
 
         return Result.Success(result);
     }
@@ -884,6 +900,8 @@ internal sealed class DeleteVendorProductImageCommandHandler(
         }
 
         await uploadStorage.DeleteStoredFileAsync(image.ImageUrl, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(image.ThumbnailUrl))
+            await uploadStorage.DeleteStoredFileAsync(image.ThumbnailUrl, cancellationToken);
 
         var wasPrimary = image.IsPrimary;
         image.IsDeleted = true;

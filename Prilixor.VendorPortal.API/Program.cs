@@ -203,10 +203,18 @@ app.MapPost("/api/files/upload", async (HttpRequest request, IVendorUploadStorag
         ? null
         : persist.StoredReference;
 
+    var thumbnailStorageKey = string.IsNullOrWhiteSpace(persist.ThumbnailStoredReference)
+        ? null
+        : persist.ThumbnailStoredReference.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : persist.ThumbnailStoredReference;
+
     return Results.Ok(new
     {
         fileUrl = persist.BrowserAccessibleUrl,
         storageKey,
+        thumbnailUrl = persist.ThumbnailBrowserAccessibleUrl,
+        thumbnailStorageKey,
         fileName = Path.GetFileName(persist.StoredReference),
         originalFileName = file.FileName,
         contentType = file.ContentType,

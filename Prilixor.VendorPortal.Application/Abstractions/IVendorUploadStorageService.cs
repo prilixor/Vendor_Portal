@@ -12,7 +12,11 @@ public sealed record VendorFilePersistResult(
     /// <summary>Value persisted in DB: absolute URL for local disk mode, or S3 object key path for S3 mode.</summary>
     string StoredReference,
     /// <summary>URL safe to open in a browser immediately after upload.</summary>
-    string BrowserAccessibleUrl);
+    string BrowserAccessibleUrl,
+    /// <summary>Optional thumbnail stored reference (same rules as StoredReference).</summary>
+    string? ThumbnailStoredReference = null,
+    /// <summary>Optional thumbnail browser URL right after upload.</summary>
+    string? ThumbnailBrowserAccessibleUrl = null);
 
 public interface IVendorUploadStorageService
 {

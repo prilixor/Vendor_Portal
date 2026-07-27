@@ -750,6 +750,7 @@ const Products = () => {
           id: img.id,
           primary: img.isPrimary,
           url: normalizeHostedFileUrl(img.imageUrl),
+          thumbnailUrl: img.thumbnailUrl ? normalizeHostedFileUrl(img.thumbnailUrl) : undefined,
           persisted: true,
         })));
       setListingDocuments(docsRes);
@@ -785,6 +786,7 @@ const Products = () => {
           id: serverImg.id,
           primary: serverImg.isPrimary,
           url: normalizeHostedFileUrl(serverImg.imageUrl),
+          thumbnailUrl: serverImg.thumbnailUrl ? normalizeHostedFileUrl(serverImg.thumbnailUrl) : undefined,
           persisted: true,
         })));
       toast.success("Image deleted");
@@ -811,6 +813,8 @@ const Products = () => {
             primary: false,
             url: normalizeHostedFileUrl(fileResult.fileUrl),
             storageKey: fileResult.storageKey ?? undefined,
+            thumbnailUrl: fileResult.thumbnailUrl ? normalizeHostedFileUrl(fileResult.thumbnailUrl) : undefined,
+            thumbnailStorageKey: fileResult.thumbnailStorageKey ?? undefined,
             persisted: false,
           } satisfies MediaImage;
         })
@@ -851,6 +855,7 @@ const Products = () => {
               imageUrl: img.storageKey ?? img.url,
               displayOrder: tempImages.length + idx + 1,
               isPrimary: img.primary,
+              thumbnailUrl: img.thumbnailStorageKey ?? img.thumbnailUrl,
             })
           )
         );
@@ -2082,6 +2087,8 @@ interface MediaImage {
   url: string;
   /** DB persistence path when using object storage */
   storageKey?: string;
+  thumbnailUrl?: string;
+  thumbnailStorageKey?: string;
   persisted: boolean;
 }
 

@@ -18,15 +18,21 @@ export function toCamelCase(str: string): string {
     .join(" ");
 }
 
-/** Resolve product/order avatar URL across DTO naming variants. */
+/** Resolve product/order avatar URL across DTO naming variants. Prefers thumbnail when present. */
 export function resolveItemImageUrl(
   item?: {
     listingPrimaryImageUrl?: string | null;
     primaryImageUrl?: string | null;
+    primaryThumbnailUrl?: string | null;
+    thumbnailUrl?: string | null;
     imageUrls?: string[] | null;
   } | null,
 ): string | null {
   if (!item) return null;
+  const fromThumb =
+    item.primaryThumbnailUrl?.trim() ||
+    item.thumbnailUrl?.trim();
+  if (fromThumb) return fromThumb;
   const fromListing = item.listingPrimaryImageUrl?.trim();
   if (fromListing) return fromListing;
   const fromPrimary = item.primaryImageUrl?.trim();

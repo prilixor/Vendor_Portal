@@ -1522,12 +1522,31 @@ public sealed class CustomerRepository(
 
 
 
-    private string? ResolvePrimaryListingImageUrl(IEnumerable<VendorProductImage> images) =>
+    private string? ResolvePrimaryListingImageUrl(IEnumerable<VendorProductImage> images)
+    {
+        var primary = images.Where(i => !i.IsDeleted)
+            .OrderByDescending(i => i.IsPrimary)
+            .ThenBy(i => i.DisplayOrder)
+            .FirstOrDefault();
+        if (primary is null) return null;
+        var thumb = primary.ThumbnailUrl?.Trim();
+        if (!string.IsNullOrEmpty(thumb))
+            return fileUrlResolver.Resolve(thumb);
+        return fileUrlResolver.Resolve(primary.ImageUrl);
+    }
 
-        ResolveOrderedDistinctListingImageUrls(images).FirstOrDefault();
-
-    private string? ResolvePrimaryProductImageUrl(IEnumerable<ProductImage> images) =>
-        ResolveOrderedDistinctProductImageUrls(images).FirstOrDefault();
+    private string? ResolvePrimaryProductImageUrl(IEnumerable<ProductImage> images)
+    {
+        var primary = images.Where(i => !i.IsDeleted)
+            .OrderByDescending(i => i.IsPrimary)
+            .ThenBy(i => i.DisplayOrder)
+            .FirstOrDefault();
+        if (primary is null) return null;
+        var thumb = primary.ThumbnailUrl?.Trim();
+        if (!string.IsNullOrEmpty(thumb))
+            return fileUrlResolver.Resolve(thumb);
+        return fileUrlResolver.Resolve(primary.ImageUrl);
+    }
 
     /// <summary>
     /// Prefer listing primary image; fall back to product primary image (same as Browse catalog).

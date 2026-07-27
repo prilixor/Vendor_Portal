@@ -141,7 +141,8 @@ public sealed record ProductImageDto(
     string ProductId,
     string ImageUrl,
     int DisplayOrder,
-    bool IsPrimary);
+    bool IsPrimary,
+    string? ThumbnailUrl = null);
 
 public sealed record VendorProductListingDto(
     string Id,
@@ -162,7 +163,8 @@ public sealed record VendorProductImageDto(
     string VendorProductListingId,
     string ImageUrl,
     int DisplayOrder,
-    bool IsPrimary);
+    bool IsPrimary,
+    string? ThumbnailUrl = null);
 
 public sealed record VendorProductDocumentDto(
     string Id,

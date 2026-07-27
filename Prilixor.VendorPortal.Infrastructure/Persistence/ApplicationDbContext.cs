@@ -369,6 +369,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.Id).HasColumnName("id");
             entity.Property(x => x.ProductId).HasColumnName("product_id");
             entity.Property(x => x.ImageUrl).HasColumnName("image_url");
+            entity.Property(x => x.ThumbnailUrl).HasColumnName("thumbnail_url");
             entity.Property(x => x.DisplayOrder).HasColumnName("display_order");
             entity.Property(x => x.IsPrimary).HasColumnName("is_primary");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
@@ -422,6 +423,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.Id).HasColumnName("id");
             entity.Property(x => x.VendorProductListingId).HasColumnName("vendor_product_listing_id");
             entity.Property(x => x.ImageUrl).HasColumnName("image_url");
+            entity.Property(x => x.ThumbnailUrl).HasColumnName("thumbnail_url");
             entity.Property(x => x.DisplayOrder).HasColumnName("display_order");
             entity.Property(x => x.IsPrimary).HasColumnName("is_primary");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");

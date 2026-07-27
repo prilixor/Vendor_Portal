@@ -548,7 +548,7 @@ const ChemicalManagement = () => {
     setProductDialogOpen(true);
   };
 
-  const addProductImageFromValue = async (imageRef: string) => {
+  const addProductImageFromValue = async (imageRef: string, thumbnailRef?: string | null) => {
     if (!editingProduct) {
       toast.error("Save product first, then add images.");
       return;
@@ -566,6 +566,7 @@ const ChemicalManagement = () => {
         imageUrl: normalized,
         displayOrder: Math.max(1, productImages.length + 1),
         isPrimary: newImageIsPrimary || productImages.length === 0,
+        thumbnailUrl: thumbnailRef?.trim() || undefined,
       });
       setNewImageUrl("");
       await loadProductImages(editingProduct.id);
@@ -588,7 +589,10 @@ const ChemicalManagement = () => {
     try {
       setUploadingImage(true);
       const upload = await adminApi.uploadProductImageFile(file);
-      await addProductImageFromValue(upload.storageKey?.trim() || upload.fileUrl);
+      await addProductImageFromValue(
+        upload.storageKey?.trim() || upload.fileUrl,
+        upload.thumbnailStorageKey?.trim() || upload.thumbnailUrl,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to upload image.";
       toast.error(message);

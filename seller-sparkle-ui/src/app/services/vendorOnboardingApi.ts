@@ -147,6 +147,7 @@ export interface VendorProductImageApiDto {
   imageUrl: string;
   displayOrder: number;
   isPrimary: boolean;
+  thumbnailUrl?: string | null;
 }
 
 export interface VendorProductDocumentApiDto {
@@ -216,6 +217,8 @@ export interface UploadedFileResponse {
   fileUrl: string;
   /** Persist this with documents/listings when set (S3 path relative to the configured prefix); omit legacy/local absolute URLs. */
   storageKey?: string | null;
+  thumbnailUrl?: string | null;
+  thumbnailStorageKey?: string | null;
   fileName: string;
   originalFileName: string;
   contentType: string;
@@ -355,6 +358,7 @@ export interface AddVendorProductImagePayload {
   imageUrl: string;
   displayOrder: number;
   isPrimary: boolean;
+  thumbnailUrl?: string | null;
 }
 
 export interface AddVendorProductDocumentPayload {

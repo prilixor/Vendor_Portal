@@ -5,6 +5,9 @@ using Microsoft.Extensions.Options;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Infrastructure.Exceptions;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Processing;
 
 namespace Prilixor.VendorPortal.Infrastructure.Services;
 
@@ -14,6 +17,9 @@ internal sealed class VendorUploadStorageService(
     IOptions<VendorPortalAssetUrlOptions> assetUrlOptions,
     IAmazonS3? amazonS3) : IVendorUploadStorageService
 {
+    private const int ThumbnailMaxWidth = 400;
+    private const int ThumbnailJpegQuality = 80;
+
     public async Task<VendorFilePersistResult> PersistVendorUploadAsync(
         string vendorId,
         string originalFileName,
@@ -40,6 +46,23 @@ internal sealed class VendorUploadStorageService(
         var storedFileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
         var localRelativePath = VendorStoragePaths.LocalVendorUploadPath(vendorId, storedFileName, folderType);
 
+        // Buffer once so we can upload original + optional thumbnail.
+        await using var sourceMs = new MemoryStream();
+        await stream.CopyToAsync(sourceMs, cancellationToken);
+        sourceMs.Position = 0;
+
+        byte[]? thumbnailBytes = null;
+        string? thumbnailFileName = null;
+        if (folderType == VendorFileFolderType.ProductImages && LooksLikeImage(contentType, extension))
+        {
+            thumbnailBytes = TryCreateThumbnailJpeg(sourceMs);
+            sourceMs.Position = 0;
+            if (thumbnailBytes is { Length: > 0 })
+            {
+                thumbnailFileName = $"{Path.GetFileNameWithoutExtension(storedFileName)}_thumb.jpg";
+            }
+        }
+
         var opts = s3Options.Value;
         if (amazonS3 is not null && opts.Enabled && !string.IsNullOrWhiteSpace(opts.BucketName))
         {
@@ -47,29 +70,36 @@ internal sealed class VendorUploadStorageService(
             {
                 var s3RelativeKey = VendorStoragePaths.S3VendorUploadKey(vendorId, storedFileName, folderType);
                 var key = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, s3RelativeKey);
-                await using var ms = new MemoryStream();
-                await stream.CopyToAsync(ms, cancellationToken);
-                ms.Position = 0;
 
                 await amazonS3.PutObjectAsync(new PutObjectRequest
                 {
                     BucketName = opts.BucketName,
                     Key = key,
-                    InputStream = ms,
+                    InputStream = sourceMs,
                     ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
                     ServerSideEncryptionMethod = ServerSideEncryptionMethod.AES256
                 }, cancellationToken);
 
-                var expiryMinutes = Math.Clamp(opts.PresignedUrlExpiryMinutes, 1, 10080);
-                var urlRequest = new GetPreSignedUrlRequest
+                string? thumbRelativeKey = null;
+                string? thumbBrowserUrl = null;
+                if (thumbnailBytes is not null && thumbnailFileName is not null)
                 {
-                    BucketName = opts.BucketName,
-                    Key = key,
-                    Verb = HttpVerb.GET,
-                    Expires = DateTime.UtcNow.AddMinutes(expiryMinutes)
-                };
-                var browserUrl = amazonS3.GetPreSignedURL(urlRequest);
-                return new VendorFilePersistResult(s3RelativeKey, browserUrl);
+                    thumbRelativeKey = VendorStoragePaths.S3VendorUploadKey(vendorId, thumbnailFileName, folderType);
+                    var thumbKey = VendorStoragePaths.CombineS3Key(opts.KeyPrefix, thumbRelativeKey);
+                    await using var thumbMs = new MemoryStream(thumbnailBytes);
+                    await amazonS3.PutObjectAsync(new PutObjectRequest
+                    {
+                        BucketName = opts.BucketName,
+                        Key = thumbKey,
+                        InputStream = thumbMs,
+                        ContentType = "image/jpeg",
+                        ServerSideEncryptionMethod = ServerSideEncryptionMethod.AES256
+                    }, cancellationToken);
+                    thumbBrowserUrl = CreatePresignedGetUrl(opts.BucketName, thumbKey, opts.PresignedUrlExpiryMinutes);
+                }
+
+                var browserUrl = CreatePresignedGetUrl(opts.BucketName, key, opts.PresignedUrlExpiryMinutes);
+                return new VendorFilePersistResult(s3RelativeKey, browserUrl, thumbRelativeKey, thumbBrowserUrl);
             }
             catch (Exception ex)
             {
@@ -81,6 +111,7 @@ internal sealed class VendorUploadStorageService(
         {
             VendorFileFolderType.ProductImages => "product-images",
             VendorFileFolderType.ProductDocuments => "product-documents",
+            VendorFileFolderType.Support => "support",
             _ => "documents"
         };
         var uploadsRoot = Path.Combine(
@@ -95,14 +126,25 @@ internal sealed class VendorUploadStorageService(
 
         await using (var fs = File.Create(filePath))
         {
-            await stream.CopyToAsync(fs, cancellationToken);
+            await sourceMs.CopyToAsync(fs, cancellationToken);
         }
 
         var baseUrl = !string.IsNullOrWhiteSpace(assetUrlOptions.Value.PublicApiBaseUrl)
             ? assetUrlOptions.Value.PublicApiBaseUrl.TrimEnd('/')
             : $"{requestPublicBaseUri.Scheme}://{requestPublicBaseUri.Authority}";
         var absoluteUrl = $"{baseUrl}/{localRelativePath}";
-        return new VendorFilePersistResult(absoluteUrl, absoluteUrl);
+
+        string? thumbLocalRelative = null;
+        string? thumbAbsoluteUrl = null;
+        if (thumbnailBytes is not null && thumbnailFileName is not null)
+        {
+            var thumbPath = Path.Combine(uploadsRoot, thumbnailFileName);
+            await File.WriteAllBytesAsync(thumbPath, thumbnailBytes, cancellationToken);
+            thumbLocalRelative = VendorStoragePaths.LocalVendorUploadPath(vendorId, thumbnailFileName, folderType);
+            thumbAbsoluteUrl = $"{baseUrl}/{thumbLocalRelative}";
+        }
+
+        return new VendorFilePersistResult(absoluteUrl, absoluteUrl, thumbAbsoluteUrl, thumbAbsoluteUrl);
     }
 
     public async Task DeleteStoredFileAsync(string storedFileReference, CancellationToken cancellationToken)
@@ -158,6 +200,55 @@ internal sealed class VendorUploadStorageService(
         }
 
         TryDeleteLocalRelativePath(s);
+    }
+
+    private string CreatePresignedGetUrl(string bucketName, string key, int expiryMinutes)
+    {
+        var clamped = Math.Clamp(expiryMinutes, 1, 10080);
+        var urlRequest = new GetPreSignedUrlRequest
+        {
+            BucketName = bucketName,
+            Key = key,
+            Verb = HttpVerb.GET,
+            Expires = DateTime.UtcNow.AddMinutes(clamped)
+        };
+        return amazonS3!.GetPreSignedURL(urlRequest);
+    }
+
+    private static bool LooksLikeImage(string? contentType, string? extension)
+    {
+        var ct = (contentType ?? string.Empty).Trim().ToLowerInvariant();
+        if (ct.StartsWith("image/", StringComparison.Ordinal))
+            return true;
+        var ext = (extension ?? string.Empty).Trim().ToLowerInvariant();
+        return ext is ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif" or ".bmp";
+    }
+
+    private static byte[]? TryCreateThumbnailJpeg(Stream source)
+    {
+        try
+        {
+            using var image = Image.Load(source);
+            var width = image.Width;
+            var height = image.Height;
+            if (width <= 0 || height <= 0)
+                return null;
+
+            if (width > ThumbnailMaxWidth)
+            {
+                var newHeight = (int)Math.Round(height * (ThumbnailMaxWidth / (double)width));
+                image.Mutate(x => x.Resize(ThumbnailMaxWidth, Math.Max(1, newHeight)));
+            }
+
+            using var outMs = new MemoryStream();
+            image.Save(outMs, new JpegEncoder { Quality = ThumbnailJpegQuality });
+            return outMs.ToArray();
+        }
+        catch
+        {
+            // Non-image or corrupt payload — skip thumbnail; original upload still succeeds.
+            return null;
+        }
     }
 
     private void TryDeleteLocalRelativePath(string relativePath)

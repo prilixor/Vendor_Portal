@@ -49,6 +49,7 @@ public sealed class AddVendorProductImageRequest : VendorIdRequest
 {
     public string ListingId { get; set; } = string.Empty;
     public string ImageUrl { get; set; } = string.Empty;
+    public string? ThumbnailUrl { get; set; }
     public int DisplayOrder { get; set; } = 1;
     public bool IsPrimary { get; set; }
 }
@@ -253,7 +254,8 @@ public sealed class AddVendorProductImageEndpoint(IMediator mediator)
             req.ListingId,
             req.ImageUrl,
             req.DisplayOrder,
-            req.IsPrimary), ct);
+            req.IsPrimary,
+            req.ThumbnailUrl), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
