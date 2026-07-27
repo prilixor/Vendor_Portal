@@ -1441,11 +1441,7 @@ const VendorDetails = () => {
                         })()
                       ) : (
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {(p.weeklyRent ?? 0) > 0
-                            ? `Weekly: ₹${p.weeklyRent}`
-                            : (p.monthlyRent ?? 0) > 0
-                              ? `Monthly: ₹${p.monthlyRent}`
-                              : `Weekly: ₹${p.weeklyRent ?? 0}`}
+                          Weekly: ₹{p.weeklyRent ?? 0} · Monthly: ₹{p.monthlyRent ?? 0}
                         </p>
                       )}
                     </div>
@@ -1548,11 +1544,7 @@ const VendorDetails = () => {
                         })()
                       ) : (
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {(p.weeklyRent ?? 0) > 0
-                            ? `Weekly: ₹${p.weeklyRent}`
-                            : (p.monthlyRent ?? 0) > 0
-                              ? `Monthly: ₹${p.monthlyRent}`
-                              : `Weekly: ₹${p.weeklyRent ?? 0}`}
+                          Weekly: ₹{p.weeklyRent ?? 0} · Monthly: ₹{p.monthlyRent ?? 0}
                         </p>
                       )}
                     </div>
