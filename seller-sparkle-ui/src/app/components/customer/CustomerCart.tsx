@@ -378,19 +378,16 @@ function CartLineCard({
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-end gap-x-5 gap-y-4">
+          <div className="mt-4 flex flex-wrap items-center gap-3 sm:gap-4">
             {canRent && canBuy ? (
               <div className="shrink-0">
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  Order type
-                </p>
-                <SegmentTrack tone="plain">
+                <SegmentTrack tone="muted">
                   {(["rent", "buy"] as const).map((type) => {
                     const selected = line.orderType === type;
                     return (
                       <SegmentButton
                         key={type}
-                        variant="primary"
+                        variant={selected ? "primary" : "soft"}
                         selected={selected}
                         onClick={() => {
                           if (type === "rent" && promptIfNeeded({})) return;
@@ -411,14 +408,11 @@ function CartLineCard({
 
             {actualOrderType === "rent" ? (
               <div className="shrink-0">
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  Rental period
-                </p>
                 <SegmentTrack tone="muted">
                   {RENTAL_UNITS_VISIBLE_IN_UI.map((u) => (
                     <SegmentButton
                       key={u}
-                      variant="soft"
+                      variant={line.rentalPeriodUnit === u ? "primary" : "soft"}
                       selected={line.rentalPeriodUnit === u}
                       onClick={() => {
                         if (promptIfNeeded({ unit: u })) return;
