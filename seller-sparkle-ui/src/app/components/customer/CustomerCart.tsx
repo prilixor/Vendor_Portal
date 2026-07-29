@@ -227,18 +227,26 @@ function ChemicalCartLine({
             </div>
           </div>
 
-          <div className="mt-4 w-36">
-            <StepperField
-              label="Quantity"
-              value={line.quantity}
-              min={1}
-              max={availableQuantity ?? 999}
-              onChange={(qty) => onUpdateQty(line.listingId, qty)}
-            />
+          <div className="mt-4 flex flex-wrap items-center gap-3 sm:gap-4">
+            <div className="inline-flex min-h-9 shrink-0 items-center rounded-lg border border-primary/35 bg-primary-soft px-3 text-sm font-semibold text-primary">
+              Buy only
+            </div>
+
+            <div className="w-36 shrink-0">
+              <StepperField
+                label="Quantity"
+                value={line.quantity}
+                min={1}
+                max={availableQuantity ?? 999}
+                onChange={(qty) => onUpdateQty(line.listingId, qty)}
+              />
+            </div>
             {isOverStock ? (
-              <p className="mt-1.5 text-[11px] font-semibold text-destructive w-full">
-                Only {availableQuantity} available.
-              </p>
+              <div className="w-full mt-[-4px]">
+                <p className="text-[11px] font-semibold text-destructive">
+                  Only {availableQuantity} available.
+                </p>
+              </div>
             ) : null}
           </div>
         </div>
