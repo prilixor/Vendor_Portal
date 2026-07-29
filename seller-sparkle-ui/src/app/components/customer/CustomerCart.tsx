@@ -189,10 +189,10 @@ function ChemicalCartLine({
 
   return (
     <article className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm shadow-black/[0.02]">
-      <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 p-4 sm:p-5">
+      <div className="flex gap-3.5 sm:gap-5 p-3.5 sm:p-5">
         <Link
           to={listingTo}
-          className="relative h-20 w-20 shrink-0 self-center sm:self-start overflow-hidden rounded-xl bg-muted/40 ring-1 ring-border/40 sm:h-24 sm:w-24 lg:h-28 lg:w-28"
+          className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-muted/40 ring-1 ring-border/40 sm:h-20 sm:w-20 lg:h-24 lg:w-24"
           aria-label={`View listing: ${line.title}`}
         >
           <CartThumb url={thumbUrl} title={line.title} />
@@ -328,10 +328,10 @@ function CartLineCard({
 
   return (
     <article className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm shadow-black/[0.02]">
-      <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 p-4 sm:p-5">
+      <div className="flex gap-3.5 sm:gap-5 p-3.5 sm:p-5">
         <Link
           to={listingTo}
-          className="relative h-28 w-28 shrink-0 self-center sm:self-start overflow-hidden rounded-xl bg-muted/40 ring-1 ring-border/50 sm:h-36 sm:w-36 lg:h-40 lg:w-40"
+          className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-muted/40 ring-1 ring-border/50 sm:h-28 sm:w-28 lg:h-32 lg:w-32"
           aria-label={`View listing: ${line.title}`}
         >
           <CartThumb url={thumbUrl} title={line.title} />
@@ -437,7 +437,7 @@ function CartLineCard({
             <div
               className={cn(
                 "grid gap-2 sm:gap-3",
-                actualOrderType === "rent" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:max-w-xs",
+                actualOrderType === "rent" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 sm:max-w-xs",
               )}
             >
               {actualOrderType === "rent" ? (
