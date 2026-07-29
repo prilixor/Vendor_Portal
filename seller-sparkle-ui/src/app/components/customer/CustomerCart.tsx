@@ -56,7 +56,7 @@ function SegmentTrack({
     <div
       role="group"
       className={cn(
-        "grid grid-cols-2 gap-1.5",
+        "inline-flex flex-wrap gap-1.5",
         tone === "muted" && "rounded-xl bg-muted/35 p-1",
         className,
       )}
@@ -87,12 +87,12 @@ function SegmentButton({
       onClick={onClick}
       aria-pressed={selected}
       className={cn(
-        "min-h-10 rounded-lg px-3 text-sm font-semibold tracking-tight transition-all",
+        "min-h-9 rounded-lg px-3.5 text-sm font-semibold tracking-tight transition-all",
         "disabled:cursor-not-allowed disabled:opacity-40",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
         variant === "primary" &&
           (selected
-            ? "bg-gradient-primary text-primary-foreground shadow-glow"
+            ? "border border-primary/45 bg-primary-soft text-primary shadow-sm"
             : "border border-border/80 bg-background text-muted-foreground hover:border-primary/30 hover:bg-primary-soft/40 hover:text-foreground"),
         variant === "soft" &&
           (selected
@@ -119,12 +119,12 @@ function StepperField({
   onChange: (next: number) => void;
 }) {
   return (
-    <div className="flex min-h-[3.25rem] items-center justify-between gap-2 rounded-xl border border-border/70 bg-background px-3">
+    <div className="flex min-h-10 items-center justify-between gap-2 rounded-xl border border-border/70 bg-background px-2.5">
       <span className="text-sm font-medium text-muted-foreground">{label}</span>
       <div className="inline-flex items-center">
         <button
           type="button"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
           aria-label={`Decrease ${label}`}
           disabled={value <= min}
           onClick={() => onChange(Math.max(min, value - 1))}
@@ -134,7 +134,7 @@ function StepperField({
         <span className="min-w-[2rem] text-center text-sm font-bold tabular-nums">{value}</span>
         <button
           type="button"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
           aria-label={`Increase ${label}`}
           disabled={value >= max}
           onClick={() => onChange(Math.min(max, value + 1))}
@@ -342,7 +342,7 @@ function CartLineCard({
             <div className="min-w-0 space-y-1">
               <Link
                 to={listingTo}
-                className="block text-[15px] font-semibold leading-snug tracking-tight hover:text-primary sm:text-base"
+                className="block text-base font-bold leading-snug tracking-tight hover:text-primary sm:text-[17px]"
               >
                 {line.title}
               </Link>
@@ -363,7 +363,7 @@ function CartLineCard({
             </div>
 
             <div className="flex shrink-0 flex-col items-end gap-1">
-              <p className="text-base font-bold tracking-tight tabular-nums sm:text-lg">
+              <p className="text-lg font-bold tracking-tight tabular-nums sm:text-xl">
                 ₹{lineRent.toFixed(0)}
               </p>
               <Button
@@ -381,62 +381,64 @@ function CartLineCard({
       </div>
 
       <div className="space-y-3 border-t border-border/50 bg-gradient-to-b from-muted/25 to-transparent px-3.5 py-3.5 sm:px-4">
-        {canRent && canBuy ? (
-          <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Order type
-            </p>
-            <SegmentTrack tone="plain">
-              {(["rent", "buy"] as const).map((type) => {
-                const selected = line.orderType === type;
-                return (
+        <div className="flex flex-wrap items-end gap-5">
+          {canRent && canBuy ? (
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Order type
+              </p>
+              <SegmentTrack tone="plain">
+                {(["rent", "buy"] as const).map((type) => {
+                  const selected = line.orderType === type;
+                  return (
+                    <SegmentButton
+                      key={type}
+                      variant="primary"
+                      selected={selected}
+                      onClick={() => {
+                        if (type === "rent" && promptIfNeeded({})) return;
+                        onUpdateOrderType(line.listingId, type);
+                      }}
+                    >
+                      {type === "rent" ? "Rent" : "Buy"}
+                    </SegmentButton>
+                  );
+                })}
+              </SegmentTrack>
+            </div>
+          ) : canRent && !canBuy ? (
+            <div className="inline-flex min-h-9 items-center rounded-lg border border-primary/35 bg-primary-soft px-3 text-sm font-semibold text-primary">
+              Rent only
+            </div>
+          ) : null}
+
+          {actualOrderType === "rent" ? (
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Rental period
+              </p>
+              <SegmentTrack tone="muted">
+                {RENTAL_UNITS_VISIBLE_IN_UI.map((u) => (
                   <SegmentButton
-                    key={type}
-                    variant="primary"
-                    selected={selected}
+                    key={u}
+                    variant="soft"
+                    selected={line.rentalPeriodUnit === u}
                     onClick={() => {
-                      if (type === "rent" && promptIfNeeded({})) return;
-                      onUpdateOrderType(line.listingId, type);
+                      if (promptIfNeeded({ unit: u })) return;
+                      onUpdatePeriodUnit(line.listingId, u);
                     }}
                   >
-                    {type === "rent" ? "Rent" : "Buy"}
+                    {RENTAL_UNIT_LABELS[u].plural}
                   </SegmentButton>
-                );
-              })}
-            </SegmentTrack>
-          </div>
-        ) : canRent && !canBuy ? (
-          <div className="inline-flex min-h-9 items-center rounded-lg border border-primary/35 bg-primary-soft px-3 text-sm font-semibold text-primary">
-            Rent only
-          </div>
-        ) : null}
-
-        {actualOrderType === "rent" ? (
-          <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Rental period
-            </p>
-            <SegmentTrack tone="muted">
-              {RENTAL_UNITS_VISIBLE_IN_UI.map((u) => (
-                <SegmentButton
-                  key={u}
-                  variant="soft"
-                  selected={line.rentalPeriodUnit === u}
-                  onClick={() => {
-                    if (promptIfNeeded({ unit: u })) return;
-                    onUpdatePeriodUnit(line.listingId, u);
-                  }}
-                >
-                  {RENTAL_UNIT_LABELS[u].plural}
-                </SegmentButton>
-              ))}
-            </SegmentTrack>
-          </div>
-        ) : null}
+                ))}
+              </SegmentTrack>
+            </div>
+          ) : null}
+        </div>
 
         <div
           className={cn(
-            "grid gap-2",
+            "grid gap-2 sm:gap-3",
             actualOrderType === "rent" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:max-w-xs",
           )}
         >
@@ -506,7 +508,7 @@ function OrderSummaryPanel({
   return (
     <aside
       className={cn(
-        "overflow-hidden rounded-2xl border border-border/60 bg-card shadow-md shadow-black/[0.03]",
+        "overflow-hidden rounded-2xl border border-border/60 bg-card shadow-xl shadow-black/[0.04]",
         className,
       )}
     >
@@ -702,15 +704,14 @@ const CustomerCart = () => {
           <BackLink to="/customer/shop" label="Back to shop" />
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
-                BlinksMed
-              </p>
-              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Your cart</h1>
-              <p className="max-w-md text-sm text-muted-foreground">
-                {lines.length === 0
-                  ? "Add medical equipment or chemicals to get started."
-                  : `${itemCount} ${itemCount === 1 ? "item" : "items"} ready for checkout.`}
-              </p>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Your cart</h1>
+              </div>
+              {lines.length > 0 && (
+                <p className="max-w-md text-sm text-muted-foreground">
+                  {itemCount} {itemCount === 1 ? "item" : "items"} ready for checkout.
+                </p>
+              )}
             </div>
             {lines.length > 0 ? (
               <div className="rounded-full border border-primary/20 bg-background/80 px-3.5 py-1.5 text-sm font-semibold text-foreground shadow-sm backdrop-blur">
