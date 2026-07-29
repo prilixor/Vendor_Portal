@@ -25,11 +25,13 @@ String? resolveMediaUrl(String? raw) {
   return '$apiBase/${url.replaceFirst(RegExp(r'^/+'), '')}';
 }
 
-/// Prefer listing primary image, then product primary, then first gallery URL.
+/// Prefer thumbnail, then listing/product primary, then first gallery URL.
 /// Mirrors web `resolveItemImageUrl`.
 String? resolveItemImageUrl({
   String? listingPrimaryImageUrl,
   String? primaryImageUrl,
+  String? primaryThumbnailUrl,
+  String? thumbnailUrl,
   List<String>? imageUrls,
   Map<String, dynamic>? json,
 }) {
@@ -39,6 +41,18 @@ String? resolveItemImageUrl({
     if (s.isEmpty || s.toLowerCase() == 'null') return null;
     return s;
   }
+
+  final fromThumb = pick(primaryThumbnailUrl) ??
+      pick(thumbnailUrl) ??
+      (json == null
+          ? null
+          : pick(
+              json['primaryThumbnailUrl'] ??
+                  json['PrimaryThumbnailUrl'] ??
+                  json['thumbnailUrl'] ??
+                  json['ThumbnailUrl'],
+            ));
+  if (fromThumb != null) return resolveMediaUrl(fromThumb);
 
   final fromListing = pick(listingPrimaryImageUrl) ??
       (json == null
@@ -54,6 +68,15 @@ String? resolveItemImageUrl({
     for (final u in imageUrls) {
       final resolved = resolveMediaUrl(u);
       if (resolved != null) return resolved;
+    }
+  }
+  if (json != null) {
+    final gallery = json['imageUrls'] ?? json['ImageUrls'];
+    if (gallery is List) {
+      for (final u in gallery) {
+        final resolved = resolveMediaUrl(u?.toString());
+        if (resolved != null) return resolved;
+      }
     }
   }
   return null;

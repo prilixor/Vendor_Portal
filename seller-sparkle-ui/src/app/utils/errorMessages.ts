@@ -1,27 +1,61 @@
 // Error message mapping utility for user-friendly notifications
-// Technical errors are logged to console, users see friendly messages
+// Technical errors are logged to console, users see friendly messages only (never raw error codes).
 
 export interface ErrorResponse {
   message?: string;
   code?: string;
   detail?: string;
+  title?: string;
 }
 
-// Backend error code to user-friendly message mapping
+/** Matches backend codes like customers.out_of_service_area, vendors.account_pending, EMAIL_NOT_VERIFIED */
+const ERROR_CODE_PATTERN =
+  /(?:vendors|customers|admins|documents|bank_accounts|auth|catalog|orders|directory)\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|EMAIL_NOT_VERIFIED/i;
+
+const BRACKET_CODE_PATTERN = /\s*\[([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+|EMAIL_NOT_VERIFIED)\]\s*/gi;
+
+// Backend error code → user-friendly message
 const errorMessages: Record<string, string> = {
   // Vendor approval errors
   "vendors.invalid_id": "Invalid vendor ID provided.",
   "vendors.not_found": "Vendor not found.",
   "vendors.invalid_status": "Vendor status is invalid for this action.",
-  "vendors.account_pending": "Your account is pending approval. You'll be able to add products once approved.",
+  "vendors.account_pending":
+    "Your account is pending approval. You'll be able to add products once approved.",
   "vendors.no_documents": "Vendor must upload at least one document before approval.",
   "vendors.insufficient_documents": "Vendor must upload exactly 5 documents.",
   "vendors.documents_not_approved": "All documents must be approved before vendor can be approved.",
   "vendors.no_bank_account": "Vendor must upload at least one bank account before approval.",
-  "vendors.bank_account_not_approved": "At least one bank account must be approved before vendor can be approved.",
+  "vendors.bank_account_not_approved":
+    "At least one bank account must be approved before vendor can be approved.",
+  "vendors.listing.active_orders":
+    "Cannot delete listing because there are active or pending customer rental orders associated with it. Please complete or cancel those orders first.",
+  "vendors.vendor_location_missing":
+    "This vendor has not set up a delivery location yet. Please try another listing.",
+  "vendors.service_area.location_required":
+    "Place the pin on the map (search, click, or drag) before saving this service area. Area name and city alone are not enough.",
+  "vendors.service_area.invalid_location":
+    "Please set a valid map pin for this service area.",
+  "vendor_service_areas.invalid_id": "Invalid service area.",
+  "vendor_service_areas.not_found": "Service area not found.",
 
-  // Vendor listing/product errors
-  "vendors.listing.active_orders": "Cannot delete listing because there are active or pending customer rental orders associated with it. Please complete or cancel those orders first.",
+  // Customer checkout / delivery
+  "customers.out_of_service_area":
+    "This delivery address is outside the vendor's service area. Please choose another address that the vendor can deliver to, or remove this item from your cart.",
+  "customers.vendor_location_missing":
+    "This item cannot be delivered yet because the vendor's location is not set up. Please try another product or contact support.",
+  "customers.delivery_distance_error":
+    "We couldn't verify delivery for this address. Please check your address or try again.",
+  "customers.address_required": "Please select a delivery address to continue.",
+  "customers.invalid_address": "Please select a valid delivery address.",
+  "customers.address_not_found": "Address not found.",
+  "customers.address_pin_required":
+    "Place the pin on the map before saving. Address text alone is not enough for delivery.",
+  "customers.stock_unavailable":
+    "Some items are out of stock or no longer available. Please update your cart and try again.",
+  "customers.listing_not_found": "One or more items in your cart are no longer available.",
+  "customers.quantity_exceeds_stock":
+    "Requested quantity is higher than available stock. Please reduce the quantity and try again.",
 
   // Admin errors
   "admins.invalid_id": "Invalid admin ID provided.",
@@ -35,85 +69,134 @@ const errorMessages: Record<string, string> = {
   "bank_accounts.not_found": "Bank account not found.",
   "bank_accounts.invalid_ifsc": "Invalid IFSC code format.",
 
+  // Auth
+  EMAIL_NOT_VERIFIED: "Please verify your email before continuing.",
+  "auth.invalid_credentials": "Invalid email or password.",
+  "auth.token_expired": "This link has expired. Please request a new one.",
+
+  // Medical directory
+  "directory.doctor_not_found":
+    "No doctor found for this Unique ID. Please check the ID and try again.",
+  "directory.doctor_code_required": "Enter the doctor's Unique ID.",
+
   // General errors
-  "unauthorized": "You are not authorized to perform this action.",
-  "forbidden": "Access denied.",
-  "not_found": "Resource not found.",
-  "validation_error": "Please check your input and try again.",
-  "server_error": "Something went wrong. Please try again.",
-  "network_error": "Unable to connect. Please check your internet connection.",
+  unauthorized: "You are not authorized to perform this action.",
+  forbidden: "Access denied.",
+  not_found: "Resource not found.",
+  validation_error: "Please check your input and try again.",
+  server_error: "Something went wrong. Please try again.",
+  network_error: "No internet connection. Please check your network and try again.",
 };
 
-// Generic fallback messages by error type
 const genericMessages = {
-  network: "Unable to connect. Please check your internet connection.",
+  network: "No internet connection. Please check your network and try again.",
   server: "Something went wrong. Please try again later.",
   validation: "Please check your input and try again.",
   unknown: "An unexpected error occurred. Please try again.",
 };
 
-/**
- * Extract error code from error response
- */
+function normalizeCode(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.includes("://") || trimmed.startsWith("http")) return null;
+  const match = trimmed.match(ERROR_CODE_PATTERN);
+  return match ? match[0] : null;
+}
+
+/** Strip technical error codes from any user-facing string. */
+export function stripErrorCodes(message: string): string {
+  return message
+    .replace(BRACKET_CODE_PATTERN, " ")
+    .replace(
+      /\b(?:vendors|customers|admins|documents|bank_accounts|auth|catalog|orders|directory)\.[a-z0-9_]+(?:\.[a-z0-9_]+)*\b/gi,
+      " ",
+    )
+    .replace(/\bEMAIL_NOT_VERIFIED\b/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function extractErrorCode(error: unknown): string | null {
   if (!error || typeof error !== "object") return null;
 
-  const err = error as ErrorResponse & Error;
+  const err = error as ErrorResponse & Error & { code?: string };
 
-  // Check for code property directly
-  if (err.code) return err.code;
+  const fromCode = normalizeCode(err.code);
+  if (fromCode) return fromCode;
 
-  // Check Error message for bracket format: "message [error.code]"
+  const fromTitle = normalizeCode(err.title);
+  if (fromTitle) return fromTitle;
+
   if (err.message && typeof err.message === "string") {
-    const bracketMatch = err.message.match(/\[([a-z_]+(?:\.[a-z_]+)+)\]$/i);
-    if (bracketMatch) return bracketMatch[1];
+    const bracketMatch = err.message.match(/\[([^\]]+)\]/);
+    const fromBracket = normalizeCode(bracketMatch?.[1]);
+    if (fromBracket) return fromBracket;
+    const fromMessage = normalizeCode(err.message);
+    if (fromMessage) return fromMessage;
   }
 
-  // Check detail property
   if (err.detail && typeof err.detail === "string") {
-    const match = err.detail.match(/([a-z_]+(?:\.[a-z_]+)+)/i);
-    if (match) return match[1];
+    return normalizeCode(err.detail);
   }
 
   return null;
 }
 
+function looksLikeTechnicalCode(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  if (ERROR_CODE_PATTERN.test(t) && !t.includes(" ")) return true;
+  if (/^[a-z0-9_.-]+$/i.test(t) && t.includes(".")) return true;
+  return false;
+}
+
 /**
- * Get user-friendly error message
- * Logs technical error to console and returns user-friendly message
+ * Get user-friendly error message (never includes backend error codes).
+ * Optional fallback is used when nothing useful can be derived.
  */
-export function getUserFriendlyMessage(error: unknown): string {
-  // Check for network errors
+export function getUserFriendlyMessage(error: unknown, fallback?: string): string {
   if (error instanceof TypeError && error.message.includes("fetch")) {
     return genericMessages.network;
   }
 
-  // Get the original error message if available
   let originalMessage = "";
   if (error instanceof Error) {
     originalMessage = error.message;
   } else if (error && typeof error === "object" && "message" in error) {
-    originalMessage = (error as ErrorResponse).message || "";
+    originalMessage = String((error as ErrorResponse).message || "");
+  } else if (typeof error === "string") {
+    originalMessage = error;
   }
 
-  // Clean the original message by removing any [error.code] brackets globally
-  const cleanMessage = originalMessage.replace(/\s*\[[a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+\]\s*/g, "").trim();
-
-  // Check for error code in response
+  const cleanMessage = stripErrorCodes(originalMessage);
   const errorCode = extractErrorCode(error);
 
   if (errorCode && errorMessages[errorCode]) {
-    // If backend message already has useful dynamic content (like "Currently uploaded: 2/5"),
-    // and it's user-friendly (contains spaces, reasonable length), use it instead
-    if (cleanMessage.length > 10 && cleanMessage.includes(" ") && !cleanMessage.includes("Exception") && !cleanMessage.includes("Error:")) {
+    // Prefer mapped copy for known delivery/checkout codes so users get actionable guidance.
+    if (
+      errorCode.startsWith("customers.") ||
+      errorCode.startsWith("vendors.account_") ||
+      errorCode.startsWith("directory.") ||
+      !cleanMessage ||
+      looksLikeTechnicalCode(cleanMessage) ||
+      cleanMessage.length < 12 ||
+      /^an error occurred$/i.test(cleanMessage)
+    ) {
+      return errorMessages[errorCode];
+    }
+    // Backend detail already user-friendly — keep it (without codes).
+    if (
+      cleanMessage.length > 10 &&
+      cleanMessage.includes(" ") &&
+      !cleanMessage.includes("Exception") &&
+      !/^error:/i.test(cleanMessage)
+    ) {
       return cleanMessage;
     }
     return errorMessages[errorCode];
   }
 
-  // Check for Error instance with message
   if (error instanceof Error) {
-    // Check if the error message contains a known error code
     for (const [code, message] of Object.entries(errorMessages)) {
       if (error.message.includes(code)) {
         return message;
@@ -121,12 +204,18 @@ export function getUserFriendlyMessage(error: unknown): string {
     }
   }
 
-  // Fallback to the clean message if it's descriptive enough
-  if (cleanMessage && cleanMessage.length > 5 && !cleanMessage.includes("Exception") && !cleanMessage.includes("Error:")) {
+  if (
+    cleanMessage &&
+    cleanMessage.length > 5 &&
+    !looksLikeTechnicalCode(cleanMessage) &&
+    !cleanMessage.includes("Exception") &&
+    !/^error:/i.test(cleanMessage)
+  ) {
     return cleanMessage;
   }
 
-  // Return generic message based on error type
+  if (fallback?.trim()) return fallback.trim();
+
   if (error instanceof Error) {
     if (error.message.includes("network") || error.message.includes("fetch")) {
       return genericMessages.network;
@@ -142,11 +231,6 @@ export function getUserFriendlyMessage(error: unknown): string {
   return genericMessages.unknown;
 }
 
-/**
- * Show user-friendly error toast
- * Wraps toast.error with user-friendly message extraction
- */
 export function showErrorToast(error: unknown, customMessage?: string): string {
-  const message = customMessage || getUserFriendlyMessage(error);
-  return message;
+  return customMessage || getUserFriendlyMessage(error);
 }

@@ -84,6 +84,8 @@ export interface VendorProductListingDto {
   listingStatus: string;
   favoriteCount: number;
   isChemical?: boolean;
+  primaryImageUrl?: string | null;
+  primaryThumbnailUrl?: string | null;
 }
 
 export interface AdminUserDto {
@@ -279,6 +281,8 @@ export interface VendorProductListingDto {
   listingStatus: string;
   favoriteCount: number;
   isChemical?: boolean;
+  primaryImageUrl?: string | null;
+  primaryThumbnailUrl?: string | null;
 }
 
 export interface VerifyVendorListingRequest {

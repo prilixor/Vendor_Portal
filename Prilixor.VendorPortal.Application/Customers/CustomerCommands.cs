@@ -158,8 +158,26 @@ public sealed class AddCustomerAddressCommandValidator : AbstractValidator<AddCu
         RuleFor(x => x.City).NotEmpty().MaximumLength(120);
         RuleFor(x => x.State).NotEmpty().MaximumLength(120);
         RuleFor(x => x.Postal).NotEmpty().MaximumLength(30);
-        RuleFor(x => x.Latitude).InclusiveBetween(-90m, 90m).When(x => x.Latitude.HasValue);
-        RuleFor(x => x.Longitude).InclusiveBetween(-180m, 180m).When(x => x.Longitude.HasValue);
+        RuleFor(x => x.Latitude)
+            .NotNull()
+            .WithErrorCode("customers.address_pin_required")
+            .WithMessage("Place the pin on the map before saving. Address text alone is not enough for delivery.");
+        RuleFor(x => x.Longitude)
+            .NotNull()
+            .WithErrorCode("customers.address_pin_required")
+            .WithMessage("Place the pin on the map before saving. Address text alone is not enough for delivery.");
+        RuleFor(x => x.Latitude!.Value)
+            .InclusiveBetween(-90m, 90m)
+            .When(x => x.Latitude.HasValue)
+            .WithMessage("Please set a valid map pin latitude.");
+        RuleFor(x => x.Longitude!.Value)
+            .InclusiveBetween(-180m, 180m)
+            .When(x => x.Longitude.HasValue)
+            .WithMessage("Please set a valid map pin longitude.");
+        RuleFor(x => x)
+            .Must(x => !(x.Latitude is 0m && x.Longitude is 0m))
+            .WithErrorCode("customers.address_pin_required")
+            .WithMessage("Place the pin on the map before saving. Address text alone is not enough for delivery.");
     }
 }
 
@@ -171,6 +189,15 @@ internal sealed class AddCustomerAddressCommandHandler(ICustomerRepository custo
         var c = await customers.GetCustomerByIdAsync(request.CustomerId, cancellationToken);
         if (c is null || c.IsDeleted)
             return Result.Failure<CustomerAddressDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
+
+        if (!request.Latitude.HasValue || !request.Longitude.HasValue ||
+            (request.Latitude.Value == 0m && request.Longitude.Value == 0m))
+        {
+            return Result.Failure<CustomerAddressDto>(new Error(
+                "customers.address_pin_required",
+                "Place the pin on the map before saving. Address text alone is not enough for delivery.",
+                ErrorCategory.Validation));
+        }
 
         if (request.SetAsDefault)
         {
@@ -232,8 +259,26 @@ public sealed class UpdateCustomerAddressCommandValidator : AbstractValidator<Up
         RuleFor(x => x.City).NotEmpty().MaximumLength(120);
         RuleFor(x => x.State).NotEmpty().MaximumLength(120);
         RuleFor(x => x.Postal).NotEmpty().MaximumLength(30);
-        RuleFor(x => x.Latitude).InclusiveBetween(-90m, 90m).When(x => x.Latitude.HasValue);
-        RuleFor(x => x.Longitude).InclusiveBetween(-180m, 180m).When(x => x.Longitude.HasValue);
+        RuleFor(x => x.Latitude)
+            .NotNull()
+            .WithErrorCode("customers.address_pin_required")
+            .WithMessage("Place the pin on the map before saving. Address text alone is not enough for delivery.");
+        RuleFor(x => x.Longitude)
+            .NotNull()
+            .WithErrorCode("customers.address_pin_required")
+            .WithMessage("Place the pin on the map before saving. Address text alone is not enough for delivery.");
+        RuleFor(x => x.Latitude!.Value)
+            .InclusiveBetween(-90m, 90m)
+            .When(x => x.Latitude.HasValue)
+            .WithMessage("Please set a valid map pin latitude.");
+        RuleFor(x => x.Longitude!.Value)
+            .InclusiveBetween(-180m, 180m)
+            .When(x => x.Longitude.HasValue)
+            .WithMessage("Please set a valid map pin longitude.");
+        RuleFor(x => x)
+            .Must(x => !(x.Latitude is 0m && x.Longitude is 0m))
+            .WithErrorCode("customers.address_pin_required")
+            .WithMessage("Place the pin on the map before saving. Address text alone is not enough for delivery.");
     }
 }
 
@@ -249,6 +294,15 @@ internal sealed class UpdateCustomerAddressCommandHandler(ICustomerRepository cu
         var addr = await customers.GetCustomerAddressByIdAsync(request.CustomerId, request.AddressId, cancellationToken);
         if (addr is null)
             return Result.Failure<CustomerAddressDto>(new Error("customers.address_not_found", "Address not found.", ErrorCategory.NotFound));
+
+        if (!request.Latitude.HasValue || !request.Longitude.HasValue ||
+            (request.Latitude.Value == 0m && request.Longitude.Value == 0m))
+        {
+            return Result.Failure<CustomerAddressDto>(new Error(
+                "customers.address_pin_required",
+                "Place the pin on the map before saving. Address text alone is not enough for delivery.",
+                ErrorCategory.Validation));
+        }
 
         if (request.SetAsDefault)
         {
@@ -624,7 +678,7 @@ internal static class CustomerOrderPricingRules
             {
                 return DeliveryDistanceResult.Fail(
                     "customers.out_of_service_area",
-                    "Selected address is outside vendor service area.");
+                    "This delivery address is outside the vendor's service area. Please choose another address, or remove items that cannot be delivered there.");
             }
         }
 
@@ -640,7 +694,7 @@ internal static class CustomerOrderPricingRules
             {
                 return DeliveryDistanceResult.Fail(
                     "customers.out_of_service_area",
-                    "Selected address is outside vendor service area.");
+                    "This delivery address is outside the vendor's service area. Please choose another address, or remove items that cannot be delivered there.");
             }
 
             return DeliveryDistanceResult.Success(distanceKm);
@@ -648,7 +702,7 @@ internal static class CustomerOrderPricingRules
 
         return DeliveryDistanceResult.Fail(
             "customers.vendor_location_missing",
-            "Vendor delivery location is not configured.");
+            "This item cannot be delivered yet because the vendor's location is not set up. Please try another product.");
     }
 }
 
@@ -688,7 +742,7 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
         {
             return Result.Failure<CustomerOrderQuoteDto>(new Error(
                 "customers.address_pin_required",
-                "Selected address is missing map location. Please add an address with a pinned map location.",
+                "Selected address is missing a map pin. Please edit the address and place the pin on the map.",
                 ErrorCategory.Validation));
         }
 
@@ -863,7 +917,7 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
         {
             return Result.Failure<PlaceCustomerOrdersResultDto>(new Error(
                 "customers.address_pin_required",
-                "Selected address is missing map location. Please add an address with a pinned map location.",
+                "Selected address is missing a map pin. Please edit the address and place the pin on the map.",
                 ErrorCategory.Validation));
         }
 

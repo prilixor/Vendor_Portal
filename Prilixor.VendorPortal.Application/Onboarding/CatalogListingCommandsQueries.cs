@@ -258,7 +258,8 @@ public sealed record GetProductsQuery(string? CategoryId) : IQuery<List<ProductD
 
 internal sealed class GetProductsQueryHandler(
     IVendorOnboardingRepository repository,
-    ICustomerRepository customerRepository)
+    ICustomerRepository customerRepository,
+    IVendorFileUrlResolver fileUrlResolver)
     : IQueryHandler<GetProductsQuery, List<ProductDto>>
 {
     public async Task<Result<List<ProductDto>>> Handle(GetProductsQuery request, CancellationToken cancellationToken)
@@ -305,13 +306,13 @@ internal sealed class GetProductsQueryHandler(
             x.IsRentEnabled,
             x.IsBuyEnabled,
             x.IsActive,
-            x.ProductImages?.Select(i => new ProductImageDto(
+            x.ProductImages?.Where(i => !i.IsDeleted).Select(i => new ProductImageDto(
                 i.Id.ToString(),
                 i.ProductId.ToString(),
-                i.ImageUrl,
+                fileUrlResolver.Resolve(i.ImageUrl),
                 i.DisplayOrder,
                 i.IsPrimary,
-                i.ThumbnailUrl)).ToList() ?? [],
+                string.IsNullOrWhiteSpace(i.ThumbnailUrl) ? null : fileUrlResolver.Resolve(i.ThumbnailUrl))).ToList() ?? [],
             x.Variants?.Select(v => new ProductVariantDto(
                 v.Id.ToString(),
                 v.ProductId.ToString(),
@@ -718,7 +719,8 @@ public sealed record GetVendorProductListingsQuery(string VendorId) : IQuery<Lis
 
 internal sealed class GetVendorProductListingsQueryHandler(
     IVendorOnboardingRepository repository,
-    ICustomerRepository customerRepository)
+    ICustomerRepository customerRepository,
+    IVendorFileUrlResolver fileUrlResolver)
     : IQueryHandler<GetVendorProductListingsQuery, List<VendorProductListingDto>>
 {
     public async Task<Result<List<VendorProductListingDto>>> Handle(GetVendorProductListingsQuery request, CancellationToken cancellationToken)
@@ -741,22 +743,81 @@ internal sealed class GetVendorProductListingsQueryHandler(
         var chemicalProductIds = await repository.GetChemicalProductIdsAsync(
             rows.Select(x => x.ProductId).Distinct().ToList(), cancellationToken);
 
-        var result = rows.Select(x => new VendorProductListingDto(
-            x.Id.ToString(),
-            x.VendorId.ToString(),
-            x.ProductId.ToString(),
-            x.ListingTitle,
-            x.DailyRent,
-            x.WeeklyRent,
-            x.MonthlyRent,
-            x.SecurityDeposit,
-            x.AvailableQuantity,
-            x.ListingStatus,
-            favoriteCounts.GetValueOrDefault(x.ProductId, 0),
-            chemicalProductIds.Contains(x.ProductId))).ToList();
+        var listingImages = await repository.GetVendorProductImagesByListingIdsAsync(listingIds, cancellationToken);
+        var listingImagesByListingId = listingImages
+            .GroupBy(x => x.VendorProductListingId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var productIds = rows.Select(x => x.ProductId).Distinct().ToList();
+        var productImages = await repository.GetProductImagesByProductIdsAsync(productIds, cancellationToken);
+        var productImagesByProductId = productImages
+            .GroupBy(x => x.ProductId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var result = rows.Select(x =>
+        {
+            var (primaryImageUrl, primaryThumbnailUrl) = ResolvePrimaryImageUrls(
+                listingImagesByListingId.GetValueOrDefault(x.Id),
+                productImagesByProductId.GetValueOrDefault(x.ProductId),
+                fileUrlResolver);
+
+            return new VendorProductListingDto(
+                x.Id.ToString(),
+                x.VendorId.ToString(),
+                x.ProductId.ToString(),
+                x.ListingTitle,
+                x.DailyRent,
+                x.WeeklyRent,
+                x.MonthlyRent,
+                x.SecurityDeposit,
+                x.AvailableQuantity,
+                x.ListingStatus,
+                favoriteCounts.GetValueOrDefault(x.ProductId, 0),
+                chemicalProductIds.Contains(x.ProductId),
+                primaryImageUrl,
+                primaryThumbnailUrl);
+        }).ToList();
 
         return Result.Success(result);
     }
+
+    private static (string? PrimaryImageUrl, string? PrimaryThumbnailUrl) ResolvePrimaryImageUrls(
+        List<VendorProductImage>? listingImages,
+        List<ProductImage>? productImages,
+        IVendorFileUrlResolver fileUrlResolver)
+    {
+        var listingPrimary = PickPrimaryListingImage(listingImages);
+        if (listingPrimary is not null)
+        {
+            return (
+                fileUrlResolver.Resolve(listingPrimary.ImageUrl),
+                string.IsNullOrWhiteSpace(listingPrimary.ThumbnailUrl)
+                    ? null
+                    : fileUrlResolver.Resolve(listingPrimary.ThumbnailUrl));
+        }
+
+        var productPrimary = PickPrimaryProductImage(productImages);
+        if (productPrimary is null)
+            return (null, null);
+
+        return (
+            fileUrlResolver.Resolve(productPrimary.ImageUrl),
+            string.IsNullOrWhiteSpace(productPrimary.ThumbnailUrl)
+                ? null
+                : fileUrlResolver.Resolve(productPrimary.ThumbnailUrl));
+    }
+
+    private static VendorProductImage? PickPrimaryListingImage(List<VendorProductImage>? images) =>
+        images?
+            .OrderByDescending(i => i.IsPrimary)
+            .ThenBy(i => i.DisplayOrder)
+            .FirstOrDefault();
+
+    private static ProductImage? PickPrimaryProductImage(List<ProductImage>? images) =>
+        images?
+            .OrderByDescending(i => i.IsPrimary)
+            .ThenBy(i => i.DisplayOrder)
+            .FirstOrDefault();
 }
 
 public sealed record AddVendorProductImageCommand(

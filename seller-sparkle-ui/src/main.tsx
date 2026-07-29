@@ -9,7 +9,7 @@ import { getUserFriendlyMessage } from "./app/utils/errorMessages";
 const originalToastError = toast.error;
 toast.error = (message: string | React.ReactNode, data?: any) => {
   if (typeof message === "string") {
-    return originalToastError(getUserFriendlyMessage(new Error(message)), data);
+    return originalToastError(getUserFriendlyMessage(message), data);
   }
   return originalToastError(message, data);
 };

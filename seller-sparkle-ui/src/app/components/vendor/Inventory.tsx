@@ -15,10 +15,12 @@ import { InventoryMovement, InventoryRecord } from "@/app/models";
 import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2, Barcode, Trash2, Search, FlaskConical } from "lucide-react";
 import { format } from "date-fns";
 import { TablePagination } from "@/app/components/shared/TablePagination";
+import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { useAuth } from "@/app/guards/AuthContext";
 import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
 import { vendorOnboardingApi, type VendorProductAssetApiDto, type TrackedAssetDto, type VendorVariantInventoryDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
+import { resolveItemImageUrl } from "@/app/helpers/utils";
 
 type ChemicalStockEditRow = {
   productVariantId: string;
@@ -144,6 +146,11 @@ const Inventory = () => {
       listings.map(async (listing) => {
         const isChemical = !!isChemMap[listing.id];
         const baseName = `${listing.listingTitle}${productById.get(listing.productId) ? ` (${productById.get(listing.productId)})` : ""}`;
+        const primaryImage =
+          resolveItemImageUrl({
+            primaryImageUrl: listing.primaryImageUrl,
+            primaryThumbnailUrl: listing.primaryThumbnailUrl,
+          }) ?? undefined;
 
         try {
           // Chemicals: packaging-size (variant) stock is the source of truth — not flat VendorInventory.
@@ -162,6 +169,7 @@ const Inventory = () => {
                 catalogProductId: listing.productId,
                 isChemical: true,
                 productName: baseName,
+                primaryImage,
                 total,
                 available,
                 reserved,
@@ -177,6 +185,7 @@ const Inventory = () => {
             catalogProductId: listing.productId,
             isChemical,
             productName: baseName,
+            primaryImage,
             total: inv.totalQuantity,
             available: inv.availableQuantity,
             reserved: inv.reservedQuantity,
@@ -202,6 +211,7 @@ const Inventory = () => {
             catalogProductId: listing.productId,
             isChemical,
             productName: baseName,
+            primaryImage,
             total: seeded.totalQuantity,
             available: seeded.availableQuantity,
             reserved: seeded.reservedQuantity,
@@ -879,7 +889,12 @@ const Inventory = () => {
                 const utilization = row.total === 0 ? 0 : ((row.rented + row.reserved) / row.total) * 100;
                 return (
                   <tr key={row.productId} className="hover:bg-muted/20">
-                    <td className="px-4 py-4 font-medium">{row.productName}</td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <ListingThumb src={row.primaryImage} alt={row.productName} />
+                        <span className="font-medium">{row.productName}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-4 text-right font-mono">{row.total}</td>
                     <td className="px-4 py-4 text-right">
                       <span className="inline-flex items-center justify-center font-mono font-medium text-success bg-success/10 px-2.5 py-0.5 rounded-full min-w-[3rem]">

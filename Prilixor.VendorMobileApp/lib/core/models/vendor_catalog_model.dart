@@ -79,6 +79,7 @@ class CatalogProduct {
   final String categoryId;
   final String productName;
   final double dailyRent;
+  final double weeklyRent;
   final double monthlyRent;
   final double securityDeposit;
   final double? buyPrice;
@@ -95,6 +96,7 @@ class CatalogProduct {
     required this.categoryId,
     required this.productName,
     required this.dailyRent,
+    this.weeklyRent = 0,
     required this.monthlyRent,
     required this.securityDeposit,
     this.buyPrice,
@@ -121,6 +123,7 @@ class CatalogProduct {
       categoryId: json['categoryId']?.toString() ?? '',
       productName: json['productName']?.toString() ?? 'Unknown',
       dailyRent: _toDouble(json['dailyRent']),
+      weeklyRent: _toDouble(json['weeklyRent']),
       monthlyRent: _toDouble(json['monthlyRent']),
       securityDeposit: _toDouble(json['securityDeposit']),
       buyPrice: json['buyPrice'] == null ? null : _toDouble(json['buyPrice']),
@@ -147,6 +150,7 @@ class VendorProductListing {
   final String productId;
   final String listingTitle;
   final double dailyRent;
+  final double weeklyRent;
   final double monthlyRent;
   final double securityDeposit;
   final int availableQuantity;
@@ -160,6 +164,7 @@ class VendorProductListing {
     required this.productId,
     required this.listingTitle,
     required this.dailyRent,
+    this.weeklyRent = 0,
     required this.monthlyRent,
     required this.securityDeposit,
     required this.availableQuantity,
@@ -175,6 +180,7 @@ class VendorProductListing {
       productId: json['productId']?.toString() ?? '',
       listingTitle: json['listingTitle']?.toString() ?? '',
       dailyRent: _toDouble(json['dailyRent']),
+      weeklyRent: _toDouble(json['weeklyRent']),
       monthlyRent: _toDouble(json['monthlyRent']),
       securityDeposit: _toDouble(json['securityDeposit']),
       availableQuantity: _toInt(json['availableQuantity']),
@@ -411,20 +417,30 @@ class ChemicalVariantStockRow {
 class VendorProductImage {
   final String id;
   final String imageUrl;
+  final String? thumbnailUrl;
   final bool isPrimary;
   final int displayOrder;
 
   const VendorProductImage({
     required this.id,
     required this.imageUrl,
+    this.thumbnailUrl,
     this.isPrimary = false,
     this.displayOrder = 0,
   });
+
+  /// Prefer thumbnail for list/grid cards; fall back to full image.
+  String get displayUrl {
+    final thumb = thumbnailUrl?.trim();
+    if (thumb != null && thumb.isNotEmpty) return thumb;
+    return imageUrl;
+  }
 
   factory VendorProductImage.fromJson(Map<String, dynamic> json) {
     return VendorProductImage(
       id: json['id']?.toString() ?? '',
       imageUrl: json['imageUrl']?.toString() ?? '',
+      thumbnailUrl: json['thumbnailUrl']?.toString(),
       isPrimary: json['isPrimary'] == true,
       displayOrder: _toInt(json['displayOrder']),
     );

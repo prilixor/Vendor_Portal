@@ -11,6 +11,8 @@ class DashboardTopListing {
   final String title;
   final String category;
   final double dailyRent;
+  final double weeklyRent;
+  final double monthlyRent;
   final int stock;
 
   const DashboardTopListing({
@@ -18,6 +20,8 @@ class DashboardTopListing {
     required this.title,
     required this.category,
     required this.dailyRent,
+    this.weeklyRent = 0,
+    this.monthlyRent = 0,
     required this.stock,
   });
 }
@@ -143,6 +147,8 @@ class VendorHomeProvider extends ChangeNotifier {
           title: l['listingTitle']?.toString() ?? '',
           category: category?['categoryName']?.toString() ?? 'Unknown',
           dailyRent: _toDouble(l['dailyRent']),
+          weeklyRent: _toDouble(l['weeklyRent']),
+          monthlyRent: _toDouble(l['monthlyRent']),
           stock: _toInt(l['availableQuantity']),
         );
       }).toList();

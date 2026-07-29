@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/api/api_client.dart';
 
+const _doctorNotFoundMessage =
+    'No doctor found for this Unique ID. Please check the ID and try again.';
+
 /// Lightweight Unique ID lookup for vendors (view-only, no listing page).
 Future<void> showVendorDoctorLookupSheet(
   BuildContext context, {
@@ -48,6 +51,51 @@ class _VendorDoctorLookupSheetState extends State<_VendorDoctorLookupSheet> {
     super.dispose();
   }
 
+  /// API 404 body is often a list of `{ code, description }` (FluentResults), not ProblemDetails.
+  String _messageFromResponse(dynamic data, {required int? status}) {
+    try {
+      if (status == 404) return _doctorNotFoundMessage;
+
+      if (data is List && data.isNotEmpty) {
+        final first = data.first;
+        if (first is Map) {
+          final code = first['code']?.toString();
+          final description =
+              first['description']?.toString() ?? first['message']?.toString();
+          if (code == 'directory.doctor_not_found' ||
+              (description != null && description.toLowerCase().contains('not found'))) {
+            return _doctorNotFoundMessage;
+          }
+          if (code == 'directory.doctor_code_required') {
+            return 'Enter a doctor Unique ID';
+          }
+          if (description != null && description.trim().isNotEmpty) {
+            return description.trim();
+          }
+        }
+      }
+      if (data is Map) {
+        final code = data['code']?.toString() ?? data['title']?.toString();
+        final detail =
+            data['detail']?.toString() ??
+            data['description']?.toString() ??
+            data['message']?.toString();
+        if (code == 'directory.doctor_not_found' ||
+            (detail != null && detail.toLowerCase().contains('not found'))) {
+          return _doctorNotFoundMessage;
+        }
+        if (detail != null &&
+            detail.trim().isNotEmpty &&
+            detail.trim().toLowerCase() != 'an error occurred') {
+          return detail.trim();
+        }
+      }
+    } catch (_) {
+      // Never let response parsing break the lookup flow.
+    }
+    return _doctorNotFoundMessage;
+  }
+
   Future<void> _lookup() async {
     final trimmed = _code.text.trim().toUpperCase();
     if (trimmed.isEmpty) {
@@ -60,6 +108,7 @@ class _VendorDoctorLookupSheetState extends State<_VendorDoctorLookupSheet> {
     setState(() {
       _loading = true;
       _error = null;
+      _doctor = null;
       _code.text = trimmed;
     });
     try {
@@ -72,30 +121,41 @@ class _VendorDoctorLookupSheetState extends State<_VendorDoctorLookupSheet> {
         if (doctor['isActive'] == false) {
           setState(() {
             _doctor = null;
-            _error = 'This doctor profile is inactive.';
+            _error = 'This doctor profile is inactive. Please use another Unique ID.';
           });
         } else {
-          setState(() => _doctor = doctor);
+          setState(() {
+            _doctor = doctor;
+            _error = null;
+          });
         }
       } else {
         setState(() {
           _doctor = null;
-          _error = 'Doctor not found for this Unique ID.';
+          _error = _doctorNotFoundMessage;
         });
       }
     } on DioException catch (e) {
       if (!mounted) return;
+      final status = e.response?.statusCode;
+      String message;
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.connectionError) {
+        message =
+            'Unable to look up this doctor right now. Please check your connection and try again.';
+      } else {
+        message = _messageFromResponse(e.response?.data, status: status);
+      }
       setState(() {
         _doctor = null;
-        _error = e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'Doctor not found for this Unique ID.';
+        _error = message;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _doctor = null;
-        _error = 'Doctor not found for this Unique ID.';
+        _error = _doctorNotFoundMessage;
       });
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -170,6 +230,9 @@ class _VendorDoctorLookupSheetState extends State<_VendorDoctorLookupSheet> {
                         borderSide: BorderSide.none,
                       ),
                     ),
+                    onChanged: (_) {
+                      if (_error != null) setState(() => _error = null);
+                    },
                     onSubmitted: (_) => _lookup(),
                   ),
                 ),
@@ -194,8 +257,29 @@ class _VendorDoctorLookupSheetState extends State<_VendorDoctorLookupSheet> {
               ],
             ),
             if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!, style: const TextStyle(color: Color(0xFFF87171), fontSize: 12)),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7F1D1D).withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFF87171).withValues(alpha: 0.45)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline, size: 18, color: Color(0xFFFCA5A5)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(color: Color(0xFFFECACA), fontSize: 13, height: 1.35),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
             if (_doctor != null) ...[
               const SizedBox(height: 16),

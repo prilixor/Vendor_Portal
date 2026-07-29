@@ -5,6 +5,7 @@ import '../models/product_detail_model.dart';
 import '../models/order_quote_model.dart';
 import '../models/cart_model.dart';
 import '../models/medical_model.dart';
+import '../utils/user_friendly_error.dart';
 
 class CheckoutProvider extends ChangeNotifier {
   final ApiClient _apiClient = ApiClient();
@@ -46,7 +47,11 @@ class CheckoutProvider extends ChangeNotifier {
         _productDetail = ProductDetailModel.fromJson(response.data);
       }
     } on DioException catch (e) {
-      _errorMessage = 'Failed to load details: ${e.message}';
+      _errorMessage = userFriendlyDioMessage(
+        e.response?.data,
+        e.message,
+        'Unable to load product details. Please try again.',
+      );
     } catch (_) {
       _errorMessage = 'An unexpected error occurred.';
     } finally {
@@ -63,6 +68,7 @@ class CheckoutProvider extends ChangeNotifier {
       'listingId': line.listingId,
       'quantity': line.quantity,
       'rentalDays': line.orderType == 'buy' ? 0 : line.rentalDays,
+      'rentalPeriodUnit': line.orderType == 'buy' ? 'day' : line.rentalPeriodUnit,
       'orderType': line.orderType,
       if (line.productVariantId != null && line.productVariantId!.isNotEmpty)
         'productVariantId': line.productVariantId,
@@ -103,8 +109,11 @@ class CheckoutProvider extends ChangeNotifier {
       }
     } on DioException catch (e) {
       _quote = null;
-      _errorMessage =
-          'Failed to get quote: ${e.response?.data?['detail'] ?? e.message}';
+      _errorMessage = userFriendlyDioMessage(
+        e.response?.data,
+        e.message,
+        'Unable to calculate delivery for this address. Please try another address.',
+      );
     } catch (_) {
       _quote = null;
       _errorMessage = 'An unexpected error occurred.';
@@ -142,23 +151,36 @@ class CheckoutProvider extends ChangeNotifier {
         final resData = response.data;
         final placedOrders = resData['placedOrders'] as List<dynamic>? ?? [];
         final failed = resData['failedLines'] as List<dynamic>? ?? [];
-        _failedLines = failed
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
+        _failedLines = failed.map((e) {
+          final map = Map<String, dynamic>.from(e as Map);
+          final raw = map['message']?.toString() ?? map['errorCode']?.toString() ?? '';
+          map['message'] = userFriendlyApiError(
+            {
+              'detail': raw,
+              'title': map['errorCode']?.toString() ?? map['code']?.toString(),
+              'code': map['errorCode']?.toString() ?? map['code']?.toString(),
+            },
+            'This item could not be ordered. Please update your cart and try again.',
+          );
+          return map;
+        }).toList();
 
         if (placedOrders.isNotEmpty) {
           return true;
         }
 
-        _errorMessage = failed.isNotEmpty
-            ? failed.map((e) => e['message']).join(', ')
-            : 'Failed to place order. No items were placed.';
+        _errorMessage = _failedLines.isNotEmpty
+            ? _failedLines.map((e) => e['message']).join(' ')
+            : 'Unable to place your order. Please review your cart and try again.';
         return false;
       }
       return false;
     } on DioException catch (e) {
-      _errorMessage =
-          'Failed to place order: ${e.response?.data?['detail'] ?? e.message}';
+      _errorMessage = userFriendlyDioMessage(
+        e.response?.data,
+        e.message,
+        'Unable to place your order. Please try again.',
+      );
       return false;
     } catch (_) {
       _errorMessage = 'An unexpected error occurred.';

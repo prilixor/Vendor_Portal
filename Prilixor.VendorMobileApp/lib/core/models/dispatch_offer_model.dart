@@ -72,7 +72,7 @@ class VendorDispatchOffer {
           (json['vendorSubtotalAmount'] as num?)?.toDouble() ?? 0,
       startDate: json['startDate']?.toString(),
       endDate: json['endDate']?.toString(),
-      listingPrimaryImageUrl: json['listingPrimaryImageUrl']?.toString(),
+      listingPrimaryImageUrl: resolveItemImageUrl(json: json),
       doctorName: json['doctorName']?.toString(),
       doctorSpecialization: json['doctorSpecialization']?.toString(),
       doctorUniqueCode: json['doctorUniqueCode']?.toString(),

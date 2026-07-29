@@ -86,7 +86,12 @@ export function CustomerMedicalReference({ title, value, onChange }: CustomerMed
       });
     } catch (e) {
       onChange(null);
-      setError(getUserFriendlyMessage(e) || "Doctor not found for this Unique ID.");
+      setError(
+        getUserFriendlyMessage(
+          e,
+          "No doctor found for this Unique ID. Please check the ID and try again.",
+        ),
+      );
     } finally {
       setLoading(false);
     }

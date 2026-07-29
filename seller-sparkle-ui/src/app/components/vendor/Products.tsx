@@ -22,9 +22,11 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
 import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { TypedFileUploadPanel } from "@/app/components/shared/TypedFileUploadPanel";
+import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { apiClient } from "@/app/services/apiClient";
 import { vendorOnboardingApi, VendorFileFolderType, VendorVariantInventoryDto } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { resolveItemImageUrl } from "@/app/helpers/utils";
 
 type LocalListing = ProductListing & {
   productId: string;
@@ -513,6 +515,10 @@ const Products = () => {
           isBuyEnabled: product?.isBuyEnabled ?? true,
           quantity,
           status: normalizeListingStatus(l.listingStatus),
+          primaryImage: resolveItemImageUrl({
+            primaryImageUrl: l.primaryImageUrl,
+            primaryThumbnailUrl: l.primaryThumbnailUrl,
+          }) ?? undefined,
           images: [],
           favoriteCount: l.favoriteCount ?? 0,
           createdAt: new Date().toISOString(),
@@ -859,6 +865,20 @@ const Products = () => {
           )
         );
       }
+      const primary = tempImages.find((i) => i.primary) ?? tempImages[0];
+      const thumb =
+        primary?.thumbnailUrl
+          ? normalizeHostedFileUrl(primary.thumbnailUrl)
+          : primary?.url
+            ? normalizeHostedFileUrl(primary.url)
+            : undefined;
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === mediaFor.id
+            ? { ...p, primaryImage: thumb, images: tempImages.map((i) => i.url) }
+            : p,
+        ),
+      );
       setMediaFor(null);
       toast.success("Media updated");
     } catch (error) {
@@ -1054,9 +1074,7 @@ const Products = () => {
                 <tr key={p.id} className="hover:bg-muted/20 align-middle">
                   <td className="px-3 py-3 sm:px-4">
                     <div className="flex items-center gap-2 sm:gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-soft">
-                        <ImageIcon className="h-4 w-4 text-primary" />
-                      </div>
+                      <ListingThumb src={p.primaryImage} alt={p.title} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <p className="font-medium truncate">{p.title}</p>
@@ -1176,9 +1194,7 @@ const Products = () => {
               <div key={p.id} className="rounded-lg border border-border p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-soft">
-                      <ImageIcon className="h-4 w-4 text-primary" />
-                    </div>
+                    <ListingThumb src={p.primaryImage} alt={p.title} />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <p className="truncate font-medium">{p.title}</p>

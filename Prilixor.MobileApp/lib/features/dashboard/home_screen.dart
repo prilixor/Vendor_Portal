@@ -8,6 +8,7 @@ import '../../core/providers/product_provider.dart';
 import '../../core/providers/favorite_provider.dart';
 import '../../core/models/product_model.dart';
 import '../../core/models/category_model.dart';
+import '../../core/utils/rental_period.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/utils/require_auth.dart';
 import '../product/product_detail_screen.dart';
@@ -739,9 +740,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final ls = product.listingStatus.trim().toLowerCase();
     final isBrowsable = ls == 'active' || ls == 'approved';
     final badge = product.getAvailabilityBadge();
+    final rate = primaryDisplayRate(
+      dailyRent: product.dailyRent,
+      weeklyRent: product.weeklyRent,
+      monthlyRent: product.monthlyRent,
+    );
     final priceText = product.isChemical
         ? '₹${(product.buyPrice ?? 0).toStringAsFixed(0)}${product.baseUnit != null ? ' / ${product.baseUnit}' : ''}'
-        : '₹${product.dailyRent.toStringAsFixed(0)}/day';
+        : (rate != null
+            ? '₹${rate.value.toStringAsFixed(0)}${rentalUnitLabels[rate.unit]!.per}'
+            : (product.buyPrice != null ? '₹${product.buyPrice!.toStringAsFixed(0)} buy' : '—'));
 
     return GestureDetector(
       onTap: isBrowsable

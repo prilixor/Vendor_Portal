@@ -419,7 +419,7 @@ class _ProductCard extends StatelessWidget {
     final listing = row.listing;
     final priceLine = row.isChemical
         ? _chemicalPrice(row)
-        : '₹${listing.dailyRent.toStringAsFixed(0)}/day · Qty ${row.quantity}';
+        : '₹${listing.weeklyRent.toStringAsFixed(0)}/w · ₹${listing.monthlyRent.toStringAsFixed(0)}/mo · Qty ${row.quantity}';
 
     return Material(
       color: const Color(0xFF1E293B),

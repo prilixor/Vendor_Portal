@@ -736,8 +736,13 @@ const VendorOrderDetail = () => {
                         <p className="col-span-2 my-0.5 border-t border-amber-200/50"></p>
                         <p className="text-muted-foreground">Base Extension Rent:</p>
                         <p className="text-right">₹{ext.extensionAmount.toFixed(2)}</p>
-                        <p className="text-muted-foreground">Service Fee:</p>
-                        <p className="text-right">₹{ext.serviceFeeAmount.toFixed(2)}</p>
+                        {/* Service fee UI hidden — keep for future re-enable */}
+                        {false && (
+                          <>
+                            <p className="text-muted-foreground">Service Fee:</p>
+                            <p className="text-right">₹{ext.serviceFeeAmount.toFixed(2)}</p>
+                          </>
+                        )}
                         <p className="text-muted-foreground">GST:</p>
                         <p className="text-right">₹{ext.gstAmount.toFixed(2)}</p>
                         <p className="font-semibold text-amber-900 dark:text-amber-400">Total to Collect:</p>
@@ -762,8 +767,13 @@ const VendorOrderDetail = () => {
                         <p className="text-right">₹{buy.baseBuyoutAmount.toFixed(2)}</p>
                         <p className="text-muted-foreground">Rent Deduction:</p>
                         <p className="text-right text-emerald-600">-₹{buy.rentDeductionAmount.toFixed(2)}</p>
-                        <p className="text-muted-foreground">Service Fee:</p>
-                        <p className="text-right">₹{buy.serviceFeeAmount.toFixed(2)}</p>
+                        {/* Service fee UI hidden — keep for future re-enable */}
+                        {false && (
+                          <>
+                            <p className="text-muted-foreground">Service Fee:</p>
+                            <p className="text-right">₹{buy.serviceFeeAmount.toFixed(2)}</p>
+                          </>
+                        )}
                         <p className="text-muted-foreground">GST:</p>
                         <p className="text-right">₹{buy.gstAmount.toFixed(2)}</p>
                         <p className="col-span-2 my-0.5 border-t border-amber-200/50"></p>

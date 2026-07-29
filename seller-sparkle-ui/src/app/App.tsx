@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/app/components/ui/tooltip";
 import { AuthProvider } from "@/app/guards/AuthContext";
 import { CartProvider } from "@/app/contexts/CartContext";
 import { AppShell } from "@/app/components/layout/AppShell";
+import { OfflineBanner } from "@/app/components/shared/OfflineBanner";
 
 import Index from "@/app/components/common/Index";
 import NotFound from "@/app/components/common/NotFound";
@@ -89,6 +90,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <CartProvider>
+            <OfflineBanner />
             <PortalHostGuard>
             <Routes>
             <Route path="/" element={<Index />} />

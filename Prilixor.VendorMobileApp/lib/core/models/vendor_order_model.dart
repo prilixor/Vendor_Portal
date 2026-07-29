@@ -65,6 +65,10 @@ class VendorOrder {
 
   String? get imageUrl => resolveItemImageUrl(
         listingPrimaryImageUrl: listingPrimaryImageUrl,
+        json: {
+          if (listingPrimaryImageUrl != null)
+            'listingPrimaryImageUrl': listingPrimaryImageUrl,
+        },
       );
 
   String get customerLocation {
@@ -90,7 +94,7 @@ class VendorOrder {
       endDate: json['endDate']?.toString(),
       listingId: json['listingId']?.toString() ?? '',
       listingTitle: json['listingTitle']?.toString() ?? 'Listing',
-      listingPrimaryImageUrl: json['listingPrimaryImageUrl']?.toString(),
+      listingPrimaryImageUrl: resolveItemImageUrl(json: json),
       customerName: json['customerName']?.toString() ?? 'Customer',
       customerCity: json['customerCity']?.toString(),
       customerState: json['customerState']?.toString(),

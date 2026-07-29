@@ -3,10 +3,13 @@ import 'package:provider/provider.dart';
 import '../../core/providers/checkout_provider.dart';
 import '../../core/providers/cart_provider.dart';
 import '../../core/providers/address_provider.dart';
+import '../../core/models/cart_model.dart';
 import '../../core/models/medical_model.dart';
 import '../../shared/utils/require_auth.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/catalog_image.dart';
+import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
+import '../../core/utils/rental_period.dart';
 import 'medical_reference_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -50,16 +53,64 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
   }
 
-  void _fetchQuote() {
+  Future<void> _fetchQuote() async {
     final cart = Provider.of<CartProvider>(context, listen: false);
     if (cart.lines.isEmpty) return;
     // Vendor pickup does not require address; others prefer one for distance fees.
-    Provider.of<CheckoutProvider>(context, listen: false).getQuote(
+    final provider = Provider.of<CheckoutProvider>(context, listen: false);
+    await provider.getQuote(
       cart.lines,
       addressId: _selectedAddressId,
       deliveryOption: _deliveryOption,
       medicalRefs: _medicalRefs,
     );
+    if (!mounted) return;
+    await _handleBuySuggestions();
+  }
+
+  Future<void> _handleBuySuggestions() async {
+    final provider = Provider.of<CheckoutProvider>(context, listen: false);
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    final quote = provider.quote;
+    if (quote == null || quote.buySuggestions.isEmpty) return;
+
+    final pending = quote.buySuggestions
+        .where((s) => cart.lines.any((l) => l.listingId == s.listingId && l.orderType == 'rent'))
+        .toList();
+    if (pending.isEmpty) return;
+
+    final first = pending.first;
+    CartLineModel? line;
+    for (final l in cart.lines) {
+      if (l.listingId == first.listingId && l.orderType == 'rent') {
+        line = l;
+        break;
+      }
+    }
+    final confirmed = await showRentExceedsBuyDialog(
+      context,
+      itemTitle: first.listingTitle,
+      rentalTotal: first.rentAmount,
+      buyTotal: first.buyAmount,
+      durationLabel: line == null
+          ? 'this rental'
+          : formatRentalDuration(line.rentalDays, line.rentalPeriodUnit),
+      buyAvailable: true,
+      compulsory: true,
+    );
+    if (!mounted || confirmed != true) return;
+
+    for (final s in quote.buySuggestions) {
+      final match = cart.lines.where((l) => l.listingId == s.listingId && l.orderType == 'rent');
+      for (final l in match) {
+        cart.updateOrderType(l.listingId, 'buy', productVariantId: l.productVariantId);
+      }
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Order type updated to Buy'), backgroundColor: Colors.green),
+    );
+    await _fetchQuote();
   }
 
   // Doctor Unique ID is optional — never block place-order.
@@ -160,7 +211,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Qty: ${line.quantity} • ${line.orderType == 'buy' ? 'Buy' : 'Rent ${line.rentalDays} days'}',
+                                  'Qty: ${line.quantity} • ${line.orderType == 'buy' ? 'Buy' : 'Rent ${formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)}'}',
                                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                                 ),
                               ],
@@ -429,7 +480,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             const SizedBox(height: 8),
                             _buildQuoteRow('Distance delivery fee', quote.distanceFeeAmount),
                           ],
-                          if (quote.serviceFeeAmount > 0) ...[
+                          // Service fee UI hidden — keep for future re-enable
+                          if (false && quote.serviceFeeAmount > 0) ...[
                             const SizedBox(height: 8),
                             _buildQuoteRow('Service Fee', quote.serviceFeeAmount),
                           ],

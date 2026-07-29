@@ -41,28 +41,38 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
     medical.clearError();
     setState(() => _localError = null);
 
-    final doctor = await medical.getDoctorByCode(_codeController.text);
-    if (!mounted) return;
+    try {
+      final doctor = await medical.getDoctorByCode(_codeController.text);
+      if (!mounted) return;
 
-    if (doctor == null) {
+      if (doctor == null) {
+        setState(() {
+          _ref = const MedicalRefModel();
+          _localError = medical.errorMessage ??
+              'No doctor found for this Unique ID. Please check the ID and try again.';
+        });
+        return;
+      }
+
+      setState(() {
+        _ref = MedicalRefModel(
+          doctorId: doctor.id,
+          uniqueCode: doctor.uniqueCode,
+          doctorName: doctor.fullName,
+          specialization: doctor.specialization,
+          hospitals: doctor.hospitals,
+        );
+        _codeController.text = doctor.uniqueCode;
+        _localError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
       setState(() {
         _ref = const MedicalRefModel();
-        _localError = medical.errorMessage ?? 'Doctor not found for this Unique ID.';
+        _localError = medical.errorMessage ??
+            'No doctor found for this Unique ID. Please check the ID and try again.';
       });
-      return;
     }
-
-    setState(() {
-      _ref = MedicalRefModel(
-        doctorId: doctor.id,
-        uniqueCode: doctor.uniqueCode,
-        doctorName: doctor.fullName,
-        specialization: doctor.specialization,
-        hospitals: doctor.hospitals,
-      );
-      _codeController.text = doctor.uniqueCode;
-      _localError = null;
-    });
   }
 
   void _clear() {
@@ -357,8 +367,29 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
               ],
             ),
             if (error != null) ...[
-              const SizedBox(height: 8),
-              Text(error, style: const TextStyle(color: Color(0xFFF87171), fontSize: 12)),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7F1D1D).withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFF87171).withValues(alpha: 0.45)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline, size: 18, color: Color(0xFFFCA5A5)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        error,
+                        style: const TextStyle(color: Color(0xFFFECACA), fontSize: 13, height: 1.35),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
             const SizedBox(height: 12),
             const Text(

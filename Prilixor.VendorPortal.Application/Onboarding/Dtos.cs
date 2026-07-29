@@ -156,7 +156,9 @@ public sealed record VendorProductListingDto(
     int AvailableQuantity,
     string ListingStatus,
     int FavoriteCount = 0,
-    bool IsChemical = false);
+    bool IsChemical = false,
+    string? PrimaryImageUrl = null,
+    string? PrimaryThumbnailUrl = null);
 
 public sealed record VendorProductImageDto(
     string Id,

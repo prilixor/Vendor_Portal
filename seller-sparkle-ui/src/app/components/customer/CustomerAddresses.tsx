@@ -20,6 +20,9 @@ import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
 import { toast } from "sonner";
 import { Trash2, Edit2 } from "lucide-react";
 
+const DEFAULT_MAP_LAT = 23.0225;
+const DEFAULT_MAP_LNG = 72.5714;
+
 const CustomerAddresses = () => {
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
@@ -32,8 +35,10 @@ const CustomerAddresses = () => {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [postal, setPostal] = useState("");
-  const [latitude, setLatitude] = useState(23.0225);
-  const [longitude, setLongitude] = useState(72.5714);
+  const [latitude, setLatitude] = useState(DEFAULT_MAP_LAT);
+  const [longitude, setLongitude] = useState(DEFAULT_MAP_LNG);
+  /** True after user searches/clicks/drags the pin (or when editing an address that already has a pin). */
+  const [locationConfirmed, setLocationConfirmed] = useState(false);
   const [setDefault, setSetDefault] = useState(false);
   const [selectedStateIso2, setSelectedStateIso2] = useState<string>("");
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
@@ -48,12 +53,47 @@ const CustomerAddresses = () => {
     });
   };
 
+  const resetForm = () => {
+    setEditingAddressId(null);
+    setLabel("");
+    setLine1("");
+    setCity("");
+    setState("");
+    setSelectedStateIso2("");
+    setPostal("");
+    setLatitude(DEFAULT_MAP_LAT);
+    setLongitude(DEFAULT_MAP_LNG);
+    setLocationConfirmed(false);
+    setSetDefault(false);
+    setFieldErrors({});
+  };
+
   const validateAddressForm = () => {
     const errors: Record<string, string> = {};
     if (!line1.trim()) errors.line1 = "Please enter the address line.";
     if (!city.trim()) errors.city = "Please select a city.";
     if (!state.trim()) errors.state = "Please select a state.";
     if (!postal.trim()) errors.postal = "Please enter the postal code.";
+
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    const coordsValid =
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      lat >= -90 &&
+      lat <= 90 &&
+      lng >= -180 &&
+      lng <= 180 &&
+      !(lat === 0 && lng === 0);
+    const stillOnDefaultNewPin =
+      !locationConfirmed &&
+      Math.abs(lat - DEFAULT_MAP_LAT) < 0.0001 &&
+      Math.abs(lng - DEFAULT_MAP_LNG) < 0.0001;
+
+    if (!coordsValid || !locationConfirmed || stillOnDefaultNewPin) {
+      errors.location =
+        "Place the pin on the map (search, click, or drag) before saving. Address text alone is not enough for delivery.";
+    }
     return errors;
   };
 
@@ -92,16 +132,7 @@ const CustomerAddresses = () => {
       }),
     onSuccess: () => {
       toast.success("Address saved.");
-      setLabel("");
-      setLine1("");
-      setCity("");
-      setState("");
-      setSelectedStateIso2("");
-      setPostal("");
-      setLatitude(23.0225);
-      setLongitude(72.5714);
-      setSetDefault(false);
-      setFieldErrors({});
+      resetForm();
       queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
     },
     onError: (err: Error) => toast.error(err.message),
@@ -121,17 +152,7 @@ const CustomerAddresses = () => {
       }),
     onSuccess: () => {
       toast.success("Address updated.");
-      setEditingAddressId(null);
-      setLabel("");
-      setLine1("");
-      setCity("");
-      setState("");
-      setSelectedStateIso2("");
-      setPostal("");
-      setLatitude(23.0225);
-      setLongitude(72.5714);
-      setSetDefault(false);
-      setFieldErrors({});
+      resetForm();
       queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
     },
     onError: (err: Error) => toast.error(err.message),
@@ -192,8 +213,13 @@ const CustomerAddresses = () => {
                     const stateObj = states.find((s) => s.name === a.state);
                     setSelectedStateIso2(stateObj?.iso2 || "");
                     setPostal(a.postal);
-                    setLatitude(a.latitude ?? 23.0225);
-                    setLongitude(a.longitude ?? 72.5714);
+                    const hasPin =
+                      typeof a.latitude === "number" &&
+                      typeof a.longitude === "number" &&
+                      !(a.latitude === 0 && a.longitude === 0);
+                    setLatitude(hasPin ? a.latitude! : DEFAULT_MAP_LAT);
+                    setLongitude(hasPin ? a.longitude! : DEFAULT_MAP_LNG);
+                    setLocationConfirmed(hasPin);
                     setSetDefault(a.isDefault);
                     setFieldErrors({});
                     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -320,69 +346,86 @@ const CustomerAddresses = () => {
               <FieldError message={fieldErrors.postal} />
             </div>
             <div className="space-y-1.5">
-              <Label>Pin delivery location</Label>
-              <MapPicker
-                latitude={latitude}
-                longitude={longitude}
-                onChange={(lat, lng) => {
-                  setLatitude(lat);
-                  setLongitude(lng);
-                }}
-                onAddressResolved={(address) => {
-                  let nextLine1 = line1;
-                  let nextCity = city;
-                  let nextState = state;
-                  let nextPostal = postal;
-
-                  if (address?.line1) {
-                    nextLine1 = address.line1;
-                    setLine1(address.line1);
-                    clearFieldError("line1");
-                  }
-                  if (address?.postal) {
-                    nextPostal = address.postal;
-                    setPostal(address.postal);
-                    clearFieldError("postal");
-                  }
-                  if (address?.state) {
-                    const matched = states.find(
-                      (s) => s.name.toLowerCase() === address.state!.toLowerCase(),
-                    );
-                    if (matched) {
-                      nextState = matched.name;
-                      setState(matched.name);
-                      setSelectedStateIso2(matched.iso2);
-                    } else {
-                      nextState = address.state;
-                      setState(address.state);
-                    }
-                    clearFieldError("state");
-                  }
-                  if (address?.city) {
-                    const exact = cities.find(
-                      (c) => c.toLowerCase() === address.city!.toLowerCase(),
-                    );
-                    nextCity = exact ?? address.city;
-                    setCity(nextCity);
-                    clearFieldError("city");
-                  }
-
-                  const missing = missingAddressFieldLabels({
-                    line1: nextLine1,
-                    city: nextCity,
-                    state: nextState,
-                    postal: nextPostal,
-                  });
-                  if (missing.length === 0) {
-                    toast.success("Location applied from map.");
-                  } else {
-                    toast.message(`Map pin saved. Please fill required ${missing.join(", ")}.`);
-                  }
-                }}
-                height="h-56"
-              />
+              <Label required>Pin delivery location</Label>
               <p className="text-xs text-muted-foreground">
-                Delivery distance fees use this pinned location.
+                Address text alone is not enough. Search, click the map, or drag the pin to your exact delivery spot.
+              </p>
+              <div className={fieldErrors.location ? "ring-2 ring-destructive/60 rounded-xl overflow-hidden" : ""}>
+                <MapPicker
+                  latitude={latitude}
+                  longitude={longitude}
+                  onChange={(lat, lng) => {
+                    setLatitude(lat);
+                    setLongitude(lng);
+                    setLocationConfirmed(true);
+                    clearFieldError("location");
+                  }}
+                  onAddressResolved={(address) => {
+                    let nextLine1 = line1;
+                    let nextCity = city;
+                    let nextState = state;
+                    let nextPostal = postal;
+
+                    if (address?.line1) {
+                      nextLine1 = address.line1;
+                      setLine1(address.line1);
+                      clearFieldError("line1");
+                    }
+                    if (address?.postal) {
+                      nextPostal = address.postal;
+                      setPostal(address.postal);
+                      clearFieldError("postal");
+                    }
+                    if (address?.state) {
+                      const matched = states.find(
+                        (s) => s.name.toLowerCase() === address.state!.toLowerCase(),
+                      );
+                      if (matched) {
+                        nextState = matched.name;
+                        setState(matched.name);
+                        setSelectedStateIso2(matched.iso2);
+                      } else {
+                        nextState = address.state;
+                        setState(address.state);
+                      }
+                      clearFieldError("state");
+                    }
+                    if (address?.city) {
+                      const exact = cities.find(
+                        (c) => c.toLowerCase() === address.city!.toLowerCase(),
+                      );
+                      nextCity = exact ?? address.city;
+                      setCity(nextCity);
+                      clearFieldError("city");
+                    }
+
+                    const missing = missingAddressFieldLabels({
+                      line1: nextLine1,
+                      city: nextCity,
+                      state: nextState,
+                      postal: nextPostal,
+                    });
+                    if (missing.length === 0) {
+                      toast.success("Location applied from map.");
+                    } else {
+                      toast.message(`Map pin saved. Please fill required ${missing.join(", ")}.`);
+                    }
+                  }}
+                  height="h-56"
+                />
+              </div>
+              {locationConfirmed ? (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                  Pin set: {latitude.toFixed(4)}, {longitude.toFixed(4)}
+                </p>
+              ) : (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  Map pin not confirmed yet — move the pin to continue.
+                </p>
+              )}
+              <FieldError message={fieldErrors.location} />
+              <p className="text-xs text-muted-foreground">
+                Delivery distance and service area checks use this pinned location.
               </p>
             </div>
             <div className="flex items-center gap-2 pt-1">
@@ -398,19 +441,7 @@ const CustomerAddresses = () => {
                 variant="outline"
                 className="w-full"
                 disabled={editMut.isPending}
-                onClick={() => {
-                  setEditingAddressId(null);
-                  setLabel("");
-                  setLine1("");
-                  setCity("");
-                  setState("");
-                  setSelectedStateIso2("");
-                  setPostal("");
-                  setLatitude(23.0225);
-                  setLongitude(72.5714);
-                  setSetDefault(false);
-                  setFieldErrors({});
-                }}
+                onClick={resetForm}
               >
                 Cancel
               </Button>
@@ -422,7 +453,7 @@ const CustomerAddresses = () => {
                 const errors = validateAddressForm();
                 if (Object.keys(errors).length > 0) {
                   setFieldErrors(errors);
-                  toast.error("Please fill in the required fields.");
+                  toast.error(errors.location || "Please fill in the required fields.");
                   return;
                 }
                 setFieldErrors({});

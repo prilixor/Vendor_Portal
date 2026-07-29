@@ -59,8 +59,12 @@ const DoctorPublicPage = () => {
           `/medical-directory/doctors/by-code/${encodeURIComponent(code.trim())}`,
         );
         if (!cancelled) setDoctor(data);
-      } catch {
-        if (!cancelled) setError("Doctor not found for this Unique ID.");
+      } catch (e) {
+        if (!cancelled) {
+          setError(
+            "No doctor found for this Unique ID. Please check the ID and try again.",
+          );
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -113,6 +117,9 @@ const DoctorPublicPage = () => {
             <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center backdrop-blur">
               <p className="text-lg font-semibold text-white">Doctor not found</p>
               <p className="mt-2 text-sm text-teal-100/70">{error}</p>
+              <p className="mt-3 text-xs text-teal-100/50">
+                Ask your doctor for their BlinksMed Unique ID, or scan their QR code again.
+              </p>
               <Link
                 to="/customer/shop"
                 className="mt-6 inline-flex items-center justify-center rounded-xl bg-teal-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-400"

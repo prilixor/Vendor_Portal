@@ -25,6 +25,7 @@ import { Checkbox } from "@/app/components/ui/checkbox";
 import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { formatRentalDuration } from "@/app/helpers/rentalPeriod";
+import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
 type DeliveryChoice = "standard" | "express" | "vendor_pickup";
 
@@ -171,7 +172,7 @@ const CustomerCheckout = () => {
         navigate("/customer/orders");
       }
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(getUserFriendlyMessage(err, "Unable to place your order. Please try again.")),
   });
 
   useEffect(() => {
@@ -222,10 +223,13 @@ const CustomerCheckout = () => {
         <div className="rounded-xl border border-destructive/50 bg-destructive/5 p-4 text-sm text-destructive shadow-sm">
           <p className="font-bold flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
-            Unable to place order: Stock or Validation issue
+            Unable to continue checkout
           </p>
           <p className="mt-1 text-muted-foreground ml-4">
-            {quoteError instanceof Error ? quoteError.message : "A validation error occurred. Please review your cart."}
+            {getUserFriendlyMessage(
+              quoteError,
+              "Please review your delivery address and cart, then try again.",
+            )}
           </p>
         </div>
       )}
@@ -236,7 +240,9 @@ const CustomerCheckout = () => {
           <div className="mt-2 space-y-3">
             {failedLines.map((l, ix) => (
               <div key={`failed-${l.listingId}-${ix}`} className="space-y-1.5">
-                <p className="text-amber-900/90 dark:text-amber-100/90">{l.message}</p>
+                <p className="text-amber-900/90 dark:text-amber-100/90">
+                  {getUserFriendlyMessage(l.message, "This item could not be ordered. Please update your cart and try again.")}
+                </p>
                 {l.variantSuggestions?.length ? (
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-xs font-medium text-amber-800/80 dark:text-amber-200/80">Available sizes:</span>
@@ -520,10 +526,13 @@ const CustomerCheckout = () => {
                     <span className="tabular-nums text-foreground">₹{distanceFee.toFixed(0)}</span>
                   </div>
                 ) : null}
-              <div className="flex justify-between gap-4 text-muted-foreground">
-                <span>Service fee</span>
-                <span className="tabular-nums text-foreground">₹{serviceFee.toFixed(0)}</span>
-              </div>
+              {/* Service fee UI hidden — keep for future re-enable */}
+              {false && (
+                <div className="flex justify-between gap-4 text-muted-foreground">
+                  <span>Service fee</span>
+                  <span className="tabular-nums text-foreground">₹{serviceFee.toFixed(0)}</span>
+                </div>
+              )}
               {gstAmount > 0 ? (
                 <div className="flex justify-between gap-4 text-muted-foreground">
                   <span>GST</span>

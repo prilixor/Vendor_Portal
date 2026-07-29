@@ -139,6 +139,8 @@ export interface VendorProductListingApiDto {
   listingStatus: string;
   favoriteCount: number;
   isChemical?: boolean;
+  primaryImageUrl?: string | null;
+  primaryThumbnailUrl?: string | null;
 }
 
 export interface VendorProductImageApiDto {

@@ -40,3 +40,25 @@ export function resolveItemImageUrl(
   const fromGallery = item.imageUrls?.find((u) => u?.trim());
   return fromGallery?.trim() || null;
 }
+
+/** Pick a list-row thumbnail from catalog product images (primary first). */
+export function resolveCatalogProductImageUrl(
+  images?: Array<{
+    imageUrl?: string | null;
+    thumbnailUrl?: string | null;
+    isPrimary?: boolean;
+    displayOrder?: number;
+  }> | null,
+): string | null {
+  if (!images?.length) return null;
+  const sorted = [...images].sort((a, b) => {
+    const primaryDelta = Number(!!b.isPrimary) - Number(!!a.isPrimary);
+    if (primaryDelta !== 0) return primaryDelta;
+    return (a.displayOrder ?? 0) - (b.displayOrder ?? 0);
+  });
+  const primary = sorted[0];
+  return resolveItemImageUrl({
+    primaryImageUrl: primary.imageUrl,
+    thumbnailUrl: primary.thumbnailUrl,
+  });
+}

@@ -9,6 +9,7 @@ class ProductDetailModel {
   final String serviceAreaHint;
   final String categoryName;
   final double dailyRent;
+  final double weeklyRent;
   final double monthlyRent;
   final double securityDeposit;
   final bool prescriptionRequired;
@@ -18,6 +19,7 @@ class ProductDetailModel {
   final String availabilityStatus;
   final String description;
   final List<String> imageUrls;
+  final String? primaryImageUrl;
   final double? buyPrice;
   final bool isRentEnabled;
   final bool isBuyEnabled;
@@ -40,6 +42,7 @@ class ProductDetailModel {
     required this.serviceAreaHint,
     required this.categoryName,
     required this.dailyRent,
+    this.weeklyRent = 0,
     required this.monthlyRent,
     required this.securityDeposit,
     required this.prescriptionRequired,
@@ -49,6 +52,7 @@ class ProductDetailModel {
     required this.availabilityStatus,
     required this.description,
     required this.imageUrls,
+    this.primaryImageUrl,
     this.buyPrice,
     this.isRentEnabled = true,
     this.isBuyEnabled = false,
@@ -109,6 +113,7 @@ class ProductDetailModel {
       serviceAreaHint: json['serviceAreaHint'] ?? '',
       categoryName: json['categoryName'] ?? '',
       dailyRent: (json['dailyRent'] ?? 0).toDouble(),
+      weeklyRent: (json['weeklyRent'] ?? 0).toDouble(),
       monthlyRent: (json['monthlyRent'] ?? 0).toDouble(),
       securityDeposit: (json['securityDeposit'] ?? 0).toDouble(),
       prescriptionRequired: json['prescriptionRequired'] ?? false,
@@ -121,6 +126,7 @@ class ProductDetailModel {
           .map((u) => resolveMediaUrl(u))
           .whereType<String>()
           .toList(),
+      primaryImageUrl: resolveItemImageUrl(json: json),
       buyPrice: json['buyPrice'] != null ? (json['buyPrice'] as num).toDouble() : null,
       isRentEnabled: json['isRentEnabled'] ?? true,
       isBuyEnabled: json['isBuyEnabled'] ?? false,

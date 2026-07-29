@@ -166,7 +166,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final inventory = provider.inventoryForListing(widget.listingId);
     final primary = _images.where((i) => i.isPrimary).firstOrNull ??
         (_images.isNotEmpty ? _images.first : null);
-    final imageUrl = resolveMediaUrl(primary?.imageUrl);
+    final imageUrl = resolveMediaUrl(primary?.displayUrl);
 
     return Scaffold(
       appBar: AppBar(
@@ -227,7 +227,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               _InfoRow(label: 'Type', value: row.isChemical ? 'Chemical' : 'Equipment'),
               _InfoRow(label: 'Status', value: _statusLabel(row.status)),
               if (!row.isChemical) ...[
-                _InfoRow(label: 'Daily rent', value: '₹${listing.dailyRent.toStringAsFixed(0)}'),
+                _InfoRow(label: 'Weekly rent', value: '₹${listing.weeklyRent.toStringAsFixed(0)}'),
                 _InfoRow(label: 'Monthly rent', value: '₹${listing.monthlyRent.toStringAsFixed(0)}'),
                 _InfoRow(label: 'Deposit', value: '₹${listing.securityDeposit.toStringAsFixed(0)}'),
               ],

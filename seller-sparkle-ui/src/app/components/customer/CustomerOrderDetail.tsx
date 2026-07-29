@@ -615,10 +615,13 @@ const CustomerOrderDetail = () => {
                   <span>Extension Rent:</span>
                   <span>₹{extensionQuote.extensionAmount.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Service Fee:</span>
-                  <span>₹{extensionQuote.serviceFeeAmount.toFixed(2)}</span>
-                </div>
+                {/* Service fee UI hidden — keep for future re-enable */}
+                {false && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Service Fee:</span>
+                    <span>₹{extensionQuote.serviceFeeAmount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-muted-foreground">
                   <span>GST:</span>
                   <span>₹{extensionQuote.gstAmount.toFixed(2)}</span>
@@ -667,10 +670,13 @@ const CustomerOrderDetail = () => {
                   <span>Rent Deduction (50% of paid):</span>
                   <span>-₹{buyoutQuote.rentDeductionAmount.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Service Fee:</span>
-                  <span>₹{buyoutQuote.serviceFeeAmount.toFixed(2)}</span>
-                </div>
+                {/* Service fee UI hidden — keep for future re-enable */}
+                {false && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Service Fee:</span>
+                    <span>₹{buyoutQuote.serviceFeeAmount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-muted-foreground">
                   <span>GST:</span>
                   <span>₹{buyoutQuote.gstAmount.toFixed(2)}</span>

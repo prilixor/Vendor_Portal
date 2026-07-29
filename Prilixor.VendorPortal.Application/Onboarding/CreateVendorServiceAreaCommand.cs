@@ -22,7 +22,20 @@ public sealed class CreateVendorServiceAreaCommandValidator : AbstractValidator<
         RuleFor(x => x.VendorId).NotEmpty();
         RuleFor(x => x.AreaName).NotEmpty().MaximumLength(150);
         RuleFor(x => x.City).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.ServiceRadiusKm).GreaterThan(0);
+        RuleFor(x => x.CenterLatitude)
+            .InclusiveBetween(-90m, 90m)
+            .WithMessage("Please set a valid map pin latitude for this service area.");
+        RuleFor(x => x.CenterLongitude)
+            .InclusiveBetween(-180m, 180m)
+            .WithMessage("Please set a valid map pin longitude for this service area.");
+        RuleFor(x => x.ServiceRadiusKm)
+            .GreaterThan(0)
+            .LessThanOrEqualTo(500)
+            .WithMessage("Service radius must be between 0 and 500 km.");
+        RuleFor(x => x)
+            .Must(x => !(x.CenterLatitude == 0m && x.CenterLongitude == 0m))
+            .WithErrorCode("vendors.service_area.location_required")
+            .WithMessage("Place the pin on the map (search, click, or drag) before saving this service area.");
     }
 }
 
@@ -40,6 +53,14 @@ internal sealed class CreateVendorServiceAreaCommandHandler(IVendorOnboardingRep
         if (vendor is null)
         {
             return Result.Failure<VendorServiceAreaDto>(new Error("vendors.not_found", "Vendor not found.", ErrorCategory.NotFound));
+        }
+
+        if (request.CenterLatitude == 0m && request.CenterLongitude == 0m)
+        {
+            return Result.Failure<VendorServiceAreaDto>(new Error(
+                "vendors.service_area.location_required",
+                "Place the pin on the map (search, click, or drag) before saving this service area.",
+                ErrorCategory.Validation));
         }
 
         var entity = new VendorServiceArea

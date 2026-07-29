@@ -205,7 +205,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                         ),
                                         child: Row(
                                           children: [
-                                            OrderThumb(url: item.listingPrimaryImageUrl, size: 40),
+                                            OrderThumb(url: item.imageUrl, size: 40),
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Column(
@@ -491,7 +491,7 @@ class _ItemDetailsPanel extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              OrderThumb(url: order.listingPrimaryImageUrl, size: 48),
+              OrderThumb(url: order.imageUrl, size: 48),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(

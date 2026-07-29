@@ -582,6 +582,42 @@ public sealed class VendorOnboardingRepository(
         return Task.CompletedTask;
     }
 
+    public Task<List<VendorProductImage>> GetVendorProductImagesByListingIdsAsync(
+        IReadOnlyList<Guid> listingIds,
+        CancellationToken cancellationToken)
+    {
+        if (listingIds.Count == 0)
+            return Task.FromResult(new List<VendorProductImage>());
+
+        return dbContext.VendorProductImages
+            .Where(x => listingIds.Contains(x.VendorProductListingId) && !x.IsDeleted)
+            .OrderByDescending(x => x.IsPrimary)
+            .ThenBy(x => x.DisplayOrder)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<ProductImage>> GetProductImagesByProductIdsAsync(
+        IReadOnlyList<Guid> productIds,
+        CancellationToken cancellationToken)
+    {
+        if (productIds.Count == 0)
+            return [];
+
+        var fromCommon = await commonDbContext.ProductImages
+            .Where(x => productIds.Contains(x.ProductId) && !x.IsDeleted)
+            .OrderByDescending(x => x.IsPrimary)
+            .ThenBy(x => x.DisplayOrder)
+            .ToListAsync(cancellationToken);
+        if (fromCommon.Count > 0)
+            return fromCommon;
+
+        return await dbContext.ProductImages
+            .Where(x => productIds.Contains(x.ProductId) && !x.IsDeleted)
+            .OrderByDescending(x => x.IsPrimary)
+            .ThenBy(x => x.DisplayOrder)
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<List<VendorProductImage>> GetVendorProductImagesAsync(Guid listingId, CancellationToken cancellationToken)
     {
         return dbContext.VendorProductImages

@@ -647,7 +647,7 @@ class _OrderGroupItemRow extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              OrderThumb(url: order.listingPrimaryImageUrl),
+              OrderThumb(url: order.imageUrl),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(

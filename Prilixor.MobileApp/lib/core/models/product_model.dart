@@ -8,6 +8,7 @@ class ProductModel {
   final String serviceAreaHint;
   final String categoryName;
   final double dailyRent;
+  final double weeklyRent;
   final double monthlyRent;
   final double securityDeposit;
   final bool prescriptionRequired;
@@ -31,6 +32,7 @@ class ProductModel {
     required this.serviceAreaHint,
     required this.categoryName,
     required this.dailyRent,
+    this.weeklyRent = 0,
     required this.monthlyRent,
     required this.securityDeposit,
     required this.prescriptionRequired,
@@ -56,6 +58,7 @@ class ProductModel {
       serviceAreaHint: json['serviceAreaHint'] ?? '',
       categoryName: json['categoryName'] ?? '',
       dailyRent: (json['dailyRent'] ?? 0).toDouble(),
+      weeklyRent: (json['weeklyRent'] ?? 0).toDouble(),
       monthlyRent: (json['monthlyRent'] ?? 0).toDouble(),
       securityDeposit: (json['securityDeposit'] ?? 0).toDouble(),
       prescriptionRequired: json['prescriptionRequired'] ?? false,

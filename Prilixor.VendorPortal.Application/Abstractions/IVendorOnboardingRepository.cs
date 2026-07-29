@@ -73,6 +73,8 @@ public interface IVendorOnboardingRepository
     Task<VendorProductImage?> GetVendorProductImageByIdAsync(Guid vendorId, Guid listingId, Guid imageId, CancellationToken cancellationToken);
     Task UpdateVendorProductImageAsync(VendorProductImage image, CancellationToken cancellationToken);
     Task<List<VendorProductImage>> GetVendorProductImagesAsync(Guid listingId, CancellationToken cancellationToken);
+    Task<List<VendorProductImage>> GetVendorProductImagesByListingIdsAsync(IReadOnlyList<Guid> listingIds, CancellationToken cancellationToken);
+    Task<List<ProductImage>> GetProductImagesByProductIdsAsync(IReadOnlyList<Guid> productIds, CancellationToken cancellationToken);
     Task<List<VendorProductImage>> GetVendorProductImagesMissingThumbnailsAsync(int limit, CancellationToken cancellationToken);
 
     Task AddVendorProductDocumentAsync(VendorProductDocument document, CancellationToken cancellationToken);

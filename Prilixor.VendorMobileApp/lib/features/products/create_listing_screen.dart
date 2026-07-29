@@ -644,7 +644,7 @@ class _EquipmentPricingInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _PriceRow(label: 'Daily rent', value: '₹${product.dailyRent.toStringAsFixed(0)}'),
+        _PriceRow(label: 'Weekly rent', value: '₹${product.weeklyRent.toStringAsFixed(0)}'),
         _PriceRow(label: 'Monthly rent', value: '₹${product.monthlyRent.toStringAsFixed(0)}'),
         _PriceRow(label: 'Security deposit', value: '₹${product.securityDeposit.toStringAsFixed(0)}'),
       ],

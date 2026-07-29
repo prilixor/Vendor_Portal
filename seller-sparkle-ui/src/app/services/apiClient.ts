@@ -72,22 +72,49 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'An error occurred' }));
-      const message = error.detail || error.title || error.message || 'An error occurred';
-      // Look for error code in various fields, but skip URL-like values (RFC links)
-      let code = error.code || error.errorCode || error.errorType || error.title;
-      // If code looks like a URL (contains http), search in other fields or message
-      if (!code || code.includes('http') || code.includes('://') || code.startsWith('https')) {
-        // Try to extract from error.message or error.title
-        const sourceText = error.message || error.title || message;
-        const codeMatch = sourceText.match(/(vendors\.[a-z_]+(?:\.[a-z_]+)*|customers\.[a-z_]+(?:\.[a-z_]+)*|admins\.[a-z_]+(?:\.[a-z_]+)*|documents\.[a-z_]+(?:\.[a-z_]+)*|bank_accounts\.[a-z_]+(?:\.[a-z_]+)*|EMAIL_NOT_VERIFIED|auth\.[a-z_]+(?:\.[a-z_]+)*)/i);
-        if (codeMatch) {
-          code = codeMatch[1];
-        }
+      const parsed = await response.json().catch(() => ({ detail: "An error occurred" }));
+      // FluentResults NotFound/BadRequest often returns `Error[]` ({ code, description }).
+      const firstListItem =
+        Array.isArray(parsed) && parsed.length > 0 && parsed[0] && typeof parsed[0] === "object"
+          ? (parsed[0] as Record<string, unknown>)
+          : null;
+      const error =
+        firstListItem ??
+        (parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : { detail: "An error occurred" });
+
+      // Prefer human detail; never use technical title/code as the visible message.
+      const detail = typeof error.detail === "string" ? error.detail.trim() : "";
+      const title = typeof error.title === "string" ? error.title.trim() : "";
+      const description =
+        typeof error.description === "string" ? error.description.trim() : "";
+      const rawMessage =
+        (detail && !/^[a-z0-9_.-]+$/i.test(detail) ? detail : "") ||
+        (description && !/^[a-z0-9_.-]+$/i.test(description) ? description : "") ||
+        (typeof error.message === "string" ? String(error.message).trim() : "") ||
+        "An error occurred";
+
+      let code =
+        error.code || error.errorCode || error.errorType || undefined;
+      // ProblemDetails often puts the machine code in `title`
+      if ((!code || String(code).includes("://")) && title && /^[a-z0-9_.-]+$/i.test(title)) {
+        code = title;
       }
-      // Include code in message so getUserFriendlyMessage can extract it
-      const fullMessage = code ? `${message} [${code}]` : message;
-      throw new Error(fullMessage);
+      if (!code || String(code).includes("http") || String(code).includes("://")) {
+        const sourceText = `${detail} ${title} ${description} ${rawMessage}`;
+        const codeMatch = sourceText.match(
+          /(vendors\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|customers\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|admins\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|documents\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|bank_accounts\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|auth\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|directory\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|EMAIL_NOT_VERIFIED)/i,
+        );
+        if (codeMatch) code = codeMatch[1];
+      }
+
+      // Throw clean message only — never append [error.code] for UI display.
+      // Attach code so getUserFriendlyMessage can map it.
+      const err = new Error(rawMessage) as Error & { code?: string; status?: number };
+      if (code) err.code = String(code);
+      err.status = response.status;
+      throw err;
     }
 
     if (response.status === 204) {

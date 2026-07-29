@@ -386,6 +386,8 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
   late double _radius;
   bool _locating = false;
   bool _resolvingAddress = false;
+  /// True after user moves pin via search/tap/GPS/manual coords (or when editing existing).
+  late bool _pinConfirmed;
   int _stateCityKey = 0;
   final PlaceSearch _placeSearch = PlaceSearch();
 
@@ -400,6 +402,7 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
     _latitude = defaultLat;
     _longitude = defaultLng;
     _radius = e?.serviceRadiusKm ?? 5;
+    _pinConfirmed = e != null;
 
     _nameController = TextEditingController(text: e?.areaName ?? '');
     // Areas API has no state field — start from profile, then picker reverse-geocodes pin.
@@ -422,11 +425,23 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
   }
 
   Future<void> _setLocation(double lat, double lng) async {
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180 || (lat == 0 && lng == 0)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please set a valid map location.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _latitude = lat;
       _longitude = lng;
       _latController.text = lat.toStringAsFixed(6);
       _lngController.text = lng.toStringAsFixed(6);
+      _pinConfirmed = true;
       _resolvingAddress = true;
     });
 
@@ -510,6 +525,33 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
       return;
     }
 
+    if (!_pinConfirmed ||
+        _latitude < -90 ||
+        _latitude > 90 ||
+        _longitude < -180 ||
+        _longitude > 180 ||
+        (_latitude == 0 && _longitude == 0)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Place the pin on the map (search, tap, GPS, or enter coordinates) before saving. Area name and city alone are not enough.',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    if (_radius <= 0 || _radius > 500) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Radius must be between 1 and 500 km.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     final provider = Provider.of<VendorServiceAreaProvider>(context, listen: false);
@@ -581,10 +623,34 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
           OnboardingFormSection(
             title: 'Pin on map',
             subtitle:
-                'Search, tap the map, or use GPS — pin fills state/city when available.',
+                'Search, tap the map, or use GPS — pin is required for coverage. Area name/city alone are not enough.',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (!_pinConfirmed)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(
+                      'Map pin not confirmed yet — move the pin to continue.',
+                      style: TextStyle(
+                        color: Colors.amber.shade200,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(
+                      'Pin set: ${_latitude.toStringAsFixed(4)}, ${_longitude.toStringAsFixed(4)}',
+                      style: const TextStyle(
+                        color: Color(0xFF34D399),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 OutlinedButton.icon(
                   onPressed: _locating ? null : _useCurrentLocation,
                   icon: _locating

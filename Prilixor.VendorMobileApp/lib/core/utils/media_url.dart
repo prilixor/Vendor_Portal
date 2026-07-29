@@ -76,6 +76,9 @@ String? normalizeHostedFileUrl(String? fileUrl) {
 
 String? resolveItemImageUrl({
   String? listingPrimaryImageUrl,
+  String? primaryImageUrl,
+  String? primaryThumbnailUrl,
+  String? thumbnailUrl,
   Map<String, dynamic>? json,
 }) {
   String? pick(dynamic value) {
@@ -85,11 +88,28 @@ String? resolveItemImageUrl({
     return s;
   }
 
+  final fromThumb = pick(primaryThumbnailUrl) ??
+      pick(thumbnailUrl) ??
+      (json == null
+          ? null
+          : pick(
+              json['primaryThumbnailUrl'] ??
+                  json['PrimaryThumbnailUrl'] ??
+                  json['thumbnailUrl'] ??
+                  json['ThumbnailUrl'],
+            ));
+  if (fromThumb != null) return resolveMediaUrl(fromThumb);
+
   final fromListing = pick(listingPrimaryImageUrl) ??
       (json == null
           ? null
           : pick(json['listingPrimaryImageUrl'] ?? json['ListingPrimaryImageUrl']));
   if (fromListing != null) return resolveMediaUrl(fromListing);
+
+  final fromPrimary = pick(primaryImageUrl) ??
+      (json == null ? null : pick(json['primaryImageUrl'] ?? json['PrimaryImageUrl']));
+  if (fromPrimary != null) return resolveMediaUrl(fromPrimary);
+
   return null;
 }
 

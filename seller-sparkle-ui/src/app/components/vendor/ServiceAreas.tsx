@@ -15,13 +15,24 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
 
-const blank: ServiceArea = { id: "", name: "", city: "", latitude: 19.07, longitude: 72.87, radiusKm: 5 };
+const DEFAULT_MAP_LAT = 19.07;
+const DEFAULT_MAP_LNG = 72.87;
+const blank: ServiceArea = {
+  id: "",
+  name: "",
+  city: "",
+  latitude: DEFAULT_MAP_LAT,
+  longitude: DEFAULT_MAP_LNG,
+  radiusKm: 5,
+};
 
 const ServiceAreas = () => {
   const { user } = useAuth();
   const [areas, setAreas] = useState<ServiceArea[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ServiceArea>(blank);
+  /** True after user searches/clicks/drags the pin (or when editing an existing saved area). */
+  const [locationConfirmed, setLocationConfirmed] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -47,8 +58,18 @@ const ServiceAreas = () => {
     radiusKm: a.serviceRadiusKm,
   });
 
-  const startNew = () => { setFieldErrors({}); setEditing({ ...blank, id: `sa${Date.now()}` }); setOpen(true); };
-  const startEdit = (a: ServiceArea) => { setFieldErrors({}); setEditing(a); setOpen(true); };
+  const startNew = () => {
+    setFieldErrors({});
+    setLocationConfirmed(false);
+    setEditing({ ...blank, id: `sa${Date.now()}` });
+    setOpen(true);
+  };
+  const startEdit = (a: ServiceArea) => {
+    setFieldErrors({});
+    setLocationConfirmed(true);
+    setEditing(a);
+    setOpen(true);
+  };
   const remove = (id: string) => {
     setDeleteConfirmId(id);
   };
@@ -87,9 +108,32 @@ const ServiceAreas = () => {
     if (!editing.city?.trim()) {
       errors.city = "Please enter a city.";
     }
+    const lat = Number(editing.latitude);
+    const lng = Number(editing.longitude);
+    const coordsValid =
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      lat >= -90 &&
+      lat <= 90 &&
+      lng >= -180 &&
+      lng <= 180 &&
+      !(lat === 0 && lng === 0);
+    const stillOnDefaultNewPin =
+      !locationConfirmed &&
+      Math.abs(lat - DEFAULT_MAP_LAT) < 0.0001 &&
+      Math.abs(lng - DEFAULT_MAP_LNG) < 0.0001;
+
+    if (!coordsValid || !locationConfirmed || stillOnDefaultNewPin) {
+      errors.location =
+        "Place the pin on the map (search, click, or drag) before saving. Area name and city alone are not enough.";
+    }
+    if (!(editing.radiusKm > 0) || editing.radiusKm > 500) {
+      errors.radius = "Radius must be between 1 and 500 km.";
+    }
+
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      toast.error("Please fill in the required fields.");
+      toast.error(errors.location || "Please fill in the required fields.");
       return;
     }
 
@@ -289,41 +333,69 @@ const ServiceAreas = () => {
                 <FieldError message={fieldErrors.city} />
               </div>
             </div>
-            {mapReady ? (
-              <div className="w-full overflow-hidden rounded-xl">
-                <MapPicker
-                  key={`dialog-map-${editing.id}`}
-                  latitude={editing.latitude}
-                  longitude={editing.longitude}
-                  radiusKm={editing.radiusKm}
-                  showRadius
-                  height="h-48 sm:h-72"
-                  onChange={(lat, lng) => setEditing({ ...editing, latitude: lat, longitude: lng })}
-                  onAddressResolved={(address) => {
-                    const nextCity = address?.city || editing.city;
-                    if (address?.city) {
-                      setEditing((prev) => ({ ...prev, city: address.city! }));
-                      clearFieldError("city");
-                    }
-                    const missing = missingAddressFieldLabels({
-                      city: nextCity,
-                      requireLine1: false,
-                      requireState: false,
-                      requirePostal: false,
-                      requireCity: true,
-                    });
-                    if (missing.length === 0) {
-                      toast.success("Location applied from map.");
-                    } else {
-                      toast.message(`Map pin saved. Please fill required ${missing.join(", ")}.`);
-                    }
-                  }}
-                  onRadiusChange={(km) => setEditing({ ...editing, radiusKm: km })}
-                />
-              </div>
-            ) : (
-              <div className="h-48 sm:h-72 w-full rounded-xl border border-border bg-muted/30 animate-pulse" />
-            )}
+            <div className="space-y-1.5">
+              <Label required>Map location</Label>
+              <p className="text-xs text-muted-foreground">
+                Area name and city do not set coverage. Search, click the map, or drag the pin to the real place, then set the radius.
+              </p>
+              {mapReady ? (
+                <div
+                  className={`w-full overflow-hidden rounded-xl ${
+                    fieldErrors.location ? "ring-2 ring-destructive/60 rounded-xl" : ""
+                  }`}
+                >
+                  <MapPicker
+                    key={`dialog-map-${editing.id}`}
+                    latitude={editing.latitude}
+                    longitude={editing.longitude}
+                    radiusKm={editing.radiusKm}
+                    showRadius
+                    height="h-48 sm:h-72"
+                    onChange={(lat, lng) => {
+                      setEditing((prev) => ({ ...prev, latitude: lat, longitude: lng }));
+                      setLocationConfirmed(true);
+                      clearFieldError("location");
+                    }}
+                    onAddressResolved={(address) => {
+                      const nextCity = address?.city || editing.city;
+                      if (address?.city) {
+                        setEditing((prev) => ({ ...prev, city: address.city! }));
+                        clearFieldError("city");
+                      }
+                      const missing = missingAddressFieldLabels({
+                        city: nextCity,
+                        requireLine1: false,
+                        requireState: false,
+                        requirePostal: false,
+                        requireCity: true,
+                      });
+                      if (missing.length === 0) {
+                        toast.success("Location applied from map.");
+                      } else {
+                        toast.message(`Map pin saved. Please fill required ${missing.join(", ")}.`);
+                      }
+                    }}
+                    onRadiusChange={(km) => {
+                      setEditing((prev) => ({ ...prev, radiusKm: km }));
+                      clearFieldError("radius");
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="h-48 sm:h-72 w-full rounded-xl border border-border bg-muted/30 animate-pulse" />
+              )}
+              {locationConfirmed ? (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                  Pin set: {editing.latitude.toFixed(4)}, {editing.longitude.toFixed(4)}
+                </p>
+              ) : (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  Map pin not confirmed yet — move the pin to continue.
+                </p>
+              )}
+              <FieldError message={fieldErrors.location} />
+              <FieldError message={fieldErrors.radius} />
+            </div>
           </div>
           <DialogFooter className="flex-col gap-2 sm:flex-row sm:gap-0">
             <Button variant="outline" onClick={() => setOpen(false)} disabled={busy} className="w-full sm:w-auto">

@@ -16,6 +16,8 @@ import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Textarea } from "@/app/components/ui/textarea";
 import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest } from "@/app/services/adminApi";
+import { ListingThumb } from "@/app/components/shared/ListingThumb";
+import { resolveCatalogProductImageUrl } from "@/app/helpers/utils";
 import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -355,6 +357,7 @@ const ProductManagement = () => {
       const images = await adminApi.getProductImages(productId);
       setProductImages(images);
       setNewImageIsPrimary(images.length === 0);
+      setProducts((prev) => prev.map((p) => (p.id === productId ? { ...p, images } : p)));
     } catch (error) {
       if (!silent) {
         const message = error instanceof Error ? error.message : "Failed to load product images.";
@@ -485,8 +488,8 @@ const ProductManagement = () => {
     }
   };
 
-  const handleProductImageUpload = async (file?: File) => {
-    if (!file) return;
+  const handleProductImageUpload = async (files: File[]) => {
+    if (!files.length) return;
     if (!editingProduct) {
       toast.error("Save product first, then upload images.");
       return;
@@ -494,14 +497,43 @@ const ProductManagement = () => {
 
     try {
       setUploadingImage(true);
-      const upload = await adminApi.uploadProductImageFile(file);
-      await addProductImageFromValue(
-        upload.storageKey?.trim() || upload.fileUrl,
-        upload.thumbnailStorageKey?.trim() || upload.thumbnailUrl,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to upload image.";
-      toast.error(message);
+      let added = 0;
+      let lastError: string | null = null;
+      let nextOrder = Math.max(1, productImages.length + 1);
+      let makePrimary = newImageIsPrimary || productImages.length === 0;
+
+      for (const file of files) {
+        try {
+          const upload = await adminApi.uploadProductImageFile(file);
+          const imageRef = (upload.storageKey?.trim() || upload.fileUrl || "").trim();
+          if (!imageRef) {
+            lastError = "Upload failed — no file URL returned.";
+            continue;
+          }
+          await adminApi.addProductImage(editingProduct.id, {
+            imageUrl: imageRef,
+            displayOrder: nextOrder,
+            isPrimary: makePrimary,
+            thumbnailUrl: upload.thumbnailStorageKey?.trim() || upload.thumbnailUrl || undefined,
+          });
+          nextOrder += 1;
+          makePrimary = false;
+          added += 1;
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : "Failed to upload image.";
+        }
+      }
+
+      setNewImageUrl("");
+      await loadProductImages(editingProduct.id);
+
+      if (added > 0 && !lastError) {
+        toast.success(added === 1 ? "Product image added" : `${added} product images added`);
+      } else if (added > 0 && lastError) {
+        toast.warning(`${added} added. Some failed: ${lastError}`);
+      } else {
+        toast.error(lastError ?? "Failed to upload image.");
+      }
     } finally {
       setUploadingImage(false);
     }
@@ -758,7 +790,12 @@ const ProductManagement = () => {
           <tbody className="divide-y divide-border">
             {paginatedProducts.map((p) => (
               <tr key={p.id} className="hover:bg-muted/20">
-                <td className="px-4 py-3 font-medium">{p.productName}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <ListingThumb src={resolveCatalogProductImageUrl(p.images)} alt={p.productName} />
+                    <span className="font-medium">{p.productName}</span>
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-muted-foreground">{getCategoryName(p.categoryId)}</td>
                 <td className="px-4 py-3">{p.brandName || "-"}</td>
                 {activeTab === "equipment" && <td className="px-4 py-3">{p.modelName || "-"}</td>}
@@ -1636,13 +1673,14 @@ const ProductManagement = () => {
                 {editingProduct ? (
                   <>
                     <FileUploadZone
+                      multiple
                       accept="image/*"
-                      label="Upload image"
-                      hint="PNG, JPG, JPEG, WEBP"
+                      label="Upload images"
+                      hint="PNG, JPG, JPEG, WEBP · You can select multiple files"
                       showPreview={false}
                       loading={uploadingImage}
                       disabled={uploadingImage || productImagesLoading}
-                      onFilesSelected={(files) => void handleProductImageUpload(files[0])}
+                      onFilesSelected={(files) => void handleProductImageUpload(files)}
                     />
 
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">

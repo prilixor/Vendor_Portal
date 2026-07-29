@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/auth/auth_provider.dart';
+import 'core/connectivity/connectivity_provider.dart';
 import 'core/theme.dart';
 import 'features/auth/login_screen.dart';
 import 'features/dashboard/customer_dashboard.dart';
+import 'shared/widgets/offline_banner.dart';
 
 import 'core/providers/product_provider.dart';
 import 'core/providers/checkout_provider.dart';
@@ -22,6 +24,7 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ProductProvider()),
         ChangeNotifierProvider(create: (_) => CheckoutProvider()),
@@ -56,6 +59,7 @@ class PrilixorMobileApp extends StatelessWidget {
       themeMode: ThemeMode.dark,
       home: const AuthGate(),
       debugShowCheckedModeBanner: false,
+      builder: (context, child) => OfflineAwareAppShell(child: child),
     );
   }
 }

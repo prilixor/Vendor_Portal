@@ -109,6 +109,7 @@ export interface InventoryRecord {
   /** Catalog product id (for chemical packaging sizes). */
   catalogProductId?: string;
   isChemical?: boolean;
+  primaryImage?: string;
 }
 
 export interface InventoryMovement {

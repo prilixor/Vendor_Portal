@@ -1,11 +1,34 @@
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http_parser/http_parser.dart';
 
 /// Build [MultipartFile] from a [PlatformFile] on mobile (path) or web (bytes/stream).
 Future<MultipartFile?> multipartFromPlatformFile(PlatformFile file) async {
   final name = _resolvedFileName(file);
   final contentType = _mediaTypeForFileName(name);
+
+  // Web has no real filesystem path — never call fromFile (it throws / fails CORS-like).
+  if (kIsWeb) {
+    final bytes = file.bytes;
+    if (bytes != null && bytes.isNotEmpty) {
+      return MultipartFile.fromBytes(
+        bytes,
+        filename: name,
+        contentType: contentType,
+      );
+    }
+    final stream = file.readStream;
+    if (stream != null && file.size > 0) {
+      return MultipartFile.fromStream(
+        () => stream,
+        file.size,
+        filename: name,
+        contentType: contentType,
+      );
+    }
+    return null;
+  }
 
   final path = file.path;
   if (path != null && path.isNotEmpty) {

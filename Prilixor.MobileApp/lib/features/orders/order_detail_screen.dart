@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/order_detail_provider.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/models/order_model.dart';
+import '../../core/utils/rental_period.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../product/product_detail_screen.dart';
 import '../../core/providers/chat_provider.dart';
@@ -106,8 +107,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       child: Column(
                         children: [
                           _buildQuoteRow('Extension Cost', provider.extensionQuote!.extensionAmount),
-                          const SizedBox(height: 8),
-                          _buildQuoteRow('Service Fee', provider.extensionQuote!.serviceFeeAmount),
+                          // Service fee UI hidden — keep for future re-enable
+                          if (false) ...[
+                            const SizedBox(height: 8),
+                            _buildQuoteRow('Service Fee', provider.extensionQuote!.serviceFeeAmount),
+                          ],
                           const SizedBox(height: 8),
                           _buildQuoteRow('GST', provider.extensionQuote!.gstAmount),
                           const Divider(color: Colors.white24, height: 24),
@@ -185,8 +189,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           _buildQuoteRow('Base Price', provider.buyoutQuote!.baseBuyoutAmount),
                           const SizedBox(height: 8),
                           _buildQuoteRow('Rental Deduction', -provider.buyoutQuote!.rentDeductionAmount, color: Colors.greenAccent),
-                          const SizedBox(height: 8),
-                          _buildQuoteRow('Service Fee', provider.buyoutQuote!.serviceFeeAmount),
+                          // Service fee UI hidden — keep for future re-enable
+                          if (false) ...[
+                            const SizedBox(height: 8),
+                            _buildQuoteRow('Service Fee', provider.buyoutQuote!.serviceFeeAmount),
+                          ],
                           const SizedBox(height: 8),
                           _buildQuoteRow('GST', provider.buyoutQuote!.gstAmount),
                           const Divider(color: Colors.white24, height: 24),
@@ -505,9 +512,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                const Text('RENTAL DAYS', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                                                Text(
+                                                  provider.currentOrder!.orderType.toLowerCase() == 'rent'
+                                                      ? 'RENTAL PERIOD'
+                                                      : 'ORDER TYPE',
+                                                  style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                                                ),
                                                 const SizedBox(height: 4),
-                                                Text('${provider.currentOrder!.rentalDays}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                                Text(
+                                                  provider.currentOrder!.orderType.toLowerCase() == 'rent'
+                                                      ? formatRentalDuration(
+                                                          provider.currentOrder!.rentalDays,
+                                                          provider.currentOrder!.rentalPeriodUnit,
+                                                        )
+                                                      : 'Buy',
+                                                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                                ),
                                               ],
                                             ),
                                           ),

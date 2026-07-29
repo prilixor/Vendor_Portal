@@ -9,8 +9,10 @@ import '../../core/models/cart_model.dart';
 import '../../core/models/product_detail_model.dart';
 import '../../core/models/product_variant_model.dart';
 import '../../core/utils/media_url.dart';
+import '../../core/utils/rental_period.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/required_field_ux.dart';
+import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
 import '../../shared/utils/require_auth.dart';
 import 'product_image_viewer_screen.dart';
 
@@ -26,7 +28,8 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   int _quantity = 1;
   String _orderType = 'rent';
-  int _rentalDays = 7;
+  int _periodCount = 1;
+  String _periodUnit = defaultUiRentalUnit;
   String? _selectedVariantId;
   bool _orderTypeInitialized = false;
   int _imageIndex = 0;
@@ -94,9 +97,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ? _orderType
             : (detail.canBuy ? 'buy' : 'rent'));
     final unitBuyPrice = selectedVariant?.buyPrice ?? detail?.buyPrice ?? 0;
+    final rentRatesDaily = detail?.dailyRent ?? 0;
+    final rentRatesWeekly = detail?.weeklyRent ?? 0;
+    final rentRatesMonthly = detail?.monthlyRent ?? 0;
     final estimate = actualOrderType == 'buy'
         ? unitBuyPrice * _quantity
-        : (detail?.dailyRent ?? 0) * _quantity * _rentalDays;
+        : estimateRent(
+            _periodUnit,
+            _periodCount,
+            _quantity,
+            dailyRent: rentRatesDaily,
+            weeklyRent: rentRatesWeekly,
+            monthlyRent: rentRatesMonthly,
+          );
     final badge = detail?.getAvailabilityBadge(qtyOverride: currentQty);
     final canAdd = detail != null && currentQty > 0;
     final cannotFulfill = selectedVariant != null && _quantity > currentQty;
@@ -475,7 +488,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       : Column(
                                           children: [
                                             if (detail.canRent) ...[
-                                              _priceRow('Daily rent', '₹${detail.dailyRent.toStringAsFixed(0)}'),
+                                              _priceRow('Weekly rent', '₹${detail.weeklyRent.toStringAsFixed(0)}'),
                                               _priceRow('Monthly rent', '₹${detail.monthlyRent.toStringAsFixed(0)}'),
                                               _priceRow('Security deposit', '₹${detail.securityDeposit.toStringAsFixed(0)}'),
                                             ],
@@ -598,20 +611,98 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
                                 if (actualOrderType == 'rent') ...[
                                   const SizedBox(height: 16),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: RequiredLabel(
+                                      'Rental period',
+                                      required: true,
+                                      style: const TextStyle(color: Colors.white70, fontSize: 16),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: rentalUnitsVisibleInUi.map((unit) {
+                                      final selected = _periodUnit == unit;
+                                      final labels = rentalUnitLabels[unit]!;
+                                      return Expanded(
+                                        child: Padding(
+                                          padding: EdgeInsets.only(right: unit == rentalUnitsVisibleInUi.last ? 0 : 8),
+                                          child: InkWell(
+                                            onTap: () async {
+                                              final blocked = await _promptRentToBuyIfNeeded(
+                                                detail: detail,
+                                                unitBuyPrice: unitBuyPrice,
+                                                nextUnit: unit,
+                                              );
+                                              if (blocked || !mounted) return;
+                                              setState(() => _periodUnit = unit);
+                                            },
+                                            borderRadius: BorderRadius.circular(10),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(vertical: 10),
+                                              decoration: BoxDecoration(
+                                                color: selected
+                                                    ? const Color(0xFF6C63FF).withValues(alpha: 0.2)
+                                                    : const Color(0xFF0F172A),
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: selected ? const Color(0xFF6C63FF) : Colors.white12,
+                                                ),
+                                              ),
+                                              alignment: Alignment.center,
+                                              child: Text(
+                                                labels.plural,
+                                                style: TextStyle(
+                                                  color: selected ? const Color(0xFF6C63FF) : Colors.white70,
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                  const SizedBox(height: 12),
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      const RequiredLabel('Rental Duration (Days)', required: true, style: TextStyle(color: Colors.white70, fontSize: 16)),
+                                      RequiredLabel(
+                                        rentalUnitLabels[_periodUnit]!.plural,
+                                        required: true,
+                                        style: const TextStyle(color: Colors.white70, fontSize: 16),
+                                      ),
                                       Row(
                                         children: [
                                           IconButton(
                                             icon: const Icon(Icons.remove_circle_outline, color: Colors.white),
-                                            onPressed: _rentalDays > 1 ? () => setState(() => _rentalDays--) : null,
+                                            onPressed: _periodCount > 1
+                                                ? () async {
+                                                    final next = _periodCount - 1;
+                                                    final blocked = await _promptRentToBuyIfNeeded(
+                                                      detail: detail,
+                                                      unitBuyPrice: unitBuyPrice,
+                                                      nextPeriods: next,
+                                                    );
+                                                    if (blocked || !mounted) return;
+                                                    setState(() => _periodCount = next);
+                                                  }
+                                                : null,
                                           ),
-                                          Text('$_rentalDays', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                          Text('$_periodCount', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                                           IconButton(
                                             icon: const Icon(Icons.add_circle_outline, color: Colors.white),
-                                            onPressed: () => setState(() => _rentalDays++),
+                                            onPressed: () async {
+                                              final next = _periodCount + 1;
+                                              final blocked = await _promptRentToBuyIfNeeded(
+                                                detail: detail,
+                                                unitBuyPrice: unitBuyPrice,
+                                                nextPeriods: next,
+                                              );
+                                              if (blocked || !mounted) return;
+                                              setState(() => _periodCount = next);
+                                            },
                                           ),
                                         ],
                                       ),
@@ -628,13 +719,37 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       children: [
                                         IconButton(
                                           icon: const Icon(Icons.remove_circle_outline, color: Colors.white),
-                                          onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null,
+                                          onPressed: _quantity > 1
+                                              ? () async {
+                                                  final next = _quantity - 1;
+                                                  if (actualOrderType == 'rent') {
+                                                    final blocked = await _promptRentToBuyIfNeeded(
+                                                      detail: detail,
+                                                      unitBuyPrice: unitBuyPrice,
+                                                      nextQty: next,
+                                                    );
+                                                    if (blocked || !mounted) return;
+                                                  }
+                                                  setState(() => _quantity = next);
+                                                }
+                                              : null,
                                         ),
                                         Text('$_quantity', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                                         IconButton(
                                           icon: const Icon(Icons.add_circle_outline, color: Colors.white),
                                           onPressed: _quantity < (currentQty > 0 ? currentQty : 1)
-                                              ? () => setState(() => _quantity++)
+                                              ? () async {
+                                                  final next = _quantity + 1;
+                                                  if (actualOrderType == 'rent') {
+                                                    final blocked = await _promptRentToBuyIfNeeded(
+                                                      detail: detail,
+                                                      unitBuyPrice: unitBuyPrice,
+                                                      nextQty: next,
+                                                    );
+                                                    if (blocked || !mounted) return;
+                                                  }
+                                                  setState(() => _quantity = next);
+                                                }
                                               : null,
                                         ),
                                       ],
@@ -674,11 +789,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                     onPressed: !canAdd || cannotFulfill
                         ? null
-                        : () {
-                            if (_quantity < 1 || (actualOrderType == 'rent' && _rentalDays < 1)) {
+                        : () async {
+                            if (_quantity < 1 || (actualOrderType == 'rent' && _periodCount < 1)) {
                               showRequiredFieldsBlocked(
                                 context,
-                                message: 'Please fill in the required fields. Quantity and rental days must be positive.',
+                                message: 'Please fill in the required fields. Quantity and rental period must be positive.',
                               );
                               return;
                             }
@@ -689,27 +804,41 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               return;
                             }
 
+                            if (actualOrderType == 'rent') {
+                              final blocked = await _promptRentToBuyIfNeeded(
+                                detail: detail,
+                                unitBuyPrice: unitBuyPrice,
+                              );
+                              if (!mounted || blocked) return;
+                            }
+
                             final displayTitle = selectedVariant != null
                                 ? '${detail.title} (${selectedVariant.sizeLabel})'
                                 : detail.title;
+
+                            final finalType = detail.canRent && detail.canBuy
+                                ? _orderType
+                                : (detail.canBuy ? 'buy' : 'rent');
 
                             Provider.of<CartProvider>(context, listen: false).addLine(
                               CartLineModel(
                                 listingId: detail.id,
                                 title: displayTitle,
                                 vendorName: detail.vendorName,
-                                primaryImageUrl: detail.imageUrls.isNotEmpty
-                                    ? resolveItemImageUrl(imageUrls: detail.imageUrls)
-                                    : null,
+                                primaryImageUrl: detail.primaryImageUrl ??
+                                    resolveItemImageUrl(imageUrls: detail.imageUrls),
                                 dailyRent: detail.dailyRent,
+                                weeklyRent: detail.weeklyRent,
                                 monthlyRent: detail.monthlyRent,
                                 securityDeposit: detail.securityDeposit,
                                 quantity: _quantity,
-                                rentalDays: actualOrderType == 'buy' ? 0 : _rentalDays,
-                                orderType: actualOrderType,
+                                rentalDays: finalType == 'buy' ? 0 : _periodCount,
+                                rentalPeriodUnit: finalType == 'buy' ? rentalUnitDay : _periodUnit,
+                                orderType: finalType,
                                 prescriptionRequired: detail.prescriptionRequired,
                                 productVariantId: _selectedVariantId,
                                 buyPrice: unitBuyPrice > 0 ? unitBuyPrice : detail.buyPrice,
+                                isBuyEnabled: detail.canBuy,
                               ),
                             );
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -729,6 +858,42 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   String? _resolvedDocUrl(String? raw) => resolveMediaUrl(raw);
+
+  /// Returns true when the rent change should be blocked (dialog shown).
+  Future<bool> _promptRentToBuyIfNeeded({
+    required ProductDetailModel detail,
+    required double unitBuyPrice,
+    int? nextPeriods,
+    String? nextUnit,
+    int? nextQty,
+  }) async {
+    if (unitBuyPrice <= 0) return false;
+    final check = evaluateRentVsBuy(
+      buyPrice: unitBuyPrice,
+      quantity: nextQty ?? _quantity,
+      periods: nextPeriods ?? _periodCount,
+      unit: nextUnit ?? _periodUnit,
+      dailyRent: detail.dailyRent,
+      weeklyRent: detail.weeklyRent,
+      monthlyRent: detail.monthlyRent,
+    );
+    if (!check.shouldForceBuy) return false;
+
+    final buyAvailable = detail.canBuy && unitBuyPrice > 0;
+    final confirmed = await showRentExceedsBuyDialog(
+      context,
+      itemTitle: detail.title,
+      rentalTotal: check.rentalTotal,
+      buyTotal: check.buyTotal,
+      durationLabel: check.durationLabel,
+      buyAvailable: buyAvailable,
+    );
+    if (!mounted) return true;
+    if (confirmed == true && buyAvailable) {
+      setState(() => _orderType = 'buy');
+    }
+    return true;
+  }
 
   Future<void> _copyDocLink(String url) async {
     await Clipboard.setData(ClipboardData(text: url));

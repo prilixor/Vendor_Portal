@@ -19,6 +19,7 @@ class OrderModel {
   final String orderType;
   final int quantity;
   final int rentalDays;
+  final String rentalPeriodUnit;
   final String? listingPrimaryImageUrl;
   final String? doctorId;
   final String? doctorName;
@@ -47,6 +48,7 @@ class OrderModel {
     required this.orderType,
     required this.quantity,
     required this.rentalDays,
+    this.rentalPeriodUnit = 'day',
     this.listingPrimaryImageUrl,
     this.doctorId,
     this.doctorName,
@@ -85,6 +87,7 @@ class OrderModel {
       orderType: json['orderType'] ?? '',
       quantity: json['quantity'] ?? 0,
       rentalDays: json['rentalDays'] ?? 0,
+      rentalPeriodUnit: (json['rentalPeriodUnit'] ?? 'day').toString(),
       listingPrimaryImageUrl: resolveItemImageUrl(json: json),
       doctorId: json['doctorId']?.toString(),
       doctorName: json['doctorName']?.toString(),

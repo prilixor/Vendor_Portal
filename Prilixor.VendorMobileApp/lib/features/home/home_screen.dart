@@ -983,9 +983,11 @@ class _TopListingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final priceLabel = listing.dailyRent > 0
-        ? '₹${listing.dailyRent.toStringAsFixed(0)}/day'
-        : 'Buy · Stock ${listing.stock}';
+    final priceLabel = listing.weeklyRent > 0 || listing.monthlyRent > 0
+        ? '₹${listing.weeklyRent.toStringAsFixed(0)}/w · ₹${listing.monthlyRent.toStringAsFixed(0)}/mo · Stock ${listing.stock}'
+        : (listing.dailyRent > 0
+            ? '₹${listing.dailyRent.toStringAsFixed(0)}/day · Stock ${listing.stock}'
+            : 'Stock ${listing.stock}');
 
     return Material(
       color: Colors.transparent,

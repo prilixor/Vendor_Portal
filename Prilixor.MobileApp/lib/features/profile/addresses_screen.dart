@@ -32,16 +32,38 @@ class _AddressesScreenState extends State<AddressesScreen> {
 
     double? latitude = existingAddress?.latitude;
     double? longitude = existingAddress?.longitude;
+    final hasExistingPin = latitude != null &&
+        longitude != null &&
+        !(latitude == 0 && longitude == 0);
+    var pinConfirmed = hasExistingPin;
     // Remount State→City pickers when map fills new state/city values.
     int stateCityKey = 0;
     String? line1Error;
     String? stateError;
     String? cityError;
     String? postalError;
+    String? locationError;
 
     void applyMapResult(Map result, void Function(void Function()) setState) {
-      latitude = (result['latitude'] as num?)?.toDouble();
-      longitude = (result['longitude'] as num?)?.toDouble();
+      final nextLat = (result['latitude'] as num?)?.toDouble();
+      final nextLng = (result['longitude'] as num?)?.toDouble();
+      if (nextLat == null ||
+          nextLng == null ||
+          nextLat < -90 ||
+          nextLat > 90 ||
+          nextLng < -180 ||
+          nextLng > 180 ||
+          (nextLat == 0 && nextLng == 0)) {
+        setState(() {
+          locationError = 'Please set a valid map pin location.';
+        });
+        return;
+      }
+
+      latitude = nextLat;
+      longitude = nextLng;
+      pinConfirmed = true;
+      locationError = null;
 
       final line1 = result['line1']?.toString().trim();
       final state = result['state']?.toString().trim();
@@ -126,10 +148,31 @@ class _AddressesScreenState extends State<AddressesScreen> {
                         )
                       ],
                     ),
-                    if (latitude != null)
+                    const SizedBox(height: 6),
+                    Text(
+                      'Address text alone is not enough. Use Pick on Map to set delivery coordinates.',
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12),
+                    ),
+                    if (pinConfirmed && latitude != null && longitude != null)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Text('Map location selected: $latitude, $longitude', style: const TextStyle(color: Colors.green, fontSize: 12)),
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          'Pin set: ${latitude!.toStringAsFixed(4)}, ${longitude!.toStringAsFixed(4)}',
+                          style: const TextStyle(color: Color(0xFF34D399), fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      )
+                    else
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          'Map pin not confirmed yet — tap Pick on Map to continue.',
+                          style: TextStyle(color: Color(0xFFFBBF24), fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    if (locationError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(locationError!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
                       ),
                     const RequiredFieldsNote(padding: EdgeInsets.only(top: 8, bottom: 12)),
                     _buildTextField(labelCtrl, 'Label (optional)'),
@@ -175,14 +218,27 @@ class _AddressesScreenState extends State<AddressesScreen> {
                           final st = requiredMessage(stateCtrl.text, message: 'State is required');
                           final ct = requiredMessage(cityCtrl.text, message: 'City is required');
                           final zip = requiredMessage(zipCtrl.text, message: 'Postal code is required');
+                          final loc = (!pinConfirmed ||
+                                  latitude == null ||
+                                  longitude == null ||
+                                  (latitude == 0 && longitude == 0))
+                              ? 'Place the pin on the map before saving. Address text alone is not enough for delivery.'
+                              : null;
                           setState(() {
                             line1Error = l1;
                             stateError = st;
                             cityError = ct;
                             postalError = zip;
+                            locationError = loc;
                           });
-                          if (l1 != null || st != null || ct != null || zip != null) {
-                            showRequiredFieldsBlocked(context);
+                          if (l1 != null || st != null || ct != null || zip != null || loc != null) {
+                            if (loc != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(loc), backgroundColor: Colors.redAccent),
+                              );
+                            } else {
+                              showRequiredFieldsBlocked(context);
+                            }
                             return;
                           }
 

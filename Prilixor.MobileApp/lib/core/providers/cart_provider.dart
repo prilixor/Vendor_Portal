@@ -91,8 +91,11 @@ class CartProvider extends ChangeNotifier {
       for (final line in _lines) {
         if (line.primaryImageUrl != null && line.primaryImageUrl!.trim().isNotEmpty) continue;
         final detail = _listingDetails[line.listingId];
-        if (detail == null || detail.imageUrls.isEmpty) continue;
-        final url = resolveItemImageUrl(imageUrls: detail.imageUrls);
+        if (detail == null) continue;
+        final url = resolveItemImageUrl(
+          primaryImageUrl: detail.primaryImageUrl,
+          imageUrls: detail.imageUrls,
+        );
         if (url == null) continue;
         line.primaryImageUrl = url;
         hydrated = true;
@@ -122,9 +125,13 @@ class CartProvider extends ChangeNotifier {
       _lines[existingIndex].orderType = newLine.orderType;
       _lines[existingIndex].rentalDays =
           newLine.orderType == 'buy' ? 0 : newLine.rentalDays;
+      _lines[existingIndex].rentalPeriodUnit = newLine.orderType == 'buy'
+          ? 'day'
+          : newLine.rentalPeriodUnit;
     } else {
       if (newLine.orderType == 'buy') {
         newLine.rentalDays = 0;
+        newLine.rentalPeriodUnit = 'day';
       }
       _lines.add(newLine);
     }
@@ -154,14 +161,27 @@ class CartProvider extends ChangeNotifier {
     }
   }
 
+  void updateRentalPeriodUnit(String listingId, String unit, {String? productVariantId}) {
+    final index = _indexOfLine(listingId, productVariantId: productVariantId);
+    if (index >= 0) {
+      if (_lines[index].orderType == 'buy') return;
+      _lines[index].rentalPeriodUnit = unit;
+      if (_lines[index].rentalDays < 1) _lines[index].rentalDays = 1;
+      _saveCart();
+      notifyListeners();
+    }
+  }
+
   void updateOrderType(String listingId, String orderType, {String? productVariantId}) {
     final index = _indexOfLine(listingId, productVariantId: productVariantId);
     if (index >= 0) {
       _lines[index].orderType = orderType;
       if (orderType == 'buy') {
         _lines[index].rentalDays = 0;
+        _lines[index].rentalPeriodUnit = 'day';
       } else if (_lines[index].rentalDays <= 0) {
         _lines[index].rentalDays = 1;
+        _lines[index].rentalPeriodUnit = 'week';
       }
       _saveCart();
       notifyListeners();

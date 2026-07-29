@@ -476,24 +476,66 @@ class VendorCatalogProvider extends ChangeNotifier {
     }
   }
 
-  Future<String?> uploadProductImageFile({
+  Future<({String imageUrl, String? thumbnailUrl})?> uploadProductImageFile({
     required String vendorId,
     required PlatformFile file,
   }) async {
+    _error = null;
     try {
       final multipart = await multipartFromPlatformFile(file);
-      if (multipart == null) return null;
+      if (multipart == null) {
+        _error = kIsWeb
+            ? 'Could not read the selected image in the browser. Try again or use a smaller photo.'
+            : 'Could not read the selected image.';
+        notifyListeners();
+        return null;
+      }
 
       final formData = FormData.fromMap({
         'vendorId': vendorId,
         'folderType': 'ProductImages',
         'file': multipart,
       });
-      final response = await _api.dio.post('/files/upload', data: formData);
-      if (response.data is! Map) return null;
+      final response = await _api.dio.post(
+        '/files/upload',
+        data: formData,
+        options: Options(
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 60),
+        ),
+      );
+      if (response.data is! Map) {
+        _error = 'Upload failed.';
+        notifyListeners();
+        return null;
+      }
       final map = Map<String, dynamic>.from(response.data as Map);
-      return map['storageKey']?.toString() ?? map['fileUrl']?.toString();
+      final imageUrl =
+          (map['storageKey']?.toString().trim().isNotEmpty == true
+                  ? map['storageKey']?.toString()
+                  : null) ??
+              map['fileUrl']?.toString();
+      if (imageUrl == null || imageUrl.trim().isEmpty) {
+        _error = 'Upload failed — no file URL returned.';
+        notifyListeners();
+        return null;
+      }
+      final thumb =
+          (map['thumbnailStorageKey']?.toString().trim().isNotEmpty == true
+                  ? map['thumbnailStorageKey']?.toString()
+                  : null) ??
+              map['thumbnailUrl']?.toString();
+      return (
+        imageUrl: imageUrl.trim(),
+        thumbnailUrl: (thumb != null && thumb.trim().isNotEmpty) ? thumb.trim() : null,
+      );
+    } on DioException catch (e) {
+      _error = _dioMessage(e, 'Failed to upload image.');
+      notifyListeners();
+      return null;
     } catch (_) {
+      _error = 'Failed to upload image.';
+      notifyListeners();
       return null;
     }
   }
@@ -504,6 +546,7 @@ class VendorCatalogProvider extends ChangeNotifier {
     required String imageUrl,
     required int displayOrder,
     required bool isPrimary,
+    String? thumbnailUrl,
   }) async {
     _saving = true;
     _error = null;
@@ -517,6 +560,7 @@ class VendorCatalogProvider extends ChangeNotifier {
           'imageUrl': imageUrl,
           'displayOrder': displayOrder,
           'isPrimary': isPrimary,
+          if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) 'thumbnailUrl': thumbnailUrl,
         },
       );
       return true;

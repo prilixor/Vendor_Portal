@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -69,28 +70,31 @@ class _ListingMediaScreenState extends State<ListingMediaScreen> {
     final result = await FilePicker.pickFiles(
       type: FileType.image,
       allowMultiple: true,
-      withData: true,
+      // Web: stream images instead of loading all bytes (same pattern as onboarding docs).
+      withData: !kIsWeb,
+      withReadStream: kIsWeb,
     );
     if (result == null || result.files.isEmpty) return;
     if (!mounted) return;
 
     var order = _images.length;
     var hasPrimary = _images.any((i) => i.isPrimary);
+    var uploadedCount = 0;
+    String? lastError;
 
     for (final file in result.files) {
-      if (platformFileNeedsBytes(file)) continue;
-      final storageKey = await provider.uploadProductImageFile(
+      if (platformFileNeedsBytes(file)) {
+        lastError = kIsWeb
+            ? 'Could not read the selected image in the browser. Try a smaller photo.'
+            : 'Could not read the selected image.';
+        continue;
+      }
+      final uploaded = await provider.uploadProductImageFile(
         vendorId: vendorId,
         file: file,
       );
-      if (storageKey == null || storageKey.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(provider.error ?? 'Failed to upload image.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+      if (uploaded == null) {
+        lastError = provider.error ?? 'Failed to upload image.';
         continue;
       }
       order += 1;
@@ -98,19 +102,41 @@ class _ListingMediaScreenState extends State<ListingMediaScreen> {
       final ok = await provider.addListingImage(
         vendorId: vendorId,
         listingId: widget.listingId,
-        imageUrl: storageKey,
+        imageUrl: uploaded.imageUrl,
         displayOrder: order,
         isPrimary: isPrimary,
+        thumbnailUrl: uploaded.thumbnailUrl,
       );
-      if (ok && isPrimary) hasPrimary = true;
+      if (!ok) {
+        lastError = provider.error ?? 'Failed to add image.';
+        continue;
+      }
+      uploadedCount += 1;
+      if (isPrimary) hasPrimary = true;
     }
 
     if (!mounted) return;
     await _load();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Images updated.')),
-    );
+    if (uploadedCount > 0 && lastError == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(uploadedCount == 1 ? 'Image added.' : '$uploadedCount images added.')),
+      );
+    } else if (uploadedCount > 0 && lastError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$uploadedCount added. Some failed: $lastError'),
+          backgroundColor: Colors.orangeAccent,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(lastError ?? 'Failed to upload image.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   Future<void> _deleteImage(VendorProductImage image) async {
@@ -231,7 +257,7 @@ class _ListingMediaScreenState extends State<ListingMediaScreen> {
                       itemCount: _images.length,
                       itemBuilder: (context, index) {
                         final image = _images[index];
-                        final url = resolveMediaUrl(image.imageUrl);
+                        final url = resolveMediaUrl(image.displayUrl);
                         return Stack(
                           fit: StackFit.expand,
                           children: [

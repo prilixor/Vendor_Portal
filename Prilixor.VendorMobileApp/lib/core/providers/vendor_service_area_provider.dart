@@ -119,9 +119,30 @@ class VendorServiceAreaProvider extends ChangeNotifier {
   String _dioMessage(DioException e, String fallback) {
     final data = e.response?.data;
     if (data is Map) {
-      final detail = data['detail'] ?? data['message'] ?? data['title'];
-      if (detail != null && detail.toString().trim().isNotEmpty) {
-        return detail.toString();
+      final detail = data['detail'] ?? data['message'];
+      final title = data['title']?.toString();
+      var text = detail?.toString().trim() ?? '';
+      // Never show bare machine codes like vendors.service_area.location_required
+      if (text.isEmpty &&
+          title != null &&
+          title.contains(' ') &&
+          !RegExp(r'^[a-z0-9_.-]+$', caseSensitive: false).hasMatch(title)) {
+        text = title;
+      }
+      text = text
+          .replaceAll(RegExp(r'\s*\[[^\]]+\]\s*'), ' ')
+          .replaceAll(
+            RegExp(
+              r'\b(?:vendors|customers|admins|documents|bank_accounts|auth|vendor_service_areas)\.[a-z0-9_]+(?:\.[a-z0-9_]+)*\b',
+              caseSensitive: false,
+            ),
+            ' ',
+          )
+          .replaceAll(RegExp(r'\s{2,}'), ' ')
+          .trim();
+      if (text.isNotEmpty) return text;
+      if (title == 'vendors.service_area.location_required') {
+        return 'Place the pin on the map (search, click, or drag) before saving this service area.';
       }
     }
     return fallback;

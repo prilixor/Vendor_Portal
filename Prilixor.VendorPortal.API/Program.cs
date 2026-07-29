@@ -81,9 +81,11 @@ builder.Services.AddCors(options =>
     {
         if (corsOptions?.Origins != null && corsOptions.Origins.Length > 0)
         {
+            // Flutter Web (localhost:3000/3001) uploads multipart + Authorization → preflight.
             policy.WithOrigins(corsOptions.Origins)
                   .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowAnyMethod()
+                  .AllowCredentials();
         }
         else
         {

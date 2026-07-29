@@ -69,13 +69,18 @@ export function VendorDoctorLookupDialog({ open, onOpenChange, initialCode }: Ve
       );
       if (!data.isActive) {
         setDoctor(null);
-        setError("This doctor profile is inactive.");
+        setError("This doctor profile is inactive. Please use another Unique ID.");
         return;
       }
       setDoctor(data);
     } catch (e) {
       setDoctor(null);
-      setError(getUserFriendlyMessage(e) || "Doctor not found for this Unique ID.");
+      setError(
+        getUserFriendlyMessage(
+          e,
+          "No doctor found for this Unique ID. Please check the ID and try again.",
+        ),
+      );
     } finally {
       setLoading(false);
     }

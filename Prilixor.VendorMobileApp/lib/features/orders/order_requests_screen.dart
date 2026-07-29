@@ -777,7 +777,7 @@ class _RequestItemRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          OrderThumb(url: offer.listingPrimaryImageUrl),
+          OrderThumb(url: offer.imageUrl),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
