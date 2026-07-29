@@ -188,33 +188,33 @@ function ChemicalCartLine({
   });
 
   return (
-    <article className="rounded-xl border border-border/60 bg-card px-3 py-3 sm:px-3.5 sm:py-3">
-      <div className="flex items-center gap-3">
+    <article className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm shadow-black/[0.02]">
+      <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 p-4 sm:p-5">
         <Link
           to={listingTo}
-          className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted/40 ring-1 ring-border/40 sm:h-16 sm:w-16"
+          className="relative h-20 w-20 shrink-0 self-center sm:self-start overflow-hidden rounded-xl bg-muted/40 ring-1 ring-border/40 sm:h-24 sm:w-24 lg:h-28 lg:w-28"
           aria-label={`View listing: ${line.title}`}
         >
           <CartThumb url={thumbUrl} title={line.title} />
         </Link>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
+        <div className="min-w-0 flex-1 flex flex-col justify-center">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 space-y-1">
               <Link
                 to={listingTo}
-                className="block truncate text-sm font-semibold tracking-tight hover:text-primary"
+                className="block text-[15px] font-semibold leading-snug tracking-tight hover:text-primary sm:text-base"
               >
                 {line.title}
               </Link>
-              <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+              <p className="text-xs leading-relaxed text-muted-foreground tabular-nums">
                 ₹{unitPrice.toFixed(0)} each
                 <span className="mx-1.5 text-border">·</span>
                 Purchase
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-0.5">
-              <p className="pr-0.5 text-sm font-bold tabular-nums sm:text-base">₹{lineTotal.toFixed(0)}</p>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <p className="text-base font-bold tracking-tight tabular-nums sm:text-lg">₹{lineTotal.toFixed(0)}</p>
               <Button
                 variant="ghost"
                 size="icon"
@@ -222,25 +222,25 @@ function ChemicalCartLine({
                 aria-label="Remove from cart"
                 onClick={() => onRemove(line.listingId)}
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           </div>
 
-          <div className="mt-2 max-w-[11rem]">
+          <div className="mt-4 max-w-xs">
             <StepperField
-              label="Qty"
+              label="Quantity"
               value={line.quantity}
               min={1}
               max={availableQuantity ?? 999}
               onChange={(qty) => onUpdateQty(line.listingId, qty)}
             />
+            {isOverStock ? (
+              <p className="mt-1.5 text-xs font-semibold text-destructive">
+                Only {availableQuantity} available — please reduce quantity.
+              </p>
+            ) : null}
           </div>
-          {isOverStock ? (
-            <p className="mt-1.5 text-xs font-semibold text-destructive">
-              Only {availableQuantity} available — please reduce quantity.
-            </p>
-          ) : null}
         </div>
       </div>
     </article>
@@ -328,17 +328,17 @@ function CartLineCard({
 
   return (
     <article className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm shadow-black/[0.02]">
-      <div className="flex gap-3.5 p-3.5 sm:p-4">
+      <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 p-4 sm:p-5">
         <Link
           to={listingTo}
-          className="relative h-[4.75rem] w-[4.75rem] shrink-0 overflow-hidden rounded-xl bg-muted/40 ring-1 ring-border/50 sm:h-[5.5rem] sm:w-[5.5rem]"
+          className="relative h-28 w-28 shrink-0 self-center sm:self-start overflow-hidden rounded-xl bg-muted/40 ring-1 ring-border/50 sm:h-36 sm:w-36 lg:h-40 lg:w-40"
           aria-label={`View listing: ${line.title}`}
         >
           <CartThumb url={thumbUrl} title={line.title} />
         </Link>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 flex flex-col justify-center">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
               <Link
                 to={listingTo}
@@ -377,100 +377,100 @@ function CartLineCard({
               </Button>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="space-y-3 border-t border-border/50 bg-gradient-to-b from-muted/25 to-transparent px-3.5 py-3.5 sm:px-4">
-        <div className="flex flex-wrap items-end gap-5">
-          {canRent && canBuy ? (
-            <div>
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                Order type
+          <div className="mt-5 space-y-4">
+            <div className="flex flex-wrap items-end gap-5">
+              {canRent && canBuy ? (
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    Order type
+                  </p>
+                  <SegmentTrack tone="plain">
+                    {(["rent", "buy"] as const).map((type) => {
+                      const selected = line.orderType === type;
+                      return (
+                        <SegmentButton
+                          key={type}
+                          variant="primary"
+                          selected={selected}
+                          onClick={() => {
+                            if (type === "rent" && promptIfNeeded({})) return;
+                            onUpdateOrderType(line.listingId, type);
+                          }}
+                        >
+                          {type === "rent" ? "Rent" : "Buy"}
+                        </SegmentButton>
+                      );
+                    })}
+                  </SegmentTrack>
+                </div>
+              ) : canRent && !canBuy ? (
+                <div className="inline-flex min-h-9 items-center rounded-lg border border-primary/35 bg-primary-soft px-3 text-sm font-semibold text-primary">
+                  Rent only
+                </div>
+              ) : null}
+
+              {actualOrderType === "rent" ? (
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    Rental period
+                  </p>
+                  <SegmentTrack tone="muted">
+                    {RENTAL_UNITS_VISIBLE_IN_UI.map((u) => (
+                      <SegmentButton
+                        key={u}
+                        variant="soft"
+                        selected={line.rentalPeriodUnit === u}
+                        onClick={() => {
+                          if (promptIfNeeded({ unit: u })) return;
+                          onUpdatePeriodUnit(line.listingId, u);
+                        }}
+                      >
+                        {RENTAL_UNIT_LABELS[u].plural}
+                      </SegmentButton>
+                    ))}
+                  </SegmentTrack>
+                </div>
+              ) : null}
+            </div>
+
+            <div
+              className={cn(
+                "grid gap-2 sm:gap-3",
+                actualOrderType === "rent" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:max-w-xs",
+              )}
+            >
+              {actualOrderType === "rent" ? (
+                <StepperField
+                  label={RENTAL_UNIT_LABELS[line.rentalPeriodUnit].plural}
+                  value={line.rentalDays}
+                  min={1}
+                  max={366}
+                  onChange={(days) => {
+                    if (promptIfNeeded({ periods: days })) return;
+                    onUpdateDays(line.listingId, days);
+                  }}
+                />
+              ) : null}
+              <StepperField
+                label="Quantity"
+                value={line.quantity}
+                min={1}
+                max={availableQuantity ?? 999}
+                onChange={(qty) => {
+                  if (actualOrderType === "rent" && promptIfNeeded({ qty })) return;
+                  onUpdateQty(line.listingId, qty);
+                }}
+              />
+            </div>
+
+            {isOverStock ? (
+              <p className="text-xs font-semibold text-destructive">
+                Only {availableQuantity} available — please reduce quantity.
               </p>
-              <SegmentTrack tone="plain">
-                {(["rent", "buy"] as const).map((type) => {
-                  const selected = line.orderType === type;
-                  return (
-                    <SegmentButton
-                      key={type}
-                      variant="primary"
-                      selected={selected}
-                      onClick={() => {
-                        if (type === "rent" && promptIfNeeded({})) return;
-                        onUpdateOrderType(line.listingId, type);
-                      }}
-                    >
-                      {type === "rent" ? "Rent" : "Buy"}
-                    </SegmentButton>
-                  );
-                })}
-              </SegmentTrack>
-            </div>
-          ) : canRent && !canBuy ? (
-            <div className="inline-flex min-h-9 items-center rounded-lg border border-primary/35 bg-primary-soft px-3 text-sm font-semibold text-primary">
-              Rent only
-            </div>
-          ) : null}
-
-          {actualOrderType === "rent" ? (
-            <div>
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                Rental period
-              </p>
-              <SegmentTrack tone="muted">
-                {RENTAL_UNITS_VISIBLE_IN_UI.map((u) => (
-                  <SegmentButton
-                    key={u}
-                    variant="soft"
-                    selected={line.rentalPeriodUnit === u}
-                    onClick={() => {
-                      if (promptIfNeeded({ unit: u })) return;
-                      onUpdatePeriodUnit(line.listingId, u);
-                    }}
-                  >
-                    {RENTAL_UNIT_LABELS[u].plural}
-                  </SegmentButton>
-                ))}
-              </SegmentTrack>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
-
-        <div
-          className={cn(
-            "grid gap-2 sm:gap-3",
-            actualOrderType === "rent" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:max-w-xs",
-          )}
-        >
-          {actualOrderType === "rent" ? (
-            <StepperField
-              label={RENTAL_UNIT_LABELS[line.rentalPeriodUnit].plural}
-              value={line.rentalDays}
-              min={1}
-              max={366}
-              onChange={(days) => {
-                if (promptIfNeeded({ periods: days })) return;
-                onUpdateDays(line.listingId, days);
-              }}
-            />
-          ) : null}
-          <StepperField
-            label="Quantity"
-            value={line.quantity}
-            min={1}
-            max={availableQuantity ?? 999}
-            onChange={(qty) => {
-              if (actualOrderType === "rent" && promptIfNeeded({ qty })) return;
-              onUpdateQty(line.listingId, qty);
-            }}
-          />
-        </div>
-
-        {isOverStock ? (
-          <p className="text-xs font-semibold text-destructive">
-            Only {availableQuantity} available — please reduce quantity.
-          </p>
-        ) : null}
       </div>
 
       <RentExceedsBuyDialog
