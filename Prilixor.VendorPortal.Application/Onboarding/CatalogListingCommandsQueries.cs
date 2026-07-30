@@ -1703,6 +1703,12 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
             var allCategories = await repository.GetProductCategoriesAsync(cancellationToken);
             var categoryMap = allCategories.ToDictionary(c => c.CategoryName, c => c.Id, StringComparer.OrdinalIgnoreCase);
 
+            // Fetch existing products to handle duplicates (updates instead of inserts)
+            var existingProductsList = await repository.GetProductsAsync(null, cancellationToken);
+            var existingProductsMap = existingProductsList
+                .GroupBy(p => p.ProductName, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
             // Process Products sheet
             if (productsSheet != null)
             {
@@ -1826,62 +1832,124 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
 
                             if (!decimal.TryParse(gstPercentText, out var gstPercent)) gstPercent = 18m;
 
-                            // Create product
-                            var product = new Product
+                            // Check for duplicates
+                            if (existingProductsMap.TryGetValue(productName, out var existingProduct))
                             {
-                                CategoryId = categoryId,
-                                ProductName = productName,
-                                BrandName = string.IsNullOrEmpty(brandName) ? null : brandName,
-                                ModelName = string.IsNullOrEmpty(modelName) ? null : modelName,
-                                ShortDescription = string.IsNullOrEmpty(shortDescription) ? null : shortDescription,
-                                LongDescription = string.IsNullOrEmpty(longDescription) ? null : longDescription,
-                                DailyRent = 0m, // Hidden from Excel/UI; retained for future enablement
-                                WeeklyRent = Math.Max(0m, weeklyRent),
-                                MonthlyRent = Math.Max(0m, monthlyRent),
-                                SecurityDeposit = Math.Max(0m, securityDeposit),
-                                BuyPrice = buyPrice is > 0m ? buyPrice : null,
-                                VendorDailyRent = 0m,
-                                VendorWeeklyRent = Math.Max(0m, vendorWeeklyRent ?? weeklyRent),
-                                VendorMonthlyRent = Math.Max(0m, vendorMonthlyRent ?? monthlyRent),
-                                VendorSecurityDeposit = Math.Max(0m, vendorSecurityDeposit ?? securityDeposit),
-                                VendorBuyPrice = vendorBuyPrice ?? buyPrice,
-                                GstPercent = Math.Clamp(gstPercent, 0m, 100m),
-                                IsRentEnabled = isRentEnabled,
-                                IsBuyEnabled = isBuyEnabled,
-                                IsActive = isActive,
-                                Variants = new List<ProductVariant>()
-                            };
+                                // Update existing product
+                                existingProduct.CategoryId = categoryId;
+                                existingProduct.BrandName = string.IsNullOrEmpty(brandName) ? null : brandName;
+                                existingProduct.ModelName = string.IsNullOrEmpty(modelName) ? null : modelName;
+                                existingProduct.ShortDescription = string.IsNullOrEmpty(shortDescription) ? null : shortDescription;
+                                existingProduct.LongDescription = string.IsNullOrEmpty(longDescription) ? null : longDescription;
+                                existingProduct.WeeklyRent = Math.Max(0m, weeklyRent);
+                                existingProduct.MonthlyRent = Math.Max(0m, monthlyRent);
+                                existingProduct.SecurityDeposit = Math.Max(0m, securityDeposit);
+                                existingProduct.BuyPrice = buyPrice is > 0m ? buyPrice : null;
+                                existingProduct.VendorWeeklyRent = Math.Max(0m, vendorWeeklyRent ?? weeklyRent);
+                                existingProduct.VendorMonthlyRent = Math.Max(0m, vendorMonthlyRent ?? monthlyRent);
+                                existingProduct.VendorSecurityDeposit = Math.Max(0m, vendorSecurityDeposit ?? securityDeposit);
+                                existingProduct.VendorBuyPrice = vendorBuyPrice ?? buyPrice;
+                                existingProduct.GstPercent = Math.Clamp(gstPercent, 0m, 100m);
+                                existingProduct.IsRentEnabled = isRentEnabled;
+                                existingProduct.IsBuyEnabled = isBuyEnabled;
+                                existingProduct.IsActive = isActive;
 
-                            if (variantsLookup.TryGetValue(productName, out var pVariants))
-                            {
-                                foreach (var v in pVariants)
+                                if (variantsLookup.TryGetValue(productName, out var pVariants))
                                 {
-                                    v.ProductId = product.Id;
-                                    product.Variants.Add(v);
+                                    var existingVariantKeys = existingProduct.Variants?.Select(v => $"{v.Sku}_{v.SizeValue}_{v.SizeUnit}").ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>();
+                                    foreach (var v in pVariants)
+                                    {
+                                        var key = $"{v.Sku}_{v.SizeValue}_{v.SizeUnit}";
+                                        if (!existingVariantKeys.Contains(key))
+                                        {
+                                            v.ProductId = existingProduct.Id;
+                                            existingProduct.Variants ??= new List<ProductVariant>();
+                                            existingProduct.Variants.Add(v);
+                                        }
+                                    }
                                 }
-                            }
 
-                            if (request.IsChemicalTemplate || !string.IsNullOrWhiteSpace(casNumber) || !string.IsNullOrWhiteSpace(chemicalFormula) || !string.IsNullOrWhiteSpace(baseUnit))
-                            {
-                                decimal? purity = decimal.TryParse(purityText, out var p) ? p : null;
-                                decimal? molecularWeight = decimal.TryParse(molecularWeightText, out var mw) ? mw : null;
-
-                                product.ChemicalProperty = new ChemicalProperty
+                                if (request.IsChemicalTemplate || !string.IsNullOrWhiteSpace(casNumber) || !string.IsNullOrWhiteSpace(chemicalFormula) || !string.IsNullOrWhiteSpace(baseUnit))
                                 {
-                                    Id = Guid.NewGuid(),
-                                    ProductId = product.Id,
-                                    CasNumber = string.IsNullOrWhiteSpace(casNumber) ? null : casNumber,
-                                    ChemicalFormula = string.IsNullOrWhiteSpace(chemicalFormula) ? null : chemicalFormula,
-                                    PurityPercentage = purity,
-                                    MolecularWeight = molecularWeight,
-                                    BaseUnit = string.IsNullOrWhiteSpace(baseUnit) ? "Kg" : baseUnit,
-                                    SdsDocumentUrl = string.IsNullOrWhiteSpace(sdsDocumentUrl) ? null : sdsDocumentUrl,
-                                    CoaDocumentUrl = string.IsNullOrWhiteSpace(coaDocumentUrl) ? null : coaDocumentUrl
-                                };
-                            }
+                                    decimal? purity = decimal.TryParse(purityText, out var p) ? p : null;
+                                    decimal? molecularWeight = decimal.TryParse(molecularWeightText, out var mw) ? mw : null;
 
-                            await repository.AddProductAsync(product, cancellationToken);
-                            productsCreated++;
+                                    if (existingProduct.ChemicalProperty == null)
+                                    {
+                                        existingProduct.ChemicalProperty = new ChemicalProperty { Id = Guid.NewGuid(), ProductId = existingProduct.Id };
+                                    }
+
+                                    existingProduct.ChemicalProperty.CasNumber = string.IsNullOrWhiteSpace(casNumber) ? null : casNumber;
+                                    existingProduct.ChemicalProperty.ChemicalFormula = string.IsNullOrWhiteSpace(chemicalFormula) ? null : chemicalFormula;
+                                    existingProduct.ChemicalProperty.PurityPercentage = purity;
+                                    existingProduct.ChemicalProperty.MolecularWeight = molecularWeight;
+                                    existingProduct.ChemicalProperty.BaseUnit = string.IsNullOrWhiteSpace(baseUnit) ? "Kg" : baseUnit;
+                                    existingProduct.ChemicalProperty.SdsDocumentUrl = string.IsNullOrWhiteSpace(sdsDocumentUrl) ? null : sdsDocumentUrl;
+                                    existingProduct.ChemicalProperty.CoaDocumentUrl = string.IsNullOrWhiteSpace(coaDocumentUrl) ? null : coaDocumentUrl;
+                                }
+
+                                await repository.UpdateProductAsync(existingProduct, cancellationToken);
+                                productsCreated++;
+                            }
+                            else
+                            {
+                                // Create new product
+                                var product = new Product
+                                {
+                                    CategoryId = categoryId,
+                                    ProductName = productName,
+                                    BrandName = string.IsNullOrEmpty(brandName) ? null : brandName,
+                                    ModelName = string.IsNullOrEmpty(modelName) ? null : modelName,
+                                    ShortDescription = string.IsNullOrEmpty(shortDescription) ? null : shortDescription,
+                                    LongDescription = string.IsNullOrEmpty(longDescription) ? null : longDescription,
+                                    DailyRent = 0m, // Hidden from Excel/UI; retained for future enablement
+                                    WeeklyRent = Math.Max(0m, weeklyRent),
+                                    MonthlyRent = Math.Max(0m, monthlyRent),
+                                    SecurityDeposit = Math.Max(0m, securityDeposit),
+                                    BuyPrice = buyPrice is > 0m ? buyPrice : null,
+                                    VendorDailyRent = 0m,
+                                    VendorWeeklyRent = Math.Max(0m, vendorWeeklyRent ?? weeklyRent),
+                                    VendorMonthlyRent = Math.Max(0m, vendorMonthlyRent ?? monthlyRent),
+                                    VendorSecurityDeposit = Math.Max(0m, vendorSecurityDeposit ?? securityDeposit),
+                                    VendorBuyPrice = vendorBuyPrice ?? buyPrice,
+                                    GstPercent = Math.Clamp(gstPercent, 0m, 100m),
+                                    IsRentEnabled = isRentEnabled,
+                                    IsBuyEnabled = isBuyEnabled,
+                                    IsActive = isActive,
+                                    Variants = new List<ProductVariant>()
+                                };
+
+                                if (variantsLookup.TryGetValue(productName, out var pVariants))
+                                {
+                                    foreach (var v in pVariants)
+                                    {
+                                        v.ProductId = product.Id;
+                                        product.Variants.Add(v);
+                                    }
+                                }
+
+                                if (request.IsChemicalTemplate || !string.IsNullOrWhiteSpace(casNumber) || !string.IsNullOrWhiteSpace(chemicalFormula) || !string.IsNullOrWhiteSpace(baseUnit))
+                                {
+                                    decimal? purity = decimal.TryParse(purityText, out var p) ? p : null;
+                                    decimal? molecularWeight = decimal.TryParse(molecularWeightText, out var mw) ? mw : null;
+
+                                    product.ChemicalProperty = new ChemicalProperty
+                                    {
+                                        Id = Guid.NewGuid(),
+                                        ProductId = product.Id,
+                                        CasNumber = string.IsNullOrWhiteSpace(casNumber) ? null : casNumber,
+                                        ChemicalFormula = string.IsNullOrWhiteSpace(chemicalFormula) ? null : chemicalFormula,
+                                        PurityPercentage = purity,
+                                        MolecularWeight = molecularWeight,
+                                        BaseUnit = string.IsNullOrWhiteSpace(baseUnit) ? "Kg" : baseUnit,
+                                        SdsDocumentUrl = string.IsNullOrWhiteSpace(sdsDocumentUrl) ? null : sdsDocumentUrl,
+                                        CoaDocumentUrl = string.IsNullOrWhiteSpace(coaDocumentUrl) ? null : coaDocumentUrl
+                                    };
+                                }
+
+                                await repository.AddProductAsync(product, cancellationToken);
+                                productsCreated++;
+                            }
                         }
                         catch (Exception ex)
                         {

@@ -15,7 +15,7 @@ import { TablePagination } from "@/app/components/shared/TablePagination";
 import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Textarea } from "@/app/components/ui/textarea";
-import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest } from "@/app/services/adminApi";
+import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto } from "@/app/services/adminApi";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { resolveCatalogProductImageUrl } from "@/app/helpers/utils";
 import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown, FlaskConical } from "lucide-react";
@@ -87,6 +87,7 @@ const ProductManagement = () => {
   const [uploadingImage, setUploadingImage] = useState(false);
   // Excel upload state
   const [excelDialogOpen, setExcelDialogOpen] = useState(false);
+  const [uploadErrors, setUploadErrors] = useState<ExcelUploadErrorDto[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Status confirmation state
@@ -664,16 +665,15 @@ const ProductManagement = () => {
   const uploadExcelFile = async (file: File) => {
     try {
       setLoading(true);
+      setUploadErrors([]);
       const result = await adminApi.uploadCatalogExcel(file, false);
       
       if (result.success) {
-        toast.success(`Excel uploaded successfully: ${result.categoriesCreated} categories, ${result.productsCreated} products created.`);
+        toast.success(`Excel processed successfully: ${result.categoriesCreated} categories, ${result.productsCreated} products processed.`);
         await loadData();
       } else {
-        toast.error(`Excel upload failed with ${result.errors.length} errors.`);
-        result.errors.forEach((error) => {
-          console.error(`Row ${error.row} (${error.sheet}): ${error.field} - ${error.message}`);
-        });
+        toast.error(`Excel upload failed with ${result.errors.length} errors. Please review them below.`);
+        setUploadErrors(result.errors);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to upload Excel.";
@@ -684,6 +684,26 @@ const ProductManagement = () => {
         fileInputRef.current.value = "";
       }
     }
+  };
+
+  const downloadErrorReport = () => {
+    if (uploadErrors.length === 0) return;
+    
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Sheet,Row,Field,Message\n";
+    
+    uploadErrors.forEach(error => {
+      const escapeCsv = (str: string) => `"${str.replace(/"/g, '""')}"`;
+      csvContent += `${escapeCsv(error.sheet)},${error.row},${escapeCsv(error.field)},${escapeCsv(error.message)}\n`;
+    });
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "excel_upload_errors.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const downloadSampleExcel = () => {
@@ -1826,6 +1846,38 @@ const ProductManagement = () => {
               inputRef={fileInputRef}
               onFilesSelected={(files) => void uploadExcelFile(files[0])}
             />
+            {uploadErrors.length > 0 && (
+              <div className="mt-6 border border-red-200 rounded-md overflow-hidden bg-red-50/50">
+                <div className="bg-red-100/50 px-4 py-2 border-b border-red-200 flex justify-between items-center">
+                  <h4 className="text-sm font-semibold text-red-800">
+                    {uploadErrors.length} Upload Error{uploadErrors.length !== 1 && 's'} Found
+                  </h4>
+                  <Button variant="outline" size="sm" onClick={downloadErrorReport} className="h-7 text-xs bg-white text-red-700 hover:bg-red-50 border-red-200">
+                    <Download className="mr-1 h-3 w-3" /> Download CSV
+                  </Button>
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-red-50 sticky top-0 border-b border-red-100">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-red-800">Sheet</th>
+                        <th className="px-3 py-2 text-left font-medium text-red-800">Row</th>
+                        <th className="px-3 py-2 text-left font-medium text-red-800">Error Details</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-red-100">
+                      {uploadErrors.map((error, idx) => (
+                        <tr key={idx} className="hover:bg-red-50/80">
+                          <td className="px-3 py-2 text-red-700 whitespace-nowrap">{error.sheet}</td>
+                          <td className="px-3 py-2 text-red-700">{error.row}</td>
+                          <td className="px-3 py-2 text-red-700">{error.message}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setExcelDialogOpen(false)}>
