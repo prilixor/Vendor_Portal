@@ -220,6 +220,92 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
+  Future<bool> verifyEmail(String token) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.dio.get(
+        '/auth/verify-email',
+        queryParameters: {'token': token},
+      );
+      if (response.statusCode == 200) {
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+    } on DioException catch (e) {
+      _errorMessage = e.response?.data?['detail']?.toString() ??
+          e.response?.data?['message']?.toString() ??
+          'Email verification failed.';
+    } catch (_) {
+      _errorMessage = 'Email verification failed.';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> resendVerification(String email) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.dio.post(
+        '/auth/resend-verification',
+        data: {'email': email},
+      );
+      if (response.statusCode == 200) {
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+    } on DioException catch (e) {
+      _errorMessage = e.response?.data?['detail']?.toString() ??
+          e.response?.data?['message']?.toString() ??
+          'Failed to resend verification email.';
+    } catch (_) {
+      _errorMessage = 'Failed to resend verification email.';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> resetPassword({
+    required String token,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.dio.post(
+        '/auth/reset-password',
+        data: {
+          'token': token,
+          'newPassword': newPassword,
+          'confirmPassword': confirmPassword,
+        },
+      );
+      if (response.statusCode == 200) {
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+    } on DioException catch (e) {
+      _errorMessage = e.response?.data?['detail']?.toString() ??
+          e.response?.data?['message']?.toString() ??
+          'Failed to reset password.';
+    } catch (_) {
+      _errorMessage = 'Failed to reset password.';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
   Future<bool> changePassword(String email, String currentPassword, String newPassword) async {
     _isLoading = true;
     _errorMessage = null;

@@ -57,6 +57,7 @@ interface AdminCartLine {
   weeklyRent: number;
   monthlyRent: number;
   buyPrice?: number;
+  isBuyEnabled?: boolean;
 }
 
 type MedicalRef = {
@@ -553,9 +554,10 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     const days = orderType === "rent" ? Math.max(1, Number(rentalDays) || 1) : 0;
     const buyUnit = selectedVariant?.buyPrice ?? detail?.buyPrice ?? selected.buyPrice;
 
-    if (orderType === "rent" && (buyUnit ?? 0) > 0) {
+    if (orderType === "rent" && buyEnabled && (buyUnit ?? 0) > 0) {
       const check = evaluateRentVsBuy({
         buyPrice: buyUnit,
+        isBuyEnabled: buyEnabled,
         quantity: qty,
         periods: days,
         unit: rentalPeriodUnit,
@@ -599,6 +601,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
           rentalPeriodUnit: orderType === "rent" ? rentalPeriodUnit : "day",
           orderType,
           buyPrice: buyUnit,
+          isBuyEnabled: buyEnabled,
           dailyRent: detail?.dailyRent ?? selected.dailyRent,
           weeklyRent: (detail as { weeklyRent?: number } | null)?.weeklyRent ?? selected.weeklyRent ?? 0,
           monthlyRent: detail?.monthlyRent ?? selected.monthlyRent ?? 0,
@@ -633,6 +636,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
           weeklyRent: (detail as { weeklyRent?: number } | null)?.weeklyRent ?? selected.weeklyRent ?? 0,
           monthlyRent: detail?.monthlyRent ?? selected.monthlyRent ?? 0,
           buyPrice: buyUnit,
+          isBuyEnabled: buyEnabled,
         },
       ];
     });
@@ -657,9 +661,10 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
         if (next.orderType === "rent") next.rentalDays = Math.max(1, next.rentalDays);
         else next.rentalDays = 0;
 
-        if (next.orderType === "rent" && (next.buyPrice ?? 0) > 0) {
+        if (next.orderType === "rent" && next.isBuyEnabled === true && (next.buyPrice ?? 0) > 0) {
           const check = evaluateRentVsBuy({
             buyPrice: next.buyPrice,
+            isBuyEnabled: next.isBuyEnabled === true,
             quantity: next.quantity,
             periods: next.rentalDays,
             unit: next.rentalPeriodUnit,

@@ -4,7 +4,10 @@ import 'core/auth/auth_provider.dart';
 import 'core/connectivity/connectivity_provider.dart';
 import 'core/theme.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/reset_password_screen.dart';
+import 'features/auth/verify_email_screen.dart';
 import 'features/dashboard/customer_dashboard.dart';
+import 'features/medical/doctor_public_screen.dart';
 import 'shared/widgets/offline_banner.dart';
 
 import 'core/providers/product_provider.dart';
@@ -60,6 +63,39 @@ class PrilixorMobileApp extends StatelessWidget {
       home: const AuthGate(),
       debugShowCheckedModeBanner: false,
       builder: (context, child) => OfflineAwareAppShell(child: child),
+      onGenerateRoute: (settings) {
+        final name = settings.name ?? '';
+        final uri = Uri.tryParse(name.startsWith('http') ? name : 'app://local$name');
+        final path = uri?.path ?? name;
+        final qp = uri?.queryParameters ?? const <String, String>{};
+
+        if (path == '/verify-email' || path.endsWith('/verify-email')) {
+          return MaterialPageRoute(
+            builder: (_) => VerifyEmailScreen(
+              token: qp['token'] ?? settings.arguments as String?,
+            ),
+            settings: settings,
+          );
+        }
+        if (path == '/reset-password' || path.endsWith('/reset-password')) {
+          return MaterialPageRoute(
+            builder: (_) => ResetPasswordScreen(
+              token: qp['token'] ?? settings.arguments as String?,
+            ),
+            settings: settings,
+          );
+        }
+        if (path.startsWith('/dr/') || path.contains('/dr/')) {
+          final code = path.split('/dr/').last.split('/').first;
+          if (code.trim().isNotEmpty) {
+            return MaterialPageRoute(
+              builder: (_) => DoctorPublicScreen(code: Uri.decodeComponent(code)),
+              settings: settings,
+            );
+          }
+        }
+        return null;
+      },
     );
   }
 }

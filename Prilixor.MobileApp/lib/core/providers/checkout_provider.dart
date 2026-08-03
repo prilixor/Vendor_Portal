@@ -67,11 +67,18 @@ class CheckoutProvider extends ChangeNotifier {
     final payload = <String, dynamic>{
       'listingId': line.listingId,
       'quantity': line.quantity,
-      'rentalDays': line.orderType == 'buy' ? 0 : line.rentalDays,
-      'rentalPeriodUnit': line.orderType == 'buy' ? 'day' : line.rentalPeriodUnit,
+      'rentalDays': line.orderType == 'buy'
+          ? 0
+          : (line.usesPricingPlan
+              ? (line.rentalDurationDays ?? line.rentalDays)
+              : line.rentalDays),
+      'rentalPeriodUnit': line.orderType == 'buy'
+          ? 'day'
+          : (line.usesPricingPlan ? 'day' : line.rentalPeriodUnit),
       'orderType': line.orderType,
       if (line.productVariantId != null && line.productVariantId!.isNotEmpty)
         'productVariantId': line.productVariantId,
+      if (line.usesPricingPlan) 'rentalPricingPlanId': line.rentalPricingPlanId,
     };
 
     if (line.prescriptionRequired && medicalRef != null && medicalRef.doctorId.isNotEmpty) {

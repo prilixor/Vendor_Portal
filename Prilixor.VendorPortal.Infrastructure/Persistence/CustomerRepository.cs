@@ -307,7 +307,7 @@ public sealed class CustomerRepository(
 
                 l.Id,
 
-                l.ListingTitle,
+                string.IsNullOrWhiteSpace(product?.ProductName) ? l.ListingTitle : product.ProductName,
 
                 vendorName ?? "Vendor",
 
@@ -1422,7 +1422,9 @@ public sealed class CustomerRepository(
                 : listing.Vendor.Profile!.BusinessName,
             VendorLatitude = listing.Vendor.Profile?.Latitude,
             VendorLongitude = listing.Vendor.Profile?.Longitude,
-            ListingTitle = listing.ListingTitle,
+            ListingTitle = string.IsNullOrWhiteSpace(product.ProductName)
+                ? listing.ListingTitle
+                : product.ProductName,
             ListingStatus = listing.ListingStatus,
             DailyRent = product.DailyRent,
             WeeklyRent = product.WeeklyRent,
@@ -1935,7 +1937,9 @@ public sealed class CustomerRepository(
                     l.Id.ToString(),
                     l.VendorId.ToString(),
                     l.ProductId.ToString(),
-                    string.IsNullOrWhiteSpace(l.ListingTitle) ? (product?.ProductName ?? "Listing") : l.ListingTitle,
+                    string.IsNullOrWhiteSpace(product?.ProductName)
+                        ? (string.IsNullOrWhiteSpace(l.ListingTitle) ? "Listing" : l.ListingTitle)
+                        : product.ProductName,
                     vendorName ?? "Vendor",
                     product?.Category?.CategoryName ?? "General",
                     product?.Category?.IsChemical ?? false,

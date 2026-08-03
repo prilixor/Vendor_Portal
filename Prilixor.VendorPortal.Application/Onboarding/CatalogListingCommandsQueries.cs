@@ -549,7 +549,8 @@ public sealed class UpsertVendorProductListingCommandValidator : AbstractValidat
     {
         RuleFor(x => x.VendorId).NotEmpty();
         RuleFor(x => x.ProductId).NotEmpty();
-        RuleFor(x => x.ListingTitle).NotEmpty().MaximumLength(255);
+        // ListingTitle is optional from clients — server always sets it from Product.ProductName.
+        RuleFor(x => x.ListingTitle).MaximumLength(255);
         RuleFor(x => x.AvailableQuantity).GreaterThanOrEqualTo(0);
         RuleFor(x => x.ListingStatus)
             .NotEmpty()
@@ -630,7 +631,11 @@ internal sealed class UpsertVendorProductListingCommandHandler(
         var isNowAvailable = request.AvailableQuantity > 0;
         var isCreate = entity.Id == Guid.Empty;
 
-        entity.ListingTitle = request.ListingTitle;
+        // Customers must see the Admin catalog name — ignore vendor-custom listing titles.
+        var catalogTitle = !string.IsNullOrWhiteSpace(product.ProductName)
+            ? product.ProductName.Trim()
+            : (!string.IsNullOrWhiteSpace(request.ListingTitle) ? request.ListingTitle.Trim() : "Listing");
+        entity.ListingTitle = catalogTitle;
         entity.DailyRent = product.DailyRent;
         entity.WeeklyRent = product.WeeklyRent;
         entity.MonthlyRent = product.MonthlyRent;

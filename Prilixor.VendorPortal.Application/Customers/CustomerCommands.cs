@@ -885,7 +885,8 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
 
             var depositPerUnit = agg.CategoryDepositRequired ? agg.SecurityDeposit : 0m;
             var lineSubtotal = CustomerOrderPricingRules.CalculateLineSubtotal(orderType, agg, line, options);
-            if (orderType == "rent")
+            // Only suggest Buy when the product actually offers it (admin Buy enabled).
+            if (orderType == "rent" && agg.IsBuyEnabled)
             {
                 var equivalentBuyAmount = decimal.Round(
                     CustomerOrderPricingRules.ResolveUnitBuyPrice(agg, line, options) * line.Quantity,
@@ -1044,25 +1045,8 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 continue;
             }
 
-            // Reject rent when cost ≥ buy but buy is disabled (cannot auto-convert).
-            if (CustomerOrderPricingRules.NormalizeOrderType(line.OrderType) == "rent"
-                && !agg.IsBuyEnabled
-                && CustomerOrderPricingRules.ResolveUnitBuyPrice(agg, line, options) > 0)
-            {
-                var rentSub = CustomerOrderPricingRules.CalculateLineSubtotal("rent", agg, line, options);
-                var buyTot = CustomerOrderPricingRules.ResolveUnitBuyPrice(agg, line, options) * line.Quantity;
-                if (rentSub >= buyTot)
-                {
-                    failed.Add(new FailedCustomerOrderLineDto(
-                        line.ListingId,
-                        line.Quantity,
-                        line.RentalDays,
-                        "rent",
-                        "customers.rent_exceeds_buy",
-                        $"Rental cost for \"{agg.ListingTitle}\" meets or exceeds the item value. Choose a shorter rental period."));
-                    continue;
-                }
-            }
+            // Rent-only (Buy disabled): allow rent even when rental cost ≥ buy price reference.
+            // ApplyRentExceedsBuyRule already skips conversion when !IsBuyEnabled.
 
             if (orderType == "buy" && !agg.IsBuyEnabled)
             {

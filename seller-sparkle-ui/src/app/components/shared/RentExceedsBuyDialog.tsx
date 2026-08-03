@@ -28,7 +28,8 @@ function inr(n: number) {
 }
 
 /**
- * Shown when rental cost ≥ buy price. Forces Buy (or asks to shorten period if Buy disabled).
+ * Shown when Buy is enabled and rental cost ≥ buy price.
+ * Forces Buy (Buy disabled products never reach this dialog).
  */
 export function RentExceedsBuyDialog({
   open,

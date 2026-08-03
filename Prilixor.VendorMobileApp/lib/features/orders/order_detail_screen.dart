@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/models/order_continuations_model.dart';
 import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
@@ -92,6 +93,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _cancel() async {
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    if (provider.hasPendingContinuations) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Review the pending customer request first.')),
+      );
+      return;
+    }
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -115,7 +123,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
-    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
     final ok = await provider.cancelAssignedOrder(vendorId, _selectedOrderId);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -126,11 +133,76 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
+  Future<void> _approveExtension(PendingExtension ext) async {
+    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null) return;
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    final ok = await provider.approveExtension(vendorId, _selectedOrderId, ext.extensionId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Extension approved.' : (provider.error ?? 'Approve failed')),
+        backgroundColor: ok ? null : Colors.redAccent,
+      ),
+    );
+  }
+
+  Future<void> _rejectExtension(PendingExtension ext) async {
+    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null) return;
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    final ok = await provider.rejectExtension(vendorId, _selectedOrderId, ext.extensionId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Extension rejected.' : (provider.error ?? 'Reject failed')),
+        backgroundColor: ok ? null : Colors.redAccent,
+      ),
+    );
+  }
+
+  Future<void> _approveBuyout(PendingBuyout buy) async {
+    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null) return;
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    final ok = await provider.approveBuyout(vendorId, _selectedOrderId, buy.buyoutId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Buyout approved.' : (provider.error ?? 'Approve failed')),
+        backgroundColor: ok ? null : Colors.redAccent,
+      ),
+    );
+  }
+
+  Future<void> _rejectBuyout(PendingBuyout buy) async {
+    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null) return;
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    final ok = await provider.rejectBuyout(vendorId, _selectedOrderId, buy.buyoutId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Buyout rejected.' : (provider.error ?? 'Reject failed')),
+        backgroundColor: ok ? null : Colors.redAccent,
+      ),
+    );
+  }
+
+  String _fmtDate(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return '—';
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return raw;
+    return '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}/${parsed.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<VendorOrderProvider>(context);
     final order = provider.selectedOrder;
     final busy = provider.actionLoading || provider.detailLoading;
+    final hasPending = provider.hasPendingContinuations;
+    final continuations = provider.continuations;
     final groupItems = order == null
         ? const <VendorOrder>[]
         : orderGroupItems(anchor: order, allOrders: provider.orders);
@@ -266,8 +338,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           ),
                           const SizedBox(height: 10),
                           _ItemDetailsPanel(order: activeItem ?? order),
+                          if (hasPending) ...[
+                            const SizedBox(height: 10),
+                            _PendingContinuationsCard(
+                              continuations: continuations,
+                              busy: busy,
+                              formatDate: _fmtDate,
+                              onApproveExtension: _approveExtension,
+                              onRejectExtension: _rejectExtension,
+                              onApproveBuyout: _approveBuyout,
+                              onRejectBuyout: _rejectBuyout,
+                            ),
+                          ],
                           const SizedBox(height: 10),
-                          ..._secondaryActions(activeItem ?? order, busy),
+                          ..._secondaryActions(activeItem ?? order, busy, hasPending),
                         ]),
                       ),
                     ),
@@ -279,6 +363,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           : _OrderActionBar(
               order: activeItem ?? order,
               busy: busy,
+              hasPendingRequests: hasPending,
               onMarkTransit: () => _openDispatchSheet(activeItem ?? order),
               onMarkActive: () => _updateStatus('active'),
               onMarkReturned: () => _updateStatus('returned'),
@@ -286,19 +371,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  List<Widget> _secondaryActions(VendorOrder order, bool busy) {
+  List<Widget> _secondaryActions(VendorOrder order, bool busy, bool hasPending) {
     final normalized = order.normalizedStatus.replaceAll(' ', '_');
     if (normalized != 'confirmed') return const [];
 
     return [
       OutlinedButton(
-        onPressed: busy ? null : _cancel,
+        onPressed: (busy || hasPending) ? null : _cancel,
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(44),
           foregroundColor: Colors.redAccent,
           side: const BorderSide(color: Colors.redAccent),
         ),
-        child: const Text('Cancel assigned order'),
+        child: Text(hasPending ? 'Review customer request first' : 'Cancel assigned order'),
       ),
     ];
   }
@@ -384,6 +469,7 @@ class _GroupHeroCard extends StatelessWidget {
 class _OrderActionBar extends StatelessWidget {
   final VendorOrder order;
   final bool busy;
+  final bool hasPendingRequests;
   final VoidCallback onMarkTransit;
   final VoidCallback onMarkActive;
   final VoidCallback onMarkReturned;
@@ -391,6 +477,7 @@ class _OrderActionBar extends StatelessWidget {
   const _OrderActionBar({
     required this.order,
     required this.busy,
+    this.hasPendingRequests = false,
     required this.onMarkTransit,
     required this.onMarkActive,
     required this.onMarkReturned,
@@ -404,7 +491,10 @@ class _OrderActionBar extends StatelessWidget {
     String? label;
     VoidCallback? action;
 
-    if (compact == 'confirmed') {
+    if (hasPendingRequests) {
+      label = 'Review customer request';
+      action = null;
+    } else if (compact == 'confirmed') {
       label = 'Mark out for delivery';
       action = onMarkTransit;
     } else if (compact == 'in_transit' || normalized.contains('transit')) {
@@ -417,7 +507,7 @@ class _OrderActionBar extends StatelessWidget {
       action = onMarkReturned;
     }
 
-    if (label == null || action == null) return const SizedBox.shrink();
+    if (label == null) return const SizedBox.shrink();
 
     return Container(
       decoration: BoxDecoration(
@@ -450,7 +540,7 @@ class _OrderActionBar extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               ElevatedButton(
-                onPressed: busy ? null : action,
+                onPressed: (busy || action == null) ? null : action,
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
                   backgroundColor: AppTheme.accent,
@@ -466,6 +556,172 @@ class _OrderActionBar extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PendingContinuationsCard extends StatelessWidget {
+  final OrderContinuations continuations;
+  final bool busy;
+  final String Function(String?) formatDate;
+  final void Function(PendingExtension) onApproveExtension;
+  final void Function(PendingExtension) onRejectExtension;
+  final void Function(PendingBuyout) onApproveBuyout;
+  final void Function(PendingBuyout) onRejectBuyout;
+
+  const _PendingContinuationsCard({
+    required this.continuations,
+    required this.busy,
+    required this.formatDate,
+    required this.onApproveExtension,
+    required this.onRejectExtension,
+    required this.onApproveBuyout,
+    required this.onRejectBuyout,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF78350F).withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Pending customer requests',
+            style: TextStyle(
+              color: Color(0xFFFBBF24),
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...continuations.pendingExtensions.map((ext) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _RequestBox(
+                title: 'Rent extension request',
+                subtitle: 'Customer wants to extend by ${ext.additionalDays} days.',
+                rows: [
+                  ('Original end date', formatDate(ext.originalEndDate)),
+                  ('New end date', formatDate(ext.newEndDate)),
+                  ('Base extension rent', '₹${ext.extensionAmount.toStringAsFixed(2)}'),
+                  ('GST', '₹${ext.gstAmount.toStringAsFixed(2)}'),
+                  ('Total to collect', '₹${ext.totalAmount.toStringAsFixed(2)}'),
+                ],
+                busy: busy,
+                onReject: () => onRejectExtension(ext),
+                onApprove: () => onApproveExtension(ext),
+              ),
+            );
+          }),
+          ...continuations.pendingBuyouts.map((buy) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _RequestBox(
+                title: 'Product buyout request',
+                subtitle: 'Customer wants to buy this rented product permanently.',
+                rows: [
+                  ('Base buyout value', '₹${buy.baseBuyoutAmount.toStringAsFixed(2)}'),
+                  ('Rent deduction', '-₹${buy.rentDeductionAmount.toStringAsFixed(2)}'),
+                  ('GST', '₹${buy.gstAmount.toStringAsFixed(2)}'),
+                  ('Total to collect', '₹${buy.totalAmount.toStringAsFixed(2)}'),
+                ],
+                busy: busy,
+                onReject: () => onRejectBuyout(buy),
+                onApprove: () => onApproveBuyout(buy),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestBox extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final List<(String, String)> rows;
+  final bool busy;
+  final VoidCallback onReject;
+  final VoidCallback onApprove;
+
+  const _RequestBox({
+    required this.title,
+    required this.subtitle,
+    required this.rows,
+    required this.busy,
+    required this.onReject,
+    required this.onApprove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
+          const SizedBox(height: 10),
+          ...rows.map(
+            (r) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      r.$1,
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12),
+                    ),
+                  ),
+                  Text(
+                    r.$2,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: busy ? null : onReject,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                  ),
+                  child: const Text('Reject'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: busy ? null : onApprove,
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accent),
+                  child: const Text('Approve'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

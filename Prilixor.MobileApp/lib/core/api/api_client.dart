@@ -52,6 +52,9 @@ class ApiClient {
               path.contains('/auth/login') ||
               path.contains('/auth/refresh') ||
               path.contains('/auth/forgot-password') ||
+              path.contains('/auth/reset-password') ||
+              path.contains('/auth/verify-email') ||
+              path.contains('/auth/resend-verification') ||
               path.contains('/auth/change-password') ||
               path.contains('/customers/register');
 

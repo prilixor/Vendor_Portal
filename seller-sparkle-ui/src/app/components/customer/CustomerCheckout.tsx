@@ -29,6 +29,9 @@ import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
 type DeliveryChoice = "standard" | "express" | "vendor_pickup";
 
+/** Temporary: hide Vendor pickup from checkout UI (keep code for later). */
+const SHOW_VENDOR_PICKUP_OPTION = false;
+
 function formatAddressOption(a: { label?: string | null; line1: string; city: string }): string {
   const tail = `${a.line1}, ${a.city}`;
   return a.label?.trim() ? `${a.label.trim()} — ${tail}` : tail;
@@ -187,8 +190,11 @@ const CustomerCheckout = () => {
 
   useEffect(() => {
     if (!quote?.buySuggestions?.length) return;
+    // API only suggests when Buy is enabled. Skip lines explicitly marked rent-only.
     const stillRent = quote.buySuggestions.find((s) =>
-      lines.some((l) => l.listingId === s.listingId && l.orderType === "rent"),
+      lines.some(
+        (l) => l.listingId === s.listingId && l.orderType === "rent" && l.isBuyEnabled !== false,
+      ),
     );
     if (!stillRent) return;
     setRentToBuySuggestion({
@@ -345,19 +351,21 @@ const CustomerCheckout = () => {
                     Dynamic
                   </span>
                 </label>
-                <label
-                  htmlFor="delivery-pickup"
-                  className={cn(
-                    "flex cursor-pointer items-center justify-between gap-4 px-4 py-3.5 transition-colors",
-                    "hover:bg-muted/40",
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <RadioGroupItem value="vendor_pickup" id="delivery-pickup" />
-                    <span className="text-sm font-medium">Vendor pickup</span>
-                  </div>
-                  <span className="shrink-0 text-sm text-muted-foreground">Free</span>
-                </label>
+                {SHOW_VENDOR_PICKUP_OPTION && (
+                  <label
+                    htmlFor="delivery-pickup"
+                    className={cn(
+                      "flex cursor-pointer items-center justify-between gap-4 px-4 py-3.5 transition-colors",
+                      "hover:bg-muted/40",
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <RadioGroupItem value="vendor_pickup" id="delivery-pickup" />
+                      <span className="text-sm font-medium">Vendor pickup</span>
+                    </div>
+                    <span className="shrink-0 text-sm text-muted-foreground">Free</span>
+                  </label>
+                )}
               </RadioGroup>
             </CardContent>
           </Card>
@@ -613,15 +621,26 @@ const CustomerCheckout = () => {
           if (line.rentalDurationLabel) return line.rentalDurationLabel;
           return formatRentalDuration(line.rentalDays, line.rentalPeriodUnit);
         })()}
-        buyAvailable
+        buyAvailable={
+          lines.some(
+            (l) =>
+              l.listingId === rentToBuySuggestion?.listingId &&
+              l.isBuyEnabled !== false &&
+              (l.buyPrice ?? 0) > 0,
+          )
+        }
         compulsory
         onConfirmBuy={() => {
+          const switchable = (l: (typeof lines)[number]) =>
+            l.orderType === "rent" && l.isBuyEnabled !== false;
           for (const s of quote?.buySuggestions ?? []) {
-            const line = lines.find((l) => l.listingId === s.listingId && l.orderType === "rent");
+            const line = lines.find((l) => l.listingId === s.listingId && switchable(l));
             if (line) updateLine(line.listingId, { orderType: "buy" });
           }
           if (rentToBuySuggestion) {
-            const line = lines.find((l) => l.listingId === rentToBuySuggestion.listingId && l.orderType === "rent");
+            const line = lines.find(
+              (l) => l.listingId === rentToBuySuggestion.listingId && switchable(l),
+            );
             if (line) updateLine(line.listingId, { orderType: "buy" });
           }
           setRentToBuySuggestion(null);

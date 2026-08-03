@@ -128,10 +128,26 @@ class CartProvider extends ChangeNotifier {
       _lines[existingIndex].rentalPeriodUnit = newLine.orderType == 'buy'
           ? 'day'
           : newLine.rentalPeriodUnit;
+      if (newLine.orderType == 'buy') {
+        _lines[existingIndex].clearPricingPlan();
+      } else if (newLine.usesPricingPlan) {
+        _lines[existingIndex].applyPricingPlan(
+          planId: newLine.rentalPricingPlanId!,
+          durationLabel: newLine.rentalDurationLabel ?? '',
+          durationDays: newLine.rentalDurationDays ?? newLine.rentalDays,
+          normalPrice: newLine.rentalNormalPrice ?? 0,
+          discountType: newLine.rentalDiscountType ?? 'none',
+          discountValue: newLine.rentalDiscountValue ?? 0,
+          finalPrice: newLine.rentalFinalPrice ?? 0,
+        );
+      } else {
+        _lines[existingIndex].clearPricingPlan();
+      }
     } else {
       if (newLine.orderType == 'buy') {
         newLine.rentalDays = 0;
         newLine.rentalPeriodUnit = 'day';
+        newLine.clearPricingPlan();
       }
       _lines.add(newLine);
     }
@@ -155,6 +171,7 @@ class CartProvider extends ChangeNotifier {
     final index = _indexOfLine(listingId, productVariantId: productVariantId);
     if (index >= 0) {
       if (_lines[index].orderType == 'buy') return;
+      if (_lines[index].usesPricingPlan) return; // plan days are fixed
       _lines[index].rentalDays = days;
       _saveCart();
       notifyListeners();
@@ -165,6 +182,7 @@ class CartProvider extends ChangeNotifier {
     final index = _indexOfLine(listingId, productVariantId: productVariantId);
     if (index >= 0) {
       if (_lines[index].orderType == 'buy') return;
+      if (_lines[index].usesPricingPlan) return;
       _lines[index].rentalPeriodUnit = unit;
       if (_lines[index].rentalDays < 1) _lines[index].rentalDays = 1;
       _saveCart();
@@ -179,6 +197,7 @@ class CartProvider extends ChangeNotifier {
       if (orderType == 'buy') {
         _lines[index].rentalDays = 0;
         _lines[index].rentalPeriodUnit = 'day';
+        _lines[index].clearPricingPlan();
       } else if (_lines[index].rentalDays <= 0) {
         _lines[index].rentalDays = 1;
         _lines[index].rentalPeriodUnit = 'week';

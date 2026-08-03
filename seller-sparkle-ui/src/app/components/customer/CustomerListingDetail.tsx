@@ -321,37 +321,26 @@ const CustomerListingDetail = () => {
     qty?: number;
     plan?: RentalPricingPlanDto | null;
   }): boolean => {
-    if (unitPrice <= 0) return false;
+    if (!canBuy || unitPrice <= 0) return false;
     const plan = next.plan !== undefined ? next.plan : selectedPlan;
-    let rentalTotal: number;
-    let durationLabel: string;
-    if (hasPricingPlans && plan) {
-      rentalTotal = Number(plan.finalRentalPrice) * (next.qty ?? qty);
-      durationLabel = plan.durationLabel || `${plan.durationDays} days`;
-    } else {
-      const check = evaluateRentVsBuy({
-        buyPrice: unitPrice,
-        quantity: next.qty ?? qty,
-        periods: next.periods ?? periods,
-        unit: next.periodUnit ?? periodUnit,
-        rates: rentRates,
-      });
-      if (!check.shouldForceBuy) return false;
-      setRentToBuyInfo({
-        rentalTotal: check.rentalTotal,
-        buyTotal: check.buyTotal,
-        durationLabel: check.durationLabel,
-      });
-      setRentToBuyOpen(true);
-      return true;
-    }
-    const buyTotal = unitPrice * (next.qty ?? qty);
-    if (buyTotal > 0 && rentalTotal >= buyTotal) {
-      setRentToBuyInfo({ rentalTotal, buyTotal, durationLabel });
-      setRentToBuyOpen(true);
-      return true;
-    }
-    return false;
+    const check = evaluateRentVsBuy({
+      buyPrice: unitPrice,
+      isBuyEnabled: canBuy,
+      quantity: next.qty ?? qty,
+      periods: plan?.durationDays ?? next.periods ?? periods,
+      unit: plan ? "day" : (next.periodUnit ?? periodUnit),
+      rates: rentRates,
+      planFinalPrice: hasPricingPlans && plan ? plan.finalRentalPrice : null,
+      planDurationLabel: hasPricingPlans && plan ? plan.durationLabel || `${plan.durationDays} days` : null,
+    });
+    if (!check.shouldForceBuy) return false;
+    setRentToBuyInfo({
+      rentalTotal: check.rentalTotal,
+      buyTotal: check.buyTotal,
+      durationLabel: check.durationLabel,
+    });
+    setRentToBuyOpen(true);
+    return true;
   };
 
   const handlePeriodsChange = (next: number) => {
@@ -443,6 +432,7 @@ const CustomerListingDetail = () => {
       prescriptionRequired: data.prescriptionRequired,
       productVariantId: selectedVariantId || undefined,
       buyPrice: unitPrice,
+      isBuyEnabled: canBuy,
       ...(planBased
         ? {
             rentalPricingPlanId: selectedPlan.id,

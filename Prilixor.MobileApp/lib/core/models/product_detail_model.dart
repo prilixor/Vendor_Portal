@@ -1,4 +1,5 @@
 import 'product_variant_model.dart';
+import 'rental_pricing_plan_model.dart';
 import '../utils/media_url.dart';
 
 class ProductDetailModel {
@@ -33,6 +34,7 @@ class ProductDetailModel {
   final String? coaDocumentUrl;
   final List<ProductVariantModel> variants;
   final List<VariantInventoryModel> variantInventory;
+  final List<RentalPricingPlanModel> rentalPricingPlans;
 
   ProductDetailModel({
     required this.id,
@@ -66,10 +68,30 @@ class ProductDetailModel {
     this.coaDocumentUrl,
     this.variants = const [],
     this.variantInventory = const [],
+    this.rentalPricingPlans = const [],
   });
 
   List<ProductVariantModel> get activeVariants =>
       variants.where((v) => v.isActive).toList();
+
+  List<RentalPricingPlanModel> get activeRentalPlans {
+    final plans = rentalPricingPlans.where((p) => p.isActive && p.durationDays > 0).toList()
+      ..sort((a, b) => a.sortOrder != b.sortOrder
+          ? a.sortOrder.compareTo(b.sortOrder)
+          : a.durationDays.compareTo(b.durationDays));
+    return plans;
+  }
+
+  bool get hasActiveRentalPlans => activeRentalPlans.isNotEmpty;
+
+  RentalPricingPlanModel? get defaultRentalPlan {
+    final plans = activeRentalPlans;
+    if (plans.isEmpty) return null;
+    for (final p in plans) {
+      if (p.isRecommended) return p;
+    }
+    return plans.first;
+  }
 
   bool get canRent => !isChemical && isRentEnabled;
   bool get canBuy => isChemical || isBuyEnabled;
@@ -104,6 +126,7 @@ class ProductDetailModel {
   factory ProductDetailModel.fromJson(Map<String, dynamic> json) {
     final variantsJson = json['variants'] as List<dynamic>? ?? [];
     final invJson = json['variantInventory'] as List<dynamic>? ?? [];
+    final plansJson = json['rentalPricingPlans'] as List<dynamic>? ?? [];
 
     return ProductDetailModel(
       id: json['id'] ?? '',
@@ -147,6 +170,9 @@ class ProductDetailModel {
           .toList(),
       variantInventory: invJson
           .map((e) => VariantInventoryModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      rentalPricingPlans: plansJson
+          .map((e) => RentalPricingPlanModel.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
   }

@@ -206,15 +206,20 @@ class _CartLineCard extends StatelessWidget {
     int? nextQty,
   }) async {
     final buyPrice = line.buyPrice ?? 0;
-    if (buyPrice <= 0 || line.orderType != 'rent') return false;
+    if (!line.isBuyEnabled || buyPrice <= 0 || line.orderType != 'rent') return false;
     final check = evaluateRentVsBuy(
       buyPrice: buyPrice,
+      isBuyEnabled: line.isBuyEnabled,
       quantity: nextQty ?? line.quantity,
-      periods: nextPeriods ?? line.rentalDays,
-      unit: nextUnit ?? line.rentalPeriodUnit,
+      periods: line.usesPricingPlan
+          ? (line.rentalDurationDays ?? line.rentalDays)
+          : (nextPeriods ?? line.rentalDays),
+      unit: line.usesPricingPlan ? rentalUnitDay : (nextUnit ?? line.rentalPeriodUnit),
       dailyRent: line.dailyRent,
       weeklyRent: line.weeklyRent,
       monthlyRent: line.monthlyRent,
+      planFinalPrice: line.usesPricingPlan ? line.rentalFinalPrice : null,
+      planDurationLabel: line.usesPricingPlan ? line.rentalDurationLabel : null,
     );
     if (!check.shouldForceBuy) return false;
 
@@ -238,7 +243,7 @@ class _CartLineCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final avail = cart.availableQuantityFor(line);
     final overStock = avail != null && line.quantity > avail;
-    final canBuy = line.isBuyEnabled || line.buyPrice != null || line.orderType == 'buy';
+    final canBuy = line.isBuyEnabled || line.orderType == 'buy';
     final unitRate = rateForUnit(
       line.rentalPeriodUnit,
       dailyRent: line.dailyRent,
@@ -305,7 +310,11 @@ class _CartLineCard extends StatelessWidget {
                     Text(
                       line.orderType == 'buy'
                           ? 'Buy · ₹${(line.buyPrice ?? (line.dailyRent * 30)).toStringAsFixed(0)}'
-                          : '₹${unitRate.toStringAsFixed(0)}${periodLabel.per} · ${formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)} · deposit ₹${line.securityDeposit.toStringAsFixed(0)}',
+                          : line.usesPricingPlan
+                              ? '${line.rentalDurationLabel ?? 'Plan'} · ₹${(line.rentalFinalPrice ?? 0).toStringAsFixed(0)}'
+                                  '${line.rentalNormalPrice != null && line.rentalNormalPrice! > (line.rentalFinalPrice ?? 0) ? ' (was ₹${line.rentalNormalPrice!.toStringAsFixed(0)})' : ''}'
+                                  ' · deposit ₹${line.securityDeposit.toStringAsFixed(0)}'
+                              : '₹${unitRate.toStringAsFixed(0)}${periodLabel.per} · ${formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)} · deposit ₹${line.securityDeposit.toStringAsFixed(0)}',
                       style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
                     ),
                     const SizedBox(height: 6),
@@ -357,6 +366,21 @@ class _CartLineCard extends StatelessWidget {
             ),
           if (line.orderType == 'rent') ...[
             const SizedBox(height: 12),
+            if (line.usesPricingPlan)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Text(
+                  'Rental period: ${line.rentalDurationLabel ?? '${line.rentalDurationDays ?? line.rentalDays} days'} (set by catalog)',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              )
+            else ...[
             Text('Rental period', style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             _SegmentedToggle(
@@ -392,6 +416,7 @@ class _CartLineCard extends StatelessWidget {
                 );
               },
             ),
+            ],
           ],
           _StepperRow(
             label: 'Quantity',
