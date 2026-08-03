@@ -21,6 +21,7 @@ import 'features/auth/login_screen.dart';
 import 'features/auth/register_screen.dart';
 import 'features/dashboard/vendor_dashboard.dart';
 import 'shared/widgets/offline_banner.dart';
+import 'shared/widgets/brand_splash.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -124,13 +125,9 @@ class _AuthGateState extends State<AuthGate> {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     if (auth.isBootstrapping) {
-      return Scaffold(
+      return BrandSplash(
         backgroundColor: AppTheme.bgColor,
-        body: Center(
-          child: CircularProgressIndicator(
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
+        label: 'Loading BlinksMed Vendor…',
       );
     }
     if (auth.isAuthenticated) {
@@ -166,7 +163,7 @@ class WelcomeScreen extends StatelessWidget {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(24),
                     child: Image.asset(
-                      'assets/branding/app_icon.png',
+                      'assets/branding/logo.png',
                       width: 112,
                       height: 112,
                       fit: BoxFit.cover,

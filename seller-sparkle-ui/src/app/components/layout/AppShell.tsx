@@ -38,6 +38,7 @@ import {
 import { VendorVerificationBanner } from "@/app/components/vendor/VendorVerificationBanner";
 
 import { SupportChat } from "@/app/components/support/SupportChat";
+import { BrandBootSplash } from "@/app/components/shared/BrandMark";
 
 
 
@@ -284,7 +285,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
 
 
-  if (isHydrating) return <div className="min-h-screen w-full bg-background" />;
+  if (isHydrating) return <BrandBootSplash />;
 
 
 

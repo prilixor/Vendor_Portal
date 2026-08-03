@@ -7,8 +7,8 @@
     <meta name="description" content="BlinksMed medical equipment rental marketplace. Browse, rent, manage, and return equipment in one place." />
     <meta name="author" content="BlinksMed" />
 
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/og-image.jpg" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
 
     <meta property="og:site_name" content="BlinksMed" />
     <meta property="og:title" content="BlinksMed — Rent · Manage · Return" />
@@ -19,7 +19,7 @@
     <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="BlinksMed" />
+    <meta property="og:image:alt" content="BlinksMed — Buy | Rent | Care" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="BlinksMed — Rent · Manage · Return" />
@@ -29,9 +29,43 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <style>
+      /* Instant branded paint before React boots (avoids blank/Lovable flash). */
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        background: #0f172a;
+        color: #94a3b8;
+        font-family: Inter, system-ui, sans-serif;
+        font-size: 0.875rem;
+        font-weight: 500;
+      }
+      #boot-splash img {
+        width: 96px;
+        height: 96px;
+        border-radius: 1rem;
+        object-fit: cover;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      }
+      #boot-splash.boot-splash--hide {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 180ms ease;
+      }
+    </style>
   </head>
 
   <body>
+    <div id="boot-splash" aria-live="polite" aria-busy="true">
+      <img src="/branding/blinksmed-logo.png" alt="BlinksMed" width="96" height="96" />
+      <span>Loading BlinksMed…</span>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

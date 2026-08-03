@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { NavLink } from "@/app/components/shared/NavLink";
 import { useLocation, Link } from "react-router-dom";
-import { ChevronLeft, Lock, Sparkles, X } from "lucide-react";
+import { ChevronLeft, Lock, X } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
 import { NavSection } from "@/app/helpers/navigation";
 import { Badge } from "@/app/components/ui/badge";
@@ -11,6 +11,7 @@ import { useCart } from "@/app/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
 import { useNotificationContext } from "@/app/contexts/NotificationContext";
+import { BrandMark } from "@/app/components/shared/BrandMark";
 
 interface SidebarProps {
   variant?: "vendor" | "admin" | "customer";
@@ -101,9 +102,7 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
           <X className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
-            <Sparkles className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <BrandMark />
           {!collapsed && (
             <div className="overflow-hidden">
               <p className="truncate text-sm font-bold leading-tight">{brandHeading ?? "Vendor Portal"}</p>

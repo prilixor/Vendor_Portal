@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Stethoscope, Loader2, MapPin, ExternalLink, Copy, Check, ShoppingBag } from "lucide-react";
+import { Loader2, MapPin, ExternalLink, Copy, Check, ShoppingBag } from "lucide-react";
 import { apiClient } from "@/app/services/apiClient";
 import { toast } from "sonner";
+import { BrandMark } from "@/app/components/shared/BrandMark";
 
 type PublicHospital = {
   id: string;
@@ -96,9 +97,7 @@ const DoctorPublicPage = () => {
 
       <div className="relative mx-auto flex min-h-screen max-w-lg flex-col px-4 py-8 sm:px-6">
         <header className="mb-8 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-400 to-emerald-700 shadow-lg shadow-teal-900/40">
-            <Stethoscope className="h-5 w-5 text-white" />
-          </div>
+          <BrandMark size="lg" />
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-200/80">BlinksMed</p>
             <p className="text-sm text-teal-50/70">Doctor reference</p>

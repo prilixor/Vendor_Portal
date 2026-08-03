@@ -1,12 +1,13 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/app/guards/AuthContext";
 import { getPortalHostKind } from "@/app/helpers/portalHost";
+import { BrandBootSplash } from "@/app/components/shared/BrandMark";
 
 const Index = () => {
   const { user, isHydrating } = useAuth();
   const portal = getPortalHostKind();
 
-  if (isHydrating) return null;
+  if (isHydrating) return <BrandBootSplash />;
 
   if (!user) {
     if (portal === "admin") return <Navigate to="/admin/login" replace />;

@@ -1,11 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BlinksMed">
-  <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#14b8a6"/>
-      <stop offset="100%" stop-color="#0ea5e9"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="14" fill="url(#g)"/>
-  <path fill="#fff" d="M32 14c1.1 0 2 .9 2 2v6.2l4.4-4.4a2 2 0 0 1 2.8 2.8L36.8 25H43a2 2 0 1 1 0 4h-6.2l4.4 4.4a2 2 0 1 1-2.8 2.8L34 31.8V38a2 2 0 1 1-4 0v-6.2l-4.4 4.4a2 2 0 1 1-2.8-2.8L27.2 29H21a2 2 0 1 1 0-4h6.2l-4.4-4.4a2 2 0 1 1 2.8-2.8L30 22.2V16c0-1.1.9-2 2-2z"/>
-  <circle cx="32" cy="48" r="3" fill="#fff"/>
+  <rect width="64" height="64" rx="14" fill="#F8FAFC"/>
+  <text x="32" y="40" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#00338D">B</text>
+  <rect x="28" y="18" width="8" height="8" fill="#fff"/>
+  <rect x="30" y="16" width="4" height="12" fill="#fff"/>
+  <path d="M14 44 C22 52, 42 50, 50 34" fill="none" stroke="#4CAF27" stroke-width="5" stroke-linecap="round"/>
 </svg>
