@@ -28,6 +28,15 @@ public class CustomerRentalOrder : AuditableEntity<Guid>, ISoftDelete
     public DateOnly? EndDate { get; set; }
     public bool IsExtended { get; set; }
     public Guid? ProductVariantId { get; set; }
+    /// <summary>Selected Admin rental duration plan (null for legacy week/month orders).</summary>
+    public Guid? RentalPricingPlanId { get; set; }
+    public string? RentalDurationLabel { get; set; }
+    public int? RentalDurationDays { get; set; }
+    public decimal? RentalNormalPrice { get; set; }
+    /// <summary>none | fixed | percentage</summary>
+    public string? RentalDiscountType { get; set; }
+    public decimal? RentalDiscountValue { get; set; }
+    public decimal? RentalFinalPrice { get; set; }
     /// <summary>Set when an admin staff member placed the order on behalf of the customer.</summary>
     public Guid? PlacedByAdminId { get; set; }
 

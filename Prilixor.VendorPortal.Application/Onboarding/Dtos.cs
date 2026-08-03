@@ -124,7 +124,8 @@ public sealed record ProductDto(
     string? BaseUnit = null,
     string? SdsDocumentUrl = null,
     string? CoaDocumentUrl = null,
-    int FavoriteCount = 0);
+    int FavoriteCount = 0,
+    List<ProductRentalPricingPlanDto>? RentalPricingPlans = null);
 
 public sealed record ProductVariantDto(
     string Id,
@@ -134,6 +135,27 @@ public sealed record ProductVariantDto(
     string SizeUnit,
     decimal VendorPrice,
     decimal BuyPrice,
+    bool IsActive);
+
+public sealed record ProductRentalPricingPlanDto(
+    string Id,
+    string ProductId,
+    string DurationLabel,
+    int DurationDays,
+    decimal NormalPrice,
+    string DiscountType,
+    decimal DiscountValue,
+    decimal FinalRentalPrice,
+    bool IsRecommended,
+    bool IsActive,
+    int SortOrder,
+    string? RentalDurationMasterId = null);
+
+public sealed record RentalDurationMasterDto(
+    string Id,
+    string DurationLabel,
+    int DurationDays,
+    int SortOrder,
     bool IsActive);
 
 public sealed record ProductImageDto(

@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Lock, Minus, Package, Plus, ShoppingBag, Trash2 } from "lucide-react";
-import { useCart } from "@/app/contexts/CartContext";
+import { estimateCartLineRent, useCart } from "@/app/contexts/CartContext";
 import type { CartLine } from "@/app/contexts/CartContext";
 import { Button } from "@/app/components/ui/button";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
@@ -15,7 +15,6 @@ import { BackLink } from "@/app/components/shared/BackLink";
 import {
   RENTAL_UNIT_LABELS,
   RENTAL_UNITS_VISIBLE_IN_UI,
-  estimateRent,
   evaluateRentVsBuy,
   formatRentalDuration,
   rateForUnit,
@@ -282,17 +281,15 @@ function CartLineCard({
   const actualOrderType: "rent" | "buy" =
     canRent && canBuy ? line.orderType : canBuy ? "buy" : "rent";
 
+  const isPlanBased = actualOrderType === "rent" && !!line.rentalPricingPlanId && line.rentalFinalPrice != null;
   const isOverStock = availableQuantity !== undefined && line.quantity > availableQuantity;
   const linePrice = line.buyPrice ?? line.dailyRent * 30;
-  const lineRent =
-    actualOrderType === "buy"
-      ? linePrice * line.quantity
-      : estimateRent(line.rentalPeriodUnit, line.rentalDays, line.quantity, {
-          dailyRent: line.dailyRent,
-          weeklyRent: line.weeklyRent,
-          monthlyRent: line.monthlyRent,
-        });
+  const lineRent = estimateCartLineRent({ ...line, orderType: actualOrderType });
   const unitRate = rateForUnit(line.rentalPeriodUnit, line);
+  const planSavings =
+    isPlanBased && line.rentalNormalPrice != null
+      ? Math.max(0, Number(line.rentalNormalPrice) - Number(line.rentalFinalPrice ?? 0))
+      : 0;
   const listingTo = `/customer/shop/${encodeURIComponent(line.listingId)}`;
   const thumbUrl = resolveItemImageUrl({
     primaryImageUrl: imageUrl ?? line.primaryImageUrl,
@@ -317,6 +314,21 @@ function CartLineCard({
     qty?: number;
   }): boolean => {
     if (!canBuy || (line.buyPrice ?? 0) <= 0) return false;
+    if (isPlanBased) {
+      const qty = next.qty ?? line.quantity;
+      const rentalTotal = Number(line.rentalFinalPrice ?? 0) * qty;
+      const buyTotal = Number(line.buyPrice ?? 0) * qty;
+      if (buyTotal > 0 && rentalTotal >= buyTotal) {
+        setRentToBuyInfo({
+          rentalTotal,
+          buyTotal,
+          durationLabel: line.rentalDurationLabel || `${line.rentalDurationDays ?? line.rentalDays} days`,
+        });
+        setRentToBuyOpen(true);
+        return true;
+      }
+      return false;
+    }
     const check = evaluateRentVsBuy({
       buyPrice: line.buyPrice,
       quantity: next.qty ?? line.quantity,
@@ -357,6 +369,26 @@ function CartLineCard({
               <p className="text-xs leading-relaxed text-muted-foreground tabular-nums sm:text-[13px]">
                 {actualOrderType === "buy" ? (
                   <>₹{linePrice.toFixed(0)} each</>
+                ) : isPlanBased ? (
+                  <>
+                    {line.rentalDurationLabel || `${line.rentalDurationDays} days`}
+                    {planSavings > 0 ? (
+                      <>
+                        <span className="mx-1.5 text-border">·</span>
+                        <span className="line-through">₹{Number(line.rentalNormalPrice).toFixed(0)}</span>{" "}
+                        <span className="font-medium text-foreground">
+                          ₹{Number(line.rentalFinalPrice).toFixed(0)}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="mx-1.5 text-border">·</span>
+                        ₹{Number(line.rentalFinalPrice).toFixed(0)}
+                      </>
+                    )}
+                    <span className="mx-1.5 text-border">·</span>
+                    Deposit ₹{line.securityDeposit.toFixed(0)}
+                  </>
                 ) : (
                   <>
                     ₹{unitRate.toFixed(0)}
@@ -368,6 +400,11 @@ function CartLineCard({
                   </>
                 )}
               </p>
+              {isPlanBased ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Starts on delivery · {line.rentalDurationDays ?? line.rentalDays} day rental
+                </p>
+              ) : null}
             </div>
 
             <div className="flex shrink-0 flex-col items-end gap-1">
@@ -414,7 +451,7 @@ function CartLineCard({
               </div>
             ) : null}
 
-            {actualOrderType === "rent" ? (
+            {actualOrderType === "rent" && !isPlanBased ? (
               <div className="shrink-0">
                 <SegmentTrack tone="muted">
                   {RENTAL_UNITS_VISIBLE_IN_UI.map((u) => (
@@ -434,7 +471,7 @@ function CartLineCard({
               </div>
             ) : null}
 
-            {actualOrderType === "rent" ? (
+            {actualOrderType === "rent" && !isPlanBased ? (
               <div className="w-36 shrink-0">
                 <StepperField
                   label={RENTAL_UNIT_LABELS[line.rentalPeriodUnit].plural}
@@ -448,7 +485,7 @@ function CartLineCard({
                 />
               </div>
             ) : null}
-            
+
             <div className="w-36 shrink-0">
               <StepperField
                 label="Quantity"

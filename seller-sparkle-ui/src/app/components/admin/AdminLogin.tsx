@@ -61,11 +61,11 @@ const AdminLogin = () => {
         mustChangePassword: !!response.user.mustChangePassword,
       };
       localStorage.setItem("adminUser", JSON.stringify(adminUser));
-      localStorage.setItem("vendor_portal_token", response.token);
+      // Dedicated admin token — must not share vendor_portal_token with impersonation tabs.
+      apiClient.setAdminAuthToken(response.token);
       if (response.refreshToken) {
         localStorage.setItem("vendor_portal_refresh_token", response.refreshToken);
       }
-      apiClient.setAuthToken(response.token);
       if (response.user.mustChangePassword) {
         toast.message("Please change your temporary password.");
         window.location.href = "/admin/settings";

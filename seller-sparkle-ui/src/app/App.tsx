@@ -46,6 +46,7 @@ import ProductManagement from "@/app/components/admin/ProductManagement";
 import ChemicalManagement from "@/app/components/admin/ChemicalManagement";
 import AdminDoctors from "@/app/components/admin/AdminDoctors";
 import AdminHospitals from "@/app/components/admin/AdminHospitals";
+import AdminRentalDurations from "@/app/components/admin/AdminRentalDurations";
 import Admins from "@/app/components/admin/Admins";
 import AdminRoles from "@/app/components/admin/AdminRoles";
 import AdminCustomers, { AdminCustomerDetail } from "@/app/components/admin/AdminCustomers";
@@ -132,6 +133,7 @@ const App = () => (
               <Route path="vendors" element={<Vendors />} />
               <Route path="vendors/:vendorId" element={<VendorDetails />} />
               <Route path="products" element={<ProductManagement />} />
+              <Route path="rental-durations" element={<AdminRentalDurations />} />
               <Route path="chemicals" element={<ChemicalManagement />} />
               <Route path="doctors" element={<AdminDoctors />} />
               <Route path="hospitals" element={<AdminHospitals />} />

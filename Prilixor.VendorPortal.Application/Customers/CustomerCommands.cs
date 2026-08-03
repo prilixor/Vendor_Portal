@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.Extensions.Options;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Customers;
 using Prilixor.VendorPortal.Domain.Options;
@@ -381,7 +382,9 @@ public sealed record CartLineRequest(
     Guid? DoctorId = null,
     Guid? HospitalId = null,
     string? ContactNumber = null,
-    string? ReferenceNumber = null);
+    string? ReferenceNumber = null,
+    Guid? RentalPricingPlanId = null,
+    DateOnly? RentalStartDate = null);
 
 public sealed record CustomerOrderQuoteDto(
     decimal SubtotalAmount,
@@ -485,7 +488,14 @@ public sealed record CustomerOrderDto(
     string? HospitalName = null,
     string? HospitalCity = null,
     string? DoctorContactNumber = null,
-    string? DoctorUniqueCode = null);
+    string? DoctorUniqueCode = null,
+    Guid? RentalPricingPlanId = null,
+    string? RentalDurationLabel = null,
+    int? RentalDurationDays = null,
+    decimal? RentalNormalPrice = null,
+    string? RentalDiscountType = null,
+    decimal? RentalDiscountValue = null,
+    decimal? RentalFinalPrice = null);
 internal static class CustomerOrderPricingRules
 {
     public static string NormalizeDeliveryOption(string? option) =>
@@ -532,7 +542,37 @@ internal static class CustomerOrderPricingRules
             return line;
 
         convertedToBuy = true;
-        return line with { OrderType = "buy", RentalDays = 0, RentalPeriodUnit = RentalPeriod.Day };
+        return line with
+        {
+            OrderType = "buy",
+            RentalDays = 0,
+            RentalPeriodUnit = RentalPeriod.Day,
+            RentalPricingPlanId = null,
+            RentalStartDate = null
+        };
+    }
+
+    public static ProductRentalPricingPlanDto? ResolveActiveRentalPlan(
+        VendorProductListingAggregate aggregate,
+        Guid? rentalPricingPlanId)
+    {
+        if (!rentalPricingPlanId.HasValue || rentalPricingPlanId.Value == Guid.Empty)
+            return null;
+
+        var planId = rentalPricingPlanId.Value.ToString();
+        return aggregate.RentalPricingPlans.FirstOrDefault(p =>
+            p.IsActive && string.Equals(p.Id, planId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static decimal ResolveVendorDailyEquivalent(VendorProductListingAggregate aggregate)
+    {
+        if (aggregate.VendorDailyRent > 0m)
+            return aggregate.VendorDailyRent;
+        if (aggregate.VendorWeeklyRent > 0m)
+            return decimal.Round(aggregate.VendorWeeklyRent / 7m, 4, MidpointRounding.AwayFromZero);
+        if (aggregate.VendorMonthlyRent > 0m)
+            return decimal.Round(aggregate.VendorMonthlyRent / 30m, 4, MidpointRounding.AwayFromZero);
+        return 0m;
     }
 
     public static bool RequiresAddress(string deliveryOption) =>
@@ -590,6 +630,12 @@ internal static class CustomerOrderPricingRules
             return unitBuyPrice * line.Quantity;
         }
 
+        var plan = ResolveActiveRentalPlan(aggregate, line.RentalPricingPlanId);
+        if (plan is not null)
+        {
+            return plan.FinalRentalPrice * line.Quantity;
+        }
+
         var customerRate = RentalPeriod.SelectCustomerRate(
             line.RentalPeriodUnit, aggregate.DailyRent, aggregate.WeeklyRent, aggregate.MonthlyRent);
         return customerRate * line.RentalDays * line.Quantity;
@@ -618,6 +664,12 @@ internal static class CustomerOrderPricingRules
         {
             var unitVendorBuyPrice = aggregate.VendorBuyPrice ?? (aggregate.VendorDailyRent * options.BuyPriceMultiplierFromDailyRent);
             return unitVendorBuyPrice * line.Quantity;
+        }
+
+        var plan = ResolveActiveRentalPlan(aggregate, line.RentalPricingPlanId);
+        if (plan is not null)
+        {
+            return ResolveVendorDailyEquivalent(aggregate) * plan.DurationDays * line.Quantity;
         }
 
         var vendorRate = RentalPeriod.SelectVendorRate(
@@ -759,7 +811,9 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
         foreach (var line in request.Lines)
         {
             var orderType = CustomerOrderPricingRules.NormalizeOrderType(line.OrderType);
-            if (orderType == "rent" && line.RentalDays <= 0)
+            if (orderType == "rent"
+                && line.RentalDays <= 0
+                && (!line.RentalPricingPlanId.HasValue || line.RentalPricingPlanId.Value == Guid.Empty))
             {
                 return Result.Failure<CustomerOrderQuoteDto>(new Error(
                     "customers.rental_days_required",
@@ -770,6 +824,17 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
             var agg = await customers.GetListingForCustomerAsync(line.ListingId, cancellationToken);
             if (agg is null)
                 return Result.Failure<CustomerOrderQuoteDto>(new Error("customers.listing_not_found", "Listing not found.", ErrorCategory.NotFound));
+
+            if (orderType == "rent"
+                && line.RentalPricingPlanId.HasValue
+                && line.RentalPricingPlanId.Value != Guid.Empty
+                && CustomerOrderPricingRules.ResolveActiveRentalPlan(agg, line.RentalPricingPlanId) is null)
+            {
+                return Result.Failure<CustomerOrderQuoteDto>(new Error(
+                    "customers.rental_plan_not_found",
+                    $"Selected rental pricing plan is not available for \"{agg.ListingTitle}\".",
+                    ErrorCategory.Validation));
+            }
 
             if (orderType == "buy" && !agg.IsBuyEnabled)
             {
@@ -948,7 +1013,26 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
 
             var effectiveLine = CustomerOrderPricingRules.ApplyRentExceedsBuyRule(agg, line, options, out _);
             var orderType = CustomerOrderPricingRules.NormalizeOrderType(effectiveLine.OrderType);
-            if (orderType == "rent" && effectiveLine.RentalDays <= 0)
+            ProductRentalPricingPlanDto? selectedPlan = null;
+            if (orderType == "rent"
+                && effectiveLine.RentalPricingPlanId.HasValue
+                && effectiveLine.RentalPricingPlanId.Value != Guid.Empty)
+            {
+                selectedPlan = CustomerOrderPricingRules.ResolveActiveRentalPlan(agg, effectiveLine.RentalPricingPlanId);
+                if (selectedPlan is null)
+                {
+                    failed.Add(new FailedCustomerOrderLineDto(
+                        line.ListingId,
+                        line.Quantity,
+                        line.RentalDays,
+                        orderType,
+                        "customers.rental_plan_not_found",
+                        "Selected rental pricing plan is not available."));
+                    continue;
+                }
+            }
+
+            if (orderType == "rent" && effectiveLine.RentalDays <= 0 && selectedPlan is null)
             {
                 failed.Add(new FailedCustomerOrderLineDto(
                     line.ListingId,
@@ -1124,11 +1208,29 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
 
             var orderNumber = $"{baseOrderNumber}-{lineIndex + 1:D2}";
             lineIndex++;
+            // Provisional dates only — final Start/End are set when vendor marks Active (delivery day).
             var start = DateOnly.FromDateTime(DateTime.UtcNow.Date);
-            var periodUnit = RentalPeriod.Normalize(effectiveLine.RentalPeriodUnit);
-            var end = orderType == "buy"
-                ? start
-                : RentalPeriod.AddPeriods(start, periodUnit, effectiveLine.RentalDays);
+            string periodUnit;
+            int rentalDays;
+            DateOnly end;
+            if (orderType == "buy")
+            {
+                periodUnit = RentalPeriod.Day;
+                rentalDays = 0;
+                end = start;
+            }
+            else if (selectedPlan is not null)
+            {
+                periodUnit = RentalPeriod.Day;
+                rentalDays = selectedPlan.DurationDays;
+                end = start.AddDays(selectedPlan.DurationDays);
+            }
+            else
+            {
+                periodUnit = RentalPeriod.Normalize(effectiveLine.RentalPeriodUnit);
+                rentalDays = effectiveLine.RentalDays;
+                end = RentalPeriod.AddPeriods(start, periodUnit, rentalDays);
+            }
 
             var order = new CustomerRentalOrder
             {
@@ -1137,8 +1239,8 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 VendorProductListingId = agg.ListingId,
                 CustomerAddressId = request.CustomerAddressId,
                 Quantity = effectiveLine.Quantity,
-                RentalDays = orderType == "buy" ? 0 : effectiveLine.RentalDays,
-                RentalPeriodUnit = orderType == "buy" ? RentalPeriod.Day : periodUnit,
+                RentalDays = rentalDays,
+                RentalPeriodUnit = periodUnit,
                 OrderType = orderType,
                 DeliveryOption = deliveryOption,
                 Status = "awaiting_vendor_acceptance",
@@ -1153,6 +1255,15 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 StartDate = start,
                 EndDate = end,
                 ProductVariantId = effectiveLine.ProductVariantId,
+                RentalPricingPlanId = selectedPlan is not null && Guid.TryParse(selectedPlan.Id, out var planGuid)
+                    ? planGuid
+                    : null,
+                RentalDurationLabel = selectedPlan?.DurationLabel,
+                RentalDurationDays = selectedPlan?.DurationDays,
+                RentalNormalPrice = selectedPlan?.NormalPrice,
+                RentalDiscountType = selectedPlan?.DiscountType,
+                RentalDiscountValue = selectedPlan?.DiscountValue,
+                RentalFinalPrice = selectedPlan?.FinalRentalPrice,
                 PlacedByAdminId = request.PlacedByAdminId,
             };
 
@@ -1331,7 +1442,14 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 primaryImg,
                 ProductVariantId: order.ProductVariantId,
                 DoctorId: order.DoctorReference?.DoctorId,
-                HospitalId: null));
+                HospitalId: null,
+                RentalPricingPlanId: order.RentalPricingPlanId,
+                RentalDurationLabel: order.RentalDurationLabel,
+                RentalDurationDays: order.RentalDurationDays,
+                RentalNormalPrice: order.RentalNormalPrice,
+                RentalDiscountType: order.RentalDiscountType,
+                RentalDiscountValue: order.RentalDiscountValue,
+                RentalFinalPrice: order.RentalFinalPrice));
         }
 
         if (request.PlacedByAdminId is Guid adminId && placed.Count > 0)
@@ -1449,7 +1567,14 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
                 HospitalName: null,
                 HospitalCity: null,
                 DoctorContactNumber: row.Doctor?.ContactNumber,
-                DoctorUniqueCode: row.Doctor?.UniqueCode));
+                DoctorUniqueCode: row.Doctor?.UniqueCode,
+                RentalPricingPlanId: o.RentalPricingPlanId,
+                RentalDurationLabel: o.RentalDurationLabel,
+                RentalDurationDays: o.RentalDurationDays,
+                RentalNormalPrice: o.RentalNormalPrice,
+                RentalDiscountType: o.RentalDiscountType,
+                RentalDiscountValue: o.RentalDiscountValue,
+                RentalFinalPrice: o.RentalFinalPrice));
         }
 
         return Result.Success(list);
@@ -1508,7 +1633,14 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
             HospitalName: null,
             HospitalCity: null,
             DoctorContactNumber: row.Doctor?.ContactNumber,
-            DoctorUniqueCode: row.Doctor?.UniqueCode));
+            DoctorUniqueCode: row.Doctor?.UniqueCode,
+            RentalPricingPlanId: o.RentalPricingPlanId,
+            RentalDurationLabel: o.RentalDurationLabel,
+            RentalDurationDays: o.RentalDurationDays,
+            RentalNormalPrice: o.RentalNormalPrice,
+            RentalDiscountType: o.RentalDiscountType,
+            RentalDiscountValue: o.RentalDiscountValue,
+            RentalFinalPrice: o.RentalFinalPrice));
     }
 }
 
@@ -1687,6 +1819,13 @@ internal sealed class CancelCustomerOrderCommandHandler(ICustomerRepository cust
             HospitalName: null,
             HospitalCity: null,
             DoctorContactNumber: row.Doctor?.ContactNumber,
-            DoctorUniqueCode: row.Doctor?.UniqueCode));
+            DoctorUniqueCode: row.Doctor?.UniqueCode,
+            RentalPricingPlanId: o.RentalPricingPlanId,
+            RentalDurationLabel: o.RentalDurationLabel,
+            RentalDurationDays: o.RentalDurationDays,
+            RentalNormalPrice: o.RentalNormalPrice,
+            RentalDiscountType: o.RentalDiscountType,
+            RentalDiscountValue: o.RentalDiscountValue,
+            RentalFinalPrice: o.RentalFinalPrice));
     }
 }

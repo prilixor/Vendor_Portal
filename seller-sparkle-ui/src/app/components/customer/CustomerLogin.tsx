@@ -35,7 +35,6 @@ const CustomerLogin = () => {
     setLoading(true);
     try {
       await login(email.trim(), password, "customer");
-      localStorage.removeItem("adminUser");
       toast.success("Welcome!");
       window.location.href = from.startsWith("/customer") ? from : "/customer/shop";
     } catch (error) {

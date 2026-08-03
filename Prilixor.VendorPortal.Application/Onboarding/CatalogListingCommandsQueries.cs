@@ -82,6 +82,19 @@ public sealed record CreateOrUpdateProductVariantDto(
     decimal BuyPrice,
     bool IsActive);
 
+public sealed record CreateOrUpdateProductRentalPricingPlanDto(
+    string? Id,
+    string DurationLabel,
+    int DurationDays,
+    decimal NormalPrice,
+    string DiscountType,
+    decimal DiscountValue,
+    decimal FinalRentalPrice,
+    bool IsRecommended,
+    bool IsActive,
+    int SortOrder,
+    string? RentalDurationMasterId = null);
+
 public sealed record CreateProductCommand(
     string CategoryId,
     string ProductName,
@@ -104,6 +117,7 @@ public sealed record CreateProductCommand(
     bool IsBuyEnabled,
     bool IsActive,
     List<CreateOrUpdateProductVariantDto>? Variants = null,
+    List<CreateOrUpdateProductRentalPricingPlanDto>? RentalPricingPlans = null,
     string? CasNumber = null,
     string? ChemicalFormula = null,
     decimal? PurityPercentage = null,
@@ -183,6 +197,11 @@ internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository re
             }).ToList();
         }
 
+        if (request.RentalPricingPlans != null && request.RentalPricingPlans.Count > 0)
+        {
+            ProductRentalPricingPlanSync.Apply(entity, request.RentalPricingPlans);
+        }
+
         var hasChemicalFields = !string.IsNullOrWhiteSpace(request.CasNumber)
             || !string.IsNullOrWhiteSpace(request.ChemicalFormula)
             || !string.IsNullOrWhiteSpace(request.BaseUnit)
@@ -250,7 +269,8 @@ internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository re
             entity.ChemicalProperty?.BaseUnit,
             entity.ChemicalProperty?.SdsDocumentUrl,
             entity.ChemicalProperty?.CoaDocumentUrl,
-            0));
+            0,
+            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans)));
     }
 }
 
@@ -329,7 +349,8 @@ internal sealed class GetProductsQueryHandler(
             x.ChemicalProperty?.BaseUnit,
             x.ChemicalProperty?.SdsDocumentUrl,
             x.ChemicalProperty?.CoaDocumentUrl,
-            favoriteCounts.GetValueOrDefault(x.Id, 0))).ToList();
+            favoriteCounts.GetValueOrDefault(x.Id, 0),
+            ProductRentalPricingPlanSync.ToDtos(x.RentalPricingPlans))).ToList();
 
         return Result.Success(result);
     }
@@ -607,6 +628,7 @@ internal sealed class UpsertVendorProductListingCommandHandler(
 
         var wasOutOfStock = entity.Id != Guid.Empty && entity.AvailableQuantity <= 0;
         var isNowAvailable = request.AvailableQuantity > 0;
+        var isCreate = entity.Id == Guid.Empty;
 
         entity.ListingTitle = request.ListingTitle;
         entity.DailyRent = product.DailyRent;
@@ -652,6 +674,28 @@ internal sealed class UpsertVendorProductListingCommandHandler(
         }
 
         await repository.SaveChangesAsync(cancellationToken);
+
+        // Notify Admins so they can set / review catalog pricing for the listing's product.
+        var chemicalIds = await repository.GetChemicalProductIdsAsync(new List<Guid> { productId }, cancellationToken);
+        var listingKind = chemicalIds.Contains(productId) ? "chemical" : "product";
+        var admins = await repository.GetAdminUsersAsync(cancellationToken);
+        var systemAdmin = admins.FirstOrDefault(a => a.IsActive) ?? admins.FirstOrDefault();
+        if (systemAdmin is not null)
+        {
+            var action = isCreate ? "vendor.listing.created" : "vendor.listing.updated";
+            var verb = isCreate ? "created" : "updated";
+            await repository.AddAdminAuditLogAsync(new AdminAuditLog
+            {
+                Id = Guid.NewGuid(),
+                AdminId = systemAdmin.Id,
+                ActionType = action,
+                EntityType = "vendor_product_listing",
+                EntityId = entity.Id,
+                NewValue = $"{{\"kind\":\"{listingKind}\",\"status\":\"{verb}\",\"productId\":\"{productId}\",\"vendorId\":\"{vendorId}\"}}",
+                Notes = $"{vendor.Email} {verb} {listingKind} listing \"{entity.ListingTitle}\". Review and set catalog pricing if needed."
+            }, cancellationToken);
+            await repository.SaveChangesAsync(cancellationToken);
+        }
         
         var favoriteCounts = await customerRepository.GetFavoriteCountsByProductsAsync(cancellationToken);
 
@@ -1301,6 +1345,7 @@ public sealed record UpdateProductCommand(
     bool IsBuyEnabled,
     bool IsActive,
     List<CreateOrUpdateProductVariantDto>? Variants = null,
+    List<CreateOrUpdateProductRentalPricingPlanDto>? RentalPricingPlans = null,
     string? CasNumber = null,
     string? ChemicalFormula = null,
     decimal? PurityPercentage = null,
@@ -1412,6 +1457,11 @@ internal sealed class UpdateProductCommandHandler(IVendorOnboardingRepository re
             }
         }
 
+        if (request.RentalPricingPlans != null)
+        {
+            ProductRentalPricingPlanSync.Apply(entity, request.RentalPricingPlans);
+        }
+
         var hasChemicalFields = !string.IsNullOrWhiteSpace(request.CasNumber)
             || !string.IsNullOrWhiteSpace(request.ChemicalFormula)
             || !string.IsNullOrWhiteSpace(request.BaseUnit)
@@ -1489,7 +1539,153 @@ internal sealed class UpdateProductCommandHandler(IVendorOnboardingRepository re
             entity.ChemicalProperty?.BaseUnit,
             entity.ChemicalProperty?.SdsDocumentUrl,
             entity.ChemicalProperty?.CoaDocumentUrl,
-            0));
+            0,
+            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans)));
+    }
+}
+
+internal static class ProductRentalPricingPlanSync
+{
+    public static List<ProductRentalPricingPlanDto> ToDtos(IEnumerable<ProductRentalPricingPlan>? plans) =>
+        plans?
+            .OrderBy(p => p.SortOrder)
+            .ThenBy(p => p.DurationDays)
+            .Select(p => new ProductRentalPricingPlanDto(
+                p.Id.ToString(),
+                p.ProductId.ToString(),
+                p.DurationLabel,
+                p.DurationDays,
+                p.NormalPrice,
+                p.DiscountType,
+                p.DiscountValue,
+                p.FinalRentalPrice,
+                p.IsRecommended,
+                p.IsActive,
+                p.SortOrder,
+                p.RentalDurationMasterId?.ToString()))
+            .ToList()
+        ?? [];
+
+    public static void Apply(Product entity, IReadOnlyList<CreateOrUpdateProductRentalPricingPlanDto> plans)
+    {
+        entity.RentalPricingPlans ??= new List<ProductRentalPricingPlan>();
+        var keepIds = new HashSet<Guid>();
+        ProductRentalPricingPlan? lastRecommended = null;
+
+        foreach (var dto in plans)
+        {
+            var discountType = RentalPricingPlanMath.NormalizeDiscountType(dto.DiscountType);
+            var finalPrice = RentalPricingPlanMath.ComputeFinalPrice(dto.NormalPrice, discountType, dto.DiscountValue);
+            var label = (dto.DurationLabel ?? string.Empty).Trim();
+            Guid? masterId = null;
+            if (!string.IsNullOrWhiteSpace(dto.RentalDurationMasterId)
+                && Guid.TryParse(dto.RentalDurationMasterId, out var parsedMasterId))
+            {
+                masterId = parsedMasterId;
+            }
+
+            ProductRentalPricingPlan? existing = null;
+            if (!string.IsNullOrWhiteSpace(dto.Id) && Guid.TryParse(dto.Id, out var planId))
+            {
+                existing = entity.RentalPricingPlans.FirstOrDefault(x => x.Id == planId);
+            }
+
+            if (existing is null && masterId.HasValue)
+            {
+                existing = entity.RentalPricingPlans.FirstOrDefault(x => x.RentalDurationMasterId == masterId);
+            }
+
+            if (existing is null)
+            {
+                existing = new ProductRentalPricingPlan
+                {
+                    Id = !string.IsNullOrWhiteSpace(dto.Id) && Guid.TryParse(dto.Id, out var newId)
+                        ? newId
+                        : Guid.CreateVersion7(),
+                    ProductId = entity.Id,
+                };
+                entity.RentalPricingPlans.Add(existing);
+            }
+
+            existing.DurationLabel = label;
+            existing.DurationDays = Math.Max(1, dto.DurationDays);
+            existing.NormalPrice = Math.Max(0m, dto.NormalPrice);
+            existing.DiscountType = discountType;
+            existing.DiscountValue = Math.Max(0m, dto.DiscountValue);
+            existing.FinalRentalPrice = finalPrice;
+            existing.IsRecommended = dto.IsRecommended;
+            existing.IsActive = dto.IsActive;
+            existing.SortOrder = dto.SortOrder;
+            existing.RentalDurationMasterId = masterId;
+
+            keepIds.Add(existing.Id);
+            if (dto.IsRecommended)
+            {
+                lastRecommended = existing;
+            }
+        }
+
+        foreach (var plan in entity.RentalPricingPlans)
+        {
+            plan.IsRecommended = lastRecommended is not null && plan.Id == lastRecommended.Id;
+        }
+
+        var toRemove = entity.RentalPricingPlans.Where(x => !keepIds.Contains(x.Id)).ToList();
+        foreach (var tr in toRemove)
+        {
+            entity.RentalPricingPlans.Remove(tr);
+        }
+    }
+
+    /// <summary>
+    /// Builds / refreshes duration chart rows from active masters using daily rate.
+    /// Preserves existing discounts, offer flags, and best-value when re-importing.
+    /// </summary>
+    public static void SeedOrRefreshFromMasters(
+        Product entity,
+        IReadOnlyList<RentalDurationMaster> masters,
+        decimal dailyRate)
+    {
+        if (masters.Count == 0 || dailyRate <= 0m)
+        {
+            return;
+        }
+
+        var rate = Math.Max(0m, dailyRate);
+        var ordered = masters
+            .Where(m => m.IsActive && !m.IsDeleted)
+            .OrderBy(m => m.SortOrder)
+            .ThenBy(m => m.DurationDays)
+            .ToList();
+        if (ordered.Count == 0)
+        {
+            return;
+        }
+
+        entity.RentalPricingPlans ??= new List<ProductRentalPricingPlan>();
+        var dtos = ordered.Select(m =>
+        {
+            var existing =
+                entity.RentalPricingPlans.FirstOrDefault(p => p.RentalDurationMasterId == m.Id)
+                ?? entity.RentalPricingPlans.FirstOrDefault(p => p.DurationDays == m.DurationDays);
+            var normal = decimal.Round(rate * m.DurationDays, 2, MidpointRounding.AwayFromZero);
+            var discountType = existing?.DiscountType ?? RentalPricingPlanMath.None;
+            var discountValue = existing?.DiscountValue ?? 0m;
+            return new CreateOrUpdateProductRentalPricingPlanDto(
+                existing?.Id.ToString() ?? string.Empty,
+                m.DurationLabel,
+                m.DurationDays,
+                normal,
+                discountType,
+                discountValue,
+                RentalPricingPlanMath.ComputeFinalPrice(normal, discountType, discountValue),
+                existing?.IsRecommended ?? false,
+                existing?.IsActive ?? true,
+                m.SortOrder,
+                m.Id.ToString());
+        }).ToList();
+
+        Apply(entity, dtos);
     }
 }
 
@@ -1701,7 +1897,9 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
 
             // Reload categories to get their IDs for product mapping
             var allCategories = await repository.GetProductCategoriesAsync(cancellationToken);
-            var categoryMap = allCategories.ToDictionary(c => c.CategoryName, c => c.Id, StringComparer.OrdinalIgnoreCase);
+            var categoryMap = allCategories
+                .Where(c => c.IsChemical == request.IsChemicalTemplate)
+                .ToDictionary(c => c.CategoryName, c => c.Id, StringComparer.OrdinalIgnoreCase);
 
             // Fetch existing products to handle duplicates (updates instead of inserts)
             var existingProductsList = await repository.GetProductsAsync(null, cancellationToken);
@@ -1709,24 +1907,29 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                 .GroupBy(p => p.ProductName, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
+            var durationMasters = request.IsChemicalTemplate
+                ? new List<RentalDurationMaster>()
+                : await repository.GetRentalDurationMastersAsync(activeOnly: true, cancellationToken);
+
             // Process Products sheet
             if (productsSheet != null)
             {
                 var rowCount = productsSheet.Dimension?.Rows ?? 0;
+                var productHeaders = CatalogExcelSheet.BuildHeaderMap(productsSheet);
                 if (rowCount > 1) // Skip header row
                 {
                     for (int row = 2; row <= rowCount; row++)
                     {
                         try
                         {
-                            var categoryName = productsSheet.Cells[row, 1].Text?.Trim();
-                            var productName = productsSheet.Cells[row, 2].Text?.Trim();
-                            var brandName = productsSheet.Cells[row, 3].Text?.Trim();
+                            var categoryName = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "category_name", 1);
+                            var productName = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "product_name", 2);
+                            var brandName = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "brand_name", 3);
                             
                             string? modelName = null;
                             string? shortDescription;
                             string? longDescription;
-                            // Daily rent kept in domain (defaults to 0); Excel exposes weekly/monthly only (UI parity).
+                            string? dailyRentText = null;
                             string? weeklyRentText = null;
                             string? monthlyRentText = null;
                             string? securityDepositText = null;
@@ -1736,7 +1939,7 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                             string? isBuyEnabledText = null;
                             string? isActiveText;
                             
-                            // Vendor pricing (weekly/monthly only in Excel)
+                            string? vendorDailyRentText = null;
                             string? vendorWeeklyRentText = null;
                             string? vendorMonthlyRentText = null;
                             string? vendorSecurityDepositText = null;
@@ -1752,66 +1955,83 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
 
                             if (request.IsChemicalTemplate)
                             {
-                                shortDescription = productsSheet.Cells[row, 4].Text?.Trim();
-                                longDescription = productsSheet.Cells[row, 5].Text?.Trim();
-                                buyPriceText = productsSheet.Cells[row, 6].Text?.Trim();
-                                gstPercentText = productsSheet.Cells[row, 7].Text?.Trim();
-                                casNumber = productsSheet.Cells[row, 8].Text?.Trim();
-                                chemicalFormula = productsSheet.Cells[row, 9].Text?.Trim();
-                                purityText = productsSheet.Cells[row, 10].Text?.Trim();
-                                molecularWeightText = productsSheet.Cells[row, 11].Text?.Trim();
-                                baseUnit = productsSheet.Cells[row, 12].Text?.Trim();
-                                sdsDocumentUrl = productsSheet.Cells[row, 13].Text?.Trim();
-                                coaDocumentUrl = productsSheet.Cells[row, 14].Text?.Trim();
-                                isActiveText = productsSheet.Cells[row, 15].Text?.Trim();
-                                vendorBuyPriceText = productsSheet.Cells[row, 16].Text?.Trim();
+                                shortDescription = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "short_description", 4);
+                                longDescription = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "long_description", 5);
+                                buyPriceText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "buy_price", 6);
+                                gstPercentText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "gst_percent", 7);
+                                casNumber = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "cas_number", 8);
+                                chemicalFormula = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "chemical_formula", 9);
+                                purityText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "purity_percentage", 10);
+                                molecularWeightText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "molecular_weight", 11);
+                                baseUnit = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "base_unit", 12);
+                                sdsDocumentUrl = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "sds_document_url", 13);
+                                coaDocumentUrl = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "coa_document_url", 14);
+                                isActiveText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "is_active", 15);
+                                vendorBuyPriceText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "vendor_buy_price", 16);
 
                                 isRentEnabledText = "false";
                                 isBuyEnabledText = "true";
                             }
                             else
                             {
-                                // Equipment columns (no daily_* — matches Admin UI):
-                                // 1 category_name, 2 product_name, 3 brand_name, 4 model_name,
-                                // 5 short_description, 6 long_description,
-                                // 7 weekly_rent, 8 monthly_rent, 9 security_deposit, 10 buy_price,
-                                // 11 gst_percent, 12 is_rent_enabled, 13 is_buy_enabled, 14 is_active,
-                                // 15 vendor_weekly_rent, 16 vendor_monthly_rent,
-                                // 17 vendor_security_deposit, 18 vendor_buy_price
-                                modelName = productsSheet.Cells[row, 4].Text?.Trim();
-                                shortDescription = productsSheet.Cells[row, 5].Text?.Trim();
-                                longDescription = productsSheet.Cells[row, 6].Text?.Trim();
-                                weeklyRentText = productsSheet.Cells[row, 7].Text?.Trim();
-                                monthlyRentText = productsSheet.Cells[row, 8].Text?.Trim();
-                                securityDepositText = productsSheet.Cells[row, 9].Text?.Trim();
-                                buyPriceText = productsSheet.Cells[row, 10].Text?.Trim();
-                                gstPercentText = productsSheet.Cells[row, 11].Text?.Trim();
-                                isRentEnabledText = productsSheet.Cells[row, 12].Text?.Trim();
-                                isBuyEnabledText = productsSheet.Cells[row, 13].Text?.Trim();
-                                isActiveText = productsSheet.Cells[row, 14].Text?.Trim();
-                                vendorWeeklyRentText = productsSheet.Cells[row, 15].Text?.Trim();
-                                vendorMonthlyRentText = productsSheet.Cells[row, 16].Text?.Trim();
-                                vendorSecurityDepositText = productsSheet.Cells[row, 17].Text?.Trim();
-                                vendorBuyPriceText = productsSheet.Cells[row, 18].Text?.Trim();
+                                // Equipment (current): daily_rent + vendor_daily_rent
+                                // Legacy templates with weekly_rent/monthly_rent are still accepted.
+                                modelName = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "model_name", 4);
+                                shortDescription = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "short_description", 5);
+                                longDescription = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "long_description", 6);
+                                dailyRentText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "daily_rent", 7);
+                                weeklyRentText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "weekly_rent");
+                                monthlyRentText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "monthly_rent");
+                                // New positional layout (no weekly/monthly): 7 daily, 8 deposit, 9 buy, ...
+                                // Legacy positional: 7 weekly, 8 monthly, 9 deposit — detect via headers.
+                                var hasDailyHeader = productHeaders.ContainsKey("daily_rent");
+                                var hasWeeklyHeader = productHeaders.ContainsKey("weekly_rent");
+                                if (hasWeeklyHeader && !hasDailyHeader)
+                                {
+                                    securityDepositText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "security_deposit", 9);
+                                    buyPriceText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "buy_price", 10);
+                                    gstPercentText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "gst_percent", 11);
+                                    isRentEnabledText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "is_rent_enabled", 12);
+                                    isBuyEnabledText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "is_buy_enabled", 13);
+                                    isActiveText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "is_active", 14);
+                                    vendorWeeklyRentText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "vendor_weekly_rent", 15);
+                                    vendorMonthlyRentText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "vendor_monthly_rent", 16);
+                                    vendorSecurityDepositText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "vendor_security_deposit", 17);
+                                    vendorBuyPriceText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "vendor_buy_price", 18);
+                                }
+                                else
+                                {
+                                    securityDepositText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "security_deposit", 8);
+                                    buyPriceText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "buy_price", 9);
+                                    gstPercentText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "gst_percent", 10);
+                                    isRentEnabledText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "is_rent_enabled", 11);
+                                    isBuyEnabledText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "is_buy_enabled", 12);
+                                    isActiveText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "is_active", 13);
+                                    vendorDailyRentText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "vendor_daily_rent", 14);
+                                    vendorWeeklyRentText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "vendor_weekly_rent");
+                                    vendorMonthlyRentText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "vendor_monthly_rent");
+                                    vendorSecurityDepositText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "vendor_security_deposit", 15);
+                                    vendorBuyPriceText = CatalogExcelSheet.Cell(productsSheet, row, productHeaders, "vendor_buy_price", 16);
+                                }
                             }
 
                             // Validate required fields
                             if (string.IsNullOrEmpty(categoryName))
                             {
-                                errors.Add(new ExcelUploadErrorDto(row, "Products", "category_name", "Category name is required."));
+                                errors.Add(new ExcelUploadErrorDto(row, request.IsChemicalTemplate ? "Chemicals" : "Products", "category_name", "Category name is required."));
                                 continue;
                             }
 
                             if (string.IsNullOrEmpty(productName))
                             {
-                                errors.Add(new ExcelUploadErrorDto(row, "Products", "product_name", "Product name is required."));
+                                errors.Add(new ExcelUploadErrorDto(row, request.IsChemicalTemplate ? "Chemicals" : "Products", "product_name", "Product name is required."));
                                 continue;
                             }
 
                             // Find category
                             if (!categoryMap.TryGetValue(categoryName, out var categoryId))
                             {
-                                errors.Add(new ExcelUploadErrorDto(row, "Products", "category_name", $"Category '{categoryName}' not found. Create it in the Categories sheet first."));
+                                errors.Add(new ExcelUploadErrorDto(row, request.IsChemicalTemplate ? "Chemicals" : "Products", "category_name", $"Category '{categoryName}' not found. Create it in the Categories sheet first (matching {(request.IsChemicalTemplate ? "chemical" : "equipment")} catalog)."));
                                 continue;
                             }
 
@@ -1819,18 +2039,42 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                             bool isActive = string.IsNullOrEmpty(isActiveText) || isActiveText?.ToLower() == "true" || isActiveText?.ToLower() == "yes" || isActiveText == "1";
                             bool isRentEnabled = string.IsNullOrEmpty(isRentEnabledText) || isRentEnabledText?.ToLower() == "true" || isRentEnabledText?.ToLower() == "yes" || isRentEnabledText == "1";
                             bool isBuyEnabled = string.IsNullOrEmpty(isBuyEnabledText) || isBuyEnabledText?.ToLower() == "true" || isBuyEnabledText?.ToLower() == "yes" || isBuyEnabledText == "1";
-                            if (!decimal.TryParse(weeklyRentText, out var weeklyRent)) weeklyRent = 0m;
-                            if (!decimal.TryParse(monthlyRentText, out var monthlyRent)) monthlyRent = 0m;
+
+                            var dailyRent = CatalogExcelSheet.ResolveDailyRate(dailyRentText, weeklyRentText, monthlyRentText);
+                            var vendorDailyRent = CatalogExcelSheet.ResolveDailyRate(vendorDailyRentText, vendorWeeklyRentText, vendorMonthlyRentText);
+                            if (vendorDailyRent <= 0m && dailyRent > 0m)
+                            {
+                                vendorDailyRent = dailyRent;
+                            }
+
+                            var weeklyRent = dailyRent > 0m ? decimal.Round(dailyRent * 7m, 2, MidpointRounding.AwayFromZero) : 0m;
+                            var monthlyRent = dailyRent > 0m ? decimal.Round(dailyRent * 30m, 2, MidpointRounding.AwayFromZero) : 0m;
+                            if (dailyRent <= 0m)
+                            {
+                                if (!decimal.TryParse(weeklyRentText, out weeklyRent)) weeklyRent = 0m;
+                                if (!decimal.TryParse(monthlyRentText, out monthlyRent)) monthlyRent = 0m;
+                            }
+
                             if (!decimal.TryParse(securityDepositText, out var securityDeposit)) securityDeposit = 0m;
                             decimal? buyPrice = null;
                             if (decimal.TryParse(buyPriceText, out var buyPriceParsed)) buyPrice = buyPriceParsed;
 
-                            decimal? vendorWeeklyRent = decimal.TryParse(vendorWeeklyRentText, out var vwr) ? vwr : (decimal?)null;
-                            decimal? vendorMonthlyRent = decimal.TryParse(vendorMonthlyRentText, out var vmr) ? vmr : (decimal?)null;
+                            decimal? vendorWeeklyRent = vendorDailyRent > 0m
+                                ? decimal.Round(vendorDailyRent * 7m, 2, MidpointRounding.AwayFromZero)
+                                : (decimal.TryParse(vendorWeeklyRentText, out var vwr) ? vwr : null);
+                            decimal? vendorMonthlyRent = vendorDailyRent > 0m
+                                ? decimal.Round(vendorDailyRent * 30m, 2, MidpointRounding.AwayFromZero)
+                                : (decimal.TryParse(vendorMonthlyRentText, out var vmr) ? vmr : null);
                             decimal? vendorSecurityDeposit = decimal.TryParse(vendorSecurityDepositText, out var vsd) ? vsd : (decimal?)null;
                             decimal? vendorBuyPrice = decimal.TryParse(vendorBuyPriceText, out var vbp) ? vbp : (decimal?)null;
 
                             if (!decimal.TryParse(gstPercentText, out var gstPercent)) gstPercent = 18m;
+
+                            if (!request.IsChemicalTemplate && isRentEnabled && dailyRent <= 0m)
+                            {
+                                errors.Add(new ExcelUploadErrorDto(row, "Products", "daily_rent", "daily_rent is required (and must be > 0) when is_rent_enabled is true."));
+                                continue;
+                            }
 
                             // Check for duplicates
                             if (existingProductsMap.TryGetValue(productName, out var existingProduct))
@@ -1841,10 +2085,12 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                                 existingProduct.ModelName = string.IsNullOrEmpty(modelName) ? null : modelName;
                                 existingProduct.ShortDescription = string.IsNullOrEmpty(shortDescription) ? null : shortDescription;
                                 existingProduct.LongDescription = string.IsNullOrEmpty(longDescription) ? null : longDescription;
+                                existingProduct.DailyRent = Math.Max(0m, dailyRent);
                                 existingProduct.WeeklyRent = Math.Max(0m, weeklyRent);
                                 existingProduct.MonthlyRent = Math.Max(0m, monthlyRent);
                                 existingProduct.SecurityDeposit = Math.Max(0m, securityDeposit);
                                 existingProduct.BuyPrice = buyPrice is > 0m ? buyPrice : null;
+                                existingProduct.VendorDailyRent = Math.Max(0m, vendorDailyRent);
                                 existingProduct.VendorWeeklyRent = Math.Max(0m, vendorWeeklyRent ?? weeklyRent);
                                 existingProduct.VendorMonthlyRent = Math.Max(0m, vendorMonthlyRent ?? monthlyRent);
                                 existingProduct.VendorSecurityDeposit = Math.Max(0m, vendorSecurityDeposit ?? securityDeposit);
@@ -1853,6 +2099,18 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                                 existingProduct.IsRentEnabled = isRentEnabled;
                                 existingProduct.IsBuyEnabled = isBuyEnabled;
                                 existingProduct.IsActive = isActive;
+
+                                if (!request.IsChemicalTemplate && isRentEnabled && dailyRent > 0m)
+                                {
+                                    if (durationMasters.Count == 0)
+                                    {
+                                        errors.Add(new ExcelUploadErrorDto(row, "Products", "daily_rent", "No active Rental Duration Masters found. Product rates were saved, but the duration price chart was not generated."));
+                                    }
+                                    else
+                                    {
+                                        ProductRentalPricingPlanSync.SeedOrRefreshFromMasters(existingProduct, durationMasters, dailyRent);
+                                    }
+                                }
 
                                 if (variantsLookup.TryGetValue(productName, out var pVariants))
                                 {
@@ -1896,18 +2154,19 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                                 // Create new product
                                 var product = new Product
                                 {
+                                    Id = Guid.CreateVersion7(),
                                     CategoryId = categoryId,
                                     ProductName = productName,
                                     BrandName = string.IsNullOrEmpty(brandName) ? null : brandName,
                                     ModelName = string.IsNullOrEmpty(modelName) ? null : modelName,
                                     ShortDescription = string.IsNullOrEmpty(shortDescription) ? null : shortDescription,
                                     LongDescription = string.IsNullOrEmpty(longDescription) ? null : longDescription,
-                                    DailyRent = 0m, // Hidden from Excel/UI; retained for future enablement
+                                    DailyRent = Math.Max(0m, dailyRent),
                                     WeeklyRent = Math.Max(0m, weeklyRent),
                                     MonthlyRent = Math.Max(0m, monthlyRent),
                                     SecurityDeposit = Math.Max(0m, securityDeposit),
                                     BuyPrice = buyPrice is > 0m ? buyPrice : null,
-                                    VendorDailyRent = 0m,
+                                    VendorDailyRent = Math.Max(0m, vendorDailyRent),
                                     VendorWeeklyRent = Math.Max(0m, vendorWeeklyRent ?? weeklyRent),
                                     VendorMonthlyRent = Math.Max(0m, vendorMonthlyRent ?? monthlyRent),
                                     VendorSecurityDeposit = Math.Max(0m, vendorSecurityDeposit ?? securityDeposit),
@@ -1916,8 +2175,21 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                                     IsRentEnabled = isRentEnabled,
                                     IsBuyEnabled = isBuyEnabled,
                                     IsActive = isActive,
-                                    Variants = new List<ProductVariant>()
+                                    Variants = new List<ProductVariant>(),
+                                    RentalPricingPlans = new List<ProductRentalPricingPlan>()
                                 };
+
+                                if (!request.IsChemicalTemplate && isRentEnabled && dailyRent > 0m)
+                                {
+                                    if (durationMasters.Count == 0)
+                                    {
+                                        errors.Add(new ExcelUploadErrorDto(row, "Products", "daily_rent", "No active Rental Duration Masters found. Product rates were saved, but the duration price chart was not generated."));
+                                    }
+                                    else
+                                    {
+                                        ProductRentalPricingPlanSync.SeedOrRefreshFromMasters(product, durationMasters, dailyRent);
+                                    }
+                                }
 
                                 if (variantsLookup.TryGetValue(productName, out var pVariants))
                                 {
@@ -1953,7 +2225,7 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                         }
                         catch (Exception ex)
                         {
-                            errors.Add(new ExcelUploadErrorDto(row, "Products", "row", $"Error processing row: {ex.Message}"));
+                            errors.Add(new ExcelUploadErrorDto(row, request.IsChemicalTemplate ? "Chemicals" : "Products", "row", $"Error processing row: {ex.Message}"));
                         }
                     }
                 }
@@ -1974,6 +2246,64 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
     }
 }
 
+internal static class CatalogExcelSheet
+{
+    public static Dictionary<string, int> BuildHeaderMap(ExcelWorksheet sheet)
+    {
+        var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var cols = sheet.Dimension?.Columns ?? 0;
+        for (var c = 1; c <= cols; c++)
+        {
+            var header = sheet.Cells[1, c].Text?.Trim();
+            if (!string.IsNullOrEmpty(header) && !map.ContainsKey(header))
+            {
+                map[header] = c;
+            }
+        }
+        return map;
+    }
+
+    public static string? Cell(
+        ExcelWorksheet sheet,
+        int row,
+        IReadOnlyDictionary<string, int> headers,
+        string headerName,
+        int? positionalFallback = null)
+    {
+        if (headers.TryGetValue(headerName, out var namedCol))
+        {
+            return sheet.Cells[row, namedCol].Text?.Trim();
+        }
+
+        if (positionalFallback is > 0)
+        {
+            return sheet.Cells[row, positionalFallback.Value].Text?.Trim();
+        }
+
+        return null;
+    }
+
+    public static decimal ResolveDailyRate(string? dailyText, string? weeklyText, string? monthlyText)
+    {
+        if (decimal.TryParse(dailyText, out var daily) && daily > 0m)
+        {
+            return decimal.Round(daily, 2, MidpointRounding.AwayFromZero);
+        }
+
+        if (decimal.TryParse(weeklyText, out var weekly) && weekly > 0m)
+        {
+            return decimal.Round(weekly / 7m, 2, MidpointRounding.AwayFromZero);
+        }
+
+        if (decimal.TryParse(monthlyText, out var monthly) && monthly > 0m)
+        {
+            return decimal.Round(monthly / 30m, 2, MidpointRounding.AwayFromZero);
+        }
+
+        return 0m;
+    }
+}
+
 // Download existing catalog data as Excel
 public sealed record DownloadCatalogExcelQuery(bool IsChemicalTemplate = false) : IQuery<byte[]>;
 
@@ -1988,7 +2318,9 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
             using var package = new ExcelPackage();
 
             // Get all categories and products
-            var categories = await repository.GetProductCategoriesAsync(cancellationToken);
+            var categories = (await repository.GetProductCategoriesAsync(cancellationToken))
+                .Where(c => c.IsChemical == request.IsChemicalTemplate)
+                .ToList();
             var products = await repository.GetProductsAsync(null, cancellationToken);
 
             // Create Categories sheet
@@ -2078,27 +2410,25 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
             }
             else
             {
-                // Daily rent omitted from Excel (UI parity); values remain 0 in DB unless set via API later.
+                // Align with Admin UI: daily rate is the source of truth; weekly/monthly derived on save/import.
                 productsSheet.Cells[1, 1].Value = "category_name";
                 productsSheet.Cells[1, 2].Value = "product_name";
                 productsSheet.Cells[1, 3].Value = "brand_name";
                 productsSheet.Cells[1, 4].Value = "model_name";
                 productsSheet.Cells[1, 5].Value = "short_description";
                 productsSheet.Cells[1, 6].Value = "long_description";
-                productsSheet.Cells[1, 7].Value = "weekly_rent";
-                productsSheet.Cells[1, 8].Value = "monthly_rent";
-                productsSheet.Cells[1, 9].Value = "security_deposit";
-                productsSheet.Cells[1, 10].Value = "buy_price";
-                productsSheet.Cells[1, 11].Value = "gst_percent";
-                productsSheet.Cells[1, 12].Value = "is_rent_enabled";
-                productsSheet.Cells[1, 13].Value = "is_buy_enabled";
-                productsSheet.Cells[1, 14].Value = "is_active";
-                productsSheet.Cells[1, 15].Value = "vendor_weekly_rent";
-                productsSheet.Cells[1, 16].Value = "vendor_monthly_rent";
-                productsSheet.Cells[1, 17].Value = "vendor_security_deposit";
-                productsSheet.Cells[1, 18].Value = "vendor_buy_price";
+                productsSheet.Cells[1, 7].Value = "daily_rent";
+                productsSheet.Cells[1, 8].Value = "security_deposit";
+                productsSheet.Cells[1, 9].Value = "buy_price";
+                productsSheet.Cells[1, 10].Value = "gst_percent";
+                productsSheet.Cells[1, 11].Value = "is_rent_enabled";
+                productsSheet.Cells[1, 12].Value = "is_buy_enabled";
+                productsSheet.Cells[1, 13].Value = "is_active";
+                productsSheet.Cells[1, 14].Value = "vendor_daily_rent";
+                productsSheet.Cells[1, 15].Value = "vendor_security_deposit";
+                productsSheet.Cells[1, 16].Value = "vendor_buy_price";
 
-                using (var headerRange = productsSheet.Cells[1, 1, 1, 18])
+                using (var headerRange = productsSheet.Cells[1, 1, 1, 16])
                 {
                     headerRange.Style.Font.Bold = true;
                     headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
@@ -2115,21 +2445,19 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
                     productsSheet.Cells[row, 4].Value = product.ModelName;
                     productsSheet.Cells[row, 5].Value = product.ShortDescription;
                     productsSheet.Cells[row, 6].Value = product.LongDescription;
-                    productsSheet.Cells[row, 7].Value = product.WeeklyRent;
-                    productsSheet.Cells[row, 8].Value = product.MonthlyRent;
-                    productsSheet.Cells[row, 9].Value = product.SecurityDeposit;
-                    productsSheet.Cells[row, 10].Value = product.BuyPrice;
-                    productsSheet.Cells[row, 11].Value = product.GstPercent;
-                    productsSheet.Cells[row, 12].Value = product.IsRentEnabled;
-                    productsSheet.Cells[row, 13].Value = product.IsBuyEnabled;
-                    productsSheet.Cells[row, 14].Value = product.IsActive;
-                    productsSheet.Cells[row, 15].Value = product.VendorWeeklyRent;
-                    productsSheet.Cells[row, 16].Value = product.VendorMonthlyRent;
-                    productsSheet.Cells[row, 17].Value = product.VendorSecurityDeposit;
-                    productsSheet.Cells[row, 18].Value = product.VendorBuyPrice;
+                    productsSheet.Cells[row, 7].Value = product.DailyRent;
+                    productsSheet.Cells[row, 8].Value = product.SecurityDeposit;
+                    productsSheet.Cells[row, 9].Value = product.BuyPrice;
+                    productsSheet.Cells[row, 10].Value = product.GstPercent;
+                    productsSheet.Cells[row, 11].Value = product.IsRentEnabled;
+                    productsSheet.Cells[row, 12].Value = product.IsBuyEnabled;
+                    productsSheet.Cells[row, 13].Value = product.IsActive;
+                    productsSheet.Cells[row, 14].Value = product.VendorDailyRent;
+                    productsSheet.Cells[row, 15].Value = product.VendorSecurityDeposit;
+                    productsSheet.Cells[row, 16].Value = product.VendorBuyPrice;
                     row++;
                 }
-                productsSheet.Cells[1, 1, 1, 18].AutoFitColumns();
+                productsSheet.Cells[1, 1, 1, 16].AutoFitColumns();
             }
 
             // Create Variants sheet if chemical template or if there are variants

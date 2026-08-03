@@ -53,6 +53,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<HospitalDoctor> HospitalDoctors => Set<HospitalDoctor>();
     public DbSet<ChemicalProperty> ChemicalProperties => Set<ChemicalProperty>();
     public DbSet<VendorVariantInventory> VendorVariantInventories => Set<VendorVariantInventory>();
+    public DbSet<RentalDurationMaster> RentalDurationMasters => Set<RentalDurationMaster>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Ignore<List<IDomainEvent>>()
@@ -320,6 +321,9 @@ public class ApplicationDbContext : DbContext
             entity.HasMany(x => x.Variants)
                 .WithOne(x => x.Product)
                 .HasForeignKey(x => x.ProductId);
+            entity.HasMany(x => x.RentalPricingPlans)
+                .WithOne(x => x.Product)
+                .HasForeignKey(x => x.ProductId);
         });
 
         modelBuilder.Entity<ChemicalProperty>(entity =>
@@ -360,6 +364,49 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(x => x.Product)
                 .WithMany(x => x.Variants)
                 .HasForeignKey(x => x.ProductId);
+        });
+
+        modelBuilder.Entity<ProductRentalPricingPlan>(entity =>
+        {
+            entity.ToTable("product_rental_pricing_plans");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.ProductId).HasColumnName("product_id");
+            entity.Property(x => x.DurationLabel).HasColumnName("duration_label");
+            entity.Property(x => x.DurationDays).HasColumnName("duration_days");
+            entity.Property(x => x.NormalPrice).HasColumnName("normal_price");
+            entity.Property(x => x.DiscountType).HasColumnName("discount_type");
+            entity.Property(x => x.DiscountValue).HasColumnName("discount_value");
+            entity.Property(x => x.FinalRentalPrice).HasColumnName("final_rental_price");
+            entity.Property(x => x.IsRecommended).HasColumnName("is_recommended");
+            entity.Property(x => x.IsActive).HasColumnName("is_active");
+            entity.Property(x => x.SortOrder).HasColumnName("sort_order");
+            entity.Property(x => x.RentalDurationMasterId).HasColumnName("rental_duration_master_id");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Ignore(x => x.CreatedBy);
+            entity.Ignore(x => x.ModifiedBy);
+            entity.HasOne(x => x.Product)
+                .WithMany(x => x.RentalPricingPlans)
+                .HasForeignKey(x => x.ProductId);
+        });
+
+        modelBuilder.Entity<RentalDurationMaster>(entity =>
+        {
+            entity.ToTable("rental_duration_masters");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.DurationLabel).HasColumnName("duration_label");
+            entity.Property(x => x.DurationDays).HasColumnName("duration_days");
+            entity.Property(x => x.SortOrder).HasColumnName("sort_order");
+            entity.Property(x => x.IsActive).HasColumnName("is_active");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
         });
 
         modelBuilder.Entity<ProductImage>(entity =>

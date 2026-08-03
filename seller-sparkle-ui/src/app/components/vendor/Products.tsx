@@ -16,7 +16,7 @@ import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { ProductListing } from "@/app/models";
-import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText, Loader2, Package, FlaskConical } from "lucide-react";
+import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText, Loader2, Package, FlaskConical, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
@@ -26,12 +26,15 @@ import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { apiClient } from "@/app/services/apiClient";
 import { vendorOnboardingApi, VendorFileFolderType, VendorVariantInventoryDto } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
-import { resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { Badge } from "@/app/components/ui/badge";
 
 type LocalListing = ProductListing & {
   productId: string;
   categoryId: string;
   buyPrice?: number;
+  vendorDailyRent?: number;
+  vendorBuyPrice?: number;
   gstPercent?: number;
   isRentEnabled?: boolean;
   isBuyEnabled?: boolean;
@@ -41,6 +44,7 @@ type LocalListing = ProductListing & {
   chemicalFormula?: string;
   isChemical?: boolean;
   variants?: any[];
+  rentalPricingPlans?: any[];
 };
 
 type CatalogCategory = {
@@ -58,6 +62,8 @@ type CatalogProduct = {
   monthlyRent: number;
   securityDeposit: number;
   buyPrice?: number;
+  vendorDailyRent?: number;
+  vendorBuyPrice?: number;
   gstPercent?: number;
   isRentEnabled?: boolean;
   isBuyEnabled?: boolean;
@@ -65,6 +71,7 @@ type CatalogProduct = {
   casNumber?: string;
   chemicalFormula?: string;
   variants?: any[];
+  rentalPricingPlans?: any[];
 };
 
 const normalizeListingStatus = (status: string): ProductListing["status"] => {
@@ -86,6 +93,8 @@ const blankListing = (category?: CatalogCategory, product?: CatalogProduct): Loc
   monthlyRent: product?.monthlyRent ?? 0,
   securityDeposit: product?.securityDeposit ?? 0,
   buyPrice: product?.buyPrice,
+  vendorDailyRent: product?.vendorDailyRent ?? 0,
+  vendorBuyPrice: product?.vendorBuyPrice,
   gstPercent: product?.gstPercent ?? 18,
   isRentEnabled: product?.isRentEnabled ?? true,
   isBuyEnabled: product?.isBuyEnabled ?? true,
@@ -95,6 +104,7 @@ const blankListing = (category?: CatalogCategory, product?: CatalogProduct): Loc
   createdAt: new Date().toISOString(),
   baseUnit: product?.baseUnit,
   variants: product?.variants || [],
+  rentalPricingPlans: product?.rentalPricingPlans || [],
 });
 
 /**
@@ -454,6 +464,8 @@ const Products = () => {
       monthlyRent: p.monthlyRent,
       securityDeposit: p.securityDeposit,
       buyPrice: p.buyPrice,
+      vendorDailyRent: p.vendorDailyRent ?? 0,
+      vendorBuyPrice: p.vendorBuyPrice,
       gstPercent: p.gstPercent,
       isRentEnabled: p.isRentEnabled,
       isBuyEnabled: p.isBuyEnabled,
@@ -461,6 +473,7 @@ const Products = () => {
       casNumber: p.casNumber,
       chemicalFormula: p.chemicalFormula,
       variants: p.variants,
+      rentalPricingPlans: p.rentalPricingPlans,
     }));
     const byProductId = new Map(mappedProducts.map((p) => [p.id, p]));
     const byCategoryId = new Map(mappedCategories.map((c) => [c.id, c]));
@@ -510,6 +523,8 @@ const Products = () => {
           monthlyRent: product?.monthlyRent ?? l.monthlyRent,
           securityDeposit: product?.securityDeposit ?? l.securityDeposit,
           buyPrice: product?.buyPrice,
+          vendorDailyRent: product?.vendorDailyRent ?? 0,
+          vendorBuyPrice: product?.vendorBuyPrice,
           gstPercent: product?.gstPercent ?? 18,
           isRentEnabled: product?.isRentEnabled ?? true,
           isBuyEnabled: product?.isBuyEnabled ?? true,
@@ -526,6 +541,7 @@ const Products = () => {
           casNumber: product?.casNumber,
           chemicalFormula: product?.chemicalFormula,
           variants: product?.variants || [],
+          rentalPricingPlans: product?.rentalPricingPlans || [],
           isChemical,
         };
       })
@@ -1061,7 +1077,7 @@ const Products = () => {
               <tr>
                 <th className="px-3 py-3 font-semibold sm:px-4">Listing</th>
                 <th className="px-3 py-3 font-semibold sm:px-4">Category</th>
-                {activeTab === "equipment" && <th className="px-3 py-3 font-semibold text-right sm:px-4">Rent (Admin)</th>}
+                {activeTab === "equipment" && <th className="px-3 py-3 font-semibold text-right sm:px-4">Daily rate (Admin)</th>}
                 {activeTab === "chemical" && <th className="px-3 py-3 font-semibold text-right sm:px-4">Buy Price (Admin)</th>}
                 {activeTab === "equipment" && <th className="px-3 py-3 font-semibold text-right sm:px-4">Deposit</th>}
                 <th className="px-3 py-3 font-semibold text-right sm:px-4">Qty</th>
@@ -1100,8 +1116,10 @@ const Products = () => {
                   <td className="px-3 py-3 text-muted-foreground sm:px-4">{p.category}</td>
                   {activeTab === "equipment" && (
                     <td className="px-3 py-3 text-right sm:px-4">
-                      <div className="font-mono tabular-nums text-sm">₹{p.weeklyRent ?? 0}<span className="text-muted-foreground">/w</span></div>
-                      <div className="font-mono tabular-nums text-xs text-muted-foreground mt-0.5">₹{p.monthlyRent ?? 0}/mo</div>
+                      <div className="font-mono tabular-nums text-sm">
+                        ₹{p.dailyRent ?? 0}
+                        <span className="text-muted-foreground">/day</span>
+                      </div>
                     </td>
                   )}
                   {activeTab === "chemical" && (
@@ -1226,9 +1244,8 @@ const Products = () => {
                   {activeTab === "equipment" ? (
                     <>
                       <div className="min-w-0">
-                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Rent (Admin)</dt>
-                        <dd className="font-mono tabular-nums text-sm">₹{p.weeklyRent ?? 0}/w</dd>
-                        <dd className="font-mono tabular-nums text-xs text-muted-foreground">₹{p.monthlyRent ?? 0}/mo</dd>
+                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Daily rate (Admin)</dt>
+                        <dd className="font-mono tabular-nums text-sm">₹{p.dailyRent ?? 0}/day</dd>
                       </div>
                       <div className="min-w-0 text-right">
                         <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Deposit</dt>
@@ -1287,258 +1304,386 @@ const Products = () => {
       </Card>
       )}
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[min(92dvh,900px)] w-[calc(100vw-1.5rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+          <DialogHeader className="shrink-0 space-y-1 border-b border-border px-5 py-4 pr-12 text-left sm:px-6">
             <DialogTitle>{products.some((p) => p.id === editing?.id) ? "Edit listing" : "New listing"}</DialogTitle>
+            <DialogDescription>
+              Pricing is set by Admin. Update title, quantity, and status for your listing.
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground px-1 -mt-1 mb-2">
-            Fields marked <span className="text-destructive">*</span> are required.
-          </p>
           {editing && (
-            <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
-              <FormGrid cols={2}>
-              <div className="space-y-1.5">
-                <Label required>Category {editing.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(Cannot be changed)</span>}</Label>
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={editing.categoryId}
-                    onValueChange={(v) => {
-                      onCategoryChange(v);
-                      clearFieldError("categoryId");
-                    }}
-                    disabled={!!editing.id}
-                  >
-                    <SelectTrigger className={`pl-1 ${fieldErrors.categoryId ? "border-destructive" : ""}`}><SelectValue className="text-left min-w-0" /></SelectTrigger>
-                    <SelectContent>
-                      {categories.filter(c => catalogProducts.some(p => p.categoryId === c.id && (activeTab === "chemical" ? isChemicalCatalogProduct(p) : !isChemicalCatalogProduct(p)))).map((c) => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {/* Vendor catalog creation disabled - managed by admin */}
-                  {/* <Button variant="outline" onClick={openCreateCategory} type="button" disabled={busy}>New</Button> */}
-                </div>
-                <FieldError message={fieldErrors.categoryId} />
-              </div>
-              <div className="space-y-1.5">
-                <Label required>Product (from catalog) {editing.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(Cannot be changed)</span>}</Label>
-                <div className="flex items-center gap-2">
-                  <Select value={editing.productId} disabled={!!editing.id} onValueChange={(v) => {
-                    const selected = catalogProducts.find((p) => p.id === v);
-                    setEditing({
-                      ...editing,
-                      productId: v,
-                      productName: selected?.name ?? "",
-                      dailyRent: selected?.dailyRent ?? 0,
-                      weeklyRent: selected?.weeklyRent ?? 0,
-                      monthlyRent: selected?.monthlyRent ?? 0,
-                      securityDeposit: selected?.securityDeposit ?? 0,
-                      buyPrice: selected?.buyPrice,
-                      gstPercent: selected?.gstPercent ?? 18,
-                      isRentEnabled: selected?.isRentEnabled ?? true,
-                      isBuyEnabled: selected?.isBuyEnabled ?? true,
-                    });
-                    clearFieldError("productId");
-                  }}>
-                    <SelectTrigger className={`pl-1 ${fieldErrors.productId ? "border-destructive" : ""}`}><SelectValue placeholder="Choose product" className="text-left min-w-0" /></SelectTrigger>
-                    <SelectContent>
-                      {catalogProducts.filter((p) => p.categoryId === editing.categoryId && (activeTab === "chemical" ? isChemicalCatalogProduct(p) : !isChemicalCatalogProduct(p))).map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {/* Vendor catalog creation disabled - managed by admin */}
-                  {/* <Button variant="outline" onClick={openCreateProduct} type="button" disabled={busy}>New</Button> */}
-                </div>
-                <FieldError message={fieldErrors.productId} />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label required>Listing title</Label>
-                <Input
-                  value={editing.title}
-                  onChange={(e) => {
-                    setEditing({ ...editing, title: e.target.value });
-                    clearFieldError("title");
-                  }}
-                  placeholder="E.g. Sony A7 III — Weekly Rental"
-                  className={fieldErrors.title ? "border-destructive" : ""}
-                />
-                <FieldError message={fieldErrors.title} />
-              </div>
-              {activeTab === "equipment" && (
-                <div className="space-y-1.5">
-                  <Label>Weekly rent (Admin-set)</Label>
-                  <Input value={`₹${editing.weeklyRent ?? 0}`} readOnly />
-                </div>
-              )}
-              {activeTab === "equipment" && (
-                <div className="space-y-1.5">
-                  <Label>Monthly rent (Admin-set)</Label>
-                  <Input value={`₹${editing.monthlyRent}`} readOnly />
-                </div>
-              )}
-              {activeTab === "chemical" && (
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="font-semibold text-xs text-muted-foreground">Chemical Sizing & Pricing Chart (Admin-set)</Label>
-                  {(!editing.variants || editing.variants.length === 0) ? (
-                    <Input value={editing.buyPrice ? `₹${editing.buyPrice}` : "Not enabled"} readOnly className="bg-muted/50" />
-                  ) : (
-                    <div className="overflow-hidden rounded-md border border-border mt-1">
-                      <table className="w-full text-xs text-left border-collapse bg-muted/20">
-                        <thead>
-                          <tr className="border-b border-border bg-muted/50 text-muted-foreground">
-                            <th className="p-2 font-semibold">SKU</th>
-                            <th className="p-2 font-semibold text-right">Size Value</th>
-                            <th className="p-2 font-semibold">Size Unit</th>
-                            <th className="p-2 font-semibold text-right">Vendor Payout Price</th>
-                            <th className="p-2 font-semibold text-right">Customer Buy Price</th>
-                            <th className="p-2 font-semibold text-center">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {editing.variants.map((v: any, idx: number) => (
-                            <tr key={idx} className="border-b border-border last:border-0 hover:bg-muted/10">
-                              <td className="p-2 font-mono text-[11px]">{v.sku}</td>
-                              <td className="p-2 text-right font-medium">{v.sizeValue}</td>
-                              <td className="p-2">{v.sizeUnit}</td>
-                              <td className="p-2 text-right font-medium text-emerald-600 dark:text-emerald-400">₹{v.vendorPrice}</td>
-                              <td className="p-2 text-right font-medium text-indigo-600 dark:text-indigo-400">₹{v.buyPrice}</td>
-                              <td className="p-2 text-center">
-                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${v.isActive ? 'bg-green-50 text-green-700 dark:bg-green-950/20 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-950/20 dark:text-red-400'}`}>
-                                  {v.isActive ? 'Active' : 'Inactive'}
-                                </span>
-                              </td>
-                            </tr>
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+              <section className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Catalog</p>
+                <FormGrid cols={2}>
+                  <div className="space-y-1.5">
+                    <Label required>
+                      Category
+                      {editing.id ? (
+                        <span className="ml-1.5 text-xs font-normal text-muted-foreground">(locked)</span>
+                      ) : null}
+                    </Label>
+                    <Select
+                      value={editing.categoryId}
+                      onValueChange={(v) => {
+                        onCategoryChange(v);
+                        clearFieldError("categoryId");
+                      }}
+                      disabled={!!editing.id}
+                    >
+                      <SelectTrigger className={cn(editing.id && "bg-muted/40", fieldErrors.categoryId && "border-destructive")}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories
+                          .filter((c) =>
+                            catalogProducts.some(
+                              (p) =>
+                                p.categoryId === c.id &&
+                                (activeTab === "chemical"
+                                  ? isChemicalCatalogProduct(p)
+                                  : !isChemicalCatalogProduct(p)),
+                            ),
+                          )
+                          .map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
                           ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              )}
+                      </SelectContent>
+                    </Select>
+                    <FieldError message={fieldErrors.categoryId} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label required>
+                      Product
+                      {editing.id ? (
+                        <span className="ml-1.5 text-xs font-normal text-muted-foreground">(locked)</span>
+                      ) : null}
+                    </Label>
+                    <Select
+                      value={editing.productId}
+                      disabled={!!editing.id}
+                      onValueChange={(v) => {
+                        const selected = catalogProducts.find((p) => p.id === v);
+                        setEditing({
+                          ...editing,
+                          productId: v,
+                          productName: selected?.name ?? "",
+                          dailyRent: selected?.dailyRent ?? 0,
+                          weeklyRent: selected?.weeklyRent ?? 0,
+                          monthlyRent: selected?.monthlyRent ?? 0,
+                          securityDeposit: selected?.securityDeposit ?? 0,
+                          buyPrice: selected?.buyPrice,
+                          vendorDailyRent: selected?.vendorDailyRent ?? 0,
+                          vendorBuyPrice: selected?.vendorBuyPrice,
+                          gstPercent: selected?.gstPercent ?? 18,
+                          isRentEnabled: selected?.isRentEnabled ?? true,
+                          isBuyEnabled: selected?.isBuyEnabled ?? true,
+                          variants: selected?.variants || [],
+                          rentalPricingPlans: selected?.rentalPricingPlans || [],
+                        });
+                        clearFieldError("productId");
+                      }}
+                    >
+                      <SelectTrigger className={cn(editing.id && "bg-muted/40", fieldErrors.productId && "border-destructive")}>
+                        <SelectValue placeholder="Choose product" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {catalogProducts
+                          .filter(
+                            (p) =>
+                              p.categoryId === editing.categoryId &&
+                              (activeTab === "chemical"
+                                ? isChemicalCatalogProduct(p)
+                                : !isChemicalCatalogProduct(p)),
+                          )
+                          .map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <FieldError message={fieldErrors.productId} />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label required>Listing title</Label>
+                    <Input
+                      value={editing.title}
+                      onChange={(e) => {
+                        setEditing({ ...editing, title: e.target.value });
+                        clearFieldError("title");
+                      }}
+                      placeholder="E.g. Air Mattress — Ready to Rent"
+                      className={fieldErrors.title ? "border-destructive" : ""}
+                    />
+                    <FieldError message={fieldErrors.title} />
+                  </div>
+                </FormGrid>
+              </section>
+
               {activeTab === "equipment" && (
-                <div className="space-y-1.5">
-                  <Label>Security deposit (Admin-set)</Label>
-                  <Input value={`₹${editing.securityDeposit}`} readOnly />
-                </div>
-              )}
-              <div className="space-y-1.5">
-                <Label>GST % (Admin-set)</Label>
-                <Input value={`${editing.gstPercent ?? 18}%`} readOnly />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Modes (Admin-set)</Label>
-                <Input value={`${editing.isRentEnabled ? "Rent" : ""}${editing.isRentEnabled && editing.isBuyEnabled ? " + " : ""}${editing.isBuyEnabled ? "Buy" : ""}${!editing.isRentEnabled && !editing.isBuyEnabled ? "Unavailable" : ""}`} readOnly />
-              </div>
-              {/* Quantity field: for equipment show single number, for chemicals show per-variant stock table */}
-              {activeTab === "equipment" && (
-                <div className="space-y-1.5">
-                  <Label>
-                    Quantity
-                    {editing.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(Manage via Inventory)</span>}
-                  </Label>
-                  <Input 
-                    type="number" 
-                    value={editing.quantity} 
-                    readOnly={!!editing.id} 
-                    className={editing.id ? "bg-muted/50" : ""}
-                    onChange={(e) => setEditing({ ...editing, quantity: Number(e.target.value) })} 
-                  />
-                </div>
-              )}
-              {activeTab === "chemical" && (
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="font-semibold text-xs">
-                    Stock per Packaging Size
-                    {editing.id && (
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">
-                        (Manage via Inventory after first save)
-                      </span>
-                    )}
-                  </Label>
-                  {(!editing.variants || editing.variants.length === 0) ? (
-                    <p className="text-xs text-muted-foreground border border-border rounded-md p-3 bg-muted/20">
-                      No packaging sizes defined for this chemical yet. Ask Admin to add variants (e.g. 1L, 5L) first.
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Admin pricing
                     </p>
+                    <Badge variant="secondary" className="font-normal">
+                      <Shield className="mr-1 h-3 w-3" />
+                      Read-only
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="rounded-xl border border-border bg-muted/20 px-3 py-2.5 space-y-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Customer
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-[11px] text-muted-foreground">Daily rate</p>
+                          <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
+                            ₹{Number(editing.dailyRent ?? 0).toLocaleString("en-IN")}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-muted-foreground">Deposit</p>
+                          <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
+                            ₹{Number(editing.securityDeposit ?? 0).toLocaleString("en-IN")}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-muted-foreground">Buy price</p>
+                          <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
+                            {editing.buyPrice != null && editing.buyPrice > 0
+                              ? `₹${Number(editing.buyPrice).toLocaleString("en-IN")}`
+                              : "—"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-muted-foreground">GST / Modes</p>
+                          <p className="mt-0.5 text-sm font-semibold">
+                            {editing.gstPercent ?? 18}%
+                            <span className="mx-1 text-muted-foreground">·</span>
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {[editing.isRentEnabled ? "Rent" : null, editing.isBuyEnabled ? "Buy" : null]
+                                .filter(Boolean)
+                                .join(" + ") || "Off"}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-muted/20 px-3 py-2.5 space-y-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Your payout
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-[11px] text-muted-foreground">Vendor daily rate</p>
+                          <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
+                            ₹{Number(editing.vendorDailyRent ?? 0).toLocaleString("en-IN")}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-muted-foreground">Vendor buy price</p>
+                          <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
+                            {editing.vendorBuyPrice != null && editing.vendorBuyPrice > 0
+                              ? `₹${Number(editing.vendorBuyPrice).toLocaleString("en-IN")}`
+                              : "—"}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Rental payout = vendor daily rate × plan days (set by Admin)
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === "chemical" && (
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Admin sizing & pricing
+                    </p>
+                    <Badge variant="secondary" className="font-normal">
+                      <Shield className="mr-1 h-3 w-3" />
+                      Read-only
+                    </Badge>
+                  </div>
+                  {(!editing.variants || editing.variants.length === 0) ? (
+                    <div className="rounded-xl border border-dashed border-border bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
+                      {editing.buyPrice
+                        ? `Buy price ₹${editing.buyPrice.toLocaleString("en-IN")} · no packaging sizes yet`
+                        : "No packaging sizes defined. Ask Admin to add variants first."}
+                    </div>
                   ) : (
-                    <div className="overflow-hidden rounded-md border border-border mt-1">
-                      <table className="w-full text-xs text-left border-collapse bg-muted/20">
-                        <thead>
-                          <tr className="border-b border-border bg-muted/50 text-muted-foreground">
-                            <th className="p-2 font-semibold">SKU</th>
-                            <th className="p-2 font-semibold text-right">Size</th>
-                            <th className="p-2 font-semibold text-right text-indigo-600 dark:text-indigo-400">Stock (Units)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {editing.variants.map((v: any, idx: number) => (
-                            <tr key={idx} className="border-b border-border last:border-0 hover:bg-muted/10">
-                              <td className="p-2 font-mono text-[11px]">{v.sku}</td>
-                              <td className="p-2 text-right font-medium">{v.sizeValue} {v.sizeUnit}</td>
-                              <td className="p-2 text-right">
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  readOnly={!!editing.id}
-                                  className={`h-7 w-20 text-right ml-auto text-xs ${editing.id ? "bg-muted/50" : ""}`}
-                                  value={variantStocks[v.id] ?? 0}
-                                  onChange={(e) => {
-                                    if (editing.id) return;
-                                    const next = Math.max(0, Number(e.target.value) || 0);
-                                    setVariantStocks((prev) => {
-                                      const updated = { ...prev, [v.id]: next };
-                                      const total = (editing.variants || []).reduce(
-                                        (sum: number, row: any) => sum + (Number(updated[row.id]) || 0),
-                                        0
-                                      );
-                                      setEditing((curr) => (curr ? { ...curr, quantity: total } : curr));
-                                      return updated;
-                                    });
-                                  }}
-                                />
-                              </td>
-                            </tr>
-                          ))}
-                          <tr className="bg-muted/30">
-                            <td className="p-2 font-semibold" colSpan={2}>Total QTY</td>
-                            <td className="p-2 text-right font-semibold tabular-nums">
-                              {(editing.variants || []).reduce(
-                                (sum: number, row: any) => sum + (Number(variantStocks[row.id]) || 0),
-                                0
-                              )}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                      {editing.id && (
-                        <p className="px-2 py-1.5 text-[11px] text-muted-foreground border-t border-border">
-                          After the listing is created, change packaging stock only from{" "}
-                          <span className="font-medium text-foreground">Inventory → Chemicals</span>.
-                        </p>
-                      )}
+                    <div className="overflow-hidden rounded-xl border border-border divide-y divide-border/70">
+                      {editing.variants.map((v: any, idx: number) => (
+                        <div key={idx} className={cn("flex items-center gap-3 px-3.5 py-2.5", !v.isActive && "opacity-50")}>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium">
+                              {v.sizeValue} {v.sizeUnit}
+                            </p>
+                            <p className="text-[11px] font-mono text-muted-foreground">{v.sku}</p>
+                          </div>
+                          <div className="shrink-0 text-right text-xs">
+                            <p className="text-muted-foreground">
+                              Customer{" "}
+                              <span className="font-mono font-semibold text-foreground">
+                                ₹{Number(v.buyPrice || 0).toLocaleString("en-IN")}
+                              </span>
+                            </p>
+                            <p className="text-muted-foreground">
+                              Payout{" "}
+                              <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
+                                ₹{Number(v.vendorPrice || 0).toLocaleString("en-IN")}
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
-                </div>
+                </section>
               )}
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Status</Label>
-                <Select value={editing.status} onValueChange={(v) => setEditing({ ...editing, status: v as ProductListing["status"] })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </FormGrid>
-            <div className="h-5" />
+
+              <section className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Availability
+                </p>
+                <FormGrid cols={2}>
+                  {activeTab === "equipment" && (
+                    <div className="space-y-1.5">
+                      <Label>
+                        Quantity
+                        {editing.id ? (
+                          <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                            (via Inventory)
+                          </span>
+                        ) : null}
+                      </Label>
+                      <Input
+                        type="number"
+                        value={editing.quantity}
+                        readOnly={!!editing.id}
+                        className={editing.id ? "bg-muted/40" : ""}
+                        onChange={(e) => setEditing({ ...editing, quantity: Number(e.target.value) })}
+                      />
+                    </div>
+                  )}
+                  <div className={cn("space-y-1.5", activeTab === "chemical" && "sm:col-span-2")}>
+                    <Label>Status</Label>
+                    <Select
+                      value={editing.status}
+                      onValueChange={(v) => setEditing({ ...editing, status: v as ProductListing["status"] })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </FormGrid>
+
+                {activeTab === "chemical" && (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">
+                      Stock per packaging size
+                      {editing.id ? (
+                        <span className="ml-1.5 font-normal text-muted-foreground">
+                          (manage in Inventory after save)
+                        </span>
+                      ) : null}
+                    </Label>
+                    {(!editing.variants || editing.variants.length === 0) ? (
+                      <p className="rounded-xl border border-dashed border-border bg-muted/20 px-3 py-4 text-xs text-muted-foreground">
+                        No packaging sizes defined for this chemical yet. Ask Admin to add variants (e.g. 1L, 5L) first.
+                      </p>
+                    ) : (
+                      <div className="overflow-hidden rounded-xl border border-border">
+                        <table className="w-full text-sm">
+                          <thead className="border-b border-border bg-muted/30 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                            <tr>
+                              <th className="px-3.5 py-2.5 font-semibold">SKU</th>
+                              <th className="px-3 py-2.5 font-semibold text-right">Size</th>
+                              <th className="px-3.5 py-2.5 font-semibold text-right">Stock</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {editing.variants.map((v: any, idx: number) => (
+                              <tr key={idx} className="border-b border-border/70 last:border-0">
+                                <td className="px-3.5 py-2 font-mono text-xs">{v.sku}</td>
+                                <td className="px-3 py-2 text-right font-medium">
+                                  {v.sizeValue} {v.sizeUnit}
+                                </td>
+                                <td className="px-3.5 py-2 text-right">
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    readOnly={!!editing.id}
+                                    className={cn(
+                                      "ml-auto h-8 w-24 text-right text-sm",
+                                      editing.id && "bg-muted/40",
+                                    )}
+                                    value={variantStocks[v.id] ?? 0}
+                                    onChange={(e) => {
+                                      if (editing.id) return;
+                                      const next = Math.max(0, Number(e.target.value) || 0);
+                                      setVariantStocks((prev) => {
+                                        const updated = { ...prev, [v.id]: next };
+                                        const total = (editing.variants || []).reduce(
+                                          (sum: number, row: any) => sum + (Number(updated[row.id]) || 0),
+                                          0,
+                                        );
+                                        setEditing((curr) => (curr ? { ...curr, quantity: total } : curr));
+                                        return updated;
+                                      });
+                                    }}
+                                  />
+                                </td>
+                              </tr>
+                            ))}
+                            <tr className="bg-muted/20">
+                              <td className="px-3.5 py-2.5 font-semibold" colSpan={2}>
+                                Total qty
+                              </td>
+                              <td className="px-3.5 py-2.5 text-right font-semibold tabular-nums">
+                                {(editing.variants || []).reduce(
+                                  (sum: number, row: any) => sum + (Number(variantStocks[row.id]) || 0),
+                                  0,
+                                )}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        {editing.id && (
+                          <p className="border-t border-border px-3.5 py-2 text-[11px] text-muted-foreground">
+                            After the listing is created, change packaging stock from{" "}
+                            <span className="font-medium text-foreground">Inventory → Chemicals</span>.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)} disabled={busy}>Cancel</Button>
+          <DialogFooter className="shrink-0 border-t border-border bg-background px-5 py-3 sm:px-6">
+            <Button variant="outline" onClick={() => setEditing(null)} disabled={busy}>
+              Cancel
+            </Button>
             <Button onClick={() => void save()} disabled={busy}>
               {busy ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
+                </>
               ) : (
                 "Save listing"
               )}

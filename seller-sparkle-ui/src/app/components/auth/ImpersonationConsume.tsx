@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { apiClient } from "@/app/services/apiClient";
+import { setImpersonationSession } from "@/app/helpers/authSession";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,27 +29,17 @@ const ImpersonationConsume = () => {
         const role = response.user.role === "customer" ? "customer" : "vendor";
         setStatus(role === "customer" ? "Starting customer impersonation…" : "Starting vendor impersonation…");
 
-        localStorage.removeItem("adminUser");
-        localStorage.setItem("vendor_portal_token", response.token);
-        localStorage.setItem(
-          "vendor_portal_user",
-          JSON.stringify({
+        // Tab-scoped only — never wipe adminUser / admin token in localStorage (other admin tabs stay signed in).
+        setImpersonationSession({
+          token: response.token,
+          user: {
             id: response.user.id,
             email: response.user.email,
             name: response.user.name,
             role,
-            impersonation: true,
-          }),
-        );
-        localStorage.setItem(
-          "impersonation_meta",
-          JSON.stringify({
-            targetType: role,
-            targetName: response.user.name,
-            startedAt: new Date().toISOString(),
-          }),
-        );
-        apiClient.setAuthToken(response.token);
+          },
+        });
+
         toast.success(`Impersonating ${response.user.name}`);
         window.location.href = role === "customer" ? "/customer/shop" : "/vendor";
       } catch (e) {
@@ -64,8 +55,8 @@ const ImpersonationConsume = () => {
       {error ? (
         <>
           <p className="text-destructive">{error}</p>
-          <button className="text-primary underline" onClick={() => navigate("/login")}>
-            Back to login
+          <button className="text-primary underline" onClick={() => navigate("/admin/login")}>
+            Back to admin login
           </button>
         </>
       ) : (

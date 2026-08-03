@@ -191,6 +191,7 @@ public sealed class VendorProductListingAggregate
     public string Description { get; init; } = string.Empty;
     public List<string> ImageUrls { get; init; } = [];
     public List<Prilixor.VendorPortal.Application.Onboarding.ProductVariantDto> Variants { get; init; } = [];
+    public List<Prilixor.VendorPortal.Application.Onboarding.ProductRentalPricingPlanDto> RentalPricingPlans { get; init; } = [];
     public Guid? InventoryId { get; init; }
     public int InventoryAvailable { get; init; }
     public int InventoryReserved { get; init; }

@@ -15,7 +15,7 @@ import { TablePagination } from "@/app/components/shared/TablePagination";
 import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Textarea } from "@/app/components/ui/textarea";
-import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto } from "@/app/services/adminApi";
+import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto, ProductRentalPricingPlanDto, RentalDurationMasterDto } from "@/app/services/adminApi";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { resolveCatalogProductImageUrl } from "@/app/helpers/utils";
 import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown, FlaskConical } from "lucide-react";
@@ -27,6 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
+import { RentalDurationPricingEditor } from "@/app/components/admin/RentalDurationPricingEditor";
 
 const PAGE_SIZE = 10;
 const PRODUCT_FORM_STEPS = ["Basic", "Pricing", "Tax & images"] as const;
@@ -34,6 +35,7 @@ const PRODUCT_FORM_STEPS = ["Basic", "Pricing", "Tax & images"] as const;
 const ProductManagement = () => {
   const [categories, setCategories] = useState<ProductCategoryDto[]>([]);
   const [products, setProducts] = useState<ProductDto[]>([]);
+  const [rentalDurationMasters, setRentalDurationMasters] = useState<RentalDurationMasterDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("categories");
   const [search, setSearch] = useState("");
@@ -79,6 +81,7 @@ const ProductManagement = () => {
     isRentEnabled: true,
     isBuyEnabled: true,
     isActive: true,
+    rentalPricingPlans: [],
   });
   const [productImages, setProductImages] = useState<ProductImageDto[]>([]);
   const [productImagesLoading, setProductImagesLoading] = useState(false);
@@ -111,12 +114,14 @@ const ProductManagement = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [categoriesRes, productsRes] = await Promise.all([
+      const [categoriesRes, productsRes, durationsRes] = await Promise.all([
         adminApi.getProductCategories(),
         adminApi.getProducts(),
+        adminApi.getRentalDurationMasters(false),
       ]);
       setCategories(categoriesRes);
       setProducts(productsRes);
+      setRentalDurationMasters(durationsRes);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load catalog data.";
       toast.error(message);
@@ -381,8 +386,17 @@ const ProductManagement = () => {
       }
     }
     if (step === 1) {
-      if (productForm.isRentEnabled && !(productForm.weeklyRent > 0 || productForm.monthlyRent > 0 || productForm.dailyRent > 0)) {
-        errors.weeklyRent = "Enter weekly or monthly rent when rent is enabled.";
+      if (productForm.isRentEnabled) {
+        const hasActivePlan = (productForm.rentalPricingPlans ?? []).some(
+          (p) => p.isActive && p.durationDays > 0 && p.finalRentalPrice > 0 && p.durationLabel.trim(),
+        );
+        if (!(productForm.dailyRent > 0)) {
+          errors.dailyRent = "Enter a daily rate when rent is enabled.";
+        }
+        if (productForm.dailyRent > 0 && !hasActivePlan) {
+          errors.rentalPricingPlans =
+            "No active priced duration plans. Check Rental Duration Master and enable rows.";
+        }
       }
     }
     if (step === 2) {
@@ -424,6 +438,7 @@ const ProductManagement = () => {
         isRentEnabled: product.isRentEnabled,
         isBuyEnabled: product.isBuyEnabled,
         isActive: product.isActive,
+        rentalPricingPlans: (product.rentalPricingPlans ?? []).map((p) => ({ ...p })),
       });
       void loadProductImages(product.id, true);
     } else {
@@ -450,6 +465,7 @@ const ProductManagement = () => {
         isRentEnabled: true,
         isBuyEnabled: true,
         isActive: true,
+        rentalPricingPlans: [],
       });
       setProductImages([]);
       setNewImageUrl("");
@@ -578,8 +594,17 @@ const ProductManagement = () => {
     if (!productForm.productName?.trim()) {
       errors.productName = "Please enter a product name.";
     }
-    if (productForm.isRentEnabled && !(productForm.weeklyRent > 0 || productForm.monthlyRent > 0 || productForm.dailyRent > 0)) {
-      errors.weeklyRent = "Enter weekly or monthly rent when rent is enabled.";
+    if (productForm.isRentEnabled) {
+      const hasActivePlan = (productForm.rentalPricingPlans ?? []).some(
+        (p) => p.isActive && p.durationDays > 0 && p.finalRentalPrice > 0 && p.durationLabel.trim(),
+      );
+      if (!(productForm.dailyRent > 0)) {
+        errors.dailyRent = "Enter a daily rate when rent is enabled.";
+      }
+      if (productForm.dailyRent > 0 && !hasActivePlan) {
+        errors.rentalPricingPlans =
+          "No active rental duration plans. Configure Rental Duration Master and set discounts/active rows.";
+      }
     }
     if (productForm.gstPercent == null || Number.isNaN(Number(productForm.gstPercent))) {
       errors.gstPercent = "Please enter GST %.";
@@ -587,7 +612,7 @@ const ProductManagement = () => {
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       if (errors.categoryId || errors.productName) setProductFormStep(0);
-      else if (errors.weeklyRent) setProductFormStep(1);
+      else if (errors.dailyRent || errors.weeklyRent || errors.rentalPricingPlans) setProductFormStep(1);
       else setProductFormStep(2);
       toast.error("Please fill in the required fields.");
       return;
@@ -597,10 +622,30 @@ const ProductManagement = () => {
       setLoading(true);
       setFieldErrors({});
       
+      const daily = Number(productForm.dailyRent) || 0;
+      const vendorDaily = Number(productForm.vendorDailyRent) || 0;
       const payload = {
         ...productForm,
         productName: productForm.productName.trim(),
         categoryId: productForm.categoryId.trim(),
+        // Keep legacy weekly/monthly columns in sync for older order paths (hidden in UI).
+        weeklyRent: daily > 0 ? daily * 7 : productForm.weeklyRent || 0,
+        monthlyRent: daily > 0 ? daily * 30 : productForm.monthlyRent || 0,
+        vendorWeeklyRent: vendorDaily > 0 ? vendorDaily * 7 : productForm.vendorWeeklyRent || 0,
+        vendorMonthlyRent: vendorDaily > 0 ? vendorDaily * 30 : productForm.vendorMonthlyRent || 0,
+        rentalPricingPlans: (productForm.rentalPricingPlans ?? []).map((p, index) => ({
+          id: p.id || undefined,
+          rentalDurationMasterId: p.rentalDurationMasterId || undefined,
+          durationLabel: p.durationLabel.trim(),
+          durationDays: p.durationDays,
+          normalPrice: p.normalPrice,
+          discountType: p.discountType,
+          discountValue: p.discountType === "none" ? 0 : p.discountValue,
+          finalRentalPrice: p.finalRentalPrice,
+          isRecommended: p.isRecommended,
+          isActive: p.isActive,
+          sortOrder: index,
+        })),
       };
 
       if (editingProduct) {
@@ -667,12 +712,16 @@ const ProductManagement = () => {
       setLoading(true);
       setUploadErrors([]);
       const result = await adminApi.uploadCatalogExcel(file, false);
-      
+
+      if (result.categoriesCreated > 0 || result.productsCreated > 0) {
+        await loadData();
+      }
+
       if (result.success) {
         toast.success(`Excel processed successfully: ${result.categoriesCreated} categories, ${result.productsCreated} products processed.`);
-        await loadData();
+        setExcelDialogOpen(false);
       } else {
-        toast.error(`Excel upload failed with ${result.errors.length} errors. Please review them below.`);
+        toast.error(`Excel upload finished with ${result.errors.length} issue(s). Review details below.`);
         setUploadErrors(result.errors);
       }
     } catch (error) {
@@ -717,7 +766,7 @@ const ProductManagement = () => {
       XLSX.utils.book_append_sheet(wb, categoriesWs, "Categories");
 
       const productsHeaders = [
-        ["category_name", "product_name", "brand_name", "model_name", "short_description", "long_description", "weekly_rent", "monthly_rent", "security_deposit", "buy_price", "gst_percent", "is_rent_enabled", "is_buy_enabled", "is_active", "vendor_weekly_rent", "vendor_monthly_rent", "vendor_security_deposit", "vendor_buy_price"]
+        ["category_name", "product_name", "brand_name", "model_name", "short_description", "long_description", "daily_rent", "security_deposit", "buy_price", "gst_percent", "is_rent_enabled", "is_buy_enabled", "is_active", "vendor_daily_rent", "vendor_security_deposit", "vendor_buy_price"]
       ];
       
       const productsWs = XLSX.utils.aoa_to_sheet(productsHeaders);
@@ -795,8 +844,8 @@ const ProductManagement = () => {
               {activeTab === "equipment" && <th className="px-4 py-3 font-semibold">Model</th>}
               {activeTab === "equipment" ? (
                 <>
-                  <th className="px-4 py-3 font-semibold text-right">Weekly</th>
-                  <th className="px-4 py-3 font-semibold text-right">Monthly</th>
+                  <th className="px-4 py-3 font-semibold text-right">Daily rate</th>
+                  <th className="px-4 py-3 font-semibold text-right">Deposit</th>
                 </>
               ) : (
                 <th className="px-4 py-3 font-semibold">Buy Price</th>
@@ -821,8 +870,8 @@ const ProductManagement = () => {
                 {activeTab === "equipment" && <td className="px-4 py-3">{p.modelName || "-"}</td>}
                 {activeTab === "equipment" ? (
                   <>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums">₹{(p.weeklyRent ?? 0).toFixed(0)}</td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums">₹{(p.monthlyRent ?? 0).toFixed(0)}</td>
+                    <td className="px-4 py-3 text-right font-mono tabular-nums">₹{(p.dailyRent ?? 0).toFixed(0)}</td>
+                    <td className="px-4 py-3 text-right font-mono tabular-nums">₹{(p.securityDeposit ?? 0).toFixed(0)}</td>
                   </>
                 ) : (
                   <td className="px-4 py-3">₹{(p.buyPrice || 0).toFixed(0)}</td>
@@ -1535,33 +1584,25 @@ const ProductManagement = () => {
             <section className="rounded-lg border border-indigo-100 dark:border-indigo-950/40 bg-indigo-50/30 dark:bg-indigo-950/10 p-4 space-y-3">
               <div>
                 <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400">Customer pricing</h4>
-                <p className="text-xs text-muted-foreground">What customers see and pay on the marketplace.</p>
+                <p className="text-xs text-muted-foreground">
+                  Set daily rate, deposit, and buy. Open the duration chart to set discounts per plan.
+                </p>
               </div>
-              <FormGrid cols={2}>
-                {/* Daily rent kept in form/API state; hidden in UI — re-enable via RENTAL_UNITS_VISIBLE_IN_UI */}
+              <FormGrid cols={3}>
                 <div className="space-y-1.5">
-                  <Label required={productForm.isRentEnabled}>Weekly Rent (INR)</Label>
+                  <Label required={productForm.isRentEnabled}>Daily rate (INR)</Label>
                   <Input
                     type="number"
                     min={0}
-                    value={productForm.weeklyRent}
+                    value={productForm.dailyRent}
                     onChange={(e) => {
-                      setProductForm({ ...productForm, weeklyRent: Number(e.target.value) || 0 });
-                      clearFieldError("weeklyRent");
+                      setProductForm({ ...productForm, dailyRent: Number(e.target.value) || 0 });
+                      clearFieldError("dailyRent");
+                      clearFieldError("rentalPricingPlans");
                     }}
-                    className={fieldErrors.weeklyRent ? "border-destructive" : ""}
+                    className={fieldErrors.dailyRent ? "border-destructive" : ""}
                   />
-                  <FieldError message={fieldErrors.weeklyRent} />
-                  <p className="text-[11px] text-muted-foreground">Required when Rent is enabled (or set Monthly Rent).</p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Monthly Rent (INR)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={productForm.monthlyRent}
-                    onChange={(e) => setProductForm({ ...productForm, monthlyRent: Number(e.target.value) || 0 })}
-                  />
+                  <p className="text-[11px] text-muted-foreground">Base rent per day for duration plans.</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Security Deposit (INR)</Label>
@@ -1582,7 +1623,7 @@ const ProductManagement = () => {
                     placeholder="Leave empty if buy not offered"
                   />
                 </div>
-                <div className="flex flex-wrap items-center gap-4 sm:col-span-2">
+                <div className="flex flex-wrap items-center gap-4 sm:col-span-2 lg:col-span-3">
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -1603,37 +1644,34 @@ const ProductManagement = () => {
               </FormGrid>
             </section>
 
+            <RentalDurationPricingEditor
+              dailyRate={productForm.dailyRent}
+              hideDailyRateInput
+              masters={rentalDurationMasters}
+              plans={productForm.rentalPricingPlans ?? []}
+              onChange={(rentalPricingPlans: ProductRentalPricingPlanDto[]) => {
+                setProductForm({ ...productForm, rentalPricingPlans });
+                clearFieldError("rentalPricingPlans");
+                clearFieldError("dailyRent");
+              }}
+            />
+            <FieldError message={fieldErrors.dailyRent || fieldErrors.rentalPricingPlans} />
+
             <section className="rounded-lg border border-emerald-100 dark:border-emerald-950/40 bg-emerald-50/30 dark:bg-emerald-950/10 p-4 space-y-3">
               <div>
-                <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Vendor payout pricing</h4>
-                <p className="text-xs text-muted-foreground">Admin-set amounts paid out to the vendor.</p>
+                <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Vendor payout</h4>
+                <p className="text-xs text-muted-foreground">
+                  What you pay the vendor. Rental payout = vendor daily rate × plan days.
+                </p>
               </div>
               <FormGrid cols={2}>
                 <div className="space-y-1.5">
-                  <Label>Vendor Weekly Rent (INR)</Label>
+                  <Label>Vendor daily rate (INR)</Label>
                   <Input
                     type="number"
                     min={0}
-                    value={productForm.vendorWeeklyRent}
-                    onChange={(e) => setProductForm({ ...productForm, vendorWeeklyRent: Number(e.target.value) || 0 })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Vendor Monthly Rent (INR)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={productForm.vendorMonthlyRent}
-                    onChange={(e) => setProductForm({ ...productForm, vendorMonthlyRent: Number(e.target.value) || 0 })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Vendor Security Deposit (INR)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={productForm.vendorSecurityDeposit}
-                    onChange={(e) => setProductForm({ ...productForm, vendorSecurityDeposit: Number(e.target.value) || 0 })}
+                    value={productForm.vendorDailyRent}
+                    onChange={(e) => setProductForm({ ...productForm, vendorDailyRent: Number(e.target.value) || 0 })}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -1833,8 +1871,11 @@ const ProductManagement = () => {
           </DialogHeader>
           <div className="max-h-[calc(100vh-16rem)] overflow-y-auto px-1">
             <p className="text-sm text-muted-foreground mb-4">
-              Upload an Excel file with two sheets: "Categories" and "Products".<br />
-              <strong>Need a template?</strong> Use the "Download Sample Excel" option above to get started.
+              Upload an Excel file with sheets <strong>Categories</strong> and <strong>Products</strong>.
+              Use <strong>daily_rent</strong> / <strong>vendor_daily_rent</strong> (required when rent is enabled).
+              Duration price charts are generated automatically from Rental Duration Master.
+              <br />
+              <strong>Need a template?</strong> Use &quot;Download Sample Excel&quot; above.
             </p>
             <FileUploadZone
               accept=".xlsx,.xls"

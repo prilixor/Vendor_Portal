@@ -1,7 +1,7 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
-import { customerApi } from "@/app/services/customerApi";
+import { useState, useEffect, useMemo } from "react";
+import { customerApi, type RentalPricingPlanDto } from "@/app/services/customerApi";
 import { useCart } from "@/app/contexts/CartContext";
 import { useAuth } from "@/app/guards/AuthContext";
 import { Button } from "@/app/components/ui/button";
@@ -12,7 +12,7 @@ import { ProductImageGallery } from "@/app/components/shared/ProductImageGallery
 import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { toast } from "sonner";
-import { ShoppingCart } from "lucide-react";
+import { Check, ChevronDown, ShoppingBag, ShoppingCart, CalendarDays } from "lucide-react";
 import {
   DEFAULT_UI_RENTAL_UNIT,
   RENTAL_UNIT_LABELS,
@@ -21,6 +21,9 @@ import {
   evaluateRentVsBuy,
   type RentalPeriodUnit,
 } from "@/app/helpers/rentalPeriod";
+import { Label } from "@/app/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
+import { cn } from "@/app/helpers/utils";
 
 function availabilityBadge(status: string, qty: number): { label: string; className: string } {
   const s = status.trim().toLowerCase();
@@ -55,6 +58,136 @@ function availabilityBadge(status: string, qty: number): { label: string; classN
   };
 }
 
+function planSavings(plan: RentalPricingPlanDto): number {
+  return Math.max(0, Number(plan.normalPrice || 0) - Number(plan.finalRentalPrice || 0));
+}
+
+function formatInr(value: number): string {
+  return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+function RentalPeriodPicker({
+  plans,
+  selectedPlanId,
+  onSelect,
+}: {
+  plans: RentalPricingPlanDto[];
+  selectedPlanId: string;
+  onSelect: (plan: RentalPricingPlanDto) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = plans.find((p) => p.id === selectedPlanId) ?? plans[0] ?? null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "flex h-14 w-full items-center gap-3 rounded-xl border-2 bg-background px-3.5 text-left transition-colors",
+            open
+              ? "border-primary ring-2 ring-primary/15"
+              : "border-border hover:border-primary/40",
+          )}
+        >
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-foreground">
+              {selected?.durationLabel ?? "Choose period"}
+            </p>
+            {selected ? (
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {selected.durationDays} days
+                {selected.isRecommended ? " · Best value" : ""}
+              </p>
+            ) : null}
+          </div>
+          <span className="shrink-0 font-mono text-base font-bold tabular-nums text-primary">
+            {selected ? formatInr(selected.finalRentalPrice) : "—"}
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+              open && "rotate-180",
+            )}
+          />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        sideOffset={8}
+        className="w-[var(--radix-popover-trigger-width)] max-h-80 overflow-hidden rounded-xl border border-border p-0 shadow-lg"
+      >
+        <div className="border-b border-border bg-muted/30 px-3.5 py-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Select rental period
+          </p>
+        </div>
+        <div className="max-h-64 overflow-y-auto p-1.5">
+          {plans.map((plan) => {
+            const isSelected = plan.id === selectedPlanId;
+            const savings = planSavings(plan);
+            return (
+              <button
+                key={plan.id}
+                type="button"
+                onClick={() => {
+                  onSelect(plan);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors",
+                  isSelected
+                    ? "bg-primary/10 text-foreground"
+                    : "hover:bg-muted/60",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+                    isSelected
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-muted-foreground/30",
+                  )}
+                >
+                  {isSelected ? <Check className="h-3 w-3" /> : null}
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="whitespace-nowrap text-sm font-semibold">
+                      {plan.durationLabel}
+                    </span>
+                    {plan.isRecommended ? (
+                      <span className="whitespace-nowrap rounded-full bg-emerald-600/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                        Best
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground whitespace-nowrap">
+                    {plan.durationDays} days
+                    {savings > 0 ? ` · Save ${formatInr(savings)}` : ""}
+                  </p>
+                </div>
+
+                <div className="shrink-0 text-right">
+                  {savings > 0 ? (
+                    <p className="text-[11px] text-muted-foreground line-through tabular-nums whitespace-nowrap">
+                      {formatInr(plan.normalPrice)}
+                    </p>
+                  ) : null}
+                  <p className="whitespace-nowrap font-mono text-sm font-bold tabular-nums">
+                    {formatInr(plan.finalRentalPrice)}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 const CustomerListingDetail = () => {
   const { listingId } = useParams<{ listingId: string }>();
   const navigate = useNavigate();
@@ -65,6 +198,7 @@ const CustomerListingDetail = () => {
   const [periodUnit, setPeriodUnit] = useState<RentalPeriodUnit>(DEFAULT_UI_RENTAL_UNIT);
   const [orderType, setOrderType] = useState<"rent" | "buy">("rent");
   const [selectedVariantId, setSelectedVariantId] = useState<string>("");
+  const [selectedPlanId, setSelectedPlanId] = useState<string>("");
   const [rentToBuyOpen, setRentToBuyOpen] = useState(false);
   const [rentToBuyInfo, setRentToBuyInfo] = useState<{
     rentalTotal: number;
@@ -78,13 +212,33 @@ const CustomerListingDetail = () => {
     enabled: !!listingId,
   });
 
-  const activeVariants = data?.variants?.filter(v => v.isActive) || [];
+  const activeVariants = data?.variants?.filter((v) => v.isActive) || [];
+  const activePlans = useMemo(
+    () =>
+      (data?.rentalPricingPlans ?? [])
+        .filter((p) => p.isActive)
+        .slice()
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.durationDays - b.durationDays),
+    [data?.rentalPricingPlans],
+  );
+  const hasPricingPlans = activePlans.length > 0;
+  const selectedPlan = activePlans.find((p) => p.id === selectedPlanId) ?? null;
 
   useEffect(() => {
     if (activeVariants.length > 0 && !selectedVariantId) {
       setSelectedVariantId(activeVariants[0].id);
     }
   }, [data, activeVariants, selectedVariantId]);
+
+  useEffect(() => {
+    if (!hasPricingPlans) {
+      setSelectedPlanId("");
+      return;
+    }
+    if (selectedPlanId && activePlans.some((p) => p.id === selectedPlanId)) return;
+    const recommended = activePlans.find((p) => p.isRecommended);
+    setSelectedPlanId(recommended?.id ?? activePlans[0]?.id ?? "");
+  }, [hasPricingPlans, activePlans, selectedPlanId]);
 
   if (!listingId) {
     return <p className="text-sm text-muted-foreground">Invalid listing.</p>;
@@ -118,31 +272,36 @@ const CustomerListingDetail = () => {
   }
 
   const images = data.imageUrls?.length ? data.imageUrls : [];
-  
-  const selectedVariant = activeVariants.find(v => v.id === selectedVariantId);
+
+  const selectedVariant = activeVariants.find((v) => v.id === selectedVariantId);
   // Chemicals are buy-only and get a spec sheet; equipment follows its own rent/buy flags.
   const isChemical = !!data.isChemical;
   const canRent = !isChemical && (data.isRentEnabled ?? true);
   const canBuy = isChemical || (data.isBuyEnabled ?? false);
-  const hasChemSpecs = isChemical && (
-    !!data.casNumber || !!data.chemicalFormula ||
-    data.purityPercentage != null || data.molecularWeight != null
-  );
-  const actualOrderType: "rent" | "buy" =
-    canRent && canBuy ? orderType : canBuy ? "buy" : "rent";
+  const hasChemSpecs =
+    isChemical &&
+    (!!data.casNumber ||
+      !!data.chemicalFormula ||
+      data.purityPercentage != null ||
+      data.molecularWeight != null);
+  const actualOrderType: "rent" | "buy" = canRent && canBuy ? orderType : canBuy ? "buy" : "rent";
 
   // Determine current available quantity and status based on selected variant (if any)
-  const currentAvailableQuantity = selectedVariant && data.variantInventory
-    ? data.variantInventory.find(vi => vi.productVariantId === selectedVariant.id)?.availableQuantity ?? 0
-    : data.availableQuantity;
-    
-  const currentAvailabilityStatus = currentAvailableQuantity <= 0
-    ? "out_of_stock"
-    : (currentAvailableQuantity <= 3 ? "low_stock" : "available");
+  const currentAvailableQuantity =
+    selectedVariant && data.variantInventory
+      ? (data.variantInventory.find((vi) => vi.productVariantId === selectedVariant.id)?.availableQuantity ?? 0)
+      : data.availableQuantity;
+
+  const currentAvailabilityStatus =
+    currentAvailableQuantity <= 0
+      ? "out_of_stock"
+      : currentAvailableQuantity <= 3
+        ? "low_stock"
+        : "available";
 
   const badge = availabilityBadge(currentAvailabilityStatus, currentAvailableQuantity);
   const canAddToCart = currentAvailableQuantity > 0;
-  
+
   const unitPrice = selectedVariant ? selectedVariant.buyPrice : (data.buyPrice ?? 0);
   const rentRates = {
     dailyRent: data.dailyRent,
@@ -152,29 +311,47 @@ const CustomerListingDetail = () => {
   const rentEstimate =
     actualOrderType === "buy"
       ? unitPrice * qty
-      : estimateRent(periodUnit, periods, qty, rentRates);
+      : hasPricingPlans && selectedPlan
+        ? Number(selectedPlan.finalRentalPrice) * qty
+        : estimateRent(periodUnit, periods, qty, rentRates);
 
   const promptRentToBuyIfNeeded = (next: {
     periods?: number;
     periodUnit?: RentalPeriodUnit;
     qty?: number;
+    plan?: RentalPricingPlanDto | null;
   }): boolean => {
     if (unitPrice <= 0) return false;
-    const check = evaluateRentVsBuy({
-      buyPrice: unitPrice,
-      quantity: next.qty ?? qty,
-      periods: next.periods ?? periods,
-      unit: next.periodUnit ?? periodUnit,
-      rates: rentRates,
-    });
-    if (!check.shouldForceBuy) return false;
-    setRentToBuyInfo({
-      rentalTotal: check.rentalTotal,
-      buyTotal: check.buyTotal,
-      durationLabel: check.durationLabel,
-    });
-    setRentToBuyOpen(true);
-    return true;
+    const plan = next.plan !== undefined ? next.plan : selectedPlan;
+    let rentalTotal: number;
+    let durationLabel: string;
+    if (hasPricingPlans && plan) {
+      rentalTotal = Number(plan.finalRentalPrice) * (next.qty ?? qty);
+      durationLabel = plan.durationLabel || `${plan.durationDays} days`;
+    } else {
+      const check = evaluateRentVsBuy({
+        buyPrice: unitPrice,
+        quantity: next.qty ?? qty,
+        periods: next.periods ?? periods,
+        unit: next.periodUnit ?? periodUnit,
+        rates: rentRates,
+      });
+      if (!check.shouldForceBuy) return false;
+      setRentToBuyInfo({
+        rentalTotal: check.rentalTotal,
+        buyTotal: check.buyTotal,
+        durationLabel: check.durationLabel,
+      });
+      setRentToBuyOpen(true);
+      return true;
+    }
+    const buyTotal = unitPrice * (next.qty ?? qty);
+    if (buyTotal > 0 && rentalTotal >= buyTotal) {
+      setRentToBuyInfo({ rentalTotal, buyTotal, durationLabel });
+      setRentToBuyOpen(true);
+      return true;
+    }
+    return false;
   };
 
   const handlePeriodsChange = (next: number) => {
@@ -195,6 +372,11 @@ const CustomerListingDetail = () => {
   const handleOrderTypeChange = (next: "rent" | "buy") => {
     if (next === "rent" && promptRentToBuyIfNeeded({})) return;
     setOrderType(next);
+  };
+
+  const handlePlanSelect = (plan: RentalPricingPlanDto) => {
+    if (promptRentToBuyIfNeeded({ plan })) return;
+    setSelectedPlanId(plan.id);
   };
 
   const variantStockOf = (variantId: string) =>
@@ -221,7 +403,12 @@ const CustomerListingDetail = () => {
       toast.error("Please select a packaging size.");
       return;
     }
-    if (qty < 1 || (actualOrderType === "rent" && periods < 1)) {
+    if (actualOrderType === "rent" && hasPricingPlans) {
+      if (!selectedPlan) {
+        toast.error("Please select a rental duration.");
+        return;
+      }
+    } else if (qty < 1 || (actualOrderType === "rent" && periods < 1)) {
       toast.error("Please fill in the required fields.");
       return;
     }
@@ -233,10 +420,12 @@ const CustomerListingDetail = () => {
     if (actualOrderType === "rent" && promptRentToBuyIfNeeded({})) {
       return;
     }
-    
-    const displayTitle = selectedVariant 
+
+    const displayTitle = selectedVariant
       ? `${data.title} (${selectedVariant.sizeValue} ${selectedVariant.sizeUnit})`
       : data.title;
+
+    const planBased = actualOrderType === "rent" && hasPricingPlans && selectedPlan;
 
     addLine({
       listingId: data.id,
@@ -248,12 +437,23 @@ const CustomerListingDetail = () => {
       securityDeposit: data.securityDeposit,
       primaryImageUrl: images[0],
       quantity: qty,
-      rentalDays: actualOrderType === "buy" ? 0 : periods,
-      rentalPeriodUnit: actualOrderType === "buy" ? "day" : periodUnit,
+      rentalDays: actualOrderType === "buy" ? 0 : planBased ? selectedPlan.durationDays : periods,
+      rentalPeriodUnit: actualOrderType === "buy" ? "day" : planBased ? "day" : periodUnit,
       orderType: actualOrderType,
       prescriptionRequired: data.prescriptionRequired,
       productVariantId: selectedVariantId || undefined,
       buyPrice: unitPrice,
+      ...(planBased
+        ? {
+            rentalPricingPlanId: selectedPlan.id,
+            rentalDurationLabel: selectedPlan.durationLabel,
+            rentalDurationDays: selectedPlan.durationDays,
+            rentalNormalPrice: selectedPlan.normalPrice,
+            rentalDiscountType: selectedPlan.discountType,
+            rentalDiscountValue: selectedPlan.discountValue,
+            rentalFinalPrice: selectedPlan.finalRentalPrice,
+          }
+        : {}),
     });
     toast.success("Added to cart");
   };
@@ -278,9 +478,7 @@ const CustomerListingDetail = () => {
               {data.title}
             </h1>
             {data.description ? (
-              <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-                {data.description}
-              </p>
+              <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">{data.description}</p>
             ) : null}
             {data.prescriptionRequired ? (
               <p className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
@@ -375,7 +573,7 @@ const CustomerListingDetail = () => {
               </div>
             ) : (
               <div className="space-y-2 text-sm">
-                {canRent && (
+                {canRent && !hasPricingPlans && (
                   <div className="grid grid-cols-3 gap-2">
                     <div className="rounded-lg bg-muted/40 px-2.5 py-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -395,6 +593,12 @@ const CustomerListingDetail = () => {
                       </p>
                       <p className="mt-0.5 font-bold tabular-nums">₹{data.securityDeposit.toFixed(0)}</p>
                     </div>
+                  </div>
+                )}
+                {canRent && hasPricingPlans && (
+                  <div className="flex items-baseline justify-between rounded-lg bg-muted/40 px-3 py-2">
+                    <span className="text-sm text-muted-foreground">Security deposit</span>
+                    <span className="font-bold tabular-nums">₹{data.securityDeposit.toFixed(0)}</span>
                   </div>
                 )}
                 {canBuy && (
@@ -446,74 +650,145 @@ const CustomerListingDetail = () => {
             </div>
           )}
 
-          {/* Compact configure + add */}
-          <div className="rounded-xl border border-border/70 bg-card p-3.5 shadow-sm sm:p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold tracking-tight">Configure & add</p>
-              <p className="text-sm font-bold tabular-nums text-foreground">
-                ₹{rentEstimate.toFixed(0)}
-                <span className="ml-1 text-xs font-medium text-muted-foreground">est.</span>
-              </p>
-            </div>
+          {/* Configure + add */}
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+            <div className="space-y-5">
+              {canRent && canBuy ? (
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => handleOrderTypeChange("rent")}
+                    className={`flex items-center justify-center gap-2 rounded-xl border-2 px-3 py-3 text-sm font-semibold transition-all ${
+                      orderType === "rent"
+                        ? "border-primary bg-gradient-primary text-primary-foreground shadow-md shadow-primary/20"
+                        : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                    }`}
+                  >
+                    <CalendarDays className="h-4 w-4 shrink-0" />
+                    Rent
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleOrderTypeChange("buy")}
+                    className={`flex items-center justify-center gap-2 rounded-xl border-2 px-3 py-3 text-sm font-semibold transition-all ${
+                      orderType === "buy"
+                        ? "border-primary bg-gradient-primary text-primary-foreground shadow-md shadow-primary/20"
+                        : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                    }`}
+                  >
+                    <ShoppingBag className="h-4 w-4 shrink-0" />
+                    Buy
+                  </button>
+                </div>
+              ) : (
+                <div
+                  className={`inline-flex items-center gap-2 rounded-xl border-2 border-primary bg-gradient-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20`}
+                >
+                  {actualOrderType === "buy" ? (
+                    <>
+                      <ShoppingBag className="h-4 w-4" />
+                      Buy only
+                    </>
+                  ) : (
+                    <>
+                      <CalendarDays className="h-4 w-4" />
+                      Rent only
+                    </>
+                  )}
+                </div>
+              )}
 
-            <div className="space-y-2.5">
-              <div className="flex flex-wrap items-center gap-2">
-                {canRent && canBuy ? (
-                  <div className="inline-grid grid-cols-2 gap-1">
-                    {(["rent", "buy"] as const).map((type) => {
-                      const selected = orderType === type;
-                      return (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => handleOrderTypeChange(type)}
-                          className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all sm:text-sm ${
-                            selected
-                              ? "border-primary bg-gradient-primary text-primary-foreground shadow-sm"
-                              : "border-border/80 bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
-                          }`}
-                        >
-                          {type === "rent" ? "Rent" : "Buy"}
-                        </button>
-                      );
-                    })}
+              {actualOrderType === "rent" && hasPricingPlans && selectedPlan ? (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Rental period
+                    </Label>
+                    <RentalPeriodPicker
+                      plans={activePlans}
+                      selectedPlanId={selectedPlanId}
+                      onSelect={handlePlanSelect}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Starts when the order is delivered
+                    </p>
                   </div>
-                ) : (
-                  <span className="rounded-lg border border-primary/30 bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary">
-                    {actualOrderType === "buy" ? "Buy only" : "Rent only"}
-                  </span>
-                )}
 
-                {actualOrderType === "rent" ? (
-                  <div className="inline-grid grid-cols-2 gap-1">
-                    {RENTAL_UNITS_VISIBLE_IN_UI.map((u) => {
-                      const selected = periodUnit === u;
-                      return (
-                        <button
-                          key={u}
-                          type="button"
-                          onClick={() => handlePeriodUnitChange(u)}
-                          className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all sm:text-sm ${
-                            selected
-                              ? "border-primary/40 bg-primary-soft text-primary"
-                              : "border-border/80 bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
-                          }`}
-                        >
-                          {RENTAL_UNIT_LABELS[u].plural}
-                        </button>
-                      );
-                    })}
+                  <div className="rounded-xl border border-border/70 bg-muted/25 px-4 py-4">
+                    <div className="flex items-end justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">You pay for rent</p>
+                        <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                          <p className="text-3xl font-bold tracking-tight tabular-nums text-foreground">
+                            {formatInr(selectedPlan.finalRentalPrice * qty)}
+                          </p>
+                          {planSavings(selectedPlan) > 0 ? (
+                            <p className="text-sm text-muted-foreground line-through tabular-nums">
+                              {formatInr(selectedPlan.normalPrice * qty)}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                      {planSavings(selectedPlan) > 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600/10 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                          <Check className="h-3.5 w-3.5" />
+                          Save {formatInr(planSavings(selectedPlan) * qty)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+                      <span>Deposit {formatInr(data.securityDeposit)} (refundable)</span>
+                      {qty > 1 ? (
+                        <span>
+                          {formatInr(selectedPlan.finalRentalPrice)} × {qty}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
+
+              {actualOrderType === "rent" && !hasPricingPlans ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {RENTAL_UNITS_VISIBLE_IN_UI.map((u) => {
+                    const selected = periodUnit === u;
+                    return (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => handlePeriodUnitChange(u)}
+                        className={`rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition-all ${
+                          selected
+                            ? "border-primary bg-gradient-primary text-primary-foreground shadow-md shadow-primary/20"
+                            : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}
+                      >
+                        {RENTAL_UNIT_LABELS[u].plural}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {actualOrderType === "buy" ? (
+                <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 px-4 py-4 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                  <p className="text-xs font-medium text-muted-foreground">You pay to buy</p>
+                  <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-400">
+                    {formatInr(rentEstimate)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Own the unit · no rental return
+                  </p>
+                </div>
+              ) : null}
 
               <div
                 className={`grid gap-2 ${
-                  actualOrderType === "rent" ? "sm:grid-cols-2" : "sm:max-w-xs"
+                  actualOrderType === "rent" && !hasPricingPlans ? "sm:grid-cols-2" : ""
                 }`}
               >
-                {actualOrderType === "rent" ? (
-                  <div className="rounded-lg border border-border/70 bg-muted/20 px-2.5 py-1.5">
+                {actualOrderType === "rent" && !hasPricingPlans ? (
+                  <div className="rounded-xl border border-border bg-muted/20 px-2.5 py-1.5">
                     <QuantityStepper
                       orientation="inline"
                       label={RENTAL_UNIT_LABELS[periodUnit].plural}
@@ -525,7 +800,7 @@ const CustomerListingDetail = () => {
                     />
                   </div>
                 ) : null}
-                <div className="rounded-lg border border-border/70 bg-muted/20 px-2.5 py-1.5">
+                <div className="rounded-xl border border-border bg-muted/20 px-2.5 py-1.5">
                   <QuantityStepper
                     orientation="inline"
                     label="Qty"
@@ -538,51 +813,55 @@ const CustomerListingDetail = () => {
                 </div>
               </div>
 
-              <p className="text-xs text-muted-foreground">
-                Estimated {actualOrderType === "buy" ? "buy" : "rent"} (excludes{" "}
-                {actualOrderType === "buy" ? "delivery" : "deposit & delivery"}).
-              </p>
-
-              <div className="flex flex-col gap-2 pt-0.5 sm:flex-row">
+              <div className="flex flex-col gap-2 pt-1 sm:flex-row">
                 <Button
-                  className="h-11 flex-1 bg-gradient-primary text-sm font-semibold shadow-glow hover:opacity-95"
+                  className="h-12 flex-1 rounded-xl bg-gradient-primary text-sm font-semibold shadow-glow hover:opacity-95"
                   type="button"
                   onClick={handleAdd}
                   disabled={!canAddToCart}
                 >
                   <ShoppingCart className="mr-2 h-4 w-4" />
-                  {canAddToCart ? "Add to cart" : "Out of stock"}
+                  {canAddToCart
+                    ? actualOrderType === "buy"
+                      ? "Add to cart — Buy"
+                      : "Add to cart — Rent"
+                    : "Out of stock"}
                 </Button>
-                <Button variant="outline" className="h-11 sm:w-auto" asChild>
+                <Button variant="outline" className="h-12 rounded-xl border-2 sm:min-w-[7.5rem]" asChild>
                   <Link to="/customer/cart">View cart</Link>
                 </Button>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  type="button"
-                  className="text-muted-foreground"
-                  onClick={() => {
-                    if (user?.role !== "customer") {
-                      toast.message("Sign in to save favorites");
-                      navigate("/customer/login", {
-                        state: { from: `/customer/shop/${data.id}` },
-                      });
-                      return;
-                    }
-                    customerApi
-                      .addFavorite(data.id)
-                      .then(() => toast.success("Added to favorites"))
-                      .catch(() => toast.error("Failed to add favorite"));
-                  }}
-                >
-                  Favorite
-                </Button>
-                <Button variant="ghost" size="sm" className="text-muted-foreground" asChild>
-                  <Link to="/customer/shop">More listings</Link>
-                </Button>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
+                <div className="flex flex-wrap gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    type="button"
+                    className="h-8 text-muted-foreground"
+                    onClick={() => {
+                      if (user?.role !== "customer") {
+                        toast.message("Sign in to save favorites");
+                        navigate("/customer/login", {
+                          state: { from: `/customer/shop/${data.id}` },
+                        });
+                        return;
+                      }
+                      customerApi
+                        .addFavorite(data.id)
+                        .then(() => toast.success("Added to favorites"))
+                        .catch(() => toast.error("Failed to add favorite"));
+                    }}
+                  >
+                    Favorite
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" asChild>
+                    <Link to="/customer/shop">More listings</Link>
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Excludes {actualOrderType === "buy" ? "delivery" : "deposit & delivery"}
+                </p>
               </div>
             </div>
           </div>

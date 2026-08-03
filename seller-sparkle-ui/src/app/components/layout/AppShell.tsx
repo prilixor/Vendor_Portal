@@ -17,6 +17,7 @@ import { getAdminNav } from "@/app/helpers/adminNav";
 import { getVendorNav } from "@/app/helpers/vendorNav";
 
 import { getAdminPortalHref } from "@/app/helpers/portalHost";
+import { clearImpersonationSession } from "@/app/helpers/authSession";
 
 import { adminApi } from "@/app/services/adminApi";
 
@@ -173,15 +174,8 @@ function VendorShellContent({
                   className="font-semibold text-primary underline"
 
                   onClick={() => {
-
-                    localStorage.removeItem("vendor_portal_user");
-
-                    localStorage.removeItem("vendor_portal_token");
-
-                    localStorage.removeItem("impersonation_meta");
-
+                    clearImpersonationSession();
                     window.location.href = getAdminPortalHref("/admin/vendors");
-
                   }}
 
                 >
@@ -251,50 +245,42 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
 
   const { data: adminOrders = [] } = useQuery({
-
     queryKey: ["admin-orders"],
-
     queryFn: () => adminApi.getAdminOrders(),
-
     enabled: variant === "admin" && !!user,
-
     refetchInterval: 30000,
-
   });
-
-
 
   const { data: adminVendors = [] } = useQuery({
-
     queryKey: ["admin-vendors"],
-
     queryFn: () => adminApi.getVendors(),
-
     enabled: variant === "admin" && !!user,
-
     refetchInterval: 30000,
-
   });
 
-
+  const { data: adminAuditLogs = [] } = useQuery({
+    queryKey: ["admin-audit-logs"],
+    queryFn: () => adminApi.getAuditLogs(),
+    enabled: variant === "admin" && !!user,
+    refetchInterval: 30000,
+  });
 
   const unreadAdminCount = useMemo(() => {
-
     const criticalOrders = (adminOrders || []).filter((o) => {
-
       if (!o || !o.status) return false;
-
       const s = o.status.toLowerCase().replace(/_/g, " ");
-
       return s.includes("dispatch failed") || s.includes("cancelled");
-
     }).length;
 
     const pendingVendors = (adminVendors || []).filter((v) => v && v.accountStatus === "pending").length;
 
-    return criticalOrders + pendingVendors;
+    const listingPricingAlerts = (adminAuditLogs || []).filter((l) => {
+      const a = (l.actionType || "").toLowerCase();
+      return a === "vendor.listing.created" || a === "vendor.listing.updated";
+    }).length;
 
-  }, [adminOrders, adminVendors]);
+    return criticalOrders + pendingVendors + listingPricingAlerts;
+  }, [adminOrders, adminVendors, adminAuditLogs]);
 
 
 
@@ -397,15 +383,8 @@ export const AppShell = ({ variant }: AppShellProps) => {
                     className="font-semibold text-primary underline"
 
                     onClick={() => {
-
-                      localStorage.removeItem("vendor_portal_user");
-
-                      localStorage.removeItem("vendor_portal_token");
-
-                      localStorage.removeItem("impersonation_meta");
-
+                      clearImpersonationSession();
                       window.location.href = getAdminPortalHref("/admin/customers");
-
                     }}
 
                   >

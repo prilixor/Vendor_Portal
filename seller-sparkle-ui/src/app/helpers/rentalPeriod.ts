@@ -98,3 +98,34 @@ export function primaryDisplayRate(rates: {
   if ((rates.dailyRent ?? 0) > 0) return { value: rates.dailyRent!, unit: "day" };
   return null;
 }
+
+/** Local calendar date as YYYY-MM-DD. */
+export function todayIsoDate(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Add whole days to an ISO date (YYYY-MM-DD). */
+export function addDaysIso(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  if (!y || !m || !d) return isoDate;
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+export function formatIsoDateDisplay(isoDate?: string | null): string {
+  if (!isoDate) return "—";
+  const [y, m, d] = isoDate.split("-");
+  if (!y || !m || !d) return isoDate;
+  return `${d}/${m}/${y}`;
+}
+
+/** Long-term rental plans use durationDays >= this threshold. */
+export const LONG_TERM_RENTAL_DAYS = 60;

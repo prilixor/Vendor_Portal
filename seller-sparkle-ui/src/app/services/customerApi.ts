@@ -58,6 +58,22 @@ export interface CustomerCatalogCategoryApi {
   isChemical?: boolean;
 }
 
+export type RentalDiscountType = "none" | "fixed" | "percentage";
+
+export interface RentalPricingPlanDto {
+  id: string;
+  productId: string;
+  durationLabel: string;
+  durationDays: number;
+  normalPrice: number;
+  discountType: RentalDiscountType;
+  discountValue: number;
+  finalRentalPrice: number;
+  isRecommended: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 export interface CustomerListingDetailApi {
   id: string;
   title: string;
@@ -90,6 +106,8 @@ export interface CustomerListingDetailApi {
   coaDocumentUrl?: string;
   variants?: ProductVariantDto[];
   variantInventory?: { productVariantId: string; availableQuantity: number }[];
+  /** Active admin-configured duration plans (prefer over week/month steppers when present). */
+  rentalPricingPlans?: RentalPricingPlanDto[];
 }
 
 export interface CustomerProfileApi {
@@ -160,6 +178,14 @@ export interface CustomerOrderApi {
   hospitalName?: string;
   hospitalCity?: string;
   doctorContactNumber?: string;
+  /** Snapshot when order used a duration pricing plan. */
+  rentalPricingPlanId?: string | null;
+  rentalDurationLabel?: string | null;
+  rentalDurationDays?: number | null;
+  rentalNormalPrice?: number | null;
+  rentalDiscountType?: RentalDiscountType | string | null;
+  rentalDiscountValue?: number | null;
+  rentalFinalPrice?: number | null;
 }
 
 export interface ExtensionQuoteApi {
@@ -213,6 +239,9 @@ export interface CartLinePayload {
   productVariantId?: string;
   /** Optional Admin-curated doctor reference (Unique ID lookup). */
   doctorId?: string;
+  rentalPricingPlanId?: string;
+  /** ISO date YYYY-MM-DD when using a duration pricing plan. */
+  rentalStartDate?: string;
 }
 
 export interface VariantStockSuggestionApi {
@@ -370,6 +399,8 @@ export const customerApi = {
         orderType: l.orderType ?? "rent",
         productVariantId: l.productVariantId,
         doctorId: l.doctorId || undefined,
+        rentalPricingPlanId: l.rentalPricingPlanId || undefined,
+        rentalStartDate: l.rentalStartDate || undefined,
       })),
     });
   },
@@ -390,6 +421,8 @@ export const customerApi = {
         orderType: l.orderType ?? "rent",
         productVariantId: l.productVariantId,
         doctorId: l.doctorId || undefined,
+        rentalPricingPlanId: l.rentalPricingPlanId || undefined,
+        rentalStartDate: l.rentalStartDate || undefined,
       })),
     });
   },

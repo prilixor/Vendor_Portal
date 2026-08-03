@@ -912,7 +912,7 @@ const VendorDetails = () => {
                     const result = await adminApi.impersonateVendor(vendorId);
                     const href = getVendorPortalHref(`/impersonation/consume?code=${encodeURIComponent(result.exchangeCode)}`);
                     window.open(href, "_blank", "noopener,noreferrer");
-                    toast.success(`Opening ${result.vendorName} in Vendor Portal`);
+                    toast.success(`Opened ${result.vendorName} in a new tab. Your admin session stays here.`);
                   } catch (e) {
                     toast.error(getUserFriendlyMessage(e));
                   } finally {
@@ -1441,7 +1441,7 @@ const VendorDetails = () => {
                         })()
                       ) : (
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Weekly: ₹{p.weeklyRent ?? 0} · Monthly: ₹{p.monthlyRent ?? 0}
+                          Daily rate: ₹{p.dailyRent ?? 0}
                         </p>
                       )}
                     </div>
@@ -1544,7 +1544,7 @@ const VendorDetails = () => {
                         })()
                       ) : (
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Weekly: ₹{p.weeklyRent ?? 0} · Monthly: ₹{p.monthlyRent ?? 0}
+                          Daily rate: ₹{p.dailyRent ?? 0}
                         </p>
                       )}
                     </div>

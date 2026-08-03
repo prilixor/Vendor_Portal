@@ -5,6 +5,7 @@ import {
   normalizeRentalUnit,
   type RentalPeriodUnit,
 } from "@/app/helpers/rentalPeriod";
+import type { RentalDiscountType } from "@/app/services/customerApi";
 
 const CART_KEY = "customer_portal_cart_v2";
 
@@ -25,7 +26,34 @@ export interface CartLine {
   prescriptionRequired?: boolean;
   productVariantId?: string;
   buyPrice?: number;
+  /** Duration pricing plan selection (when listing has admin plans). */
+  rentalPricingPlanId?: string;
+  rentalStartDate?: string;
+  rentalDurationLabel?: string;
+  rentalDurationDays?: number;
+  rentalNormalPrice?: number;
+  rentalDiscountType?: RentalDiscountType | string;
+  rentalDiscountValue?: number;
+  rentalFinalPrice?: number;
 }
+
+type CartLineMutablePatch = Partial<
+  Pick<
+    CartLine,
+    | "quantity"
+    | "rentalDays"
+    | "rentalPeriodUnit"
+    | "orderType"
+    | "rentalPricingPlanId"
+    | "rentalStartDate"
+    | "rentalDurationLabel"
+    | "rentalDurationDays"
+    | "rentalNormalPrice"
+    | "rentalDiscountType"
+    | "rentalDiscountValue"
+    | "rentalFinalPrice"
+  >
+>;
 
 interface CartContextValue {
   lines: CartLine[];
@@ -36,10 +64,7 @@ interface CartContextValue {
       rentalPeriodUnit?: RentalPeriodUnit;
     },
   ) => void;
-  updateLine: (
-    listingId: string,
-    patch: Partial<Pick<CartLine, "quantity" | "rentalDays" | "rentalPeriodUnit" | "orderType">>,
-  ) => void;
+  updateLine: (listingId: string, patch: CartLineMutablePatch) => void;
   removeLine: (listingId: string) => void;
   clear: () => void;
   totalEstimatedRent: number;
@@ -65,6 +90,33 @@ function loadCart(): CartLine[] {
   }
 }
 
+function planSnapshotFrom(line: Partial<CartLine>) {
+  return {
+    rentalPricingPlanId: line.rentalPricingPlanId,
+    rentalStartDate: line.rentalStartDate,
+    rentalDurationLabel: line.rentalDurationLabel,
+    rentalDurationDays: line.rentalDurationDays,
+    rentalNormalPrice: line.rentalNormalPrice,
+    rentalDiscountType: line.rentalDiscountType,
+    rentalDiscountValue: line.rentalDiscountValue,
+    rentalFinalPrice: line.rentalFinalPrice,
+  };
+}
+
+export function estimateCartLineRent(line: CartLine): number {
+  if (line.orderType === "buy") {
+    return (line.buyPrice ?? line.dailyRent * 30) * line.quantity;
+  }
+  if (line.rentalPricingPlanId && line.rentalFinalPrice != null) {
+    return Number(line.rentalFinalPrice) * Math.max(1, line.quantity);
+  }
+  return estimateRent(line.rentalPeriodUnit, line.rentalDays, line.quantity, {
+    dailyRent: line.dailyRent,
+    weeklyRent: line.weeklyRent,
+    monthlyRent: line.monthlyRent,
+  });
+}
+
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [lines, setLines] = useState<CartLine[]>(() => loadCart());
 
@@ -84,6 +136,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       const orderType = line.orderType ?? "rent";
       const unit = orderType === "buy" ? "day" : normalizeRentalUnit(line.rentalPeriodUnit || DEFAULT_UI_RENTAL_UNIT);
       const periods = orderType === "buy" ? 0 : (line.rentalDays ?? 1);
+      const snapshot = orderType === "buy" ? {} : planSnapshotFrom(line);
       setLines((prev) => {
         const ix = prev.findIndex((l) => l.listingId === line.listingId && l.productVariantId === line.productVariantId);
         if (ix >= 0) {
@@ -103,6 +156,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
             orderType,
             prescriptionRequired: line.prescriptionRequired ?? next[ix].prescriptionRequired,
             buyPrice: line.buyPrice,
+            ...snapshot,
           };
           return next;
         }
@@ -124,6 +178,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
             prescriptionRequired: line.prescriptionRequired,
             productVariantId: line.productVariantId,
             buyPrice: line.buyPrice,
+            ...snapshot,
           },
         ];
       });
@@ -131,29 +186,30 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     [],
   );
 
-  const updateLine = useCallback(
-    (
-      listingId: string,
-      patch: Partial<Pick<CartLine, "quantity" | "rentalDays" | "rentalPeriodUnit" | "orderType">>,
-    ) => {
-      setLines((prev) =>
-        prev.map((l) => {
-          if (l.listingId !== listingId) return l;
-          const next = { ...l, ...patch };
-          if (next.orderType === "buy") {
-            next.rentalDays = 0;
-          } else if (next.rentalDays <= 0) {
-            next.rentalDays = 1;
-          }
-          if (patch.rentalPeriodUnit) {
-            next.rentalPeriodUnit = normalizeRentalUnit(patch.rentalPeriodUnit);
-          }
-          return next;
-        }),
-      );
-    },
-    [],
-  );
+  const updateLine = useCallback((listingId: string, patch: CartLineMutablePatch) => {
+    setLines((prev) =>
+      prev.map((l) => {
+        if (l.listingId !== listingId) return l;
+        const next = { ...l, ...patch };
+        if (next.orderType === "buy") {
+          next.rentalDays = 0;
+        } else if (next.rentalDays <= 0) {
+          next.rentalDays = next.rentalDurationDays && next.rentalPricingPlanId
+            ? next.rentalDurationDays
+            : 1;
+        }
+        if (patch.rentalPeriodUnit) {
+          next.rentalPeriodUnit = normalizeRentalUnit(patch.rentalPeriodUnit);
+        }
+        // Restore plan day unit when switching back to rent with a plan snapshot.
+        if (patch.orderType === "rent" && next.rentalPricingPlanId && next.rentalDurationDays) {
+          next.rentalDays = next.rentalDurationDays;
+          next.rentalPeriodUnit = "day";
+        }
+        return next;
+      }),
+    );
+  }, []);
 
   const removeLine = useCallback((listingId: string) => {
     setLines((prev) => prev.filter((l) => l.listingId !== listingId));
@@ -162,19 +218,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const clear = useCallback(() => setLines([]), []);
 
   const totalEstimatedRent = useMemo(
-    () =>
-      lines.reduce((sum, l) => {
-        const buyPrice = l.buyPrice ?? l.dailyRent * 30;
-        if (l.orderType === "buy") return sum + buyPrice * l.quantity;
-        return (
-          sum +
-          estimateRent(l.rentalPeriodUnit, l.rentalDays, l.quantity, {
-            dailyRent: l.dailyRent,
-            weeklyRent: l.weeklyRent,
-            monthlyRent: l.monthlyRent,
-          })
-        );
-      }, 0),
+    () => lines.reduce((sum, l) => sum + estimateCartLineRent(l), 0),
     [lines],
   );
 

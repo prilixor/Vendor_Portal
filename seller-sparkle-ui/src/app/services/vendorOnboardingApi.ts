@@ -99,6 +99,22 @@ export interface ProductCategoryApiDto {
   isActive: boolean;
 }
 
+export type RentalDiscountType = "none" | "fixed" | "percentage";
+
+export interface ProductRentalPricingPlanDto {
+  id: string;
+  productId: string;
+  durationLabel: string;
+  durationDays: number;
+  normalPrice: number;
+  discountType: RentalDiscountType | string;
+  discountValue: number;
+  finalRentalPrice: number;
+  isRecommended: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 export interface ProductApiDto {
   id: string;
   categoryId: string;
@@ -112,6 +128,11 @@ export interface ProductApiDto {
   monthlyRent: number;
   securityDeposit: number;
   buyPrice?: number;
+  vendorDailyRent?: number;
+  vendorWeeklyRent?: number;
+  vendorMonthlyRent?: number;
+  vendorSecurityDeposit?: number;
+  vendorBuyPrice?: number;
   gstPercent: number;
   isRentEnabled: boolean;
   isBuyEnabled: boolean;
@@ -124,6 +145,7 @@ export interface ProductApiDto {
   sdsDocumentUrl?: string;
   coaDocumentUrl?: string;
   variants?: ProductVariantPayload[];
+  rentalPricingPlans?: ProductRentalPricingPlanDto[];
 }
 
 export interface VendorProductListingApiDto {
@@ -442,6 +464,13 @@ export interface VendorDispatchOfferApiDto {
   hospitalName?: string;
   hospitalCity?: string;
   doctorContactNumber?: string;
+  rentalPricingPlanId?: string | null;
+  rentalDurationLabel?: string | null;
+  rentalDurationDays?: number | null;
+  rentalNormalPrice?: number | null;
+  rentalDiscountType?: string | null;
+  rentalDiscountValue?: number | null;
+  rentalFinalPrice?: number | null;
 }
 
 export interface VendorOrderApiDto {
@@ -474,6 +503,13 @@ export interface VendorOrderApiDto {
   doctorContactNumber?: string;
   assignedAssetTags?: string[];
   productVariantId?: string;
+  rentalPricingPlanId?: string | null;
+  rentalDurationLabel?: string | null;
+  rentalDurationDays?: number | null;
+  rentalNormalPrice?: number | null;
+  rentalDiscountType?: string | null;
+  rentalDiscountValue?: number | null;
+  rentalFinalPrice?: number | null;
 }
 
 export interface VendorExpiringOrderApiDto {

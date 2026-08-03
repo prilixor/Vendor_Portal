@@ -2,6 +2,17 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { Role, User } from "@/app/models";
 import { authApi } from "@/app/services/authApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import {
+  ADMIN_USER_KEY,
+  PORTAL_USER_KEY,
+  clearAdminSession,
+  clearImpersonationSession,
+  clearPortalSession,
+  ensureAdminTokenMigrated,
+  isAdminPath,
+  readImpersonationUser,
+  setAdminAccessToken,
+} from "@/app/helpers/authSession";
 
 interface AuthContextValue {
   user: User | null;
@@ -16,9 +27,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-const STORAGE_KEY = "vendor_portal_user";
-const ADMIN_STORAGE_KEY = "adminUser";
 
 function mapAdminStorage(adminUser: Record<string, unknown>): User {
   return {
@@ -36,24 +44,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isHydrating, setIsHydrating] = useState(true);
 
   useEffect(() => {
-    const adminRaw = localStorage.getItem(ADMIN_STORAGE_KEY);
-    if (adminRaw) {
+    const onAdminRoute = isAdminPath();
+    ensureAdminTokenMigrated();
+    const impersonationUser = readImpersonationUser<User>();
+
+    if (impersonationUser && !onAdminRoute) {
+      setUser({
+        ...impersonationUser,
+        impersonation: true,
+      });
+      setIsHydrating(false);
+      return;
+    }
+
+    const adminRaw = localStorage.getItem(ADMIN_USER_KEY);
+    if (adminRaw && (onAdminRoute || !localStorage.getItem(PORTAL_USER_KEY))) {
       try {
         setUser(mapAdminStorage(JSON.parse(adminRaw)));
       } catch {
-        localStorage.removeItem(ADMIN_STORAGE_KEY);
+        localStorage.removeItem(ADMIN_USER_KEY);
       }
     } else {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(PORTAL_USER_KEY);
       if (raw) {
         try {
           const parsed = JSON.parse(raw);
           setUser({
             ...parsed,
-            impersonation: !!parsed.impersonation || !!localStorage.getItem("impersonation_meta"),
+            impersonation: !!parsed.impersonation,
           });
         } catch {
-          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(PORTAL_USER_KEY);
         }
       }
     }
@@ -61,17 +82,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const logout = () => {
+    // Impersonation is tab-scoped — never wipe the admin session in other tabs.
+    if (readImpersonationUser() && !isAdminPath()) {
+      clearImpersonationSession();
+      setUser(null);
+      return;
+    }
+
     authApi.logout();
     persist(null);
-    localStorage.removeItem(ADMIN_STORAGE_KEY);
-    localStorage.removeItem("vendor_portal_token");
-    localStorage.removeItem("impersonation_meta");
+    if (isAdminPath()) {
+      clearAdminSession();
+    }
+    clearPortalSession();
+    clearImpersonationSession();
   };
 
   useEffect(() => {
     const handleUnauthorized = () => {
+      const wasImpersonating = !!readImpersonationUser() && !isAdminPath();
       logout();
       const path = window.location.pathname;
+      if (wasImpersonating) {
+        window.location.href = path.startsWith("/customer")
+          ? "/admin/customers"
+          : "/admin/vendors";
+        return;
+      }
       if (path.startsWith("/admin")) {
         window.location.href = "/admin/login";
       } else if (path.startsWith("/customer")) {
@@ -88,14 +125,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const persist = (u: User | null) => {
-    if (u) localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
-    else localStorage.removeItem(STORAGE_KEY);
+    if (u) localStorage.setItem(PORTAL_USER_KEY, JSON.stringify(u));
+    else localStorage.removeItem(PORTAL_USER_KEY);
     setUser(u);
   };
 
   const setSessionUser = (u: User | null) => {
     if (u?.role === "admin") {
-      localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify({
+      localStorage.setItem(ADMIN_USER_KEY, JSON.stringify({
         id: u.id,
         email: u.email,
         fullName: u.name,
@@ -104,7 +141,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         adminRole: u.adminRole,
         permissions: u.permissions ?? [],
       }));
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(PORTAL_USER_KEY);
       setUser(u);
       return;
     }
@@ -113,6 +150,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, password: string, role: Role) => {
     const result = await authApi.login(email, password, role);
+    if (role === "admin") {
+      setAdminAccessToken(result.token);
+      setSessionUser(result.user);
+      return;
+    }
+    clearImpersonationSession();
     persist(result.user);
   };
 

@@ -30,14 +30,14 @@ import { cn } from "@/app/helpers/utils";
 export const AdminNotifications = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = (searchParams.get("tab") as "all" | "orders" | "vendors" | "logs") ?? "all";
-  const [activeTab, setActiveTab] = useState<"all" | "orders" | "vendors" | "logs">(
-    ["all", "orders", "vendors", "logs"].includes(initialTab) ? initialTab : "all"
+  const initialTab = (searchParams.get("tab") as "all" | "orders" | "vendors" | "listings" | "logs") ?? "all";
+  const [activeTab, setActiveTab] = useState<"all" | "orders" | "vendors" | "listings" | "logs">(
+    ["all", "orders", "vendors", "listings", "logs"].includes(initialTab) ? initialTab : "all"
   );
 
   useEffect(() => {
-    const t = searchParams.get("tab") as "all" | "orders" | "vendors" | "logs";
-    if (t && ["all", "orders", "vendors", "logs"].includes(t)) {
+    const t = searchParams.get("tab") as "all" | "orders" | "vendors" | "listings" | "logs";
+    if (t && ["all", "orders", "vendors", "listings", "logs"].includes(t)) {
       setActiveTab(t);
     } else if (!t) {
       setActiveTab("all");
@@ -48,7 +48,7 @@ export const AdminNotifications = () => {
   const PAGE_SIZE = 15;
 
   const handleTabChange = (v: string) => {
-    const val = v as "all" | "orders" | "vendors" | "logs";
+    const val = v as "all" | "orders" | "vendors" | "listings" | "logs";
     setActiveTab(val);
     setPage(1); // Reset pagination on tab change
     if (val === "all") {
@@ -184,20 +184,57 @@ export const AdminNotifications = () => {
     return [...logs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [logs]);
 
+  // Vendor listing create/update → Admin should review catalog pricing
+  const listingAlerts = useMemo(() => {
+    return logs
+      .filter((l) => {
+        const a = (l.actionType || "").toLowerCase();
+        return a === "vendor.listing.created" || a === "vendor.listing.updated";
+      })
+      .map((l) => {
+        const created = (l.actionType || "").toLowerCase().includes("created");
+        let kind = "product";
+        try {
+          if (l.newValue) {
+            const parsed = JSON.parse(l.newValue) as { kind?: string };
+            if (parsed.kind === "chemical" || parsed.kind === "product") kind = parsed.kind;
+          }
+        } catch {
+          /* ignore malformed JSON */
+        }
+        if ((l.notes || "").toLowerCase().includes("chemical")) kind = "chemical";
+        return {
+          id: `listing-${l.id}`,
+          type: "listing" as const,
+          title: created ? "New vendor listing needs pricing" : "Vendor listing updated",
+          description: l.notes || `A vendor ${created ? "created" : "updated"} a ${kind} listing. Review catalog pricing.`,
+          status: created ? "created" : "updated",
+          timestamp: l.createdAt,
+          meta: {
+            kind,
+            notes: l.notes,
+            listingTitle: l.notes?.match(/listing "([^"]+)"/)?.[1] || "Listing",
+          },
+          link: kind === "chemical" ? "/admin/chemicals" : "/admin/products",
+        };
+      })
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [logs]);
+
   // Combine Alerts
   const allAlerts = useMemo(() => {
-    const list = [...criticalOrders, ...pendingVendors];
-    // Sort critical first, then newest
+    const list = [...criticalOrders, ...pendingVendors, ...listingAlerts];
     return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [criticalOrders, pendingVendors]);
+  }, [criticalOrders, pendingVendors, listingAlerts]);
 
   // Count Badges
   const counts = useMemo(() => ({
     all: allAlerts.length,
     orders: criticalOrders.length,
     vendors: pendingVendors.length,
+    listings: listingAlerts.length,
     logs: logs.length,
-  }), [allAlerts, criticalOrders, pendingVendors, logs]);
+  }), [allAlerts, criticalOrders, pendingVendors, listingAlerts, logs]);
 
   // Helper to format audit log timeline icons
   const getLogIcon = (action: string) => {
@@ -208,7 +245,7 @@ export const AdminNotifications = () => {
     if (a.includes("reject") || a.includes("ban") || a.includes("suspend") || a.includes("failed")) {
       return <ShieldAlert className="h-4 w-4 text-destructive" />;
     }
-    if (a.includes("catalog") || a.includes("product") || a.includes("category")) {
+    if (a.includes("catalog") || a.includes("product") || a.includes("category") || a.includes("listing")) {
       return <Package className="h-4 w-4 text-indigo-500" />;
     }
     return <Settings className="h-4 w-4 text-muted-foreground" />;
@@ -269,6 +306,9 @@ export const AdminNotifications = () => {
           <TabsTrigger value="vendors" className="text-xs">
             Pending Onboarding ({counts.vendors})
           </TabsTrigger>
+          <TabsTrigger value="listings" className="text-xs">
+            Listing Pricing ({counts.listings})
+          </TabsTrigger>
           <TabsTrigger value="logs" className="text-xs">
             System Activity Stream ({counts.logs})
           </TabsTrigger>
@@ -295,7 +335,7 @@ export const AdminNotifications = () => {
                   <CheckCircle2 className="h-6 w-6" />
                 </div>
                 <h3 className="mt-4 text-base font-bold text-foreground">All Clear!</h3>
-                <p className="mt-1 text-sm text-muted-foreground">No urgent dispatch failures or onboarding requests awaiting approval.</p>
+                <p className="mt-1 text-sm text-muted-foreground">No urgent dispatch failures, onboarding requests, or listing pricing alerts.</p>
               </Card>
             ) : (
               <div>
@@ -349,6 +389,28 @@ export const AdminNotifications = () => {
                   </div>
                 ))}
                 {renderPagination(pendingVendors.length)}
+              </div>
+            )
+          )}
+
+          {/* TAB: LISTING PRICING */}
+          {activeTab === "listings" && (
+            listingAlerts.length === 0 ? (
+              <Card className="border-border/60 p-12 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
+                <h3 className="mt-4 text-base font-bold text-foreground">No Listing Pricing Alerts</h3>
+                <p className="mt-1 text-sm text-muted-foreground">No recent vendor product or chemical listing create/update events requiring pricing review.</p>
+              </Card>
+            ) : (
+              <div>
+                {listingAlerts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((alert) => (
+                  <div key={alert.id} className="mb-4 last:mb-0">
+                    <AlertCard alert={alert} navigate={navigate} />
+                  </div>
+                ))}
+                {renderPagination(listingAlerts.length)}
               </div>
             )
           )}
@@ -426,7 +488,7 @@ const AlertCard = ({
 }: {
   alert: {
     id: string;
-    type: "order" | "vendor" | "extension" | "buyout";
+    type: "order" | "vendor" | "extension" | "buyout" | "listing";
     title: string;
     description: string;
     status: string;
@@ -444,11 +506,12 @@ const AlertCard = ({
           alert.type === "order" ? "bg-destructive/10 text-destructive" 
           : alert.type === "extension" ? "bg-blue-500/10 text-blue-500"
           : alert.type === "buyout" ? "bg-fuchsia-500/10 text-fuchsia-500"
+          : alert.type === "listing" ? "bg-indigo-500/10 text-indigo-500"
           : "bg-amber-500/10 text-amber-500"
         )}>
           {alert.type === "order" ? <AlertTriangle className="h-5 w-5" /> 
            : alert.type === "extension" ? <Clock className="h-5 w-5" />
-           : alert.type === "buyout" ? <Package className="h-5 w-5" />
+           : alert.type === "buyout" || alert.type === "listing" ? <Package className="h-5 w-5" />
            : <Building className="h-5 w-5" />}
         </div>
         <div className="space-y-1">
@@ -462,6 +525,8 @@ const AlertCard = ({
                 ? "bg-blue-100 text-blue-800 border-blue-500/20 dark:bg-blue-900/30 dark:text-blue-300"
                 : alert.type === "buyout"
                 ? "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-500/20 dark:bg-fuchsia-900/30 dark:text-fuchsia-300"
+                : alert.type === "listing"
+                ? "bg-indigo-100 text-indigo-800 border-indigo-500/20 dark:bg-indigo-900/30 dark:text-indigo-300"
                 : "bg-amber-100 text-amber-950 border-amber-500/20"
             )}>
               {alert.status.replace("_", " ").toUpperCase()}
@@ -476,6 +541,11 @@ const AlertCard = ({
                 <p>Listing: <span className="text-foreground">{alert.meta.listingTitle}</span></p>
                 <p>Customer: <span className="text-foreground">{alert.meta.customerName}</span></p>
                 <p>Total Amount: <span className="text-primary font-bold">₹{alert.meta.amount.toFixed(0)}</span></p>
+              </>
+            ) : alert.type === "listing" ? (
+              <>
+                <p>Listing: <span className="text-foreground">{alert.meta.listingTitle}</span></p>
+                <p>Catalog: <span className="text-foreground capitalize">{alert.meta.kind || "product"}</span></p>
               </>
             ) : (
               <>
@@ -504,7 +574,7 @@ const AlertCard = ({
             navigate(alert.link);
           }
         }}>
-          Resolve Action
+          {alert.type === "listing" ? "Open Catalog" : "Resolve Action"}
           <ChevronRight className="ml-1 h-3.5 w-3.5" />
         </Button>
       </div>

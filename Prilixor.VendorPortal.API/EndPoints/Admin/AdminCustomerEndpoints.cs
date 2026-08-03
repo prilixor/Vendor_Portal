@@ -98,6 +98,8 @@ public sealed class CartLineApiRequest
     public Guid? HospitalId { get; set; }
     public string? ContactNumber { get; set; }
     public string? ReferenceNumber { get; set; }
+    public Guid? RentalPricingPlanId { get; set; }
+    public DateOnly? RentalStartDate { get; set; }
 }
 
 public sealed class AdminPlaceCustomerOrdersEndpoint(IMediator mediator)
@@ -131,7 +133,8 @@ public sealed class AdminPlaceCustomerOrdersEndpoint(IMediator mediator)
 
         var lines = req.Lines.Select(l => new CartLineRequest(
             l.ListingId, l.Quantity, l.RentalDays, l.RentalPeriodUnit, l.OrderType,
-            l.ProductVariantId, l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber)).ToList();
+            l.ProductVariantId, l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber,
+            l.RentalPricingPlanId, l.RentalStartDate)).ToList();
 
         var result = await mediator.Send(new PlaceCustomerOrdersCommand(
             customerId, addressId, req.DeliveryOption, lines, adminId), ct);

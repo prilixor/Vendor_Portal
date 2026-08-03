@@ -40,8 +40,6 @@ const Login = () => {
     try {
       await login(email, password, "vendor");
       setNeedsVerification(false);
-      // Clear any admin user data from previous session
-      localStorage.removeItem("adminUser");
       toast.success("Welcome back, Vendor!");
       // Use window.location.href to force full page reload
       window.location.href = "/vendor";

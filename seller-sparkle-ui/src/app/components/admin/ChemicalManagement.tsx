@@ -830,12 +830,16 @@ const ChemicalManagement = () => {
       setLoading(true);
       setUploadErrors([]);
       const result = await adminApi.uploadCatalogExcel(file, true);
-      
+
+      if (result.categoriesCreated > 0 || result.productsCreated > 0) {
+        await loadData();
+      }
+
       if (result.success) {
         toast.success(`Excel processed successfully: ${result.categoriesCreated} categories, ${result.productsCreated} products processed.`);
-        await loadData();
+        setExcelDialogOpen(false);
       } else {
-        toast.error(`Excel upload failed with ${result.errors.length} errors. Please review them below.`);
+        toast.error(`Excel upload finished with ${result.errors.length} issue(s). Review details below.`);
         setUploadErrors(result.errors);
       }
     } catch (error) {

@@ -365,6 +365,42 @@ export interface ProductVariantDto {
   isActive: boolean;
 }
 
+export type RentalDiscountType = "none" | "fixed" | "percentage";
+
+export interface ProductRentalPricingPlanDto {
+  id: string;
+  productId: string;
+  durationLabel: string;
+  durationDays: number;
+  normalPrice: number;
+  discountType: RentalDiscountType;
+  discountValue: number;
+  finalRentalPrice: number;
+  isRecommended: boolean;
+  isActive: boolean;
+  sortOrder: number;
+  rentalDurationMasterId?: string | null;
+}
+
+export interface RentalDurationMasterDto {
+  id: string;
+  durationLabel: string;
+  durationDays: number;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface CreateRentalDurationMasterRequest {
+  durationLabel: string;
+  durationDays: number;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface UpdateRentalDurationMasterRequest extends CreateRentalDurationMasterRequest {
+  id: string;
+}
+
 export interface ProductDto {
   id: string;
   categoryId: string;
@@ -397,6 +433,7 @@ export interface ProductDto {
   coaDocumentUrl?: string;
   favoriteCount: number;
   variants?: ProductVariantDto[];
+  rentalPricingPlans?: ProductRentalPricingPlanDto[];
 }
 
 export interface ProductImageDto {
@@ -543,6 +580,7 @@ export interface CreateProductRequest {
   sdsDocumentUrl?: string;
   coaDocumentUrl?: string;
   variants?: ProductVariantDto[];
+  rentalPricingPlans?: ProductRentalPricingPlanDto[];
 }
 
 export interface UpdateProductRequest {
@@ -575,6 +613,7 @@ export interface UpdateProductRequest {
   sdsDocumentUrl?: string;
   coaDocumentUrl?: string;
   variants?: ProductVariantDto[];
+  rentalPricingPlans?: ProductRentalPricingPlanDto[];
 }
 
 export interface ExcelUploadErrorDto {
@@ -786,6 +825,23 @@ export const adminApi = {
 
   async deleteProductCategory(id: string): Promise<void> {
     return apiClient.delete<void>(`/admin/catalog/categories/${id}`);
+  },
+
+  async getRentalDurationMasters(activeOnly = false): Promise<RentalDurationMasterDto[]> {
+    const qs = activeOnly ? "?activeOnly=true" : "";
+    return apiClient.get<RentalDurationMasterDto[]>(`/admin/catalog/rental-durations${qs}`);
+  },
+
+  async createRentalDurationMaster(data: CreateRentalDurationMasterRequest): Promise<RentalDurationMasterDto> {
+    return apiClient.post<RentalDurationMasterDto>("/admin/catalog/rental-durations", data);
+  },
+
+  async updateRentalDurationMaster(id: string, data: UpdateRentalDurationMasterRequest): Promise<RentalDurationMasterDto> {
+    return apiClient.put<RentalDurationMasterDto>(`/admin/catalog/rental-durations/${id}`, data);
+  },
+
+  async deleteRentalDurationMaster(id: string): Promise<void> {
+    return apiClient.delete<void>(`/admin/catalog/rental-durations/${id}`);
   },
 
   async getProducts(categoryId?: string): Promise<ProductDto[]> {

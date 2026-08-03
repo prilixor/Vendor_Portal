@@ -1,3 +1,12 @@
+import {
+  getActiveAccessToken,
+  isAdminPath,
+  setAdminAccessToken,
+  setPortalAccessToken,
+  ADMIN_TOKEN_KEY,
+  PORTAL_TOKEN_KEY,
+} from "@/app/helpers/authSession";
+
 function resolveApiBaseUrl(): string {
   const explicit = import.meta.env.VITE_API_BASE_URL?.trim();
   if (explicit) {
@@ -17,8 +26,6 @@ function resolveApiBaseUrl(): string {
 
 const API_BASE_URL = resolveApiBaseUrl();
 
-const TOKEN_KEY = 'vendor_portal_token';
-
 class ApiClient {
   private baseUrl: string;
 
@@ -27,15 +34,23 @@ class ApiClient {
   }
 
   private getToken(): string | null {
-    return localStorage.getItem(TOKEN_KEY);
+    return getActiveAccessToken();
   }
 
   private setToken(token: string): void {
-    localStorage.setItem(TOKEN_KEY, token);
+    // Default write path: portal token. Admin login should call setAdminAuthToken.
+    if (isAdminPath()) {
+      setAdminAccessToken(token);
+      return;
+    }
+    setPortalAccessToken(token);
   }
 
   private clearToken(): void {
-    localStorage.removeItem(TOKEN_KEY);
+    if (isAdminPath()) {
+      localStorage.removeItem(ADMIN_TOKEN_KEY);
+    }
+    localStorage.removeItem(PORTAL_TOKEN_KEY);
   }
 
   private getHeaders(includeJsonContentType: boolean = true): HeadersInit {
@@ -198,6 +213,10 @@ class ApiClient {
 
   setAuthToken(token: string): void {
     this.setToken(token);
+  }
+
+  setAdminAuthToken(token: string): void {
+    setAdminAccessToken(token);
   }
 
   removeAuthToken(): void {

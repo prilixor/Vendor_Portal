@@ -34,7 +34,6 @@ const CustomerRegister = () => {
     try {
       await registerCustomer(email.trim(), password, fullName.trim(), phone.trim() || undefined);
       await login(email.trim(), password, "customer");
-      localStorage.removeItem("adminUser");
       toast.success("Welcome! Your account is ready.");
       window.location.href = "/customer/shop";
     } catch (error) {

@@ -368,7 +368,18 @@ const CustomerOrders = () => {
                                 {o.orderType?.toLowerCase() === "buy" ? (
                                   <span>Purchase Date: <strong className="text-foreground font-medium">{formatOrderDate(o.startDate)}</strong></span>
                                 ) : (
-                                  <span>Period: <strong className="text-foreground font-medium">{formatDateRange(o.startDate, o.endDate)}</strong></span>
+                                  <>
+                                    <span>Period: <strong className="text-foreground font-medium">{formatDateRange(o.startDate, o.endDate)}</strong></span>
+                                    {o.rentalDurationLabel ? (
+                                      <>
+                                        <span className="text-muted-foreground/30" aria-hidden="true">•</span>
+                                        <span>
+                                          Duration:{" "}
+                                          <strong className="text-foreground font-medium">{o.rentalDurationLabel}</strong>
+                                        </span>
+                                      </>
+                                    ) : null}
+                                  </>
                                 )}
                                 <span className="text-muted-foreground/30" aria-hidden="true">•</span>
                                 <span>Qty: <strong className="text-foreground font-medium">{o.quantity}</strong></span>

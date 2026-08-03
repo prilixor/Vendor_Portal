@@ -33,4 +33,5 @@ public class Product : AuditableEntity<Guid>, ISoftDelete
     public ICollection<VendorProductListing> VendorProductListings { get; set; } = [];
     public ChemicalProperty? ChemicalProperty { get; set; }
     public ICollection<ProductVariant> Variants { get; set; } = [];
+    public ICollection<ProductRentalPricingPlan> RentalPricingPlans { get; set; } = [];
 }

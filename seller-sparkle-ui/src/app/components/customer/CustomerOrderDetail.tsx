@@ -487,19 +487,40 @@ const CustomerOrderDetail = () => {
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rental period</p>
                 <p className="text-sm font-medium">
-                  {activeItem.rentalDays}{" "}
-                  {activeItem.rentalPeriodUnit === "week"
-                    ? activeItem.rentalDays === 1
-                      ? "week"
-                      : "weeks"
-                    : activeItem.rentalPeriodUnit === "month"
-                      ? activeItem.rentalDays === 1
-                        ? "month"
-                        : "months"
-                      : activeItem.rentalDays === 1
-                        ? "day"
-                        : "days"}
+                  {activeItem.rentalDurationLabel
+                    ? `${activeItem.rentalDurationLabel}${
+                        activeItem.rentalDurationDays
+                          ? ` (${activeItem.rentalDurationDays} day${activeItem.rentalDurationDays === 1 ? "" : "s"})`
+                          : ""
+                      }`
+                    : (
+                      <>
+                        {activeItem.rentalDays}{" "}
+                        {activeItem.rentalPeriodUnit === "week"
+                          ? activeItem.rentalDays === 1
+                            ? "week"
+                            : "weeks"
+                          : activeItem.rentalPeriodUnit === "month"
+                            ? activeItem.rentalDays === 1
+                              ? "month"
+                              : "months"
+                            : activeItem.rentalDays === 1
+                              ? "day"
+                              : "days"}
+                      </>
+                    )}
                 </p>
+                {activeItem.rentalFinalPrice != null ? (
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {activeItem.rentalNormalPrice != null &&
+                    Number(activeItem.rentalNormalPrice) > Number(activeItem.rentalFinalPrice) ? (
+                      <>
+                        <span className="line-through">₹{Number(activeItem.rentalNormalPrice).toFixed(0)}</span>{" "}
+                      </>
+                    ) : null}
+                    Plan price ₹{Number(activeItem.rentalFinalPrice).toFixed(0)}
+                  </p>
+                ) : null}
               </div>
             </>
           )}

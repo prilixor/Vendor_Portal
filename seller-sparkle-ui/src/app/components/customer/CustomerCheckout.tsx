@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { customerApi } from "@/app/services/customerApi";
 import type { PlaceCustomerOrdersResultApi } from "@/app/services/customerApi";
-import { useCart } from "@/app/contexts/CartContext";
+import { estimateCartLineRent, useCart } from "@/app/contexts/CartContext";
 import { useAuth } from "@/app/guards/AuthContext";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
@@ -114,6 +114,11 @@ const CustomerCheckout = () => {
         rentalPeriodUnit: l.rentalPeriodUnit,
         orderType: l.orderType,
         productVariantId: l.productVariantId || undefined,
+        ...(l.rentalPricingPlanId
+          ? {
+              rentalPricingPlanId: l.rentalPricingPlanId,
+            }
+          : {}),
         ...(l.prescriptionRequired && medicalRefs[l.listingId]?.doctorId
           ? { doctorId: medicalRefs[l.listingId]!.doctorId }
           : {}),
@@ -147,6 +152,11 @@ const CustomerCheckout = () => {
           rentalPeriodUnit: l.rentalPeriodUnit,
           orderType: l.orderType,
           productVariantId: l.productVariantId || undefined,
+          ...(l.rentalPricingPlanId
+            ? {
+                rentalPricingPlanId: l.rentalPricingPlanId,
+              }
+            : {}),
           ...(l.prescriptionRequired && medicalRefs[l.listingId]?.doctorId
             ? { doctorId: medicalRefs[l.listingId]!.doctorId }
             : {}),
@@ -471,6 +481,7 @@ const CustomerCheckout = () => {
             <div className="space-y-3 text-sm">
               {lines.map((l) => {
                 const imageUrl = resolveItemImageUrl(l);
+                const isPlanBased = !!l.rentalPricingPlanId && l.rentalFinalPrice != null;
                 return (
                 <div key={l.listingId} className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -489,16 +500,24 @@ const CustomerCheckout = () => {
                       <span className="font-medium tabular-nums">{l.quantity}</span>
                       <span className="text-muted-foreground"> × </span>
                       <span>{l.title}</span>
+                      {l.orderType === "rent" && isPlanBased ? (
+                        <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                          {l.rentalDurationLabel || `${l.rentalDurationDays} days`}
+                          {" · Starts on delivery"}
+                          {l.rentalNormalPrice != null &&
+                          Number(l.rentalNormalPrice) > Number(l.rentalFinalPrice) ? (
+                            <>
+                              {" · "}
+                              <span className="line-through">₹{Number(l.rentalNormalPrice).toFixed(0)}</span>{" "}
+                              ₹{Number(l.rentalFinalPrice).toFixed(0)}
+                            </>
+                          ) : null}
+                        </span>
+                      ) : null}
                     </span>
                   </div>
                   <span className="shrink-0 tabular-nums font-medium">
-                    ₹{(l.orderType === "buy"
-                      ? (l.buyPrice ?? 0) * l.quantity
-                      : (l.rentalPeriodUnit === "week"
-                          ? l.weeklyRent
-                          : l.rentalPeriodUnit === "month"
-                            ? l.monthlyRent
-                            : l.dailyRent) * l.quantity * l.rentalDays).toFixed(0)}
+                    ₹{estimateCartLineRent(l).toFixed(0)}
                   </span>
                 </div>
                 );
@@ -590,7 +609,9 @@ const CustomerCheckout = () => {
         buyTotal={rentToBuySuggestion?.buyAmount ?? 0}
         durationLabel={(() => {
           const line = lines.find((l) => l.listingId === rentToBuySuggestion?.listingId);
-          return line ? formatRentalDuration(line.rentalDays, line.rentalPeriodUnit) : "this rental";
+          if (!line) return "this rental";
+          if (line.rentalDurationLabel) return line.rentalDurationLabel;
+          return formatRentalDuration(line.rentalDays, line.rentalPeriodUnit);
         })()}
         buyAvailable
         compulsory

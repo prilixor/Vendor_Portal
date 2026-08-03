@@ -327,6 +327,7 @@ public sealed class VendorOnboardingRepository(
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
             .Include(x => x.Variants)
+            .Include(x => x.RentalPricingPlans)
             .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
         if (product is not null)
         {
@@ -337,6 +338,7 @@ public sealed class VendorOnboardingRepository(
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
             .Include(x => x.Variants)
+            .Include(x => x.RentalPricingPlans)
             .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
     }
 
@@ -347,6 +349,7 @@ public sealed class VendorOnboardingRepository(
         var legacyProduct = await dbContext.Products
             .Include(x => x.ChemicalProperty)
             .Include(x => x.Variants)
+            .Include(x => x.RentalPricingPlans)
             .FirstOrDefaultAsync(x => x.Id == product.Id, cancellationToken);
         if (legacyProduct is null)
         {
@@ -355,18 +358,29 @@ public sealed class VendorOnboardingRepository(
         }
 
         CopyProductValues(product, legacyProduct);
-        dbContext.Products.Update(legacyProduct);
+        await EnsureRentalPricingPlanGraphAsync(dbContext, legacyProduct, cancellationToken);
     }
 
     public async Task UpdateProductAsync(Product product, CancellationToken cancellationToken)
     {
-        commonDbContext.Products.Update(product);
+        // Product is usually already tracked from GetProductByIdAsync.
+        // Do NOT call Products.Update(product): EF marks newly added rental plans
+        // (Ids already assigned via CreateVersion7) as Modified, which emits
+        // UPDATE … WHERE id = @id and throws DbUpdateConcurrencyException (0 rows).
+        if (commonDbContext.Entry(product).State == EntityState.Detached)
+        {
+            commonDbContext.Attach(product);
+            commonDbContext.Entry(product).State = EntityState.Modified;
+        }
 
-        // Must include ChemicalProperty/Variants so CopyProductValues updates existing rows
+        await EnsureRentalPricingPlanGraphAsync(commonDbContext, product, cancellationToken);
+
+        // Must include ChemicalProperty/Variants/Plans so CopyProductValues updates existing rows
         // instead of inserting duplicates (uq_chemical_properties_product / sku uniqueness).
         var legacyProduct = await dbContext.Products
             .Include(x => x.ChemicalProperty)
             .Include(x => x.Variants)
+            .Include(x => x.RentalPricingPlans)
             .FirstOrDefaultAsync(x => x.Id == product.Id, cancellationToken);
         if (legacyProduct is null)
         {
@@ -375,7 +389,65 @@ public sealed class VendorOnboardingRepository(
         }
 
         CopyProductValues(product, legacyProduct);
-        dbContext.Products.Update(legacyProduct);
+        await EnsureRentalPricingPlanGraphAsync(dbContext, legacyProduct, cancellationToken);
+    }
+
+    /// <summary>
+    /// Keep rental-plan change-tracker states correct after collection sync:
+    /// missing rows → Added, removed tracked plans → Deleted.
+    /// </summary>
+    private static async Task EnsureRentalPricingPlanGraphAsync(
+        DbContext ctx,
+        Product product,
+        CancellationToken cancellationToken)
+    {
+        var keepIds = product.RentalPricingPlans?.Select(p => p.Id).ToHashSet() ?? [];
+
+        if (product.RentalPricingPlans != null)
+        {
+            foreach (var plan in product.RentalPricingPlans)
+            {
+                var entry = ctx.Entry(plan);
+                if (entry.State == EntityState.Detached)
+                {
+                    var exists = await ctx.Set<ProductRentalPricingPlan>()
+                        .AsNoTracking()
+                        .AnyAsync(p => p.Id == plan.Id, cancellationToken);
+                    if (exists)
+                    {
+                        ctx.Attach(plan);
+                        ctx.Entry(plan).State = EntityState.Modified;
+                    }
+                    else
+                    {
+                        ctx.Add(plan);
+                    }
+
+                    continue;
+                }
+
+                // Attach/Update can flip brand-new children (pre-assigned Ids) to Modified.
+                if (entry.State == EntityState.Modified)
+                {
+                    var exists = await ctx.Set<ProductRentalPricingPlan>()
+                        .AsNoTracking()
+                        .AnyAsync(p => p.Id == plan.Id, cancellationToken);
+                    if (!exists)
+                    {
+                        entry.State = EntityState.Added;
+                    }
+                }
+            }
+        }
+
+        foreach (var orphan in ctx.ChangeTracker.Entries<ProductRentalPricingPlan>()
+                     .Where(e => e.Entity.ProductId == product.Id
+                                 && e.State is not (EntityState.Deleted or EntityState.Detached)
+                                 && !keepIds.Contains(e.Entity.Id))
+                     .ToList())
+        {
+            orphan.State = EntityState.Deleted;
+        }
     }
 
     public async Task DeleteProductAsync(Guid productId, CancellationToken cancellationToken)
@@ -406,6 +478,7 @@ public sealed class VendorOnboardingRepository(
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
             .Include(x => x.Variants)
+            .Include(x => x.RentalPricingPlans)
             .Where(x => !x.IsDeleted)
             .AsQueryable();
 
@@ -424,6 +497,7 @@ public sealed class VendorOnboardingRepository(
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
             .Include(x => x.Variants)
+            .Include(x => x.RentalPricingPlans)
             .Where(x => !x.IsDeleted)
             .AsQueryable();
         if (categoryId.HasValue)
@@ -468,6 +542,121 @@ public sealed class VendorOnboardingRepository(
             .OrderBy(x => x.CreatedOnUtc)
             .Take(take)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<RentalDurationMaster>> GetRentalDurationMastersAsync(bool activeOnly, CancellationToken cancellationToken)
+    {
+        var query = commonDbContext.RentalDurationMasters.Where(x => !x.IsDeleted);
+        if (activeOnly)
+            query = query.Where(x => x.IsActive);
+
+        var rows = await query
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.DurationDays)
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count > 0)
+            return rows;
+
+        var legacy = dbContext.RentalDurationMasters.Where(x => !x.IsDeleted);
+        if (activeOnly)
+            legacy = legacy.Where(x => x.IsActive);
+
+        return await legacy
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.DurationDays)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<RentalDurationMaster?> GetRentalDurationMasterByIdAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var row = await commonDbContext.RentalDurationMasters
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        if (row is not null)
+            return row;
+
+        return await dbContext.RentalDurationMasters
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task AddRentalDurationMasterAsync(RentalDurationMaster entity, CancellationToken cancellationToken)
+    {
+        await commonDbContext.RentalDurationMasters.AddAsync(entity, cancellationToken);
+
+        var legacy = await dbContext.RentalDurationMasters
+            .FirstOrDefaultAsync(x => x.Id == entity.Id, cancellationToken);
+        if (legacy is null)
+        {
+            await dbContext.RentalDurationMasters.AddAsync(CloneRentalDurationMaster(entity), cancellationToken);
+            return;
+        }
+
+        CopyRentalDurationMasterValues(entity, legacy);
+    }
+
+    public async Task UpdateRentalDurationMasterAsync(RentalDurationMaster entity, CancellationToken cancellationToken)
+    {
+        if (commonDbContext.Entry(entity).State == EntityState.Detached)
+            commonDbContext.RentalDurationMasters.Update(entity);
+
+        var legacy = await dbContext.RentalDurationMasters
+            .FirstOrDefaultAsync(x => x.Id == entity.Id, cancellationToken);
+        if (legacy is null)
+        {
+            await dbContext.RentalDurationMasters.AddAsync(CloneRentalDurationMaster(entity), cancellationToken);
+            return;
+        }
+
+        CopyRentalDurationMasterValues(entity, legacy);
+    }
+
+    public async Task DeleteRentalDurationMasterAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var entity = await commonDbContext.RentalDurationMasters
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        if (entity is not null)
+        {
+            entity.IsDeleted = true;
+            entity.DeletedAt = DateTimeOffset.UtcNow;
+            entity.IsActive = false;
+        }
+
+        var legacy = await dbContext.RentalDurationMasters
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        if (legacy is not null)
+        {
+            legacy.IsDeleted = true;
+            legacy.DeletedAt = DateTimeOffset.UtcNow;
+            legacy.IsActive = false;
+        }
+    }
+
+    private static RentalDurationMaster CloneRentalDurationMaster(RentalDurationMaster source) =>
+        new()
+        {
+            Id = source.Id,
+            DurationLabel = source.DurationLabel,
+            DurationDays = source.DurationDays,
+            SortOrder = source.SortOrder,
+            IsActive = source.IsActive,
+            CreatedOnUtc = source.CreatedOnUtc,
+            ModifiedOnUtc = source.ModifiedOnUtc,
+            IsDeleted = source.IsDeleted,
+            DeletedAt = source.DeletedAt,
+            DeletedBy = source.DeletedBy,
+        };
+
+    private static void CopyRentalDurationMasterValues(RentalDurationMaster source, RentalDurationMaster destination)
+    {
+        destination.DurationLabel = source.DurationLabel;
+        destination.DurationDays = source.DurationDays;
+        destination.SortOrder = source.SortOrder;
+        destination.IsActive = source.IsActive;
+        destination.CreatedOnUtc = source.CreatedOnUtc;
+        destination.ModifiedOnUtc = source.ModifiedOnUtc;
+        destination.IsDeleted = source.IsDeleted;
+        destination.DeletedAt = source.DeletedAt;
+        destination.DeletedBy = source.DeletedBy;
     }
 
     public Task<VendorProductListing?> GetVendorProductListingByIdAsync(Guid vendorId, Guid listingId, CancellationToken cancellationToken)
@@ -1269,6 +1458,23 @@ public sealed class VendorOnboardingRepository(
                 IsActive = v.IsActive,
                 CreatedOnUtc = v.CreatedOnUtc,
                 ModifiedOnUtc = v.ModifiedOnUtc
+            }).ToList() ?? [],
+            RentalPricingPlans = source.RentalPricingPlans?.Select(p => new ProductRentalPricingPlan
+            {
+                Id = p.Id,
+                ProductId = p.ProductId,
+                DurationLabel = p.DurationLabel,
+                DurationDays = p.DurationDays,
+                NormalPrice = p.NormalPrice,
+                DiscountType = p.DiscountType,
+                DiscountValue = p.DiscountValue,
+                FinalRentalPrice = p.FinalRentalPrice,
+                IsRecommended = p.IsRecommended,
+                IsActive = p.IsActive,
+                SortOrder = p.SortOrder,
+                RentalDurationMasterId = p.RentalDurationMasterId,
+                CreatedOnUtc = p.CreatedOnUtc,
+                ModifiedOnUtc = p.ModifiedOnUtc
             }).ToList() ?? []
         };
 
@@ -1359,6 +1565,56 @@ public sealed class VendorOnboardingRepository(
             foreach (var tr in toRemove)
             {
                 destination.Variants.Remove(tr);
+            }
+        }
+
+        if (source.RentalPricingPlans != null)
+        {
+            destination.RentalPricingPlans ??= new List<ProductRentalPricingPlan>();
+            foreach (var sp in source.RentalPricingPlans)
+            {
+                var dp = destination.RentalPricingPlans.FirstOrDefault(p => p.Id == sp.Id);
+                if (dp is null)
+                {
+                    destination.RentalPricingPlans.Add(new ProductRentalPricingPlan
+                    {
+                        Id = sp.Id == Guid.Empty ? Guid.NewGuid() : sp.Id,
+                        ProductId = destination.Id,
+                        DurationLabel = sp.DurationLabel,
+                        DurationDays = sp.DurationDays,
+                        NormalPrice = sp.NormalPrice,
+                        DiscountType = sp.DiscountType,
+                        DiscountValue = sp.DiscountValue,
+                        FinalRentalPrice = sp.FinalRentalPrice,
+                        IsRecommended = sp.IsRecommended,
+                        IsActive = sp.IsActive,
+                        SortOrder = sp.SortOrder,
+                        RentalDurationMasterId = sp.RentalDurationMasterId,
+                        CreatedOnUtc = sp.CreatedOnUtc,
+                        ModifiedOnUtc = sp.ModifiedOnUtc
+                    });
+                }
+                else
+                {
+                    dp.DurationLabel = sp.DurationLabel;
+                    dp.DurationDays = sp.DurationDays;
+                    dp.NormalPrice = sp.NormalPrice;
+                    dp.DiscountType = sp.DiscountType;
+                    dp.DiscountValue = sp.DiscountValue;
+                    dp.FinalRentalPrice = sp.FinalRentalPrice;
+                    dp.IsRecommended = sp.IsRecommended;
+                    dp.IsActive = sp.IsActive;
+                    dp.SortOrder = sp.SortOrder;
+                    dp.RentalDurationMasterId = sp.RentalDurationMasterId;
+                    dp.ModifiedOnUtc = sp.ModifiedOnUtc;
+                }
+            }
+            var plansToRemove = destination.RentalPricingPlans
+                .Where(dp => !source.RentalPricingPlans.Any(sp => sp.Id == dp.Id))
+                .ToList();
+            foreach (var tr in plansToRemove)
+            {
+                destination.RentalPricingPlans.Remove(tr);
             }
         }
     }

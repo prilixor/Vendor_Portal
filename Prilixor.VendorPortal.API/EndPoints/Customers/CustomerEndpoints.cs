@@ -139,6 +139,8 @@ public sealed class CustomerListingDetailResponse
     /// <summary>Customer-facing packaging sizes (SKUs) with per-size price and live stock.</summary>
     public List<CustomerListingVariantResponse> Variants { get; set; } = [];
     public List<VariantInventoryItemResponse> VariantInventory { get; set; } = [];
+    /// <summary>Active day-based rental pricing plans (sorted).</summary>
+    public List<ProductRentalPricingPlanDto> RentalPricingPlans { get; set; } = [];
 }
 
 /// <summary>Per-variant stock for customer-side availability display.</summary>
@@ -253,6 +255,11 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
                     ProductVariantId = vi.ProductVariantId,
                     AvailableQuantity = vi.AvailableQuantity,
                 })
+                .ToList(),
+            RentalPricingPlans = agg.RentalPricingPlans
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.DurationDays)
                 .ToList(),
         };
 
@@ -475,6 +482,8 @@ public sealed class CartLineDto
     public Guid? HospitalId { get; set; }
     public string? ContactNumber { get; set; }
     public string? ReferenceNumber { get; set; }
+    public Guid? RentalPricingPlanId { get; set; }
+    public DateOnly? RentalStartDate { get; set; }
 }
 
 public sealed class PlaceCustomerOrdersRequest
@@ -509,7 +518,8 @@ public sealed class QuoteCustomerOrdersEndpoint(IMediator mediator)
 
         var lines = req.Lines.ConvertAll(l => new CartLineRequest(
             l.ListingId, l.Quantity, l.RentalDays, l.RentalPeriodUnit, l.OrderType, l.ProductVariantId,
-            l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber));
+            l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber,
+            l.RentalPricingPlanId, l.RentalStartDate));
         var result = await mediator.Send(new QuoteCustomerOrdersCommand(
             customerId,
             req.CustomerAddressId,
@@ -540,7 +550,8 @@ public sealed class PlaceCustomerOrdersEndpoint(IMediator mediator)
 
         var lines = req.Lines.ConvertAll(l => new CartLineRequest(
             l.ListingId, l.Quantity, l.RentalDays, l.RentalPeriodUnit, l.OrderType, l.ProductVariantId,
-            l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber));
+            l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber,
+            l.RentalPricingPlanId, l.RentalStartDate));
         var result = await mediator.Send(new PlaceCustomerOrdersCommand(
             customerId,
             req.CustomerAddressId,

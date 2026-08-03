@@ -61,6 +61,12 @@ public interface IVendorOnboardingRepository
     Task<List<ProductImage>> GetProductImagesAsync(Guid productId, CancellationToken cancellationToken);
     Task<List<ProductImage>> GetProductImagesMissingThumbnailsAsync(int limit, CancellationToken cancellationToken);
 
+    Task<List<RentalDurationMaster>> GetRentalDurationMastersAsync(bool activeOnly, CancellationToken cancellationToken);
+    Task<RentalDurationMaster?> GetRentalDurationMasterByIdAsync(Guid id, CancellationToken cancellationToken);
+    Task AddRentalDurationMasterAsync(RentalDurationMaster entity, CancellationToken cancellationToken);
+    Task UpdateRentalDurationMasterAsync(RentalDurationMaster entity, CancellationToken cancellationToken);
+    Task DeleteRentalDurationMasterAsync(Guid id, CancellationToken cancellationToken);
+
     Task<VendorProductListing?> GetVendorProductListingByIdAsync(Guid vendorId, Guid listingId, CancellationToken cancellationToken);
     Task<VendorProductListing?> GetVendorProductListingByVendorProductAsync(Guid vendorId, Guid productId, CancellationToken cancellationToken);
     Task AddVendorProductListingAsync(VendorProductListing listing, CancellationToken cancellationToken);

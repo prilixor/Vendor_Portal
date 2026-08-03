@@ -862,19 +862,40 @@ const VendorOrderDetail = () => {
                   <div className="space-y-1">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rental period</p>
                     <p className="text-sm font-medium">
-                      {order.rentalDays}{" "}
-                      {order.rentalPeriodUnit === "week"
-                        ? order.rentalDays === 1
-                          ? "week"
-                          : "weeks"
-                        : order.rentalPeriodUnit === "month"
-                          ? order.rentalDays === 1
-                            ? "month"
-                            : "months"
-                          : order.rentalDays === 1
-                            ? "day"
-                            : "days"}
+                      {order.rentalDurationLabel
+                        ? `${order.rentalDurationLabel}${
+                            order.rentalDurationDays
+                              ? ` (${order.rentalDurationDays} day${order.rentalDurationDays === 1 ? "" : "s"})`
+                              : ""
+                          }`
+                        : (
+                          <>
+                            {order.rentalDays}{" "}
+                            {order.rentalPeriodUnit === "week"
+                              ? order.rentalDays === 1
+                                ? "week"
+                                : "weeks"
+                              : order.rentalPeriodUnit === "month"
+                                ? order.rentalDays === 1
+                                  ? "month"
+                                  : "months"
+                                : order.rentalDays === 1
+                                  ? "day"
+                                  : "days"}
+                          </>
+                        )}
                     </p>
+                    {order.rentalFinalPrice != null ? (
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {order.rentalNormalPrice != null &&
+                        Number(order.rentalNormalPrice) > Number(order.rentalFinalPrice) ? (
+                          <>
+                            <span className="line-through">₹{Number(order.rentalNormalPrice).toFixed(0)}</span>{" "}
+                          </>
+                        ) : null}
+                        Plan price ₹{Number(order.rentalFinalPrice).toFixed(0)}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">

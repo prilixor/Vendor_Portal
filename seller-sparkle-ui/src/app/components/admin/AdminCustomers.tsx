@@ -233,7 +233,7 @@ export const AdminCustomerDetail = () => {
                       `/impersonation/consume?code=${encodeURIComponent(result.exchangeCode)}`,
                     );
                     window.open(href, "_blank", "noopener,noreferrer");
-                    toast.success(`Opening ${result.targetName} in Customer Portal`);
+                    toast.success(`Opened ${result.targetName} in a new tab. Your admin session stays here.`);
                   } catch (e) {
                     toast.error(getUserFriendlyMessage(e));
                   } finally {

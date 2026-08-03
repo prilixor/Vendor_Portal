@@ -51,6 +51,7 @@ public sealed class CreateProductRequest
     public bool IsBuyEnabled { get; set; } = true;
     public bool IsActive { get; set; } = true;
     public List<CreateOrUpdateProductVariantDto>? Variants { get; set; }
+    public List<CreateOrUpdateProductRentalPricingPlanDto>? RentalPricingPlans { get; set; }
     public string? CasNumber { get; set; }
     public string? ChemicalFormula { get; set; }
     public decimal? PurityPercentage { get; set; }
@@ -84,6 +85,7 @@ public sealed class UpdateProductRequest
     public bool IsBuyEnabled { get; set; } = true;
     public bool IsActive { get; set; }
     public List<CreateOrUpdateProductVariantDto>? Variants { get; set; }
+    public List<CreateOrUpdateProductRentalPricingPlanDto>? RentalPricingPlans { get; set; }
     public string? CasNumber { get; set; }
     public string? ChemicalFormula { get; set; }
     public decimal? PurityPercentage { get; set; }
@@ -266,6 +268,7 @@ public sealed class CreateProductEndpoint(IMediator mediator)
             req.IsBuyEnabled,
             req.IsActive,
             req.Variants,
+            req.RentalPricingPlans,
             req.CasNumber,
             req.ChemicalFormula,
             req.PurityPercentage,
@@ -314,6 +317,7 @@ public sealed class UpdateProductEndpoint(IMediator mediator)
             req.IsBuyEnabled,
             req.IsActive,
             req.Variants,
+            req.RentalPricingPlans,
             req.CasNumber,
             req.ChemicalFormula,
             req.PurityPercentage,
@@ -516,5 +520,119 @@ public sealed class BackfillProductImageThumbnailsEndpoint(IMediator mediator)
     {
         var result = await mediator.Send(new BackfillProductImageThumbnailsCommand(req.Limit <= 0 ? 50 : req.Limit), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetRentalDurationMastersRequest
+{
+    public bool ActiveOnly { get; set; }
+}
+
+public sealed class GetRentalDurationMastersEndpoint(IMediator mediator)
+    : Endpoint<GetRentalDurationMastersRequest, Results<Ok<List<RentalDurationMasterDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/rental-durations");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<List<RentalDurationMasterDto>>, ProblemHttpResult>> ExecuteAsync(
+        GetRentalDurationMastersRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetRentalDurationMastersQuery(req.ActiveOnly), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class CreateRentalDurationMasterRequest
+{
+    public string DurationLabel { get; set; } = string.Empty;
+    public int DurationDays { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class CreateRentalDurationMasterEndpoint(IMediator mediator)
+    : Endpoint<CreateRentalDurationMasterRequest, Results<Ok<RentalDurationMasterDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("catalog/rental-durations");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<RentalDurationMasterDto>, ProblemHttpResult>> ExecuteAsync(
+        CreateRentalDurationMasterRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new CreateRentalDurationMasterCommand(
+            req.DurationLabel,
+            req.DurationDays,
+            req.SortOrder,
+            req.IsActive), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class UpdateRentalDurationMasterRequest
+{
+    public string Id { get; set; } = string.Empty;
+    public string DurationLabel { get; set; } = string.Empty;
+    public int DurationDays { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class UpdateRentalDurationMasterEndpoint(IMediator mediator)
+    : Endpoint<UpdateRentalDurationMasterRequest, Results<Ok<RentalDurationMasterDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Put("catalog/rental-durations/{id}");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<RentalDurationMasterDto>, ProblemHttpResult>> ExecuteAsync(
+        UpdateRentalDurationMasterRequest req,
+        CancellationToken ct)
+    {
+        req.Id = Route<string>("id") ?? req.Id;
+        var result = await mediator.Send(new UpdateRentalDurationMasterCommand(
+            req.Id,
+            req.DurationLabel,
+            req.DurationDays,
+            req.SortOrder,
+            req.IsActive), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class DeleteRentalDurationMasterRequest
+{
+    public string Id { get; set; } = string.Empty;
+}
+
+public sealed class DeleteRentalDurationMasterEndpoint(IMediator mediator)
+    : Endpoint<DeleteRentalDurationMasterRequest, Results<Ok, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Delete("catalog/rental-durations/{id}");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok, ProblemHttpResult>> ExecuteAsync(
+        DeleteRentalDurationMasterRequest req,
+        CancellationToken ct)
+    {
+        req.Id = Route<string>("id") ?? req.Id;
+        var result = await mediator.Send(new DeleteRentalDurationMasterCommand(req.Id), ct);
+        return result.IsSuccess ? TypedResults.Ok() : result.ToErrorResponse();
     }
 }

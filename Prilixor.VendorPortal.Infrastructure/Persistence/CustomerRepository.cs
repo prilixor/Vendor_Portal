@@ -165,6 +165,7 @@ public sealed class CustomerRepository(
             .Include(p => p.ProductImages)
             .Include(p => p.ChemicalProperty)
             .Include(p => p.Variants)
+            .Include(p => p.RentalPricingPlans)
             .Where(p =>
                 !p.IsDeleted &&
                 p.IsActive &&
@@ -426,6 +427,7 @@ public sealed class CustomerRepository(
             .Include(p => p.ProductImages)
             .Include(p => p.ChemicalProperty)
             .Include(p => p.Variants)
+            .Include(p => p.RentalPricingPlans)
             .FirstOrDefaultAsync(p => p.Id == l.ProductId && !p.IsDeleted, cancellationToken);
         if (product is null)
         {
@@ -449,6 +451,7 @@ public sealed class CustomerRepository(
             .Include(p => p.ProductImages)
             .Include(p => p.ChemicalProperty)
             .Include(p => p.Variants)
+            .Include(p => p.RentalPricingPlans)
             .FirstOrDefaultAsync(p => p.Id == productId && !p.IsDeleted, cancellationToken);
         if (product is null)
         {
@@ -1463,6 +1466,21 @@ public sealed class CustomerRepository(
                 v.VendorPrice,
                 v.BuyPrice,
                 v.IsActive)).ToList() ?? [],
+            RentalPricingPlans = product.RentalPricingPlans?
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.DurationDays)
+                .Select(p => new Prilixor.VendorPortal.Application.Onboarding.ProductRentalPricingPlanDto(
+                    p.Id.ToString(),
+                    p.ProductId.ToString(),
+                    p.DurationLabel,
+                    p.DurationDays,
+                    p.NormalPrice,
+                    p.DiscountType,
+                    p.DiscountValue,
+                    p.FinalRentalPrice,
+                    p.IsRecommended,
+                    p.IsActive,
+                    p.SortOrder)).ToList() ?? [],
             VariantInventory = variantInventory
                 .Select(vi => new VariantInventoryItem(vi.ProductVariantId, vi.AvailableQuantity))
                 .ToList(),
@@ -1809,6 +1827,7 @@ public sealed class CustomerRepository(
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
             .Include(p => p.Variants)
+            .Include(p => p.RentalPricingPlans)
             .Where(p => !p.IsDeleted && p.IsActive && productIds.Contains(p.Id));
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -1857,6 +1876,7 @@ public sealed class CustomerRepository(
                     .Include(p => p.Category)
                     .Include(p => p.ProductImages)
                     .Include(p => p.Variants)
+                    .Include(p => p.RentalPricingPlans)
                     .Where(p => !p.IsDeleted && p.IsActive && productIds.Contains(p.Id));
             }
         }
