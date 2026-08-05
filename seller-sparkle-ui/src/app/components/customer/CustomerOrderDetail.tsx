@@ -1,8 +1,8 @@
 import { useParams, Link } from "react-router-dom";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Headset, MessageCircle } from "lucide-react";
-import { customerApi } from "@/app/services/customerApi";
+import { Check, Headset, ImagePlus, Loader2, MessageCircle, X } from "lucide-react";
+import { customerApi, type CustomerOrderImageApi } from "@/app/services/customerApi";
 import { chatApi } from "@/app/services/chatApi";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
@@ -57,6 +57,18 @@ function formatDetailDate(value?: string | null): string {
 function isCustomerOrderCancellable(status: string): boolean {
   const s = status.trim().toLowerCase();
   return s === "pending" || s === "awaiting vendor acceptance";
+}
+
+const MAX_ORDER_IMAGES = 5;
+
+function canSendOrderImagesToVendor(status: string): boolean {
+  const compact = status.trim().toLowerCase().replace(/\s+/g, "_");
+  return (
+    compact === "pending" ||
+    compact === "awaiting_vendor_acceptance" ||
+    compact === "confirmed" ||
+    compact === "in_transit"
+  );
 }
 
 const getTimelineSteps = (orderType?: string) => {
@@ -202,6 +214,8 @@ const CustomerOrderDetail = () => {
 
   const [buyoutDialogOpen, setBuyoutDialogOpen] = useState(false);
   const [buyoutQuote, setBuyoutQuote] = useState<BuyoutQuoteApi | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const orderImageInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch current selected item details
   const currentItemId = selectedItemId || orderId;
@@ -315,6 +329,55 @@ const CustomerOrderDetail = () => {
     },
     onError: (err: Error) => toast.error(err.message || "Failed to process buyout.")
   });
+
+  const {
+    data: orderImages = [],
+    isLoading: orderImagesLoading,
+  } = useQuery({
+    queryKey: ["customer-order-images", currentItemId],
+    queryFn: () => customerApi.getOrderImages(currentItemId!),
+    enabled: !!currentItemId,
+  });
+
+  const uploadOrderImageMut = useMutation({
+    mutationFn: (file: File) => customerApi.uploadOrderImage(currentItemId!, file),
+    onSuccess: () => {
+      toast.success("Photo sent to vendor.");
+      queryClient.invalidateQueries({ queryKey: ["customer-order-images", currentItemId] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to upload photo."),
+  });
+
+  const deleteOrderImageMut = useMutation({
+    mutationFn: (imageId: string) => customerApi.deleteOrderImage(currentItemId!, imageId),
+    onSuccess: () => {
+      toast.success("Photo removed.");
+      queryClient.invalidateQueries({ queryKey: ["customer-order-images", currentItemId] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to remove photo."),
+  });
+
+  const handleOrderImagePick = (files: FileList | null) => {
+    if (!files?.length || !currentItemId) return;
+    const remaining = MAX_ORDER_IMAGES - orderImages.length;
+    if (remaining <= 0) {
+      toast.error(`You can send at most ${MAX_ORDER_IMAGES} photos for this order.`);
+      return;
+    }
+    const selected = Array.from(files).slice(0, remaining);
+    for (const file of selected) {
+      if (!file.type.startsWith("image/")) {
+        toast.error("Only image files are allowed.");
+        continue;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name} is larger than 5 MB.`);
+        continue;
+      }
+      uploadOrderImageMut.mutate(file);
+    }
+    if (orderImageInputRef.current) orderImageInputRef.current.value = "";
+  };
 
   // Find all items belonging to the same order group prefix
   const orderGroupItems = useMemo(() => {
@@ -548,6 +611,105 @@ const CustomerOrderDetail = () => {
           hospitalCity={activeItem.hospitalCity}
         />
       )}
+
+      {/* Photos for vendor (not Admin chat) */}
+      {(canSendOrderImagesToVendor(activeItem.status) || orderImages.length > 0) && (
+        <Card className="border-border/80 shadow-sm">
+          <CardHeader className="pb-3">
+            <p className="text-lg font-semibold">Photos for vendor</p>
+            <p className="text-xs text-muted-foreground">
+              Send up to {MAX_ORDER_IMAGES} photos for this item to the vendor
+              {canSendOrderImagesToVendor(activeItem.status)
+                ? " before delivery. Removed automatically after delivery."
+                : ". Uploads are closed after delivery."}
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <input
+              ref={orderImageInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              className="hidden"
+              onChange={(e) => handleOrderImagePick(e.target.files)}
+            />
+
+            {orderImagesLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading photos…
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+                {orderImages.map((img: CustomerOrderImageApi) => (
+                  <div
+                    key={img.id}
+                    className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted"
+                  >
+                    <button
+                      type="button"
+                      className="h-full w-full"
+                      onClick={() => setPreviewImageUrl(img.fileUrl)}
+                      aria-label="Preview photo"
+                    >
+                      <img
+                        src={img.fileUrl}
+                        alt={img.originalFileName || "Order photo"}
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
+                    {canSendOrderImagesToVendor(activeItem.status) && (
+                      <button
+                        type="button"
+                        className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                        disabled={deleteOrderImageMut.isPending}
+                        onClick={() => deleteOrderImageMut.mutate(img.id)}
+                        aria-label="Remove photo"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                {canSendOrderImagesToVendor(activeItem.status) &&
+                  orderImages.length < MAX_ORDER_IMAGES && (
+                    <button
+                      type="button"
+                      onClick={() => orderImageInputRef.current?.click()}
+                      disabled={uploadOrderImageMut.isPending}
+                      className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-muted/40 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
+                    >
+                      {uploadOrderImageMut.isPending ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <ImagePlus className="h-5 w-5" />
+                      )}
+                      <span className="text-[11px] font-medium">
+                        {uploadOrderImageMut.isPending ? "Uploading…" : "Add photo"}
+                      </span>
+                    </button>
+                  )}
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              {orderImages.length}/{MAX_ORDER_IMAGES} photos · JPEG, PNG, or WebP · max 5 MB each
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={!!previewImageUrl} onOpenChange={(open) => !open && setPreviewImageUrl(null)}>
+        <DialogContent className="max-w-3xl p-2 sm:p-4">
+          <DialogHeader>
+            <DialogTitle className="sr-only">Photo preview</DialogTitle>
+          </DialogHeader>
+          {previewImageUrl ? (
+            <img src={previewImageUrl} alt="Order photo preview" className="max-h-[80vh] w-full rounded-md object-contain" />
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       {/* Support and Cancellation Actions for Selected Item */}
       <div className="flex flex-wrap gap-3">

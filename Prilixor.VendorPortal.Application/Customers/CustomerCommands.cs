@@ -1647,7 +1647,10 @@ internal static class CustomerOrderStatusMapper
 /// <summary>Cancel pending rental request (local state only until vendor workflow exists).</summary>
 public sealed record CancelCustomerOrderCommand(Guid CustomerId, Guid OrderId) : ICommand<CustomerOrderDto>;
 
-internal sealed class CancelCustomerOrderCommandHandler(ICustomerRepository customers, IVendorOnboardingRepository vendors)
+internal sealed class CancelCustomerOrderCommandHandler(
+    ICustomerRepository customers,
+    IVendorOnboardingRepository vendors,
+    IVendorUploadStorageService uploadStorage)
     : ICommandHandler<CancelCustomerOrderCommand, CustomerOrderDto>
 {
     public async Task<Result<CustomerOrderDto>> Handle(CancelCustomerOrderCommand request, CancellationToken cancellationToken)
@@ -1746,6 +1749,9 @@ internal sealed class CancelCustomerOrderCommandHandler(ICustomerRepository cust
         }
 
         o.Status = "cancelled";
+        // Customer cancel: delete order photos from S3/storage immediately.
+        await CustomerOrderImageLifecycle.PurgeForOrderAsync(
+            customers, uploadStorage, o.Id, deletedBy: request.CustomerId, cancellationToken);
         await customers.UpdateCustomerRentalOrderAsync(o, cancellationToken);
 
         var listingTitleForNotif = row.Listing?.ListingTitle ?? agg.ListingTitle ?? "Listing unavailable";

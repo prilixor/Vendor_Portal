@@ -5,6 +5,7 @@ import '../api/api_client.dart';
 import '../models/dispatch_offer_model.dart';
 import '../models/expiring_order_model.dart';
 import '../models/order_continuations_model.dart';
+import '../models/order_image_model.dart';
 import '../models/vendor_order_model.dart';
 
 class VendorOrderProvider extends ChangeNotifier {
@@ -40,6 +41,12 @@ class VendorOrderProvider extends ChangeNotifier {
   OrderContinuations _continuations = OrderContinuations.empty;
   OrderContinuations get continuations => _continuations;
   bool get hasPendingContinuations => _continuations.hasPending;
+
+  bool _orderImagesLoading = false;
+  bool get orderImagesLoading => _orderImagesLoading;
+
+  List<OrderImage> _orderImages = [];
+  List<OrderImage> get orderImages => _orderImages;
 
   bool _expirationsLoading = false;
   bool get expirationsLoading => _expirationsLoading;
@@ -124,21 +131,62 @@ class VendorOrderProvider extends ChangeNotifier {
         _selectedOrder = VendorOrder.fromJson(
           Map<String, dynamic>.from(response.data as Map),
         );
-        await fetchContinuations(orderId, silent: true);
+        await Future.wait([
+          fetchContinuations(orderId, silent: true),
+          fetchOrderImages(vendorId, orderId, silent: true),
+        ]);
         return _selectedOrder;
       }
       _continuations = OrderContinuations.empty;
+      _orderImages = [];
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to load order.');
       _continuations = OrderContinuations.empty;
+      _orderImages = [];
     } catch (_) {
       _error = 'Failed to load order.';
       _continuations = OrderContinuations.empty;
+      _orderImages = [];
     } finally {
       _detailLoading = false;
       notifyListeners();
     }
     return null;
+  }
+
+  Future<List<OrderImage>> fetchOrderImages(
+    String vendorId,
+    String orderId, {
+    bool silent = false,
+  }) async {
+    if (vendorId.isEmpty || orderId.isEmpty) {
+      _orderImages = [];
+      if (!silent) notifyListeners();
+      return _orderImages;
+    }
+    if (!silent) {
+      _orderImagesLoading = true;
+      notifyListeners();
+    }
+    try {
+      final response =
+          await _api.dio.get('/vendors/$vendorId/orders/$orderId/images');
+      final data = response.data;
+      final list = data is List ? data : <dynamic>[];
+      _orderImages = list
+          .whereType<Map>()
+          .map((e) => OrderImage.fromJson(Map<String, dynamic>.from(e)))
+          .where((img) => img.id.isNotEmpty && img.fileUrl.isNotEmpty)
+          .toList();
+    } on DioException catch (_) {
+      _orderImages = [];
+    } catch (_) {
+      _orderImages = [];
+    } finally {
+      _orderImagesLoading = false;
+      if (!silent) notifyListeners();
+    }
+    return _orderImages;
   }
 
   Future<OrderContinuations> fetchContinuations(

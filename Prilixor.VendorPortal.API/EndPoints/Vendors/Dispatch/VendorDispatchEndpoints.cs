@@ -155,3 +155,19 @@ public sealed class GetVendorOrderExpirationsEndpoint(IMediator mediator)
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
+
+public sealed class GetVendorOrderImagesEndpoint(IMediator mediator)
+    : Endpoint<VendorDispatchOrderRequest, Results<Ok<List<CustomerOrderImageDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/orders/{orderId}/images");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<List<CustomerOrderImageDto>>, ProblemHttpResult>> ExecuteAsync(VendorDispatchOrderRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetVendorOrderImagesQuery(req.VendorId, req.OrderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}

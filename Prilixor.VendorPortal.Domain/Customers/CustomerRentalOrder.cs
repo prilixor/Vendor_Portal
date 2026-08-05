@@ -48,4 +48,5 @@ public class CustomerRentalOrder : AuditableEntity<Guid>, ISoftDelete
     /// <summary>Listing rows live in the vendor database; use <see cref="VendorProductListingId"/> when querying the vendor DbContext.</summary>
     public CustomerAddress? CustomerAddress { get; set; }
     public CustomerOrderDoctorReference? DoctorReference { get; set; }
+    public ICollection<CustomerOrderImage> Images { get; set; } = [];
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Barcode, CheckCircle2, Stethoscope } from "lucide-react";
+import { Check, Barcode, CheckCircle2, Images, Stethoscope } from "lucide-react";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -10,7 +10,13 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Label } from "@/app/components/ui/label";
 import { Input } from "@/app/components/ui/input";
 import { useAuth } from "@/app/guards/AuthContext";
-import { vendorOnboardingApi, type VendorOrderApiDto, type VendorProductAssetApiDto, type OrderContinuationsDto } from "@/app/services/vendorOnboardingApi";
+import {
+  vendorOnboardingApi,
+  type VendorOrderApiDto,
+  type VendorOrderImageApiDto,
+  type VendorProductAssetApiDto,
+  type OrderContinuationsDto,
+} from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 import { VendorDoctorLookupDialog } from "@/app/components/vendor/VendorDoctorLookupDialog";
 import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
@@ -300,6 +306,9 @@ const VendorOrderDetail = () => {
   const [openDropdowns, setOpenDropdowns] = useState<Record<number, boolean>>({});
   const [doctorLookupOpen, setDoctorLookupOpen] = useState(false);
   const [doctorLookupCode, setDoctorLookupCode] = useState("");
+  const [orderImages, setOrderImages] = useState<VendorOrderImageApiDto[]>([]);
+  const [orderImagesLoading, setOrderImagesLoading] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   const currentItemId = selectedItemId || orderId;
 
@@ -346,6 +355,30 @@ const VendorOrderDetail = () => {
   useEffect(() => {
     void loadAllOrders();
   }, [user?.id]);
+
+  const loadOrderImages = useCallback(async (itemId?: string | null) => {
+    const id = itemId ?? currentItemId;
+    if (!user?.id || !id) {
+      setOrderImages([]);
+      return;
+    }
+    try {
+      setOrderImagesLoading(true);
+      const rows = await vendorOnboardingApi.getVendorOrderImages(user.id, id);
+      setOrderImages(rows);
+    } catch (error) {
+      // After Cancel & Reassign this vendor no longer owns the order — keep prior
+      // thumbnails only if still on-screen; do not treat as "photos deleted".
+      console.error("Failed to load customer order photos", error);
+      setOrderImages([]);
+    } finally {
+      setOrderImagesLoading(false);
+    }
+  }, [user?.id, currentItemId]);
+
+  useEffect(() => {
+    void loadOrderImages(currentItemId);
+  }, [loadOrderImages, currentItemId]);
 
   const orderGroupItems = useMemo(() => {
     if (!order) return [];
@@ -481,7 +514,7 @@ const VendorOrderDetail = () => {
       await vendorOnboardingApi.updateVendorOrderStatus(user.id, currentItemId, status, assetTagsToSubmit);
       toast.success("Order status updated.");
       handleDispatchDialogChange(false);
-      await Promise.all([loadOrder(currentItemId), loadAllOrders()]);
+      await Promise.all([loadOrder(currentItemId), loadAllOrders(), loadOrderImages(currentItemId)]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update status.";
       toast.error(message);
@@ -495,12 +528,12 @@ const VendorOrderDetail = () => {
     try {
       setUpdating(true);
       await vendorOnboardingApi.cancelAssignedVendorOrder(user.id, currentItemId);
-      toast.success("Order cancelled and reassigned.");
-      await Promise.all([loadOrder(currentItemId), loadAllOrders()]);
+      // Photos are kept for the next vendor — leave this detail page (we no longer own the order).
+      toast.success("Order reassigned. Customer photos stay available for the next vendor.");
+      navigate("/vendor/orders");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to cancel order.";
       toast.error(message);
-    } finally {
       setUpdating(false);
     }
   };
@@ -915,6 +948,66 @@ const VendorOrderDetail = () => {
 
           {order.assignedAssetTags && order.assignedAssetTags.length > 0 && (
             <AssignedSerialNumbersCard tags={order.assignedAssetTags} />
+          )}
+
+          {/* Customer photos — only when customer has uploaded at least one */}
+          {!orderImagesLoading && orderImages.length > 0 && (
+            <>
+              <Card className="border-border/80 shadow-sm">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Images className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-lg font-semibold leading-tight">Customer photos</p>
+                        <Badge variant="secondary" className="font-normal tabular-nums">
+                          {orderImages.length}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Photos the customer sent for this item. Cleared automatically after delivery.
+                      </p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+                    {orderImages.map((img) => (
+                      <button
+                        key={img.id}
+                        type="button"
+                        className="aspect-square overflow-hidden rounded-lg border border-border bg-muted"
+                        onClick={() => setPreviewImageUrl(img.fileUrl)}
+                        aria-label={img.originalFileName || "Customer photo"}
+                      >
+                        <img
+                          src={img.fileUrl}
+                          alt={img.originalFileName || "Customer photo"}
+                          className="h-full w-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Dialog open={!!previewImageUrl} onOpenChange={(open) => !open && setPreviewImageUrl(null)}>
+                <DialogContent className="max-w-3xl p-2 sm:p-4">
+                  <DialogHeader>
+                    <DialogTitle className="sr-only">Customer photo preview</DialogTitle>
+                  </DialogHeader>
+                  {previewImageUrl ? (
+                    <img
+                      src={previewImageUrl}
+                      alt="Customer photo preview"
+                      className="max-h-[80vh] w-full rounded-md object-contain"
+                    />
+                  ) : null}
+                </DialogContent>
+              </Dialog>
+            </>
           )}
 
           {/* Medical Reference */}

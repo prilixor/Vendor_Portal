@@ -142,7 +142,8 @@ public sealed record UpdateVendorOrderStatusCommand(string VendorId, Guid OrderI
 
 internal sealed class UpdateVendorOrderStatusCommandHandler(
     ICustomerRepository customers,
-    IVendorOnboardingRepository vendors)
+    IVendorOnboardingRepository vendors,
+    IVendorUploadStorageService uploadStorage)
     : ICommandHandler<UpdateVendorOrderStatusCommand, CustomerOrderDto>
 {
     public async Task<Result<CustomerOrderDto>> Handle(UpdateVendorOrderStatusCommand request, CancellationToken cancellationToken)
@@ -439,6 +440,13 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
         }
 
         order.Status = target;
+        // Vendor delivered → delete order photos from S3/storage immediately.
+        if (target == "active")
+        {
+            await CustomerOrderImageLifecycle.PurgeForOrderAsync(
+                customers, uploadStorage, order.Id, deletedBy: null, cancellationToken);
+        }
+
         await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
         await customers.AddCustomerNotificationAsync(
             new CustomerNotification
@@ -743,6 +751,10 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
         order.Status = "confirmed";
         await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
 
+        // Keep customer photos across reassignment; retarget metadata to the accepting vendor.
+        await CustomerOrderImageLifecycle.ReassignVendorAsync(
+            customers, order.Id, vendorId, cancellationToken);
+
         myOffer.Status = "accepted";
         myOffer.RespondedAt = now;
         await customers.UpdateCustomerOrderVendorOfferAsync(myOffer, cancellationToken);
@@ -948,6 +960,7 @@ internal sealed class VendorCancelAssignedOrderCommandHandler(
             pending = await CreateFallbackOffersAsync(order, vendorId, cancellationToken);
         }
 
+        // Vendor cancel never deletes customer photos — keep them for reassignment (or admin restart/reassign).
         if (pending.Count == 0)
         {
             order.Status = "dispatch_failed";

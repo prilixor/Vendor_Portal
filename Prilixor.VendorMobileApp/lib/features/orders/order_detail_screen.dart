@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/models/order_continuations_model.dart';
+import '../../core/models/order_image_model.dart';
 import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
@@ -338,6 +339,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           ),
                           const SizedBox(height: 10),
                           _ItemDetailsPanel(order: activeItem ?? order),
+                          if (!provider.orderImagesLoading &&
+                              provider.orderImages.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            _CustomerPhotosCard(images: provider.orderImages),
+                          ],
                           if (hasPending) ...[
                             const SizedBox(height: 10),
                             _PendingContinuationsCard(
@@ -722,6 +728,83 @@ class _RequestBox extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CustomerPhotosCard extends StatelessWidget {
+  final List<OrderImage> images;
+
+  const _CustomerPhotosCard({required this.images});
+
+  void _preview(BuildContext context, OrderImage image) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: Image.network(
+                  image.fileUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Center(
+                    child: Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: IconButton(
+                onPressed: () => Navigator.pop(ctx),
+                icon: const Icon(Icons.close, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      title: 'Customer photos',
+      subtitle: '${images.length} photo${images.length == 1 ? '' : 's'} · cleared after delivery',
+      compact: true,
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: images.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+        ),
+        itemBuilder: (context, index) {
+          final image = images[index];
+          return Material(
+            color: Colors.white.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(10),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => _preview(context, image),
+              child: Image.network(
+                image.fileUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const Center(
+                  child: Icon(Icons.broken_image_outlined, color: Colors.white38),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

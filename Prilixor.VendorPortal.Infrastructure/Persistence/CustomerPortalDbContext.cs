@@ -23,6 +23,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<CustomerFavorite> CustomerFavorites => Set<CustomerFavorite>();
     public DbSet<CustomerOrderDoctorReference> CustomerOrderDoctorReferences => Set<CustomerOrderDoctorReference>();
+    public DbSet<CustomerOrderImage> CustomerOrderImages => Set<CustomerOrderImage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -158,6 +159,31 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.HasOne(x => x.Order)
                 .WithOne(x => x.DoctorReference)
                 .HasForeignKey<CustomerOrderDoctorReference>(x => x.CustomerRentalOrderId);
+        });
+
+        modelBuilder.Entity<CustomerOrderImage>(entity =>
+        {
+            entity.ToTable("customer_order_images");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CustomerRentalOrderId).HasColumnName("customer_rental_order_id");
+            entity.Property(x => x.VendorId).HasColumnName("vendor_id");
+            entity.Property(x => x.StoredReference).HasColumnName("stored_reference");
+            entity.Property(x => x.OriginalFileName).HasColumnName("original_file_name");
+            entity.Property(x => x.ContentType).HasColumnName("content_type");
+            entity.Property(x => x.SortOrder).HasColumnName("sort_order");
+
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+
+            entity.HasOne(x => x.Order)
+                .WithMany(x => x.Images)
+                .HasForeignKey(x => x.CustomerRentalOrderId);
         });
 
         modelBuilder.Entity<CustomerRentalOrderExtension>(entity =>

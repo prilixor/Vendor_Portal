@@ -480,6 +480,16 @@ export interface VendorDispatchOfferApiDto {
   rentalFinalPrice?: number | null;
 }
 
+export interface VendorOrderImageApiDto {
+  id: string;
+  orderId: string;
+  fileUrl: string;
+  originalFileName?: string | null;
+  contentType?: string | null;
+  sortOrder: number;
+  createdAt: string;
+}
+
 export interface VendorOrderApiDto {
   orderId: string;
   orderNumber: string;
@@ -787,6 +797,12 @@ export const vendorOnboardingApi = {
 
   getVendorOrder(vendorId: string, orderId: string) {
     return apiClient.get<VendorOrderApiDto>(`/vendors/${vendorId}/orders/${orderId}`);
+  },
+
+  getVendorOrderImages(vendorId: string, orderId: string) {
+    return apiClient.get<VendorOrderImageApiDto[]>(
+      `/vendors/${vendorId}/orders/${orderId}/images`,
+    );
   },
 
   updateVendorOrderStatus(vendorId: string, orderId: string, status: string, assetTags?: string[]) {

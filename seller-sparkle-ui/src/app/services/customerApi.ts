@@ -206,6 +206,16 @@ export interface CustomerOrderApi {
   rentalFinalPrice?: number | null;
 }
 
+export interface CustomerOrderImageApi {
+  id: string;
+  orderId: string;
+  fileUrl: string;
+  originalFileName?: string | null;
+  contentType?: string | null;
+  sortOrder: number;
+  createdAt: string;
+}
+
 export interface ExtensionQuoteApi {
   additionalDays: number;
   newEndDate: string;
@@ -451,6 +461,27 @@ export const customerApi = {
 
   cancelOrder(orderId: string): Promise<CustomerOrderApi> {
     return apiClient.patch<CustomerOrderApi>(`/customers/me/orders/${encodeURIComponent(orderId)}/cancel`, {});
+  },
+
+  getOrderImages(orderId: string): Promise<CustomerOrderImageApi[]> {
+    return apiClient.get<CustomerOrderImageApi[]>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/images`,
+    );
+  },
+
+  uploadOrderImage(orderId: string, file: File): Promise<CustomerOrderImageApi> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiClient.postForm<CustomerOrderImageApi>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/images`,
+      formData,
+    );
+  },
+
+  deleteOrderImage(orderId: string, imageId: string): Promise<void> {
+    return apiClient.delete(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/images/${encodeURIComponent(imageId)}`,
+    );
   },
 
   quoteExtension(orderId: string, additionalDays: number): Promise<ExtensionQuoteApi> {

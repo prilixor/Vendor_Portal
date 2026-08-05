@@ -14,6 +14,7 @@ internal static class VendorStoragePaths
         VendorFileFolderType.ProductDocuments => "product-documents",
         VendorFileFolderType.Support => "support",
         VendorFileFolderType.RentalIcons => "rental-icons",
+        VendorFileFolderType.OrderImages => "order-images",
         _ => "documents"
     };
 

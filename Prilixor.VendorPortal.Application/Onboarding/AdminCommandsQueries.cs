@@ -1034,7 +1034,8 @@ public sealed class UpdateAdminOrderStatusCommandValidator : AbstractValidator<U
 
 internal sealed class UpdateAdminOrderStatusCommandHandler(
     ICustomerRepository customers,
-    IVendorOnboardingRepository vendors)
+    IVendorOnboardingRepository vendors,
+    IVendorUploadStorageService uploadStorage)
     : ICommandHandler<UpdateAdminOrderStatusCommand, AdminOrderDto>
 {
     public async Task<Result<AdminOrderDto>> Handle(UpdateAdminOrderStatusCommand request, CancellationToken cancellationToken)
@@ -1230,6 +1231,13 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
         }
 
         order.Status = target;
+        // Admin marked delivered → delete order photos from S3/storage immediately.
+        if (target == "active")
+        {
+            await CustomerOrderImageLifecycle.PurgeForOrderAsync(
+                customers, uploadStorage, order.Id, deletedBy: adminUserId, cancellationToken);
+        }
+
         await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
         await customers.AddCustomerNotificationAsync(
             new CustomerNotification
