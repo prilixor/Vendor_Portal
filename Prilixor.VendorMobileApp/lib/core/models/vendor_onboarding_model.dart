@@ -138,6 +138,7 @@ class VendorServiceArea {
   final double centerLongitude;
   final double serviceRadiusKm;
   final bool isActive;
+  final bool isRadiusSetByAdmin;
 
   const VendorServiceArea({
     required this.id,
@@ -147,6 +148,7 @@ class VendorServiceArea {
     required this.centerLongitude,
     required this.serviceRadiusKm,
     this.isActive = true,
+    this.isRadiusSetByAdmin = false,
   });
 
   factory VendorServiceArea.fromJson(Map<String, dynamic> json) {
@@ -158,6 +160,7 @@ class VendorServiceArea {
       centerLongitude: _toDouble(json['centerLongitude']),
       serviceRadiusKm: _toDouble(json['serviceRadiusKm']),
       isActive: json['isActive'] != false,
+      isRadiusSetByAdmin: json['isRadiusSetByAdmin'] == true,
     );
   }
 }

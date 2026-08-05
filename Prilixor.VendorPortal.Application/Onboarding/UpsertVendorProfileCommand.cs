@@ -89,7 +89,8 @@ internal sealed class UpsertVendorProfileCommandHandler(IVendorOnboardingReposit
                     City = request.City,
                     CenterLatitude = request.Latitude.Value,
                     CenterLongitude = request.Longitude.Value,
-                    ServiceRadiusKm = 5, // Default 5km radius
+                    ServiceRadiusKm = 5, // Default 5km radius until Admin sets coverage
+                    IsRadiusSetByAdmin = false,
                     IsActive = true
                 };
                 await repository.AddVendorServiceAreaAsync(businessPinArea, cancellationToken);

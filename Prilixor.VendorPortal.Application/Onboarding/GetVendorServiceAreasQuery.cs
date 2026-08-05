@@ -25,7 +25,8 @@ internal sealed class GetVendorServiceAreasQueryHandler(IVendorOnboardingReposit
             entity.CenterLatitude,
             entity.CenterLongitude,
             entity.ServiceRadiusKm,
-            entity.IsActive)).ToList();
+            entity.IsActive,
+            entity.IsRadiusSetByAdmin)).ToList();
 
         return Result.Success(result);
     }

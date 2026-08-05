@@ -21,6 +21,12 @@ interface MapPickerProps {
   onAddressResolved?: (address: ResolvedMapAddress | null) => void;
   radiusKm?: number;
   onRadiusChange?: (km: number) => void;
+  /** Max value for the radius slider (default 30). Admin can pass 100+. */
+  maxRadiusKm?: number;
+  /** Optional quick-select presets shown next to the slider (e.g. [15, 30, 100]). */
+  radiusPresetsKm?: number[];
+  /** When true with showRadius and no onRadiusChange, shows a read-only radius label. */
+  radiusReadOnlyLabel?: string;
   height?: string;
   showRadius?: boolean;
   className?: string;
@@ -42,6 +48,9 @@ export const MapPicker = ({
   onAddressResolved,
   radiusKm,
   onRadiusChange,
+  maxRadiusKm = 30,
+  radiusPresetsKm,
+  radiusReadOnlyLabel,
   height = "h-72",
   showRadius = false,
   className,
@@ -337,18 +346,44 @@ export const MapPicker = ({
       </div>
 
       {showRadius && onRadiusChange && (
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium">Radius:</span>
-          <input
-            type="range"
-            min={1}
-            max={30}
-            value={radiusKm ?? 5}
-            onChange={(e) => onRadiusChange(Number(e.target.value))}
-            className="flex-1 accent-primary"
-          />
-          <span className="w-16 text-right text-sm font-semibold text-primary">{radiusKm} km</span>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium">Radius:</span>
+            <input
+              type="range"
+              min={1}
+              max={maxRadiusKm}
+              value={Math.min(radiusKm ?? 5, maxRadiusKm)}
+              onChange={(e) => onRadiusChange(Number(e.target.value))}
+              className="flex-1 accent-primary"
+            />
+            <span className="w-16 text-right text-sm font-semibold text-primary">{radiusKm} km</span>
+          </div>
+          {radiusPresetsKm && radiusPresetsKm.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {radiusPresetsKm.map((km) => (
+                <button
+                  key={km}
+                  type="button"
+                  onClick={() => onRadiusChange(km)}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                    radiusKm === km
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  {km} km
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+      )}
+      {showRadius && !onRadiusChange && radiusKm != null && (
+        <p className="text-sm text-muted-foreground">
+          {radiusReadOnlyLabel ?? `Coverage radius: ${radiusKm} km (set by Admin)`}
+        </p>
       )}
     </div>
   );

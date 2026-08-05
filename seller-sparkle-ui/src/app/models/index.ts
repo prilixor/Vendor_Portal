@@ -62,6 +62,8 @@ export interface ServiceArea {
   latitude: number;
   longitude: number;
   radiusKm: number;
+  /** Present when loaded from API; false until Admin sets coverage radius. */
+  isRadiusSetByAdmin?: boolean;
 }
 
 export interface WorkingHour {

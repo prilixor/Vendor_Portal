@@ -69,6 +69,7 @@ export interface VendorServiceAreaApiDto {
   centerLongitude: number;
   serviceRadiusKm: number;
   isActive: boolean;
+  isRadiusSetByAdmin?: boolean;
 }
 
 export interface VendorWorkingHourApiDto {

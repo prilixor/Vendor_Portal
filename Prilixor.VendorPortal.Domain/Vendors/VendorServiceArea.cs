@@ -10,6 +10,8 @@ public class VendorServiceArea : AuditableEntity<Guid>, ISoftDelete
     public decimal CenterLatitude { get; set; }
     public decimal CenterLongitude { get; set; }
     public decimal ServiceRadiusKm { get; set; }
+    /// <summary>False until an Admin sets/confirms coverage radius (vendor-created areas start false).</summary>
+    public bool IsRadiusSetByAdmin { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

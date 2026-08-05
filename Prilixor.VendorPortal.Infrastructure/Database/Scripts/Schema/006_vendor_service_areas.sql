@@ -9,6 +9,7 @@ create table if not exists public.vendor_service_areas (
     center_latitude numeric(10, 7) not null,
     center_longitude numeric(10, 7) not null,
     service_radius_km numeric(8, 2) not null,
+    is_radius_set_by_admin boolean not null default false,
     is_active boolean not null default true,
 
     -- Audit columns

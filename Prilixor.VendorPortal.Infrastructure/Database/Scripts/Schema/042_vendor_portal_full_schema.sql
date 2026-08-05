@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS public.vendor_service_areas (
     center_latitude numeric(10, 7) NOT NULL,
     center_longitude numeric(10, 7) NOT NULL,
     service_radius_km numeric(8, 2) NOT NULL,
+    is_radius_set_by_admin boolean NOT NULL DEFAULT false,
     is_active boolean NOT NULL DEFAULT true,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),

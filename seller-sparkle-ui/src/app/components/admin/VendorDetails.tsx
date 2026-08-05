@@ -161,6 +161,8 @@ import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { getVendorPortalHref } from "@/app/helpers/portalHost";
 import { useAuth } from "@/app/guards/AuthContext";
 import { ADMIN_PERMISSIONS } from "@/app/helpers/adminNav";
+import { MapPicker } from "@/app/components/shared/MapPicker";
+import { Input } from "@/app/components/ui/input";
 
 
 const dayLabel: Record<number, string> = {
@@ -314,8 +316,10 @@ const VendorDetails = () => {
   const [bankAccounts, setBankAccounts] = useState<VendorBankAccountDto[]>([]);
 
   const [serviceAreas, setServiceAreas] = useState<VendorServiceAreaDto[]>([]);
-
-
+  const [radiusEditArea, setRadiusEditArea] = useState<VendorServiceAreaDto | null>(null);
+  const [radiusDraftKm, setRadiusDraftKm] = useState(5);
+  const [radiusSaving, setRadiusSaving] = useState(false);
+  const [radiusMapReady, setRadiusMapReady] = useState(false);
 
   const [productListings, setProductListings] = useState<VendorProductListingDto[]>([]);
   const [productMap, setProductMap] = useState<Record<string, ProductDto>>({});
@@ -334,7 +338,14 @@ const VendorDetails = () => {
 
   }, [vendorId]);
 
-
+  useEffect(() => {
+    if (!radiusEditArea) {
+      setRadiusMapReady(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setRadiusMapReady(true), 180);
+    return () => window.clearTimeout(timer);
+  }, [radiusEditArea]);
 
   const loadVendorData = async (id: string) => {
 
@@ -852,13 +863,54 @@ const VendorDetails = () => {
     }
   };
 
+  const canSetServiceRadius = hasPermission(ADMIN_PERMISSIONS.vendorsVerify);
 
+  const openRadiusEditor = (area: VendorServiceAreaDto) => {
+    setRadiusEditArea(area);
+    setRadiusDraftKm(area.serviceRadiusKm > 0 ? area.serviceRadiusKm : 5);
+    setRadiusMapReady(false);
+  };
+
+  const saveServiceAreaRadius = async () => {
+    if (!vendorId || !radiusEditArea) return;
+    if (!(radiusDraftKm > 0) || radiusDraftKm > 500) {
+      toast.error("Radius must be between 1 and 500 km.");
+      return;
+    }
+    const adminUserId = getAdminUserId();
+    if (!adminUserId) {
+      toast.error("Admin session not found. Please login again.");
+      return;
+    }
+
+    setRadiusSaving(true);
+    try {
+      const updated = await adminApi.updateVendorServiceAreaRadius({
+        adminUserId,
+        vendorId,
+        serviceAreaId: radiusEditArea.id,
+        serviceRadiusKm: radiusDraftKm,
+      });
+      setServiceAreas((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      setRadiusEditArea(null);
+      toast.success(`Service radius set to ${updated.serviceRadiusKm} km.`);
+    } catch (error) {
+      toast.error(getUserFriendlyMessage(error));
+    } finally {
+      setRadiusSaving(false);
+    }
+  };
+
+  const serviceAreasNeedRadiusReview =
+    serviceAreas.length === 0 || serviceAreas.some((a) => !a.isRadiusSetByAdmin);
 
   const canApprove = vendor?.accountStatus === "pending" &&
 
     documents.length > 0 && documents.every(d => d.verificationStatus === "approved") &&
 
-    bankAccounts.length > 0 && bankAccounts.some(b => b.verificationStatus === "approved");
+    bankAccounts.length > 0 && bankAccounts.some(b => b.verificationStatus === "approved") &&
+
+    serviceAreas.length > 0 && serviceAreas.every((a) => a.isRadiusSetByAdmin);
 
 
 
@@ -887,20 +939,22 @@ const VendorDetails = () => {
           <div className="flex items-center gap-2">
 
             {vendor?.accountStatus === "pending" && (
-
-              <Button
-
-                onClick={approve}
-
-                disabled={!canApprove || approving}
-
-                className="bg-success hover:bg-success/90 text-success-foreground"
-
-              >
-
-                {approving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />} Approve
-
-              </Button>
+              <div className="flex flex-col items-end gap-1">
+                <Button
+                  onClick={approve}
+                  disabled={!canApprove || approving}
+                  className="bg-success hover:bg-success/90 text-success-foreground"
+                >
+                  {approving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />} Approve
+                </Button>
+                {serviceAreasNeedRadiusReview && (
+                  <p className="max-w-xs text-right text-[11px] text-amber-700 dark:text-amber-300">
+                    {serviceAreas.length === 0
+                      ? "Add/set service area radius on the Areas tab before approval."
+                      : "Set coverage radius for all service areas (Areas tab) before approval."}
+                  </p>
+                )}
+              </div>
             )}
             {hasPermission(ADMIN_PERMISSIONS.vendorsImpersonate) && vendorId && (
               <Button
@@ -1007,7 +1061,17 @@ const VendorDetails = () => {
 
           <TabsTrigger value="bank">Bank</TabsTrigger>
 
-          <TabsTrigger value="areas">Areas</TabsTrigger>
+          <TabsTrigger value="areas" className="gap-1.5">
+            Areas
+            {serviceAreas.some((a) => !a.isRadiusSetByAdmin) && (
+              <Badge
+                variant="outline"
+                className="h-4 border-amber-500/40 bg-amber-500/10 px-1 text-[9px] font-medium text-amber-800 dark:text-amber-200"
+              >
+                Review
+              </Badge>
+            )}
+          </TabsTrigger>
 
           <TabsTrigger value="products">Equipment</TabsTrigger>
 
@@ -1344,21 +1408,86 @@ const VendorDetails = () => {
         <TabsContent value="areas">
 
           <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="font-semibold">Service areas</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Review the vendor pin location, then set the coverage radius (e.g. 15, 30, or 100 km).
+                  Vendor approval stays blocked until every area has an Admin-set radius.
+                </p>
+              </div>
+              {serviceAreas.some((a) => !a.isRadiusSetByAdmin) && (
+                <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200">
+                  Needs Admin review
+                </Badge>
+              )}
+            </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
 
               {serviceAreas.map((area) => (
 
-                <div key={area.id} className="rounded-lg border border-border p-3">
-
-                  <p className="text-sm font-medium">{area.areaName}</p>
-
-                  <p className="mt-1 text-xs text-muted-foreground inline-flex items-center gap-1">
-
-                    <MapPin className="h-3.5 w-3.5" /> {area.city} · {area.serviceRadiusKm} km radius
-
-                  </p>
-
+                <div
+                  key={area.id}
+                  className={`overflow-hidden rounded-lg border ${
+                    area.isRadiusSetByAdmin ? "border-border" : "border-amber-500/40"
+                  }`}
+                >
+                  <div className="bg-muted/20 p-1">
+                    <MapPicker
+                      latitude={area.centerLatitude}
+                      longitude={area.centerLongitude}
+                      radiusKm={area.serviceRadiusKm}
+                      showRadius
+                      height="h-40"
+                      radiusReadOnlyLabel={
+                        area.isRadiusSetByAdmin
+                          ? `${area.serviceRadiusKm} km coverage (set by Admin)`
+                          : `Default ${area.serviceRadiusKm} km — Needs Admin review`
+                      }
+                    />
+                  </div>
+                  <div className="flex items-start justify-between gap-3 p-3">
+                    <div className="min-w-0 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium">{area.areaName}</p>
+                        {!area.isRadiusSetByAdmin ? (
+                          <>
+                            <Badge
+                              variant="outline"
+                              className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-800 dark:text-amber-200"
+                            >
+                              Default radius
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-800 dark:text-amber-200"
+                            >
+                              Needs Admin review
+                            </Badge>
+                          </>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="border-success/40 bg-success/10 text-[10px] text-success"
+                          >
+                            Radius set
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5" /> {area.city} · {area.serviceRadiusKm} km radius
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Pin {area.centerLatitude.toFixed(4)}, {area.centerLongitude.toFixed(4)}
+                      </p>
+                    </div>
+                    {canSetServiceRadius && (
+                      <Button size="sm" variant={area.isRadiusSetByAdmin ? "outline" : "default"} onClick={() => openRadiusEditor(area)}>
+                        {area.isRadiusSetByAdmin ? "Edit radius" : "Set radius"}
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
               ))}
@@ -1372,6 +1501,79 @@ const VendorDetails = () => {
             </div>
 
           </Card>
+
+          <Dialog
+            open={Boolean(radiusEditArea)}
+            onOpenChange={(open) => {
+              if (!open && !radiusSaving) setRadiusEditArea(null);
+            }}
+          >
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Set service area radius</DialogTitle>
+              </DialogHeader>
+              {radiusEditArea && (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium">{radiusEditArea.areaName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {radiusEditArea.city} · pin {radiusEditArea.centerLatitude.toFixed(4)},{" "}
+                      {radiusEditArea.centerLongitude.toFixed(4)}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Confirm the vendor location on the map, then choose the coverage radius for this area.
+                  </p>
+                  {radiusMapReady ? (
+                    <MapPicker
+                      key={`admin-radius-${radiusEditArea.id}`}
+                      latitude={radiusEditArea.centerLatitude}
+                      longitude={radiusEditArea.centerLongitude}
+                      radiusKm={radiusDraftKm}
+                      showRadius
+                      maxRadiusKm={100}
+                      radiusPresetsKm={[15, 30, 50, 100]}
+                      height="h-56 sm:h-72"
+                      onRadiusChange={setRadiusDraftKm}
+                    />
+                  ) : (
+                    <div className="h-56 sm:h-72 w-full rounded-xl border border-border bg-muted/30 animate-pulse" />
+                  )}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="admin-service-radius-km">Radius (km)</Label>
+                    <Input
+                      id="admin-service-radius-km"
+                      type="number"
+                      min={1}
+                      max={500}
+                      step={1}
+                      value={radiusDraftKm}
+                      onChange={(e) => setRadiusDraftKm(Number(e.target.value))}
+                    />
+                    <p className="text-[11px] text-muted-foreground">Allowed range: 1–500 km.</p>
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setRadiusEditArea(null)}
+                  disabled={radiusSaving}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={saveServiceAreaRadius} disabled={radiusSaving}>
+                  {radiusSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…
+                    </>
+                  ) : (
+                    "Save radius"
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
         </TabsContent>
 

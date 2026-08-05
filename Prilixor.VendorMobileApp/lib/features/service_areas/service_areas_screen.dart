@@ -208,8 +208,8 @@ class _ServiceAreasHeader extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   count == 0
-                      ? 'Customers in these zones see your listings.'
-                      : '$count active ${count == 1 ? 'area' : 'areas'} configured',
+                      ? 'Place pins for your zones. Coverage radius is set by Admin.'
+                      : '$count active ${count == 1 ? 'area' : 'areas'} · radius set by Admin',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.58),
                     fontSize: 12,
@@ -308,6 +308,11 @@ class _ServiceAreaCard extends StatelessWidget {
                                 icon: Icons.radar,
                                 label: '${area.serviceRadiusKm.toStringAsFixed(0)} km radius',
                               ),
+                              if (!area.isRadiusSetByAdmin)
+                                const _InfoChip(
+                                  icon: Icons.pending_actions_outlined,
+                                  label: 'Needs Admin review',
+                                ),
                               _InfoChip(
                                 icon: Icons.pin_drop_outlined,
                                 label:
@@ -542,16 +547,6 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
       return;
     }
 
-    if (_radius <= 0 || _radius > 500) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Radius must be between 1 and 500 km.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return;
-    }
-
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     final provider = Provider.of<VendorServiceAreaProvider>(context, listen: false);
@@ -712,7 +707,8 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
           ),
           OnboardingFormSection(
             title: 'Coverage radius',
-            subtitle: 'Customers within this distance can request your services.',
+            subtitle:
+                'Radius is reviewed and set by Admin. You only need to place the pin for this area.',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -730,13 +726,14 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
                     ),
                   ],
                 ),
-                Slider(
-                  value: _radius,
-                  min: 1,
-                  max: 30,
-                  divisions: 29,
-                  activeColor: AppTheme.accent,
-                  onChanged: (v) => setState(() => _radius = v),
+                const SizedBox(height: 8),
+                Text(
+                  widget.existing == null
+                      ? 'New areas start at a default radius until Admin sets coverage.'
+                      : (widget.existing!.isRadiusSetByAdmin
+                          ? 'Coverage radius is set by Admin and cannot be changed here.'
+                          : 'Default radius — pending Admin review. You cannot change it here.'),
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
                 ),
               ],
             ),

@@ -76,6 +76,27 @@ internal sealed class ApproveVendorCommandHandler(
             return Result.Failure<VendorDto>(new Error("vendors.bank_account_not_approved", "At least one bank account must be approved before vendor can be approved.", ErrorCategory.Validation));
         }
 
+        // Validate service areas exist and Admin has set coverage radius on each
+        var serviceAreas = await repository.GetVendorServiceAreasAsync(vendorId, cancellationToken);
+        var activeAreas = serviceAreas.Where(a => a.IsActive && !a.IsDeleted).ToList();
+        if (activeAreas.Count == 0)
+        {
+            return Result.Failure<VendorDto>(new Error(
+                "vendors.no_service_area",
+                "Vendor must have at least one service area before approval.",
+                ErrorCategory.Validation));
+        }
+
+        var pendingRadiusAreas = activeAreas.Where(a => !a.IsRadiusSetByAdmin).ToList();
+        if (pendingRadiusAreas.Count > 0)
+        {
+            var areaNames = string.Join(", ", pendingRadiusAreas.Select(a => a.AreaName));
+            return Result.Failure<VendorDto>(new Error(
+                "vendors.service_radius_not_set",
+                $"Admin must set the coverage radius for all service areas before approval. Pending: {areaNames}.",
+                ErrorCategory.Validation));
+        }
+
         // Approve vendor
         vendor.AccountStatus = "active";
         vendor.RegistrationStage = "approved";

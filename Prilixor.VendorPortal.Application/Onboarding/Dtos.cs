@@ -54,7 +54,8 @@ public sealed record VendorServiceAreaDto(
     decimal CenterLatitude,
     decimal CenterLongitude,
     decimal ServiceRadiusKm,
-    bool IsActive);
+    bool IsActive,
+    bool IsRadiusSetByAdmin = false);
 
 public sealed record VendorWorkingHourDto(
     string Id,

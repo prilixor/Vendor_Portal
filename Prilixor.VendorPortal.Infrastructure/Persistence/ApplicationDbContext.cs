@@ -183,6 +183,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.CenterLatitude).HasColumnName("center_latitude");
             entity.Property(x => x.CenterLongitude).HasColumnName("center_longitude");
             entity.Property(x => x.ServiceRadiusKm).HasColumnName("service_radius_km");
+            entity.Property(x => x.IsRadiusSetByAdmin).HasColumnName("is_radius_set_by_admin");
             entity.Property(x => x.IsActive).HasColumnName("is_active");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");

@@ -96,6 +96,14 @@ public sealed class ForceResetVendorPasswordRequest : AdminUserIdRequest
     public string? Notes { get; set; }
 }
 
+public sealed class UpdateVendorServiceAreaRadiusRequest : AdminUserIdRequest
+{
+    public string VendorId { get; set; } = string.Empty;
+    public string ServiceAreaId { get; set; } = string.Empty;
+    public decimal ServiceRadiusKm { get; set; }
+    public string? Notes { get; set; }
+}
+
 public sealed class RegisterAdminUserEndpoint(IMediator mediator)
     : Endpoint<RegisterAdminUserRequest, Results<Ok<AdminUserDto>, ProblemHttpResult>>
 {
@@ -493,6 +501,31 @@ public sealed class ReactivateVendorEndpoint(IMediator mediator)
             req.VendorId,
             HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
             req.Reason), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class UpdateVendorServiceAreaRadiusEndpoint(IMediator mediator)
+    : Endpoint<UpdateVendorServiceAreaRadiusRequest, Results<Ok<VendorServiceAreaDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("vendors/{vendorId}/service-areas/{serviceAreaId}/radius");
+        Group<AdminApiGroup>();
+        Policies("Perm:vendors.verify");
+    }
+
+    public override async Task<Results<Ok<VendorServiceAreaDto>, ProblemHttpResult>> ExecuteAsync(
+        UpdateVendorServiceAreaRadiusRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new UpdateVendorServiceAreaRadiusCommand(
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
+            req.VendorId,
+            req.ServiceAreaId,
+            req.ServiceRadiusKm,
+            req.Notes), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }

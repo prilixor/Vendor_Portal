@@ -56,6 +56,7 @@ const ServiceAreas = () => {
     latitude: a.centerLatitude,
     longitude: a.centerLongitude,
     radiusKm: a.serviceRadiusKm,
+    isRadiusSetByAdmin: Boolean(a.isRadiusSetByAdmin),
   });
 
   const startNew = () => {
@@ -127,10 +128,6 @@ const ServiceAreas = () => {
       errors.location =
         "Place the pin on the map (search, click, or drag) before saving. Area name and city alone are not enough.";
     }
-    if (!(editing.radiusKm > 0) || editing.radiusKm > 500) {
-      errors.radius = "Radius must be between 1 and 500 km.";
-    }
-
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       toast.error(errors.location || "Please fill in the required fields.");
@@ -216,7 +213,7 @@ const ServiceAreas = () => {
     <div>
       <PageHeader
         title="Service areas"
-        description="Define the locations where you fulfill rentals. Customers in these zones will see your listings."
+        description="Set the pin for each location you serve. Coverage radius is reviewed and set by Admin."
         actions={
           <Button onClick={startNew} className="bg-gradient-primary shadow-glow">
             <Plus className="mr-2 h-4 w-4" /> Add service area
@@ -267,14 +264,30 @@ const ServiceAreas = () => {
         {areas.map((area) => (
           <Card key={area.id} className="overflow-hidden border-border/60 hover:shadow-elegant transition-all">
             <div className="bg-gradient-soft p-1">
-              <MapPicker latitude={area.latitude} longitude={area.longitude} radiusKm={area.radiusKm} showRadius height="h-40" />
+              <MapPicker
+                latitude={area.latitude}
+                longitude={area.longitude}
+                radiusKm={area.radiusKm}
+                showRadius
+                height="h-40"
+                radiusReadOnlyLabel={
+                  area.isRadiusSetByAdmin
+                    ? `Coverage radius: ${area.radiusKm} km (set by Admin)`
+                    : `Default ${area.radiusKm} km — pending Admin review`
+                }
+              />
             </div>
             <div className="p-4">
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="font-semibold">{area.name}</h3>
-                  <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <p className="mt-0.5 inline-flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
                     <MapPin className="h-3 w-3" /> {area.city} · {area.radiusKm} km radius
+                    {!area.isRadiusSetByAdmin && (
+                      <span className="ml-1 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-200">
+                        Pending Admin
+                      </span>
+                    )}
                   </p>
                 </div>
                 <div className="flex gap-1">
@@ -336,7 +349,8 @@ const ServiceAreas = () => {
             <div className="space-y-1.5">
               <Label required>Map location</Label>
               <p className="text-xs text-muted-foreground">
-                Area name and city do not set coverage. Search, click the map, or drag the pin to the real place, then set the radius.
+                Area name and city do not set coverage. Search, click the map, or drag the pin to the real place.
+                Coverage radius is set by Admin after review.
               </p>
               {mapReady ? (
                 <div
@@ -351,6 +365,11 @@ const ServiceAreas = () => {
                     radiusKm={editing.radiusKm}
                     showRadius
                     height="h-48 sm:h-72"
+                    radiusReadOnlyLabel={
+                      editing.isRadiusSetByAdmin
+                        ? `Coverage radius: ${editing.radiusKm} km (set by Admin)`
+                        : `Default ${editing.radiusKm} km — pending Admin review`
+                    }
                     onChange={(lat, lng) => {
                       setEditing((prev) => ({ ...prev, latitude: lat, longitude: lng }));
                       setLocationConfirmed(true);
@@ -375,10 +394,6 @@ const ServiceAreas = () => {
                         toast.message(`Map pin saved. Please fill required ${missing.join(", ")}.`);
                       }
                     }}
-                    onRadiusChange={(km) => {
-                      setEditing((prev) => ({ ...prev, radiusKm: km }));
-                      clearFieldError("radius");
-                    }}
                   />
                 </div>
               ) : (
@@ -394,7 +409,6 @@ const ServiceAreas = () => {
                 </p>
               )}
               <FieldError message={fieldErrors.location} />
-              <FieldError message={fieldErrors.radius} />
             </div>
           </div>
           <DialogFooter className="flex-col gap-2 sm:flex-row sm:gap-0">

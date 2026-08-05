@@ -73,7 +73,7 @@ internal sealed class UpdateVendorServiceAreaCommandHandler(IVendorOnboardingRep
         entity.City = request.City;
         entity.CenterLatitude = request.CenterLatitude;
         entity.CenterLongitude = request.CenterLongitude;
-        entity.ServiceRadiusKm = request.ServiceRadiusKm;
+        // ServiceRadiusKm is admin-only — preserve existing value; ignore client payload.
         entity.IsActive = request.IsActive;
 
         await repository.SaveChangesAsync(cancellationToken);
@@ -86,6 +86,7 @@ internal sealed class UpdateVendorServiceAreaCommandHandler(IVendorOnboardingRep
             entity.CenterLatitude,
             entity.CenterLongitude,
             entity.ServiceRadiusKm,
-            entity.IsActive));
+            entity.IsActive,
+            entity.IsRadiusSetByAdmin));
     }
 }

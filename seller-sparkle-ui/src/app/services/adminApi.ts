@@ -60,6 +60,8 @@ export interface VendorServiceAreaDto {
   centerLongitude: number;
   serviceRadiusKm: number;
   isActive: boolean;
+  /** False until Admin sets/confirms coverage radius. */
+  isRadiusSetByAdmin?: boolean;
 }
 
 export interface VendorWorkingHourDto {
@@ -290,6 +292,14 @@ export interface VerifyVendorListingRequest {
   vendorId: string;
   listingId: string;
   listingStatus: string;
+  notes?: string;
+}
+
+export interface UpdateVendorServiceAreaRadiusRequest {
+  adminUserId: string;
+  vendorId: string;
+  serviceAreaId: string;
+  serviceRadiusKm: number;
   notes?: string;
 }
 
@@ -739,6 +749,15 @@ export const adminApi = {
 
   async getVendorServiceAreas(vendorId: string): Promise<VendorServiceAreaDto[]> {
     return apiClient.get<VendorServiceAreaDto[]>(`/vendors/${vendorId}/service-areas`);
+  },
+
+  async updateVendorServiceAreaRadius(
+    data: UpdateVendorServiceAreaRadiusRequest
+  ): Promise<VendorServiceAreaDto> {
+    return apiClient.patch<VendorServiceAreaDto>(
+      `/admin/vendors/${data.vendorId}/service-areas/${data.serviceAreaId}/radius`,
+      data
+    );
   },
 
   async getVendorWorkingHours(vendorId: string): Promise<VendorWorkingHourDto[]> {

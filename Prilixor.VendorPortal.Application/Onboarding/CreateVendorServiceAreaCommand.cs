@@ -63,6 +63,9 @@ internal sealed class CreateVendorServiceAreaCommandHandler(IVendorOnboardingRep
                 ErrorCategory.Validation));
         }
 
+        // Coverage radius is admin-controlled. Vendors may place the pin; default radius until admin sets it.
+        const decimal DefaultServiceRadiusKm = 5m;
+
         var entity = new VendorServiceArea
         {
             VendorId = vendorId,
@@ -70,7 +73,8 @@ internal sealed class CreateVendorServiceAreaCommandHandler(IVendorOnboardingRep
             City = request.City,
             CenterLatitude = request.CenterLatitude,
             CenterLongitude = request.CenterLongitude,
-            ServiceRadiusKm = request.ServiceRadiusKm,
+            ServiceRadiusKm = DefaultServiceRadiusKm,
+            IsRadiusSetByAdmin = false,
             IsActive = request.IsActive
         };
 
@@ -85,6 +89,7 @@ internal sealed class CreateVendorServiceAreaCommandHandler(IVendorOnboardingRep
             entity.CenterLatitude,
             entity.CenterLongitude,
             entity.ServiceRadiusKm,
-            entity.IsActive));
+            entity.IsActive,
+            entity.IsRadiusSetByAdmin));
     }
 }
