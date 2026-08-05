@@ -5,7 +5,8 @@ public enum VendorFileFolderType
     Documents,
     ProductImages,
     ProductDocuments,
-    Support
+    Support,
+    RentalIcons
 }
 
 public sealed record VendorFilePersistResult(

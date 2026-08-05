@@ -95,18 +95,20 @@ export function evaluateRentVsBuy(params: {
   };
 }
 
-/** Primary display rate for browse cards (first visible unit with a positive price). */
+/** Primary display rate for browse cards — day-first (latest rental flow). */
 export function primaryDisplayRate(rates: {
   dailyRent?: number;
   weeklyRent?: number;
   monthlyRent?: number;
 }): { value: number; unit: RentalPeriodUnit } | null {
+  const daily = rates.dailyRent ?? 0;
+  if (daily > 0) return { value: daily, unit: "day" };
+  const weekly = rates.weeklyRent ?? 0;
+  if (weekly > 0) return { value: Math.round(weekly / 7), unit: "day" };
   for (const unit of RENTAL_UNITS_VISIBLE_IN_UI) {
     const value = rateForUnit(unit, rates);
     if (value > 0) return { value, unit };
   }
-  // Fallback to daily if UI-hidden but still set (legacy data)
-  if ((rates.dailyRent ?? 0) > 0) return { value: rates.dailyRent!, unit: "day" };
   return null;
 }
 

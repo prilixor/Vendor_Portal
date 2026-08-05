@@ -31,6 +31,11 @@ import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { evaluateRentVsBuy } from "@/app/helpers/rentalPeriod";
 import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
+import { RentalPeriodPlanDropdown, sortActiveRentalPlans } from "@/app/components/shared/RentalPeriodPlanDropdown";
+import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
+
+/** Temporary: hide Pickup from admin place-order (match customer checkout). */
+const SHOW_PICKUP_DELIVERY_OPTION = false;
 
 type Step = "search" | "configure" | "cart" | "success";
 type BrowseMode = "equipment" | "chemicals";
@@ -51,6 +56,10 @@ interface AdminCartLine {
   rentalDays: number;
   rentalPeriodUnit: "day" | "week" | "month";
   orderType: "rent" | "buy";
+  rentalPricingPlanId?: string;
+  rentalDurationLabel?: string;
+  rentalFinalPrice?: number;
+  rentalNormalPrice?: number;
   productVariantId?: string;
   variantLabel?: string;
   dailyRent: number;
@@ -78,6 +87,9 @@ function lineEstimate(line: AdminCartLine) {
   const qty = Math.max(1, line.quantity);
   if (line.orderType === "buy") {
     return (line.buyPrice ?? 0) * qty;
+  }
+  if (line.rentalPricingPlanId && line.rentalFinalPrice != null) {
+    return line.rentalFinalPrice * qty;
   }
   const rate =
     line.rentalPeriodUnit === "week"
@@ -125,11 +137,13 @@ function priceHint(listing: AdminOrderableListingDto, mode: BrowseMode) {
   }
   const parts: string[] = [];
   if (listing.isRentEnabled) {
+    const daily = listing.dailyRent ?? 0;
     const weekly = listing.weeklyRent ?? 0;
-    const monthly = listing.monthlyRent ?? 0;
-    if (weekly > 0) parts.push(`${formatMoney(weekly)}/week rent`);
-    else if (monthly > 0) parts.push(`${formatMoney(monthly)}/month rent`);
-    // Daily kept in API but not shown while UI hides day unit
+    // Latest flow: day rate on browse; plan durations are chosen on the Add item step
+    const dayRate = daily > 0 ? daily : weekly > 0 ? weekly / 7 : 0;
+    if (dayRate > 0) parts.push(`${formatMoney(Math.round(dayRate))}/day`);
+    if (listing.securityDeposit > 0) parts.push(`Deposit ${formatMoney(listing.securityDeposit)}`);
+    parts.push("Plans on select");
   }
   if (listing.isBuyEnabled && listing.buyPrice != null && listing.buyPrice > 0) {
     parts.push(`Buy ${formatMoney(listing.buyPrice)}`);
@@ -164,6 +178,9 @@ function unitPriceLabel(line: AdminCartLine) {
   if (line.orderType === "buy") {
     return `${formatMoney(line.buyPrice ?? 0)} each`;
   }
+  if (line.rentalPricingPlanId && line.rentalFinalPrice != null) {
+    return `${formatMoney(line.rentalFinalPrice)} · ${line.rentalDurationLabel || dayPlanTitle(line.rentalDays)}`;
+  }
   const rate =
     line.rentalPeriodUnit === "week"
       ? line.weeklyRent
@@ -186,6 +203,7 @@ function CartItemTile({
   const img = resolveItemImageUrl({ primaryImageUrl: line.primaryImageUrl });
   const total = lineEstimate(line);
   const isRent = line.orderType === "rent";
+  const isPlanBased = isRent && !!line.rentalPricingPlanId && line.rentalFinalPrice != null;
 
   return (
     <div
@@ -283,16 +301,24 @@ function CartItemTile({
 
                 {isRent && (
                   <div className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Days</p>
-                    <Input
-                      className="h-8 w-[4.5rem] text-center tabular-nums font-semibold"
-                      type="number"
-                      min={1}
-                      value={line.rentalDays}
-                      onChange={(e) =>
-                        onUpdate(line.key, { rentalDays: Math.max(1, Number(e.target.value) || 1) })
-                      }
-                    />
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
+                      {isPlanBased ? "Plan" : "Days"}
+                    </p>
+                    {isPlanBased ? (
+                      <p className="h-8 flex items-center text-sm font-semibold">
+                        {line.rentalDurationLabel || `${line.rentalDays} days`}
+                      </p>
+                    ) : (
+                      <Input
+                        className="h-8 w-[4.5rem] text-center tabular-nums font-semibold"
+                        type="number"
+                        min={1}
+                        value={line.rentalDays}
+                        onChange={(e) =>
+                          onUpdate(line.key, { rentalDays: Math.max(1, Number(e.target.value) || 1) })
+                        }
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -301,7 +327,9 @@ function CartItemTile({
                 <p className="text-[11px] text-muted-foreground">
                   {unitPriceLabel(line)}
                   {isRent
-                    ? ` × ${line.rentalDays}${line.rentalPeriodUnit === "week" ? "w" : line.rentalPeriodUnit === "month" ? "mo" : "d"}`
+                    ? isPlanBased
+                      ? ""
+                      : ` × ${line.rentalDays}${line.rentalPeriodUnit === "week" ? "w" : line.rentalPeriodUnit === "month" ? "mo" : "d"}`
                     : ""}{" "}
                   × {line.quantity}
                 </p>
@@ -340,6 +368,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
   const [quantity, setQuantity] = useState("1");
   const [rentalDays, setRentalDays] = useState("1");
   const [rentalPeriodUnit, setRentalPeriodUnit] = useState<"week" | "month">("week");
+  const [selectedPlanId, setSelectedPlanId] = useState("");
   const [variantId, setVariantId] = useState("");
   const [addressId, setAddressId] = useState("");
   const [deliveryOption, setDeliveryOption] = useState("standard");
@@ -386,6 +415,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     setDetail(null);
     setQuantity("1");
     setRentalDays("7");
+    setSelectedPlanId("");
     setVariantId("");
     setDeliveryOption("standard");
     setMedicalRefs({});
@@ -429,6 +459,12 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     () => variants.find((v) => v.id === variantId),
     [variants, variantId],
   );
+  const activePlans = useMemo(() => sortActiveRentalPlans(detail?.rentalPricingPlans), [detail]);
+  const hasPricingPlans = activePlans.length > 0;
+  const selectedPlan = useMemo(
+    () => activePlans.find((plan) => plan.id === selectedPlanId) ?? null,
+    [activePlans, selectedPlanId],
+  );
 
   const rentEnabled = detail?.isRentEnabled ?? selected?.isRentEnabled ?? true;
   const buyEnabled = detail?.isBuyEnabled ?? selected?.isBuyEnabled ?? false;
@@ -441,12 +477,15 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
       const unit = selectedVariant?.buyPrice ?? detail?.buyPrice ?? selected?.buyPrice ?? 0;
       return unit * qty;
     }
+    if (hasPricingPlans && selectedPlan) {
+      return Number(selectedPlan.finalRentalPrice) * qty;
+    }
     const weekly = (detail as { weeklyRent?: number } | null)?.weeklyRent ?? selected?.weeklyRent ?? 0;
     const monthly = detail?.monthlyRent ?? selected?.monthlyRent ?? 0;
     const daily = detail?.dailyRent ?? selected?.dailyRent ?? 0;
     const rate = rentalPeriodUnit === "week" ? weekly : rentalPeriodUnit === "month" ? monthly : daily;
     return rate * Math.max(1, periods) * qty;
-  }, [orderType, quantity, rentalDays, rentalPeriodUnit, selectedVariant, detail, selected]);
+  }, [orderType, quantity, rentalDays, rentalPeriodUnit, selectedVariant, detail, selected, hasPricingPlans, selectedPlan]);
 
   const cartTotal = useMemo(() => cart.reduce((sum, line) => sum + lineEstimate(line), 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((sum, line) => sum + line.quantity, 0), [cart]);
@@ -509,9 +548,12 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     setVariantId("");
     setQuantity("1");
     setRentalDays("7");
+    setSelectedPlanId("");
     try {
       const d = await customerApi.getListingDetail(listing.listingId);
       setDetail(d);
+      const plans = sortActiveRentalPlans(d.rentalPricingPlans);
+      setSelectedPlanId(plans[0]?.id ?? "");
       const canRent = d.isRentEnabled !== false;
       const canBuy = d.isBuyEnabled === true;
       if (d.isChemical || (canBuy && !canRent)) setOrderType("buy");
@@ -533,7 +575,12 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
 
   const addToCart = (andContinue: boolean) => {
     if (!selected) return;
-    if (orderType === "rent" && (!Number(rentalDays) || Number(rentalDays) < 1)) {
+    const isPlanRental = orderType === "rent" && hasPricingPlans;
+    if (isPlanRental && !selectedPlan) {
+      toast.error("Select a rental pricing plan");
+      return;
+    }
+    if (orderType === "rent" && !isPlanRental && (!Number(rentalDays) || Number(rentalDays) < 1)) {
       toast.error("Rental period must be at least 1");
       return;
     }
@@ -551,7 +598,12 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     }
 
     const qty = Math.max(1, Number(quantity) || 1);
-    const days = orderType === "rent" ? Math.max(1, Number(rentalDays) || 1) : 0;
+    const days =
+      orderType === "rent"
+        ? isPlanRental
+          ? selectedPlan!.durationDays
+          : Math.max(1, Number(rentalDays) || 1)
+        : 0;
     const buyUnit = selectedVariant?.buyPrice ?? detail?.buyPrice ?? selected.buyPrice;
 
     if (orderType === "rent" && buyEnabled && (buyUnit ?? 0) > 0) {
@@ -560,12 +612,14 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
         isBuyEnabled: buyEnabled,
         quantity: qty,
         periods: days,
-        unit: rentalPeriodUnit,
+        unit: isPlanRental ? "day" : rentalPeriodUnit,
         rates: {
           dailyRent: detail?.dailyRent ?? selected.dailyRent,
           weeklyRent: (detail as { weeklyRent?: number } | null)?.weeklyRent ?? selected.weeklyRent ?? 0,
           monthlyRent: detail?.monthlyRent ?? selected.monthlyRent ?? 0,
         },
+        planFinalPrice: isPlanRental ? selectedPlan!.finalRentalPrice : null,
+        planDurationLabel: isPlanRental ? selectedPlan!.durationLabel || `${selectedPlan!.durationDays} days` : null,
       });
       if (check.shouldForceBuy) {
         setRentToBuyInfo({
@@ -598,8 +652,14 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
           ...next[ix],
           quantity: next[ix].quantity + qty,
           rentalDays: days,
-          rentalPeriodUnit: orderType === "rent" ? rentalPeriodUnit : "day",
+          rentalPeriodUnit: orderType === "rent" ? (isPlanRental ? "day" : rentalPeriodUnit) : "day",
           orderType,
+          rentalPricingPlanId: isPlanRental ? selectedPlan!.id : undefined,
+          rentalDurationLabel: isPlanRental
+            ? dayPlanTitle(selectedPlan!.durationDays, selectedPlan!.durationLabel)
+            : undefined,
+          rentalFinalPrice: isPlanRental ? selectedPlan!.finalRentalPrice : undefined,
+          rentalNormalPrice: isPlanRental ? selectedPlan!.normalPrice : undefined,
           buyPrice: buyUnit,
           isBuyEnabled: buyEnabled,
           dailyRent: detail?.dailyRent ?? selected.dailyRent,
@@ -628,8 +688,14 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
           primaryImageUrl: image,
           quantity: qty,
           rentalDays: days,
-          rentalPeriodUnit: orderType === "rent" ? rentalPeriodUnit : "day",
+          rentalPeriodUnit: orderType === "rent" ? (isPlanRental ? "day" : rentalPeriodUnit) : "day",
           orderType,
+          rentalPricingPlanId: isPlanRental ? selectedPlan!.id : undefined,
+          rentalDurationLabel: isPlanRental
+            ? dayPlanTitle(selectedPlan!.durationDays, selectedPlan!.durationLabel)
+            : undefined,
+          rentalFinalPrice: isPlanRental ? selectedPlan!.finalRentalPrice : undefined,
+          rentalNormalPrice: isPlanRental ? selectedPlan!.normalPrice : undefined,
           productVariantId: variantId || undefined,
           variantLabel,
           dailyRent: detail?.dailyRent ?? selected.dailyRent,
@@ -644,6 +710,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     toast.success(andContinue ? "Added to cart — keep shopping" : "Added to cart");
     setSelected(null);
     setDetail(null);
+    setSelectedPlanId("");
     setPlaceErrors([]);
     if (andContinue) {
       setStep("search");
@@ -662,17 +729,20 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
         else next.rentalDays = 0;
 
         if (next.orderType === "rent" && next.isBuyEnabled === true && (next.buyPrice ?? 0) > 0) {
+          const isPlanBased = !!next.rentalPricingPlanId && next.rentalFinalPrice != null;
           const check = evaluateRentVsBuy({
             buyPrice: next.buyPrice,
             isBuyEnabled: next.isBuyEnabled === true,
             quantity: next.quantity,
             periods: next.rentalDays,
-            unit: next.rentalPeriodUnit,
+            unit: isPlanBased ? "day" : next.rentalPeriodUnit,
             rates: {
               dailyRent: next.dailyRent,
               weeklyRent: next.weeklyRent,
               monthlyRent: next.monthlyRent,
             },
+            planFinalPrice: isPlanBased ? next.rentalFinalPrice : null,
+            planDurationLabel: isPlanBased ? next.rentalDurationLabel || `${next.rentalDays} days` : null,
           });
           if (check.shouldForceBuy) {
             // Defer dialog to after state update via microtask so we don't setState during render map
@@ -731,6 +801,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
             rentalDays: line.orderType === "rent" ? line.rentalDays : 0,
             rentalPeriodUnit: line.orderType === "rent" ? line.rentalPeriodUnit : "day",
             orderType: line.orderType,
+            ...(line.rentalPricingPlanId ? { rentalPricingPlanId: line.rentalPricingPlanId } : {}),
             productVariantId: line.productVariantId,
             doctorId: line.prescriptionRequired ? ref?.doctorId : undefined,
             hospitalId: line.prescriptionRequired ? ref?.hospitalId : undefined,
@@ -1144,7 +1215,47 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                   <Input type="number" min={1} value={quantity} onChange={(e) => setQuantity(e.target.value)} />
                 </div>
 
-                {orderType === "rent" && (
+                {orderType === "rent" && hasPricingPlans ? (
+                  <div className="sm:col-span-2">
+                    <RentalPeriodPlanDropdown
+                      plans={activePlans}
+                      selectedPlanId={selectedPlanId}
+                      onSelect={(plan) => {
+                        const qty = Math.max(1, Number(quantity) || 1);
+                        const buyUnit = selectedVariant?.buyPrice ?? detail?.buyPrice ?? selected?.buyPrice;
+                        if (buyEnabled && (buyUnit ?? 0) > 0) {
+                          const check = evaluateRentVsBuy({
+                            buyPrice: buyUnit,
+                            isBuyEnabled: buyEnabled,
+                            quantity: qty,
+                            periods: plan.durationDays,
+                            unit: "day",
+                            rates: {
+                              dailyRent: detail?.dailyRent ?? selected?.dailyRent ?? 0,
+                              weeklyRent: (detail as { weeklyRent?: number } | null)?.weeklyRent ?? selected?.weeklyRent ?? 0,
+                              monthlyRent: detail?.monthlyRent ?? selected?.monthlyRent ?? 0,
+                            },
+                            planFinalPrice: plan.finalRentalPrice,
+                            planDurationLabel: plan.durationLabel || `${plan.durationDays} days`,
+                          });
+                          if (check.shouldForceBuy) {
+                            setRentToBuyInfo({
+                              title: selected?.title ?? "Item",
+                              rentalTotal: check.rentalTotal,
+                              buyTotal: check.buyTotal,
+                              durationLabel: check.durationLabel,
+                              buyAvailable: buyEnabled,
+                              target: "configure",
+                            });
+                            setRentToBuyOpen(true);
+                            return;
+                          }
+                        }
+                        setSelectedPlanId(plan.id);
+                      }}
+                    />
+                  </div>
+                ) : orderType === "rent" ? (
                   <>
                     <div className="space-y-1.5">
                       <Label>Period</Label>
@@ -1163,7 +1274,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                       <Input type="number" min={1} value={rentalDays} onChange={(e) => setRentalDays(e.target.value)} />
                     </div>
                   </>
-                )}
+                ) : null}
               </div>
 
               <div className="rounded-lg border bg-muted/30 px-4 py-3">
@@ -1294,14 +1405,19 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                     </div>
                     <div className="space-y-1.5 sm:col-span-2">
                       <Label>Delivery option</Label>
-                      <Select value={deliveryOption} onValueChange={setDeliveryOption}>
+                      <Select
+                        value={deliveryOption === "pickup" && !SHOW_PICKUP_DELIVERY_OPTION ? "standard" : deliveryOption}
+                        onValueChange={setDeliveryOption}
+                      >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="standard">Standard</SelectItem>
                           <SelectItem value="express">Express</SelectItem>
-                          <SelectItem value="pickup">Pickup</SelectItem>
+                          {SHOW_PICKUP_DELIVERY_OPTION ? (
+                            <SelectItem value="pickup">Pickup</SelectItem>
+                          ) : null}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1433,12 +1549,25 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
           if (rentToBuyInfo.target === "configure") {
             setOrderType("buy");
             setRentalDays("1");
+            setSelectedPlanId("");
             toast.message("Order type set to Buy — add to cart again");
             return;
           }
           const key = rentToBuyInfo.target.cartKey;
           setCart((prev) =>
-            prev.map((l) => (l.key === key ? { ...l, orderType: "buy" as const, rentalDays: 0 } : l)),
+            prev.map((l) => (
+              l.key === key
+                ? {
+                    ...l,
+                    orderType: "buy" as const,
+                    rentalDays: 0,
+                    rentalPricingPlanId: undefined,
+                    rentalDurationLabel: undefined,
+                    rentalFinalPrice: undefined,
+                    rentalNormalPrice: undefined,
+                  }
+                : l
+            )),
           );
           toast.success("Cart line switched to Buy");
         }}

@@ -93,7 +93,13 @@ public sealed record CreateOrUpdateProductRentalPricingPlanDto(
     bool IsRecommended,
     bool IsActive,
     int SortOrder,
-    string? RentalDurationMasterId = null);
+    string? RentalDurationMasterId = null,
+    decimal BillingCycles = 0,
+    string? RentalDurationIconId = null,
+    string? IconUrl = null,
+    string? IconThumbnailUrl = null,
+    string? ValueTier = null,
+    string? IconName = null);
 
 public sealed record CreateProductCommand(
     string CategoryId,
@@ -141,7 +147,9 @@ public sealed class CreateProductCommandValidator : AbstractValidator<CreateProd
     }
 }
 
-internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class CreateProductCommandHandler(
+    IVendorOnboardingRepository repository,
+    IVendorFileUrlResolver fileUrlResolver)
     : ICommandHandler<CreateProductCommand, ProductDto>
 {
     public async Task<Result<ProductDto>> Handle(CreateProductCommand request, CancellationToken cancellationToken)
@@ -270,7 +278,7 @@ internal sealed class CreateProductCommandHandler(IVendorOnboardingRepository re
             entity.ChemicalProperty?.SdsDocumentUrl,
             entity.ChemicalProperty?.CoaDocumentUrl,
             0,
-            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans)));
+            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver)));
     }
 }
 
@@ -350,7 +358,7 @@ internal sealed class GetProductsQueryHandler(
             x.ChemicalProperty?.SdsDocumentUrl,
             x.ChemicalProperty?.CoaDocumentUrl,
             favoriteCounts.GetValueOrDefault(x.Id, 0),
-            ProductRentalPricingPlanSync.ToDtos(x.RentalPricingPlans))).ToList();
+            ProductRentalPricingPlanSync.ToDtos(x.RentalPricingPlans, fileUrlResolver))).ToList();
 
         return Result.Success(result);
     }
@@ -1375,7 +1383,9 @@ public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProd
     }
 }
 
-internal sealed class UpdateProductCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class UpdateProductCommandHandler(
+    IVendorOnboardingRepository repository,
+    IVendorFileUrlResolver fileUrlResolver)
     : ICommandHandler<UpdateProductCommand, ProductDto>
 {
     public async Task<Result<ProductDto>> Handle(UpdateProductCommand request, CancellationToken cancellationToken)
@@ -1545,13 +1555,15 @@ internal sealed class UpdateProductCommandHandler(IVendorOnboardingRepository re
             entity.ChemicalProperty?.SdsDocumentUrl,
             entity.ChemicalProperty?.CoaDocumentUrl,
             0,
-            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans)));
+            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver)));
     }
 }
 
 internal static class ProductRentalPricingPlanSync
 {
-    public static List<ProductRentalPricingPlanDto> ToDtos(IEnumerable<ProductRentalPricingPlan>? plans) =>
+    public static List<ProductRentalPricingPlanDto> ToDtos(
+        IEnumerable<ProductRentalPricingPlan>? plans,
+        IVendorFileUrlResolver? fileUrlResolver = null) =>
         plans?
             .OrderBy(p => p.SortOrder)
             .ThenBy(p => p.DurationDays)
@@ -1567,9 +1579,41 @@ internal static class ProductRentalPricingPlanSync
                 p.IsRecommended,
                 p.IsActive,
                 p.SortOrder,
-                p.RentalDurationMasterId?.ToString()))
+                p.RentalDurationMasterId?.ToString(),
+                p.BillingCycles,
+                p.RentalDurationIconId?.ToString(),
+                ResolveOptionalUrl(p.IconUrl, fileUrlResolver),
+                ResolveOptionalUrl(p.IconThumbnailUrl, fileUrlResolver),
+                p.ValueTier,
+                p.IconName))
             .ToList()
         ?? [];
+
+    private static string? ResolveOptionalUrl(string? stored, IVendorFileUrlResolver? fileUrlResolver)
+    {
+        if (string.IsNullOrWhiteSpace(stored))
+            return null;
+        return fileUrlResolver is null ? stored.Trim() : fileUrlResolver.Resolve(stored.Trim());
+    }
+
+    /// <summary>
+    /// Persist durable storage keys (S3 relative / uploads/…), never short-lived presigned URLs.
+    /// </summary>
+    private static string? PersistStoredFileRef(string? incoming, string? existing)
+    {
+        if (string.IsNullOrWhiteSpace(incoming))
+            return null;
+
+        var value = incoming.Trim();
+        if (LooksLikePresignedS3Url(value) && !string.IsNullOrWhiteSpace(existing))
+            return existing.Trim();
+
+        return value;
+    }
+
+    private static bool LooksLikePresignedS3Url(string value) =>
+        value.Contains(".amazonaws.com/", StringComparison.OrdinalIgnoreCase)
+        || value.Contains("X-Amz-", StringComparison.OrdinalIgnoreCase);
 
     public static void Apply(Product entity, IReadOnlyList<CreateOrUpdateProductRentalPricingPlanDto> plans)
     {
@@ -1587,6 +1631,13 @@ internal static class ProductRentalPricingPlanSync
                 && Guid.TryParse(dto.RentalDurationMasterId, out var parsedMasterId))
             {
                 masterId = parsedMasterId;
+            }
+
+            Guid? iconId = null;
+            if (!string.IsNullOrWhiteSpace(dto.RentalDurationIconId)
+                && Guid.TryParse(dto.RentalDurationIconId, out var parsedIconId))
+            {
+                iconId = parsedIconId;
             }
 
             ProductRentalPricingPlan? existing = null;
@@ -1614,6 +1665,9 @@ internal static class ProductRentalPricingPlanSync
 
             existing.DurationLabel = label;
             existing.DurationDays = Math.Max(1, dto.DurationDays);
+            existing.BillingCycles = dto.BillingCycles > 0
+                ? dto.BillingCycles
+                : decimal.Round(existing.DurationDays / 28m, 2, MidpointRounding.AwayFromZero);
             existing.NormalPrice = Math.Max(0m, dto.NormalPrice);
             existing.DiscountType = discountType;
             existing.DiscountValue = Math.Max(0m, dto.DiscountValue);
@@ -1622,6 +1676,13 @@ internal static class ProductRentalPricingPlanSync
             existing.IsActive = dto.IsActive;
             existing.SortOrder = dto.SortOrder;
             existing.RentalDurationMasterId = masterId;
+            existing.RentalDurationIconId = iconId;
+            existing.IconUrl = PersistStoredFileRef(dto.IconUrl, existing.IconUrl);
+            existing.IconThumbnailUrl = PersistStoredFileRef(dto.IconThumbnailUrl, existing.IconThumbnailUrl);
+            existing.ValueTier = string.IsNullOrWhiteSpace(dto.ValueTier)
+                ? null
+                : RentalDurationValueTiers.Normalize(dto.ValueTier);
+            existing.IconName = string.IsNullOrWhiteSpace(dto.IconName) ? null : dto.IconName.Trim();
 
             keepIds.Add(existing.Id);
             if (dto.IsRecommended)
@@ -1644,7 +1705,7 @@ internal static class ProductRentalPricingPlanSync
 
     /// <summary>
     /// Builds / refreshes duration chart rows from active masters using daily rate.
-    /// Preserves existing discounts, offer flags, and best-value when re-importing.
+    /// Preserves existing discounts, offer flags, best-value, and per-product icons when re-importing.
     /// </summary>
     public static void SeedOrRefreshFromMasters(
         Product entity,
@@ -1676,6 +1737,9 @@ internal static class ProductRentalPricingPlanSync
             var normal = decimal.Round(rate * m.DurationDays, 2, MidpointRounding.AwayFromZero);
             var discountType = existing?.DiscountType ?? RentalPricingPlanMath.None;
             var discountValue = existing?.DiscountValue ?? 0m;
+            var billingCycles = m.BillingCycles > 0
+                ? m.BillingCycles
+                : decimal.Round(m.DurationDays / 28m, 2, MidpointRounding.AwayFromZero);
             return new CreateOrUpdateProductRentalPricingPlanDto(
                 existing?.Id.ToString() ?? string.Empty,
                 m.DurationLabel,
@@ -1687,7 +1751,13 @@ internal static class ProductRentalPricingPlanSync
                 existing?.IsRecommended ?? false,
                 existing?.IsActive ?? true,
                 m.SortOrder,
-                m.Id.ToString());
+                m.Id.ToString(),
+                billingCycles,
+                existing?.RentalDurationIconId?.ToString(),
+                existing?.IconUrl,
+                existing?.IconThumbnailUrl,
+                existing?.ValueTier,
+                existing?.IconName);
         }).ToList();
 
         Apply(entity, dtos);

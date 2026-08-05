@@ -149,14 +149,33 @@ public sealed record ProductRentalPricingPlanDto(
     bool IsRecommended,
     bool IsActive,
     int SortOrder,
-    string? RentalDurationMasterId = null);
+    string? RentalDurationMasterId = null,
+    decimal BillingCycles = 0,
+    string? RentalDurationIconId = null,
+    string? IconUrl = null,
+    string? IconThumbnailUrl = null,
+    string? ValueTier = null,
+    string? IconName = null);
 
 public sealed record RentalDurationMasterDto(
     string Id,
     string DurationLabel,
     int DurationDays,
     int SortOrder,
-    bool IsActive);
+    bool IsActive,
+    decimal BillingCycles = 0);
+
+public sealed record RentalDurationIconDto(
+    string Id,
+    string Name,
+    string ValueTier,
+    string ImageUrl,
+    string? ThumbnailUrl,
+    int SortOrder,
+    bool IsActive,
+    /// <summary>Raw storage reference to persist on save/assign (S3 key or uploads/… path).</summary>
+    string? ImageStorageKey = null,
+    string? ThumbnailStorageKey = null);
 
 public sealed record ProductImageDto(
     string Id,

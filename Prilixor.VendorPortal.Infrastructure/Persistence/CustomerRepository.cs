@@ -1469,8 +1469,9 @@ public sealed class CustomerRepository(
                 v.BuyPrice,
                 v.IsActive)).ToList() ?? [],
             RentalPricingPlans = product.RentalPricingPlans?
-                .OrderBy(p => p.SortOrder)
-                .ThenBy(p => p.DurationDays)
+                .OrderByDescending(p => p.IsRecommended)
+                .ThenByDescending(p => p.DurationDays)
+                .ThenBy(p => p.SortOrder)
                 .Select(p => new Prilixor.VendorPortal.Application.Onboarding.ProductRentalPricingPlanDto(
                     p.Id.ToString(),
                     p.ProductId.ToString(),
@@ -1482,7 +1483,14 @@ public sealed class CustomerRepository(
                     p.FinalRentalPrice,
                     p.IsRecommended,
                     p.IsActive,
-                    p.SortOrder)).ToList() ?? [],
+                    p.SortOrder,
+                    p.RentalDurationMasterId?.ToString(),
+                    p.BillingCycles,
+                    p.RentalDurationIconId?.ToString(),
+                    string.IsNullOrWhiteSpace(p.IconUrl) ? null : fileUrlResolver.Resolve(p.IconUrl),
+                    string.IsNullOrWhiteSpace(p.IconThumbnailUrl) ? null : fileUrlResolver.Resolve(p.IconThumbnailUrl),
+                    p.ValueTier,
+                    p.IconName)).ToList() ?? [],
             VariantInventory = variantInventory
                 .Select(vi => new VariantInventoryItem(vi.ProductVariantId, vi.AvailableQuantity))
                 .ToList(),

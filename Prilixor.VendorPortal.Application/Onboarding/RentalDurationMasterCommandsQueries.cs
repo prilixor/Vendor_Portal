@@ -20,14 +20,15 @@ internal sealed class GetRentalDurationMastersQueryHandler(IVendorOnboardingRepo
     }
 
     private static RentalDurationMasterDto ToDto(RentalDurationMaster x) =>
-        new(x.Id.ToString(), x.DurationLabel, x.DurationDays, x.SortOrder, x.IsActive);
+        new(x.Id.ToString(), x.DurationLabel, x.DurationDays, x.SortOrder, x.IsActive, x.BillingCycles);
 }
 
 public sealed record CreateRentalDurationMasterCommand(
     string DurationLabel,
     int DurationDays,
     int SortOrder,
-    bool IsActive) : ICommand<RentalDurationMasterDto>;
+    bool IsActive,
+    decimal BillingCycles) : ICommand<RentalDurationMasterDto>;
 
 public sealed class CreateRentalDurationMasterCommandValidator : AbstractValidator<CreateRentalDurationMasterCommand>
 {
@@ -36,6 +37,7 @@ public sealed class CreateRentalDurationMasterCommandValidator : AbstractValidat
         RuleFor(x => x.DurationLabel).NotEmpty().MaximumLength(100);
         RuleFor(x => x.DurationDays).GreaterThan(0);
         RuleFor(x => x.SortOrder).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.BillingCycles).GreaterThan(0);
     }
 }
 
@@ -56,11 +58,16 @@ internal sealed class CreateRentalDurationMasterCommandHandler(IVendorOnboarding
                 ErrorCategory.Validation));
         }
 
+        var billingCycles = request.BillingCycles > 0
+            ? request.BillingCycles
+            : decimal.Round(request.DurationDays / 28m, 2, MidpointRounding.AwayFromZero);
+
         var entity = new RentalDurationMaster
         {
             Id = Guid.CreateVersion7(),
             DurationLabel = label,
             DurationDays = request.DurationDays,
+            BillingCycles = billingCycles,
             SortOrder = request.SortOrder,
             IsActive = request.IsActive,
         };
@@ -73,7 +80,8 @@ internal sealed class CreateRentalDurationMasterCommandHandler(IVendorOnboarding
             entity.DurationLabel,
             entity.DurationDays,
             entity.SortOrder,
-            entity.IsActive));
+            entity.IsActive,
+            entity.BillingCycles));
     }
 }
 
@@ -82,7 +90,8 @@ public sealed record UpdateRentalDurationMasterCommand(
     string DurationLabel,
     int DurationDays,
     int SortOrder,
-    bool IsActive) : ICommand<RentalDurationMasterDto>;
+    bool IsActive,
+    decimal BillingCycles) : ICommand<RentalDurationMasterDto>;
 
 public sealed class UpdateRentalDurationMasterCommandValidator : AbstractValidator<UpdateRentalDurationMasterCommand>
 {
@@ -92,6 +101,7 @@ public sealed class UpdateRentalDurationMasterCommandValidator : AbstractValidat
         RuleFor(x => x.DurationLabel).NotEmpty().MaximumLength(100);
         RuleFor(x => x.DurationDays).GreaterThan(0);
         RuleFor(x => x.SortOrder).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.BillingCycles).GreaterThan(0);
     }
 }
 
@@ -130,6 +140,9 @@ internal sealed class UpdateRentalDurationMasterCommandHandler(IVendorOnboarding
 
         entity.DurationLabel = request.DurationLabel.Trim();
         entity.DurationDays = request.DurationDays;
+        entity.BillingCycles = request.BillingCycles > 0
+            ? request.BillingCycles
+            : decimal.Round(request.DurationDays / 28m, 2, MidpointRounding.AwayFromZero);
         entity.SortOrder = request.SortOrder;
         entity.IsActive = request.IsActive;
 
@@ -141,7 +154,8 @@ internal sealed class UpdateRentalDurationMasterCommandHandler(IVendorOnboarding
             entity.DurationLabel,
             entity.DurationDays,
             entity.SortOrder,
-            entity.IsActive));
+            entity.IsActive,
+            entity.BillingCycles));
     }
 }
 

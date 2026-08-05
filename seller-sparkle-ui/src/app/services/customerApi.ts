@@ -72,6 +72,24 @@ export interface RentalPricingPlanDto {
   isRecommended: boolean;
   isActive: boolean;
   sortOrder: number;
+  billingCycles?: number;
+  rentalDurationIconId?: string | null;
+  iconUrl?: string | null;
+  iconThumbnailUrl?: string | null;
+  valueTier?: string | null;
+  iconName?: string | null;
+}
+
+export interface RentalDurationIconDto {
+  id: string;
+  name: string;
+  valueTier: string;
+  imageUrl: string;
+  thumbnailUrl?: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  imageStorageKey?: string | null;
+  thumbnailStorageKey?: string | null;
 }
 
 export interface CustomerListingDetailApi {
@@ -320,6 +338,10 @@ export const customerApi = {
 
   getListingDetail(listingId: string): Promise<CustomerListingDetailApi> {
     return apiClient.get<CustomerListingDetailApi>(`/customers/catalog/listings/${encodeURIComponent(listingId)}`);
+  },
+
+  getRentalDurationIcons(): Promise<RentalDurationIconDto[]> {
+    return apiClient.get<RentalDurationIconDto[]>("/customers/catalog/rental-duration-icons");
   },
 
   getProfile(): Promise<CustomerProfileApi> {

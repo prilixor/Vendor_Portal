@@ -105,6 +105,26 @@ public sealed class GetCustomerCatalogCategoriesEndpoint(IMediator mediator)
     }
 }
 
+/// <summary>Active rental-duration icons for customer renting-chart legend (public).</summary>
+public sealed class GetCustomerRentalDurationIconsEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<List<RentalDurationIconDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/rental-duration-icons");
+        AllowAnonymous();
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<List<RentalDurationIconDto>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetRentalDurationIconsQuery(ActiveOnly: true), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class CustomerListingDetailResponse
 {
     public Guid Id { get; set; }

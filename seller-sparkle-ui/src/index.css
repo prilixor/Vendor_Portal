@@ -159,6 +159,24 @@
     background-clip: text;
     color: transparent;
   }
+
+  /* Diagonal strike: left-bottom → right-top (for old rental prices) */
+  .strike-diagonal {
+    position: relative;
+    display: inline-block;
+  }
+  .strike-diagonal::after {
+    content: "";
+    position: absolute;
+    left: -2%;
+    right: -2%;
+    top: 50%;
+    height: 1.5px;
+    background: currentColor;
+    transform: rotate(-18deg);
+    transform-origin: center;
+    pointer-events: none;
+  }
 }
 
 /*

@@ -31,18 +31,25 @@ import { cn } from "@/app/helpers/utils";
 type FormState = {
   durationLabel: string;
   durationDays: number;
+  billingCycles: number;
   sortOrder: number;
   isActive: boolean;
 };
 
 const emptyForm = (): FormState => ({
   durationLabel: "",
-  durationDays: 7,
+  durationDays: 28,
+  billingCycles: 1,
   sortOrder: 0,
   isActive: true,
 });
 
-const AdminRentalDurations = () => {
+type AdminRentalDurationsProps = {
+  /** When true, omit PageHeader (used inside Rental Setup tabs). */
+  embedded?: boolean;
+};
+
+const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) => {
   const [rows, setRows] = useState<RentalDurationMasterDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -116,6 +123,9 @@ const AdminRentalDurations = () => {
     setForm({
       durationLabel: row.durationLabel,
       durationDays: row.durationDays,
+      billingCycles: row.billingCycles && row.billingCycles > 0
+        ? row.billingCycles
+        : Math.round((row.durationDays / 28) * 100) / 100,
       sortOrder: row.sortOrder,
       isActive: row.isActive,
     });
@@ -125,8 +135,9 @@ const AdminRentalDurations = () => {
 
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
-    if (!form.durationLabel.trim()) errors.durationLabel = "Enter a duration label.";
+    if (!form.durationLabel.trim()) errors.durationLabel = "Enter a billing-cycle label.";
     if (!(form.durationDays > 0)) errors.durationDays = "Duration days must be greater than 0.";
+    if (!(form.billingCycles > 0)) errors.billingCycles = "Billing cycles must be greater than 0.";
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -141,6 +152,7 @@ const AdminRentalDurations = () => {
       const payload: CreateRentalDurationMasterRequest = {
         durationLabel: form.durationLabel.trim(),
         durationDays: form.durationDays,
+        billingCycles: form.billingCycles,
         sortOrder: form.sortOrder,
         isActive: form.isActive,
       };
@@ -167,6 +179,10 @@ const AdminRentalDurations = () => {
         id: row.id,
         durationLabel: row.durationLabel,
         durationDays: row.durationDays,
+        billingCycles:
+          row.billingCycles && row.billingCycles > 0
+            ? row.billingCycles
+            : Math.round((row.durationDays / 28) * 100) / 100,
         sortOrder: row.sortOrder,
         isActive: !row.isActive,
       });
@@ -198,10 +214,12 @@ const AdminRentalDurations = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Rental Duration Master"
-        description="Define rental labels and day counts once. Product pricing uses these with a daily rate and optional discounts."
-      />
+      {!embedded && (
+        <PageHeader
+          title="Billing Cycle Durations"
+          description="Define billing-cycle names and day counts once. Product pricing uses these with a daily rate, discounts, and per-product icons."
+        />
+      )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card className="border-border/70 p-4 shadow-sm">
@@ -265,7 +283,7 @@ const AdminRentalDurations = () => {
               <p className="text-sm font-semibold text-foreground">No rental durations found</p>
               <p className="max-w-sm text-xs text-muted-foreground">
                 {rows.length === 0
-                  ? "Add durations like 7 Days, 14 Days, or 1 Month — then reuse them on every product."
+                  ? "Add billing cycles like 0.5, 1, or 3 — then reuse them on every rent product."
                   : "Try a different search or status filter."}
               </p>
             </div>
@@ -283,7 +301,8 @@ const AdminRentalDurations = () => {
               <table className="w-full min-w-[720px] text-sm">
                 <thead className="border-b border-border bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                   <tr>
-                    <th className="px-5 py-3 font-semibold">Duration</th>
+                    <th className="px-5 py-3 font-semibold">Billing cycle</th>
+                    <th className="px-4 py-3 font-semibold text-right">Cycles</th>
                     <th className="px-4 py-3 font-semibold text-right">Days</th>
                     <th className="px-4 py-3 font-semibold text-right">Sort order</th>
                     <th className="px-4 py-3 font-semibold text-center">Status</th>
@@ -311,6 +330,11 @@ const AdminRentalDurations = () => {
                             </p>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono tabular-nums text-muted-foreground">
+                        {row.billingCycles && row.billingCycles > 0
+                          ? row.billingCycles
+                          : Math.round((row.durationDays / 28) * 100) / 100}
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <Badge variant="outline" className="font-mono font-normal tabular-nums">
@@ -418,23 +442,50 @@ const AdminRentalDurations = () => {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
           <DialogHeader className="space-y-1 border-b border-border px-5 py-4 pr-12 text-left sm:px-6">
-            <DialogTitle>{editing ? "Edit rental duration" : "Add rental duration"}</DialogTitle>
+            <DialogTitle>{editing ? "Edit billing cycle" : "Add billing cycle"}</DialogTitle>
             <DialogDescription>
-              Labels appear on customer duration cards. Days drive list price (= daily rate × days).
+              Use billing-cycle names for customers (e.g. 1 Billing Cycle). Days drive list price (= daily rate × days).
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 px-5 py-5 sm:px-6">
             <FormGrid cols={2}>
               <div className="space-y-1.5 sm:col-span-2">
-                <Label required>Duration label</Label>
+                <Label required>Label</Label>
                 <Input
                   value={form.durationLabel}
                   onChange={(e) => setForm({ ...form, durationLabel: e.target.value })}
-                  placeholder="e.g. 14 Days or 2 Months"
+                  placeholder="e.g. 1 Billing Cycle"
                   className={fieldErrors.durationLabel ? "border-destructive" : ""}
                 />
                 <FieldError message={fieldErrors.durationLabel} />
+              </div>
+              <div className="space-y-1.5">
+                <Label required>Billing cycles</Label>
+                <Input
+                  type="number"
+                  min={0.01}
+                  step={0.25}
+                  value={form.billingCycles}
+                  onChange={(e) => {
+                    const billingCycles = Math.max(0.01, Number(e.target.value) || 0);
+                    const durationDays = Math.max(1, Math.round(billingCycles * 28));
+                    setForm({
+                      ...form,
+                      billingCycles,
+                      durationDays,
+                      durationLabel:
+                        form.durationLabel.trim() === "" ||
+                        /billing cycle/i.test(form.durationLabel)
+                          ? billingCycles === 1
+                            ? "1 Billing Cycle"
+                            : `${billingCycles} Billing Cycles`
+                          : form.durationLabel,
+                    });
+                  }}
+                  className={fieldErrors.billingCycles ? "border-destructive" : ""}
+                />
+                <FieldError message={fieldErrors.billingCycles} />
               </div>
               <div className="space-y-1.5">
                 <Label required>Days</Label>
@@ -449,7 +500,7 @@ const AdminRentalDurations = () => {
                 />
                 <FieldError message={fieldErrors.durationDays} />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 sm:col-span-2">
                 <Label>Sort order</Label>
                 <Input
                   type="number"
