@@ -14,6 +14,12 @@ import {
   Settings,
   Stethoscope,
   CalendarRange,
+  Globe,
+  FileText,
+  Layers,
+  HelpCircle,
+  PhoneCall,
+  Wrench,
 } from "lucide-react";
 import type { NavSection } from "@/app/helpers/navigation";
 
@@ -68,6 +74,19 @@ const adminNavBase: { title: string; items: AdminNavItem[] }[] = [
       { label: "Chemicals Management", to: "/admin/chemicals", icon: FlaskConical, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Doctor References", to: "/admin/doctors", icon: Stethoscope, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Hospitals", to: "/admin/hospitals", icon: Building2, permission: ADMIN_PERMISSIONS.catalogManage },
+    ],
+  },
+  {
+    title: "Portal Content Management",
+    items: [
+      { label: "Home Content", to: "/admin/website-content/home", icon: Globe, permission: ADMIN_PERMISSIONS.catalogManage },
+      { label: "About Content", to: "/admin/website-content/about", icon: FileText, permission: ADMIN_PERMISSIONS.catalogManage },
+      { label: "Services Content", to: "/admin/website-content/services", icon: Stethoscope, permission: ADMIN_PERMISSIONS.catalogManage },
+      { label: "How It Works", to: "/admin/website-content/how-it-works", icon: Wrench, permission: ADMIN_PERMISSIONS.catalogManage },
+      { label: "Rent or Buy Content", to: "/admin/website-content/rent-or-buy", icon: Layers, permission: ADMIN_PERMISSIONS.catalogManage },
+      { label: "FAQ Management", to: "/admin/website-content/faq", icon: HelpCircle, permission: ADMIN_PERMISSIONS.catalogManage },
+      { label: "Contact Details", to: "/admin/website-content/contact", icon: PhoneCall, permission: ADMIN_PERMISSIONS.catalogManage },
+      { label: "Portal Settings", to: "/admin/website-content/settings", icon: Settings, permission: ADMIN_PERMISSIONS.catalogManage },
     ],
   },
   {

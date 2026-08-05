@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   Destructively recreates admin/common/vendor/customer portal databases and applies full schema + migrations (including Admin RBAC).
 
@@ -36,6 +36,14 @@ param(
 $ErrorActionPreference = "Stop"
 
 $psql = Get-Command psql -ErrorAction SilentlyContinue
+if (-not $psql) {
+    $foundPsql = Get-ChildItem "C:\Program Files\PostgreSQL" -Filter "psql.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($foundPsql) {
+        $env:Path = $foundPsql.DirectoryName + ";" + $env:Path
+        $psql = Get-Command psql -ErrorAction SilentlyContinue
+    }
+}
+
 if (-not $psql) {
     throw "psql was not found on PATH. Install PostgreSQL client tools and retry."
 }

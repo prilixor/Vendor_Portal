@@ -54,6 +54,17 @@ public class ApplicationDbContext : DbContext
     public DbSet<ChemicalProperty> ChemicalProperties => Set<ChemicalProperty>();
     public DbSet<VendorVariantInventory> VendorVariantInventories => Set<VendorVariantInventory>();
     public DbSet<RentalDurationMaster> RentalDurationMasters => Set<RentalDurationMaster>();
+    public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeContent> WebsiteHomeContents => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeContent>();
+    public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeFeature> WebsiteHomeFeatures => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeFeature>();
+    public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteAboutContent> WebsiteAboutContents => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteAboutContent>();
+    public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteAudienceCategory> WebsiteAudienceCategories => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteAudienceCategory>();
+    public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteServicesHeader> WebsiteServicesHeaders => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteServicesHeader>();
+    public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteServiceItem> WebsiteServiceItems => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteServiceItem>();
+    public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteFaqCategory> WebsiteFaqCategories => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteFaqCategory>();
+    public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteFaqItem> WebsiteFaqItems => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteFaqItem>();
+    public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteContactContent> WebsiteContactContents => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteContactContent>();
+    public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksHeader> WebsiteHowItWorksHeaders => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksHeader>();
+    public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksStep> WebsiteHowItWorksSteps => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksStep>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Ignore<List<IDomainEvent>>()

@@ -106,6 +106,14 @@ CREATE DATABASE customer_portal_db;
 \c customer_portal_db
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/059_customer_orders_placed_by_admin.sql'
 
+-- 8) Additional feature migrations (weekly rent & thumbnail URLs)
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/064_rental_weekly_period_unit.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/065_product_image_thumbnails.sql'
+
+-- 9) Website Content Management
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/068_website_content_management.sql'
+
 \echo 'All schemas and migrations applied successfully.'
-\echo 'Coverage: admin/common/vendor/customer, medical, chemicals, variants, assets, favorites, RBAC.'
+\echo 'Coverage: admin/common/vendor/customer, medical, chemicals, variants, assets, favorites, RBAC, weekly rent, thumbnails, website content.'
 \echo 'Next: enable BootstrapSuperAdmin in appsettings, start the API once, then disable bootstrap.'
+

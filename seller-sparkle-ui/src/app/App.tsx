@@ -21,6 +21,9 @@ import ContactUs from "@/app/components/common/ContactUs";
 import DoctorPublicPage from "@/app/components/common/DoctorPublicPage";
 import TermsAndConditions from "@/app/components/legal/TermsAndConditions";
 import PrivacyPolicy from "@/app/components/legal/PrivacyPolicy";
+import AboutPage from "@/app/components/landing/AboutPage";
+import FAQPage from "@/app/components/landing/FAQPage";
+import ContactPage from "@/app/components/landing/ContactPage";
 
 import VendorDashboard from "@/app/components/vendor/Dashboard";
 import Onboarding from "@/app/components/vendor/Onboarding";
@@ -57,6 +60,7 @@ import AdminOrders from "@/app/components/admin/AdminOrders";
 import AdminOrderDetail from "@/app/components/admin/AdminOrderDetail";
 import { AdminNotifications } from "@/app/components/admin/AdminNotifications";
 import AdminSettings from "@/app/components/admin/AdminSettings";
+import WebsiteContentManagement from "@/app/components/admin/WebsiteContentManagement";
 import ImpersonationConsume from "@/app/components/auth/ImpersonationConsume";
 
 import CustomerBrowse from "@/app/components/customer/CustomerBrowse";
@@ -106,7 +110,11 @@ const App = () => (
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-            <Route path="/contact-us" element={<ContactUs />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/faq" element={<FAQPage />} />
+            <Route path="/faqs" element={<Navigate to="/faq" replace />} />
+            <Route path="/contact" element={<ContactPage />} />
+            <Route path="/contact-us" element={<ContactPage />} />
             <Route path="/dr/:code" element={<DoctorPublicPage />} />
 
             <Route path="/vendor" element={<AppShell variant="vendor" />}>
@@ -147,6 +155,15 @@ const App = () => (
               <Route path="orders/:orderId" element={<AdminOrderDetail />} />
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="settings" element={<AdminSettings />} />
+              <Route path="website-content" element={<WebsiteContentManagement />} />
+              <Route path="website-content/home" element={<WebsiteContentManagement initialTab="home" />} />
+              <Route path="website-content/about" element={<WebsiteContentManagement initialTab="about" />} />
+              <Route path="website-content/services" element={<WebsiteContentManagement initialTab="services" />} />
+              <Route path="website-content/how-it-works" element={<WebsiteContentManagement initialTab="how-it-works" />} />
+              <Route path="website-content/rent-or-buy" element={<WebsiteContentManagement initialTab="rent-or-buy" />} />
+              <Route path="website-content/faq" element={<WebsiteContentManagement initialTab="faq" />} />
+              <Route path="website-content/contact" element={<WebsiteContentManagement initialTab="contact" />} />
+              <Route path="website-content/settings" element={<WebsiteContentManagement initialTab="settings" />} />
             </Route>
 
             <Route path="/customer/login" element={<CustomerLogin />} />

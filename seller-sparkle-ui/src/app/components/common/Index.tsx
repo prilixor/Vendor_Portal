@@ -1,20 +1,33 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/app/guards/AuthContext";
 import { getPortalHostKind } from "@/app/helpers/portalHost";
+import Home from "@/app/components/landing/Home";
+import { useQuery } from "@tanstack/react-query";
+import { websiteContentApi } from "@/app/services/websiteContentApi";
 
 const Index = () => {
   const { user, isHydrating } = useAuth();
   const portal = getPortalHostKind();
 
+  const { data: publicContent, isLoading } = useQuery({
+    queryKey: ["publicWebsiteContent"],
+    queryFn: () => websiteContentApi.getPublicContent(),
+    staleTime: 1000 * 60 * 5,
+    retry: 1,
+  });
+
   if (isHydrating) return null;
 
   if (!user) {
     if (portal === "admin") return <Navigate to="/admin/login" replace />;
-    // Customer/www + local (localhost): storefront first. Vendor host stays login-first.
-    if (portal === "customer" || portal === "local") {
+    if (portal === "vendor") return <Navigate to="/login" replace />;
+
+    // Redirect to customer shop if Landing Page is disabled in Website Settings
+    if (publicContent?.settings?.showLandingPage === false) {
       return <Navigate to="/customer/shop" replace />;
     }
-    return <Navigate to="/login" replace />;
+
+    return <Home />;
   }
 
   if (user.role === "admin") return <Navigate to="/admin" replace />;
@@ -23,3 +36,5 @@ const Index = () => {
 };
 
 export default Index;
+
+

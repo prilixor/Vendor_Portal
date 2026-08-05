@@ -1,4 +1,4 @@
-\c common_portal_db
+-- Schema for chemical_properties table (run on common_portal_db and vendor_portal_db)
 
 CREATE TABLE IF NOT EXISTS public.chemical_properties (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

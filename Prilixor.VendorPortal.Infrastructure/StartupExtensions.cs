@@ -60,6 +60,7 @@ namespace Prilixor.VendorPortal.Infrastructure
 
             services.AddScoped<IEmailService, SmtpEmailService>();
             services.AddScoped<IPushNotificationService, WebPushNotificationService>();
+            services.AddScoped<IWebsiteContentRepository, WebsiteContentRepository>();
             services.Configure<WebPushOptions>(configuration.GetSection(WebPushOptions.SectionName));
 
             // Configure Groq AI Support
