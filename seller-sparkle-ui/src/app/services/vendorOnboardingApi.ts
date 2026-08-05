@@ -113,6 +113,12 @@ export interface ProductRentalPricingPlanDto {
   isRecommended: boolean;
   isActive: boolean;
   sortOrder: number;
+  billingCycles?: number;
+  rentalDurationIconId?: string | null;
+  iconUrl?: string | null;
+  iconThumbnailUrl?: string | null;
+  valueTier?: string | null;
+  iconName?: string | null;
 }
 
 export interface ProductApiDto {

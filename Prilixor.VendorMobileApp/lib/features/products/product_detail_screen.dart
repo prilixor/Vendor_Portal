@@ -90,7 +90,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         backgroundColor: const Color(0xFF1E293B),
         title: const Text('Delete listing?', style: TextStyle(color: Colors.white)),
         content: Text(
-          'Delete "${row.listing.listingTitle}"? This cannot be undone.',
+          'Delete "${row.productName.trim().isNotEmpty ? row.productName : row.listing.listingTitle}"? This cannot be undone.',
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -144,7 +144,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       MaterialPageRoute(
         builder: (_) => ListingMediaScreen(
           listingId: widget.listingId,
-          listingTitle: row.listing.listingTitle,
+          listingTitle: row.productName.trim().isNotEmpty
+              ? row.productName
+              : row.listing.listingTitle,
         ),
       ),
     );
@@ -163,6 +165,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
 
     final listing = row.listing;
+    CatalogProduct? catalogProduct;
+    for (final p in provider.products) {
+      if (p.id == listing.productId) {
+        catalogProduct = p;
+        break;
+      }
+    }
     final inventory = provider.inventoryForListing(widget.listingId);
     final primary = _images.where((i) => i.isPrimary).firstOrNull ??
         (_images.isNotEmpty ? _images.first : null);
@@ -170,7 +179,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(listing.listingTitle),
+        title: Text(
+          row.productName.trim().isNotEmpty
+              ? row.productName
+              : listing.listingTitle,
+        ),
         actions: [
           IconButton(
             tooltip: 'Edit listing',
@@ -178,7 +191,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             icon: const Icon(Icons.edit_outlined),
           ),
           IconButton(
-            tooltip: 'Manage photos',
+            tooltip: 'Manage photos & documents',
             onPressed: () => _openMedia(row),
             icon: const Icon(Icons.photo_library_outlined),
           ),
@@ -225,11 +238,47 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               _InfoRow(label: 'Catalog product', value: row.productName),
               _InfoRow(label: 'Category', value: row.categoryName),
               _InfoRow(label: 'Type', value: row.isChemical ? 'Chemical' : 'Equipment'),
+              _InfoRow(
+                label: 'Modes',
+                value: () {
+                  final modes = <String>[
+                    if (catalogProduct?.isRentEnabled == true) 'Rent',
+                    if (catalogProduct?.isBuyEnabled == true) 'Buy',
+                  ];
+                  return modes.isEmpty ? 'Off' : modes.join(' + ');
+                }(),
+              ),
+              if (catalogProduct != null)
+                _InfoRow(
+                  label: 'GST',
+                  value: '${catalogProduct.gstPercent.toStringAsFixed(0)}%',
+                ),
               _InfoRow(label: 'Status', value: _statusLabel(row.status)),
               if (!row.isChemical) ...[
-                _InfoRow(label: 'Weekly rent', value: '₹${listing.weeklyRent.toStringAsFixed(0)}'),
-                _InfoRow(label: 'Monthly rent', value: '₹${listing.monthlyRent.toStringAsFixed(0)}'),
-                _InfoRow(label: 'Deposit', value: '₹${listing.securityDeposit.toStringAsFixed(0)}'),
+                _InfoRow(
+                  label: 'Daily rate',
+                  value: '₹${(catalogProduct?.dailyRent ?? listing.dailyRent).toStringAsFixed(0)}',
+                ),
+                _InfoRow(
+                  label: 'Deposit',
+                  value: '₹${(catalogProduct?.securityDeposit ?? listing.securityDeposit).toStringAsFixed(0)}',
+                ),
+                _InfoRow(
+                  label: 'Buy price',
+                  value: catalogProduct?.buyPrice != null && catalogProduct!.buyPrice! > 0
+                      ? '₹${catalogProduct.buyPrice!.toStringAsFixed(0)}'
+                      : '—',
+                ),
+                _InfoRow(
+                  label: 'Vendor daily rate',
+                  value: '₹${(catalogProduct?.vendorDailyRent ?? 0).toStringAsFixed(0)}',
+                ),
+                _InfoRow(
+                  label: 'Vendor buy price',
+                  value: catalogProduct?.vendorBuyPrice != null && catalogProduct!.vendorBuyPrice! > 0
+                      ? '₹${catalogProduct.vendorBuyPrice!.toStringAsFixed(0)}'
+                      : '—',
+                ),
               ],
               _InfoRow(label: 'Quantity', value: '${row.quantity}'),
               if (listing.favoriteCount > 0)
@@ -240,7 +289,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           OutlinedButton.icon(
             onPressed: () => _openMedia(row),
             icon: const Icon(Icons.add_photo_alternate_outlined),
-            label: Text(_images.isEmpty ? 'Add photos' : 'Manage photos (${_images.length})'),
+            label: Text(_images.isEmpty ? 'Add photos & documents' : 'Photos & documents (${_images.length})'),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
               foregroundColor: Colors.white,

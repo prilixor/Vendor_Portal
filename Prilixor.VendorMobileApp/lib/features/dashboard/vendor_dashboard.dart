@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/providers/vendor_notification_provider.dart';
+import '../../core/providers/vendor_onboarding_provider.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/providers/vendor_support_provider.dart';
@@ -102,6 +103,8 @@ class _VendorDashboardState extends State<VendorDashboard>
           Provider.of<VendorProfileProvider>(context, listen: false);
       final support =
           Provider.of<VendorSupportProvider>(context, listen: false);
+      final onboarding =
+          Provider.of<VendorOnboardingProvider>(context, listen: false);
 
       await Future.wait([
         orders.fetchOffers(vendorId, silent: silent),
@@ -109,6 +112,7 @@ class _VendorDashboardState extends State<VendorDashboard>
         alerts.fetchNotifications(vendorId, silent: silent),
         profile.fetchStatus(vendorId, silent: silent),
         support.refreshUnreadAdminReplyCount(vendorId),
+        onboarding.loadAll(vendorId),
       ]);
     } catch (_) {
       // Never crash the shell on background poll / resume refresh failures.

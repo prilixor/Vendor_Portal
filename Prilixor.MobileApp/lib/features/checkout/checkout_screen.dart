@@ -12,6 +12,9 @@ import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
 import '../../core/utils/rental_period.dart';
 import 'medical_reference_screen.dart';
 
+/// Temporary: hide Vendor pickup from checkout UI (keep code for later).
+const bool kShowVendorPickupOption = false;
+
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
 
@@ -75,14 +78,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (quote == null || quote.buySuggestions.isEmpty) return;
 
     final pending = quote.buySuggestions
-        .where((s) => cart.lines.any((l) => l.listingId == s.listingId && l.orderType == 'rent'))
+        .where(
+          (s) => cart.lines.any(
+            (l) => l.listingId == s.listingId && l.orderType == 'rent' && l.isBuyEnabled,
+          ),
+        )
         .toList();
     if (pending.isEmpty) return;
 
     final first = pending.first;
     CartLineModel? line;
     for (final l in cart.lines) {
-      if (l.listingId == first.listingId && l.orderType == 'rent') {
+      if (l.listingId == first.listingId && l.orderType == 'rent' && l.isBuyEnabled) {
         line = l;
         break;
       }
@@ -94,14 +101,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       buyTotal: first.buyAmount,
       durationLabel: line == null
           ? 'this rental'
-          : formatRentalDuration(line.rentalDays, line.rentalPeriodUnit),
+          : (line.rentalDurationLabel?.isNotEmpty == true
+              ? line.rentalDurationLabel!
+              : formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)),
       buyAvailable: true,
       compulsory: true,
     );
     if (!mounted || confirmed != true) return;
 
     for (final s in quote.buySuggestions) {
-      final match = cart.lines.where((l) => l.listingId == s.listingId && l.orderType == 'rent');
+      final match = cart.lines.where(
+        (l) =>
+            l.listingId == s.listingId &&
+            l.orderType == 'rent' &&
+            l.isBuyEnabled &&
+            (l.buyPrice ?? 0) > 0,
+      );
       for (final l in match) {
         cart.updateOrderType(l.listingId, 'buy', productVariantId: l.productVariantId);
       }
@@ -284,11 +299,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     title: 'Express (next-day)',
                     trailing: 'Dynamic',
                   ),
-                  _deliveryOptionTile(
-                    value: 'vendor_pickup',
-                    title: 'Vendor pickup',
-                    trailing: 'Free',
-                  ),
+                  if (kShowVendorPickupOption)
+                    _deliveryOptionTile(
+                      value: 'vendor_pickup',
+                      title: 'Vendor pickup',
+                      trailing: 'Free',
+                    ),
 
                   if (needsPrescription) ...[
                     const SizedBox(height: 24),
@@ -436,10 +452,61 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         children: [
                           const Text('Some items could not be placed', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
-                          ...provider.failedLines.map((l) => Text(
-                                '• ${l['message'] ?? 'Failed'}',
-                                style: const TextStyle(color: Colors.amber, fontSize: 12),
-                              )),
+                          ...provider.failedLines.map((l) {
+                            final message = (l['message'] ?? 'Failed').toString();
+                            final suggestions = (l['variantSuggestions'] as List?)
+                                    ?.whereType<Map>()
+                                    .map((e) => Map<String, dynamic>.from(e))
+                                    .toList() ??
+                                const <Map<String, dynamic>>[];
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '• $message',
+                                    style: const TextStyle(color: Colors.amber, fontSize: 12),
+                                  ),
+                                  if (suggestions.isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    const Text(
+                                      'Available packaging sizes:',
+                                      style: TextStyle(color: Colors.white54, fontSize: 11),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: suggestions.map((s) {
+                                        final sizeValue = s['sizeValue']?.toString() ?? '';
+                                        final sizeUnit = s['sizeUnit']?.toString() ?? '';
+                                        final buyPrice = (s['buyPrice'] as num?)?.toDouble() ?? 0;
+                                        final qty = (s['availableQuantity'] as num?)?.toInt() ?? 0;
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.06),
+                                            borderRadius: BorderRadius.circular(999),
+                                            border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
+                                          ),
+                                          child: Text(
+                                            '$sizeValue $sizeUnit · ₹${buyPrice.toStringAsFixed(0)} · $qty in stock',
+                                            style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    const Text(
+                                      'Update packaging size or quantity in your cart, then try again.',
+                                      style: TextStyle(color: Colors.white38, fontSize: 11),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            );
+                          }),
                         ],
                       ),
                     ),

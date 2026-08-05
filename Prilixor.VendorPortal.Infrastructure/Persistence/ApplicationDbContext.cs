@@ -65,6 +65,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteContactContent> WebsiteContactContents => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteContactContent>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksHeader> WebsiteHowItWorksHeaders => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksHeader>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksStep> WebsiteHowItWorksSteps => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksStep>();
+    public DbSet<RentalDurationIcon> RentalDurationIcons => Set<RentalDurationIcon>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Ignore<List<IDomainEvent>>()
@@ -385,6 +386,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.ProductId).HasColumnName("product_id");
             entity.Property(x => x.DurationLabel).HasColumnName("duration_label");
             entity.Property(x => x.DurationDays).HasColumnName("duration_days");
+            entity.Property(x => x.BillingCycles).HasColumnName("billing_cycles");
             entity.Property(x => x.NormalPrice).HasColumnName("normal_price");
             entity.Property(x => x.DiscountType).HasColumnName("discount_type");
             entity.Property(x => x.DiscountValue).HasColumnName("discount_value");
@@ -393,6 +395,11 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.IsActive).HasColumnName("is_active");
             entity.Property(x => x.SortOrder).HasColumnName("sort_order");
             entity.Property(x => x.RentalDurationMasterId).HasColumnName("rental_duration_master_id");
+            entity.Property(x => x.RentalDurationIconId).HasColumnName("rental_duration_icon_id");
+            entity.Property(x => x.IconUrl).HasColumnName("icon_url");
+            entity.Property(x => x.IconThumbnailUrl).HasColumnName("icon_thumbnail_url");
+            entity.Property(x => x.ValueTier).HasColumnName("value_tier");
+            entity.Property(x => x.IconName).HasColumnName("icon_name");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
             entity.Ignore(x => x.CreatedBy);
@@ -409,6 +416,27 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.Id).HasColumnName("id");
             entity.Property(x => x.DurationLabel).HasColumnName("duration_label");
             entity.Property(x => x.DurationDays).HasColumnName("duration_days");
+            entity.Property(x => x.BillingCycles).HasColumnName("billing_cycles");
+            entity.Property(x => x.SortOrder).HasColumnName("sort_order");
+            entity.Property(x => x.IsActive).HasColumnName("is_active");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+        });
+
+        modelBuilder.Entity<RentalDurationIcon>(entity =>
+        {
+            entity.ToTable("rental_duration_icons");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.Name).HasColumnName("name");
+            entity.Property(x => x.ValueTier).HasColumnName("value_tier");
+            entity.Property(x => x.ImageUrl).HasColumnName("image_url");
+            entity.Property(x => x.ThumbnailUrl).HasColumnName("thumbnail_url");
             entity.Property(x => x.SortOrder).HasColumnName("sort_order");
             entity.Property(x => x.IsActive).HasColumnName("is_active");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");

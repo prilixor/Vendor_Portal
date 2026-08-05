@@ -52,7 +52,7 @@ export function estimateRent(
 }
 
 export type RentVsBuyCheck = {
-  /** True when rental total meets or exceeds buy total (and buy price is known). */
+  /** True when Buy is offered and rental total meets or exceeds buy total. */
   shouldForceBuy: boolean;
   rentalTotal: number;
   buyTotal: number;
@@ -60,42 +60,55 @@ export type RentVsBuyCheck = {
 };
 
 /**
- * When renting long enough that rent ≥ buy price, the order should switch to Buy.
- * Example: buy ₹10,000 · weekly ₹1,000 · 10 weeks → force Buy.
+ * When Buy is enabled and rent ≥ buy price, the order should switch to Buy.
+ * If Buy is disabled (rent-only), never force Buy — rental continues.
+ * Example: buy ₹10,000 · weekly ₹1,000 · 10 weeks → force Buy (only if isBuyEnabled).
  */
 export function evaluateRentVsBuy(params: {
   buyPrice?: number | null;
+  /** Admin "Buy enabled" — required for force-buy. */
+  isBuyEnabled?: boolean | null;
   quantity: number;
   periods: number;
   unit: RentalPeriodUnit;
   rates: { dailyRent?: number; weeklyRent?: number; monthlyRent?: number };
+  /** Optional plan-based rental total (overrides estimateRent). */
+  planFinalPrice?: number | null;
+  planDurationLabel?: string | null;
 }): RentVsBuyCheck {
   const qty = Math.max(1, params.quantity || 1);
   const periods = Math.max(1, params.periods || 1);
   const unitBuy = params.buyPrice ?? 0;
   const buyTotal = unitBuy > 0 ? unitBuy * qty : 0;
-  const rentalTotal = estimateRent(params.unit, periods, qty, params.rates);
-  const durationLabel = formatRentalDuration(periods, params.unit);
+  const rentalTotal =
+    params.planFinalPrice != null && params.planFinalPrice > 0
+      ? Number(params.planFinalPrice) * qty
+      : estimateRent(params.unit, periods, qty, params.rates);
+  const durationLabel =
+    params.planDurationLabel?.trim() || formatRentalDuration(periods, params.unit);
+  const buyOffered = params.isBuyEnabled === true;
   return {
-    shouldForceBuy: buyTotal > 0 && rentalTotal >= buyTotal,
+    shouldForceBuy: buyOffered && buyTotal > 0 && rentalTotal >= buyTotal,
     rentalTotal,
     buyTotal,
     durationLabel,
   };
 }
 
-/** Primary display rate for browse cards (first visible unit with a positive price). */
+/** Primary display rate for browse cards — day-first (latest rental flow). */
 export function primaryDisplayRate(rates: {
   dailyRent?: number;
   weeklyRent?: number;
   monthlyRent?: number;
 }): { value: number; unit: RentalPeriodUnit } | null {
+  const daily = rates.dailyRent ?? 0;
+  if (daily > 0) return { value: daily, unit: "day" };
+  const weekly = rates.weeklyRent ?? 0;
+  if (weekly > 0) return { value: Math.round(weekly / 7), unit: "day" };
   for (const unit of RENTAL_UNITS_VISIBLE_IN_UI) {
     const value = rateForUnit(unit, rates);
     if (value > 0) return { value, unit };
   }
-  // Fallback to daily if UI-hidden but still set (legacy data)
-  if ((rates.dailyRent ?? 0) > 0) return { value: rates.dailyRent!, unit: "day" };
   return null;
 }
 

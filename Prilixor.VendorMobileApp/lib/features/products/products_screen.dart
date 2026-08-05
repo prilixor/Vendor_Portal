@@ -419,7 +419,7 @@ class _ProductCard extends StatelessWidget {
     final listing = row.listing;
     final priceLine = row.isChemical
         ? _chemicalPrice(row)
-        : '₹${listing.weeklyRent.toStringAsFixed(0)}/w · ₹${listing.monthlyRent.toStringAsFixed(0)}/mo · Qty ${row.quantity}';
+        : '₹${listing.dailyRent.toStringAsFixed(0)}/day · Qty ${row.quantity}';
 
     return Material(
       color: const Color(0xFF1E293B),
@@ -441,7 +441,9 @@ class _ProductCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      listing.listingTitle,
+                      row.productName.trim().isNotEmpty
+                          ? row.productName
+                          : listing.listingTitle,
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -469,7 +471,7 @@ class _ProductCard extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                '${row.categoryName} · ${row.productName}',
+                row.categoryName,
                 style: const TextStyle(color: Colors.white54, fontSize: 13),
               ),
               const SizedBox(height: 8),

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../api/api_client.dart';
 import '../models/dispatch_offer_model.dart';
 import '../models/expiring_order_model.dart';
+import '../models/order_continuations_model.dart';
 import '../models/vendor_order_model.dart';
 
 class VendorOrderProvider extends ChangeNotifier {
@@ -35,6 +36,10 @@ class VendorOrderProvider extends ChangeNotifier {
 
   VendorOrder? _selectedOrder;
   VendorOrder? get selectedOrder => _selectedOrder;
+
+  OrderContinuations _continuations = OrderContinuations.empty;
+  OrderContinuations get continuations => _continuations;
+  bool get hasPendingContinuations => _continuations.hasPending;
 
   bool _expirationsLoading = false;
   bool get expirationsLoading => _expirationsLoading;
@@ -119,17 +124,129 @@ class VendorOrderProvider extends ChangeNotifier {
         _selectedOrder = VendorOrder.fromJson(
           Map<String, dynamic>.from(response.data as Map),
         );
+        await fetchContinuations(orderId, silent: true);
         return _selectedOrder;
       }
+      _continuations = OrderContinuations.empty;
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to load order.');
+      _continuations = OrderContinuations.empty;
     } catch (_) {
       _error = 'Failed to load order.';
+      _continuations = OrderContinuations.empty;
     } finally {
       _detailLoading = false;
       notifyListeners();
     }
     return null;
+  }
+
+  Future<OrderContinuations> fetchContinuations(
+    String orderId, {
+    bool silent = false,
+  }) async {
+    if (orderId.isEmpty) return OrderContinuations.empty;
+    try {
+      final response =
+          await _api.dio.get('/vendors/me/orders/$orderId/continuations');
+      if (response.data is Map) {
+        _continuations = OrderContinuations.fromJson(
+          Map<String, dynamic>.from(response.data as Map),
+        );
+      } else {
+        _continuations = OrderContinuations.empty;
+      }
+    } on DioException catch (e) {
+      if (!silent) {
+        _error = _dioMessage(e, 'Failed to load customer requests.');
+      }
+      _continuations = OrderContinuations.empty;
+    } catch (_) {
+      if (!silent) _error = 'Failed to load customer requests.';
+      _continuations = OrderContinuations.empty;
+    }
+    if (!silent) notifyListeners();
+    return _continuations;
+  }
+
+  Future<bool> approveExtension(
+    String vendorId,
+    String orderId,
+    String extensionId,
+  ) async {
+    return _continuationAction(
+      vendorId,
+      orderId,
+      '/vendors/me/orders/$orderId/extensions/$extensionId/approve',
+      'Failed to approve extension.',
+    );
+  }
+
+  Future<bool> rejectExtension(
+    String vendorId,
+    String orderId,
+    String extensionId,
+  ) async {
+    return _continuationAction(
+      vendorId,
+      orderId,
+      '/vendors/me/orders/$orderId/extensions/$extensionId/cancel',
+      'Failed to reject extension.',
+    );
+  }
+
+  Future<bool> approveBuyout(
+    String vendorId,
+    String orderId,
+    String buyoutId,
+  ) async {
+    return _continuationAction(
+      vendorId,
+      orderId,
+      '/vendors/me/orders/$orderId/buyouts/$buyoutId/approve',
+      'Failed to approve buyout.',
+    );
+  }
+
+  Future<bool> rejectBuyout(
+    String vendorId,
+    String orderId,
+    String buyoutId,
+  ) async {
+    return _continuationAction(
+      vendorId,
+      orderId,
+      '/vendors/me/orders/$orderId/buyouts/$buyoutId/cancel',
+      'Failed to reject buyout.',
+    );
+  }
+
+  Future<bool> _continuationAction(
+    String vendorId,
+    String orderId,
+    String path,
+    String fallbackError,
+  ) async {
+    _workingOrderId = orderId;
+    _actionLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      await _api.dio.post(path, data: {});
+      await fetchOrderDetail(vendorId, orderId);
+      await fetchOrders(vendorId, silent: true);
+      return true;
+    } on DioException catch (e) {
+      _error = _dioMessage(e, fallbackError);
+      return false;
+    } catch (_) {
+      _error = fallbackError;
+      return false;
+    } finally {
+      _workingOrderId = null;
+      _actionLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> fetchExpirations(

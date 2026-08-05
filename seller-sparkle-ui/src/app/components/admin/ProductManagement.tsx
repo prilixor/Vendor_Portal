@@ -15,7 +15,7 @@ import { TablePagination } from "@/app/components/shared/TablePagination";
 import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Textarea } from "@/app/components/ui/textarea";
-import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto, ProductRentalPricingPlanDto, RentalDurationMasterDto } from "@/app/services/adminApi";
+import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto, ProductRentalPricingPlanDto, RentalDurationMasterDto, RentalDurationIconDto } from "@/app/services/adminApi";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { resolveCatalogProductImageUrl } from "@/app/helpers/utils";
 import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown, FlaskConical } from "lucide-react";
@@ -36,6 +36,7 @@ const ProductManagement = () => {
   const [categories, setCategories] = useState<ProductCategoryDto[]>([]);
   const [products, setProducts] = useState<ProductDto[]>([]);
   const [rentalDurationMasters, setRentalDurationMasters] = useState<RentalDurationMasterDto[]>([]);
+  const [rentalDurationIcons, setRentalDurationIcons] = useState<RentalDurationIconDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("categories");
   const [search, setSearch] = useState("");
@@ -114,14 +115,16 @@ const ProductManagement = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [categoriesRes, productsRes, durationsRes] = await Promise.all([
+      const [categoriesRes, productsRes, durationsRes, iconsRes] = await Promise.all([
         adminApi.getProductCategories(),
         adminApi.getProducts(),
         adminApi.getRentalDurationMasters(false),
+        adminApi.getRentalDurationIcons(false),
       ]);
       setCategories(categoriesRes);
       setProducts(productsRes);
       setRentalDurationMasters(durationsRes);
+      setRentalDurationIcons(iconsRes);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load catalog data.";
       toast.error(message);
@@ -638,6 +641,7 @@ const ProductManagement = () => {
           rentalDurationMasterId: p.rentalDurationMasterId || undefined,
           durationLabel: p.durationLabel.trim(),
           durationDays: p.durationDays,
+          billingCycles: p.billingCycles ?? 0,
           normalPrice: p.normalPrice,
           discountType: p.discountType,
           discountValue: p.discountType === "none" ? 0 : p.discountValue,
@@ -645,6 +649,11 @@ const ProductManagement = () => {
           isRecommended: p.isRecommended,
           isActive: p.isActive,
           sortOrder: index,
+          rentalDurationIconId: p.rentalDurationIconId || null,
+          iconUrl: p.iconUrl || null,
+          iconThumbnailUrl: p.iconThumbnailUrl || null,
+          valueTier: p.valueTier || null,
+          iconName: p.iconName || null,
         })),
       };
 
@@ -1648,6 +1657,7 @@ const ProductManagement = () => {
               dailyRate={productForm.dailyRent}
               hideDailyRateInput
               masters={rentalDurationMasters}
+              icons={rentalDurationIcons}
               plans={productForm.rentalPricingPlans ?? []}
               onChange={(rentalPricingPlans: ProductRentalPricingPlanDto[]) => {
                 setProductForm({ ...productForm, rentalPricingPlans });

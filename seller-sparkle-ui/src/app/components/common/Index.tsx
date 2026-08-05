@@ -4,6 +4,7 @@ import { getPortalHostKind } from "@/app/helpers/portalHost";
 import Home from "@/app/components/landing/Home";
 import { useQuery } from "@tanstack/react-query";
 import { websiteContentApi } from "@/app/services/websiteContentApi";
+import { BrandBootSplash } from "@/app/components/shared/BrandMark";
 
 const Index = () => {
   const { user, isHydrating } = useAuth();
@@ -16,7 +17,7 @@ const Index = () => {
     retry: 1,
   });
 
-  if (isHydrating) return null;
+    if (isHydrating) return <BrandBootSplash />;
 
   if (!user) {
     if (portal === "admin") return <Navigate to="/admin/login" replace />;

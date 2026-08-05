@@ -13,4 +13,5 @@ class AppUrls {
 
   static const String termsPath = '/terms-and-conditions';
   static const String privacyPath = '/privacy-policy';
+  static const String contactPath = '/contact-us';
 }

@@ -6,7 +6,6 @@ import {
   LogOut,
   Moon,
   ShoppingCart,
-  Sparkles,
   Sun,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -25,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
+import { BrandMark } from "@/app/components/shared/BrandMark";
 
 function flattenNavItems(signedIn: boolean) {
   const sections = signedIn ? customerNav : guestCustomerNav;
@@ -68,12 +68,10 @@ export function CustomerStoreHeader() {
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 shadow-sm backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-3 px-3 sm:h-16 sm:px-6 lg:px-8">
         <Link to="/customer/shop" className="flex shrink-0 items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
-            <Sparkles className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <BrandMark />
           <div className="hidden min-w-0 sm:block">
             <p className="truncate text-sm font-bold leading-tight">BlinksMed</p>
-            <p className="truncate text-[11px] text-muted-foreground">Rent · Manage · Return</p>
+            <p className="truncate text-[11px] text-muted-foreground">Buy · Rent · Care</p>
           </div>
         </Link>
 

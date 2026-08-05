@@ -26,6 +26,8 @@ export interface CartLine {
   prescriptionRequired?: boolean;
   productVariantId?: string;
   buyPrice?: number;
+  /** Admin Buy enabled — used for rent≥buy force-buy. */
+  isBuyEnabled?: boolean;
   /** Duration pricing plan selection (when listing has admin plans). */
   rentalPricingPlanId?: string;
   rentalStartDate?: string;
@@ -156,6 +158,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
             orderType,
             prescriptionRequired: line.prescriptionRequired ?? next[ix].prescriptionRequired,
             buyPrice: line.buyPrice,
+            isBuyEnabled: line.isBuyEnabled,
             ...snapshot,
           };
           return next;
@@ -178,6 +181,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
             prescriptionRequired: line.prescriptionRequired,
             productVariantId: line.productVariantId,
             buyPrice: line.buyPrice,
+            isBuyEnabled: line.isBuyEnabled,
             ...snapshot,
           },
         ];

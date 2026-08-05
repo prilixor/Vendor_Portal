@@ -583,8 +583,7 @@ public sealed class VendorOnboardingRepository(
     {
         await commonDbContext.RentalDurationMasters.AddAsync(entity, cancellationToken);
 
-        var legacy = await dbContext.RentalDurationMasters
-            .FirstOrDefaultAsync(x => x.Id == entity.Id, cancellationToken);
+        var legacy = await FindLegacyRentalDurationMasterAsync(entity.Id, entity.DurationDays, cancellationToken);
         if (legacy is null)
         {
             await dbContext.RentalDurationMasters.AddAsync(CloneRentalDurationMaster(entity), cancellationToken);
@@ -596,11 +595,22 @@ public sealed class VendorOnboardingRepository(
 
     public async Task UpdateRentalDurationMasterAsync(RentalDurationMaster entity, CancellationToken cancellationToken)
     {
-        if (commonDbContext.Entry(entity).State == EntityState.Detached)
+        var entry = commonDbContext.Entry(entity);
+        // Prefer original duration_days so day-value edits still find the vendor twin row
+        // when common/vendor were seeded with different UUIDs.
+        var lookupDays = entry.State != EntityState.Detached
+            ? entry.Property(x => x.DurationDays).OriginalValue
+            : entity.DurationDays;
+
+        if (entry.State == EntityState.Detached)
             commonDbContext.RentalDurationMasters.Update(entity);
 
-        var legacy = await dbContext.RentalDurationMasters
-            .FirstOrDefaultAsync(x => x.Id == entity.Id, cancellationToken);
+        var legacy = await FindLegacyRentalDurationMasterAsync(entity.Id, lookupDays, cancellationToken);
+        if (legacy is null && lookupDays != entity.DurationDays)
+        {
+            legacy = await FindLegacyRentalDurationMasterAsync(entity.Id, entity.DurationDays, cancellationToken);
+        }
+
         if (legacy is null)
         {
             await dbContext.RentalDurationMasters.AddAsync(CloneRentalDurationMaster(entity), cancellationToken);
@@ -621,14 +631,37 @@ public sealed class VendorOnboardingRepository(
             entity.IsActive = false;
         }
 
-        var legacy = await dbContext.RentalDurationMasters
-            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
-        if (legacy is not null)
+        var legacy = await FindLegacyRentalDurationMasterAsync(
+            id,
+            entity?.DurationDays,
+            cancellationToken);
+        if (legacy is not null && !legacy.IsDeleted)
         {
             legacy.IsDeleted = true;
             legacy.DeletedAt = DateTimeOffset.UtcNow;
             legacy.IsActive = false;
         }
+    }
+
+    /// <summary>
+    /// Vendor DB was seeded with different UUIDs than common for the same duration_days.
+    /// Prefer Id match; fall back to non-deleted duration_days so dual-write updates (not inserts).
+    /// </summary>
+    private async Task<RentalDurationMaster?> FindLegacyRentalDurationMasterAsync(
+        Guid id,
+        int? durationDays,
+        CancellationToken cancellationToken)
+    {
+        var byId = await dbContext.RentalDurationMasters
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (byId is not null)
+            return byId;
+
+        if (durationDays is null or <= 0)
+            return null;
+
+        return await dbContext.RentalDurationMasters
+            .FirstOrDefaultAsync(x => !x.IsDeleted && x.DurationDays == durationDays, cancellationToken);
     }
 
     private static RentalDurationMaster CloneRentalDurationMaster(RentalDurationMaster source) =>
@@ -637,6 +670,7 @@ public sealed class VendorOnboardingRepository(
             Id = source.Id,
             DurationLabel = source.DurationLabel,
             DurationDays = source.DurationDays,
+            BillingCycles = source.BillingCycles,
             SortOrder = source.SortOrder,
             IsActive = source.IsActive,
             CreatedOnUtc = source.CreatedOnUtc,
@@ -650,6 +684,126 @@ public sealed class VendorOnboardingRepository(
     {
         destination.DurationLabel = source.DurationLabel;
         destination.DurationDays = source.DurationDays;
+        destination.BillingCycles = source.BillingCycles;
+        destination.SortOrder = source.SortOrder;
+        destination.IsActive = source.IsActive;
+        destination.CreatedOnUtc = source.CreatedOnUtc;
+        destination.ModifiedOnUtc = source.ModifiedOnUtc;
+        destination.IsDeleted = source.IsDeleted;
+        destination.DeletedAt = source.DeletedAt;
+        destination.DeletedBy = source.DeletedBy;
+    }
+
+    public async Task<List<RentalDurationIcon>> GetRentalDurationIconsAsync(bool activeOnly, CancellationToken cancellationToken)
+    {
+        var query = commonDbContext.RentalDurationIcons.Where(x => !x.IsDeleted);
+        if (activeOnly)
+            query = query.Where(x => x.IsActive);
+
+        var rows = await query
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count > 0)
+            return rows;
+
+        var legacy = dbContext.RentalDurationIcons.Where(x => !x.IsDeleted);
+        if (activeOnly)
+            legacy = legacy.Where(x => x.IsActive);
+
+        return await legacy
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<RentalDurationIcon?> GetRentalDurationIconByIdAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var row = await commonDbContext.RentalDurationIcons
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        if (row is not null)
+            return row;
+
+        return await dbContext.RentalDurationIcons
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task AddRentalDurationIconAsync(RentalDurationIcon entity, CancellationToken cancellationToken)
+    {
+        await commonDbContext.RentalDurationIcons.AddAsync(entity, cancellationToken);
+
+        var legacy = await dbContext.RentalDurationIcons
+            .FirstOrDefaultAsync(x => x.Id == entity.Id, cancellationToken);
+        if (legacy is null)
+        {
+            await dbContext.RentalDurationIcons.AddAsync(CloneRentalDurationIcon(entity), cancellationToken);
+            return;
+        }
+
+        CopyRentalDurationIconValues(entity, legacy);
+    }
+
+    public async Task UpdateRentalDurationIconAsync(RentalDurationIcon entity, CancellationToken cancellationToken)
+    {
+        if (commonDbContext.Entry(entity).State == EntityState.Detached)
+            commonDbContext.RentalDurationIcons.Update(entity);
+
+        var legacy = await dbContext.RentalDurationIcons
+            .FirstOrDefaultAsync(x => x.Id == entity.Id, cancellationToken);
+        if (legacy is null)
+        {
+            await dbContext.RentalDurationIcons.AddAsync(CloneRentalDurationIcon(entity), cancellationToken);
+            return;
+        }
+
+        CopyRentalDurationIconValues(entity, legacy);
+    }
+
+    public async Task DeleteRentalDurationIconAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var entity = await commonDbContext.RentalDurationIcons
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        if (entity is not null)
+        {
+            entity.IsDeleted = true;
+            entity.DeletedAt = DateTimeOffset.UtcNow;
+            entity.IsActive = false;
+        }
+
+        var legacy = await dbContext.RentalDurationIcons
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        if (legacy is not null)
+        {
+            legacy.IsDeleted = true;
+            legacy.DeletedAt = DateTimeOffset.UtcNow;
+            legacy.IsActive = false;
+        }
+    }
+
+    private static RentalDurationIcon CloneRentalDurationIcon(RentalDurationIcon source) =>
+        new()
+        {
+            Id = source.Id,
+            Name = source.Name,
+            ValueTier = source.ValueTier,
+            ImageUrl = source.ImageUrl,
+            ThumbnailUrl = source.ThumbnailUrl,
+            SortOrder = source.SortOrder,
+            IsActive = source.IsActive,
+            CreatedOnUtc = source.CreatedOnUtc,
+            ModifiedOnUtc = source.ModifiedOnUtc,
+            IsDeleted = source.IsDeleted,
+            DeletedAt = source.DeletedAt,
+            DeletedBy = source.DeletedBy,
+        };
+
+    private static void CopyRentalDurationIconValues(RentalDurationIcon source, RentalDurationIcon destination)
+    {
+        destination.Name = source.Name;
+        destination.ValueTier = source.ValueTier;
+        destination.ImageUrl = source.ImageUrl;
+        destination.ThumbnailUrl = source.ThumbnailUrl;
         destination.SortOrder = source.SortOrder;
         destination.IsActive = source.IsActive;
         destination.CreatedOnUtc = source.CreatedOnUtc;
@@ -1465,6 +1619,7 @@ public sealed class VendorOnboardingRepository(
                 ProductId = p.ProductId,
                 DurationLabel = p.DurationLabel,
                 DurationDays = p.DurationDays,
+                BillingCycles = p.BillingCycles,
                 NormalPrice = p.NormalPrice,
                 DiscountType = p.DiscountType,
                 DiscountValue = p.DiscountValue,
@@ -1473,6 +1628,11 @@ public sealed class VendorOnboardingRepository(
                 IsActive = p.IsActive,
                 SortOrder = p.SortOrder,
                 RentalDurationMasterId = p.RentalDurationMasterId,
+                RentalDurationIconId = p.RentalDurationIconId,
+                IconUrl = p.IconUrl,
+                IconThumbnailUrl = p.IconThumbnailUrl,
+                ValueTier = p.ValueTier,
+                IconName = p.IconName,
                 CreatedOnUtc = p.CreatedOnUtc,
                 ModifiedOnUtc = p.ModifiedOnUtc
             }).ToList() ?? []
@@ -1575,39 +1735,51 @@ public sealed class VendorOnboardingRepository(
             {
                 var dp = destination.RentalPricingPlans.FirstOrDefault(p => p.Id == sp.Id);
                 if (dp is null)
-                {
-                    destination.RentalPricingPlans.Add(new ProductRentalPricingPlan
                     {
-                        Id = sp.Id == Guid.Empty ? Guid.NewGuid() : sp.Id,
-                        ProductId = destination.Id,
-                        DurationLabel = sp.DurationLabel,
-                        DurationDays = sp.DurationDays,
-                        NormalPrice = sp.NormalPrice,
-                        DiscountType = sp.DiscountType,
-                        DiscountValue = sp.DiscountValue,
-                        FinalRentalPrice = sp.FinalRentalPrice,
-                        IsRecommended = sp.IsRecommended,
-                        IsActive = sp.IsActive,
-                        SortOrder = sp.SortOrder,
-                        RentalDurationMasterId = sp.RentalDurationMasterId,
-                        CreatedOnUtc = sp.CreatedOnUtc,
-                        ModifiedOnUtc = sp.ModifiedOnUtc
-                    });
-                }
-                else
-                {
-                    dp.DurationLabel = sp.DurationLabel;
-                    dp.DurationDays = sp.DurationDays;
-                    dp.NormalPrice = sp.NormalPrice;
-                    dp.DiscountType = sp.DiscountType;
-                    dp.DiscountValue = sp.DiscountValue;
-                    dp.FinalRentalPrice = sp.FinalRentalPrice;
-                    dp.IsRecommended = sp.IsRecommended;
-                    dp.IsActive = sp.IsActive;
-                    dp.SortOrder = sp.SortOrder;
-                    dp.RentalDurationMasterId = sp.RentalDurationMasterId;
-                    dp.ModifiedOnUtc = sp.ModifiedOnUtc;
-                }
+                        destination.RentalPricingPlans.Add(new ProductRentalPricingPlan
+                        {
+                            Id = sp.Id == Guid.Empty ? Guid.NewGuid() : sp.Id,
+                            ProductId = destination.Id,
+                            DurationLabel = sp.DurationLabel,
+                            DurationDays = sp.DurationDays,
+                            BillingCycles = sp.BillingCycles,
+                            NormalPrice = sp.NormalPrice,
+                            DiscountType = sp.DiscountType,
+                            DiscountValue = sp.DiscountValue,
+                            FinalRentalPrice = sp.FinalRentalPrice,
+                            IsRecommended = sp.IsRecommended,
+                            IsActive = sp.IsActive,
+                            SortOrder = sp.SortOrder,
+                            RentalDurationMasterId = sp.RentalDurationMasterId,
+                            RentalDurationIconId = sp.RentalDurationIconId,
+                            IconUrl = sp.IconUrl,
+                            IconThumbnailUrl = sp.IconThumbnailUrl,
+                            ValueTier = sp.ValueTier,
+                            IconName = sp.IconName,
+                            CreatedOnUtc = sp.CreatedOnUtc,
+                            ModifiedOnUtc = sp.ModifiedOnUtc
+                        });
+                    }
+                    else
+                    {
+                        dp.DurationLabel = sp.DurationLabel;
+                        dp.DurationDays = sp.DurationDays;
+                        dp.BillingCycles = sp.BillingCycles;
+                        dp.NormalPrice = sp.NormalPrice;
+                        dp.DiscountType = sp.DiscountType;
+                        dp.DiscountValue = sp.DiscountValue;
+                        dp.FinalRentalPrice = sp.FinalRentalPrice;
+                        dp.IsRecommended = sp.IsRecommended;
+                        dp.IsActive = sp.IsActive;
+                        dp.SortOrder = sp.SortOrder;
+                        dp.RentalDurationMasterId = sp.RentalDurationMasterId;
+                        dp.RentalDurationIconId = sp.RentalDurationIconId;
+                        dp.IconUrl = sp.IconUrl;
+                        dp.IconThumbnailUrl = sp.IconThumbnailUrl;
+                        dp.ValueTier = sp.ValueTier;
+                        dp.IconName = sp.IconName;
+                        dp.ModifiedOnUtc = sp.ModifiedOnUtc;
+                    }
             }
             var plansToRemove = destination.RentalPricingPlans
                 .Where(dp => !source.RentalPricingPlans.Any(sp => sp.Id == dp.Id))

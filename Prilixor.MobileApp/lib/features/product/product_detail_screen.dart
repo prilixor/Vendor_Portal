@@ -8,6 +8,7 @@ import '../../core/providers/cart_provider.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/models/product_detail_model.dart';
 import '../../core/models/product_variant_model.dart';
+import '../../core/models/rental_pricing_plan_model.dart';
 import '../../core/utils/media_url.dart';
 import '../../core/utils/rental_period.dart';
 import '../../shared/widgets/catalog_image.dart';
@@ -31,6 +32,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   int _periodCount = 1;
   String _periodUnit = defaultUiRentalUnit;
   String? _selectedVariantId;
+  String? _selectedPlanId;
   bool _orderTypeInitialized = false;
   int _imageIndex = 0;
   final PageController _imagePageController = PageController();
@@ -64,6 +66,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     if (detail.activeVariants.isNotEmpty && _selectedVariantId == null) {
       _selectedVariantId = detail.activeVariants.first.id;
     }
+    if (detail.hasActiveRentalPlans && _selectedPlanId == null) {
+      _selectedPlanId = detail.defaultRentalPlan?.id;
+    }
+  }
+
+  RentalPricingPlanModel? _selectedPlan(ProductDetailModel detail) {
+    if (!detail.hasActiveRentalPlans) return null;
+    final plans = detail.activeRentalPlans;
+    for (final p in plans) {
+      if (p.id == _selectedPlanId) return p;
+    }
+    return detail.defaultRentalPlan;
   }
 
   @override
@@ -100,16 +114,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final rentRatesDaily = detail?.dailyRent ?? 0;
     final rentRatesWeekly = detail?.weeklyRent ?? 0;
     final rentRatesMonthly = detail?.monthlyRent ?? 0;
+    final selectedPlan = detail == null ? null : _selectedPlan(detail);
     final estimate = actualOrderType == 'buy'
         ? unitBuyPrice * _quantity
-        : estimateRent(
-            _periodUnit,
-            _periodCount,
-            _quantity,
-            dailyRent: rentRatesDaily,
-            weeklyRent: rentRatesWeekly,
-            monthlyRent: rentRatesMonthly,
-          );
+        : (selectedPlan != null
+            ? selectedPlan.finalRentalPrice * _quantity
+            : estimateRent(
+                _periodUnit,
+                _periodCount,
+                _quantity,
+                dailyRent: rentRatesDaily,
+                weeklyRent: rentRatesWeekly,
+                monthlyRent: rentRatesMonthly,
+              ));
     final badge = detail?.getAvailabilityBadge(qtyOverride: currentQty);
     final canAdd = detail != null && currentQty > 0;
     final cannotFulfill = selectedVariant != null && _quantity > currentQty;
@@ -488,9 +505,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       : Column(
                                           children: [
                                             if (detail.canRent) ...[
-                                              _priceRow('Weekly rent', '₹${detail.weeklyRent.toStringAsFixed(0)}'),
-                                              _priceRow('Monthly rent', '₹${detail.monthlyRent.toStringAsFixed(0)}'),
-                                              _priceRow('Security deposit', '₹${detail.securityDeposit.toStringAsFixed(0)}'),
+                                              if (detail.hasActiveRentalPlans) ...[
+                                                _priceRow('Daily rate', '₹${detail.dailyRent.toStringAsFixed(0)}'),
+                                                _priceRow('Security deposit', '₹${detail.securityDeposit.toStringAsFixed(0)}'),
+                                              ] else ...[
+                                                _priceRow('Weekly rent', '₹${detail.weeklyRent.toStringAsFixed(0)}'),
+                                                _priceRow('Monthly rent', '₹${detail.monthlyRent.toStringAsFixed(0)}'),
+                                                _priceRow('Security deposit', '₹${detail.securityDeposit.toStringAsFixed(0)}'),
+                                              ],
                                             ],
                                             if (detail.canBuy)
                                               _priceRow(
@@ -611,6 +633,161 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
                                 if (actualOrderType == 'rent') ...[
                                   const SizedBox(height: 16),
+                                  if (detail.hasActiveRentalPlans) ...[
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: RequiredLabel(
+                                        'Rental period',
+                                        required: true,
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(alpha: 0.55),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.6,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    InkWell(
+                                      onTap: () => _openRentalPeriodSheet(
+                                        detail: detail,
+                                        unitBuyPrice: unitBuyPrice,
+                                      ),
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0F172A),
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(color: const Color(0xFF6C63FF), width: 1.5),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    selectedPlan?.durationLabel ?? 'Choose period',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.w700,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                  if (selectedPlan != null)
+                                                    Text(
+                                                      '${selectedPlan.durationDays} days'
+                                                      '${selectedPlan.isRecommended ? ' · Best value' : ''}',
+                                                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                            Text(
+                                              selectedPlan != null
+                                                  ? '₹${selectedPlan.finalRentalPrice.toStringAsFixed(0)}'
+                                                  : '—',
+                                              style: const TextStyle(
+                                                color: Color(0xFF6C63FF),
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white54),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    const Text(
+                                      'Starts when the order is delivered',
+                                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                                    ),
+                                    if (selectedPlan != null) ...[
+                                      const SizedBox(height: 12),
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0F172A),
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(color: Colors.white12),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'You pay for rent',
+                                              style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w600),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Row(
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              children: [
+                                                Expanded(
+                                                  child: Wrap(
+                                                    crossAxisAlignment: WrapCrossAlignment.end,
+                                                    spacing: 8,
+                                                    children: [
+                                                      Text(
+                                                        '₹${(selectedPlan.finalRentalPrice * _quantity).toStringAsFixed(0)}',
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 28,
+                                                          fontWeight: FontWeight.w800,
+                                                          height: 1.1,
+                                                        ),
+                                                      ),
+                                                      if (selectedPlan.hasDiscount)
+                                                        Text(
+                                                          '₹${(selectedPlan.normalPrice * _quantity).toStringAsFixed(0)}',
+                                                          style: const TextStyle(
+                                                            color: Colors.white38,
+                                                            fontSize: 14,
+                                                            decoration: TextDecoration.lineThrough,
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                if (selectedPlan.hasDiscount)
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                                      borderRadius: BorderRadius.circular(999),
+                                                    ),
+                                                    child: Text(
+                                                      'Save ₹${(selectedPlan.savings * _quantity).toStringAsFixed(0)}',
+                                                      style: const TextStyle(
+                                                        color: Color(0xFF34D399),
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+                                            const SizedBox(height: 10),
+                                            Text(
+                                              detail.securityDeposit > 0
+                                                  ? 'Deposit ₹${(detail.securityDeposit * _quantity).toStringAsFixed(0)} (refundable)'
+                                                      '${_quantity > 1 ? ' · ₹${selectedPlan.finalRentalPrice.toStringAsFixed(0)} × $_quantity' : ''}'
+                                                  : (_quantity > 1
+                                                      ? '₹${selectedPlan.finalRentalPrice.toStringAsFixed(0)} × $_quantity'
+                                                      : 'No deposit required'),
+                                              style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ] else ...[
                                   Align(
                                     alignment: Alignment.centerLeft,
                                     child: RequiredLabel(
@@ -708,6 +885,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       ),
                                     ],
                                   ),
+                                  ],
                                 ],
 
                                 const SizedBox(height: 12),
@@ -758,7 +936,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Estimated ${actualOrderType == 'buy' ? 'buy amount' : 'rent'}: ₹${estimate.toStringAsFixed(0)}',
+                                  detail.hasActiveRentalPlans && actualOrderType == 'rent'
+                                      ? 'Tap period above to change duration'
+                                      : 'Estimated ${actualOrderType == 'buy' ? 'buy amount' : 'rent'}: ₹${estimate.toStringAsFixed(0)}',
                                   style: const TextStyle(color: Colors.white54, fontSize: 13),
                                 ),
                                 const SizedBox(height: 100),
@@ -790,10 +970,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     onPressed: !canAdd || cannotFulfill
                         ? null
                         : () async {
-                            if (_quantity < 1 || (actualOrderType == 'rent' && _periodCount < 1)) {
+                            if (_quantity < 1 ||
+                                (actualOrderType == 'rent' &&
+                                    (detail.hasActiveRentalPlans
+                                        ? selectedPlan == null
+                                        : _periodCount < 1))) {
                               showRequiredFieldsBlocked(
                                 context,
-                                message: 'Please fill in the required fields. Quantity and rental period must be positive.',
+                                message: detail.hasActiveRentalPlans
+                                    ? 'Please select a rental period and quantity.'
+                                    : 'Please fill in the required fields. Quantity and rental period must be positive.',
                               );
                               return;
                             }
@@ -832,13 +1018,31 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 monthlyRent: detail.monthlyRent,
                                 securityDeposit: detail.securityDeposit,
                                 quantity: _quantity,
-                                rentalDays: finalType == 'buy' ? 0 : _periodCount,
-                                rentalPeriodUnit: finalType == 'buy' ? rentalUnitDay : _periodUnit,
+                                rentalDays: finalType == 'buy'
+                                    ? 0
+                                    : (selectedPlan?.durationDays ?? _periodCount),
+                                rentalPeriodUnit: finalType == 'buy'
+                                    ? rentalUnitDay
+                                    : (selectedPlan != null ? rentalUnitDay : _periodUnit),
                                 orderType: finalType,
                                 prescriptionRequired: detail.prescriptionRequired,
                                 productVariantId: _selectedVariantId,
                                 buyPrice: unitBuyPrice > 0 ? unitBuyPrice : detail.buyPrice,
                                 isBuyEnabled: detail.canBuy,
+                                rentalPricingPlanId:
+                                    finalType == 'rent' ? selectedPlan?.id : null,
+                                rentalDurationLabel:
+                                    finalType == 'rent' ? selectedPlan?.durationLabel : null,
+                                rentalDurationDays:
+                                    finalType == 'rent' ? selectedPlan?.durationDays : null,
+                                rentalNormalPrice:
+                                    finalType == 'rent' ? selectedPlan?.normalPrice : null,
+                                rentalDiscountType:
+                                    finalType == 'rent' ? selectedPlan?.discountType : null,
+                                rentalDiscountValue:
+                                    finalType == 'rent' ? selectedPlan?.discountValue : null,
+                                rentalFinalPrice:
+                                    finalType == 'rent' ? selectedPlan?.finalRentalPrice : null,
                               ),
                             );
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -859,6 +1063,184 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   String? _resolvedDocUrl(String? raw) => resolveMediaUrl(raw);
 
+  Future<void> _openRentalPeriodSheet({
+    required ProductDetailModel detail,
+    required double unitBuyPrice,
+  }) async {
+    final plans = detail.activeRentalPlans;
+    if (plans.isEmpty) return;
+    final currentId = _selectedPlan(detail)?.id;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1E293B),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Select rental period',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                    itemCount: plans.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 6),
+                    itemBuilder: (_, index) {
+                      final plan = plans[index];
+                      final selected = plan.id == currentId;
+                      return InkWell(
+                        onTap: () async {
+                          Navigator.pop(ctx);
+                          final blocked = await _promptRentToBuyIfNeeded(
+                            detail: detail,
+                            unitBuyPrice: unitBuyPrice,
+                            nextPlan: plan,
+                          );
+                          if (blocked || !mounted) return;
+                          setState(() => _selectedPlanId = plan.id);
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? const Color(0xFF6C63FF).withValues(alpha: 0.16)
+                                : const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selected ? const Color(0xFF6C63FF) : Colors.white12,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: selected ? const Color(0xFF6C63FF) : Colors.transparent,
+                                  border: Border.all(
+                                    color: selected ? const Color(0xFF6C63FF) : Colors.white24,
+                                  ),
+                                ),
+                                child: selected
+                                    ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                    : null,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            plan.durationLabel,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                        if (plan.isRecommended) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF10B981).withValues(alpha: 0.18),
+                                              borderRadius: BorderRadius.circular(999),
+                                            ),
+                                            child: const Text(
+                                              'Best',
+                                              style: TextStyle(
+                                                color: Color(0xFF34D399),
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    Text(
+                                      '${plan.durationDays} days'
+                                      '${plan.hasDiscount ? ' · Save ₹${plan.savings.toStringAsFixed(0)}' : ''}',
+                                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  if (plan.hasDiscount)
+                                    Text(
+                                      '₹${plan.normalPrice.toStringAsFixed(0)}',
+                                      style: const TextStyle(
+                                        color: Colors.white38,
+                                        fontSize: 11,
+                                        decoration: TextDecoration.lineThrough,
+                                      ),
+                                    ),
+                                  Text(
+                                    '₹${plan.finalRentalPrice.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   /// Returns true when the rent change should be blocked (dialog shown).
   Future<bool> _promptRentToBuyIfNeeded({
     required ProductDetailModel detail,
@@ -866,16 +1248,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     int? nextPeriods,
     String? nextUnit,
     int? nextQty,
+    RentalPricingPlanModel? nextPlan,
   }) async {
-    if (unitBuyPrice <= 0) return false;
+    if (unitBuyPrice <= 0 || !detail.canBuy) return false;
+    final plan = nextPlan ?? _selectedPlan(detail);
     final check = evaluateRentVsBuy(
       buyPrice: unitBuyPrice,
+      isBuyEnabled: detail.canBuy,
       quantity: nextQty ?? _quantity,
-      periods: nextPeriods ?? _periodCount,
-      unit: nextUnit ?? _periodUnit,
+      periods: plan?.durationDays ?? nextPeriods ?? _periodCount,
+      unit: plan != null ? rentalUnitDay : (nextUnit ?? _periodUnit),
       dailyRent: detail.dailyRent,
       weeklyRent: detail.weeklyRent,
       monthlyRent: detail.monthlyRent,
+      planFinalPrice: plan?.finalRentalPrice,
+      planDurationLabel: plan?.durationLabel,
     );
     if (!check.shouldForceBuy) return false;
 

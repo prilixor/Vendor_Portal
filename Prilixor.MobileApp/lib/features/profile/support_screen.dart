@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../core/config/app_urls.dart';
 
 class SupportScreen extends StatelessWidget {
   final String? orderRef;
@@ -7,6 +10,8 @@ class SupportScreen extends StatelessWidget {
   const SupportScreen({super.key, this.orderRef});
 
   static const _supportEmail = 'support@blinksmed.com';
+  static const _supportPhone = '+91 9876543210';
+  static const _supportPhoneTel = '+919876543210';
 
   Future<void> _copyEmail(BuildContext context) async {
     await Clipboard.setData(const ClipboardData(text: _supportEmail));
@@ -15,6 +20,16 @@ class SupportScreen extends StatelessWidget {
         const SnackBar(content: Text('Support email copied'), backgroundColor: Colors.green),
       );
     }
+  }
+
+  Future<void> _callSupport() async {
+    final uri = Uri(scheme: 'tel', path: _supportPhoneTel);
+    await launchUrl(uri);
+  }
+
+  Future<void> _openContactPage() async {
+    final uri = Uri.parse('${AppUrls.portalWebBaseUrl}${AppUrls.contactPath}');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   @override
@@ -69,13 +84,23 @@ class SupportScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Email our support team for account help and general inquiries.',
+                  'Email or call our support team for account help and general inquiries.',
                   style: TextStyle(color: Colors.white54, fontSize: 13),
                 ),
                 const SizedBox(height: 12),
                 SelectableText(
                   _supportEmail,
                   style: const TextStyle(color: Color(0xFFA5B4FC), fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                SelectableText(
+                  _supportPhone,
+                  style: const TextStyle(color: Color(0xFFA5B4FC), fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Hours: Mon–Sat, 9:00 AM – 6:00 PM IST',
+                  style: TextStyle(color: Colors.white38, fontSize: 12),
                 ),
                 const SizedBox(height: 14),
                 SizedBox(
@@ -85,6 +110,32 @@ class SupportScreen extends StatelessWidget {
                     onPressed: () => _copyEmail(context),
                     icon: const Icon(Icons.copy, color: Colors.white),
                     label: const Text('Copy support email', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                      side: const BorderSide(color: Colors.white24),
+                    ),
+                    onPressed: _callSupport,
+                    icon: const Icon(Icons.phone_outlined),
+                    label: const Text('Call support'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                      side: const BorderSide(color: Colors.white24),
+                    ),
+                    onPressed: _openContactPage,
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('Open contact page'),
                   ),
                 ),
               ],

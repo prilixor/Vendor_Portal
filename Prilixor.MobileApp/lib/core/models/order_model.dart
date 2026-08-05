@@ -28,6 +28,13 @@ class OrderModel {
   final String? doctorContactNumber;
   final String? hospitalName;
   final String? hospitalCity;
+  final String? rentalPricingPlanId;
+  final String? rentalDurationLabel;
+  final int? rentalDurationDays;
+  final double? rentalNormalPrice;
+  final String? rentalDiscountType;
+  final double? rentalDiscountValue;
+  final double? rentalFinalPrice;
 
   OrderModel({
     required this.id,
@@ -57,6 +64,13 @@ class OrderModel {
     this.doctorContactNumber,
     this.hospitalName,
     this.hospitalCity,
+    this.rentalPricingPlanId,
+    this.rentalDurationLabel,
+    this.rentalDurationDays,
+    this.rentalNormalPrice,
+    this.rentalDiscountType,
+    this.rentalDiscountValue,
+    this.rentalFinalPrice,
   });
 
   bool get hasMedicalReference {
@@ -96,6 +110,13 @@ class OrderModel {
       doctorContactNumber: json['doctorContactNumber']?.toString(),
       hospitalName: json['hospitalName']?.toString(),
       hospitalCity: json['hospitalCity']?.toString(),
+      rentalPricingPlanId: json['rentalPricingPlanId']?.toString(),
+      rentalDurationLabel: json['rentalDurationLabel']?.toString(),
+      rentalDurationDays: (json['rentalDurationDays'] as num?)?.toInt(),
+      rentalNormalPrice: (json['rentalNormalPrice'] as num?)?.toDouble(),
+      rentalDiscountType: json['rentalDiscountType']?.toString(),
+      rentalDiscountValue: (json['rentalDiscountValue'] as num?)?.toDouble(),
+      rentalFinalPrice: (json['rentalFinalPrice'] as num?)?.toDouble(),
     );
   }
 }

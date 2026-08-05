@@ -521,13 +521,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                                 const SizedBox(height: 4),
                                                 Text(
                                                   provider.currentOrder!.orderType.toLowerCase() == 'rent'
-                                                      ? formatRentalDuration(
-                                                          provider.currentOrder!.rentalDays,
-                                                          provider.currentOrder!.rentalPeriodUnit,
-                                                        )
+                                                      ? (provider.currentOrder!.rentalDurationLabel?.isNotEmpty == true
+                                                          ? '${provider.currentOrder!.rentalDurationLabel}'
+                                                              '${provider.currentOrder!.rentalDurationDays != null ? ' (${provider.currentOrder!.rentalDurationDays} days)' : ''}'
+                                                          : formatRentalDuration(
+                                                              provider.currentOrder!.rentalDays,
+                                                              provider.currentOrder!.rentalPeriodUnit,
+                                                            ))
                                                       : 'Buy',
                                                   style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                                                 ),
+                                                if (provider.currentOrder!.orderType.toLowerCase() == 'rent' &&
+                                                    provider.currentOrder!.rentalFinalPrice != null) ...[
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    provider.currentOrder!.rentalNormalPrice != null &&
+                                                            provider.currentOrder!.rentalNormalPrice! >
+                                                                provider.currentOrder!.rentalFinalPrice!
+                                                        ? 'Plan ₹${provider.currentOrder!.rentalFinalPrice!.toStringAsFixed(0)} (was ₹${provider.currentOrder!.rentalNormalPrice!.toStringAsFixed(0)})'
+                                                        : 'Plan ₹${provider.currentOrder!.rentalFinalPrice!.toStringAsFixed(0)}',
+                                                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                                  ),
+                                                ],
                                               ],
                                             ),
                                           ),

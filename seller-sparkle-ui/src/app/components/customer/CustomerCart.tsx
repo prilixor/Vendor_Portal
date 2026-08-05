@@ -153,7 +153,7 @@ function lineFlags(
     return {
       isChemical: false,
       canRent: line.orderType === "rent",
-      canBuy: line.orderType === "buy" || (line.buyPrice ?? 0) > 0,
+      canBuy: line.isBuyEnabled === true || line.orderType === "buy",
     };
   }
   const isChemical = !!detail.isChemical;
@@ -314,27 +314,19 @@ function CartLineCard({
     qty?: number;
   }): boolean => {
     if (!canBuy || (line.buyPrice ?? 0) <= 0) return false;
-    if (isPlanBased) {
-      const qty = next.qty ?? line.quantity;
-      const rentalTotal = Number(line.rentalFinalPrice ?? 0) * qty;
-      const buyTotal = Number(line.buyPrice ?? 0) * qty;
-      if (buyTotal > 0 && rentalTotal >= buyTotal) {
-        setRentToBuyInfo({
-          rentalTotal,
-          buyTotal,
-          durationLabel: line.rentalDurationLabel || `${line.rentalDurationDays ?? line.rentalDays} days`,
-        });
-        setRentToBuyOpen(true);
-        return true;
-      }
-      return false;
-    }
     const check = evaluateRentVsBuy({
       buyPrice: line.buyPrice,
+      isBuyEnabled: canBuy,
       quantity: next.qty ?? line.quantity,
-      periods: next.periods ?? line.rentalDays,
-      unit: next.unit ?? line.rentalPeriodUnit,
+      periods: isPlanBased
+        ? (line.rentalDurationDays ?? line.rentalDays)
+        : (next.periods ?? line.rentalDays),
+      unit: isPlanBased ? "day" : (next.unit ?? line.rentalPeriodUnit),
       rates,
+      planFinalPrice: isPlanBased ? line.rentalFinalPrice : null,
+      planDurationLabel: isPlanBased
+        ? line.rentalDurationLabel || `${line.rentalDurationDays ?? line.rentalDays} days`
+        : null,
     });
     if (!check.shouldForceBuy) return false;
     setRentToBuyInfo({

@@ -20,6 +20,15 @@ class CartLineModel {
   final double? buyPrice;
   final bool isBuyEnabled;
 
+  /// Admin duration plan snapshot (when listing has rentalPricingPlans).
+  String? rentalPricingPlanId;
+  String? rentalDurationLabel;
+  int? rentalDurationDays;
+  double? rentalNormalPrice;
+  String? rentalDiscountType;
+  double? rentalDiscountValue;
+  double? rentalFinalPrice;
+
   CartLineModel({
     required this.listingId,
     required this.title,
@@ -37,15 +46,31 @@ class CartLineModel {
     this.productVariantId,
     this.buyPrice,
     this.isBuyEnabled = false,
+    this.rentalPricingPlanId,
+    this.rentalDurationLabel,
+    this.rentalDurationDays,
+    this.rentalNormalPrice,
+    this.rentalDiscountType,
+    this.rentalDiscountValue,
+    this.rentalFinalPrice,
   });
 
   /// Unique key for cart line (listing + packaging size).
   String get lineKey => '$listingId|${productVariantId ?? ''}';
 
+  bool get usesPricingPlan =>
+      orderType == 'rent' &&
+      rentalPricingPlanId != null &&
+      rentalPricingPlanId!.isNotEmpty &&
+      rentalFinalPrice != null;
+
   double get lineTotal {
     if (orderType == 'buy') {
       final unit = buyPrice ?? (dailyRent * 30);
       return unit * quantity;
+    }
+    if (usesPricingPlan) {
+      return (rentalFinalPrice ?? 0) * (quantity < 1 ? 1 : quantity);
     }
     return estimateRent(
       rentalPeriodUnit,
@@ -55,6 +80,36 @@ class CartLineModel {
       weeklyRent: weeklyRent,
       monthlyRent: monthlyRent,
     );
+  }
+
+  void applyPricingPlan({
+    required String planId,
+    required String durationLabel,
+    required int durationDays,
+    required double normalPrice,
+    required String discountType,
+    required double discountValue,
+    required double finalPrice,
+  }) {
+    rentalPricingPlanId = planId;
+    rentalDurationLabel = durationLabel;
+    rentalDurationDays = durationDays;
+    rentalNormalPrice = normalPrice;
+    rentalDiscountType = discountType;
+    rentalDiscountValue = discountValue;
+    rentalFinalPrice = finalPrice;
+    rentalDays = durationDays < 1 ? 1 : durationDays;
+    rentalPeriodUnit = rentalUnitDay;
+  }
+
+  void clearPricingPlan() {
+    rentalPricingPlanId = null;
+    rentalDurationLabel = null;
+    rentalDurationDays = null;
+    rentalNormalPrice = null;
+    rentalDiscountType = null;
+    rentalDiscountValue = null;
+    rentalFinalPrice = null;
   }
 
   Map<String, dynamic> toJson() {
@@ -75,6 +130,13 @@ class CartLineModel {
       'productVariantId': productVariantId,
       'buyPrice': buyPrice,
       'isBuyEnabled': isBuyEnabled,
+      'rentalPricingPlanId': rentalPricingPlanId,
+      'rentalDurationLabel': rentalDurationLabel,
+      'rentalDurationDays': rentalDurationDays,
+      'rentalNormalPrice': rentalNormalPrice,
+      'rentalDiscountType': rentalDiscountType,
+      'rentalDiscountValue': rentalDiscountValue,
+      'rentalFinalPrice': rentalFinalPrice,
     };
   }
 
@@ -101,12 +163,19 @@ class CartLineModel {
           ? rentalUnitDay
           : (json.containsKey('rentalPeriodUnit')
               ? normalizeRentalUnit(json['rentalPeriodUnit']?.toString())
-              : rentalUnitDay), // legacy local carts were day-based
+              : rentalUnitDay),
       orderType: orderType,
       prescriptionRequired: json['prescriptionRequired'] ?? false,
       productVariantId: json['productVariantId'],
       buyPrice: (json['buyPrice'] as num?)?.toDouble(),
-      isBuyEnabled: json['isBuyEnabled'] == true || (json['buyPrice'] as num?) != null,
+      isBuyEnabled: json['isBuyEnabled'] == true,
+      rentalPricingPlanId: json['rentalPricingPlanId']?.toString(),
+      rentalDurationLabel: json['rentalDurationLabel']?.toString(),
+      rentalDurationDays: (json['rentalDurationDays'] as num?)?.toInt(),
+      rentalNormalPrice: (json['rentalNormalPrice'] as num?)?.toDouble(),
+      rentalDiscountType: json['rentalDiscountType']?.toString(),
+      rentalDiscountValue: (json['rentalDiscountValue'] as num?)?.toDouble(),
+      rentalFinalPrice: (json['rentalFinalPrice'] as num?)?.toDouble(),
     );
   }
 }

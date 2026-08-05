@@ -525,14 +525,21 @@ const CustomerBrowse = () => {
 
             const primaryPrice = (() => {
               if (showRent) {
+                const daily = item.dailyRent ?? 0;
                 const weekly = item.weeklyRent ?? 0;
                 const monthly = item.monthlyRent ?? 0;
-                if (weekly > 0) return { value: `₹${weekly.toFixed(0)}`, unit: "/week" };
-                if (monthly > 0) return { value: `₹${monthly.toFixed(0)}`, unit: "/month" };
+                // Latest flow: lead with day rate (derive from weekly when daily unset)
+                const dayRate = daily > 0 ? daily : weekly > 0 ? weekly / 7 : 0;
+                if (dayRate > 0) {
+                  return { value: `₹${Math.round(dayRate).toLocaleString("en-IN")}`, unit: "/day" };
+                }
+                if (monthly > 0) {
+                  return { value: `₹${monthly.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`, unit: "/month" };
+                }
               }
               if (showBuy && item.buyPrice != null && item.buyPrice > 0) {
                 return {
-                  value: `₹${item.buyPrice.toFixed(0)}`,
+                  value: `₹${item.buyPrice.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
                   unit: item.baseUnit ? ` / ${item.baseUnit}` : "",
                 };
               }
@@ -610,14 +617,10 @@ const CustomerBrowse = () => {
                   <div className="space-y-1 text-xs text-muted-foreground">
                     {showRent && (
                       <p className="tabular-nums">
-                        {(item.weeklyRent ?? 0) > 0 && (item.monthlyRent ?? 0) > 0
-                          ? `Weekly ₹${(item.weeklyRent ?? 0).toFixed(0)} · Monthly ₹${item.monthlyRent.toFixed(0)}`
-                          : (item.monthlyRent ?? 0) > 0
-                            ? `Monthly ₹${item.monthlyRent.toFixed(0)}`
-                            : (item.weeklyRent ?? 0) > 0
-                              ? `Weekly ₹${(item.weeklyRent ?? 0).toFixed(0)}`
-                              : null}
-                        {item.depositRequired ? ` · Deposit ₹${item.securityDeposit.toFixed(0)}` : ""}
+                        {/* Day rate is already in the hero price — browse only needs deposit + plan hint */}
+                        {item.depositRequired
+                          ? `Deposit ₹${item.securityDeposit.toLocaleString("en-IN", { maximumFractionDigits: 0 })} · Plans on details`
+                          : "Rental plans on details"}
                       </p>
                     )}
                     {showBuy && showRent && item.buyPrice != null && item.buyPrice > 0 && (

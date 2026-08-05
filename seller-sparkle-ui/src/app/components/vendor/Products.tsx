@@ -87,7 +87,7 @@ const blankListing = (category?: CatalogCategory, product?: CatalogProduct): Loc
   categoryId: category?.id ?? "",
   category: category?.name ?? "",
   productName: product?.name ?? "",
-  title: "",
+  title: product?.name ?? "",
   dailyRent: product?.dailyRent ?? 0,
   weeklyRent: product?.weeklyRent ?? 0,
   monthlyRent: product?.monthlyRent ?? 0,
@@ -517,7 +517,7 @@ const Products = () => {
           categoryId: product?.categoryId ?? "",
           category: category?.name ?? "Unknown",
           productName: product?.name ?? "Unknown",
-          title: l.listingTitle,
+          title: product?.name ?? l.listingTitle,
           dailyRent: product?.dailyRent ?? l.dailyRent,
           weeklyRent: product?.weeklyRent ?? l.weeklyRent ?? 0,
           monthlyRent: product?.monthlyRent ?? l.monthlyRent,
@@ -608,8 +608,9 @@ const Products = () => {
     if (!editing.productId?.trim()) {
       errors.productId = "Please select a product.";
     }
-    if (!editing.title?.trim()) {
-      errors.title = "Please enter a listing title.";
+    const catalogTitle = (editing.productName || editing.title || "").trim();
+    if (!catalogTitle) {
+      errors.productId = errors.productId || "Please select a product.";
     }
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -639,7 +640,7 @@ const Products = () => {
           vendorId: user.id,
           listingId: editing.id,
           productId: editing.productId,
-          listingTitle: editing.title,
+          listingTitle: catalogTitle,
           availableQuantity: quantityToSave,
           listingStatus: editing.status,
         });
@@ -647,7 +648,7 @@ const Products = () => {
         const created = await vendorOnboardingApi.createVendorProductListing(user.id, {
           vendorId: user.id,
           productId: editing.productId,
-          listingTitle: editing.title,
+          listingTitle: catalogTitle,
           availableQuantity: quantityToSave,
           listingStatus: editing.status,
         });
@@ -1093,7 +1094,7 @@ const Products = () => {
                       <ListingThumb src={p.primaryImage} alt={p.title} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
-                          <p className="font-medium truncate">{p.title}</p>
+                          <p className="font-medium truncate">{p.productName || p.title}</p>
                           {(p.favoriteCount ?? 0) > 0 && (
                             <TooltipProvider>
                               <Tooltip>
@@ -1109,7 +1110,7 @@ const Products = () => {
                             </TooltipProvider>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">{p.productName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{p.category}</p>
                       </div>
                     </div>
                   </td>
@@ -1215,14 +1216,14 @@ const Products = () => {
                     <ListingThumb src={p.primaryImage} alt={p.title} />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <p className="truncate font-medium">{p.title}</p>
+                        <p className="truncate font-medium">{p.productName || p.title}</p>
                         {(p.favoriteCount ?? 0) > 0 && (
                           <span className="inline-flex shrink-0 items-center rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
                             ❤️ {p.favoriteCount}
                           </span>
                         )}
                       </div>
-                      <p className="truncate text-xs text-muted-foreground">{p.productName}</p>
+                      <p className="truncate text-xs text-muted-foreground">{p.category}</p>
                     </div>
                   </div>
                   <Switch
@@ -1308,7 +1309,7 @@ const Products = () => {
           <DialogHeader className="shrink-0 space-y-1 border-b border-border px-5 py-4 pr-12 text-left sm:px-6">
             <DialogTitle>{products.some((p) => p.id === editing?.id) ? "Edit listing" : "New listing"}</DialogTitle>
             <DialogDescription>
-              Pricing is set by Admin. Update title, quantity, and status for your listing.
+              Pricing and catalog name are set by Admin. Update quantity and status for your listing.
             </DialogDescription>
           </DialogHeader>
           {editing && (
@@ -1370,6 +1371,7 @@ const Products = () => {
                           ...editing,
                           productId: v,
                           productName: selected?.name ?? "",
+                          title: selected?.name ?? "",
                           dailyRent: selected?.dailyRent ?? 0,
                           weeklyRent: selected?.weeklyRent ?? 0,
                           monthlyRent: selected?.monthlyRent ?? 0,
@@ -1408,17 +1410,19 @@ const Products = () => {
                     <FieldError message={fieldErrors.productId} />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
-                    <Label required>Listing title</Label>
+                    <Label>
+                      Catalog name
+                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">(from Admin)</span>
+                    </Label>
                     <Input
-                      value={editing.title}
-                      onChange={(e) => {
-                        setEditing({ ...editing, title: e.target.value });
-                        clearFieldError("title");
-                      }}
-                      placeholder="E.g. Air Mattress — Ready to Rent"
-                      className={fieldErrors.title ? "border-destructive" : ""}
+                      value={editing.productName || editing.title || "Select a product"}
+                      readOnly
+                      disabled
+                      className="bg-muted/40"
                     />
-                    <FieldError message={fieldErrors.title} />
+                    <p className="text-[11px] text-muted-foreground">
+                      Customers always see this Admin product/chemical name — vendors cannot set a custom listing title.
+                    </p>
                   </div>
                 </FormGrid>
               </section>
@@ -1982,8 +1986,7 @@ const Products = () => {
               <div className="mb-6">
                 <p className="text-sm text-muted-foreground mb-2">Are you sure you want to delete this listing?</p>
                 <div className="p-3 bg-muted/50 rounded-md">
-                  <p className="font-medium text-sm">{listing.title}</p>
-                  <p className="text-xs text-muted-foreground">{listing.productName}</p>
+                  <p className="font-medium text-sm">{listing.productName || listing.title}</p>
                   <p className="text-xs text-muted-foreground">{listing.category}</p>
                 </div>
               </div>
@@ -2045,8 +2048,7 @@ const Products = () => {
                   Are you sure you want to {isActivating ? 'activate' : 'deactivate'} this listing?
                 </p>
                 <div className="p-3 bg-muted/50 rounded-md">
-                  <p className="font-medium text-sm">{listing.title}</p>
-                  <p className="text-xs text-muted-foreground">{listing.productName}</p>
+                  <p className="font-medium text-sm">{listing.productName || listing.title}</p>
                   <p className="text-xs text-muted-foreground">{listing.category}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <div className={`w-2 h-2 rounded-full ${listing.status === 'active' ? 'bg-green-500' : 'bg-gray-400'}`} />

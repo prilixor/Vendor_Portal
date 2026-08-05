@@ -11,8 +11,21 @@ import { Skeleton } from "@/app/components/ui/skeleton";
 import { ProductImageGallery } from "@/app/components/shared/ProductImageGallery";
 import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
 import { BackLink } from "@/app/components/shared/BackLink";
+import {
+  RentalPeriodPlanDropdown,
+  planDiscountPercent,
+  planSavings,
+  sortActiveRentalPlans,
+} from "@/app/components/shared/RentalPeriodPlanDropdown";
 import { toast } from "sonner";
-import { Check, ChevronDown, ShoppingBag, ShoppingCart, CalendarDays } from "lucide-react";
+import {
+  Check,
+  ShoppingBag,
+  ShoppingCart,
+  CalendarDays,
+  ShieldCheck,
+  Truck,
+} from "lucide-react";
 import {
   DEFAULT_UI_RENTAL_UNIT,
   RENTAL_UNIT_LABELS,
@@ -21,8 +34,6 @@ import {
   evaluateRentVsBuy,
   type RentalPeriodUnit,
 } from "@/app/helpers/rentalPeriod";
-import { Label } from "@/app/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import { cn } from "@/app/helpers/utils";
 
 function availabilityBadge(status: string, qty: number): { label: string; className: string } {
@@ -58,134 +69,8 @@ function availabilityBadge(status: string, qty: number): { label: string; classN
   };
 }
 
-function planSavings(plan: RentalPricingPlanDto): number {
-  return Math.max(0, Number(plan.normalPrice || 0) - Number(plan.finalRentalPrice || 0));
-}
-
 function formatInr(value: number): string {
   return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-}
-
-function RentalPeriodPicker({
-  plans,
-  selectedPlanId,
-  onSelect,
-}: {
-  plans: RentalPricingPlanDto[];
-  selectedPlanId: string;
-  onSelect: (plan: RentalPricingPlanDto) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const selected = plans.find((p) => p.id === selectedPlanId) ?? plans[0] ?? null;
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "flex h-14 w-full items-center gap-3 rounded-xl border-2 bg-background px-3.5 text-left transition-colors",
-            open
-              ? "border-primary ring-2 ring-primary/15"
-              : "border-border hover:border-primary/40",
-          )}
-        >
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-foreground">
-              {selected?.durationLabel ?? "Choose period"}
-            </p>
-            {selected ? (
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {selected.durationDays} days
-                {selected.isRecommended ? " · Best value" : ""}
-              </p>
-            ) : null}
-          </div>
-          <span className="shrink-0 font-mono text-base font-bold tabular-nums text-primary">
-            {selected ? formatInr(selected.finalRentalPrice) : "—"}
-          </span>
-          <ChevronDown
-            className={cn(
-              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-              open && "rotate-180",
-            )}
-          />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        sideOffset={8}
-        className="w-[var(--radix-popover-trigger-width)] max-h-80 overflow-hidden rounded-xl border border-border p-0 shadow-lg"
-      >
-        <div className="border-b border-border bg-muted/30 px-3.5 py-2.5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Select rental period
-          </p>
-        </div>
-        <div className="max-h-64 overflow-y-auto p-1.5">
-          {plans.map((plan) => {
-            const isSelected = plan.id === selectedPlanId;
-            const savings = planSavings(plan);
-            return (
-              <button
-                key={plan.id}
-                type="button"
-                onClick={() => {
-                  onSelect(plan);
-                  setOpen(false);
-                }}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors",
-                  isSelected
-                    ? "bg-primary/10 text-foreground"
-                    : "hover:bg-muted/60",
-                )}
-              >
-                <span
-                  className={cn(
-                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-                    isSelected
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-muted-foreground/30",
-                  )}
-                >
-                  {isSelected ? <Check className="h-3 w-3" /> : null}
-                </span>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="whitespace-nowrap text-sm font-semibold">
-                      {plan.durationLabel}
-                    </span>
-                    {plan.isRecommended ? (
-                      <span className="whitespace-nowrap rounded-full bg-emerald-600/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                        Best
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground whitespace-nowrap">
-                    {plan.durationDays} days
-                    {savings > 0 ? ` · Save ${formatInr(savings)}` : ""}
-                  </p>
-                </div>
-
-                <div className="shrink-0 text-right">
-                  {savings > 0 ? (
-                    <p className="text-[11px] text-muted-foreground line-through tabular-nums whitespace-nowrap">
-                      {formatInr(plan.normalPrice)}
-                    </p>
-                  ) : null}
-                  <p className="whitespace-nowrap font-mono text-sm font-bold tabular-nums">
-                    {formatInr(plan.finalRentalPrice)}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
 }
 
 const CustomerListingDetail = () => {
@@ -214,11 +99,7 @@ const CustomerListingDetail = () => {
 
   const activeVariants = data?.variants?.filter((v) => v.isActive) || [];
   const activePlans = useMemo(
-    () =>
-      (data?.rentalPricingPlans ?? [])
-        .filter((p) => p.isActive)
-        .slice()
-        .sort((a, b) => a.sortOrder - b.sortOrder || a.durationDays - b.durationDays),
+    () => sortActiveRentalPlans(data?.rentalPricingPlans),
     [data?.rentalPricingPlans],
   );
   const hasPricingPlans = activePlans.length > 0;
@@ -321,37 +202,26 @@ const CustomerListingDetail = () => {
     qty?: number;
     plan?: RentalPricingPlanDto | null;
   }): boolean => {
-    if (unitPrice <= 0) return false;
+    if (!canBuy || unitPrice <= 0) return false;
     const plan = next.plan !== undefined ? next.plan : selectedPlan;
-    let rentalTotal: number;
-    let durationLabel: string;
-    if (hasPricingPlans && plan) {
-      rentalTotal = Number(plan.finalRentalPrice) * (next.qty ?? qty);
-      durationLabel = plan.durationLabel || `${plan.durationDays} days`;
-    } else {
-      const check = evaluateRentVsBuy({
-        buyPrice: unitPrice,
-        quantity: next.qty ?? qty,
-        periods: next.periods ?? periods,
-        unit: next.periodUnit ?? periodUnit,
-        rates: rentRates,
-      });
-      if (!check.shouldForceBuy) return false;
-      setRentToBuyInfo({
-        rentalTotal: check.rentalTotal,
-        buyTotal: check.buyTotal,
-        durationLabel: check.durationLabel,
-      });
-      setRentToBuyOpen(true);
-      return true;
-    }
-    const buyTotal = unitPrice * (next.qty ?? qty);
-    if (buyTotal > 0 && rentalTotal >= buyTotal) {
-      setRentToBuyInfo({ rentalTotal, buyTotal, durationLabel });
-      setRentToBuyOpen(true);
-      return true;
-    }
-    return false;
+    const check = evaluateRentVsBuy({
+      buyPrice: unitPrice,
+      isBuyEnabled: canBuy,
+      quantity: next.qty ?? qty,
+      periods: plan?.durationDays ?? next.periods ?? periods,
+      unit: plan ? "day" : (next.periodUnit ?? periodUnit),
+      rates: rentRates,
+      planFinalPrice: hasPricingPlans && plan ? plan.finalRentalPrice : null,
+      planDurationLabel: hasPricingPlans && plan ? plan.durationLabel || `${plan.durationDays} days` : null,
+    });
+    if (!check.shouldForceBuy) return false;
+    setRentToBuyInfo({
+      rentalTotal: check.rentalTotal,
+      buyTotal: check.buyTotal,
+      durationLabel: check.durationLabel,
+    });
+    setRentToBuyOpen(true);
+    return true;
   };
 
   const handlePeriodsChange = (next: number) => {
@@ -443,6 +313,7 @@ const CustomerListingDetail = () => {
       prescriptionRequired: data.prescriptionRequired,
       productVariantId: selectedVariantId || undefined,
       buyPrice: unitPrice,
+      isBuyEnabled: canBuy,
       ...(planBased
         ? {
             rentalPricingPlanId: selectedPlan.id,
@@ -577,9 +448,18 @@ const CustomerListingDetail = () => {
                   <div className="grid grid-cols-3 gap-2">
                     <div className="rounded-lg bg-muted/40 px-2.5 py-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Weekly
+                        Daily
                       </p>
-                      <p className="mt-0.5 font-bold tabular-nums">₹{(data.weeklyRent ?? 0).toFixed(0)}</p>
+                      <p className="mt-0.5 font-bold tabular-nums">
+                        ₹
+                        {Math.round(
+                          (data.dailyRent ?? 0) > 0
+                            ? data.dailyRent
+                            : (data.weeklyRent ?? 0) > 0
+                              ? (data.weeklyRent ?? 0) / 7
+                              : 0,
+                        ).toLocaleString("en-IN")}
+                      </p>
                     </div>
                     <div className="rounded-lg bg-muted/40 px-2.5 py-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -700,49 +580,77 @@ const CustomerListingDetail = () => {
 
               {actualOrderType === "rent" && hasPricingPlans && selectedPlan ? (
                 <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Rental period
-                    </Label>
-                    <RentalPeriodPicker
-                      plans={activePlans}
-                      selectedPlanId={selectedPlanId}
-                      onSelect={handlePlanSelect}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Starts when the order is delivered
-                    </p>
-                  </div>
+                  <RentalPeriodPlanDropdown
+                    plans={activePlans}
+                    selectedPlanId={selectedPlanId}
+                    onSelect={handlePlanSelect}
+                  />
 
-                  <div className="rounded-xl border border-border/70 bg-muted/25 px-4 py-4">
-                    <div className="flex items-end justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground">You pay for rent</p>
-                        <div className="mt-1 flex flex-wrap items-baseline gap-2">
-                          <p className="text-3xl font-bold tracking-tight tabular-nums text-foreground">
-                            {formatInr(selectedPlan.finalRentalPrice * qty)}
-                          </p>
-                          {planSavings(selectedPlan) > 0 ? (
-                            <p className="text-sm text-muted-foreground line-through tabular-nums">
-                              {formatInr(selectedPlan.normalPrice * qty)}
-                            </p>
-                          ) : null}
-                        </div>
+                  {/* Live copy — same as production listing detail */}
+                  <p className="inline-flex items-center gap-2 text-[13px] font-medium text-slate-600">
+                    <Truck className="h-4 w-4 shrink-0 text-violet-500" />
+                    Starts when the order is delivered
+                  </p>
+
+                  {/* Checkout strip: qty + deposit + rent due */}
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex items-center justify-between gap-3 px-4 py-4">
+                      <div className="min-w-0">
+                        <p className="text-[14px] font-bold tracking-tight text-slate-900">
+                          Quantity
+                          <span className="ml-0.5 text-destructive" aria-hidden>
+                            *
+                          </span>
+                        </p>
+                        <p className="mt-0.5 text-[12px] font-medium text-slate-500">
+                          {currentAvailableQuantity > 0
+                            ? `${currentAvailableQuantity} available`
+                            : "Select how many units"}
+                        </p>
                       </div>
-                      {planSavings(selectedPlan) > 0 ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600/10 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                          <Check className="h-3.5 w-3.5" />
-                          Save {formatInr(planSavings(selectedPlan) * qty)}
-                        </span>
-                      ) : null}
+                      <QuantityStepper
+                        orientation="inline"
+                        label="Qty"
+                        required
+                        value={qty}
+                        min={1}
+                        max={Math.max(1, currentAvailableQuantity)}
+                        onChange={handleQtyChange}
+                        className="[&>span]:sr-only"
+                      />
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/60 pt-3 text-xs text-muted-foreground">
-                      <span>Deposit {formatInr(data.securityDeposit)} (refundable)</span>
-                      {qty > 1 ? (
-                        <span>
-                          {formatInr(selectedPlan.finalRentalPrice)} × {qty}
+
+                    <div className="space-y-3 border-t border-slate-100 bg-gradient-to-br from-slate-50 to-white px-4 py-4">
+                      <div className="flex items-center justify-between gap-3 rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200/80">
+                        <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+                          <ShieldCheck className="h-[18px] w-[18px] text-emerald-600" />
+                          Refundable deposit
                         </span>
-                      ) : null}
+                        <span className="text-[15px] font-bold tabular-nums text-slate-900">
+                          {formatInr(data.securityDeposit * qty)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-end justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[14px] font-bold tracking-tight text-slate-900">
+                            You pay for rent
+                          </p>
+                          <p className="mt-1 text-[12px] font-medium leading-snug text-slate-500">
+                            {qty > 1
+                              ? `${formatInr(selectedPlan.finalRentalPrice)} × ${qty} units`
+                              : "Excludes deposit & delivery"}
+                          </p>
+                        </div>
+                        <p
+                          className={cn(
+                            "text-[24px] font-extrabold leading-none tabular-nums tracking-tight",
+                            selectedPlan.isRecommended ? "text-blue-600" : "text-violet-600",
+                          )}
+                        >
+                          {formatInr(selectedPlan.finalRentalPrice * qty)}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -782,36 +690,39 @@ const CustomerListingDetail = () => {
                 </div>
               ) : null}
 
-              <div
-                className={`grid gap-2 ${
-                  actualOrderType === "rent" && !hasPricingPlans ? "sm:grid-cols-2" : ""
-                }`}
-              >
-                {actualOrderType === "rent" && !hasPricingPlans ? (
+              {/* Qty lives in the rental checkout strip when pricing plans are shown */}
+              {!(actualOrderType === "rent" && hasPricingPlans) ? (
+                <div
+                  className={`grid gap-2 ${
+                    actualOrderType === "rent" && !hasPricingPlans ? "sm:grid-cols-2" : ""
+                  }`}
+                >
+                  {actualOrderType === "rent" && !hasPricingPlans ? (
+                    <div className="rounded-xl border border-border bg-muted/20 px-2.5 py-1.5">
+                      <QuantityStepper
+                        orientation="inline"
+                        label={RENTAL_UNIT_LABELS[periodUnit].plural}
+                        required
+                        value={periods}
+                        min={1}
+                        max={366}
+                        onChange={handlePeriodsChange}
+                      />
+                    </div>
+                  ) : null}
                   <div className="rounded-xl border border-border bg-muted/20 px-2.5 py-1.5">
                     <QuantityStepper
                       orientation="inline"
-                      label={RENTAL_UNIT_LABELS[periodUnit].plural}
+                      label="Qty"
                       required
-                      value={periods}
+                      value={qty}
                       min={1}
-                      max={366}
-                      onChange={handlePeriodsChange}
+                      max={Math.max(1, currentAvailableQuantity)}
+                      onChange={handleQtyChange}
                     />
                   </div>
-                ) : null}
-                <div className="rounded-xl border border-border bg-muted/20 px-2.5 py-1.5">
-                  <QuantityStepper
-                    orientation="inline"
-                    label="Qty"
-                    required
-                    value={qty}
-                    min={1}
-                    max={Math.max(1, currentAvailableQuantity)}
-                    onChange={handleQtyChange}
-                  />
                 </div>
-              </div>
+              ) : null}
 
               <div className="flex flex-col gap-2 pt-1 sm:flex-row">
                 <Button
@@ -832,13 +743,13 @@ const CustomerListingDetail = () => {
                 </Button>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3.5">
                 <div className="flex flex-wrap gap-1">
                   <Button
                     variant="ghost"
                     size="sm"
                     type="button"
-                    className="h-8 text-muted-foreground"
+                    className="h-9 px-3 text-[13px] font-medium text-slate-600 hover:text-slate-900"
                     onClick={() => {
                       if (user?.role !== "customer") {
                         toast.message("Sign in to save favorites");
@@ -855,11 +766,16 @@ const CustomerListingDetail = () => {
                   >
                     Favorite
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-3 text-[13px] font-medium text-slate-600 hover:text-slate-900"
+                    asChild
+                  >
                     <Link to="/customer/shop">More listings</Link>
                   </Button>
                 </div>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[12px] font-medium text-slate-500">
                   Excludes {actualOrderType === "buy" ? "delivery" : "deposit & delivery"}
                 </p>
               </div>

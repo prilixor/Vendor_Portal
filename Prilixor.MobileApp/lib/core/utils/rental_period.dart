@@ -90,33 +90,41 @@ class RentVsBuyCheck {
   });
 }
 
-/// When renting long enough that rent ≥ buy price, switch order to Buy.
+/// When Buy is enabled and rent ≥ buy price, switch order to Buy.
+/// If Buy is disabled (rent-only), never force Buy — rental continues.
 RentVsBuyCheck evaluateRentVsBuy({
   double? buyPrice,
+  bool isBuyEnabled = false,
   required int quantity,
   required int periods,
   required String unit,
   double dailyRent = 0,
   double weeklyRent = 0,
   double monthlyRent = 0,
+  double? planFinalPrice,
+  String? planDurationLabel,
 }) {
   final qty = quantity < 1 ? 1 : quantity;
   final p = periods < 1 ? 1 : periods;
   final unitBuy = buyPrice ?? 0;
   final buyTotal = unitBuy > 0 ? unitBuy * qty : 0.0;
-  final rentalTotal = estimateRent(
-    unit,
-    p,
-    qty,
-    dailyRent: dailyRent,
-    weeklyRent: weeklyRent,
-    monthlyRent: monthlyRent,
-  );
+  final rentalTotal = planFinalPrice != null
+      ? planFinalPrice * qty
+      : estimateRent(
+          unit,
+          p,
+          qty,
+          dailyRent: dailyRent,
+          weeklyRent: weeklyRent,
+          monthlyRent: monthlyRent,
+        );
   return RentVsBuyCheck(
-    shouldForceBuy: buyTotal > 0 && rentalTotal >= buyTotal,
+    shouldForceBuy: isBuyEnabled && buyTotal > 0 && rentalTotal >= buyTotal,
     rentalTotal: rentalTotal,
     buyTotal: buyTotal,
-    durationLabel: formatRentalDuration(p, unit),
+    durationLabel: planDurationLabel?.isNotEmpty == true
+        ? planDurationLabel!
+        : formatRentalDuration(p, unit),
   );
 }
 

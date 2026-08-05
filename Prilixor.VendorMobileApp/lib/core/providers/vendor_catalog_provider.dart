@@ -601,6 +601,141 @@ class VendorCatalogProvider extends ChangeNotifier {
     }
   }
 
+  Future<List<VendorListingDocument>> fetchListingDocuments(
+    String vendorId,
+    String listingId,
+  ) async {
+    try {
+      final response = await _api.dio.get(
+        '/vendors/$vendorId/listings/$listingId/documents',
+      );
+      final data = response.data;
+      final list = data is List ? data : <dynamic>[];
+      return list
+          .whereType<Map>()
+          .map((e) => VendorListingDocument.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } on DioException catch (e) {
+      _error = _dioMessage(e, 'Failed to load documents.');
+      return const [];
+    } catch (_) {
+      _error = 'Failed to load documents.';
+      return const [];
+    }
+  }
+
+  Future<({String fileUrl})?> uploadListingDocumentFile({
+    required String vendorId,
+    required PlatformFile file,
+  }) async {
+    _error = null;
+    try {
+      final multipart = await multipartFromPlatformFile(file);
+      if (multipart == null) {
+        _error = kIsWeb
+            ? 'Could not read the selected file in the browser. Try again or use a smaller file.'
+            : 'Could not read the selected file.';
+        notifyListeners();
+        return null;
+      }
+      final formData = FormData.fromMap({
+        'vendorId': vendorId,
+        'folderType': 'ProductDocuments',
+        'file': multipart,
+      });
+      final response = await _api.dio.post(
+        '/files/upload',
+        data: formData,
+        options: Options(
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 60),
+        ),
+      );
+      if (response.data is! Map) {
+        _error = 'Upload failed.';
+        notifyListeners();
+        return null;
+      }
+      final map = Map<String, dynamic>.from(response.data as Map);
+      final fileUrl =
+          (map['storageKey']?.toString().trim().isNotEmpty == true
+                  ? map['storageKey']?.toString()
+                  : null) ??
+              map['fileUrl']?.toString();
+      if (fileUrl == null || fileUrl.trim().isEmpty) {
+        _error = 'Upload failed — no file URL returned.';
+        notifyListeners();
+        return null;
+      }
+      return (fileUrl: fileUrl.trim());
+    } on DioException catch (e) {
+      _error = _dioMessage(e, 'Failed to upload document.');
+      notifyListeners();
+      return null;
+    } catch (_) {
+      _error = 'Failed to upload document.';
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<bool> addListingDocument({
+    required String vendorId,
+    required String listingId,
+    required String documentType,
+    required String fileUrl,
+  }) async {
+    _saving = true;
+    _error = null;
+    notifyListeners();
+    try {
+      await _api.dio.post(
+        '/vendors/$vendorId/listings/$listingId/documents',
+        data: {
+          'vendorId': vendorId,
+          'listingId': listingId,
+          'documentType': documentType,
+          'fileUrl': fileUrl,
+        },
+      );
+      return true;
+    } on DioException catch (e) {
+      _error = _dioMessage(e, 'Failed to add document.');
+      return false;
+    } catch (_) {
+      _error = 'Failed to add document.';
+      return false;
+    } finally {
+      _saving = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteListingDocument({
+    required String vendorId,
+    required String listingId,
+    required String documentId,
+  }) async {
+    _saving = true;
+    _error = null;
+    notifyListeners();
+    try {
+      await _api.dio.delete(
+        '/vendors/$vendorId/listings/$listingId/documents/$documentId',
+      );
+      return true;
+    } on DioException catch (e) {
+      _error = _dioMessage(e, 'Failed to delete document.');
+      return false;
+    } catch (_) {
+      _error = 'Failed to delete document.';
+      return false;
+    } finally {
+      _saving = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> setListingImagePrimary({
     required String vendorId,
     required String listingId,

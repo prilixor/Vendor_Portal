@@ -551,6 +551,7 @@ public sealed class CreateRentalDurationMasterRequest
 {
     public string DurationLabel { get; set; } = string.Empty;
     public int DurationDays { get; set; }
+    public decimal BillingCycles { get; set; }
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
 }
@@ -569,11 +570,15 @@ public sealed class CreateRentalDurationMasterEndpoint(IMediator mediator)
         CreateRentalDurationMasterRequest req,
         CancellationToken ct)
     {
+        var billingCycles = req.BillingCycles > 0
+            ? req.BillingCycles
+            : Math.Round(req.DurationDays / 28m, 2, MidpointRounding.AwayFromZero);
         var result = await mediator.Send(new CreateRentalDurationMasterCommand(
             req.DurationLabel,
             req.DurationDays,
             req.SortOrder,
-            req.IsActive), ct);
+            req.IsActive,
+            billingCycles), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -583,6 +588,7 @@ public sealed class UpdateRentalDurationMasterRequest
     public string Id { get; set; } = string.Empty;
     public string DurationLabel { get; set; } = string.Empty;
     public int DurationDays { get; set; }
+    public decimal BillingCycles { get; set; }
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
 }
@@ -602,12 +608,16 @@ public sealed class UpdateRentalDurationMasterEndpoint(IMediator mediator)
         CancellationToken ct)
     {
         req.Id = Route<string>("id") ?? req.Id;
+        var billingCycles = req.BillingCycles > 0
+            ? req.BillingCycles
+            : Math.Round(req.DurationDays / 28m, 2, MidpointRounding.AwayFromZero);
         var result = await mediator.Send(new UpdateRentalDurationMasterCommand(
             req.Id,
             req.DurationLabel,
             req.DurationDays,
             req.SortOrder,
-            req.IsActive), ct);
+            req.IsActive,
+            billingCycles), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -633,6 +643,128 @@ public sealed class DeleteRentalDurationMasterEndpoint(IMediator mediator)
     {
         req.Id = Route<string>("id") ?? req.Id;
         var result = await mediator.Send(new DeleteRentalDurationMasterCommand(req.Id), ct);
+        return result.IsSuccess ? TypedResults.Ok() : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetRentalDurationIconsRequest
+{
+    public bool ActiveOnly { get; set; }
+}
+
+public sealed class GetRentalDurationIconsEndpoint(IMediator mediator)
+    : Endpoint<GetRentalDurationIconsRequest, Results<Ok<List<RentalDurationIconDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/rental-duration-icons");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<List<RentalDurationIconDto>>, ProblemHttpResult>> ExecuteAsync(
+        GetRentalDurationIconsRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetRentalDurationIconsQuery(req.ActiveOnly), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class CreateRentalDurationIconRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string ValueTier { get; set; } = "good";
+    public string ImageUrl { get; set; } = string.Empty;
+    public string? ThumbnailUrl { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class CreateRentalDurationIconEndpoint(IMediator mediator)
+    : Endpoint<CreateRentalDurationIconRequest, Results<Ok<RentalDurationIconDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("catalog/rental-duration-icons");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<RentalDurationIconDto>, ProblemHttpResult>> ExecuteAsync(
+        CreateRentalDurationIconRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new CreateRentalDurationIconCommand(
+            req.Name,
+            req.ValueTier,
+            req.ImageUrl,
+            req.ThumbnailUrl,
+            req.SortOrder,
+            req.IsActive), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class UpdateRentalDurationIconRequest
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string ValueTier { get; set; } = "good";
+    public string ImageUrl { get; set; } = string.Empty;
+    public string? ThumbnailUrl { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class UpdateRentalDurationIconEndpoint(IMediator mediator)
+    : Endpoint<UpdateRentalDurationIconRequest, Results<Ok<RentalDurationIconDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Put("catalog/rental-duration-icons/{id}");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<RentalDurationIconDto>, ProblemHttpResult>> ExecuteAsync(
+        UpdateRentalDurationIconRequest req,
+        CancellationToken ct)
+    {
+        req.Id = Route<string>("id") ?? req.Id;
+        var result = await mediator.Send(new UpdateRentalDurationIconCommand(
+            req.Id,
+            req.Name,
+            req.ValueTier,
+            req.ImageUrl,
+            req.ThumbnailUrl,
+            req.SortOrder,
+            req.IsActive), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class DeleteRentalDurationIconRequest
+{
+    public string Id { get; set; } = string.Empty;
+}
+
+public sealed class DeleteRentalDurationIconEndpoint(IMediator mediator)
+    : Endpoint<DeleteRentalDurationIconRequest, Results<Ok, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Delete("catalog/rental-duration-icons/{id}");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok, ProblemHttpResult>> ExecuteAsync(
+        DeleteRentalDurationIconRequest req,
+        CancellationToken ct)
+    {
+        req.Id = Route<string>("id") ?? req.Id;
+        var result = await mediator.Send(new DeleteRentalDurationIconCommand(req.Id), ct);
         return result.IsSuccess ? TypedResults.Ok() : result.ToErrorResponse();
     }
 }

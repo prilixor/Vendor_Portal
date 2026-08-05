@@ -83,6 +83,8 @@ class CatalogProduct {
   final double monthlyRent;
   final double securityDeposit;
   final double? buyPrice;
+  final double vendorDailyRent;
+  final double? vendorBuyPrice;
   final double gstPercent;
   final bool isRentEnabled;
   final bool isBuyEnabled;
@@ -100,6 +102,8 @@ class CatalogProduct {
     required this.monthlyRent,
     required this.securityDeposit,
     this.buyPrice,
+    this.vendorDailyRent = 0,
+    this.vendorBuyPrice,
     this.gstPercent = 0,
     this.isRentEnabled = true,
     this.isBuyEnabled = false,
@@ -127,6 +131,9 @@ class CatalogProduct {
       monthlyRent: _toDouble(json['monthlyRent']),
       securityDeposit: _toDouble(json['securityDeposit']),
       buyPrice: json['buyPrice'] == null ? null : _toDouble(json['buyPrice']),
+      vendorDailyRent: _toDouble(json['vendorDailyRent']),
+      vendorBuyPrice:
+          json['vendorBuyPrice'] == null ? null : _toDouble(json['vendorBuyPrice']),
       gstPercent: _toDouble(json['gstPercent']),
       isRentEnabled: json['isRentEnabled'] != false,
       isBuyEnabled: json['isBuyEnabled'] == true,
@@ -443,6 +450,38 @@ class VendorProductImage {
       thumbnailUrl: json['thumbnailUrl']?.toString(),
       isPrimary: json['isPrimary'] == true,
       displayOrder: _toInt(json['displayOrder']),
+    );
+  }
+}
+
+class VendorListingDocument {
+  final String id;
+  final String vendorProductListingId;
+  final String documentType;
+  final String fileUrl;
+  final String verificationStatus;
+  final String? rejectionReason;
+  final String? verifiedAt;
+
+  const VendorListingDocument({
+    required this.id,
+    required this.vendorProductListingId,
+    required this.documentType,
+    required this.fileUrl,
+    this.verificationStatus = 'pending',
+    this.rejectionReason,
+    this.verifiedAt,
+  });
+
+  factory VendorListingDocument.fromJson(Map<String, dynamic> json) {
+    return VendorListingDocument(
+      id: json['id']?.toString() ?? '',
+      vendorProductListingId: json['vendorProductListingId']?.toString() ?? '',
+      documentType: json['documentType']?.toString() ?? '',
+      fileUrl: json['fileUrl']?.toString() ?? '',
+      verificationStatus: json['verificationStatus']?.toString() ?? 'pending',
+      rejectionReason: json['rejectionReason']?.toString(),
+      verifiedAt: json['verifiedAt']?.toString(),
     );
   }
 }

@@ -7,7 +7,7 @@ interface PageHeaderProps {
   description?: string;
   actions?: ReactNode;
   breadcrumbs?: { label: string; href?: string }[];
-  /** When false, breadcrumb row is omitted (e.g. Lovable-style settings). Default true. */
+  /** When false, breadcrumb row is omitted (e.g. compact settings). Default true. */
   showBreadcrumbs?: boolean;
 }
 

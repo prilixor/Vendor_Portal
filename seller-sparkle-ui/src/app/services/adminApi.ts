@@ -367,6 +367,8 @@ export interface ProductVariantDto {
 
 export type RentalDiscountType = "none" | "fixed" | "percentage";
 
+export type RentalValueTier = "good" | "better" | "best_value" | "maximum_savings";
+
 export interface ProductRentalPricingPlanDto {
   id: string;
   productId: string;
@@ -380,6 +382,12 @@ export interface ProductRentalPricingPlanDto {
   isActive: boolean;
   sortOrder: number;
   rentalDurationMasterId?: string | null;
+  billingCycles?: number;
+  rentalDurationIconId?: string | null;
+  iconUrl?: string | null;
+  iconThumbnailUrl?: string | null;
+  valueTier?: string | null;
+  iconName?: string | null;
 }
 
 export interface RentalDurationMasterDto {
@@ -388,16 +396,45 @@ export interface RentalDurationMasterDto {
   durationDays: number;
   sortOrder: number;
   isActive: boolean;
+  billingCycles?: number;
 }
 
 export interface CreateRentalDurationMasterRequest {
   durationLabel: string;
   durationDays: number;
+  billingCycles: number;
   sortOrder: number;
   isActive: boolean;
 }
 
 export interface UpdateRentalDurationMasterRequest extends CreateRentalDurationMasterRequest {
+  id: string;
+}
+
+export interface RentalDurationIconDto {
+  id: string;
+  name: string;
+  valueTier: RentalValueTier | string;
+  /** Browser-ready URL (presigned S3 or static). */
+  imageUrl: string;
+  thumbnailUrl?: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  /** Raw storage key/path to persist on save (same pattern as product images). */
+  imageStorageKey?: string | null;
+  thumbnailStorageKey?: string | null;
+}
+
+export interface CreateRentalDurationIconRequest {
+  name: string;
+  valueTier: RentalValueTier | string;
+  imageUrl: string;
+  thumbnailUrl?: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface UpdateRentalDurationIconRequest extends CreateRentalDurationIconRequest {
   id: string;
 }
 
@@ -844,6 +881,31 @@ export const adminApi = {
     return apiClient.delete<void>(`/admin/catalog/rental-durations/${id}`);
   },
 
+  async getRentalDurationIcons(activeOnly = false): Promise<RentalDurationIconDto[]> {
+    const qs = activeOnly ? "?activeOnly=true" : "";
+    return apiClient.get<RentalDurationIconDto[]>(`/admin/catalog/rental-duration-icons${qs}`);
+  },
+
+  async createRentalDurationIcon(data: CreateRentalDurationIconRequest): Promise<RentalDurationIconDto> {
+    return apiClient.post<RentalDurationIconDto>("/admin/catalog/rental-duration-icons", data);
+  },
+
+  async updateRentalDurationIcon(id: string, data: UpdateRentalDurationIconRequest): Promise<RentalDurationIconDto> {
+    return apiClient.put<RentalDurationIconDto>(`/admin/catalog/rental-duration-icons/${id}`, data);
+  },
+
+  async deleteRentalDurationIcon(id: string): Promise<void> {
+    return apiClient.delete<void>(`/admin/catalog/rental-duration-icons/${id}`);
+  },
+
+  async uploadRentalIconFile(file: File): Promise<UploadedFileResponse> {
+    const data = new FormData();
+    data.append("vendorId", "common");
+    data.append("file", file);
+    data.append("folderType", "RentalIcons");
+    return apiClient.postForm<UploadedFileResponse>("/files/upload", data);
+  },
+
   async getProducts(categoryId?: string): Promise<ProductDto[]> {
     const url = categoryId ? `/admin/catalog/products?categoryId=${categoryId}` : '/admin/catalog/products';
     return apiClient.get<ProductDto[]>(url);
@@ -990,6 +1052,7 @@ export const adminApi = {
       rentalDays: number;
       rentalPeriodUnit?: "day" | "week" | "month";
       orderType: string;
+      rentalPricingPlanId?: string;
       productVariantId?: string;
       doctorId?: string;
       hospitalId?: string;

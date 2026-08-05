@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
-import { Sparkles, ShieldCheck, Zap, BarChart3 } from "lucide-react";
+import { ShieldCheck, Zap, BarChart3 } from "lucide-react";
+import { BrandMark } from "@/app/components/shared/BrandMark";
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -56,9 +57,7 @@ export const AuthLayout = ({ children, title, subtitle, portalType = "vendor" }:
         <div className="absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
 
         <div className="relative flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 backdrop-blur">
-            <Sparkles className="h-6 w-6" />
-          </div>
+          <BrandMark size="lg" className="ring-white/20" />
           <div>
             <p className="text-sm font-bold leading-tight">{content.brandTitle}</p>
             <p className="text-xs text-white/70">{content.brandSubtitle}</p>
@@ -91,6 +90,13 @@ export const AuthLayout = ({ children, title, subtitle, portalType = "vendor" }:
       {/* Right — form */}
       <div className="flex w-full items-center justify-center px-6 py-12 lg:w-1/2">
         <div className="w-full max-w-md animate-fade-in">
+          <div className="mb-6 flex items-center gap-3 lg:hidden">
+            <BrandMark size="lg" />
+            <div>
+              <p className="text-sm font-bold leading-tight">BlinksMed</p>
+              <p className="text-xs text-muted-foreground">{content.brandTitle}</p>
+            </div>
+          </div>
           <div className="mb-8">
             <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
             <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>

@@ -6,7 +6,7 @@ import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 
-/// Edit listing title + status — category/product locked after create (web parity).
+/// Edit listing status — catalog name is always the Admin product/chemical name.
 class EditListingScreen extends StatefulWidget {
   final String listingId;
 
@@ -17,32 +17,16 @@ class EditListingScreen extends StatefulWidget {
 }
 
 class _EditListingScreenState extends State<EditListingScreen> {
-  final _titleController = TextEditingController();
   ListingUiStatus _status = ListingUiStatus.inactive;
   bool _initialized = false;
 
-  @override
-  void dispose() {
-    _titleController.dispose();
-    super.dispose();
-  }
-
   void _initFromRow(VendorListingRow row) {
     if (_initialized) return;
-    _titleController.text = row.listing.listingTitle;
     _status = row.status;
     _initialized = true;
   }
 
   Future<void> _save(VendorListingRow row) async {
-    final title = _titleController.text.trim();
-    if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a listing title.')),
-      );
-      return;
-    }
-
     final pending =
         Provider.of<VendorProfileProvider>(context, listen: false).isPending;
     if (pending) {
@@ -63,7 +47,9 @@ class _EditListingScreenState extends State<EditListingScreen> {
     final ok = await provider.updateListing(
       vendorId: vendorId,
       row: row,
-      listingTitle: title,
+      listingTitle: row.productName.trim().isNotEmpty
+          ? row.productName.trim()
+          : row.listing.listingTitle,
       status: _status,
       availableQuantity: row.listing.availableQuantity,
     );
@@ -112,18 +98,16 @@ class _EditListingScreenState extends State<EditListingScreen> {
         children: [
           _ReadOnlyField(label: 'Category', value: row.categoryName),
           const SizedBox(height: 12),
-          _ReadOnlyField(label: 'Catalog product', value: row.productName),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _titleController,
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
-              labelText: 'Listing title',
-              labelStyle: TextStyle(color: Colors.white54),
-              filled: true,
-              fillColor: Color(0xFF1E293B),
-              border: OutlineInputBorder(borderSide: BorderSide.none),
-            ),
+          _ReadOnlyField(
+            label: 'Catalog name (from Admin)',
+            value: row.productName.trim().isNotEmpty
+                ? row.productName
+                : row.listing.listingTitle,
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Customers always see this Admin product/chemical name.',
+            style: TextStyle(color: Colors.white38, fontSize: 11),
           ),
           const SizedBox(height: 16),
           const Text(
