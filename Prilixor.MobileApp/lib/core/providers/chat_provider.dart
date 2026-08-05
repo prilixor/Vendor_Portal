@@ -87,20 +87,24 @@ class ChatProvider extends ChangeNotifier {
     return success;
   }
 
-  Future<String?> createSession(String vendorId, String orderId) async {
+  Future<String?> createSession(String vendorId, String orderId, {String? subject}) async {
     _isLoading = true;
     notifyListeners();
     String? newSessionId;
     try {
       final response = await _apiClient.dio.post(
         '/customers/me/chats/sessions',
-        data: {'vendorId': vendorId, 'orderId': orderId},
+        data: {
+          'vendorId': vendorId,
+          'orderId': orderId,
+          if (subject != null && subject.isNotEmpty) 'subject': subject,
+        },
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
         newSessionId = response.data['id'];
       }
     } catch (e) {
-      _errorMessage = 'Failed to create chat session.';
+      _errorMessage = 'Failed to create chat with support.';
     } finally {
       _isLoading = false;
       notifyListeners();

@@ -19,8 +19,9 @@ CREATE TABLE IF NOT EXISTS public.customer_notification_preferences (
 CREATE TABLE IF NOT EXISTS public.chat_sessions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id uuid NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
-    vendor_id uuid NOT NULL, -- No foreign key reference because vendor resides in a separate database (vendor_portal_db)
+    vendor_id uuid NULL, -- Order/vendor context only; no FK (vendor is in vendor_portal_db)
     order_id uuid NULL REFERENCES public.customer_rental_orders(id) ON DELETE SET NULL,
+    counterparty_type varchar(30) NOT NULL DEFAULT 'Admin', -- 'Admin' (order chat) or 'Vendor' (legacy)
     subject varchar(500) NOT NULL,
     last_message_at timestamptz NOT NULL DEFAULT now(),
     is_closed boolean NOT NULL DEFAULT false,
@@ -34,11 +35,12 @@ CREATE TABLE IF NOT EXISTS public.chat_sessions (
 CREATE INDEX IF NOT EXISTS ix_chat_sessions_customer_id ON public.chat_sessions(customer_id);
 CREATE INDEX IF NOT EXISTS ix_chat_sessions_vendor_id ON public.chat_sessions(vendor_id);
 CREATE INDEX IF NOT EXISTS ix_chat_sessions_order_id ON public.chat_sessions(order_id);
+CREATE INDEX IF NOT EXISTS ix_chat_sessions_counterparty_type ON public.chat_sessions(counterparty_type);
 
 CREATE TABLE IF NOT EXISTS public.chat_messages (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     chat_session_id uuid NOT NULL REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
-    sender_type varchar(30) NOT NULL, -- 'Customer' or 'Vendor'
+    sender_type varchar(30) NOT NULL, -- 'Customer', 'Admin', or 'Vendor'
     message_text text NOT NULL,
     sent_at timestamptz NOT NULL DEFAULT now(),
     is_read boolean NOT NULL DEFAULT false,

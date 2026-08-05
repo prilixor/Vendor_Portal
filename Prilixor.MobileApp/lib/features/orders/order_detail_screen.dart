@@ -593,10 +593,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                           child: OutlinedButton.icon(
                                             style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white24), padding: const EdgeInsets.symmetric(vertical: 16)),
                                             icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                                            label: const Text('Chat about Order', style: TextStyle(fontSize: 14)),
+                                            label: const Text('Chat with Admin', style: TextStyle(fontSize: 14)),
                                             onPressed: () async {
                                               final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-                                              final sessionId = await chatProvider.createSession(order.vendorId, order.id);
+                                              final sessionId = await chatProvider.createSession(
+                                                order.vendorId,
+                                                order.id,
+                                                subject: 'Chat regarding order ${order.orderNumber}: ${order.listingTitle}',
+                                              );
                                               if (sessionId != null && context.mounted) {
                                                 Navigator.push(
                                                   context,

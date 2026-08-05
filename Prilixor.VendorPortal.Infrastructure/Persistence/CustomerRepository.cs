@@ -1624,16 +1624,44 @@ public sealed class CustomerRepository(
         customerDb.ChatSessions.Where(s => s.CustomerId == customerId && !s.IsDeleted).OrderByDescending(s => s.LastMessageAt).ToListAsync(cancellationToken);
 
     public Task<List<ChatSession>> GetVendorChatSessionsAsync(Guid vendorId, CancellationToken cancellationToken) =>
-        customerDb.ChatSessions.Where(s => s.VendorId == vendorId && !s.IsDeleted).OrderByDescending(s => s.LastMessageAt).ToListAsync(cancellationToken);
+        customerDb.ChatSessions
+            .Where(s => s.VendorId == vendorId
+                        && !s.IsDeleted
+                        && s.CounterpartyType == ChatCounterpartyTypes.Vendor)
+            .OrderByDescending(s => s.LastMessageAt)
+            .ToListAsync(cancellationToken);
+
+    public Task<List<ChatSession>> GetAdminChatSessionsAsync(CancellationToken cancellationToken) =>
+        customerDb.ChatSessions
+            .Where(s => !s.IsDeleted && s.CounterpartyType == ChatCounterpartyTypes.Admin)
+            .OrderByDescending(s => s.LastMessageAt)
+            .ToListAsync(cancellationToken);
 
     public Task<ChatSession?> GetChatSessionAsync(Guid customerId, Guid vendorId, Guid? orderId, CancellationToken cancellationToken)
     {
         if (orderId.HasValue)
         {
-            return customerDb.ChatSessions.FirstOrDefaultAsync(s => s.CustomerId == customerId && s.VendorId == vendorId && s.OrderId == orderId && !s.IsDeleted, cancellationToken);
+            return customerDb.ChatSessions.FirstOrDefaultAsync(s =>
+                s.CustomerId == customerId
+                && s.VendorId == vendorId
+                && s.OrderId == orderId
+                && s.CounterpartyType == ChatCounterpartyTypes.Vendor
+                && !s.IsDeleted, cancellationToken);
         }
-        return customerDb.ChatSessions.FirstOrDefaultAsync(s => s.CustomerId == customerId && s.VendorId == vendorId && s.OrderId == null && !s.IsDeleted, cancellationToken);
+        return customerDb.ChatSessions.FirstOrDefaultAsync(s =>
+            s.CustomerId == customerId
+            && s.VendorId == vendorId
+            && s.OrderId == null
+            && s.CounterpartyType == ChatCounterpartyTypes.Vendor
+            && !s.IsDeleted, cancellationToken);
     }
+
+    public Task<ChatSession?> GetAdminChatSessionForOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken) =>
+        customerDb.ChatSessions.FirstOrDefaultAsync(s =>
+            s.CustomerId == customerId
+            && s.OrderId == orderId
+            && s.CounterpartyType == ChatCounterpartyTypes.Admin
+            && !s.IsDeleted, cancellationToken);
 
     public Task<ChatSession?> GetChatSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken) =>
         customerDb.ChatSessions.FirstOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted, cancellationToken);

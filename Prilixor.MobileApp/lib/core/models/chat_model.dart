@@ -20,8 +20,8 @@ class ChatSessionModel {
   factory ChatSessionModel.fromJson(Map<String, dynamic> json) {
     return ChatSessionModel(
       sessionId: json['id'] ?? json['sessionId'] ?? '',
-      participantId: json['vendorId'] ?? json['participantId'] ?? '',
-      participantName: json['vendorName'] ?? json['participantName'] ?? '',
+      participantId: json['vendorId']?.toString() ?? json['participantId'] ?? '',
+      participantName: json['counterpartyName'] ?? json['vendorName'] ?? json['participantName'] ?? 'BlinksMed Support',
       relatedOrderId: json['orderId'] ?? json['relatedOrderId'],
       relatedOrderNumber: json['orderNumber'] ?? json['relatedOrderNumber'],
       subject: json['subject'] ?? json['lastMessagePreview'],

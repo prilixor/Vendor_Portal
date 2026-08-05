@@ -9,8 +9,10 @@ public sealed record ChatSessionDto(
     Guid Id,
     Guid CustomerId,
     string CustomerName,
-    Guid VendorId,
+    Guid? VendorId,
     string VendorName,
+    string CounterpartyType,
+    string CounterpartyName,
     Guid? OrderId,
     string? OrderNumber,
     string Subject,
@@ -25,6 +27,47 @@ public sealed record ChatMessageDto(
     DateTimeOffset SentAt,
     bool IsRead);
 
+internal static class ChatSessionMapping
+{
+    public const string AdminDisplayName = "BlinksMed Support";
+
+    public static async Task<(string VendorName, string CounterpartyName)> ResolveNamesAsync(
+        ICustomerRepository customers,
+        ChatSession session,
+        CancellationToken cancellationToken)
+    {
+        string vendorName = "Store";
+        if (session.VendorId.HasValue)
+            vendorName = await customers.GetVendorBusinessNameAsync(session.VendorId.Value, cancellationToken) ?? "Store";
+
+        var counterpartyName = string.Equals(session.CounterpartyType, ChatCounterpartyTypes.Admin, StringComparison.OrdinalIgnoreCase)
+            ? AdminDisplayName
+            : vendorName;
+
+        return (vendorName, counterpartyName);
+    }
+
+    public static ChatSessionDto ToDto(
+        ChatSession session,
+        string customerName,
+        string vendorName,
+        string counterpartyName,
+        string? orderNumber) =>
+        new(
+            session.Id,
+            session.CustomerId,
+            customerName,
+            session.VendorId,
+            vendorName,
+            session.CounterpartyType,
+            counterpartyName,
+            session.OrderId,
+            orderNumber,
+            session.Subject,
+            session.LastMessageAt,
+            session.IsClosed);
+}
+
 // Query: Get Customer Chat Sessions
 public sealed record GetCustomerChatSessionsQuery(Guid CustomerId) : IQuery<List<ChatSessionDto>>;
 
@@ -32,7 +75,7 @@ internal sealed class GetCustomerChatSessionsQueryHandler(ICustomerRepository cu
     : IQueryHandler<GetCustomerChatSessionsQuery, List<ChatSessionDto>>
 {
     public async Task<Result<List<ChatSessionDto>>> Handle(
-        GetCustomerChatSessionsQuery request, 
+        GetCustomerChatSessionsQuery request,
         CancellationToken cancellationToken)
     {
         var customer = await customers.GetCustomerByIdAsync(request.CustomerId, cancellationToken);
@@ -44,7 +87,7 @@ internal sealed class GetCustomerChatSessionsQueryHandler(ICustomerRepository cu
 
         foreach (var s in sessions)
         {
-            var vendorName = await customers.GetVendorBusinessNameAsync(s.VendorId, cancellationToken) ?? "Store";
+            var (vendorName, counterpartyName) = await ChatSessionMapping.ResolveNamesAsync(customers, s, cancellationToken);
             string? orderNumber = null;
 
             if (s.OrderId.HasValue)
@@ -53,31 +96,21 @@ internal sealed class GetCustomerChatSessionsQueryHandler(ICustomerRepository cu
                 orderNumber = order?.Order.OrderNumber;
             }
 
-            dtos.Add(new ChatSessionDto(
-                s.Id,
-                s.CustomerId,
-                customer.FullName,
-                s.VendorId,
-                vendorName,
-                s.OrderId,
-                orderNumber,
-                s.Subject,
-                s.LastMessageAt,
-                s.IsClosed));
+            dtos.Add(ChatSessionMapping.ToDto(s, customer.FullName, vendorName, counterpartyName, orderNumber));
         }
 
         return Result.Success(dtos);
     }
 }
 
-// Query: Get Vendor Chat Sessions
+// Query: Get Vendor Chat Sessions (legacy Vendor counterparty only)
 public sealed record GetVendorChatSessionsQuery(Guid VendorId) : IQuery<List<ChatSessionDto>>;
 
 internal sealed class GetVendorChatSessionsQueryHandler(ICustomerRepository customers)
     : IQueryHandler<GetVendorChatSessionsQuery, List<ChatSessionDto>>
 {
     public async Task<Result<List<ChatSessionDto>>> Handle(
-        GetVendorChatSessionsQuery request, 
+        GetVendorChatSessionsQuery request,
         CancellationToken cancellationToken)
     {
         var sessions = await customers.GetVendorChatSessionsAsync(request.VendorId, cancellationToken);
@@ -87,7 +120,7 @@ internal sealed class GetVendorChatSessionsQueryHandler(ICustomerRepository cust
         {
             var customer = await customers.GetCustomerByIdAsync(s.CustomerId, cancellationToken);
             var customerName = customer?.FullName ?? "Customer";
-            var vendorName = await customers.GetVendorBusinessNameAsync(s.VendorId, cancellationToken) ?? "Store";
+            var (vendorName, counterpartyName) = await ChatSessionMapping.ResolveNamesAsync(customers, s, cancellationToken);
             string? orderNumber = null;
 
             if (s.OrderId.HasValue)
@@ -96,27 +129,50 @@ internal sealed class GetVendorChatSessionsQueryHandler(ICustomerRepository cust
                 orderNumber = order?.Order.OrderNumber;
             }
 
-            dtos.Add(new ChatSessionDto(
-                s.Id,
-                s.CustomerId,
-                customerName,
-                s.VendorId,
-                vendorName,
-                s.OrderId,
-                orderNumber,
-                s.Subject,
-                s.LastMessageAt,
-                s.IsClosed));
+            dtos.Add(ChatSessionMapping.ToDto(s, customerName, vendorName, counterpartyName, orderNumber));
         }
 
         return Result.Success(dtos);
     }
 }
 
-// Command: Create Chat Session
+// Query: Get Admin Chat Sessions (Customer ↔ Admin)
+public sealed record GetAdminChatSessionsQuery : IQuery<List<ChatSessionDto>>;
+
+internal sealed class GetAdminChatSessionsQueryHandler(ICustomerRepository customers)
+    : IQueryHandler<GetAdminChatSessionsQuery, List<ChatSessionDto>>
+{
+    public async Task<Result<List<ChatSessionDto>>> Handle(
+        GetAdminChatSessionsQuery request,
+        CancellationToken cancellationToken)
+    {
+        var sessions = await customers.GetAdminChatSessionsAsync(cancellationToken);
+        var dtos = new List<ChatSessionDto>();
+
+        foreach (var s in sessions)
+        {
+            var customer = await customers.GetCustomerByIdAsync(s.CustomerId, cancellationToken);
+            var customerName = customer?.FullName ?? "Customer";
+            var (vendorName, counterpartyName) = await ChatSessionMapping.ResolveNamesAsync(customers, s, cancellationToken);
+            string? orderNumber = null;
+
+            if (s.OrderId.HasValue)
+            {
+                var order = await customers.GetCustomerOrderByIdAsync(s.OrderId.Value, cancellationToken);
+                orderNumber = order?.Order.OrderNumber;
+            }
+
+            dtos.Add(ChatSessionMapping.ToDto(s, customerName, vendorName, counterpartyName, orderNumber));
+        }
+
+        return Result.Success(dtos);
+    }
+}
+
+// Command: Create Customer ↔ Admin Chat Session (order-linked)
 public sealed record CreateChatSessionCommand(
     Guid CustomerId,
-    Guid VendorId,
+    Guid? VendorId,
     Guid? OrderId,
     string Subject) : ICommand<ChatSessionDto>;
 
@@ -124,18 +180,29 @@ internal sealed class CreateChatSessionCommandHandler(ICustomerRepository custom
     : ICommandHandler<CreateChatSessionCommand, ChatSessionDto>
 {
     public async Task<Result<ChatSessionDto>> Handle(
-        CreateChatSessionCommand request, 
+        CreateChatSessionCommand request,
         CancellationToken cancellationToken)
     {
         var customer = await customers.GetCustomerByIdAsync(request.CustomerId, cancellationToken);
         if (customer is null || customer.IsDeleted)
             return Result.Failure<ChatSessionDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
 
-        var vendorName = await customers.GetVendorBusinessNameAsync(request.VendorId, cancellationToken);
-        if (vendorName is null)
-            return Result.Failure<ChatSessionDto>(new Error("vendors.not_found", "Vendor not found.", ErrorCategory.NotFound));
+        if (!request.OrderId.HasValue)
+            return Result.Failure<ChatSessionDto>(new Error("chats.order_required", "Order id is required to start a support chat.", ErrorCategory.Validation));
 
-        var s = await customers.GetChatSessionAsync(request.CustomerId, request.VendorId, request.OrderId, cancellationToken);
+        var orderRow = await customers.GetCustomerOrderAsync(request.CustomerId, request.OrderId.Value, cancellationToken);
+        if (orderRow is null)
+            return Result.Failure<ChatSessionDto>(new Error("orders.not_found", "Order not found.", ErrorCategory.NotFound));
+
+        var vendorId = orderRow.Listing?.VendorId ?? request.VendorId;
+        if (vendorId.HasValue)
+        {
+            var vendorNameCheck = await customers.GetVendorBusinessNameAsync(vendorId.Value, cancellationToken);
+            if (vendorNameCheck is null)
+                return Result.Failure<ChatSessionDto>(new Error("vendors.not_found", "Vendor not found.", ErrorCategory.NotFound));
+        }
+
+        var s = await customers.GetAdminChatSessionForOrderAsync(request.CustomerId, request.OrderId.Value, cancellationToken);
 
         if (s is null)
         {
@@ -143,9 +210,12 @@ internal sealed class CreateChatSessionCommandHandler(ICustomerRepository custom
             {
                 Id = Guid.NewGuid(),
                 CustomerId = request.CustomerId,
-                VendorId = request.VendorId,
+                VendorId = vendorId,
                 OrderId = request.OrderId,
-                Subject = string.IsNullOrWhiteSpace(request.Subject) ? "Chat Session" : request.Subject.Trim(),
+                CounterpartyType = ChatCounterpartyTypes.Admin,
+                Subject = string.IsNullOrWhiteSpace(request.Subject)
+                    ? $"Chat regarding order {orderRow.Order.OrderNumber}"
+                    : request.Subject.Trim(),
                 LastMessageAt = DateTimeOffset.UtcNow,
                 IsClosed = false,
                 CreatedOnUtc = DateTime.UtcNow,
@@ -155,24 +225,14 @@ internal sealed class CreateChatSessionCommandHandler(ICustomerRepository custom
             await customers.SaveChangesAsync(cancellationToken);
         }
 
-        string? orderNumber = null;
-        if (s.OrderId.HasValue)
-        {
-            var order = await customers.GetCustomerOrderAsync(request.CustomerId, s.OrderId.Value, cancellationToken);
-            orderNumber = order?.Order.OrderNumber;
-        }
+        var (vendorName, counterpartyName) = await ChatSessionMapping.ResolveNamesAsync(customers, s, cancellationToken);
 
-        return Result.Success(new ChatSessionDto(
-            s.Id,
-            s.CustomerId,
+        return Result.Success(ChatSessionMapping.ToDto(
+            s,
             customer.FullName,
-            s.VendorId,
             vendorName,
-            s.OrderId,
-            orderNumber,
-            s.Subject,
-            s.LastMessageAt,
-            s.IsClosed));
+            counterpartyName,
+            orderRow.Order.OrderNumber));
     }
 }
 
@@ -186,7 +246,7 @@ internal sealed class SendChatMessageCommandHandler(ICustomerRepository customer
     : ICommandHandler<SendChatMessageCommand, ChatMessageDto>
 {
     public async Task<Result<ChatMessageDto>> Handle(
-        SendChatMessageCommand request, 
+        SendChatMessageCommand request,
         CancellationToken cancellationToken)
     {
         var session = await customers.GetChatSessionByIdAsync(request.ChatSessionId, cancellationToken);
@@ -196,11 +256,23 @@ internal sealed class SendChatMessageCommandHandler(ICustomerRepository customer
         if (session.IsClosed)
             return Result.Failure<ChatMessageDto>(new Error("chats.session_closed", "This chat session is closed.", ErrorCategory.Validation));
 
+        var senderType = request.SenderType.Trim();
+        var isAdminSession = string.Equals(session.CounterpartyType, ChatCounterpartyTypes.Admin, StringComparison.OrdinalIgnoreCase);
+        var allowed = isAdminSession
+            ? senderType is "Customer" or "Admin"
+            : senderType is "Customer" or "Vendor";
+
+        if (!allowed)
+            return Result.Failure<ChatMessageDto>(new Error("chats.invalid_sender", "Invalid sender type for this chat session.", ErrorCategory.Validation));
+
+        if (string.IsNullOrWhiteSpace(request.MessageText))
+            return Result.Failure<ChatMessageDto>(new Error("chats.empty_message", "Message cannot be empty.", ErrorCategory.Validation));
+
         var msg = new ChatMessage
         {
             Id = Guid.NewGuid(),
             ChatSessionId = request.ChatSessionId,
-            SenderType = request.SenderType,
+            SenderType = senderType,
             MessageText = request.MessageText.Trim(),
             SentAt = DateTimeOffset.UtcNow,
             IsRead = false,
@@ -209,7 +281,7 @@ internal sealed class SendChatMessageCommandHandler(ICustomerRepository customer
         };
 
         await customers.AddChatMessageAsync(msg, cancellationToken);
-        
+
         session.LastMessageAt = msg.SentAt;
         session.ModifiedOnUtc = DateTime.UtcNow;
         await customers.UpdateChatSessionAsync(session, cancellationToken);
@@ -233,7 +305,7 @@ internal sealed class GetChatMessagesQueryHandler(ICustomerRepository customers)
     : IQueryHandler<GetChatMessagesQuery, List<ChatMessageDto>>
 {
     public async Task<Result<List<ChatMessageDto>>> Handle(
-        GetChatMessagesQuery request, 
+        GetChatMessagesQuery request,
         CancellationToken cancellationToken)
     {
         var session = await customers.GetChatSessionByIdAsync(request.ChatSessionId, cancellationToken);

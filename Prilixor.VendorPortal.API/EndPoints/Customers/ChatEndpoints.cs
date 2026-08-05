@@ -12,7 +12,8 @@ namespace Prilixor.VendorPortal.API.EndPoints.Customers;
 
 public sealed class CreateCustomerChatSessionRequest
 {
-    public Guid VendorId { get; set; }
+    /// <summary>Optional order/vendor context. Counterparty is always Admin.</summary>
+    public Guid? VendorId { get; set; }
     public Guid? OrderId { get; set; }
     public string Subject { get; set; } = string.Empty;
 }
@@ -127,7 +128,7 @@ public sealed class GetCustomerChatMessagesEndpoint(IMediator mediator)
 }
 
 
-// ================= VENDOR CHAT ENDPOINTS =================
+// ================= VENDOR CHAT ENDPOINTS (legacy Vendor counterparty only) =================
 
 public sealed class VendorChatSessionRequest
 {

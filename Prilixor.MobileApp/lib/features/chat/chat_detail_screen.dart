@@ -58,7 +58,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Chat about this Order', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text('Chat with Admin', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 2),
             Text('Order: ${widget.orderNumber} • ${widget.listingTitle}', style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
@@ -81,7 +81,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                             const SizedBox(height: 16),
                             const Text('No active conversation', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 8),
-                            const Text('Start a direct chat with the vendor regarding this item.', style: TextStyle(color: Colors.white54, fontSize: 14), textAlign: TextAlign.center),
+                            const Text('Start a chat with BlinksMed support about this order.', style: TextStyle(color: Colors.white54, fontSize: 14), textAlign: TextAlign.center),
                           ],
                         ),
                       )

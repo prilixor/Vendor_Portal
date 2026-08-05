@@ -236,7 +236,14 @@ const CustomerOrderDetail = () => {
 
   const activeSession = useMemo(() => {
     if (!chatSessions || !data) return null;
-    return chatSessions.find((s) => s.vendorId === data.vendorId && s.orderId === data.id) || null;
+    return (
+      chatSessions.find(
+        (s) => s.counterpartyType === "Admin" && s.orderId === data.id
+      ) ||
+      // Fallback for older sessions created before Admin routing
+      chatSessions.find((s) => s.orderId === data.id) ||
+      null
+    );
   }, [chatSessions, data]);
 
   const { data: messages } = useQuery({
@@ -261,7 +268,7 @@ const CustomerOrderDetail = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customer-chat-sessions"] });
     },
-    onError: (err: Error) => toast.error(err.message || "Failed to start chat session.")
+    onError: (err: Error) => toast.error(err.message || "Failed to start chat with support.")
   });
 
   const sendMessageMut = useMutation({
@@ -556,7 +563,7 @@ const CustomerOrderDetail = () => {
 
         <Button variant="outline" onClick={() => setIsChatOpen(true)}>
           <MessageCircle className="mr-2 h-4 w-4" />
-          Chat with Vendor
+          Chat with Admin
         </Button>
 
         {isCustomerOrderCancellable(activeItem.status) && (
@@ -722,20 +729,20 @@ const CustomerOrderDetail = () => {
       </Dialog>
 
       <Sheet open={isChatOpen} onOpenChange={setIsChatOpen}>
-        <SheetContent className="flex flex-col h-full sm:max-w-md p-0">
-          <SheetHeader className="p-6 border-b">
-            <SheetTitle>Chat about this Order</SheetTitle>
-            <SheetDescription className="text-xs">
+        <SheetContent className="flex h-full w-full max-w-full flex-col gap-0 p-0 sm:max-w-md">
+          <SheetHeader className="space-y-1 border-b p-4 pr-12 text-left sm:p-6">
+            <SheetTitle>Chat with Admin</SheetTitle>
+            <SheetDescription className="text-xs break-words">
               Order: {activeItem.orderNumber} • {activeItem.listingTitle}
             </SheetDescription>
           </SheetHeader>
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
             {!activeSession ? (
-              <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
+              <div className="flex h-full flex-col items-center justify-center space-y-3 text-center">
                 <MessageCircle className="h-10 w-10 text-muted-foreground" />
                 <div>
                   <p className="text-sm font-semibold">No active conversation</p>
-                  <p className="text-xs text-muted-foreground">Start a direct chat with the vendor regarding this item.</p>
+                  <p className="text-xs text-muted-foreground">Start a chat with BlinksMed support about this order.</p>
                 </div>
                 <Button
                   onClick={() => createSessionMut.mutate()}
@@ -745,7 +752,7 @@ const CustomerOrderDetail = () => {
                 </Button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="flex flex-col space-y-3">
                 {messages && messages.length > 0 ? (
                   messages.map((msg) => {
                     const isMe = msg.senderType === "Customer";
@@ -753,21 +760,26 @@ const CustomerOrderDetail = () => {
                       <div
                         key={msg.id}
                         className={cn(
-                          "flex flex-col max-w-[85%] rounded-lg p-3 text-sm shadow-sm",
+                          "flex w-fit max-w-[85%] flex-col rounded-lg p-3 text-sm shadow-sm",
                           isMe
-                            ? "bg-primary text-primary-foreground ml-auto rounded-tr-none"
-                            : "bg-muted text-muted-foreground mr-auto rounded-tl-none border"
+                            ? "ml-auto self-end rounded-tr-none bg-primary text-primary-foreground"
+                            : "mr-auto self-start rounded-tl-none border bg-muted text-muted-foreground"
                         )}
                       >
+                        {!isMe && (
+                          <span className="mb-1 text-[10px] font-bold uppercase tracking-wide opacity-80">
+                            {msg.senderType === "Admin" ? "Admin" : msg.senderType}
+                          </span>
+                        )}
                         <p className="break-words whitespace-pre-wrap font-medium leading-relaxed">{msg.messageText}</p>
-                        <span className="text-[10px] opacity-75 mt-1.5 self-end font-semibold">
+                        <span className="mt-1.5 self-end text-[10px] font-semibold opacity-75">
                           {new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                     );
                   })
                 ) : (
-                  <p className="text-xs text-center text-muted-foreground py-12">
+                  <p className="py-12 text-center text-xs text-muted-foreground">
                     Send a message to start the conversation.
                   </p>
                 )}
@@ -776,7 +788,7 @@ const CustomerOrderDetail = () => {
             )}
           </div>
           {activeSession && (
-            <div className="p-4 border-t bg-background sticky bottom-0">
+            <div className="shrink-0 border-t bg-background p-3 sm:p-4">
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -786,7 +798,7 @@ const CustomerOrderDetail = () => {
                 className="flex items-end gap-2"
               >
                 <ChatMessageTextarea
-                  placeholder="Type a message... (Shift+Enter for new line)"
+                  placeholder="Type a message..."
                   value={newMessageText}
                   onChange={setNewMessageText}
                   onSubmit={() => {
@@ -795,9 +807,9 @@ const CustomerOrderDetail = () => {
                   }}
                   submitDisabled={sendMessageMut.isPending}
                   disabled={sendMessageMut.isPending}
-                  className="flex-1"
+                  className="min-w-0 flex-1"
                 />
-                <Button type="submit" size="sm" disabled={sendMessageMut.isPending || !newMessageText.trim()}>
+                <Button type="submit" size="sm" className="shrink-0" disabled={sendMessageMut.isPending || !newMessageText.trim()}>
                   Send
                 </Button>
               </form>
