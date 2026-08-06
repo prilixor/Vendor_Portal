@@ -38,7 +38,7 @@ export function availabilityBadge(
   qty: number,
   totalAcrossVendors: number,
   listingStatus: string,
-): { label: string; className: string } {
+): { label: string; className: string } | null {
   const s = status.trim().toLowerCase();
   const ls = listingStatus.trim().toLowerCase();
   if (ls !== "active" && ls !== "approved") {
@@ -71,10 +71,8 @@ export function availabilityBadge(
       className: "pointer-events-none absolute left-3 top-3 border-0 bg-amber-600 text-white hover:bg-amber-600",
     };
   }
-  return {
-    label: "Available",
-    className: "pointer-events-none absolute left-3 top-3 border-0 bg-emerald-600 text-white hover:bg-emerald-600",
-  };
+  // In-stock / available: no badge per product requirement
+  return null;
 }
 
 /** Fits the whole image inside a fixed aspect-ratio frame (letterboxing on sides or top/bottom). */
@@ -559,13 +557,13 @@ const CustomerBrowse = () => {
                     >
                       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
                         <BrowseCardImage src={item.primaryImageUrl ?? ""} />
-                        <Badge className={badge.className}>{badge.label}</Badge>
+                        {badge ? <Badge className={badge.className}>{badge.label}</Badge> : null}
                       </div>
                     </Link>
                   ) : (
                     <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
                       <BrowseCardImage src={item.primaryImageUrl ?? ""} />
-                      <Badge className={badge.className}>{badge.label}</Badge>
+                      {badge ? <Badge className={badge.className}>{badge.label}</Badge> : null}
                     </div>
                   )}
                   {item.listingStatus !== "product_only" && (

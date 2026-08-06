@@ -776,30 +776,31 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.fromLTRB(10, 36, 10, 8),
                     child: CatalogImage(url: product.primaryImageUrl, fit: BoxFit.contain),
                   ),
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 104),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Color(badge['color'] as int),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        badge['label'] as String,
-                        maxLines: 1,
-                        softWrap: false,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          height: 1.15,
+                  if (badge != null)
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 104),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Color(badge['color'] as int),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          badge['label'] as String,
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            height: 1.15,
+                          ),
                         ),
                       ),
                     ),
-                  ),
                   Positioned(
                     top: 8,
                     right: 8,

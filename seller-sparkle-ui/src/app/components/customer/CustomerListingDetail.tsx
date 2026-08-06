@@ -36,7 +36,7 @@ import {
 } from "@/app/helpers/rentalPeriod";
 import { cn } from "@/app/helpers/utils";
 
-function availabilityBadge(status: string, qty: number): { label: string; className: string } {
+function availabilityBadge(status: string, qty: number): { label: string; className: string } | null {
   const s = status.trim().toLowerCase();
   const listingVisible = s === "available" || s === "low_stock" || s === "out_of_stock";
   if (!listingVisible) {
@@ -63,10 +63,8 @@ function availabilityBadge(status: string, qty: number): { label: string; classN
       className: "border-0 bg-amber-600 text-white hover:bg-amber-600",
     };
   }
-  return {
-    label: "Available",
-    className: "border-0 bg-emerald-600 text-white hover:bg-emerald-600",
-  };
+  // In-stock / available: no badge per product requirement
+  return null;
 }
 
 function formatInr(value: number): string {
@@ -343,7 +341,7 @@ const CustomerListingDetail = () => {
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
                 Medical equipment
               </p>
-              <Badge className={badge.className}>{badge.label}</Badge>
+              {badge ? <Badge className={badge.className}>{badge.label}</Badge> : null}
             </div>
             <h1 className="text-2xl font-bold tracking-tight sm:text-[1.75rem] sm:leading-tight">
               {data.title}
