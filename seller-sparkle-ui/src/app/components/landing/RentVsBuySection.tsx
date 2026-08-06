@@ -37,7 +37,7 @@ export const RentVsBuySection = ({ data }: RentVsBuySectionProps) => {
         <h2 className="display" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif", fontSize: "40px", fontWeight: 400 }}>
           {title} <span style={{ color: "var(--teal-mid)", fontStyle: "italic" }}>{accentText}</span>
         </h2>
-        <p className="sub" style={{ maxWidth: "640px" }}>
+        <p className="sub" style={{ maxWidth: "1350px" }}>
           {subtitle}
         </p>
 

@@ -108,7 +108,7 @@ export const AboutSection = ({ data }: AboutSectionProps) => {
         <h2>
           {bannerTitle} <span className="accent">{bannerAccent}</span>
         </h2>
-        <p className="sub">{bannerSub}</p>
+        <p className="sub" style={{ maxWidth: "1150px" }}>{bannerSub}</p>
       </div>
 
       <div className="section-inner" style={{ paddingTop: "24px" }}>
