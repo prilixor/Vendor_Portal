@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
@@ -40,6 +41,9 @@ const CustomerSettings = () => {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [profileFieldErrors, setProfileFieldErrors] = useState<Record<string, string>>({});
   const [passwordFieldErrors, setPasswordFieldErrors] = useState<Record<string, string>>({});
@@ -224,51 +228,93 @@ const CustomerSettings = () => {
                 </p>
                 <div className="space-y-1.5">
                   <Label htmlFor="customer-settings-cur-pw" required>Current password</Label>
-                  <Input
-                    id="customer-settings-cur-pw"
-                    type="password"
-                    placeholder="••••••••"
-                    value={currentPassword}
-                    onChange={(e) => {
-                      setCurrentPassword(e.target.value);
-                      clearPasswordFieldError("currentPassword");
-                    }}
-                    autoComplete="current-password"
-                    className={passwordFieldErrors.currentPassword ? "border-destructive" : ""}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="customer-settings-cur-pw"
+                      type={showCurrentPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={currentPassword}
+                      onChange={(e) => {
+                        setCurrentPassword(e.target.value);
+                        clearPasswordFieldError("currentPassword");
+                      }}
+                      autoComplete="current-password"
+                      className={
+                        passwordFieldErrors.currentPassword
+                          ? "border-destructive pr-10"
+                          : "pr-10"
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
+                    >
+                      {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                   <FieldError message={passwordFieldErrors.currentPassword} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="customer-settings-new-pw" required>New password</Label>
-                    <Input
-                      id="customer-settings-new-pw"
-                      type="password"
-                      placeholder="••••••••"
-                      value={newPassword}
-                      onChange={(e) => {
-                        setNewPassword(e.target.value);
-                        clearPasswordFieldError("newPassword");
-                      }}
-                      autoComplete="new-password"
-                      className={passwordFieldErrors.newPassword ? "border-destructive" : ""}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="customer-settings-new-pw"
+                        type={showNewPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={newPassword}
+                        onChange={(e) => {
+                          setNewPassword(e.target.value);
+                          clearPasswordFieldError("newPassword");
+                        }}
+                        autoComplete="new-password"
+                        className={
+                          passwordFieldErrors.newPassword
+                            ? "border-destructive pr-10"
+                            : "pr-10"
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                      >
+                        {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                     <FieldError message={passwordFieldErrors.newPassword} />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="customer-settings-cp-pw" required>Confirm</Label>
-                    <Input
-                      id="customer-settings-cp-pw"
-                      type="password"
-                      placeholder="••••••••"
-                      value={confirmPassword}
-                      onChange={(e) => {
-                        setConfirmPassword(e.target.value);
-                        clearPasswordFieldError("confirmPassword");
-                      }}
-                      autoComplete="new-password"
-                      className={passwordFieldErrors.confirmPassword ? "border-destructive" : ""}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="customer-settings-cp-pw"
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={confirmPassword}
+                        onChange={(e) => {
+                          setConfirmPassword(e.target.value);
+                          clearPasswordFieldError("confirmPassword");
+                        }}
+                        autoComplete="new-password"
+                        className={
+                          passwordFieldErrors.confirmPassword
+                            ? "border-destructive pr-10"
+                            : "pr-10"
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                     <FieldError message={passwordFieldErrors.confirmPassword} />
                   </div>
                 </div>

@@ -65,6 +65,7 @@ const Admins = () => {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [resetCustomPassword, setResetCustomPassword] = useState("");
   const [useCustomResetPassword, setUseCustomResetPassword] = useState(false);
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [tempPasswordResult, setTempPasswordResult] = useState<string | null>(null);
   const [copiedTemp, setCopiedTemp] = useState(false);
@@ -135,6 +136,7 @@ const Admins = () => {
     setPassword("");
     setResetCustomPassword("");
     setUseCustomResetPassword(false);
+    setShowCreatePassword(false);
     setShowResetPassword(false);
     setTempPasswordResult(null);
     setCopiedTemp(false);
@@ -145,6 +147,7 @@ const Admins = () => {
     setName("");
     setEmail("");
     setPassword("");
+    setShowCreatePassword(false);
     setRole(creatableRoles[0]?.code ?? "verifier");
     setIsActive(true);
     setFieldErrors({});
@@ -533,13 +536,24 @@ const Admins = () => {
             </div>
             <div className="space-y-1.5">
               <Label required>Password</Label>
-              <Input
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); clearFieldError("password"); }}
-                placeholder="••••••••"
-                type="password"
-                className={fieldErrors.password ? "border-destructive" : ""}
-              />
+              <div className="relative">
+                <Input
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); clearFieldError("password"); }}
+                  placeholder="••••••••"
+                  type={showCreatePassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  className={fieldErrors.password ? "border-destructive pr-10" : "pr-10"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCreatePassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showCreatePassword ? "Hide password" : "Show password"}
+                >
+                  {showCreatePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               <FieldError message={fieldErrors.password} />
             </div>
             <div className="space-y-1.5">

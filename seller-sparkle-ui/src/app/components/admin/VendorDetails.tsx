@@ -162,7 +162,7 @@ import { getVendorPortalHref } from "@/app/helpers/portalHost";
 import { useAuth } from "@/app/guards/AuthContext";
 import { ADMIN_PERMISSIONS } from "@/app/helpers/adminNav";
 import { MapPicker } from "@/app/components/shared/MapPicker";
-import { Input } from "@/app/components/ui/input";
+import { AdminServiceAreaRadiusDialog } from "@/app/components/admin/AdminServiceAreaRadiusDialog";
 
 
 const dayLabel: Record<number, string> = {
@@ -317,9 +317,6 @@ const VendorDetails = () => {
 
   const [serviceAreas, setServiceAreas] = useState<VendorServiceAreaDto[]>([]);
   const [radiusEditArea, setRadiusEditArea] = useState<VendorServiceAreaDto | null>(null);
-  const [radiusDraftKm, setRadiusDraftKm] = useState(5);
-  const [radiusSaving, setRadiusSaving] = useState(false);
-  const [radiusMapReady, setRadiusMapReady] = useState(false);
 
   const [productListings, setProductListings] = useState<VendorProductListingDto[]>([]);
   const [productMap, setProductMap] = useState<Record<string, ProductDto>>({});
@@ -339,13 +336,22 @@ const VendorDetails = () => {
   }, [vendorId]);
 
   useEffect(() => {
-    if (!radiusEditArea) {
-      setRadiusMapReady(false);
+    if (loading) return;
+    if (searchParams.get("editRadius") !== "1") return;
+    if (serviceAreas.length === 0) return;
+
+    if (searchParams.get("tab") !== "areas") {
+      setSearchParams({ tab: "areas", editRadius: "1" }, { replace: true });
       return;
     }
-    const timer = window.setTimeout(() => setRadiusMapReady(true), 180);
-    return () => window.clearTimeout(timer);
-  }, [radiusEditArea]);
+
+    const pending = serviceAreas.find((a) => !a.isRadiusSetByAdmin) ?? serviceAreas[0];
+    if (pending) setRadiusEditArea(pending);
+
+    const next = new URLSearchParams(searchParams);
+    next.delete("editRadius");
+    setSearchParams(next, { replace: true });
+  }, [loading, serviceAreas, searchParams, setSearchParams]);
 
   const loadVendorData = async (id: string) => {
 
@@ -867,38 +873,6 @@ const VendorDetails = () => {
 
   const openRadiusEditor = (area: VendorServiceAreaDto) => {
     setRadiusEditArea(area);
-    setRadiusDraftKm(area.serviceRadiusKm > 0 ? area.serviceRadiusKm : 5);
-    setRadiusMapReady(false);
-  };
-
-  const saveServiceAreaRadius = async () => {
-    if (!vendorId || !radiusEditArea) return;
-    if (!(radiusDraftKm > 0) || radiusDraftKm > 500) {
-      toast.error("Radius must be between 1 and 500 km.");
-      return;
-    }
-    const adminUserId = getAdminUserId();
-    if (!adminUserId) {
-      toast.error("Admin session not found. Please login again.");
-      return;
-    }
-
-    setRadiusSaving(true);
-    try {
-      const updated = await adminApi.updateVendorServiceAreaRadius({
-        adminUserId,
-        vendorId,
-        serviceAreaId: radiusEditArea.id,
-        serviceRadiusKm: radiusDraftKm,
-      });
-      setServiceAreas((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
-      setRadiusEditArea(null);
-      toast.success(`Service radius set to ${updated.serviceRadiusKm} km.`);
-    } catch (error) {
-      toast.error(getUserFriendlyMessage(error));
-    } finally {
-      setRadiusSaving(false);
-    }
   };
 
   const serviceAreasNeedRadiusReview =
@@ -1502,78 +1476,19 @@ const VendorDetails = () => {
 
           </Card>
 
-          <Dialog
-            open={Boolean(radiusEditArea)}
-            onOpenChange={(open) => {
-              if (!open && !radiusSaving) setRadiusEditArea(null);
-            }}
-          >
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Set service area radius</DialogTitle>
-              </DialogHeader>
-              {radiusEditArea && (
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm font-medium">{radiusEditArea.areaName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {radiusEditArea.city} · pin {radiusEditArea.centerLatitude.toFixed(4)},{" "}
-                      {radiusEditArea.centerLongitude.toFixed(4)}
-                    </p>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Confirm the vendor location on the map, then choose the coverage radius for this area.
-                  </p>
-                  {radiusMapReady ? (
-                    <MapPicker
-                      key={`admin-radius-${radiusEditArea.id}`}
-                      latitude={radiusEditArea.centerLatitude}
-                      longitude={radiusEditArea.centerLongitude}
-                      radiusKm={radiusDraftKm}
-                      showRadius
-                      maxRadiusKm={100}
-                      radiusPresetsKm={[15, 30, 50, 100]}
-                      height="h-56 sm:h-72"
-                      onRadiusChange={setRadiusDraftKm}
-                    />
-                  ) : (
-                    <div className="h-56 sm:h-72 w-full rounded-xl border border-border bg-muted/30 animate-pulse" />
-                  )}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="admin-service-radius-km">Radius (km)</Label>
-                    <Input
-                      id="admin-service-radius-km"
-                      type="number"
-                      min={1}
-                      max={500}
-                      step={1}
-                      value={radiusDraftKm}
-                      onChange={(e) => setRadiusDraftKm(Number(e.target.value))}
-                    />
-                    <p className="text-[11px] text-muted-foreground">Allowed range: 1–500 km.</p>
-                  </div>
-                </div>
-              )}
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setRadiusEditArea(null)}
-                  disabled={radiusSaving}
-                >
-                  Cancel
-                </Button>
-                <Button onClick={saveServiceAreaRadius} disabled={radiusSaving}>
-                  {radiusSaving ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…
-                    </>
-                  ) : (
-                    "Save radius"
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          {vendorId && (
+            <AdminServiceAreaRadiusDialog
+              vendorId={vendorId}
+              area={radiusEditArea}
+              open={Boolean(radiusEditArea)}
+              onOpenChange={(open) => {
+                if (!open) setRadiusEditArea(null);
+              }}
+              onSaved={(updated) => {
+                setServiceAreas((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+              }}
+            />
+          )}
 
         </TabsContent>
 

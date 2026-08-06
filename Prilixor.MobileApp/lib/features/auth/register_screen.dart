@@ -21,11 +21,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   bool _agreedToTerms = false;
   String? _nameError;
   String? _emailError;
   String? _passwordError;
+  String? _confirmPasswordError;
 
   @override
   void dispose() {
@@ -33,19 +36,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
   bool _validate() {
     final nameErr = requiredMessage(_fullNameController.text, message: 'Full name is required');
     final emailErr = requiredMessage(_emailController.text, message: 'Email is required');
-    final passwordErr = requiredMessage(_passwordController.text, message: 'Password is required');
+    String? passwordErr = requiredMessage(_passwordController.text, message: 'Password is required');
+    if (passwordErr == null && _passwordController.text.length < 8) {
+      passwordErr = 'Password must be at least 8 characters';
+    }
+    String? confirmErr = requiredMessage(
+      _confirmPasswordController.text,
+      message: 'Confirm password is required',
+    );
+    if (confirmErr == null && _confirmPasswordController.text != _passwordController.text) {
+      confirmErr = "Passwords don't match";
+    }
     setState(() {
       _nameError = nameErr;
       _emailError = emailErr;
       _passwordError = passwordErr;
+      _confirmPasswordError = confirmErr;
     });
-    if (nameErr != null || emailErr != null || passwordErr != null) return false;
+    if (nameErr != null || emailErr != null || passwordErr != null || confirmErr != null) return false;
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -69,7 +84,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   void _register() async {
     if (!_validate()) {
-      if (_nameError != null || _emailError != null || _passwordError != null) {
+      if (_nameError != null ||
+          _emailError != null ||
+          _passwordError != null ||
+          _confirmPasswordError != null) {
         showRequiredFieldsBlocked(context);
       }
       return;
@@ -198,8 +216,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   errorText: _passwordError,
                   prefixIcon: Icons.lock_outline,
                   suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.white54),
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                      color: Colors.white54,
+                    ),
                     onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _confirmPasswordController,
+                style: const TextStyle(color: Colors.white),
+                obscureText: _obscureConfirmPassword,
+                onChanged: (_) {
+                  if (_confirmPasswordError != null) {
+                    setState(() => _confirmPasswordError = null);
+                  }
+                },
+                decoration: requiredInputDecoration(
+                  context,
+                  label: 'Confirm Password',
+                  required: true,
+                  errorText: _confirmPasswordError,
+                  prefixIcon: Icons.lock_clock_outlined,
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureConfirmPassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: Colors.white54,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
                   ),
                 ),
               ),

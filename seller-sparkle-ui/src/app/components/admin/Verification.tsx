@@ -7,17 +7,19 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
-import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw, FileText, Eye, Building, AlertCircle, Calendar } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw, FileText, Eye, Building, AlertCircle, Calendar, MapPin, ExternalLink } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
+import { Badge } from "@/app/components/ui/badge";
 import { Textarea } from "@/app/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { safeFormatDate } from "@/app/utils/dateUtils";
-import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto } from "@/app/services/adminApi";
+import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto } from "@/app/services/adminApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
+import { AdminServiceAreaRadiusDialog } from "@/app/components/admin/AdminServiceAreaRadiusDialog";
 
 const getApiOrigin = (): string | null => {
   const configured = import.meta.env.VITE_API_BASE_URL as string | undefined;
@@ -183,6 +185,10 @@ const Verification = () => {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [vendorProfile, setVendorProfile] = useState<VendorProfileDto | null>(null);
   const [vendorProfiles, setVendorProfiles] = useState<Map<string, VendorProfileDto>>(new Map());
+  const [serviceAreas, setServiceAreas] = useState<VendorServiceAreaDto[]>([]);
+  const [loadingAreas, setLoadingAreas] = useState(false);
+  const [radiusEditArea, setRadiusEditArea] = useState<VendorServiceAreaDto | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadVendors();
@@ -194,10 +200,13 @@ const Verification = () => {
       loadDocuments(selected.id);
       loadBankAccounts(selected.id);
       loadVendorProfile(selected.id);
+      loadServiceAreas(selected.id);
     } else {
       setDocuments([]);
       setBankAccounts([]);
       setVendorProfile(null);
+      setServiceAreas([]);
+      setRadiusEditArea(null);
     }
   }, [selected]);
 
@@ -233,6 +242,18 @@ const Verification = () => {
       // Bank accounts not found - vendor hasn't added yet, this is expected
     } finally {
       setLoadingBanks(false);
+    }
+  };
+
+  const loadServiceAreas = async (vendorId: string) => {
+    setLoadingAreas(true);
+    try {
+      const areas = await adminApi.getVendorServiceAreas(vendorId);
+      setServiceAreas(areas);
+    } catch {
+      setServiceAreas([]);
+    } finally {
+      setLoadingAreas(false);
     }
   };
 
@@ -412,7 +433,55 @@ const Verification = () => {
     return hasProfile && isReadyForVerification && m && s;
   });
 
+  const serviceAreasNeedRadiusReview =
+    serviceAreas.length === 0 || serviceAreas.some((a) => !a.isRadiusSetByAdmin);
+
+  const docsReady = documents.length > 0 && documents.every((d) => d.verificationStatus === "approved");
+  const bankReady = bankAccounts.length > 0 && bankAccounts.some((b) => b.verificationStatus === "approved");
+  const radiusReady = serviceAreas.length > 0 && serviceAreas.every((a) => a.isRadiusSetByAdmin);
+
+  const canApprove =
+    !!selected &&
+    selected.accountStatus === "pending" &&
+    docsReady &&
+    bankReady &&
+    radiusReady;
+
+  const openAreasPage = (vendorId: string, editRadius = false) => {
+    const qs = editRadius ? "?tab=areas&editRadius=1" : "?tab=areas";
+    navigate(`/admin/vendors/${vendorId}${qs}`);
+  };
+
+  const openFirstPendingRadius = () => {
+    const pending = serviceAreas.find((a) => !a.isRadiusSetByAdmin) ?? serviceAreas[0];
+    if (pending) setRadiusEditArea(pending);
+  };
+
   const approve = async (id: string) => {
+    if (!canApprove) {
+      if (serviceAreasNeedRadiusReview) {
+        toast.error(
+          serviceAreas.length === 0
+            ? "Vendor has no service area yet. Open Areas to review the business location."
+            : "Set coverage radius for all service areas before approval.",
+          {
+            action: {
+              label: serviceAreas.length === 0 ? "Open Areas" : "Set radius",
+              onClick: () => {
+                if (serviceAreas.length === 0) openAreasPage(id);
+                else openFirstPendingRadius();
+              },
+            },
+          },
+        );
+      } else if (!docsReady) {
+        toast.error("Approve all required documents before vendor approval.");
+      } else if (!bankReady) {
+        toast.error("Approve at least one bank account before vendor approval.");
+      }
+      return;
+    }
+
     setVerifying(true);
     try {
       const adminUserId = getAdminUserId() || "";
@@ -428,7 +497,15 @@ const Verification = () => {
       toast.success("Vendor approved successfully");
     } catch (error) {
       const message = getUserFriendlyMessage(error);
-      toast.error(message);
+      const radiusBlocked =
+        message.toLowerCase().includes("coverage radius") ||
+        message.toLowerCase().includes("service area");
+      toast.error(message, radiusBlocked ? {
+        action: {
+          label: "Set radius",
+          onClick: () => openFirstPendingRadius(),
+        },
+      } : undefined);
     } finally {
       setVerifying(false);
     }
@@ -998,10 +1075,115 @@ const Verification = () => {
                   </div>
                 )}
               </div>
+
+              <div className="rounded-lg border border-border p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <h4 className="font-semibold">Service coverage</h4>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Admin must set coverage radius before approval.
+                    </p>
+                  </div>
+                  {serviceAreasNeedRadiusReview ? (
+                    <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200">
+                      Needs radius
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-success/40 bg-success/10 text-success">
+                      Ready
+                    </Badge>
+                  )}
+                </div>
+                {loadingAreas ? (
+                  <div className="space-y-2 animate-pulse">
+                    <div className="flex items-center justify-between p-3 border border-border/60 rounded-lg">
+                      <div className="space-y-1">
+                        <Skeleton className="h-4 w-36" />
+                        <Skeleton className="h-3 w-48" />
+                      </div>
+                      <Skeleton className="h-8 w-24" />
+                    </div>
+                  </div>
+                ) : serviceAreas.length > 0 ? (
+                  <div className="space-y-2">
+                    {serviceAreas.map((area) => (
+                      <div
+                        key={area.id}
+                        className={`rounded-lg border p-3 ${
+                          area.isRadiusSetByAdmin ? "border-border" : "border-amber-500/40"
+                        }`}
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-medium">{area.areaName}</p>
+                              {area.isRadiusSetByAdmin ? (
+                                <Badge
+                                  variant="outline"
+                                  className="border-success/40 bg-success/10 text-[10px] text-success"
+                                >
+                                  Radius set
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  variant="outline"
+                                  className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-800 dark:text-amber-200"
+                                >
+                                  Needs Admin review
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                              <MapPin className="h-3.5 w-3.5 shrink-0" />
+                              {area.city} · {area.serviceRadiusKm} km
+                              {area.isRadiusSetByAdmin ? " (set by Admin)" : " default"}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              Pin {area.centerLatitude.toFixed(4)}, {area.centerLongitude.toFixed(4)}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 gap-2">
+                            <Button
+                              size="sm"
+                              variant={area.isRadiusSetByAdmin ? "outline" : "default"}
+                              onClick={() => setRadiusEditArea(area)}
+                            >
+                              {area.isRadiusSetByAdmin ? "Edit radius" : "Set radius"}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-auto px-0 text-xs"
+                      onClick={() => selected && openAreasPage(selected.id)}
+                    >
+                      Open full Areas page
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3 rounded-lg border border-dashed border-border p-4">
+                    <p className="text-sm text-muted-foreground">
+                      No service area / business location found for this vendor yet.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => selected && openAreasPage(selected.id, true)}
+                    >
+                      Open Areas page
+                      <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="flex-col items-stretch gap-2 sm:flex-row sm:items-center">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" disabled={verifying}>
@@ -1009,6 +1191,11 @@ const Verification = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => selected && openAreasPage(selected.id, serviceAreasNeedRadiusReview)}
+                >
+                  <MapPin className="mr-2 h-4 w-4" /> Open Areas page
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => { setActionType("reject"); setSelectedVendorId(selected?.id || null); setSelected(null); setRejectOpen(true); }}>
                   <XCircle className="mr-2 h-4 w-4 text-destructive" /> Reject
                 </DropdownMenuItem>
@@ -1027,9 +1214,26 @@ const Verification = () => {
             </DropdownMenu>
             {/* Only show main approve button for non-active vendors */}
             {selected?.accountStatus !== "active" && (
-              <Button onClick={() => selected && approve(selected.id)} className="bg-success hover:bg-success/90 text-success-foreground" disabled={verifying}>
-                {verifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />} Approve
-              </Button>
+              <div className="flex flex-col items-stretch gap-1 sm:items-end">
+                <Button
+                  onClick={() => selected && void approve(selected.id)}
+                  className="bg-success hover:bg-success/90 text-success-foreground"
+                  disabled={
+                    verifying ||
+                    loadingAreas ||
+                    (selected?.accountStatus === "pending" && !canApprove)
+                  }
+                >
+                  {verifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />} Approve
+                </Button>
+                {selected?.accountStatus === "pending" && !loadingAreas && serviceAreasNeedRadiusReview && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300 sm:text-right">
+                    {serviceAreas.length === 0
+                      ? "Set service area radius on Areas before approval."
+                      : "Set coverage radius for all service areas before approval."}
+                  </p>
+                )}
+              </div>
             )}
             {/* Show indicator for active vendors with pending documents */}
             {selected?.accountStatus === "active" && selected?.registrationStage === "documents_pending" && (
@@ -1041,6 +1245,20 @@ const Verification = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {selected && (
+        <AdminServiceAreaRadiusDialog
+          vendorId={selected.id}
+          area={radiusEditArea}
+          open={Boolean(radiusEditArea)}
+          onOpenChange={(open) => {
+            if (!open) setRadiusEditArea(null);
+          }}
+          onSaved={(updated) => {
+            setServiceAreas((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+          }}
+        />
+      )}
 
       <Dialog open={itemRejectOpen} onOpenChange={setItemRejectOpen}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-md">

@@ -14,7 +14,9 @@ const CustomerRegister = () => {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -23,6 +25,8 @@ const CustomerRegister = () => {
     if (fullName.trim().length < 2) e.fullName = "Enter your full name";
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) e.email = "Valid email required";
     if (password.length < 8) e.password = "At least 8 characters";
+    if (!confirmPassword) e.confirmPassword = "Please confirm your password";
+    else if (confirmPassword !== password) e.confirmPassword = "Passwords don't match";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -88,18 +92,41 @@ const CustomerRegister = () => {
               type={showPwd ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
               className={errors.password ? "border-destructive pr-10" : "pr-10"}
             />
             <button
               type="button"
               onClick={() => setShowPwd((v) => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              aria-label="Toggle password visibility"
+              aria-label={showPwd ? "Hide password" : "Show password"}
             >
               {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
           {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="confirmPassword" required>Confirm password</Label>
+          <div className="relative">
+            <Input
+              id="confirmPassword"
+              type={showConfirmPwd ? "text" : "password"}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              className={errors.confirmPassword ? "border-destructive pr-10" : "pr-10"}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPwd((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label={showConfirmPwd ? "Hide confirm password" : "Show confirm password"}
+            >
+              {showConfirmPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword}</p>}
         </div>
 
         <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>

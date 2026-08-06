@@ -28,6 +28,10 @@ const errorMessages: Record<string, string> = {
   "vendors.no_bank_account": "Vendor must upload at least one bank account before approval.",
   "vendors.bank_account_not_approved":
     "At least one bank account must be approved before vendor can be approved.",
+  "vendors.no_service_area":
+    "Vendor must have a business location / service area before approval.",
+  "vendors.service_radius_not_set":
+    "Admin must set the coverage radius for all service areas before approval.",
   "vendors.listing.active_orders":
     "Cannot delete listing because there are active or pending customer rental orders associated with it. Please complete or cancel those orders first.",
   "vendors.vendor_location_missing":
