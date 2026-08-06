@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/profile_provider.dart';
+import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/required_field_ux.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -14,6 +16,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   String? _nameError;
+  String? _phoneError;
   bool _initialized = false;
 
   @override
@@ -43,8 +46,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } else if (name.length < 2) {
       nameErr = 'Please enter your full name.';
     }
-    setState(() => _nameError = nameErr);
-    return nameErr == null;
+    final phoneErr = IndianMobilePhone.optionalError(_phoneController.text);
+    setState(() {
+      _nameError = nameErr;
+      _phoneError = phoneErr;
+    });
+    return nameErr == null && phoneErr == null;
   }
 
   Future<void> _save() async {
@@ -53,10 +60,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
 
+    final phoneRaw = _phoneController.text.trim();
+    final phone = phoneRaw.isEmpty ? '' : IndianMobilePhone.normalizeDigits(phoneRaw);
     final provider = Provider.of<ProfileProvider>(context, listen: false);
     final success = await provider.updateProfile(
       _nameController.text.trim(),
-      _phoneController.text.trim(),
+      phone,
     );
 
     if (!mounted) return;
@@ -133,10 +142,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       controller: _phoneController,
                       style: const TextStyle(color: Colors.white),
                       keyboardType: TextInputType.phone,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
+                      onChanged: (_) {
+                        if (_phoneError != null) setState(() => _phoneError = null);
+                      },
                       decoration: requiredInputDecoration(
                         context,
                         label: 'Phone',
+                        errorText: _phoneError,
                         prefixIcon: Icons.phone_outlined,
+                      ).copyWith(
+                        hintText: '9876543210',
+                        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.28)),
+                        helperText: 'Indian mobile: 10 digits starting with 6–9',
+                        helperStyle: const TextStyle(color: Colors.white38, fontSize: 11),
                       ),
                     ),
                     const SizedBox(height: 32),

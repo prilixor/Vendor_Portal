@@ -12,6 +12,11 @@ import { authApi } from "@/app/services/authApi";
 import { vendorOnboardingApi, type VendorProfileApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 import { Eye, EyeOff, Save } from "lucide-react";
+import {
+  maskIndianMobileInput,
+  normalizeIndianMobileDigits,
+  requiredIndianMobileError,
+} from "@/app/helpers/indianMobilePhone";
 
 const Settings = () => {
   const { user } = useAuth();
@@ -86,6 +91,8 @@ const Settings = () => {
     if (!fullName.trim() || fullName.trim().length < 2) {
       errors.fullName = "Please enter your full name (at least 2 characters).";
     }
+    const phoneErr = requiredIndianMobileError(phone);
+    if (phoneErr) errors.phone = phoneErr;
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       toast.error("Please fill in the required fields.");
@@ -99,7 +106,7 @@ const Settings = () => {
         vendorId: user.id,
         businessName: profile.businessName,
         ownerName: fullName.trim(),
-        supportPhone: phone.trim(),
+        supportPhone: normalizeIndianMobileDigits(phone),
         gstNumber: profile.gstNumber,
         addressLine1: profile.addressLine1,
         addressLine2: profile.addressLine2,
@@ -247,8 +254,31 @@ const Settings = () => {
               <Input value={user?.email ?? ""} type="email" disabled />
             </div>
             <div className="space-y-1.5">
-              <Label>Phone</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} disabled={loading || savingProfile} />
+              <Label required>Phone</Label>
+              <Input
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel"
+                placeholder="9876543210"
+                value={phone}
+                onChange={(e) => {
+                  setPhone(maskIndianMobileInput(e.target.value));
+                  setFieldErrors((prev) => {
+                    if (!prev.phone) return prev;
+                    const next = { ...prev };
+                    delete next.phone;
+                    return next;
+                  });
+                }}
+                disabled={loading || savingProfile}
+                className={fieldErrors.phone ? "border-destructive" : ""}
+              />
+              <FieldError message={fieldErrors.phone} />
+              {!fieldErrors.phone && (
+                <p className="text-[11px] text-muted-foreground">
+                  10-digit Indian mobile starting with 6–9.
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Time zone</Label>

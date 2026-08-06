@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.Extensions.Options;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Customers;
@@ -23,6 +24,9 @@ public sealed class RegisterCustomerCommandValidator : AbstractValidator<Registe
         RuleFor(x => x.Email).NotEmpty().EmailAddress();
         RuleFor(x => x.Password).NotEmpty().MinimumLength(8);
         RuleFor(x => x.FullName).NotEmpty().MinimumLength(2).MaximumLength(200);
+        RuleFor(x => x.Phone)
+            .Must(p => string.IsNullOrWhiteSpace(p) || IndianMobilePhone.IsValid(p))
+            .WithMessage(IndianMobilePhone.InvalidMessage);
     }
 }
 
@@ -47,9 +51,22 @@ internal sealed class RegisterCustomerCommandHandler(
             Email = request.Email.Trim().ToLowerInvariant(),
             PasswordHash = passwordHasher.HashPassword(request.Password),
             FullName = request.FullName.Trim(),
-            Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
+            Phone = null,
             IsEmailVerified = true,
         };
+
+        if (!string.IsNullOrWhiteSpace(request.Phone))
+        {
+            if (!IndianMobilePhone.TryNormalize(request.Phone, out var phone))
+            {
+                return Result.Failure<CustomerRegisteredDto>(new Error(
+                    "customers.invalid_phone",
+                    IndianMobilePhone.InvalidMessage,
+                    ErrorCategory.Validation));
+            }
+
+            entity.Phone = phone;
+        }
 
         await customers.AddCustomerAsync(entity, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
@@ -94,6 +111,9 @@ public sealed class UpdateCustomerProfileCommandValidator : AbstractValidator<Up
     public UpdateCustomerProfileCommandValidator()
     {
         RuleFor(x => x.FullName).NotEmpty().MinimumLength(2).MaximumLength(200);
+        RuleFor(x => x.Phone)
+            .Must(p => string.IsNullOrWhiteSpace(p) || IndianMobilePhone.IsValid(p))
+            .WithMessage(IndianMobilePhone.InvalidMessage);
     }
 }
 
@@ -107,7 +127,22 @@ internal sealed class UpdateCustomerProfileCommandHandler(ICustomerRepository cu
             return Result.Failure<CustomerProfileDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
 
         c.FullName = request.FullName.Trim();
-        c.Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        if (string.IsNullOrWhiteSpace(request.Phone))
+        {
+            c.Phone = null;
+        }
+        else if (!IndianMobilePhone.TryNormalize(request.Phone, out var phone))
+        {
+            return Result.Failure<CustomerProfileDto>(new Error(
+                "customers.invalid_phone",
+                IndianMobilePhone.InvalidMessage,
+                ErrorCategory.Validation));
+        }
+        else
+        {
+            c.Phone = phone;
+        }
+
         await customers.UpdateCustomerAsync(c, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
 

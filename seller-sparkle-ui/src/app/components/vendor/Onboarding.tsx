@@ -37,6 +37,7 @@ import { sanitizeAdminComment, buildVerificationSupportMessage } from "@/app/hel
 import { useSupportChat } from "@/app/contexts/SupportChatContext";
 import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
 import { cn, toCamelCase } from "@/app/helpers/utils";
+import { INDIAN_MOBILE_MESSAGE, isValidIndianMobile } from "@/app/helpers/indianMobilePhone";
 
 const steps = [
   { label: "Basic Info", description: "Account" },
@@ -597,9 +598,13 @@ const Onboarding = () => {
 
   const handleContinue = async () => {
     if (step === 0) {
-      // Validate phone number in basic info
+      // Validate phone number in basic info (Indian mobile)
       if (!profile.phone.trim()) {
         toast.error("Phone number is required");
+        return;
+      }
+      if (!isValidIndianMobile(profile.phone)) {
+        toast.error(INDIAN_MOBILE_MESSAGE);
         return;
       }
     }

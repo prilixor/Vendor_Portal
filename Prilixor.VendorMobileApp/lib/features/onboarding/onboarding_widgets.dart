@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/models/vendor_onboarding_model.dart';
 import '../../core/theme.dart';
@@ -533,6 +534,7 @@ class OnboardingTextField extends StatelessWidget {
   final int? maxLength;
   final TextCapitalization textCapitalization;
   final Widget? suffix;
+  final List<TextInputFormatter>? inputFormatters;
 
   const OnboardingTextField({
     super.key,
@@ -548,6 +550,7 @@ class OnboardingTextField extends StatelessWidget {
     this.maxLength,
     this.textCapitalization = TextCapitalization.none,
     this.suffix,
+    this.inputFormatters,
   });
 
   String get _displayLabel {
@@ -580,6 +583,7 @@ class OnboardingTextField extends StatelessWidget {
             keyboardType: keyboardType,
             onChanged: onChanged,
             maxLength: maxLength,
+            inputFormatters: inputFormatters,
             textCapitalization: textCapitalization,
             style: const TextStyle(color: Colors.white, fontSize: 15),
             decoration: InputDecoration(

@@ -1,6 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff } from "lucide-react";
+import {
+  maskIndianMobileInput,
+  normalizeIndianMobileDigits,
+  optionalIndianMobileError,
+} from "@/app/helpers/indianMobilePhone";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
@@ -91,7 +96,11 @@ const CustomerSettings = () => {
   };
 
   const saveProfileMut = useMutation({
-    mutationFn: () => customerApi.updateProfile(fullName.trim(), phone.trim() || undefined),
+    mutationFn: () =>
+      customerApi.updateProfile(
+        fullName.trim(),
+        phone.trim() ? normalizeIndianMobileDigits(phone) : undefined,
+      ),
     onSuccess: () => {
       toast.success("Profile updated.");
       queryClient.invalidateQueries({ queryKey: ["customer-profile"] });
@@ -105,6 +114,8 @@ const CustomerSettings = () => {
     if (fullName.trim().length < 2) {
       errors.fullName = "Please enter your full name.";
     }
+    const phoneErr = optionalIndianMobileError(phone);
+    if (phoneErr) errors.phone = phoneErr;
     if (Object.keys(errors).length > 0) {
       setProfileFieldErrors(errors);
       toast.error("Please fill in the required fields.");
@@ -208,7 +219,25 @@ const CustomerSettings = () => {
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="customer-settings-phone">Phone</Label>
-                    <Input id="customer-settings-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                    <Input
+                      id="customer-settings-phone"
+                      type="tel"
+                      inputMode="numeric"
+                      autoComplete="tel"
+                      placeholder="9876543210"
+                      value={phone}
+                      onChange={(e) => {
+                        setPhone(maskIndianMobileInput(e.target.value));
+                        clearProfileFieldError("phone");
+                      }}
+                      className={profileFieldErrors.phone ? "border-destructive" : ""}
+                    />
+                    <FieldError message={profileFieldErrors.phone} />
+                    {!profileFieldErrors.phone && (
+                      <p className="text-[11px] text-muted-foreground">
+                        10-digit Indian mobile starting with 6–9 (optional).
+                      </p>
+                    )}
                   </div>
                   <Button type="submit" disabled={saveProfileMut.isPending}>
                     Save changes

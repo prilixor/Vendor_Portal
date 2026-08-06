@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,6 +15,7 @@ import '../../shared/widgets/state_city_picker.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/device_location.dart';
+import '../../core/utils/indian_mobile_phone.dart';
 import '../../core/utils/multipart_file_util.dart';
 import '../../core/utils/place_search.dart';
 import 'document_preview_screen.dart';
@@ -348,10 +350,18 @@ class _ProfileTabState extends State<_ProfileTab> {
     final current = widget.profile;
     if (vendorId == null || current == null) return;
 
+    final phoneErr = IndianMobilePhone.requiredError(_phoneController.text);
+    if (phoneErr != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(phoneErr), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+
     final updated = current.copyWith(
       businessName: _businessController.text.trim(),
       ownerName: _ownerController.text.trim(),
-      supportPhone: _phoneController.text.trim(),
+      supportPhone: IndianMobilePhone.normalizeDigits(_phoneController.text),
       gstNumber: _gstController.text.trim().isEmpty ? null : _gstController.text.trim(),
       addressLine1: _address1Controller.text.trim(),
       addressLine2: _address2Controller.text.trim().isEmpty ? null : _address2Controller.text.trim(),
@@ -472,7 +482,11 @@ class _ProfileTabState extends State<_ProfileTab> {
               OnboardingTextField(
                 controller: _phoneController,
                 label: 'Support phone *',
+                hint: '9876543210',
+                helperText: 'Indian mobile: 10 digits starting with 6–9',
                 keyboardType: TextInputType.phone,
+                maxLength: 10,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               ),
               OnboardingTextField(
                 controller: _gstController,

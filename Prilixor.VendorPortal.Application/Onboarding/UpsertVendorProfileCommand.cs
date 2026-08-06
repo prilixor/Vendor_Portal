@@ -1,5 +1,6 @@
 using FluentValidation;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
@@ -27,7 +28,10 @@ public sealed class UpsertVendorProfileCommandValidator : AbstractValidator<Upse
         RuleFor(x => x.VendorId).NotEmpty();
         RuleFor(x => x.BusinessName).NotEmpty().MaximumLength(255);
         RuleFor(x => x.OwnerName).NotEmpty().MaximumLength(255);
-        RuleFor(x => x.SupportPhone).NotEmpty().MaximumLength(20);
+        RuleFor(x => x.SupportPhone)
+            .NotEmpty()
+            .Must(IndianMobilePhone.IsValid)
+            .WithMessage(IndianMobilePhone.InvalidMessage);
         RuleFor(x => x.AddressLine1).NotEmpty().MaximumLength(255);
         RuleFor(x => x.City).NotEmpty().MaximumLength(100);
         RuleFor(x => x.State).NotEmpty().MaximumLength(100);
@@ -60,9 +64,32 @@ internal sealed class UpsertVendorProfileCommandHandler(IVendorOnboardingReposit
             };
         }
 
+        if (!IndianMobilePhone.TryNormalize(request.SupportPhone, out var normalizedPhone))
+        {
+            return Result.Failure<VendorProfileDto>(new Error(
+                "vendors.invalid_support_phone",
+                IndianMobilePhone.InvalidMessage,
+                ErrorCategory.Validation));
+        }
+
+        if (!string.Equals(vendor.SupportPhone, normalizedPhone, StringComparison.Ordinal))
+        {
+            var existingByPhone = await repository.GetVendorByPhoneAsync(normalizedPhone, cancellationToken);
+            if (existingByPhone is not null && existingByPhone.Id != vendorId)
+            {
+                return Result.Failure<VendorProfileDto>(new Error(
+                    "vendors.phone_exists",
+                    "A vendor account already exists for this phone number.",
+                    ErrorCategory.Validation));
+            }
+
+            vendor.SupportPhone = normalizedPhone;
+            await repository.UpdateVendorAsync(vendor, cancellationToken);
+        }
+
         profile.BusinessName = request.BusinessName;
         profile.OwnerName = request.OwnerName;
-        profile.SupportPhone = vendor.SupportPhone;
+        profile.SupportPhone = normalizedPhone;
         profile.GstNumber = request.GstNumber;
         profile.AddressLine1 = request.AddressLine1;
         profile.AddressLine2 = request.AddressLine2;

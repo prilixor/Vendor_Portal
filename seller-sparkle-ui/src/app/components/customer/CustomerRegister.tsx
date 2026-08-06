@@ -7,6 +7,11 @@ import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import {
+  maskIndianMobileInput,
+  normalizeIndianMobileDigits,
+  optionalIndianMobileError,
+} from "@/app/helpers/indianMobilePhone";
 
 const CustomerRegister = () => {
   const { registerCustomer, login } = useAuth();
@@ -24,6 +29,8 @@ const CustomerRegister = () => {
     const e: Record<string, string> = {};
     if (fullName.trim().length < 2) e.fullName = "Enter your full name";
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) e.email = "Valid email required";
+    const phoneErr = optionalIndianMobileError(phone);
+    if (phoneErr) e.phone = phoneErr;
     if (password.length < 8) e.password = "At least 8 characters";
     if (!confirmPassword) e.confirmPassword = "Please confirm your password";
     else if (confirmPassword !== password) e.confirmPassword = "Passwords don't match";
@@ -36,7 +43,10 @@ const CustomerRegister = () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      await registerCustomer(email.trim(), password, fullName.trim(), phone.trim() || undefined);
+      const phoneNormalized = phone.trim()
+        ? normalizeIndianMobileDigits(phone)
+        : undefined;
+      await registerCustomer(email.trim(), password, fullName.trim(), phoneNormalized);
       await login(email.trim(), password, "customer");
       toast.success("Welcome! Your account is ready.");
       window.location.href = "/customer/shop";
@@ -82,7 +92,24 @@ const CustomerRegister = () => {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="phone">Phone (optional)</Label>
-          <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <Input
+            id="phone"
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel"
+            placeholder="9876543210"
+            value={phone}
+            onChange={(e) => setPhone(maskIndianMobileInput(e.target.value))}
+            aria-invalid={!!errors.phone}
+            className={errors.phone ? "border-destructive" : ""}
+          />
+          {errors.phone ? (
+            <p className="text-xs text-destructive">{errors.phone}</p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              10-digit Indian mobile starting with 6–9 (optional).
+            </p>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="password" required>Password</Label>

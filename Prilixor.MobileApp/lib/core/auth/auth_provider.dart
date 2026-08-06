@@ -169,7 +169,7 @@ class AuthProvider extends ChangeNotifier {
           'email': email,
           'password': password,
           'fullName': fullName,
-          if (phone != null && phone.isNotEmpty) 'phoneNumber': phone,
+          if (phone != null && phone.isNotEmpty) 'phone': phone,
         },
       );
       if (response.statusCode == 200 || response.statusCode == 201) {

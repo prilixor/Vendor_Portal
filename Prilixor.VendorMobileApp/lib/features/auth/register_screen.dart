@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/config/app_urls.dart';
+import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import 'login_screen.dart';
@@ -66,11 +67,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_isValidEmail(email)) {
       emailErr = 'Enter a valid email';
     }
-    if (phone.isEmpty) {
-      phoneErr = 'Enter a valid phone number';
-    } else if (phone.length != 10) {
-      phoneErr = 'Phone number must be exactly 10 digits';
-    }
+    phoneErr = IndianMobilePhone.requiredError(phone);
     if (password.length < 8) {
       passwordErr = 'Use at least 8 characters';
     }
@@ -123,7 +120,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final success = await provider.registerVendor(
       email: email,
       password: _passwordController.text,
-      supportPhone: _phoneController.text.trim(),
+      supportPhone: IndianMobilePhone.normalizeDigits(_phoneController.text),
     );
 
     if (!mounted) return;
@@ -241,8 +238,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Icons.phone_outlined,
                     color: Color(0xFF6C63FF),
                   ),
-                  hintText: '1234567890',
+                  hintText: '9876543210',
                   hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.28)),
+                  helperText: 'Indian mobile: 10 digits starting with 6–9',
+                  helperStyle: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    fontSize: 11,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
