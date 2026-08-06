@@ -1749,9 +1749,9 @@ internal sealed class CancelCustomerOrderCommandHandler(
         }
 
         o.Status = "cancelled";
-        // Customer cancel: delete order photos from S3/storage immediately.
-        await CustomerOrderImageLifecycle.PurgeForOrderAsync(
-            customers, uploadStorage, o.Id, deletedBy: request.CustomerId, cancellationToken);
+        // Customer cancel: close photo request + delete images from S3.
+        await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
+            customers, uploadStorage, o.Id, closedReason: "cancelled", deletedBy: request.CustomerId, cancellationToken);
         await customers.UpdateCustomerRentalOrderAsync(o, cancellationToken);
 
         var listingTitleForNotif = row.Listing?.ListingTitle ?? agg.ListingTitle ?? "Listing unavailable";

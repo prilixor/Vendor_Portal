@@ -22,7 +22,9 @@ If your DB names are suffixed (example: `vendor_portal_db_new`, `customer_portal
 
 ## Notes
 
+- Prefer `master_fresh_setup.sql` for a full local bootstrap (includes customer order chat `056`, order images `057`, and vendor photo-request `058`).
 - The `04x` scripts are full standalone scripts and replace the need to execute old incremental `001`..`034` during fresh setup.
+- On an existing DB that already has `057`, run only `058_vendor_order_image_requests.sql` (do not drop `customer_order_images`).
 - `042_vendor_portal_full_schema.sql` includes catalog tables (`product_categories`, `products`) for compatibility with the current staged migration logic.
 - If you are doing a strict final split where catalog exists only in Common DB, we can create a follow-up `vendor-only-without-catalog` variant and update FK/read logic accordingly.
 - For local development in this branch, `appsettings.Development.json` points to `vendor_portal_db_new` and `customer_portal_db_new` by default.

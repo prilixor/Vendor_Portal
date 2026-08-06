@@ -808,6 +808,48 @@ public sealed class CustomerRepository(
             .CountAsync(x => x.CustomerRentalOrderId == customerOrderId && !x.IsDeleted, cancellationToken);
     }
 
+    public async Task AddCustomerOrderImageRequestAsync(CustomerOrderImageRequest request, CancellationToken cancellationToken)
+    {
+        await customerDb.CustomerOrderImageRequests.AddAsync(request, cancellationToken);
+    }
+
+    public Task<CustomerOrderImageRequest?> GetOpenCustomerOrderImageRequestAsync(Guid customerOrderId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImageRequests
+            .FirstOrDefaultAsync(
+                x => x.CustomerRentalOrderId == customerOrderId
+                     && !x.IsDeleted
+                     && x.Status == CustomerOrderImageRequest.StatusOpen,
+                cancellationToken);
+    }
+
+    public Task<CustomerOrderImageRequest?> GetCustomerOrderImageRequestByIdAsync(Guid requestId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImageRequests
+            .FirstOrDefaultAsync(x => x.Id == requestId && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task UpdateCustomerOrderImageRequestAsync(CustomerOrderImageRequest request, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerOrderImageRequests.Update(request);
+        return Task.CompletedTask;
+    }
+
+    public Task<List<CustomerOrderImage>> GetCustomerOrderImagesByRequestIdAsync(Guid requestId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImages
+            .Where(x => x.RequestId == requestId && !x.IsDeleted)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<int> CountCustomerOrderImagesByRequestIdAsync(Guid requestId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImages
+            .CountAsync(x => x.RequestId == requestId && !x.IsDeleted, cancellationToken);
+    }
+
     public async Task<IReadOnlyDictionary<Guid, List<string>>> GetCustomerOrderAssetTagsByOrderIdsAsync(
         IEnumerable<Guid> orderIds,
         CancellationToken cancellationToken)

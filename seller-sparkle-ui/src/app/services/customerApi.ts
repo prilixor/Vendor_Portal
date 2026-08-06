@@ -209,11 +209,22 @@ export interface CustomerOrderApi {
 export interface CustomerOrderImageApi {
   id: string;
   orderId: string;
+  requestId?: string | null;
   fileUrl: string;
   originalFileName?: string | null;
   contentType?: string | null;
   sortOrder: number;
   createdAt: string;
+}
+
+export interface CustomerOrderImageRequestApi {
+  id: string;
+  orderId: string;
+  vendorId: string;
+  status: string;
+  message: string;
+  requestedAt: string;
+  images: CustomerOrderImageApi[];
 }
 
 export interface ExtensionQuoteApi {
@@ -463,24 +474,17 @@ export const customerApi = {
     return apiClient.patch<CustomerOrderApi>(`/customers/me/orders/${encodeURIComponent(orderId)}/cancel`, {});
   },
 
-  getOrderImages(orderId: string): Promise<CustomerOrderImageApi[]> {
-    return apiClient.get<CustomerOrderImageApi[]>(
-      `/customers/me/orders/${encodeURIComponent(orderId)}/images`,
+  async getOrderImageRequest(orderId: string): Promise<CustomerOrderImageRequestApi | null> {
+    const row = await apiClient.get<CustomerOrderImageRequestApi | null | undefined>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/image-request`,
     );
+    return row ?? null;
   },
 
-  uploadOrderImage(orderId: string, file: File): Promise<CustomerOrderImageApi> {
-    const formData = new FormData();
-    formData.append("file", file);
-    return apiClient.postForm<CustomerOrderImageApi>(
-      `/customers/me/orders/${encodeURIComponent(orderId)}/images`,
-      formData,
-    );
-  },
-
-  deleteOrderImage(orderId: string, imageId: string): Promise<void> {
-    return apiClient.delete(
-      `/customers/me/orders/${encodeURIComponent(orderId)}/images/${encodeURIComponent(imageId)}`,
+  createOrderImageRequest(orderId: string): Promise<CustomerOrderImageRequestApi> {
+    return apiClient.post<CustomerOrderImageRequestApi>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/image-request`,
+      {},
     );
   },
 

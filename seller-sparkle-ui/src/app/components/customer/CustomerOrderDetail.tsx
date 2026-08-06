@@ -1,11 +1,16 @@
 import { useParams, Link } from "react-router-dom";
 import { useState, useMemo, useRef, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Headset, ImagePlus, Loader2, MessageCircle, X } from "lucide-react";
-import { customerApi, type CustomerOrderImageApi } from "@/app/services/customerApi";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Check, Headset, Images, Loader2, MessageCircle } from "lucide-react";
+import {
+  customerApi,
+  type CustomerOrderImageApi,
+  type CustomerOrderImageRequestApi,
+} from "@/app/services/customerApi";
 import { chatApi } from "@/app/services/chatApi";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
+import { Checkbox } from "@/app/components/ui/checkbox";
 import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { Skeleton } from "@/app/components/ui/skeleton";
@@ -61,13 +66,21 @@ function isCustomerOrderCancellable(status: string): boolean {
 
 const MAX_ORDER_IMAGES = 5;
 
-function canSendOrderImagesToVendor(status: string): boolean {
-  const compact = status.trim().toLowerCase().replace(/\s+/g, "_");
+function orderStatusCompact(status: string): string {
+  return status.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+/** Photo request is only meaningful once a fulfilling vendor is assigned. */
+function canRequestOrderImages(status: string): boolean {
+  const compact = orderStatusCompact(status);
+  return compact === "pending" || compact === "confirmed" || compact === "in_transit";
+}
+
+function isAwaitingVendorForPhotos(status: string): boolean {
+  const compact = orderStatusCompact(status);
   return (
-    compact === "pending" ||
     compact === "awaiting_vendor_acceptance" ||
-    compact === "confirmed" ||
-    compact === "in_transit"
+    compact === "pending_vendor_acceptance"
   );
 }
 
@@ -215,7 +228,8 @@ const CustomerOrderDetail = () => {
   const [buyoutDialogOpen, setBuyoutDialogOpen] = useState(false);
   const [buyoutQuote, setBuyoutQuote] = useState<BuyoutQuoteApi | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
-  const orderImageInputRef = useRef<HTMLInputElement>(null);
+  const [photoRequestSelection, setPhotoRequestSelection] = useState<string[]>([]);
+  const [photoSelectionInitialized, setPhotoSelectionInitialized] = useState(false);
 
   // Fetch current selected item details
   const currentItemId = selectedItemId || orderId;
@@ -330,55 +344,6 @@ const CustomerOrderDetail = () => {
     onError: (err: Error) => toast.error(err.message || "Failed to process buyout.")
   });
 
-  const {
-    data: orderImages = [],
-    isLoading: orderImagesLoading,
-  } = useQuery({
-    queryKey: ["customer-order-images", currentItemId],
-    queryFn: () => customerApi.getOrderImages(currentItemId!),
-    enabled: !!currentItemId,
-  });
-
-  const uploadOrderImageMut = useMutation({
-    mutationFn: (file: File) => customerApi.uploadOrderImage(currentItemId!, file),
-    onSuccess: () => {
-      toast.success("Photo sent to vendor.");
-      queryClient.invalidateQueries({ queryKey: ["customer-order-images", currentItemId] });
-    },
-    onError: (err: Error) => toast.error(err.message || "Failed to upload photo."),
-  });
-
-  const deleteOrderImageMut = useMutation({
-    mutationFn: (imageId: string) => customerApi.deleteOrderImage(currentItemId!, imageId),
-    onSuccess: () => {
-      toast.success("Photo removed.");
-      queryClient.invalidateQueries({ queryKey: ["customer-order-images", currentItemId] });
-    },
-    onError: (err: Error) => toast.error(err.message || "Failed to remove photo."),
-  });
-
-  const handleOrderImagePick = (files: FileList | null) => {
-    if (!files?.length || !currentItemId) return;
-    const remaining = MAX_ORDER_IMAGES - orderImages.length;
-    if (remaining <= 0) {
-      toast.error(`You can send at most ${MAX_ORDER_IMAGES} photos for this order.`);
-      return;
-    }
-    const selected = Array.from(files).slice(0, remaining);
-    for (const file of selected) {
-      if (!file.type.startsWith("image/")) {
-        toast.error("Only image files are allowed.");
-        continue;
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error(`${file.name} is larger than 5 MB.`);
-        continue;
-      }
-      uploadOrderImageMut.mutate(file);
-    }
-    if (orderImageInputRef.current) orderImageInputRef.current.value = "";
-  };
-
   // Find all items belonging to the same order group prefix
   const orderGroupItems = useMemo(() => {
     if (!data || !allOrders) return data ? [data] : [];
@@ -387,6 +352,113 @@ const CustomerOrderDetail = () => {
     const matches = allOrders.filter((o) => o && o.orderNumber && o.orderNumber.split('-').slice(0, 3).join('-') === baseNum);
     return matches.length > 0 ? matches : (data ? [data] : []);
   }, [data, allOrders]);
+
+  const groupItemIds = useMemo(() => orderGroupItems.map((item) => item.id), [orderGroupItems]);
+
+  const imageRequestQueries = useQueries({
+    queries: groupItemIds.map((itemId) => ({
+      queryKey: ["customer-order-image-request", itemId],
+      queryFn: () => customerApi.getOrderImageRequest(itemId),
+      enabled: groupItemIds.length > 0,
+    })),
+  });
+
+  const imageRequestLoading = imageRequestQueries.some((q) => q.isLoading || q.isFetching);
+  const imageRequestsByItemId = useMemo(() => {
+    const map = new Map<string, CustomerOrderImageRequestApi | null>();
+    groupItemIds.forEach((itemId, index) => {
+      map.set(itemId, imageRequestQueries[index]?.data ?? null);
+    });
+    return map;
+  }, [groupItemIds, imageRequestQueries]);
+
+  const photoEligibleItems = useMemo(
+    () =>
+      orderGroupItems.filter(
+        (item) =>
+          canRequestOrderImages(item.status) && !imageRequestsByItemId.get(item.id),
+      ),
+    [orderGroupItems, imageRequestsByItemId],
+  );
+
+  const itemsWithOpenRequest = useMemo(
+    () => orderGroupItems.filter((item) => Boolean(imageRequestsByItemId.get(item.id))),
+    [orderGroupItems, imageRequestsByItemId],
+  );
+
+  const groupPhotoSections = useMemo(() => {
+    return itemsWithOpenRequest.map((item) => {
+      const request = imageRequestsByItemId.get(item.id);
+      return {
+        item,
+        request,
+        images: request?.images ?? [],
+      };
+    });
+  }, [itemsWithOpenRequest, imageRequestsByItemId]);
+
+  const allGroupImages = useMemo(
+    () =>
+      groupPhotoSections.flatMap((section) =>
+        section.images.map((img) => ({
+          ...img,
+          listingTitle: section.item.listingTitle,
+          orderItemId: section.item.id,
+        })),
+      ),
+    [groupPhotoSections],
+  );
+
+  const showPhotosCard =
+    photoEligibleItems.length > 0 ||
+    itemsWithOpenRequest.length > 0 ||
+    orderGroupItems.some((item) => isAwaitingVendorForPhotos(item.status));
+
+  const groupKey = groupItemIds.slice().sort().join("|");
+
+  useEffect(() => {
+    setPhotoSelectionInitialized(false);
+    setPhotoRequestSelection([]);
+  }, [groupKey]);
+
+  useEffect(() => {
+    if (photoSelectionInitialized) return;
+    if (photoEligibleItems.length === 0) return;
+    setPhotoRequestSelection(photoEligibleItems.map((item) => item.id));
+    setPhotoSelectionInitialized(true);
+  }, [photoEligibleItems, photoSelectionInitialized]);
+
+  const createImageRequestMut = useMutation({
+    mutationFn: async (itemIds: string[]) => {
+      const results = await Promise.allSettled(
+        itemIds.map((id) => customerApi.createOrderImageRequest(id)),
+      );
+      const succeeded = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.length - succeeded;
+      return { succeeded, failed, total: results.length };
+    },
+    onSuccess: ({ succeeded, failed, total }) => {
+      if (succeeded > 0) {
+        toast.success(
+          total === 1
+            ? "Photo request sent to the supplier."
+            : `Photo request sent to suppliers for ${succeeded} product${succeeded === 1 ? "" : "s"}.`,
+        );
+      }
+      if (failed > 0) {
+        toast.error(
+          failed === total
+            ? "Failed to send photo request(s)."
+            : `${failed} item${failed === 1 ? "" : "s"} could not be requested.`,
+        );
+      }
+      for (const id of groupItemIds) {
+        queryClient.invalidateQueries({ queryKey: ["customer-order-image-request", id] });
+      }
+      setPhotoSelectionInitialized(false);
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to request photos."),
+  });
 
   // Combined totals for the order group
   const groupTotalAmount = useMemo(() => {
@@ -612,90 +684,231 @@ const CustomerOrderDetail = () => {
         />
       )}
 
-      {/* Photos for vendor (not Admin chat) */}
-      {(canSendOrderImagesToVendor(activeItem.status) || orderImages.length > 0) && (
+      {/* Request vendor photos — order-group aware (all items / selected items) */}
+      {showPhotosCard && (
         <Card className="border-border/80 shadow-sm">
           <CardHeader className="pb-3">
-            <p className="text-lg font-semibold">Photos for vendor</p>
+            <p className="text-lg font-semibold">Request photos from your supplier</p>
             <p className="text-xs text-muted-foreground">
-              Send up to {MAX_ORDER_IMAGES} photos for this item to the vendor
-              {canSendOrderImagesToVendor(activeItem.status)
-                ? " before delivery. Removed automatically after delivery."
-                : ". Uploads are closed after delivery."}
+              {orderGroupItems.length > 1
+                ? `This asks the supplier (vendor) fulfilling each product — not BlinksMed support. Choose items or request all. Up to ${MAX_ORDER_IMAGES} photos per item. Cleared after delivery, cancel, or dispatch failure.`
+                : `This asks the supplier (vendor) for this product — not BlinksMed support chat below. Up to ${MAX_ORDER_IMAGES} photos. Cleared after delivery, cancel, or dispatch failure.`}
             </p>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <input
-              ref={orderImageInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              multiple
-              className="hidden"
-              onChange={(e) => handleOrderImagePick(e.target.files)}
-            />
-
-            {orderImagesLoading ? (
+          <CardContent className="space-y-5">
+            {imageRequestLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Loading photos…
+                Loading photo requests…
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-                {orderImages.map((img: CustomerOrderImageApi) => (
-                  <div
-                    key={img.id}
-                    className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted"
-                  >
-                    <button
-                      type="button"
-                      className="h-full w-full"
-                      onClick={() => setPreviewImageUrl(img.fileUrl)}
-                      aria-label="Preview photo"
-                    >
-                      <img
-                        src={img.fileUrl}
-                        alt={img.originalFileName || "Order photo"}
-                        className="h-full w-full object-cover"
-                      />
-                    </button>
-                    {canSendOrderImagesToVendor(activeItem.status) && (
-                      <button
+              <>
+                {photoEligibleItems.length > 0 && (
+                  <div className="space-y-3">
+                    {orderGroupItems.length > 1 && (
+                      <div className="space-y-2 rounded-lg border border-border/70 bg-muted/30 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Select products (sent to each product’s supplier)
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() =>
+                                setPhotoRequestSelection(photoEligibleItems.map((item) => item.id))
+                              }
+                            >
+                              Select all
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => setPhotoRequestSelection([])}
+                            >
+                              Clear
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {photoEligibleItems.map((item) => {
+                            const checked = photoRequestSelection.includes(item.id);
+                            return (
+                              <label
+                                key={item.id}
+                                className="flex cursor-pointer items-center gap-3 rounded-md border border-transparent px-1 py-1.5 hover:bg-background/80"
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(value) => {
+                                    setPhotoRequestSelection((prev) => {
+                                      if (value === true) {
+                                        return prev.includes(item.id) ? prev : [...prev, item.id];
+                                      }
+                                      return prev.filter((id) => id !== item.id);
+                                    });
+                                  }}
+                                />
+                                <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
+                                  {item.listingTitle}
+                                </span>
+                                <span className="text-[11px] capitalize text-muted-foreground">
+                                  {item.status.replace(/_/g, " ")}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2">
+                      {orderGroupItems.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="default"
+                          disabled={createImageRequestMut.isPending || photoEligibleItems.length === 0}
+                          onClick={() =>
+                            createImageRequestMut.mutate(photoEligibleItems.map((item) => item.id))
+                          }
+                        >
+                          {createImageRequestMut.isPending ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Images className="mr-2 h-4 w-4" />
+                          )}
+                          Request all from suppliers ({photoEligibleItems.length})
+                        </Button>
+                      )}
+                      <Button
                         type="button"
-                        className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                        disabled={deleteOrderImageMut.isPending}
-                        onClick={() => deleteOrderImageMut.mutate(img.id)}
-                        aria-label="Remove photo"
+                        variant="outline"
+                        disabled={
+                          createImageRequestMut.isPending ||
+                          (orderGroupItems.length > 1
+                            ? photoRequestSelection.length === 0
+                            : photoEligibleItems.length === 0)
+                        }
+                        onClick={() => {
+                          const ids =
+                            orderGroupItems.length > 1
+                              ? photoRequestSelection
+                              : photoEligibleItems.map((item) => item.id);
+                          createImageRequestMut.mutate(ids);
+                        }}
                       >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
+                        {createImageRequestMut.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Images className="mr-2 h-4 w-4" />
+                        )}
+                        {orderGroupItems.length > 1
+                          ? `Request selected from suppliers (${photoRequestSelection.length})`
+                          : "Request photos from supplier"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {photoEligibleItems.length === 0 &&
+                  itemsWithOpenRequest.length === 0 &&
+                  orderGroupItems.some((item) => isAwaitingVendorForPhotos(item.status)) && (
+                    <div className="space-y-3">
+                      <p className="text-sm text-muted-foreground">
+                        You can request supplier photos after a supplier accepts each product.
+                      </p>
+                      <Button type="button" variant="outline" disabled>
+                        <Images className="mr-2 h-4 w-4" />
+                        Waiting for supplier acceptance
+                      </Button>
+                    </div>
+                  )}
+
+                {itemsWithOpenRequest.length > 0 && (
+                  <div className="space-y-4">
+                    {allGroupImages.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        {itemsWithOpenRequest.length === 1
+                          ? "Request sent to the supplier. Waiting for photos."
+                          : `Requests sent to suppliers for ${itemsWithOpenRequest.length} products. Waiting for photos.`}
+                      </p>
+                    ) : orderGroupItems.length === 1 ? (
+                      <>
+                        <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+                          {allGroupImages.map((img) => (
+                            <button
+                              key={img.id}
+                              type="button"
+                              className="aspect-square overflow-hidden rounded-lg border border-border bg-muted"
+                              onClick={() => setPreviewImageUrl(img.fileUrl)}
+                              aria-label="Preview photo"
+                            >
+                              <img
+                                src={img.fileUrl}
+                                alt={img.originalFileName || "Vendor photo"}
+                                className="h-full w-full object-cover"
+                              />
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {allGroupImages.length}/{MAX_ORDER_IMAGES} photos received
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Supplier photos for this order ({allGroupImages.length})
+                        </p>
+                        <div className="space-y-4">
+                          {groupPhotoSections.map(({ item, images }) => (
+                            <div key={item.id} className="space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-semibold text-foreground">
+                                  {item.listingTitle}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {images.length === 0
+                                    ? "Waiting on supplier"
+                                    : `${images.length}/${MAX_ORDER_IMAGES} photos`}
+                                </p>
+                              </div>
+                              {images.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">
+                                  Request sent to the supplier — photos not uploaded yet.
+                                </p>
+                              ) : (
+                                <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+                                  {images.map((img: CustomerOrderImageApi) => (
+                                    <button
+                                      key={img.id}
+                                      type="button"
+                                      className="aspect-square overflow-hidden rounded-lg border border-border bg-muted"
+                                      onClick={() => setPreviewImageUrl(img.fileUrl)}
+                                      aria-label={`Preview photo for ${item.listingTitle}`}
+                                    >
+                                      <img
+                                        src={img.fileUrl}
+                                        alt={img.originalFileName || item.listingTitle}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </>
                     )}
                   </div>
-                ))}
-
-                {canSendOrderImagesToVendor(activeItem.status) &&
-                  orderImages.length < MAX_ORDER_IMAGES && (
-                    <button
-                      type="button"
-                      onClick={() => orderImageInputRef.current?.click()}
-                      disabled={uploadOrderImageMut.isPending}
-                      className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-muted/40 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
-                    >
-                      {uploadOrderImageMut.isPending ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <ImagePlus className="h-5 w-5" />
-                      )}
-                      <span className="text-[11px] font-medium">
-                        {uploadOrderImageMut.isPending ? "Uploading…" : "Add photo"}
-                      </span>
-                    </button>
-                  )}
-              </div>
+                )}
+              </>
             )}
-
-            <p className="text-xs text-muted-foreground">
-              {orderImages.length}/{MAX_ORDER_IMAGES} photos · JPEG, PNG, or WebP · max 5 MB each
-            </p>
           </CardContent>
         </Card>
       )}
@@ -719,13 +932,13 @@ const CustomerOrderDetail = () => {
             to={`/customer/support?order=${encodeURIComponent(activeItem.orderNumber)}`}
           >
             <Headset className="mr-2 h-4 w-4" />
-            Contact support
+            BlinksMed support
           </Link>
         </Button>
 
         <Button variant="outline" onClick={() => setIsChatOpen(true)}>
           <MessageCircle className="mr-2 h-4 w-4" />
-          Chat with Admin
+          Chat with BlinksMed
         </Button>
 
         {isCustomerOrderCancellable(activeItem.status) && (
@@ -893,8 +1106,9 @@ const CustomerOrderDetail = () => {
       <Sheet open={isChatOpen} onOpenChange={setIsChatOpen}>
         <SheetContent className="flex h-full w-full max-w-full flex-col gap-0 p-0 sm:max-w-md">
           <SheetHeader className="space-y-1 border-b p-4 pr-12 text-left sm:p-6">
-            <SheetTitle>Chat with Admin</SheetTitle>
+            <SheetTitle>Chat with BlinksMed support</SheetTitle>
             <SheetDescription className="text-xs break-words">
+              Message BlinksMed about this order — not your product supplier.{" "}
               Order: {activeItem.orderNumber} • {activeItem.listingTitle}
             </SheetDescription>
           </SheetHeader>
@@ -904,7 +1118,9 @@ const CustomerOrderDetail = () => {
                 <MessageCircle className="h-10 w-10 text-muted-foreground" />
                 <div>
                   <p className="text-sm font-semibold">No active conversation</p>
-                  <p className="text-xs text-muted-foreground">Start a chat with BlinksMed support about this order.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Start a chat with BlinksMed support about this order (not the supplier).
+                  </p>
                 </div>
                 <Button
                   onClick={() => createSessionMut.mutate()}

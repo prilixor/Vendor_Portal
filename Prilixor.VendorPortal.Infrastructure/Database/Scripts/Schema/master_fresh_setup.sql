@@ -57,6 +57,9 @@ CREATE DATABASE customer_portal_db;
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Schema/046_customer_dispatch_split_and_buy.sql'
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Schema/049_customer_chat_and_preferences.sql'
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Schema/051_rental_extensions_buyouts.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Schema/056_customer_admin_order_chat.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Schema/057_customer_order_images.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Schema/058_vendor_order_image_requests.sql'
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/026_add_customer_favorites.sql'
 
 \c common_portal_db
@@ -114,6 +117,6 @@ CREATE DATABASE customer_portal_db;
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/068_website_content_management.sql'
 
 \echo 'All schemas and migrations applied successfully.'
-\echo 'Coverage: admin/common/vendor/customer, medical, chemicals, variants, assets, favorites, RBAC, weekly rent, thumbnails, website content.'
+\echo 'Coverage: admin/common/vendor/customer, medical, chemicals, variants, assets, favorites, RBAC, order chat, order photo requests, weekly rent, thumbnails, website content.'
 \echo 'Next: enable BootstrapSuperAdmin in appsettings, start the API once, then disable bootstrap.'
 

@@ -41,7 +41,7 @@ Defined in `lib/core/config/app_urls.dart` and wired through `ApiClient`.
 |----------|--------|--------|
 | Auth (login / register / forgot / verify) | Auth screens | Done |
 | Order Requests | Requests tab | Done — refine grouping like web |
-| Orders + Detail | Orders tab + detail | Done — Customer search + filter sheet; web status tabs; expirations entry |
+| Orders + Detail | Orders tab + detail | Done — search/filter; photo-request upload (max 5) when customer asks |
 | Expirations | From Orders (timer icon) | Done |
 | Notifications | Alerts tab | Done — unread badge, mark read, web deep links |
 | Chats | Profile → Chats | Done — customer order chat |
