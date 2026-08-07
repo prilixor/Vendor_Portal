@@ -657,7 +657,9 @@ const CustomerOrderDetail = () => {
                     {activeItem.rentalNormalPrice != null &&
                     Number(activeItem.rentalNormalPrice) > Number(activeItem.rentalFinalPrice) ? (
                       <>
-                        <span className="line-through">₹{Number(activeItem.rentalNormalPrice).toFixed(0)}</span>{" "}
+                        <span className="strike-diagonal font-semibold text-rose-500 dark:text-rose-400">
+                          ₹{Number(activeItem.rentalNormalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                        </span>{" "}
                       </>
                     ) : null}
                     Plan price ₹{Number(activeItem.rentalFinalPrice).toFixed(0)}

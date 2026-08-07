@@ -24,6 +24,8 @@ import { CustomerMedicalReference, type DoctorRefSelection } from "./CustomerMed
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
 import { BackLink } from "@/app/components/shared/BackLink";
+import { StruckPrice } from "@/app/components/shared/RentalPeriodPlanDropdown";
+import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
 import { formatRentalDuration } from "@/app/helpers/rentalPeriod";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
@@ -510,14 +512,18 @@ const CustomerCheckout = () => {
                       <span>{l.title}</span>
                       {l.orderType === "rent" && isPlanBased ? (
                         <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                          {l.rentalDurationLabel || `${l.rentalDurationDays} days`}
+                          {dayPlanTitle(Number(l.rentalDurationDays ?? l.rentalDays ?? 0))}
                           {" · Starts on delivery"}
                           {l.rentalNormalPrice != null &&
                           Number(l.rentalNormalPrice) > Number(l.rentalFinalPrice) ? (
                             <>
                               {" · "}
-                              <span className="line-through">₹{Number(l.rentalNormalPrice).toFixed(0)}</span>{" "}
-                              ₹{Number(l.rentalFinalPrice).toFixed(0)}
+                              <StruckPrice className="text-[11px] font-semibold text-rose-500 dark:text-rose-400">
+                                ₹{Number(l.rentalNormalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                              </StruckPrice>{" "}
+                              <span className="font-semibold text-foreground">
+                                ₹{Number(l.rentalFinalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                              </span>
                             </>
                           ) : null}
                         </span>

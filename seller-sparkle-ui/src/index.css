@@ -173,9 +173,14 @@
     top: 50%;
     height: 1.5px;
     background: currentColor;
+    opacity: 0.9;
     transform: rotate(-18deg);
     transform-origin: center;
     pointer-events: none;
+  }
+  .dark .strike-diagonal::after {
+    height: 1.75px;
+    opacity: 1;
   }
 }
 

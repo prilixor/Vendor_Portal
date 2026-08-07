@@ -15,6 +15,7 @@ import {
   RentalPeriodPlanDropdown,
   sortActiveRentalPlans,
 } from "@/app/components/shared/RentalPeriodPlanDropdown";
+import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
 import { toast } from "sonner";
 import {
   AlertCircle,
@@ -295,7 +296,10 @@ const CustomerListingDetail = () => {
       ...(planBased
         ? {
             rentalPricingPlanId: selectedPlan.id,
-            rentalDurationLabel: selectedPlan.durationLabel,
+            rentalDurationLabel: dayPlanTitle(
+              selectedPlan.durationDays,
+              selectedPlan.durationLabel,
+            ),
             rentalDurationDays: selectedPlan.durationDays,
             rentalNormalPrice: selectedPlan.normalPrice,
             rentalDiscountType: selectedPlan.discountType,

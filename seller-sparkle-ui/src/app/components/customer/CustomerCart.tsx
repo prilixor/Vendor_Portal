@@ -12,6 +12,8 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
 import { BackLink } from "@/app/components/shared/BackLink";
+import { StruckPrice } from "@/app/components/shared/RentalPeriodPlanDropdown";
+import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
 import {
   RENTAL_UNIT_LABELS,
   RENTAL_UNITS_VISIBLE_IN_UI,
@@ -20,6 +22,10 @@ import {
   rateForUnit,
   type RentalPeriodUnit,
 } from "@/app/helpers/rentalPeriod";
+
+function formatCartInr(value: number): string {
+  return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
 
 function CartThumb({ url, title }: { url?: string | null; title: string }) {
   const [failed, setFailed] = useState(false);
@@ -363,57 +369,57 @@ function CartLineCard({
 
         <div className="min-w-0 flex-1 flex flex-col justify-center">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 space-y-1">
+            <div className="min-w-0 space-y-1.5">
               <Link
                 to={listingTo}
                 className="block text-base font-bold leading-snug tracking-tight hover:text-primary sm:text-[17px]"
               >
                 {line.title}
               </Link>
-              <p className="text-xs leading-relaxed text-muted-foreground tabular-nums sm:text-[13px]">
-                {actualOrderType === "buy" ? (
-                  <>₹{linePrice.toFixed(0)} each</>
-                ) : isPlanBased ? (
-                  <>
-                    {line.rentalDurationLabel || `${line.rentalDurationDays} days`}
-                    {planSavings > 0 ? (
-                      <>
-                        <span className="mx-1.5 text-border">·</span>
-                        <span className="line-through">₹{Number(line.rentalNormalPrice).toFixed(0)}</span>{" "}
-                        <span className="font-medium text-foreground">
-                          ₹{Number(line.rentalFinalPrice).toFixed(0)}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="mx-1.5 text-border">·</span>
-                        ₹{Number(line.rentalFinalPrice).toFixed(0)}
-                      </>
-                    )}
-                    <span className="mx-1.5 text-border">·</span>
-                    Deposit ₹{line.securityDeposit.toFixed(0)}
-                  </>
-                ) : (
-                  <>
-                    ₹{unitRate.toFixed(0)}
-                    {RENTAL_UNIT_LABELS[line.rentalPeriodUnit].per}
-                    <span className="mx-1.5 text-border">·</span>
-                    {formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)}
-                    <span className="mx-1.5 text-border">·</span>
-                    Deposit ₹{line.securityDeposit.toFixed(0)}
-                  </>
-                )}
-              </p>
-              {isPlanBased ? (
-                <p className="text-[11px] text-muted-foreground">
-                  Starts on delivery · {line.rentalDurationDays ?? line.rentalDays} day rental
+              {actualOrderType === "buy" ? (
+                <p className="text-[13px] font-medium tabular-nums text-muted-foreground">
+                  {formatCartInr(linePrice)} each
                 </p>
-              ) : null}
+              ) : isPlanBased ? (
+                <>
+                  <p className="text-[13px] font-semibold tracking-tight text-foreground">
+                    {dayPlanTitle(Number(line.rentalDurationDays ?? line.rentalDays ?? 0))}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] tabular-nums">
+                    {planSavings > 0 ? (
+                      <StruckPrice className="text-[13px] font-semibold text-rose-500 dark:text-rose-400">
+                        {formatCartInr(Number(line.rentalNormalPrice))}
+                      </StruckPrice>
+                    ) : null}
+                    <span className="font-bold text-foreground">
+                      {formatCartInr(Number(line.rentalFinalPrice))}
+                    </span>
+                    <span className="text-border" aria-hidden>
+                      ·
+                    </span>
+                    <span className="font-medium text-muted-foreground">
+                      Deposit {formatCartInr(line.securityDeposit)}
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-medium text-muted-foreground">
+                    Starts on delivery · {line.rentalDurationDays ?? line.rentalDays} day rental
+                  </p>
+                </>
+              ) : (
+                <p className="text-[13px] font-medium tabular-nums text-muted-foreground">
+                  {formatCartInr(unitRate)}
+                  {RENTAL_UNIT_LABELS[line.rentalPeriodUnit].per}
+                  <span className="mx-1.5 text-border">·</span>
+                  {formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)}
+                  <span className="mx-1.5 text-border">·</span>
+                  Deposit {formatCartInr(line.securityDeposit)}
+                </p>
+              )}
             </div>
 
             <div className="flex shrink-0 flex-col items-end gap-1">
               <p className="text-lg font-bold tracking-tight tabular-nums sm:text-xl">
-                ₹{lineRent.toFixed(0)}
+                {formatCartInr(lineRent)}
               </p>
               <Button
                 variant="ghost"
@@ -784,12 +790,12 @@ const CustomerCart = () => {
           <div className="space-y-6">
             {equipmentLines.length > 0 ? (
               <section className="space-y-2.5">
-                <div className="flex items-baseline justify-between gap-2 px-0.5">
+                <div className="flex items-center justify-between gap-2 px-0.5">
                   <h2 className="text-sm font-semibold tracking-tight">Equipment</h2>
-                  <p className="text-xs text-muted-foreground">
+                  <span className="inline-flex items-center rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
                     {equipmentLines.length}{" "}
-                    {equipmentLines.length === 1 ? "item" : "items"} · rent or buy
-                  </p>
+                    {equipmentLines.length === 1 ? "item" : "items"}
+                  </span>
                 </div>
                 <div className="space-y-3">{equipmentLines.map(renderLine)}</div>
               </section>
