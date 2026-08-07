@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X } from "lucide-react";
+import { BrandMark } from "@/app/components/shared/BrandMark";
 import { WebsiteSettingsDto } from "@/app/services/websiteContentApi";
 
 interface LandingHeaderProps {
@@ -62,16 +63,9 @@ export const LandingHeader = ({ activeSection = "home", onSectionClick, settings
 
   return (
     <header className={`site-header ${isScrolled ? "is-scrolled" : ""}`} id="siteHeader">
-      <Link to="/" className="logo" id="logoHome" onClick={() => setIsMobileMenuOpen(false)}>
-        <svg className="logo-mark" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-          <path d="M24 8c-4-6-14-6-17 1-3 8 3 15 17 27 14-12 20-19 17-27-3-7-13-7-17-1z" fill="var(--teal-mid)" opacity="0.9" />
-          <circle cx="18" cy="20" r="9" fill="var(--white)" />
-          <path d="M18 15v10M13 20h10" stroke="var(--teal-dark)" strokeWidth="2.6" strokeLinecap="round" />
-        </svg>
-        <div className="logo-text">
-          <div className="name">Blinks<span>Med</span></div>
-          <div className="tag">Simplified Healthcare</div>
-        </div>
+      <Link to="/" className="logo" id="logoHome" onClick={() => setIsMobileMenuOpen(false)} aria-label="BlinksMed home">
+        {/* Full lockup already includes BLINKSMED + Buy | Rent | Care */}
+        <BrandMark size="lg" className="logo-mark shadow-none h-14 w-14 sm:h-16 sm:w-16" />
       </Link>
 
       <nav className={`main-nav ${isMobileMenuOpen ? "is-open" : ""}`} aria-label="Primary">
