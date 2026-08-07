@@ -15,6 +15,7 @@ import { TablePagination } from "@/app/components/shared/TablePagination";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
+import { SearchableSelect } from "@/app/components/shared/SearchableSelect";
 import { ProductListing } from "@/app/models";
 import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText, Loader2, Package, FlaskConical, Shield } from "lucide-react";
 import { toast } from "sonner";
@@ -1324,35 +1325,33 @@ const Products = () => {
                         <span className="ml-1.5 text-xs font-normal text-muted-foreground">(locked)</span>
                       ) : null}
                     </Label>
-                    <Select
+                    <SearchableSelect
+                      aria-label="Category"
                       value={editing.categoryId}
-                      onValueChange={(v) => {
+                      disabled={!!editing.id}
+                      placeholder="Search category…"
+                      searchPlaceholder="Search category…"
+                      emptyText="No category found."
+                      triggerClassName={cn(
+                        editing.id && "bg-muted/40",
+                        fieldErrors.categoryId && "border-destructive",
+                      )}
+                      options={categories
+                        .filter((c) =>
+                          catalogProducts.some(
+                            (p) =>
+                              p.categoryId === c.id &&
+                              (activeTab === "chemical"
+                                ? isChemicalCatalogProduct(p)
+                                : !isChemicalCatalogProduct(p)),
+                          ),
+                        )
+                        .map((c) => ({ value: c.id, label: c.name }))}
+                      onChange={(v) => {
                         onCategoryChange(v);
                         clearFieldError("categoryId");
                       }}
-                      disabled={!!editing.id}
-                    >
-                      <SelectTrigger className={cn(editing.id && "bg-muted/40", fieldErrors.categoryId && "border-destructive")}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories
-                          .filter((c) =>
-                            catalogProducts.some(
-                              (p) =>
-                                p.categoryId === c.id &&
-                                (activeTab === "chemical"
-                                  ? isChemicalCatalogProduct(p)
-                                  : !isChemicalCatalogProduct(p)),
-                            ),
-                          )
-                          .map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                    />
                     <FieldError message={fieldErrors.categoryId} />
                   </div>
                   <div className="space-y-1.5">
@@ -1362,10 +1361,27 @@ const Products = () => {
                         <span className="ml-1.5 text-xs font-normal text-muted-foreground">(locked)</span>
                       ) : null}
                     </Label>
-                    <Select
+                    <SearchableSelect
+                      aria-label="Product"
                       value={editing.productId}
                       disabled={!!editing.id}
-                      onValueChange={(v) => {
+                      placeholder="Search product…"
+                      searchPlaceholder="Search product…"
+                      emptyText="No product found."
+                      triggerClassName={cn(
+                        editing.id && "bg-muted/40",
+                        fieldErrors.productId && "border-destructive",
+                      )}
+                      options={catalogProducts
+                        .filter(
+                          (p) =>
+                            p.categoryId === editing.categoryId &&
+                            (activeTab === "chemical"
+                              ? isChemicalCatalogProduct(p)
+                              : !isChemicalCatalogProduct(p)),
+                        )
+                        .map((p) => ({ value: p.id, label: p.name }))}
+                      onChange={(v) => {
                         const selected = catalogProducts.find((p) => p.id === v);
                         setEditing({
                           ...editing,
@@ -1387,26 +1403,7 @@ const Products = () => {
                         });
                         clearFieldError("productId");
                       }}
-                    >
-                      <SelectTrigger className={cn(editing.id && "bg-muted/40", fieldErrors.productId && "border-destructive")}>
-                        <SelectValue placeholder="Choose product" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {catalogProducts
-                          .filter(
-                            (p) =>
-                              p.categoryId === editing.categoryId &&
-                              (activeTab === "chemical"
-                                ? isChemicalCatalogProduct(p)
-                                : !isChemicalCatalogProduct(p)),
-                          )
-                          .map((p) => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                    />
                     <FieldError message={fieldErrors.productId} />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
