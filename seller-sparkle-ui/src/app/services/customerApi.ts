@@ -305,6 +305,17 @@ export interface PlaceCustomerOrdersResultApi {
   }>;
 }
 
+export interface CustomerCheckoutApi {
+  checkoutSessionId: string;
+  razorpayKeyId: string;
+  razorpayOrderId?: string | null;
+  amount: number;
+  currency: string;
+  paymentLinkUrl?: string | null;
+  orders: CustomerOrderApi[];
+  failedLines: PlaceCustomerOrdersResultApi["failedLines"];
+}
+
 export interface CustomerNotificationApi {
   id: string;
   title: string;
@@ -446,6 +457,37 @@ export const customerApi = {
         rentalStartDate: l.rentalStartDate || undefined,
       })),
     });
+  },
+
+  createCheckout(payload: {
+    customerAddressId?: string | null;
+    deliveryOption: string;
+    lines: CartLinePayload[];
+  }): Promise<CustomerCheckoutApi> {
+    return apiClient.post<CustomerCheckoutApi>("/customers/me/payments/checkout", {
+      customerAddressId: payload.customerAddressId ?? undefined,
+      deliveryOption: payload.deliveryOption,
+      lines: payload.lines.map((l) => ({
+        listingId: l.listingId,
+        quantity: l.quantity,
+        rentalDays: l.rentalDays,
+        rentalPeriodUnit: l.rentalPeriodUnit ?? "day",
+        orderType: l.orderType ?? "rent",
+        productVariantId: l.productVariantId,
+        doctorId: l.doctorId || undefined,
+        rentalPricingPlanId: l.rentalPricingPlanId || undefined,
+        rentalStartDate: l.rentalStartDate || undefined,
+      })),
+    });
+  },
+
+  verifyCheckout(payload: {
+    checkoutSessionId: string;
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature: string;
+  }): Promise<CustomerCheckoutApi> {
+    return apiClient.post<CustomerCheckoutApi>("/customers/me/payments/verify", payload);
   },
 
   quoteOrders(payload: {

@@ -39,6 +39,8 @@ public class CustomerRentalOrder : AuditableEntity<Guid>, ISoftDelete
     public decimal? RentalFinalPrice { get; set; }
     /// <summary>Set when an admin staff member placed the order on behalf of the customer.</summary>
     public Guid? PlacedByAdminId { get; set; }
+    /// <summary>Checkout session that must be paid before dispatch starts.</summary>
+    public Guid? CheckoutSessionId { get; set; }
 
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

@@ -5,6 +5,7 @@ using Prilixor.VendorPortal.API.EndPoints.Vendors;
 using Prilixor.VendorPortal.API.Extensions;
 using Prilixor.VendorPortal.Application.Customers;
 using Prilixor.VendorPortal.Application.Onboarding;
+using Prilixor.VendorPortal.Domain.Customers;
 
 namespace Prilixor.VendorPortal.API.EndPoints.Admin;
 
@@ -103,7 +104,7 @@ public sealed class CartLineApiRequest
 }
 
 public sealed class AdminPlaceCustomerOrdersEndpoint(IMediator mediator)
-    : Endpoint<AdminPlaceCustomerOrdersRequest, Results<Ok<PlaceCustomerOrdersResultDto>, ProblemHttpResult>>
+    : Endpoint<AdminPlaceCustomerOrdersRequest, Results<Ok<CustomerCheckoutDto>, ProblemHttpResult>>
 {
     public override void Configure()
     {
@@ -112,7 +113,7 @@ public sealed class AdminPlaceCustomerOrdersEndpoint(IMediator mediator)
         Policies($"Perm:{AdminPermissions.CustomersPlaceOrder}");
     }
 
-    public override async Task<Results<Ok<PlaceCustomerOrdersResultDto>, ProblemHttpResult>> ExecuteAsync(
+    public override async Task<Results<Ok<CustomerCheckoutDto>, ProblemHttpResult>> ExecuteAsync(
         AdminPlaceCustomerOrdersRequest req, CancellationToken ct)
     {
         var adminIdStr = HttpContext.ResolveAdminUserId();
@@ -136,8 +137,13 @@ public sealed class AdminPlaceCustomerOrdersEndpoint(IMediator mediator)
             l.ProductVariantId, l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber,
             l.RentalPricingPlanId, l.RentalStartDate)).ToList();
 
-        var result = await mediator.Send(new PlaceCustomerOrdersCommand(
-            customerId, addressId, req.DeliveryOption, lines, adminId), ct);
+        var result = await mediator.Send(new CreateCustomerCheckoutCommand(
+            customerId,
+            addressId,
+            req.DeliveryOption,
+            lines,
+            CheckoutSessionSources.AdminPaymentLink,
+            adminId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

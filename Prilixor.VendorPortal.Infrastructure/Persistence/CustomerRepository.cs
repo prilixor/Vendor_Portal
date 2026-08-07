@@ -1305,6 +1305,38 @@ public sealed class CustomerRepository(
     public Task SaveCommonChangesAsync(CancellationToken cancellationToken) =>
         commonDb.SaveChangesAsync(cancellationToken);
 
+    public async Task AddCheckoutSessionAsync(CustomerCheckoutSession session, CancellationToken cancellationToken) =>
+        await customerDb.CustomerCheckoutSessions.AddAsync(session, cancellationToken);
+
+    public Task UpdateCheckoutSessionAsync(CustomerCheckoutSession session, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerCheckoutSessions.Update(session);
+        return Task.CompletedTask;
+    }
+
+    public async Task AddCheckoutSessionOrderAsync(CustomerCheckoutSessionOrder link, CancellationToken cancellationToken) =>
+        await customerDb.CustomerCheckoutSessionOrders.AddAsync(link, cancellationToken);
+
+    public Task<CustomerCheckoutSession?> GetCheckoutSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        customerDb.CustomerCheckoutSessions
+            .Include(x => x.SessionOrders)
+            .FirstOrDefaultAsync(x => x.Id == sessionId && !x.IsDeleted, cancellationToken);
+
+    public Task<CustomerCheckoutSession?> GetCheckoutSessionByRazorpayOrderIdAsync(string razorpayOrderId, CancellationToken cancellationToken) =>
+        customerDb.CustomerCheckoutSessions
+            .Include(x => x.SessionOrders)
+            .FirstOrDefaultAsync(x => x.RazorpayOrderId == razorpayOrderId && !x.IsDeleted, cancellationToken);
+
+    public Task<CustomerCheckoutSession?> GetCheckoutSessionByPaymentLinkIdAsync(string paymentLinkId, CancellationToken cancellationToken) =>
+        customerDb.CustomerCheckoutSessions
+            .Include(x => x.SessionOrders)
+            .FirstOrDefaultAsync(x => x.RazorpayPaymentLinkId == paymentLinkId && !x.IsDeleted, cancellationToken);
+
+    public Task<List<CustomerRentalOrder>> GetOrdersByCheckoutSessionIdAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        customerDb.CustomerRentalOrders
+            .Where(o => o.CheckoutSessionId == sessionId && !o.IsDeleted)
+            .ToListAsync(cancellationToken);
+
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken) =>
 
         customerDb.SaveChangesAsync(cancellationToken);

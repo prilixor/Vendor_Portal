@@ -378,6 +378,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
   const [medicalRefs, setMedicalRefs] = useState<Record<string, MedicalRef>>({});
   const [placeErrors, setPlaceErrors] = useState<string[]>([]);
   const [placedOrders, setPlacedOrders] = useState<{ id: string; orderNumber: string; listingTitle?: string }[]>([]);
+  const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
   const [rentToBuyOpen, setRentToBuyOpen] = useState(false);
   const [rentToBuyInfo, setRentToBuyInfo] = useState<{
     title: string;
@@ -421,6 +422,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     setMedicalRefs({});
     setPlaceErrors([]);
     setPlacedOrders([]);
+    setPaymentLinkUrl(null);
     const def = customer.addresses.find((a) => a.isDefault) ?? customer.addresses[0];
     setAddressId(def?.id ?? "");
   }, [open, customer]);
@@ -810,7 +812,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
         }),
       });
 
-      const placed = result.placedOrders ?? [];
+      const placed = result.orders ?? result.placedOrders ?? [];
       const failed = result.failedLines ?? [];
       if (failed.length > 0 && placed.length === 0) {
         setPlaceErrors(failed.map((f) => f.message || "Order line failed"));
@@ -820,10 +822,14 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
 
       if (failed.length > 0) {
         setPlaceErrors(failed.map((f) => f.message || "Some lines failed"));
-        toast.warning(`Placed ${placed.length}; ${failed.length} line(s) failed`);
+        toast.warning(`Created ${placed.length}; ${failed.length} line(s) failed`);
       }
 
       setPlacedOrders(placed);
+      setPaymentLinkUrl(result.paymentLinkUrl ?? null);
+      if (result.paymentLinkUrl) {
+        toast.success("Payment link emailed to customer");
+      }
       setCart((prev) => {
         if (failed.length === 0) return [];
         const failedIds = new Set(failed.map((f) => f.listingId));
@@ -1444,14 +1450,42 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
               </div>
               <div className="space-y-1">
                 <p className="text-lg font-semibold">
-                  {placedOrders.length > 0 ? "Order placed successfully" : "Order submitted"}
+                  {placedOrders.length > 0 ? "Draft order created — awaiting payment" : "Order submitted"}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {placedOrders.length > 0
-                    ? `${placedOrders.length} order${placedOrders.length === 1 ? "" : "s"} created for ${customer.fullName}.`
+                    ? `${placedOrders.length} order${placedOrders.length === 1 ? "" : "s"} created for ${customer.fullName}. Dispatch starts after the customer pays.`
                     : `Orders for ${customer.fullName} were processed.`}
                 </p>
               </div>
+              {paymentLinkUrl && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-3 text-left space-y-2 max-w-sm mx-auto">
+                  <p className="text-sm font-medium">Payment link (also emailed)</p>
+                  <a
+                    href={paymentLinkUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block text-xs text-primary break-all underline underline-offset-2"
+                  >
+                    {paymentLinkUrl}
+                  </a>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(paymentLinkUrl);
+                        toast.success("Payment link copied");
+                      } catch {
+                        toast.error("Could not copy link");
+                      }
+                    }}
+                  >
+                    Copy link
+                  </Button>
+                </div>
+              )}
               {placedOrders.length > 0 && (
                 <div className="rounded-xl border bg-muted/20 text-left divide-y max-w-sm mx-auto">
                   {placedOrders.map((o) => (
@@ -1528,7 +1562,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                   disabled={saving || cart.length === 0 || customer.addresses.length === 0}
                 >
                   {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShoppingCart className="h-4 w-4 mr-2" />}
-                  Place order{cart.length > 0 ? ` (${cart.length})` : ""}
+                  {`Create & send payment${cart.length > 0 ? ` (${cart.length})` : ""}`}
                 </Button>
               )}
             </>

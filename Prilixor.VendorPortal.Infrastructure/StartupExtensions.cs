@@ -71,6 +71,12 @@ namespace Prilixor.VendorPortal.Infrastructure
             });
             services.AddScoped<IAiSupportService, GroqSupportService>();
 
+            services.AddHttpClient("Razorpay", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+            services.AddScoped<IRazorpayPaymentService, RazorpayPaymentService>();
+
             RegisterVendorStorage(services, configuration, environment);
 
             return services;
@@ -152,6 +158,9 @@ namespace Prilixor.VendorPortal.Infrastructure
 
             services.Configure<CustomerPricingOptions>(
                 configuration.GetSection(CustomerPricingOptions.SectionName));
+
+            services.Configure<RazorpayOptions>(
+                configuration.GetSection(RazorpayOptions.SectionName));
 
             return services;
         }

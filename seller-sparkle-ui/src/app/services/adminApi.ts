@@ -1079,10 +1079,31 @@ export const adminApi = {
       referenceNumber?: string;
     }[];
   }): Promise<{
-    placedOrders: { id: string; orderNumber: string; listingTitle?: string }[];
+    checkoutSessionId: string;
+    razorpayKeyId: string;
+    razorpayOrderId?: string | null;
+    amount: number;
+    currency: string;
+    paymentLinkUrl?: string | null;
+    orders: { id: string; orderNumber: string; listingTitle?: string }[];
     failedLines: { listingId: string; reasonCode: string; message: string }[];
+    /** @deprecated use orders — kept for older UI paths */
+    placedOrders?: { id: string; orderNumber: string; listingTitle?: string }[];
   }> {
-    return apiClient.post(`/admin/customers/${customerId}/orders`, data);
+    const result = await apiClient.post<{
+      checkoutSessionId: string;
+      razorpayKeyId: string;
+      razorpayOrderId?: string | null;
+      amount: number;
+      currency: string;
+      paymentLinkUrl?: string | null;
+      orders: { id: string; orderNumber: string; listingTitle?: string }[];
+      failedLines: { listingId: string; reasonCode: string; message: string }[];
+    }>(`/admin/customers/${customerId}/orders`, data);
+    return {
+      ...result,
+      placedOrders: result.orders,
+    };
   },
 
   async impersonateVendor(vendorId: string): Promise<VendorImpersonationStartDto> {

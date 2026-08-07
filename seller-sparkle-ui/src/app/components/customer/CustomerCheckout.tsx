@@ -5,6 +5,7 @@ import { customerApi } from "@/app/services/customerApi";
 import type { PlaceCustomerOrdersResultApi } from "@/app/services/customerApi";
 import { estimateCartLineRent, useCart } from "@/app/contexts/CartContext";
 import { useAuth } from "@/app/guards/AuthContext";
+import { openRazorpayCheckout } from "@/app/helpers/razorpayCheckout";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Label } from "@/app/components/ui/label";
@@ -144,8 +145,8 @@ const CustomerCheckout = () => {
   const grandTotal = quote?.totalAmount ?? (totalEstimatedRent + totalDeposit + serviceFee + gstAmount);
 
   const placeMutation = useMutation({
-    mutationFn: () =>
-      customerApi.placeOrders({
+    mutationFn: async () => {
+      const checkout = await customerApi.createCheckout({
         deliveryOption: deliveryChoice,
         customerAddressId: addressId || undefined,
         lines: lines.map((l) => ({
@@ -164,28 +165,62 @@ const CustomerCheckout = () => {
             ? { doctorId: medicalRefs[l.listingId]!.doctorId }
             : {}),
         })),
-      }),
-    onSuccess: (result) => {
-      const placedCount = result.placedOrders.length;
-      const failedCount = result.failedLines.length;
-      setFailedLines(failedCount > 0 ? result.failedLines : []);
-      if (placedCount > 0 && failedCount > 0) {
-        const failedDetails = result.failedLines.map((l) => l.message).join(", ");
-        toast.success(`Placed ${placedCount} order(s). Failed lines: ${failedDetails}`);
-      } else if (placedCount > 0) {
-        toast.success(`Placed ${placedCount} order(s).`);
-      } else {
-        const failedDetails = result.failedLines.map((l) => l.message).join(", ");
-        toast.error(`No orders placed. Reason: ${failedDetails}`);
+      });
+
+      if (!checkout.orders?.length) {
+        return { checkout, paid: false as const };
+      }
+      if (!checkout.razorpayOrderId) {
+        throw new Error("Payment could not be started. Please try again.");
       }
 
-      if (placedCount > 0) {
-        clear();
-        queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
-        navigate("/customer/orders");
-      }
+      const payment = await openRazorpayCheckout({
+        key: checkout.razorpayKeyId,
+        amountPaise: Math.round(Number(checkout.amount) * 100),
+        currency: checkout.currency || "INR",
+        orderId: checkout.razorpayOrderId,
+        description: `Pay for ${checkout.orders.length} order(s)`,
+        prefill: {
+          name: user?.name || undefined,
+          email: user?.email || undefined,
+        },
+      });
+
+      const verified = await customerApi.verifyCheckout({
+        checkoutSessionId: checkout.checkoutSessionId,
+        razorpayOrderId: payment.razorpay_order_id,
+        razorpayPaymentId: payment.razorpay_payment_id,
+        razorpaySignature: payment.razorpay_signature,
+      });
+
+      return { checkout: verified, paid: true as const };
     },
-    onError: (err: Error) => toast.error(getUserFriendlyMessage(err, "Unable to place your order. Please try again.")),
+    onSuccess: (result) => {
+      const placedCount = result.checkout.orders.length;
+      const failedCount = result.checkout.failedLines.length;
+      setFailedLines(failedCount > 0 ? result.checkout.failedLines : []);
+      if (placedCount === 0) {
+        const failedDetails = result.checkout.failedLines.map((l) => l.message).join(", ");
+        toast.error(`No orders placed. Reason: ${failedDetails || "Unknown error"}`);
+        return;
+      }
+
+      if (!result.paid) {
+        toast.error("Unable to start payment for these items.");
+        return;
+      }
+
+      if (failedCount > 0) {
+        toast.success(`Paid ${placedCount} order(s). Some lines failed: ${result.checkout.failedLines.map((l) => l.message).join(", ")}`);
+      } else {
+        toast.success(`Payment successful. ${placedCount} order(s) submitted.`);
+      }
+
+      clear();
+      queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+      navigate("/customer/orders");
+    },
+    onError: (err: Error) => toast.error(getUserFriendlyMessage(err, "Unable to complete payment. Please try again.")),
   });
 
   useEffect(() => {
@@ -596,14 +631,14 @@ const CustomerCheckout = () => {
               {placeMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Placing order…
+                  Processing payment…
                 </>
               ) : (
-                "Place order"
+                `Pay ₹${grandTotal.toFixed(0)}`
               )}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
-              You&apos;ll be charged after the vendor confirms.
+              Secure payment via Razorpay. Orders are sent to vendors after payment succeeds.
             </p>
           </CardContent>
         </Card>

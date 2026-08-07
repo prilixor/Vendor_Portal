@@ -1029,3 +1029,74 @@ public sealed class CreateCustomerOrderImageRequestEndpoint(IMediator mediator)
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
+
+public sealed class CreateCustomerCheckoutEndpoint(IMediator mediator)
+    : Endpoint<PlaceCustomerOrdersRequest, Results<Ok<CustomerCheckoutDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/payments/checkout");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerCheckoutDto>, ProblemHttpResult>> ExecuteAsync(PlaceCustomerOrdersRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var lines = req.Lines.ConvertAll(l => new CartLineRequest(
+            l.ListingId, l.Quantity, l.RentalDays, l.RentalPeriodUnit, l.OrderType, l.ProductVariantId,
+            l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber,
+            l.RentalPricingPlanId, l.RentalStartDate));
+
+        var result = await mediator.Send(new CreateCustomerCheckoutCommand(
+            customerId,
+            req.CustomerAddressId,
+            req.DeliveryOption,
+            lines,
+            CheckoutSessionSources.CustomerWeb), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class VerifyCustomerCheckoutRequest
+{
+    public Guid CheckoutSessionId { get; set; }
+    public string RazorpayOrderId { get; set; } = string.Empty;
+    public string RazorpayPaymentId { get; set; } = string.Empty;
+    public string RazorpaySignature { get; set; } = string.Empty;
+}
+
+public sealed class VerifyCustomerCheckoutEndpoint(IMediator mediator)
+    : Endpoint<VerifyCustomerCheckoutRequest, Results<Ok<CustomerCheckoutDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/payments/verify");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerCheckoutDto>, ProblemHttpResult>> ExecuteAsync(VerifyCustomerCheckoutRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var result = await mediator.Send(new VerifyCustomerCheckoutCommand(
+            customerId,
+            req.CheckoutSessionId,
+            req.RazorpayOrderId,
+            req.RazorpayPaymentId,
+            req.RazorpaySignature), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}

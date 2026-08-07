@@ -25,6 +25,8 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
     public DbSet<CustomerOrderDoctorReference> CustomerOrderDoctorReferences => Set<CustomerOrderDoctorReference>();
     public DbSet<CustomerOrderImage> CustomerOrderImages => Set<CustomerOrderImage>();
     public DbSet<CustomerOrderImageRequest> CustomerOrderImageRequests => Set<CustomerOrderImageRequest>();
+    public DbSet<CustomerCheckoutSession> CustomerCheckoutSessions => Set<CustomerCheckoutSession>();
+    public DbSet<CustomerCheckoutSessionOrder> CustomerCheckoutSessionOrders => Set<CustomerCheckoutSessionOrder>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -132,6 +134,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.RentalDiscountValue).HasColumnName("rental_discount_value");
             entity.Property(x => x.RentalFinalPrice).HasColumnName("rental_final_price");
             entity.Property(x => x.PlacedByAdminId).HasColumnName("placed_by_admin_id");
+            entity.Property(x => x.CheckoutSessionId).HasColumnName("checkout_session_id");
             entity.HasOne(x => x.CustomerAddress)
                 .WithMany()
                 .HasForeignKey(x => x.CustomerAddressId)
@@ -139,6 +142,49 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.HasOne(x => x.Customer)
                 .WithMany(x => x.Orders)
                 .HasForeignKey(x => x.CustomerId);
+        });
+
+        modelBuilder.Entity<CustomerCheckoutSession>(entity =>
+        {
+            entity.ToTable("customer_checkout_sessions");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CustomerId).HasColumnName("customer_id");
+            entity.Property(x => x.Source).HasColumnName("source");
+            entity.Property(x => x.Status).HasColumnName("status");
+            entity.Property(x => x.Amount).HasColumnName("amount");
+            entity.Property(x => x.Currency).HasColumnName("currency");
+            entity.Property(x => x.RazorpayOrderId).HasColumnName("razorpay_order_id");
+            entity.Property(x => x.RazorpayPaymentId).HasColumnName("razorpay_payment_id");
+            entity.Property(x => x.RazorpayPaymentLinkId).HasColumnName("razorpay_payment_link_id");
+            entity.Property(x => x.PaymentLinkUrl).HasColumnName("payment_link_url");
+            entity.Property(x => x.Receipt).HasColumnName("receipt");
+            entity.Property(x => x.PaidAt).HasColumnName("paid_at");
+            entity.Property(x => x.PlacedByAdminId).HasColumnName("placed_by_admin_id");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId);
+            entity.HasMany(x => x.SessionOrders)
+                .WithOne(x => x.CheckoutSession)
+                .HasForeignKey(x => x.CheckoutSessionId);
+        });
+
+        modelBuilder.Entity<CustomerCheckoutSessionOrder>(entity =>
+        {
+            entity.ToTable("customer_checkout_session_orders");
+            entity.HasKey(x => new { x.CheckoutSessionId, x.CustomerRentalOrderId });
+            entity.Property(x => x.CheckoutSessionId).HasColumnName("checkout_session_id");
+            entity.Property(x => x.CustomerRentalOrderId).HasColumnName("customer_rental_order_id");
+            entity.HasOne(x => x.CustomerRentalOrder)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerRentalOrderId);
         });
 
         modelBuilder.Entity<CustomerOrderDoctorReference>(entity =>

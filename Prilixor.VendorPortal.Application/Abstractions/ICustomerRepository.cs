@@ -130,6 +130,14 @@ public interface ICustomerRepository
 
     Task SaveCommonChangesAsync(CancellationToken cancellationToken);
 
+    Task AddCheckoutSessionAsync(CustomerCheckoutSession session, CancellationToken cancellationToken);
+    Task UpdateCheckoutSessionAsync(CustomerCheckoutSession session, CancellationToken cancellationToken);
+    Task AddCheckoutSessionOrderAsync(CustomerCheckoutSessionOrder link, CancellationToken cancellationToken);
+    Task<CustomerCheckoutSession?> GetCheckoutSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken);
+    Task<CustomerCheckoutSession?> GetCheckoutSessionByRazorpayOrderIdAsync(string razorpayOrderId, CancellationToken cancellationToken);
+    Task<CustomerCheckoutSession?> GetCheckoutSessionByPaymentLinkIdAsync(string paymentLinkId, CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrder>> GetOrdersByCheckoutSessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }
 

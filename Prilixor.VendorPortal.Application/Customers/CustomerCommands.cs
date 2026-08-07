@@ -449,7 +449,9 @@ public sealed record PlaceCustomerOrdersCommand(
     Guid? CustomerAddressId,
     string DeliveryOption,
     IReadOnlyList<CartLineRequest> Lines,
-    Guid? PlacedByAdminId = null) : ICommand<PlaceCustomerOrdersResultDto>;
+    Guid? PlacedByAdminId = null,
+    /// <summary>When true, create draft orders (awaiting_payment) without vendor dispatch offers.</summary>
+    bool AwaitPayment = false) : ICommand<PlaceCustomerOrdersResultDto>;
 
 public sealed class PlaceCustomerOrdersCommandValidator : AbstractValidator<PlaceCustomerOrdersCommand>
 {
@@ -1262,7 +1264,7 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 RentalPeriodUnit = periodUnit,
                 OrderType = orderType,
                 DeliveryOption = deliveryOption,
-                Status = "awaiting_vendor_acceptance",
+                Status = request.AwaitPayment ? "awaiting_payment" : "awaiting_vendor_acceptance",
                 SubtotalAmount = subtotal,
                 VendorSubtotalAmount = vendorSubtotal,
                 DepositAmount = deposit,
@@ -1310,76 +1312,16 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
             await customers.AddCustomerRentalOrderAsync(order, cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
 
-            var candidateListings = await customers.GetCandidateListingsByProductIdAsync(agg.ProductId, cancellationToken);
-            var eligibleCandidates = new List<(VendorProductListingAggregate Candidate, decimal DistanceKm)>();
-            foreach (var candidate in candidateListings.Where(c => c.VendorId != Guid.Empty))
-            {
-                var candidateListing = await vendors.GetVendorProductListingByIdAsync(candidate.VendorId, candidate.ListingId, cancellationToken);
-                if (candidateListing is null)
-                    continue;
-
-                if (line.ProductVariantId.HasValue)
-                {
-                    var variantInv = await vendors.GetVariantInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
-                    var specificVariant = variantInv.FirstOrDefault(vi => vi.ProductVariantId == line.ProductVariantId.Value);
-                    var varAvailable = specificVariant?.AvailableQuantity ?? 0;
-                    if (varAvailable < line.Quantity)
-                        continue;
-                }
-                else
-                {
-                    var candidateInventory = await vendors.GetVendorInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
-                    var candidateAvailable = candidateInventory?.AvailableQuantity ?? candidateListing.AvailableQuantity;
-                    if (candidateAvailable < line.Quantity)
-                        continue;
-                }
-
-                decimal distanceKm = 0m;
-                if (CustomerOrderPricingRules.RequiresAddress(deliveryOption))
-                {
-                    if (!vendorAreasByVendorId.TryGetValue(candidate.VendorId, out var vendorAreas))
-                    {
-                        vendorAreas = await vendors.GetVendorServiceAreasAsync(candidate.VendorId, cancellationToken);
-                        vendorAreasByVendorId[candidate.VendorId] = vendorAreas;
-                    }
-
-                    var candidateDistance = CustomerOrderPricingRules.ResolveDeliveryDistance(
-                        address!.Latitude!.Value,
-                        address.Longitude!.Value,
-                        candidate,
-                        vendorAreas,
-                        options);
-                    if (!candidateDistance.IsSuccess)
-                        continue;
-
-                    distanceKm = candidateDistance.DistanceKm;
-                }
-
-                eligibleCandidates.Add((candidate, distanceKm));
-            }
-
-            var ranked = eligibleCandidates
-                .OrderBy(x => x.DistanceKm)
-                .ThenByDescending(x => x.Candidate.InventoryAvailable)
-                .Take(Math.Max(1, options.MaxDispatchVendorsPerLine))
-                .ToList();
-
-            var now = DateTimeOffset.UtcNow;
-            for (var i = 0; i < ranked.Count; i++)
-            {
-                var candidate = ranked[i].Candidate;
-                var offer = new CustomerOrderVendorOffer
-                {
-                    CustomerRentalOrderId = order.Id,
-                    VendorId = candidate.VendorId,
-                    VendorProductListingId = candidate.ListingId,
-                    OfferRank = i + 1,
-                    Status = "pending",
-                    ExpiresAt = now.AddMinutes((double)Math.Max(1m, options.DispatchOfferTtlMinutes)),
-                };
-                await customers.AddCustomerOrderVendorOfferAsync(offer, cancellationToken);
-            }
-            await customers.SaveChangesAsync(cancellationToken);
+            var ranked = await CustomerOrderDispatchStarter.RankEligibleVendorsAsync(
+                customers,
+                vendors,
+                options,
+                order,
+                agg.ProductId,
+                line.ProductVariantId,
+                address,
+                vendorAreasByVendorId,
+                cancellationToken);
 
             if (ranked.Count == 0)
             {
@@ -1397,35 +1339,33 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 continue;
             }
 
-            await customers.AddCustomerNotificationAsync(
-                new CustomerNotification
-                {
-                    Id = Guid.NewGuid(),
-                    CustomerId = request.CustomerId,
-                    Title = $"Order {order.OrderNumber} submitted",
-                    Body = $"Your {orderType} request for \"{trackedListing.ListingTitle}\" is awaiting vendor acceptance.",
-                    NotificationType = "order_pending",
-                    RelatedOrderId = order.Id,
-                },
-                cancellationToken);
-            await customers.SaveChangesAsync(cancellationToken);
-
-            foreach (var r in ranked)
+            if (request.AwaitPayment)
             {
-                var candidate = r.Candidate;
-                await vendors.AddVendorNotificationAsync(new VendorNotification
-                {
-                    VendorId = candidate.VendorId,
-                    NotificationType = "dispatch_offer",
-                    Title = $"New order request {order.OrderNumber}",
-                    Message = $"You have a new {orderType} request for \"{trackedListing.ListingTitle}\".",
-                    Channel = "in_app",
-                    Status = "sent",
-                    SentAt = DateTimeOffset.UtcNow
-                }, cancellationToken);
+                await customers.AddCustomerNotificationAsync(
+                    new CustomerNotification
+                    {
+                        Id = Guid.NewGuid(),
+                        CustomerId = request.CustomerId,
+                        Title = $"Order {order.OrderNumber} awaiting payment",
+                        Body = $"Complete payment to submit your {orderType} request for \"{trackedListing.ListingTitle}\".",
+                        NotificationType = "order_awaiting_payment",
+                        RelatedOrderId = order.Id,
+                    },
+                    cancellationToken);
+                await customers.SaveChangesAsync(cancellationToken);
             }
-
-            await vendors.SaveChangesAsync(cancellationToken);
+            else
+            {
+                await CustomerOrderDispatchStarter.CreateOffersAndNotifyAsync(
+                    customers,
+                    vendors,
+                    options,
+                    order,
+                    trackedListing.ListingTitle,
+                    orderType,
+                    ranked,
+                    cancellationToken);
+            }
 
             var vendorDisplay = string.IsNullOrWhiteSpace(agg.VendorBusinessName) ? "Vendor" : agg.VendorBusinessName!;
             var primaryImg = agg.ImageUrls.Count > 0 ? agg.ImageUrls[0] : null;
@@ -1668,6 +1608,7 @@ internal static class CustomerOrderStatusMapper
     public static string ToDisplay(string status) => status.ToLowerInvariant() switch
     {
         "pending" => "Pending",
+        "awaiting_payment" => "Awaiting payment",
         "awaiting_vendor_acceptance" => "Awaiting vendor acceptance",
         "confirmed" => "Confirmed",
         "in_transit" => "In transit",
@@ -1675,6 +1616,7 @@ internal static class CustomerOrderStatusMapper
         "returned" => "Returned",
         "dispatch_failed" => "Dispatch failed",
         "cancelled" => "Cancelled",
+        "bought_out" => "Bought out",
         _ => status
     };
 }
@@ -1697,6 +1639,7 @@ internal sealed class CancelCustomerOrderCommandHandler(
         var o = row.Order;
         var isCancellable =
             string.Equals(o.Status, "pending", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(o.Status, "awaiting_payment", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(o.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase);
         if (!isCancellable)
             return Result.Failure<CustomerOrderDto>(new Error("customers.order_not_cancellable", "Only pending orders can be cancelled.", ErrorCategory.Validation));
