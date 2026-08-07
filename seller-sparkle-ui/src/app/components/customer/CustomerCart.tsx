@@ -118,27 +118,39 @@ function StepperField({
   onChange: (next: number) => void;
 }) {
   return (
-    <div className="flex min-h-10 items-center justify-between gap-2 rounded-xl border border-border/70 bg-background px-2.5">
-      <span className="text-sm font-medium text-muted-foreground">{label}</span>
-      <div className="inline-flex items-center">
+    <div className="flex min-h-10 items-center gap-2.5 rounded-xl border border-border/70 bg-muted/25 px-2.5 py-1">
+      <span className="shrink-0 text-sm font-medium text-muted-foreground">{label}</span>
+      <div className="inline-flex items-center gap-0.5 rounded-lg border border-border bg-background p-0.5 shadow-sm">
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
+          className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-md text-foreground transition-colors",
+            "hover:bg-muted active:bg-muted/80",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+            "disabled:pointer-events-none disabled:text-muted-foreground/40",
+          )}
           aria-label={`Decrease ${label}`}
           disabled={value <= min}
           onClick={() => onChange(Math.max(min, value - 1))}
         >
-          <Minus className="h-4 w-4" />
+          <Minus className="h-[18px] w-[18px]" strokeWidth={2.5} />
         </button>
-        <span className="min-w-[2rem] text-center text-sm font-bold tabular-nums">{value}</span>
+        <span className="min-w-[2rem] select-none text-center text-sm font-bold tabular-nums text-foreground">
+          {value}
+        </span>
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-35"
+          className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-md text-foreground transition-colors",
+            "hover:bg-muted active:bg-muted/80",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+            "disabled:pointer-events-none disabled:text-muted-foreground/40",
+          )}
           aria-label={`Increase ${label}`}
           disabled={value >= max}
           onClick={() => onChange(Math.min(max, value + 1))}
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-[18px] w-[18px]" strokeWidth={2.5} />
         </button>
       </div>
     </div>
@@ -231,7 +243,7 @@ function ChemicalCartLine({
               Buy only
             </div>
 
-            <div className="w-36 shrink-0">
+            <div className="min-w-[11.5rem] shrink-0">
               <StepperField
                 label="Quantity"
                 value={line.quantity}
@@ -464,7 +476,7 @@ function CartLineCard({
             ) : null}
 
             {actualOrderType === "rent" && !isPlanBased ? (
-              <div className="w-36 shrink-0">
+              <div className="min-w-[11.5rem] shrink-0">
                 <StepperField
                   label={RENTAL_UNIT_LABELS[line.rentalPeriodUnit].plural}
                   value={line.rentalDays}
@@ -478,7 +490,7 @@ function CartLineCard({
               </div>
             ) : null}
 
-            <div className="w-36 shrink-0">
+            <div className="min-w-[11.5rem] shrink-0">
               <StepperField
                 label="Quantity"
                 value={line.quantity}
