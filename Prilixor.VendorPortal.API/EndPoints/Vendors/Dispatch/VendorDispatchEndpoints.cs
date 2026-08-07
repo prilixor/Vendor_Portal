@@ -156,18 +156,76 @@ public sealed class GetVendorOrderExpirationsEndpoint(IMediator mediator)
     }
 }
 
-public sealed class GetVendorOrderImagesEndpoint(IMediator mediator)
-    : Endpoint<VendorDispatchOrderRequest, Results<Ok<List<CustomerOrderImageDto>>, ProblemHttpResult>>
+public sealed class VendorOrderImageIdRequest : VendorIdRequest
+{
+    public Guid OrderId { get; set; }
+    public Guid ImageId { get; set; }
+}
+
+public sealed class GetVendorOrderImageRequestEndpoint(IMediator mediator)
+    : Endpoint<VendorDispatchOrderRequest, Results<Ok<CustomerOrderImageRequestDto?>, ProblemHttpResult>>
 {
     public override void Configure()
     {
-        Get("{vendorId}/orders/{orderId}/images");
+        Get("{vendorId}/orders/{orderId}/image-request");
         Group<VendorOnboardingGroup>();
     }
 
-    public override async Task<Results<Ok<List<CustomerOrderImageDto>>, ProblemHttpResult>> ExecuteAsync(VendorDispatchOrderRequest req, CancellationToken ct)
+    public override async Task<Results<Ok<CustomerOrderImageRequestDto?>, ProblemHttpResult>> ExecuteAsync(VendorDispatchOrderRequest req, CancellationToken ct)
     {
-        var result = await mediator.Send(new GetVendorOrderImagesQuery(req.VendorId, req.OrderId), ct);
+        var result = await mediator.Send(new GetVendorOrderImageRequestQuery(req.VendorId, req.OrderId), ct);
+        return result.IsSuccess
+            ? TypedResults.Ok<CustomerOrderImageRequestDto?>(result.Value)
+            : result.ToErrorResponse();
+    }
+}
+
+public sealed class UploadVendorOrderImageEndpoint(IMediator mediator)
+    : Endpoint<VendorDispatchOrderRequest, Results<Ok<CustomerOrderImageDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("{vendorId}/orders/{orderId}/images");
+        Group<VendorOnboardingGroup>();
+        AllowFileUploads();
+    }
+
+    public override async Task<Results<Ok<CustomerOrderImageDto>, ProblemHttpResult>> ExecuteAsync(VendorDispatchOrderRequest req, CancellationToken ct)
+    {
+        var file = Files.FirstOrDefault();
+        if (file is null || file.Length <= 0)
+            return TypedResults.Problem(title: "customers.order_images.missing_file", detail: "Image file is required.", statusCode: 400);
+
+        await using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        var publicBase = new Uri($"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}");
+
+        var result = await mediator.Send(
+            new UploadVendorOrderImageCommand(
+                req.VendorId,
+                req.OrderId,
+                file.FileName,
+                file.ContentType,
+                ms.ToArray(),
+                publicBase),
+            ct);
+
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class DeleteVendorOrderImageEndpoint(IMediator mediator)
+    : Endpoint<VendorOrderImageIdRequest, Results<NoContent, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Delete("{vendorId}/orders/{orderId}/images/{imageId}");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(VendorOrderImageIdRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new DeleteVendorOrderImageCommand(req.VendorId, req.OrderId, req.ImageId), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
     }
 }

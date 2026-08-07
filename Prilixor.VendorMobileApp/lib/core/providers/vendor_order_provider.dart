@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 
 import '../api/api_client.dart';
@@ -7,6 +8,7 @@ import '../models/expiring_order_model.dart';
 import '../models/order_continuations_model.dart';
 import '../models/order_image_model.dart';
 import '../models/vendor_order_model.dart';
+import '../utils/multipart_file_util.dart';
 
 class VendorOrderProvider extends ChangeNotifier {
   final ApiClient _api = ApiClient();
@@ -45,8 +47,10 @@ class VendorOrderProvider extends ChangeNotifier {
   bool _orderImagesLoading = false;
   bool get orderImagesLoading => _orderImagesLoading;
 
-  List<OrderImage> _orderImages = [];
-  List<OrderImage> get orderImages => _orderImages;
+  OrderImageRequest? _imageRequest;
+  OrderImageRequest? get imageRequest => _imageRequest;
+
+  List<OrderImage> get orderImages => _imageRequest?.images ?? const [];
 
   bool _expirationsLoading = false;
   bool get expirationsLoading => _expirationsLoading;
@@ -133,20 +137,20 @@ class VendorOrderProvider extends ChangeNotifier {
         );
         await Future.wait([
           fetchContinuations(orderId, silent: true),
-          fetchOrderImages(vendorId, orderId, silent: true),
+          fetchOrderImageRequest(vendorId, orderId, silent: true),
         ]);
         return _selectedOrder;
       }
       _continuations = OrderContinuations.empty;
-      _orderImages = [];
+      _imageRequest = null;
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to load order.');
       _continuations = OrderContinuations.empty;
-      _orderImages = [];
+      _imageRequest = null;
     } catch (_) {
       _error = 'Failed to load order.';
       _continuations = OrderContinuations.empty;
-      _orderImages = [];
+      _imageRequest = null;
     } finally {
       _detailLoading = false;
       notifyListeners();
@@ -154,39 +158,100 @@ class VendorOrderProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<List<OrderImage>> fetchOrderImages(
+  Future<OrderImageRequest?> fetchOrderImageRequest(
     String vendorId,
     String orderId, {
     bool silent = false,
   }) async {
     if (vendorId.isEmpty || orderId.isEmpty) {
-      _orderImages = [];
+      _imageRequest = null;
       if (!silent) notifyListeners();
-      return _orderImages;
+      return null;
     }
     if (!silent) {
       _orderImagesLoading = true;
       notifyListeners();
     }
     try {
-      final response =
-          await _api.dio.get('/vendors/$vendorId/orders/$orderId/images');
+      final response = await _api.dio
+          .get('/vendors/$vendorId/orders/$orderId/image-request');
       final data = response.data;
-      final list = data is List ? data : <dynamic>[];
-      _orderImages = list
-          .whereType<Map>()
-          .map((e) => OrderImage.fromJson(Map<String, dynamic>.from(e)))
-          .where((img) => img.id.isNotEmpty && img.fileUrl.isNotEmpty)
-          .toList();
+      if (data is Map) {
+        _imageRequest =
+            OrderImageRequest.fromJson(Map<String, dynamic>.from(data));
+      } else {
+        _imageRequest = null;
+      }
     } on DioException catch (_) {
-      _orderImages = [];
+      _imageRequest = null;
     } catch (_) {
-      _orderImages = [];
+      _imageRequest = null;
     } finally {
       _orderImagesLoading = false;
       if (!silent) notifyListeners();
     }
-    return _orderImages;
+    return _imageRequest;
+  }
+
+  Future<bool> uploadOrderImage({
+    required String vendorId,
+    required String orderId,
+    required PlatformFile file,
+  }) async {
+    _error = null;
+    _actionLoading = true;
+    notifyListeners();
+    try {
+      final multipart = await multipartFromPlatformFile(file);
+      if (multipart == null) {
+        _error = 'Could not read the selected image.';
+        return false;
+      }
+      final formData = FormData.fromMap({'file': multipart});
+      await _api.dio.post(
+        '/vendors/$vendorId/orders/$orderId/images',
+        data: formData,
+        options: Options(
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 60),
+        ),
+      );
+      await fetchOrderImageRequest(vendorId, orderId, silent: true);
+      return true;
+    } on DioException catch (e) {
+      _error = _dioMessage(e, 'Failed to upload photo.');
+      return false;
+    } catch (_) {
+      _error = 'Failed to upload photo.';
+      return false;
+    } finally {
+      _actionLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteOrderImage({
+    required String vendorId,
+    required String orderId,
+    required String imageId,
+  }) async {
+    _error = null;
+    _actionLoading = true;
+    notifyListeners();
+    try {
+      await _api.dio.delete('/vendors/$vendorId/orders/$orderId/images/$imageId');
+      await fetchOrderImageRequest(vendorId, orderId, silent: true);
+      return true;
+    } on DioException catch (e) {
+      _error = _dioMessage(e, 'Failed to remove photo.');
+      return false;
+    } catch (_) {
+      _error = 'Failed to remove photo.';
+      return false;
+    } finally {
+      _actionLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<OrderContinuations> fetchContinuations(

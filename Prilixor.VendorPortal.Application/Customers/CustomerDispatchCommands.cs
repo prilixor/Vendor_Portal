@@ -440,11 +440,11 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
         }
 
         order.Status = target;
-        // Vendor delivered → delete order photos from S3/storage immediately.
+        // Vendor delivered → close photo request + delete images from S3.
         if (target == "active")
         {
-            await CustomerOrderImageLifecycle.PurgeForOrderAsync(
-                customers, uploadStorage, order.Id, deletedBy: null, cancellationToken);
+            await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
+                customers, uploadStorage, order.Id, closedReason: "delivered", deletedBy: null, cancellationToken);
         }
 
         await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
@@ -662,7 +662,8 @@ public sealed record VendorRespondDispatchOfferCommand(string VendorId, Guid Ord
 
 internal sealed class VendorRespondDispatchOfferCommandHandler(
     ICustomerRepository customers,
-    IVendorOnboardingRepository vendors)
+    IVendorOnboardingRepository vendors,
+    IVendorUploadStorageService uploadStorage)
     : ICommandHandler<VendorRespondDispatchOfferCommand, CustomerOrderDto>
 {
     public async Task<Result<CustomerOrderDto>> Handle(VendorRespondDispatchOfferCommand request, CancellationToken cancellationToken)
@@ -708,6 +709,8 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
             if (!anyPendingLeft)
             {
                 order.Status = "dispatch_failed";
+                await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
+                    customers, uploadStorage, order.Id, closedReason: "dispatch_failed", deletedBy: vendorId, cancellationToken);
                 await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
                 await customers.AddCustomerNotificationAsync(
                     new CustomerNotification
@@ -750,10 +753,6 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
         order.VendorProductListingId = selectedListing.Id;
         order.Status = "confirmed";
         await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
-
-        // Keep customer photos across reassignment; retarget metadata to the accepting vendor.
-        await CustomerOrderImageLifecycle.ReassignVendorAsync(
-            customers, order.Id, vendorId, cancellationToken);
 
         myOffer.Status = "accepted";
         myOffer.RespondedAt = now;
@@ -894,6 +893,7 @@ public sealed record VendorCancelAssignedOrderCommand(string VendorId, Guid Orde
 internal sealed class VendorCancelAssignedOrderCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
+    IVendorUploadStorageService uploadStorage,
     IOptions<CustomerPricingOptions> pricingOptions)
     : ICommandHandler<VendorCancelAssignedOrderCommand, CustomerOrderDto>
 {
@@ -960,10 +960,12 @@ internal sealed class VendorCancelAssignedOrderCommandHandler(
             pending = await CreateFallbackOffersAsync(order, vendorId, cancellationToken);
         }
 
-        // Vendor cancel never deletes customer photos — keep them for reassignment (or admin restart/reassign).
+        // Vendor cancel/reassign: close photo request + remove images (not carried to next vendor).
         if (pending.Count == 0)
         {
             order.Status = "dispatch_failed";
+            await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
+                customers, uploadStorage, order.Id, closedReason: "dispatch_failed", deletedBy: vendorId, cancellationToken);
             await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
             await customers.AddCustomerNotificationAsync(
                 new CustomerNotification
@@ -980,6 +982,8 @@ internal sealed class VendorCancelAssignedOrderCommandHandler(
         else
         {
             order.Status = "awaiting_vendor_acceptance";
+            await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
+                customers, uploadStorage, order.Id, closedReason: "cancelled", deletedBy: vendorId, cancellationToken);
             await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
             foreach (var next in pending)
             {

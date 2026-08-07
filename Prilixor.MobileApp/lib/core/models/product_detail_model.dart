@@ -177,7 +177,7 @@ class ProductDetailModel {
     );
   }
 
-  Map<String, dynamic> getAvailabilityBadge({int? qtyOverride}) {
+  Map<String, dynamic>? getAvailabilityBadge({int? qtyOverride}) {
     final qty = qtyOverride ?? availableQuantity;
     final s = availabilityStatus.trim().toLowerCase();
     final ls = listingStatus.trim().toLowerCase();
@@ -197,6 +197,7 @@ class ProductDetailModel {
     if (s == 'low_stock' || qty <= 3) {
       return {'label': 'Low stock', 'color': 0xFFF57C00};
     }
-    return {'label': 'Available', 'color': 0xFF4CAF50};
+    // In-stock / available: no badge per product requirement
+    return null;
   }
 }

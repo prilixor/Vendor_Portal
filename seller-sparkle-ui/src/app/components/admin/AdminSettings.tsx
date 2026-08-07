@@ -243,7 +243,7 @@ const AdminSettings = () => {
                   disabled={savingPassword}
                   aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
                 >
-                  {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showCurrentPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                 </Button>
               </div>
               <FieldError message={fieldErrors.currentPassword} />
@@ -270,7 +270,7 @@ const AdminSettings = () => {
                   disabled={savingPassword}
                   aria-label={showNewPassword ? "Hide new password" : "Show new password"}
                 >
-                  {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showNewPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                 </Button>
               </div>
               <FieldError message={fieldErrors.newPassword} />
@@ -302,7 +302,7 @@ const AdminSettings = () => {
                   disabled={savingPassword}
                   aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
                 >
-                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showConfirmPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                 </Button>
               </div>
               <FieldError message={fieldErrors.confirmPassword} />

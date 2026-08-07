@@ -1,5 +1,6 @@
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Customers;
+using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.Domain.Customers;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.DI;
@@ -489,7 +490,8 @@ public sealed class CustomerRepository(
             .Where(vi => vi.VendorProductListingId == listingId)
             .ToListAsync(cancellationToken);
 
-        return ToAggregate(l, product, variantInventory);
+        var liveIcons = await GetLiveRentalDurationIconsAsync(cancellationToken);
+        return ToAggregate(l, product, variantInventory, liveIcons);
     }
 
     public async Task<List<VendorProductListingAggregate>> GetCandidateListingsByProductIdAsync(Guid productId, CancellationToken cancellationToken)
@@ -520,7 +522,8 @@ public sealed class CustomerRepository(
                 EF.Functions.ILike(x.Vendor.AccountStatus, "active"))
             .ToListAsync(cancellationToken);
 
-        return listings.Select(l => ToAggregate(l, product)).ToList();
+        var liveIcons = await GetLiveRentalDurationIconsAsync(cancellationToken);
+        return listings.Select(l => ToAggregate(l, product, [], liveIcons)).ToList();
     }
 
 
@@ -855,6 +858,48 @@ public sealed class CustomerRepository(
     {
         return customerDb.CustomerOrderImages
             .CountAsync(x => x.CustomerRentalOrderId == customerOrderId && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task AddCustomerOrderImageRequestAsync(CustomerOrderImageRequest request, CancellationToken cancellationToken)
+    {
+        await customerDb.CustomerOrderImageRequests.AddAsync(request, cancellationToken);
+    }
+
+    public Task<CustomerOrderImageRequest?> GetOpenCustomerOrderImageRequestAsync(Guid customerOrderId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImageRequests
+            .FirstOrDefaultAsync(
+                x => x.CustomerRentalOrderId == customerOrderId
+                     && !x.IsDeleted
+                     && x.Status == CustomerOrderImageRequest.StatusOpen,
+                cancellationToken);
+    }
+
+    public Task<CustomerOrderImageRequest?> GetCustomerOrderImageRequestByIdAsync(Guid requestId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImageRequests
+            .FirstOrDefaultAsync(x => x.Id == requestId && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task UpdateCustomerOrderImageRequestAsync(CustomerOrderImageRequest request, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerOrderImageRequests.Update(request);
+        return Task.CompletedTask;
+    }
+
+    public Task<List<CustomerOrderImage>> GetCustomerOrderImagesByRequestIdAsync(Guid requestId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImages
+            .Where(x => x.RequestId == requestId && !x.IsDeleted)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<int> CountCustomerOrderImagesByRequestIdAsync(Guid requestId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImages
+            .CountAsync(x => x.RequestId == requestId && !x.IsDeleted, cancellationToken);
     }
 
     public async Task<IReadOnlyDictionary<Guid, List<string>>> GetCustomerOrderAssetTagsByOrderIdsAsync(
@@ -1476,13 +1521,30 @@ public sealed class CustomerRepository(
 
 
 
-    private VendorProductListingAggregate ToAggregate(VendorProductListing listing, Product product)
-        => ToAggregate(listing, product, []);
+    private async Task<IReadOnlyDictionary<Guid, RentalDurationIcon>> GetLiveRentalDurationIconsAsync(
+        CancellationToken cancellationToken)
+    {
+        var rows = await commonDb.RentalDurationIcons
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.IsActive)
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count == 0)
+        {
+            rows = await vendorDb.RentalDurationIcons
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted && x.IsActive)
+                .ToListAsync(cancellationToken);
+        }
+
+        return RentalDurationIconLiveResolve.ToLookup(rows);
+    }
 
     private VendorProductListingAggregate ToAggregate(
         VendorProductListing listing,
         Product product,
-        List<Prilixor.VendorPortal.Domain.Vendors.VendorVariantInventory> variantInventory)
+        List<Prilixor.VendorPortal.Domain.Vendors.VendorVariantInventory> variantInventory,
+        IReadOnlyDictionary<Guid, RentalDurationIcon>? liveIcons = null)
     {
         var inv = listing.Inventory;
         var imgs = ResolveOrderedDistinctListingImageUrls(listing.Images);
@@ -1555,25 +1617,29 @@ public sealed class CustomerRepository(
                 .OrderByDescending(p => p.IsRecommended)
                 .ThenByDescending(p => p.DurationDays)
                 .ThenBy(p => p.SortOrder)
-                .Select(p => new Prilixor.VendorPortal.Application.Onboarding.ProductRentalPricingPlanDto(
-                    p.Id.ToString(),
-                    p.ProductId.ToString(),
-                    p.DurationLabel,
-                    p.DurationDays,
-                    p.NormalPrice,
-                    p.DiscountType,
-                    p.DiscountValue,
-                    p.FinalRentalPrice,
-                    p.IsRecommended,
-                    p.IsActive,
-                    p.SortOrder,
-                    p.RentalDurationMasterId?.ToString(),
-                    p.BillingCycles,
-                    p.RentalDurationIconId?.ToString(),
-                    string.IsNullOrWhiteSpace(p.IconUrl) ? null : fileUrlResolver.Resolve(p.IconUrl),
-                    string.IsNullOrWhiteSpace(p.IconThumbnailUrl) ? null : fileUrlResolver.Resolve(p.IconThumbnailUrl),
-                    p.ValueTier,
-                    p.IconName)).ToList() ?? [],
+                .Select(p =>
+                {
+                    var icon = RentalDurationIconLiveResolve.Resolve(p, liveIcons, fileUrlResolver);
+                    return new Prilixor.VendorPortal.Application.Onboarding.ProductRentalPricingPlanDto(
+                        p.Id.ToString(),
+                        p.ProductId.ToString(),
+                        p.DurationLabel,
+                        p.DurationDays,
+                        p.NormalPrice,
+                        p.DiscountType,
+                        p.DiscountValue,
+                        p.FinalRentalPrice,
+                        p.IsRecommended,
+                        p.IsActive,
+                        p.SortOrder,
+                        p.RentalDurationMasterId?.ToString(),
+                        p.BillingCycles,
+                        p.RentalDurationIconId?.ToString(),
+                        icon.IconUrl,
+                        icon.IconThumbnailUrl,
+                        icon.ValueTier,
+                        icon.IconName);
+                }).ToList() ?? [],
             VariantInventory = variantInventory
                 .Select(vi => new VariantInventoryItem(vi.ProductVariantId, vi.AvailableQuantity))
                 .ToList(),

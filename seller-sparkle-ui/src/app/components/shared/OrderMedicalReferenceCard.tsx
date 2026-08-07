@@ -51,7 +51,9 @@ export function OrderMedicalReferenceCard({
             {doctorUniqueCode && (
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Unique ID</p>
-                <p className="font-mono text-sm font-bold tracking-wider text-teal-700">{doctorUniqueCode}</p>
+                <p className="font-mono text-sm font-bold tracking-wider text-teal-700 dark:text-teal-300">
+                  {doctorUniqueCode}
+                </p>
               </div>
             )}
 

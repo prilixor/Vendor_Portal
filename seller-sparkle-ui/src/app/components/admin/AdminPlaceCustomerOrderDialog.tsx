@@ -105,7 +105,14 @@ function stockBadge(status: string, qty: number) {
     return <Badge variant="outline" className="text-[10px] bg-destructive/10 text-destructive border-destructive/20">Out of stock</Badge>;
   }
   if (status === "low_stock" || qty <= 3) {
-    return <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">Low · {qty}</Badge>;
+    return (
+      <Badge
+        variant="outline"
+        className="border-amber-200 bg-amber-50 text-[10px] text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+      >
+        Low · {qty}
+      </Badge>
+    );
   }
   return <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-800 border-emerald-200">{qty} available</Badge>;
 }
@@ -119,7 +126,10 @@ function typeBadge(isChemical: boolean) {
     );
   }
   return (
-    <Badge variant="outline" className="text-[10px] bg-teal-50 text-teal-800 border-teal-200">
+    <Badge
+      variant="outline"
+      className="border-teal-200 bg-teal-50 text-[10px] text-teal-800 dark:border-teal-500/30 dark:bg-teal-500/10 dark:text-teal-200"
+    >
       Equipment
     </Badge>
   );
@@ -158,7 +168,9 @@ function ListingThumb({ src, isChemical }: { src?: string | null; isChemical?: b
     return (
       <div className={cn(
         "h-full w-full flex items-center justify-center",
-        isChemical ? "bg-violet-50 text-violet-400" : "bg-teal-50 text-teal-400",
+        isChemical
+          ? "bg-violet-50 text-violet-400 dark:bg-violet-500/10 dark:text-violet-300"
+          : "bg-teal-50 text-teal-400 dark:bg-teal-500/10 dark:text-teal-300",
       )}>
         {isChemical ? <FlaskConical className="h-5 w-5" /> : <Package className="h-5 w-5" />}
       </div>
@@ -265,7 +277,10 @@ function CartItemTile({
                 {isRent ? "Rent" : "Buy"}
               </Badge>
               {line.prescriptionRequired && (
-                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
+                <Badge
+                  variant="outline"
+                  className="border-amber-200 bg-amber-50 text-[10px] text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                >
                   Rx required
                 </Badge>
               )}
@@ -302,23 +317,13 @@ function CartItemTile({
                 {isRent && (
                   <div className="space-y-1">
                     <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
-                      {isPlanBased ? "Plan" : "Days"}
+                      Plan
                     </p>
-                    {isPlanBased ? (
-                      <p className="h-8 flex items-center text-sm font-semibold">
-                        {line.rentalDurationLabel || `${line.rentalDays} days`}
-                      </p>
-                    ) : (
-                      <Input
-                        className="h-8 w-[4.5rem] text-center tabular-nums font-semibold"
-                        type="number"
-                        min={1}
-                        value={line.rentalDays}
-                        onChange={(e) =>
-                          onUpdate(line.key, { rentalDays: Math.max(1, Number(e.target.value) || 1) })
-                        }
-                      />
-                    )}
+                    <p className="h-8 flex items-center text-sm font-semibold">
+                      {isPlanBased
+                        ? line.rentalDurationLabel || `${line.rentalDays} days`
+                        : "Plans missing"}
+                    </p>
                   </div>
                 )}
               </div>
@@ -366,8 +371,6 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
 
   const [orderType, setOrderType] = useState<"rent" | "buy">("rent");
   const [quantity, setQuantity] = useState("1");
-  const [rentalDays, setRentalDays] = useState("1");
-  const [rentalPeriodUnit, setRentalPeriodUnit] = useState<"week" | "month">("week");
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [variantId, setVariantId] = useState("");
   const [addressId, setAddressId] = useState("");
@@ -414,7 +417,6 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     setSelected(null);
     setDetail(null);
     setQuantity("1");
-    setRentalDays("7");
     setSelectedPlanId("");
     setVariantId("");
     setDeliveryOption("standard");
@@ -472,7 +474,6 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
 
   const configureEstimate = useMemo(() => {
     const qty = Math.max(1, Number(quantity) || 1);
-    const periods = Math.max(0, Number(rentalDays) || 0);
     if (orderType === "buy") {
       const unit = selectedVariant?.buyPrice ?? detail?.buyPrice ?? selected?.buyPrice ?? 0;
       return unit * qty;
@@ -480,12 +481,8 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     if (hasPricingPlans && selectedPlan) {
       return Number(selectedPlan.finalRentalPrice) * qty;
     }
-    const weekly = (detail as { weeklyRent?: number } | null)?.weeklyRent ?? selected?.weeklyRent ?? 0;
-    const monthly = detail?.monthlyRent ?? selected?.monthlyRent ?? 0;
-    const daily = detail?.dailyRent ?? selected?.dailyRent ?? 0;
-    const rate = rentalPeriodUnit === "week" ? weekly : rentalPeriodUnit === "month" ? monthly : daily;
-    return rate * Math.max(1, periods) * qty;
-  }, [orderType, quantity, rentalDays, rentalPeriodUnit, selectedVariant, detail, selected, hasPricingPlans, selectedPlan]);
+    return 0;
+  }, [orderType, quantity, selectedVariant, detail, selected, hasPricingPlans, selectedPlan]);
 
   const cartTotal = useMemo(() => cart.reduce((sum, line) => sum + lineEstimate(line), 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((sum, line) => sum + line.quantity, 0), [cart]);
@@ -547,16 +544,17 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     setDetail(null);
     setVariantId("");
     setQuantity("1");
-    setRentalDays("7");
     setSelectedPlanId("");
     try {
       const d = await customerApi.getListingDetail(listing.listingId);
       setDetail(d);
       const plans = sortActiveRentalPlans(d.rentalPricingPlans);
-      setSelectedPlanId(plans[0]?.id ?? "");
+      const recommended = plans.find((p) => p.isRecommended);
+      setSelectedPlanId(recommended?.id ?? plans[0]?.id ?? "");
       const canRent = d.isRentEnabled !== false;
       const canBuy = d.isBuyEnabled === true;
       if (d.isChemical || (canBuy && !canRent)) setOrderType("buy");
+      else if (canRent && plans.length === 0 && canBuy) setOrderType("buy");
       else setOrderType("rent");
       const active = (d.variants ?? []).filter((v) => v.isActive);
       if (active.length === 1) setVariantId(active[0].id);
@@ -575,14 +573,11 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
 
   const addToCart = (andContinue: boolean) => {
     if (!selected) return;
-    const isPlanRental = orderType === "rent" && hasPricingPlans;
-    if (isPlanRental && !selectedPlan) {
-      toast.error("Select a rental pricing plan");
-      return;
-    }
-    if (orderType === "rent" && !isPlanRental && (!Number(rentalDays) || Number(rentalDays) < 1)) {
-      toast.error("Rental period must be at least 1");
-      return;
+    if (orderType === "rent") {
+      if (!hasPricingPlans || !selectedPlan) {
+        toast.error("Rental plans are not configured for this product. Add plans in Product Management, or switch to Buy.");
+        return;
+      }
     }
     if (variants.length > 0 && !variantId) {
       toast.error("Select a packaging size / variant");
@@ -598,12 +593,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     }
 
     const qty = Math.max(1, Number(quantity) || 1);
-    const days =
-      orderType === "rent"
-        ? isPlanRental
-          ? selectedPlan!.durationDays
-          : Math.max(1, Number(rentalDays) || 1)
-        : 0;
+    const days = orderType === "rent" ? selectedPlan!.durationDays : 0;
     const buyUnit = selectedVariant?.buyPrice ?? detail?.buyPrice ?? selected.buyPrice;
 
     if (orderType === "rent" && buyEnabled && (buyUnit ?? 0) > 0) {
@@ -612,14 +602,14 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
         isBuyEnabled: buyEnabled,
         quantity: qty,
         periods: days,
-        unit: isPlanRental ? "day" : rentalPeriodUnit,
+        unit: "day",
         rates: {
           dailyRent: detail?.dailyRent ?? selected.dailyRent,
           weeklyRent: (detail as { weeklyRent?: number } | null)?.weeklyRent ?? selected.weeklyRent ?? 0,
           monthlyRent: detail?.monthlyRent ?? selected.monthlyRent ?? 0,
         },
-        planFinalPrice: isPlanRental ? selectedPlan!.finalRentalPrice : null,
-        planDurationLabel: isPlanRental ? selectedPlan!.durationLabel || `${selectedPlan!.durationDays} days` : null,
+        planFinalPrice: selectedPlan!.finalRentalPrice,
+        planDurationLabel: selectedPlan!.durationLabel || `${selectedPlan!.durationDays} days`,
       });
       if (check.shouldForceBuy) {
         setRentToBuyInfo({
@@ -643,6 +633,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
       primaryImageUrl: detail?.imageUrls?.[0] ?? selected.primaryImageUrl,
       imageUrls: detail?.imageUrls,
     });
+    const isPlanRental = orderType === "rent";
 
     setCart((prev) => {
       const ix = prev.findIndex((l) => l.key === key);
@@ -652,7 +643,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
           ...next[ix],
           quantity: next[ix].quantity + qty,
           rentalDays: days,
-          rentalPeriodUnit: orderType === "rent" ? (isPlanRental ? "day" : rentalPeriodUnit) : "day",
+          rentalPeriodUnit: "day",
           orderType,
           rentalPricingPlanId: isPlanRental ? selectedPlan!.id : undefined,
           rentalDurationLabel: isPlanRental
@@ -688,7 +679,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
           primaryImageUrl: image,
           quantity: qty,
           rentalDays: days,
-          rentalPeriodUnit: orderType === "rent" ? (isPlanRental ? "day" : rentalPeriodUnit) : "day",
+          rentalPeriodUnit: "day",
           orderType,
           rentalPricingPlanId: isPlanRental ? selectedPlan!.id : undefined,
           rentalDurationLabel: isPlanRental
@@ -780,8 +771,8 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
       return;
     }
     for (const line of cart) {
-      if (line.orderType === "rent" && line.rentalDays < 1) {
-        toast.error(`Set rental days for “${line.title}”`);
+      if (line.orderType === "rent" && (!line.rentalPricingPlanId || line.rentalDays < 1)) {
+        toast.error(`“${line.title}” needs a rental pricing plan before placing the order.`);
         return;
       }
     }
@@ -1079,9 +1070,9 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                           className={cn(
                             "w-full flex gap-3 rounded-lg border p-3 text-left transition-colors",
                             row.isChemical
-                              ? "border-violet-100 hover:border-violet-300 hover:bg-violet-50/40"
-                              : "border-teal-100 hover:border-teal-300 hover:bg-teal-50/40",
-                            disabled && "opacity-50 cursor-not-allowed bg-muted/20 hover:bg-muted/20 hover:border-border",
+                              ? "border-violet-100 hover:border-violet-300 hover:bg-violet-50/40 dark:border-violet-500/20 dark:hover:border-violet-500/40 dark:hover:bg-violet-500/10"
+                              : "border-teal-100 hover:border-teal-300 hover:bg-teal-50/40 dark:border-teal-500/20 dark:hover:border-teal-500/40 dark:hover:bg-teal-500/10",
+                            disabled && "cursor-not-allowed bg-muted/20 opacity-50 hover:border-border hover:bg-muted/20",
                           )}
                         >
                           <div className="h-14 w-14 rounded-md border bg-muted/40 overflow-hidden shrink-0">
@@ -1131,7 +1122,9 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
               {selected && (
                 <div className={cn(
                   "flex gap-3 rounded-lg border p-3",
-                  selected.isChemical ? "bg-violet-50/40 border-violet-100" : "bg-teal-50/40 border-teal-100",
+                  selected.isChemical
+                    ? "border-violet-100 bg-violet-50/40 dark:border-violet-500/20 dark:bg-violet-500/10"
+                    : "border-teal-100 bg-teal-50/40 dark:border-teal-500/20 dark:bg-teal-500/10",
                 )}>
                   <div className="h-16 w-16 rounded-md border bg-background overflow-hidden shrink-0">
                     <ListingThumb src={imageUrl} isChemical={selected.isChemical} />
@@ -1256,24 +1249,16 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                     />
                   </div>
                 ) : orderType === "rent" ? (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label>Period</Label>
-                      <Select value={rentalPeriodUnit} onValueChange={(v) => setRentalPeriodUnit(v as "week" | "month")}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="week">Week</SelectItem>
-                          <SelectItem value="month">Month</SelectItem>
-                        </SelectContent>
-                      </Select>
+                  <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/80 px-3.5 py-3 text-sm text-amber-900 sm:col-span-2 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="font-semibold">Rental plans not configured</p>
+                      <p className="text-[13px] leading-snug opacity-90">
+                        Add rental pricing plans in Product Management before placing a rent order
+                        {buyEnabled ? ", or switch this item to Buy." : "."}
+                      </p>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label>{rentalPeriodUnit === "month" ? "Months" : "Weeks"}</Label>
-                      <Input type="number" min={1} value={rentalDays} onChange={(e) => setRentalDays(e.target.value)} />
-                    </div>
-                  </>
+                  </div>
                 ) : null}
               </div>
 
@@ -1364,12 +1349,14 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                         )}
 
                         {prescriptionLines.length > 0 && (
-                          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3.5 space-y-2">
+                          <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/50 p-3.5 dark:border-amber-500/30 dark:bg-amber-500/10">
                             <div className="flex items-start gap-2">
                               <AlertCircle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
                               <div>
-                                <p className="text-sm font-semibold text-amber-900">Doctor reference (optional)</p>
-                                <p className="text-xs text-amber-800/90 mt-0.5">
+                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                                  Doctor reference (optional)
+                                </p>
+                                <p className="mt-0.5 text-xs text-amber-800/90 dark:text-amber-200/80">
                                   Doctors are managed under Catalog → Doctor References. Customers will attach a doctor by Unique ID at checkout (optional). Hospital selection has been removed.
                                 </p>
                               </div>
@@ -1465,8 +1452,10 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                 </div>
               )}
               {placeErrors.length > 0 && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-3.5 py-3 text-left space-y-1 max-w-sm mx-auto">
-                  <p className="text-sm font-medium text-amber-900">Some items still need attention</p>
+                <div className="mx-auto max-w-sm space-y-1 rounded-xl border border-amber-200 bg-amber-50/60 px-3.5 py-3 text-left dark:border-amber-500/30 dark:bg-amber-500/10">
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                    Some items still need attention
+                  </p>
                   {placeErrors.map((err, i) => (
                     <p key={i} className="text-xs text-amber-800">{err}</p>
                   ))}
@@ -1505,13 +1494,23 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                   <Button
                     type="button"
                     variant="secondary"
-                    disabled={loadingDetail}
+                    disabled={
+                      loadingDetail ||
+                      (orderType === "rent" && (!hasPricingPlans || !selectedPlan))
+                    }
                     onClick={() => addToCart(true)}
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add & keep shopping
                   </Button>
-                  <Button type="button" disabled={loadingDetail} onClick={() => addToCart(false)}>
+                  <Button
+                    type="button"
+                    disabled={
+                      loadingDetail ||
+                      (orderType === "rent" && (!hasPricingPlans || !selectedPlan))
+                    }
+                    onClick={() => addToCart(false)}
+                  >
                     <ShoppingCart className="h-4 w-4 mr-2" />
                     Add to cart
                   </Button>
@@ -1548,7 +1547,6 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
           if (!rentToBuyInfo) return;
           if (rentToBuyInfo.target === "configure") {
             setOrderType("buy");
-            setRentalDays("1");
             setSelectedPlanId("");
             toast.message("Order type set to Buy — add to cart again");
             return;

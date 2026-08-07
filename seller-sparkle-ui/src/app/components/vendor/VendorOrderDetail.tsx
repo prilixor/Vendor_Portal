@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Barcode, CheckCircle2, Images, Stethoscope } from "lucide-react";
+import { Check, Barcode, CheckCircle2, ImagePlus, Images, Loader2, Stethoscope, X } from "lucide-react";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -13,7 +13,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import {
   vendorOnboardingApi,
   type VendorOrderApiDto,
-  type VendorOrderImageApiDto,
+  type VendorOrderImageRequestApiDto,
   type VendorProductAssetApiDto,
   type OrderContinuationsDto,
 } from "@/app/services/vendorOnboardingApi";
@@ -306,9 +306,13 @@ const VendorOrderDetail = () => {
   const [openDropdowns, setOpenDropdowns] = useState<Record<number, boolean>>({});
   const [doctorLookupOpen, setDoctorLookupOpen] = useState(false);
   const [doctorLookupCode, setDoctorLookupCode] = useState("");
-  const [orderImages, setOrderImages] = useState<VendorOrderImageApiDto[]>([]);
-  const [orderImagesLoading, setOrderImagesLoading] = useState(false);
+  const [imageRequest, setImageRequest] = useState<VendorOrderImageRequestApiDto | null>(null);
+  const [imageRequestLoading, setImageRequestLoading] = useState(false);
+  const [uploadingOrderImage, setUploadingOrderImage] = useState(false);
+  const [deletingOrderImageId, setDeletingOrderImageId] = useState<string | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const orderImageInputRef = useRef<HTMLInputElement>(null);
+  const MAX_ORDER_IMAGES = 5;
 
   const currentItemId = selectedItemId || orderId;
 
@@ -356,29 +360,34 @@ const VendorOrderDetail = () => {
     void loadAllOrders();
   }, [user?.id]);
 
-  const loadOrderImages = useCallback(async (itemId?: string | null) => {
+  const loadImageRequest = useCallback(async (itemId?: string | null) => {
     const id = itemId ?? currentItemId;
     if (!user?.id || !id) {
-      setOrderImages([]);
+      setImageRequest(null);
       return;
     }
     try {
-      setOrderImagesLoading(true);
-      const rows = await vendorOnboardingApi.getVendorOrderImages(user.id, id);
-      setOrderImages(rows);
+      setImageRequestLoading(true);
+      const row = await vendorOnboardingApi.getVendorOrderImageRequest(user.id, id);
+      setImageRequest(row);
     } catch (error) {
-      // After Cancel & Reassign this vendor no longer owns the order — keep prior
-      // thumbnails only if still on-screen; do not treat as "photos deleted".
-      console.error("Failed to load customer order photos", error);
-      setOrderImages([]);
+      console.error("Failed to load order photo request", error);
+      setImageRequest(null);
     } finally {
-      setOrderImagesLoading(false);
+      setImageRequestLoading(false);
     }
   }, [user?.id, currentItemId]);
 
   useEffect(() => {
-    void loadOrderImages(currentItemId);
-  }, [loadOrderImages, currentItemId]);
+    void loadImageRequest(currentItemId);
+  }, [loadImageRequest, currentItemId]);
+
+  const orderImages = imageRequest?.images ?? [];
+  const canUploadOrderImages = Boolean(imageRequest) && (
+    (order?.status.trim().toLowerCase() === "confirmed") ||
+    (order?.status.trim().toLowerCase().replace(/\s+/g, "_") === "in_transit") ||
+    (order?.status.trim().toLowerCase() === "pending")
+  );
 
   const orderGroupItems = useMemo(() => {
     if (!order) return [];
@@ -514,7 +523,7 @@ const VendorOrderDetail = () => {
       await vendorOnboardingApi.updateVendorOrderStatus(user.id, currentItemId, status, assetTagsToSubmit);
       toast.success("Order status updated.");
       handleDispatchDialogChange(false);
-      await Promise.all([loadOrder(currentItemId), loadAllOrders(), loadOrderImages(currentItemId)]);
+      await Promise.all([loadOrder(currentItemId), loadAllOrders(), loadImageRequest(currentItemId)]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update status.";
       toast.error(message);
@@ -528,13 +537,59 @@ const VendorOrderDetail = () => {
     try {
       setUpdating(true);
       await vendorOnboardingApi.cancelAssignedVendorOrder(user.id, currentItemId);
-      // Photos are kept for the next vendor — leave this detail page (we no longer own the order).
-      toast.success("Order reassigned. Customer photos stay available for the next vendor.");
+      toast.success("Order reassigned. Any photo request for this item was closed.");
       navigate("/vendor/orders");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to cancel order.";
       toast.error(message);
       setUpdating(false);
+    }
+  };
+
+  const handleOrderImagePick = async (files: FileList | null) => {
+    if (!files?.length || !user?.id || !currentItemId || !imageRequest) return;
+    const remaining = MAX_ORDER_IMAGES - orderImages.length;
+    if (remaining <= 0) {
+      toast.error(`You can upload at most ${MAX_ORDER_IMAGES} photos for this request.`);
+      return;
+    }
+    const selected = Array.from(files).slice(0, remaining);
+    try {
+      setUploadingOrderImage(true);
+      for (const file of selected) {
+        if (!file.type.startsWith("image/")) {
+          toast.error("Only image files are allowed.");
+          continue;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error(`${file.name} is larger than 5 MB.`);
+          continue;
+        }
+        await vendorOnboardingApi.uploadVendorOrderImage(user.id, currentItemId, file);
+      }
+      toast.success("Photo uploaded.");
+      await loadImageRequest(currentItemId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to upload photo.";
+      toast.error(message);
+    } finally {
+      setUploadingOrderImage(false);
+      if (orderImageInputRef.current) orderImageInputRef.current.value = "";
+    }
+  };
+
+  const handleDeleteOrderImage = async (imageId: string) => {
+    if (!user?.id || !currentItemId) return;
+    try {
+      setDeletingOrderImageId(imageId);
+      await vendorOnboardingApi.deleteVendorOrderImage(user.id, currentItemId, imageId);
+      toast.success("Photo removed.");
+      await loadImageRequest(currentItemId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to remove photo.";
+      toast.error(message);
+    } finally {
+      setDeletingOrderImageId(null);
     }
   };
 
@@ -923,7 +978,11 @@ const VendorOrderDetail = () => {
                         {order.rentalNormalPrice != null &&
                         Number(order.rentalNormalPrice) > Number(order.rentalFinalPrice) ? (
                           <>
-                            <span className="line-through">₹{Number(order.rentalNormalPrice).toFixed(0)}</span>{" "}
+                            <span className="strike-diagonal font-semibold text-rose-500 dark:text-rose-400">
+                              ₹{Number(order.rentalNormalPrice).toLocaleString("en-IN", {
+                                maximumFractionDigits: 0,
+                              })}
+                            </span>{" "}
                           </>
                         ) : null}
                         Plan price ₹{Number(order.rentalFinalPrice).toFixed(0)}
@@ -950,8 +1009,8 @@ const VendorOrderDetail = () => {
             <AssignedSerialNumbersCard tags={order.assignedAssetTags} />
           )}
 
-          {/* Customer photos — only when customer has uploaded at least one */}
-          {!orderImagesLoading && orderImages.length > 0 && (
+          {/* Customer photo request — vendor uploads (hidden when no open request) */}
+          {!imageRequestLoading && imageRequest && (
             <>
               <Card className="border-border/80 shadow-sm">
                 <CardHeader className="pb-3">
@@ -961,47 +1020,95 @@ const VendorOrderDetail = () => {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-lg font-semibold leading-tight">Customer photos</p>
+                        <p className="text-lg font-semibold leading-tight">Customer photo request</p>
                         <Badge variant="secondary" className="font-normal tabular-nums">
-                          {orderImages.length}
+                          {orderImages.length}/{MAX_ORDER_IMAGES}
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Photos the customer sent for this item. Cleared automatically after delivery.
+                        From the customer for this order item — upload here (not Admin chat).{" "}
+                        {imageRequest.message}
                       </p>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="space-y-4 pt-0">
+                  <input
+                    ref={orderImageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => void handleOrderImagePick(e.target.files)}
+                  />
                   <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
                     {orderImages.map((img) => (
-                      <button
+                      <div
                         key={img.id}
-                        type="button"
-                        className="aspect-square overflow-hidden rounded-lg border border-border bg-muted"
-                        onClick={() => setPreviewImageUrl(img.fileUrl)}
-                        aria-label={img.originalFileName || "Customer photo"}
+                        className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted"
                       >
-                        <img
-                          src={img.fileUrl}
-                          alt={img.originalFileName || "Customer photo"}
-                          className="h-full w-full object-cover"
-                        />
-                      </button>
+                        <button
+                          type="button"
+                          className="h-full w-full"
+                          onClick={() => setPreviewImageUrl(img.fileUrl)}
+                          aria-label={img.originalFileName || "Order photo"}
+                        >
+                          <img
+                            src={img.fileUrl}
+                            alt={img.originalFileName || "Order photo"}
+                            className="h-full w-full object-cover"
+                          />
+                        </button>
+                        {canUploadOrderImages && (
+                          <button
+                            type="button"
+                            className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                            disabled={deletingOrderImageId === img.id}
+                            onClick={() => void handleDeleteOrderImage(img.id)}
+                            aria-label="Remove photo"
+                          >
+                            {deletingOrderImageId === img.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <X className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        )}
+                      </div>
                     ))}
+                    {canUploadOrderImages && orderImages.length < MAX_ORDER_IMAGES && (
+                      <button
+                        type="button"
+                        onClick={() => orderImageInputRef.current?.click()}
+                        disabled={uploadingOrderImage}
+                        className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-muted/40 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
+                      >
+                        {uploadingOrderImage ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <ImagePlus className="h-5 w-5" />
+                        )}
+                        <span className="text-[11px] font-medium">
+                          {uploadingOrderImage ? "Uploading…" : "Add photo"}
+                        </span>
+                      </button>
+                    )}
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    JPEG, PNG, or WebP · max 5 MB each · cleared after delivery, cancel, or dispatch failure
+                  </p>
                 </CardContent>
               </Card>
 
               <Dialog open={!!previewImageUrl} onOpenChange={(open) => !open && setPreviewImageUrl(null)}>
                 <DialogContent className="max-w-3xl p-2 sm:p-4">
                   <DialogHeader>
-                    <DialogTitle className="sr-only">Customer photo preview</DialogTitle>
+                    <DialogTitle className="sr-only">Order photo preview</DialogTitle>
                   </DialogHeader>
                   {previewImageUrl ? (
                     <img
                       src={previewImageUrl}
-                      alt="Customer photo preview"
+                      alt="Order photo preview"
                       className="max-h-[80vh] w-full rounded-md object-contain"
                     />
                   ) : null}

@@ -76,7 +76,7 @@ class ProductModel {
     );
   }
 
-  Map<String, dynamic> getAvailabilityBadge() {
+  Map<String, dynamic>? getAvailabilityBadge() {
     final s = availabilityStatus.trim().toLowerCase();
     final ls = listingStatus.trim().toLowerCase();
 
@@ -95,6 +95,7 @@ class ProductModel {
     if (s == 'low_stock' || availableQuantity <= 3) {
       return {'label': 'Low stock', 'color': 0xFFF57C00};
     }
-    return {'label': 'Available', 'color': 0xFF4CAF50};
+    // In-stock / available: no badge per product requirement
+    return null;
   }
 }

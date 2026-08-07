@@ -33,29 +33,31 @@ export function QuantityStepper({
   );
 
   const controls = (
-    <div className="inline-flex h-9 items-center rounded-full border border-border bg-background shadow-sm">
+    <div className="inline-flex items-center gap-0.5 rounded-lg border border-border bg-background p-0.5 shadow-sm">
       <Button
         type="button"
         variant="ghost"
         size="icon"
-        className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+        className="h-8 w-8 shrink-0 rounded-md text-foreground hover:bg-muted"
         aria-label={`Decrease ${label}`}
         disabled={value <= min}
         onClick={() => onChange(Math.max(min, value - 1))}
       >
-        <Minus className="h-4 w-4" />
+        <Minus className="h-[18px] w-[18px]" strokeWidth={2.5} />
       </Button>
-      <span className="min-w-[2.25rem] text-center text-sm font-semibold tabular-nums">{value}</span>
+      <span className="min-w-[2.25rem] select-none text-center text-sm font-bold tabular-nums">
+        {value}
+      </span>
       <Button
         type="button"
         variant="ghost"
         size="icon"
-        className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+        className="h-8 w-8 shrink-0 rounded-md text-foreground hover:bg-muted"
         aria-label={`Increase ${label}`}
         disabled={value >= max}
         onClick={() => onChange(Math.min(max, value + 1))}
       >
-        <Plus className="h-4 w-4" />
+        <Plus className="h-[18px] w-[18px]" strokeWidth={2.5} />
       </Button>
     </div>
   );

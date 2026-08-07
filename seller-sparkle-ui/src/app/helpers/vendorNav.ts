@@ -149,7 +149,12 @@ export const getVendorRoute = (notificationType?: string, title?: string): strin
     return "/vendor/order-requests";
   }
   
-  if (type === "order_confirmed" || type === "order_status_updated" || type.startsWith("order_")) {
+  if (
+    type === "order_confirmed" ||
+    type === "order_status_updated" ||
+    type === "order_photos_requested" ||
+    type.startsWith("order_")
+  ) {
     return "/vendor/orders";
   }
   

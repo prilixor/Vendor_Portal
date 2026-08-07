@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:flutter/services.dart';
+
 import '../../core/auth/auth_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
 
@@ -18,6 +21,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   String? _nameError;
+  String? _phoneError;
 
   @override
   void initState() {
@@ -57,8 +61,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (nameErr == null && _nameController.text.trim().length < 2) {
       nameTooShort = 'Please enter your full name (at least 2 characters).';
     }
-    setState(() => _nameError = nameErr ?? nameTooShort);
-    if (_nameError != null) {
+    final phoneErr = IndianMobilePhone.requiredError(_phoneController.text);
+    setState(() {
+      _nameError = nameErr ?? nameTooShort;
+      _phoneError = phoneErr;
+    });
+    if (_nameError != null || _phoneError != null) {
       showRequiredFieldsBlocked(context);
       return;
     }
@@ -71,7 +79,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ok = await provider.saveProfile(
       vendorId: vendorId,
       ownerName: _nameController.text,
-      supportPhone: _phoneController.text,
+      supportPhone: IndianMobilePhone.normalizeDigits(_phoneController.text),
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -144,11 +152,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  CustomTextField(
-                    label: 'Support phone',
-                    icon: Icons.phone_outlined,
+                  TextField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(10),
+                    ],
+                    style: TextStyle(color: colors.textPrimary),
+                    onChanged: (_) {
+                      if (_phoneError != null) {
+                        setState(() => _phoneError = null);
+                      }
+                    },
+                    decoration: requiredInputDecoration(
+                      context,
+                      label: 'Support phone',
+                      required: true,
+                      errorText: _phoneError,
+                      prefixIcon: Icons.phone_outlined,
+                    ).copyWith(
+                      prefixIcon: Icon(
+                        Icons.phone_outlined,
+                        color: AppTheme.accent,
+                      ),
+                      hintText: '9876543210',
+                      helperText: 'Indian mobile: 10 digits starting with 6–9',
+                    ),
                   ),
                   if (provider.profile!.businessName.isNotEmpty) ...[
                     const SizedBox(height: 16),

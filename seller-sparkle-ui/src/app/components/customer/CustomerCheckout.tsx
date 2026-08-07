@@ -24,6 +24,8 @@ import { CustomerMedicalReference, type DoctorRefSelection } from "./CustomerMed
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
 import { BackLink } from "@/app/components/shared/BackLink";
+import { StruckPrice } from "@/app/components/shared/RentalPeriodPlanDropdown";
+import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
 import { formatRentalDuration } from "@/app/helpers/rentalPeriod";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
@@ -371,12 +373,12 @@ const CustomerCheckout = () => {
           </Card>
 
           {needsPrescription && (
-            <Card className="border-teal-200 shadow-sm overflow-hidden bg-white">
-              <div className="bg-teal-50/70 px-5 py-4 border-b border-teal-100/70 flex items-start gap-3">
-                <FileText className="h-5 w-5 text-teal-700 shrink-0 mt-0.5" />
+            <Card className="overflow-hidden border-teal-200 bg-card shadow-sm dark:border-teal-500/30">
+              <div className="flex items-start gap-3 border-b border-teal-100/70 bg-teal-50/70 px-5 py-4 dark:border-teal-500/20 dark:bg-teal-500/10">
+                <FileText className="mt-0.5 h-5 w-5 shrink-0 text-teal-700 dark:text-teal-300" />
                 <div>
-                  <h3 className="font-semibold text-teal-950">Doctor reference (optional)</h3>
-                  <p className="text-sm text-teal-800/80 mt-0.5 leading-relaxed">
+                  <h3 className="font-semibold text-teal-950 dark:text-teal-50">Doctor reference (optional)</h3>
+                  <p className="mt-0.5 text-sm leading-relaxed text-teal-800/80 dark:text-teal-200/80">
                     Some items can include a doctor reference. Enter the Unique ID from your doctor or their QR share page.
                     You can also skip this and place the order without one.
                   </p>
@@ -395,7 +397,7 @@ const CustomerCheckout = () => {
                         <p className="font-medium">{l.title}</p>
                         {hasFilled ? (
                           <div className="mt-2 space-y-1">
-                            <div className="flex items-center gap-1.5 text-[13px] text-green-700 font-medium bg-green-50/80 w-fit px-2.5 py-1 rounded-md border border-green-200/60">
+                            <div className="flex w-fit items-center gap-1.5 rounded-md border border-green-200/60 bg-green-50/80 px-2.5 py-1 text-[13px] font-medium text-green-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
                               <CheckCircle2 className="h-3.5 w-3.5" />
                               <span>
                                 {mRef!.doctorName}
@@ -429,7 +431,7 @@ const CustomerCheckout = () => {
                               )}
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto p-0 border-teal-100">
+                          <DialogContent className="max-h-[90vh] overflow-y-auto border-border p-0 sm:max-w-[480px]">
                             <DialogTitle className="sr-only">Doctor Unique ID</DialogTitle>
                             <DialogDescription className="sr-only">
                               Look up doctor by Unique ID for {l.title}
@@ -510,14 +512,18 @@ const CustomerCheckout = () => {
                       <span>{l.title}</span>
                       {l.orderType === "rent" && isPlanBased ? (
                         <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                          {l.rentalDurationLabel || `${l.rentalDurationDays} days`}
+                          {dayPlanTitle(Number(l.rentalDurationDays ?? l.rentalDays ?? 0))}
                           {" · Starts on delivery"}
                           {l.rentalNormalPrice != null &&
                           Number(l.rentalNormalPrice) > Number(l.rentalFinalPrice) ? (
                             <>
                               {" · "}
-                              <span className="line-through">₹{Number(l.rentalNormalPrice).toFixed(0)}</span>{" "}
-                              ₹{Number(l.rentalFinalPrice).toFixed(0)}
+                              <StruckPrice className="text-[11px] font-semibold text-rose-500 dark:text-rose-400">
+                                ₹{Number(l.rentalNormalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                              </StruckPrice>{" "}
+                              <span className="font-semibold text-foreground">
+                                ₹{Number(l.rentalFinalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                              </span>
                             </>
                           ) : null}
                         </span>
@@ -574,7 +580,7 @@ const CustomerCheckout = () => {
                   <p className="text-xs text-muted-foreground">Updating distance-based charges…</p>
                 )}
                 {quote?.buySuggestions?.length ? (
-                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900">
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
                     {quote.buySuggestions.map((s) => (
                       <p key={s.listingId} className="leading-relaxed">
                         <span className="font-medium">{s.listingTitle}:</span> Rent ₹{s.rentAmount.toFixed(0)} meets or
@@ -586,7 +592,7 @@ const CustomerCheckout = () => {
             </div>
 
             <Button
-              className="w-full bg-foreground text-background hover:bg-foreground/90"
+              className="w-full bg-gradient-primary font-semibold text-primary-foreground shadow-glow hover:opacity-95"
               size="lg"
               disabled={placeMutation.isPending || !!quoteError || quoteLoading}
               onClick={() => {

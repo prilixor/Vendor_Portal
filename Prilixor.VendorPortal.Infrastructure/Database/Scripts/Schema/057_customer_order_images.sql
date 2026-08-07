@@ -1,5 +1,7 @@
--- Migration: Customer order images (max 5 per order; deleted from storage when delivered)
+-- Migration: Order photo storage (max 5 per request).
 -- Run on: customer_portal_db
+-- Note: Originally customer-upload; 058 adds request → vendor-upload flow.
+-- Keep this table; 058 adds request_id and customer_order_image_requests.
 
 \c customer_portal_db
 
@@ -30,4 +32,4 @@ CREATE INDEX IF NOT EXISTS ix_customer_order_images_vendor_id
     WHERE is_deleted = false;
 
 COMMENT ON TABLE public.customer_order_images IS
-    'Customer photos sent to the vendor for a specific order. Soft-deleted and removed from S3 when order is delivered (status=active).';
+    'Order photos (vendor-uploaded after 058). Soft-deleted and removed from S3 when request is closed (delivered, cancelled, or dispatch_failed).';

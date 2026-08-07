@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -128,7 +129,71 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok ? 'Order cancelled.' : (provider.error ?? 'Cancel failed')),
+        content: Text(
+          ok
+              ? 'Order cancelled. Any photo request was closed.'
+              : (provider.error ?? 'Cancel failed'),
+        ),
+        backgroundColor: ok ? null : Colors.redAccent,
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadPhotos() async {
+    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null) return;
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    final remaining = 5 - provider.orderImages.length;
+    if (remaining <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You can upload at most 5 photos.')),
+      );
+      return;
+    }
+    final result = await FilePicker.pickFiles(
+      type: FileType.image,
+      allowMultiple: true,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty || !mounted) return;
+    var uploaded = 0;
+    for (final file in result.files.take(remaining)) {
+      final ok = await provider.uploadOrderImage(
+        vendorId: vendorId,
+        orderId: _selectedOrderId,
+        file: file,
+      );
+      if (!ok) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(provider.error ?? 'Failed to upload photo.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
+      uploaded++;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(uploaded == 1 ? 'Photo uploaded.' : '$uploaded photos uploaded.')),
+    );
+  }
+
+  Future<void> _deletePhoto(String imageId) async {
+    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null) return;
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    final ok = await provider.deleteOrderImage(
+      vendorId: vendorId,
+      orderId: _selectedOrderId,
+      imageId: imageId,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Photo removed.' : (provider.error ?? 'Failed to remove photo.')),
         backgroundColor: ok ? null : Colors.redAccent,
       ),
     );
@@ -340,9 +405,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           const SizedBox(height: 10),
                           _ItemDetailsPanel(order: activeItem ?? order),
                           if (!provider.orderImagesLoading &&
-                              provider.orderImages.isNotEmpty) ...[
+                              provider.imageRequest != null) ...[
                             const SizedBox(height: 10),
-                            _CustomerPhotosCard(images: provider.orderImages),
+                            _PhotoRequestCard(
+                              request: provider.imageRequest!,
+                              images: provider.orderImages,
+                              busy: busy,
+                              canUpload: () {
+                                final s = (activeItem ?? order)
+                                    .status
+                                    .trim()
+                                    .toLowerCase()
+                                    .replaceAll(' ', '_');
+                                return s == 'pending' ||
+                                    s == 'confirmed' ||
+                                    s == 'in_transit';
+                              }(),
+                              onAdd: _pickAndUploadPhotos,
+                              onDelete: _deletePhoto,
+                            ),
                           ],
                           if (hasPending) ...[
                             const SizedBox(height: 10),
@@ -733,10 +814,22 @@ class _RequestBox extends StatelessWidget {
   }
 }
 
-class _CustomerPhotosCard extends StatelessWidget {
+class _PhotoRequestCard extends StatelessWidget {
+  final OrderImageRequest request;
   final List<OrderImage> images;
+  final bool busy;
+  final bool canUpload;
+  final VoidCallback onAdd;
+  final Future<void> Function(String imageId) onDelete;
 
-  const _CustomerPhotosCard({required this.images});
+  const _PhotoRequestCard({
+    required this.request,
+    required this.images,
+    required this.busy,
+    required this.canUpload,
+    required this.onAdd,
+    required this.onDelete,
+  });
 
   void _preview(BuildContext context, OrderImage image) {
     showDialog<void>(
@@ -774,38 +867,99 @@ class _CustomerPhotosCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final message = request.message.trim().isEmpty
+        ? 'Please share up to 5 photos for this order so we can proceed.'
+        : request.message;
+    final showAdd = canUpload && images.length < 5;
+    final itemCount = images.length + (showAdd ? 1 : 0);
+
     return _SectionCard(
-      title: 'Customer photos',
-      subtitle: '${images.length} photo${images.length == 1 ? '' : 's'} · cleared after delivery',
+      title: 'Customer photo request',
+      subtitle: 'From customer for this item (not Admin chat) · ${images.length}/5 · $message',
       compact: true,
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: images.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-        ),
-        itemBuilder: (context, index) {
-          final image = images[index];
-          return Material(
-            color: Colors.white.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(10),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () => _preview(context, image),
-              child: Image.network(
-                image.fileUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const Center(
-                  child: Icon(Icons.broken_image_outlined, color: Colors.white38),
-                ),
+      child: itemCount == 0
+          ? Text(
+              'No photos uploaded yet.',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 13),
+            )
+          : GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: itemCount,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
               ),
+              itemBuilder: (context, index) {
+                if (showAdd && index == images.length) {
+                  return Material(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(10),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: busy ? null : onAdd,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            busy ? Icons.hourglass_top : Icons.add_photo_alternate_outlined,
+                            color: Colors.white70,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            busy ? 'Uploading…' : 'Add photo',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final image = images[index];
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Material(
+                      color: Colors.white.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(10),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => _preview(context, image),
+                        child: Image.network(
+                          image.fileUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Icon(Icons.broken_image_outlined, color: Colors.white38),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (canUpload)
+                      Positioned(
+                        top: 2,
+                        right: 2,
+                        child: Material(
+                          color: Colors.black54,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: busy ? null : () => onDelete(image.id),
+                            child: const Padding(
+                              padding: EdgeInsets.all(4),
+                              child: Icon(Icons.close, size: 14, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 }

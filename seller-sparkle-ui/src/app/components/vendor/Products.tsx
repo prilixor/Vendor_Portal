@@ -15,6 +15,7 @@ import { TablePagination } from "@/app/components/shared/TablePagination";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
+import { SearchableSelect } from "@/app/components/shared/SearchableSelect";
 import { ProductListing } from "@/app/models";
 import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText, Loader2, Package, FlaskConical, Shield } from "lucide-react";
 import { toast } from "sonner";
@@ -1324,35 +1325,33 @@ const Products = () => {
                         <span className="ml-1.5 text-xs font-normal text-muted-foreground">(locked)</span>
                       ) : null}
                     </Label>
-                    <Select
+                    <SearchableSelect
+                      aria-label="Category"
                       value={editing.categoryId}
-                      onValueChange={(v) => {
+                      disabled={!!editing.id}
+                      placeholder="Search category…"
+                      searchPlaceholder="Search category…"
+                      emptyText="No category found."
+                      triggerClassName={cn(
+                        editing.id && "bg-muted/40",
+                        fieldErrors.categoryId && "border-destructive",
+                      )}
+                      options={categories
+                        .filter((c) =>
+                          catalogProducts.some(
+                            (p) =>
+                              p.categoryId === c.id &&
+                              (activeTab === "chemical"
+                                ? isChemicalCatalogProduct(p)
+                                : !isChemicalCatalogProduct(p)),
+                          ),
+                        )
+                        .map((c) => ({ value: c.id, label: c.name }))}
+                      onChange={(v) => {
                         onCategoryChange(v);
                         clearFieldError("categoryId");
                       }}
-                      disabled={!!editing.id}
-                    >
-                      <SelectTrigger className={cn(editing.id && "bg-muted/40", fieldErrors.categoryId && "border-destructive")}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories
-                          .filter((c) =>
-                            catalogProducts.some(
-                              (p) =>
-                                p.categoryId === c.id &&
-                                (activeTab === "chemical"
-                                  ? isChemicalCatalogProduct(p)
-                                  : !isChemicalCatalogProduct(p)),
-                            ),
-                          )
-                          .map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                    />
                     <FieldError message={fieldErrors.categoryId} />
                   </div>
                   <div className="space-y-1.5">
@@ -1362,10 +1361,27 @@ const Products = () => {
                         <span className="ml-1.5 text-xs font-normal text-muted-foreground">(locked)</span>
                       ) : null}
                     </Label>
-                    <Select
+                    <SearchableSelect
+                      aria-label="Product"
                       value={editing.productId}
                       disabled={!!editing.id}
-                      onValueChange={(v) => {
+                      placeholder="Search product…"
+                      searchPlaceholder="Search product…"
+                      emptyText="No product found."
+                      triggerClassName={cn(
+                        editing.id && "bg-muted/40",
+                        fieldErrors.productId && "border-destructive",
+                      )}
+                      options={catalogProducts
+                        .filter(
+                          (p) =>
+                            p.categoryId === editing.categoryId &&
+                            (activeTab === "chemical"
+                              ? isChemicalCatalogProduct(p)
+                              : !isChemicalCatalogProduct(p)),
+                        )
+                        .map((p) => ({ value: p.id, label: p.name }))}
+                      onChange={(v) => {
                         const selected = catalogProducts.find((p) => p.id === v);
                         setEditing({
                           ...editing,
@@ -1387,26 +1403,7 @@ const Products = () => {
                         });
                         clearFieldError("productId");
                       }}
-                    >
-                      <SelectTrigger className={cn(editing.id && "bg-muted/40", fieldErrors.productId && "border-destructive")}>
-                        <SelectValue placeholder="Choose product" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {catalogProducts
-                          .filter(
-                            (p) =>
-                              p.categoryId === editing.categoryId &&
-                              (activeTab === "chemical"
-                                ? isChemicalCatalogProduct(p)
-                                : !isChemicalCatalogProduct(p)),
-                          )
-                          .map((p) => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                    />
                     <FieldError message={fieldErrors.productId} />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
@@ -1972,9 +1969,9 @@ const Products = () => {
         if (!listing) return null;
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+            <Card className="w-full max-w-md bg-card p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20">
                   <Trash2 className="h-5 w-5 text-red-600" />
                 </div>
                 <div>
@@ -2024,9 +2021,9 @@ const Products = () => {
         const isActivating = statusConfirmAction === 'activate';
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+            <Card className="w-full max-w-md bg-card p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isActivating ? 'bg-green-100' : 'bg-amber-100'}`}>
+                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${isActivating ? "bg-green-100 dark:bg-emerald-500/20" : "bg-amber-100 dark:bg-amber-500/20"}`}>
                   {isActivating ? (
                     <ImageIcon className="h-5 w-5 text-green-600" />
                   ) : (

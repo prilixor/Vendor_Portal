@@ -1,11 +1,13 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/config/app_urls.dart';
+import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import 'login_screen.dart';
 
@@ -21,11 +23,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   bool _agreedToTerms = false;
   String? _nameError;
   String? _emailError;
+  String? _phoneError;
   String? _passwordError;
+  String? _confirmPasswordError;
 
   @override
   void dispose() {
@@ -33,19 +39,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
   bool _validate() {
     final nameErr = requiredMessage(_fullNameController.text, message: 'Full name is required');
     final emailErr = requiredMessage(_emailController.text, message: 'Email is required');
-    final passwordErr = requiredMessage(_passwordController.text, message: 'Password is required');
+    final phoneErr = IndianMobilePhone.optionalError(_phoneController.text);
+    String? passwordErr = requiredMessage(_passwordController.text, message: 'Password is required');
+    if (passwordErr == null && _passwordController.text.length < 8) {
+      passwordErr = 'Password must be at least 8 characters';
+    }
+    String? confirmErr = requiredMessage(
+      _confirmPasswordController.text,
+      message: 'Confirm password is required',
+    );
+    if (confirmErr == null && _confirmPasswordController.text != _passwordController.text) {
+      confirmErr = "Passwords don't match";
+    }
     setState(() {
       _nameError = nameErr;
       _emailError = emailErr;
+      _phoneError = phoneErr;
       _passwordError = passwordErr;
+      _confirmPasswordError = confirmErr;
     });
-    if (nameErr != null || emailErr != null || passwordErr != null) return false;
+    if (nameErr != null ||
+        emailErr != null ||
+        phoneErr != null ||
+        passwordErr != null ||
+        confirmErr != null) {
+      return false;
+    }
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -69,18 +95,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   void _register() async {
     if (!_validate()) {
-      if (_nameError != null || _emailError != null || _passwordError != null) {
+      if (_nameError != null ||
+          _emailError != null ||
+          _phoneError != null ||
+          _passwordError != null ||
+          _confirmPasswordError != null) {
         showRequiredFieldsBlocked(context);
       }
       return;
     }
 
+    final phoneRaw = _phoneController.text.trim();
+    final phone = phoneRaw.isEmpty ? null : IndianMobilePhone.normalizeDigits(phoneRaw);
     final provider = Provider.of<AuthProvider>(context, listen: false);
     final success = await provider.registerCustomer(
       _emailController.text.trim(),
       _passwordController.text,
       _fullNameController.text.trim(),
-      _phoneController.text.trim(),
+      phone,
     );
 
     if (!mounted) return;
@@ -177,10 +209,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _phoneController,
                 style: const TextStyle(color: Colors.white),
                 keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+                onChanged: (_) {
+                  if (_phoneError != null) setState(() => _phoneError = null);
+                },
                 decoration: requiredInputDecoration(
                   context,
                   label: 'Phone Number (Optional)',
+                  errorText: _phoneError,
                   prefixIcon: Icons.phone_outlined,
+                ).copyWith(
+                  hintText: '9876543210',
+                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.28)),
+                  helperText: 'Indian mobile: 10 digits starting with 6–9',
+                  helperStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11),
                 ),
               ),
               const SizedBox(height: 16),
@@ -198,8 +243,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   errorText: _passwordError,
                   prefixIcon: Icons.lock_outline,
                   suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.white54),
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: Colors.white54,
+                    ),
                     onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _confirmPasswordController,
+                style: const TextStyle(color: Colors.white),
+                obscureText: _obscureConfirmPassword,
+                onChanged: (_) {
+                  if (_confirmPasswordError != null) {
+                    setState(() => _confirmPasswordError = null);
+                  }
+                },
+                decoration: requiredInputDecoration(
+                  context,
+                  label: 'Confirm Password',
+                  required: true,
+                  errorText: _confirmPasswordError,
+                  prefixIcon: Icons.lock_clock_outlined,
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureConfirmPassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      color: Colors.white54,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
                   ),
                 ),
               ),

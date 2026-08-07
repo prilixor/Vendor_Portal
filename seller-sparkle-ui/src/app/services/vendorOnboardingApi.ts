@@ -483,11 +483,22 @@ export interface VendorDispatchOfferApiDto {
 export interface VendorOrderImageApiDto {
   id: string;
   orderId: string;
+  requestId?: string | null;
   fileUrl: string;
   originalFileName?: string | null;
   contentType?: string | null;
   sortOrder: number;
   createdAt: string;
+}
+
+export interface VendorOrderImageRequestApiDto {
+  id: string;
+  orderId: string;
+  vendorId: string;
+  status: string;
+  message: string;
+  requestedAt: string;
+  images: VendorOrderImageApiDto[];
 }
 
 export interface VendorOrderApiDto {
@@ -799,9 +810,25 @@ export const vendorOnboardingApi = {
     return apiClient.get<VendorOrderApiDto>(`/vendors/${vendorId}/orders/${orderId}`);
   },
 
-  getVendorOrderImages(vendorId: string, orderId: string) {
-    return apiClient.get<VendorOrderImageApiDto[]>(
+  async getVendorOrderImageRequest(vendorId: string, orderId: string) {
+    const row = await apiClient.get<VendorOrderImageRequestApiDto | null | undefined>(
+      `/vendors/${vendorId}/orders/${orderId}/image-request`,
+    );
+    return row ?? null;
+  },
+
+  uploadVendorOrderImage(vendorId: string, orderId: string, file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiClient.postForm<VendorOrderImageApiDto>(
       `/vendors/${vendorId}/orders/${orderId}/images`,
+      formData,
+    );
+  },
+
+  deleteVendorOrderImage(vendorId: string, orderId: string, imageId: string) {
+    return apiClient.delete(
+      `/vendors/${vendorId}/orders/${orderId}/images/${encodeURIComponent(imageId)}`,
     );
   },
 

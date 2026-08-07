@@ -9,6 +9,7 @@ import { authApi } from "@/app/services/authApi";
 import { getCustomerPortalHref } from "@/app/helpers/portalHost";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { isValidIndianMobile } from "@/app/helpers/indianMobilePhone";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -25,9 +26,8 @@ const Login = () => {
   const validate = () => {
     const e: typeof errors = {};
     const isEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
-    const phoneDigits = email.replace(/\D/g, "");
-    const isPhone = phoneDigits.length === 10;
-    if (!isEmail && !isPhone) e.email = "Enter a valid email address or phone number";
+    const isPhone = isValidIndianMobile(email);
+    if (!isEmail && !isPhone) e.email = "Enter a valid email address or 10-digit Indian mobile number";
     if (password.length < 8) e.password = "Password must be at least 8 characters";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -120,7 +120,7 @@ const Login = () => {
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               aria-label="Toggle password visibility"
             >
-              {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showPwd ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
             </button>
           </div>
           {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}

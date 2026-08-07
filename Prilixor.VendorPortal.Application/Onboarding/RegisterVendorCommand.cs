@@ -1,6 +1,6 @@
 using FluentValidation;
-using System.Linq;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
@@ -21,8 +21,8 @@ public sealed class RegisterVendorCommandValidator : AbstractValidator<RegisterV
         RuleFor(x => x.Password).NotEmpty().MinimumLength(8);
         RuleFor(x => x.SupportPhone)
             .NotEmpty()
-            .Matches("^\\d{10}$")
-            .WithMessage("Support phone must contain exactly 10 digits.");
+            .Must(IndianMobilePhone.IsValid)
+            .WithMessage(IndianMobilePhone.InvalidMessage);
     }
 }
 
@@ -48,15 +48,15 @@ internal sealed class RegisterVendorCommandHandler(
             return Result.Failure<VendorDto>(new Error("vendors.invalid_support_phone", "Support phone is required.", ErrorCategory.Validation));
         }
 
+        if (!IndianMobilePhone.TryNormalize(request.SupportPhone, out var normalizedPhone))
         {
-            var digits = new string(request.SupportPhone.Where(char.IsDigit).ToArray());
-            if (digits.Length != 10)
-            {
-                return Result.Failure<VendorDto>(new Error("vendors.invalid_support_phone", "Support phone must contain exactly 10 digits.", ErrorCategory.Validation));
-            }
-            // normalize to digits-only
-            request = request with { SupportPhone = digits };
+            return Result.Failure<VendorDto>(new Error(
+                "vendors.invalid_support_phone",
+                IndianMobilePhone.InvalidMessage,
+                ErrorCategory.Validation));
         }
+
+        request = request with { SupportPhone = normalizedPhone };
 
         var existingByPhone = await repository.GetVendorByPhoneAsync(request.SupportPhone, cancellationToken);
         if (existingByPhone is not null)

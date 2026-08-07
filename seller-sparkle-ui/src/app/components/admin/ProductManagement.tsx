@@ -1149,7 +1149,7 @@ const ProductManagement = () => {
         if (!product) return null;
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+            <Card className="w-full max-w-md bg-card p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
                   <Trash2 className="h-5 w-5 text-red-600" />
@@ -1201,7 +1201,7 @@ const ProductManagement = () => {
         const isActivating = statusConfirmAction === 'activate';
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+            <Card className="w-full max-w-md bg-card p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isActivating ? 'bg-green-100' : 'bg-amber-100'}`}>
                   {isActivating ? (
@@ -1272,7 +1272,7 @@ const ProductManagement = () => {
         const isActivating = categoryStatusConfirmAction === 'activate';
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+            <Card className="w-full max-w-md bg-card p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isActivating ? 'bg-green-100' : 'bg-amber-100'}`}>
                   {isActivating ? (
@@ -1341,7 +1341,7 @@ const ProductManagement = () => {
         if (!category) return null;
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+            <Card className="w-full max-w-md bg-card p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
                   <Trash2 className="h-5 w-5 text-red-600" />
@@ -1903,7 +1903,7 @@ const ProductManagement = () => {
                   <h4 className="text-sm font-semibold text-red-800">
                     {uploadErrors.length} Upload Error{uploadErrors.length !== 1 && 's'} Found
                   </h4>
-                  <Button variant="outline" size="sm" onClick={downloadErrorReport} className="h-7 text-xs bg-white text-red-700 hover:bg-red-50 border-red-200">
+                  <Button variant="outline" size="sm" onClick={downloadErrorReport} className="h-7 border-red-200 bg-card text-xs text-red-700 hover:bg-red-50 dark:border-red-500/40 dark:text-red-300 dark:hover:bg-red-500/10">
                     <Download className="mr-1 h-3 w-3" /> Download CSV
                   </Button>
                 </div>

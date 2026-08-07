@@ -7,7 +7,12 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+import {
+  maskIndianMobileInput,
+  normalizeIndianMobileDigits,
+  requiredIndianMobileError,
+} from "@/app/helpers/indianMobilePhone";
 
 const Field = ({ id, label, type, value, onChange, placeholder, error, required }: any) => (
   <div className="space-y-1.5">
@@ -25,6 +30,52 @@ const Field = ({ id, label, type, value, onChange, placeholder, error, required 
   </div>
 );
 
+const PasswordField = ({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+  error,
+  required,
+  show,
+  onToggle,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  error?: string;
+  required?: boolean;
+  show: boolean;
+  onToggle: () => void;
+}) => (
+  <div className="space-y-1.5">
+    <Label htmlFor={id} required={required}>{label}</Label>
+    <div className="relative">
+      <Input
+        id={id}
+        type={show ? "text" : "password"}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        aria-invalid={!!error}
+        className={error ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        aria-label={show ? "Hide password" : "Show password"}
+      >
+        {show ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+      </button>
+    </div>
+    {error && <p className="text-xs text-destructive">{error}</p>}
+  </div>
+);
+
 const Register = () => {
   const navigate = useNavigate();
   const { register } = useAuth();
@@ -33,6 +84,8 @@ const Register = () => {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -41,11 +94,8 @@ const Register = () => {
     const e: Record<string, string> = {};
     if (name.trim().length < 2) e.name = "Please enter your full name";
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) e.email = "Enter a valid email";
-    if (phone.trim().length === 0) {
-      e.phone = "Enter a valid phone number";
-    } else if (phone.trim().length !== 10) {
-      e.phone = "Phone number must be exactly 10 digits";
-    }
+    const phoneErr = requiredIndianMobileError(phone);
+    if (phoneErr) e.phone = phoneErr;
     if (password.length < 8) e.password = "Use at least 8 characters";
     if (confirm !== password) e.confirm = "Passwords don't match";
     setErrors(e);
@@ -57,7 +107,7 @@ const Register = () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      await register(email, password, phone);
+      await register(email, password, normalizeIndianMobileDigits(phone));
       sessionStorage.setItem("pending_verification_email", email.trim().toLowerCase());
       toast.success("Verification link has been sent to your email.");
       navigate("/verify-email-sent");
@@ -85,14 +135,37 @@ const Register = () => {
           label="Phone number"
           type="tel"
           value={phone}
-          onChange={(e: any) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-          placeholder="1234567890"
+          onChange={(e: any) => setPhone(maskIndianMobileInput(e.target.value))}
+          placeholder="9876543210"
           error={errors.phone}
           required
         />
+        <p className="text-[11px] text-muted-foreground -mt-2">
+          10-digit Indian mobile number starting with 6, 7, 8, or 9.
+        </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field id="password" label="Password" type="password" value={password} onChange={(e: any) => setPassword(e.target.value)} placeholder="••••••••" error={errors.password} required />
-          <Field id="confirm" label="Confirm" type="password" value={confirm} onChange={(e: any) => setConfirm(e.target.value)} placeholder="••••••••" error={errors.confirm} required />
+          <PasswordField
+            id="password"
+            label="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            error={errors.password}
+            required
+            show={showPwd}
+            onToggle={() => setShowPwd((v) => !v)}
+          />
+          <PasswordField
+            id="confirm"
+            label="Confirm"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder="••••••••"
+            error={errors.confirm}
+            required
+            show={showConfirmPwd}
+            onToggle={() => setShowConfirmPwd((v) => !v)}
+          />
         </div>
 
         <div className="flex items-start space-x-2 py-1">

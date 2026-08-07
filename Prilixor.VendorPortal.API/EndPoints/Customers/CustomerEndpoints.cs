@@ -1010,18 +1010,12 @@ public sealed class RequestBuyoutEndpoint(IMediator mediator)
     }
 }
 
-public sealed class CustomerOrderImageIdRequest
-{
-    public string OrderId { get; set; } = string.Empty;
-    public string ImageId { get; set; } = string.Empty;
-}
-
-public sealed class GetCustomerOrderImagesEndpoint(IMediator mediator)
-    : Endpoint<CustomerOrderIdRequest, Results<Ok<List<CustomerOrderImageDto>>, ProblemHttpResult>>
+public sealed class GetCustomerOrderImageRequestEndpoint(IMediator mediator)
+    : Endpoint<CustomerOrderIdRequest, Results<Ok<CustomerOrderImageRequestDto?>, ProblemHttpResult>>
 {
     public override void Configure()
     {
-        Get("me/orders/{OrderId}/images");
+        Get("me/orders/{OrderId}/image-request");
         AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
         Policies("CustomerOnly");
         Group<CustomersRouteGroup>();
@@ -1029,7 +1023,7 @@ public sealed class GetCustomerOrderImagesEndpoint(IMediator mediator)
         Options(x => x.WithTags("Customers"));
     }
 
-    public override async Task<Results<Ok<List<CustomerOrderImageDto>>, ProblemHttpResult>> ExecuteAsync(CustomerOrderIdRequest req, CancellationToken ct)
+    public override async Task<Results<Ok<CustomerOrderImageRequestDto?>, ProblemHttpResult>> ExecuteAsync(CustomerOrderIdRequest req, CancellationToken ct)
     {
         if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
@@ -1037,26 +1031,27 @@ public sealed class GetCustomerOrderImagesEndpoint(IMediator mediator)
         if (!Guid.TryParse(req.OrderId, out var orderId))
             return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
 
-        var result = await mediator.Send(new GetCustomerOrderImagesQuery(customerId, orderId), ct);
-        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+        var result = await mediator.Send(new GetCustomerOrderImageRequestQuery(customerId, orderId), ct);
+        return result.IsSuccess
+            ? TypedResults.Ok<CustomerOrderImageRequestDto?>(result.Value)
+            : result.ToErrorResponse();
     }
 }
 
-public sealed class UploadCustomerOrderImageEndpoint(IMediator mediator)
-    : Endpoint<CustomerOrderIdRequest, Results<Ok<CustomerOrderImageDto>, ProblemHttpResult>>
+public sealed class CreateCustomerOrderImageRequestEndpoint(IMediator mediator)
+    : Endpoint<CustomerOrderIdRequest, Results<Ok<CustomerOrderImageRequestDto>, ProblemHttpResult>>
 {
     public override void Configure()
     {
-        Post("me/orders/{OrderId}/images");
+        Post("me/orders/{OrderId}/image-request");
         AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
         Policies("CustomerOnly");
         Group<CustomersRouteGroup>();
-        AllowFileUploads();
         DontAutoTag();
         Options(x => x.WithTags("Customers"));
     }
 
-    public override async Task<Results<Ok<CustomerOrderImageDto>, ProblemHttpResult>> ExecuteAsync(CustomerOrderIdRequest req, CancellationToken ct)
+    public override async Task<Results<Ok<CustomerOrderImageRequestDto>, ProblemHttpResult>> ExecuteAsync(CustomerOrderIdRequest req, CancellationToken ct)
     {
         if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
@@ -1064,50 +1059,7 @@ public sealed class UploadCustomerOrderImageEndpoint(IMediator mediator)
         if (!Guid.TryParse(req.OrderId, out var orderId))
             return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
 
-        var file = Files.FirstOrDefault();
-        if (file is null || file.Length <= 0)
-            return TypedResults.Problem(title: "customers.order_images.missing_file", detail: "Image file is required.", statusCode: 400);
-
-        await using var ms = new MemoryStream();
-        await file.CopyToAsync(ms, ct);
-        var publicBase = new Uri($"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}");
-
-        var result = await mediator.Send(
-            new UploadCustomerOrderImageCommand(
-                customerId,
-                orderId,
-                file.FileName,
-                file.ContentType,
-                ms.ToArray(),
-                publicBase),
-            ct);
-
+        var result = await mediator.Send(new CreateCustomerOrderImageRequestCommand(customerId, orderId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
-    }
-}
-
-public sealed class DeleteCustomerOrderImageEndpoint(IMediator mediator)
-    : Endpoint<CustomerOrderImageIdRequest, Results<NoContent, ProblemHttpResult>>
-{
-    public override void Configure()
-    {
-        Delete("me/orders/{OrderId}/images/{ImageId}");
-        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
-        Policies("CustomerOnly");
-        Group<CustomersRouteGroup>();
-        DontAutoTag();
-        Options(x => x.WithTags("Customers"));
-    }
-
-    public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(CustomerOrderImageIdRequest req, CancellationToken ct)
-    {
-        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
-            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
-
-        if (!Guid.TryParse(req.OrderId, out var orderId) || !Guid.TryParse(req.ImageId, out var imageId))
-            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order or image id.", statusCode: 400);
-
-        var result = await mediator.Send(new DeleteCustomerOrderImageCommand(customerId, orderId, imageId), ct);
-        return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
     }
 }

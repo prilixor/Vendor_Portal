@@ -7,6 +7,11 @@ import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import {
+  maskIndianMobileInput,
+  normalizeIndianMobileDigits,
+  optionalIndianMobileError,
+} from "@/app/helpers/indianMobilePhone";
 
 const CustomerRegister = () => {
   const { registerCustomer, login } = useAuth();
@@ -14,7 +19,9 @@ const CustomerRegister = () => {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -22,7 +29,11 @@ const CustomerRegister = () => {
     const e: Record<string, string> = {};
     if (fullName.trim().length < 2) e.fullName = "Enter your full name";
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) e.email = "Valid email required";
+    const phoneErr = optionalIndianMobileError(phone);
+    if (phoneErr) e.phone = phoneErr;
     if (password.length < 8) e.password = "At least 8 characters";
+    if (!confirmPassword) e.confirmPassword = "Please confirm your password";
+    else if (confirmPassword !== password) e.confirmPassword = "Passwords don't match";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -32,7 +43,10 @@ const CustomerRegister = () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      await registerCustomer(email.trim(), password, fullName.trim(), phone.trim() || undefined);
+      const phoneNormalized = phone.trim()
+        ? normalizeIndianMobileDigits(phone)
+        : undefined;
+      await registerCustomer(email.trim(), password, fullName.trim(), phoneNormalized);
       await login(email.trim(), password, "customer");
       toast.success("Welcome! Your account is ready.");
       window.location.href = "/customer/shop";
@@ -78,7 +92,24 @@ const CustomerRegister = () => {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="phone">Phone (optional)</Label>
-          <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <Input
+            id="phone"
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel"
+            placeholder="9876543210"
+            value={phone}
+            onChange={(e) => setPhone(maskIndianMobileInput(e.target.value))}
+            aria-invalid={!!errors.phone}
+            className={errors.phone ? "border-destructive" : ""}
+          />
+          {errors.phone ? (
+            <p className="text-xs text-destructive">{errors.phone}</p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              10-digit Indian mobile starting with 6–9 (optional).
+            </p>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="password" required>Password</Label>
@@ -88,18 +119,41 @@ const CustomerRegister = () => {
               type={showPwd ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
               className={errors.password ? "border-destructive pr-10" : "pr-10"}
             />
             <button
               type="button"
               onClick={() => setShowPwd((v) => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              aria-label="Toggle password visibility"
+              aria-label={showPwd ? "Hide password" : "Show password"}
             >
-              {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showPwd ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
             </button>
           </div>
           {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="confirmPassword" required>Confirm password</Label>
+          <div className="relative">
+            <Input
+              id="confirmPassword"
+              type={showConfirmPwd ? "text" : "password"}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              className={errors.confirmPassword ? "border-destructive pr-10" : "pr-10"}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPwd((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label={showConfirmPwd ? "Hide confirm password" : "Show confirm password"}
+            >
+              {showConfirmPwd ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </button>
+          </div>
+          {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword}</p>}
         </div>
 
         <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>

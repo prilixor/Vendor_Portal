@@ -16,6 +16,8 @@ class ResetPasswordScreen extends StatefulWidget {
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
   bool _done = false;
 
   @override
@@ -114,7 +116,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _passwordController,
-              obscureText: true,
+              obscureText: _obscurePassword,
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 labelText: 'New password',
@@ -125,12 +127,20 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
+                suffixIcon: IconButton(
+                  tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  icon: Icon(
+                    _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    color: Colors.white54,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _confirmController,
-              obscureText: true,
+              obscureText: _obscureConfirm,
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 labelText: 'Confirm password',
@@ -140,6 +150,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
+                ),
+                suffixIcon: IconButton(
+                  tooltip: _obscureConfirm ? 'Show password' : 'Hide password',
+                  onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                  icon: Icon(
+                    _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    color: Colors.white54,
+                  ),
                 ),
               ),
             ),

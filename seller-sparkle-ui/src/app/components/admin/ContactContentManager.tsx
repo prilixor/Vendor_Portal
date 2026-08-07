@@ -9,6 +9,11 @@ import { websiteContentApi } from "@/app/services/websiteContentApi";
 import { useQueryClient } from "@tanstack/react-query";
 import { Mail, Phone, Clock, FileText, Save, RotateCcw, Send, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  INDIAN_MOBILE_MESSAGE,
+  isValidIndianMobile,
+  normalizeIndianMobileDigits,
+} from "@/app/helpers/indianMobilePhone";
 
 export function ContactContentManager() {
   const queryClient = useQueryClient();
@@ -62,13 +67,18 @@ export function ContactContentManager() {
   }, []);
 
   const handleSave = async () => {
+    if (!isValidIndianMobile(phone)) {
+      toast.error(INDIAN_MOBILE_MESSAGE);
+      return;
+    }
+    const displayPhone = `+91 ${normalizeIndianMobileDigits(phone)}`;
     setSaving(true);
     try {
       await websiteContentApi.updateContactContent({
         heroTitle,
         heroAccent,
         heroSub,
-        phone,
+        phone: displayPhone,
         email,
         operatingHours,
         institutionalNote,
@@ -170,9 +180,14 @@ export function ContactContentManager() {
               </Label>
               <Input
                 id="phone"
+                type="tel"
+                placeholder="+91 9876543210"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
+              <p className="text-[11px] text-muted-foreground">
+                Indian mobile (10 digits starting with 6–9). Saved as +91…
+              </p>
             </div>
 
             <div className="space-y-2">

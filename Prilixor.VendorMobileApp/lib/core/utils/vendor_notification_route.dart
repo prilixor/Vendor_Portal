@@ -50,6 +50,7 @@ VendorNotificationRoute? resolveVendorNotificationRoute({
 
   if (type == 'order_confirmed' ||
       type == 'order_status_updated' ||
+      type == 'order_photos_requested' ||
       type.startsWith('order_')) {
     return _ordersRoute(orderIdFromMessage);
   }

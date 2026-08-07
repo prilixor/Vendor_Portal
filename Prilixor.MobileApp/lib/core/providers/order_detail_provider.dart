@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../api/api_client.dart';
 import '../models/order_model.dart';
 import '../models/order_action_model.dart';
+import '../models/order_image_request_model.dart';
 
 class OrderDetailProvider extends ChangeNotifier {
   final ApiClient _apiClient = ApiClient();
@@ -26,6 +27,23 @@ class OrderDetailProvider extends ChangeNotifier {
   bool _isActionLoading = false;
   bool get isActionLoading => _isActionLoading;
 
+  bool _imageRequestLoading = false;
+  bool get imageRequestLoading => _imageRequestLoading;
+
+  /// Open photo requests keyed by order line item id.
+  final Map<String, OrderImageRequestModel> _imageRequestsByOrderId = {};
+  Map<String, OrderImageRequestModel> get imageRequestsByOrderId =>
+      Map.unmodifiable(_imageRequestsByOrderId);
+
+  OrderImageRequestModel? imageRequestFor(String orderId) =>
+      _imageRequestsByOrderId[orderId];
+
+  /// Legacy single-item accessor (selected line).
+  OrderImageRequestModel? get imageRequest =>
+      _currentOrder == null ? null : _imageRequestsByOrderId[_currentOrder!.id];
+
+  List<OrderImageModel> get orderImages => imageRequest?.images ?? const [];
+
   Future<void> fetchOrderDetail(String orderId) async {
     _isLoading = true;
     _errorMessage = null;
@@ -44,6 +62,7 @@ class OrderDetailProvider extends ChangeNotifier {
       );
       if (response.statusCode == 200) {
         _currentOrder = OrderModel.fromJson(response.data);
+        await fetchImageRequest(orderId, silent: true);
       }
     } on DioException catch (e) {
       _errorMessage = 'Failed to load order: ${e.message}';
@@ -53,6 +72,99 @@ class OrderDetailProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> fetchGroupImageRequests(List<String> orderIds) async {
+    final ids = orderIds.where((id) => id.isNotEmpty).toSet().toList();
+    if (ids.isEmpty) {
+      _imageRequestsByOrderId.clear();
+      notifyListeners();
+      return;
+    }
+    _imageRequestLoading = true;
+    notifyListeners();
+    try {
+      await Future.wait(ids.map((id) => fetchImageRequest(id, silent: true)));
+      _imageRequestsByOrderId.removeWhere((key, _) => !ids.contains(key));
+    } finally {
+      _imageRequestLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<OrderImageRequestModel?> fetchImageRequest(
+    String orderId, {
+    bool silent = false,
+  }) async {
+    if (orderId.isEmpty) return null;
+    if (!silent) {
+      _imageRequestLoading = true;
+      notifyListeners();
+    }
+    try {
+      final response =
+          await _apiClient.dio.get('/customers/me/orders/$orderId/image-request');
+      final data = response.data;
+      if (data is Map) {
+        _imageRequestsByOrderId[orderId] =
+            OrderImageRequestModel.fromJson(Map<String, dynamic>.from(data));
+      } else {
+        _imageRequestsByOrderId.remove(orderId);
+      }
+    } on DioException catch (_) {
+      _imageRequestsByOrderId.remove(orderId);
+    } catch (_) {
+      _imageRequestsByOrderId.remove(orderId);
+    } finally {
+      if (!silent) {
+        _imageRequestLoading = false;
+        notifyListeners();
+      }
+    }
+    return _imageRequestsByOrderId[orderId];
+  }
+
+  Future<bool> createImageRequest(String orderId) async {
+    final result = await createImageRequests([orderId]);
+    return result.succeeded > 0;
+  }
+
+  Future<({int succeeded, int failed})> createImageRequests(
+    List<String> orderIds,
+  ) async {
+    _isActionLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    var succeeded = 0;
+    var failed = 0;
+    try {
+      for (final orderId in orderIds) {
+        try {
+          final response = await _apiClient.dio.post(
+            '/customers/me/orders/$orderId/image-request',
+            data: <String, dynamic>{},
+            options: Options(contentType: Headers.jsonContentType),
+          );
+          if (response.statusCode == 200 && response.data is Map) {
+            _imageRequestsByOrderId[orderId] = OrderImageRequestModel.fromJson(
+              Map<String, dynamic>.from(response.data as Map),
+            );
+            succeeded++;
+          } else {
+            failed++;
+          }
+        } catch (_) {
+          failed++;
+        }
+      }
+      if (succeeded == 0 && failed > 0) {
+        _errorMessage = 'Failed to request photos.';
+      }
+    } finally {
+      _isActionLoading = false;
+      notifyListeners();
+    }
+    return (succeeded: succeeded, failed: failed);
   }
 
   Future<bool> cancelOrder(String orderId) async {

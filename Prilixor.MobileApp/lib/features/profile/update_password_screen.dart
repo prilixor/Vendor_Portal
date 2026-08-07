@@ -15,6 +15,9 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
   final _currentPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
   String? _currentError;
   String? _newError;
   String? _confirmError;
@@ -99,7 +102,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
               TextField(
                 controller: _currentPasswordController,
                 style: const TextStyle(color: Colors.white),
-                obscureText: true,
+                obscureText: _obscureCurrent,
                 onChanged: (_) {
                   if (_currentError != null) setState(() => _currentError = null);
                 },
@@ -109,13 +112,22 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                   required: true,
                   errorText: _currentError,
                   prefixIcon: Icons.lock_outline,
+                ).copyWith(
+                  suffixIcon: IconButton(
+                    tooltip: _obscureCurrent ? 'Show password' : 'Hide password',
+                    onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
+                    icon: Icon(
+                      _obscureCurrent ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: Colors.white54,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: _newPasswordController,
                 style: const TextStyle(color: Colors.white),
-                obscureText: true,
+                obscureText: _obscureNew,
                 onChanged: (_) {
                   if (_newError != null) setState(() => _newError = null);
                 },
@@ -125,13 +137,22 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                   required: true,
                   errorText: _newError,
                   prefixIcon: Icons.lock,
+                ).copyWith(
+                  suffixIcon: IconButton(
+                    tooltip: _obscureNew ? 'Show password' : 'Hide password',
+                    onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                    icon: Icon(
+                      _obscureNew ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: Colors.white54,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: _confirmPasswordController,
                 style: const TextStyle(color: Colors.white),
-                obscureText: true,
+                obscureText: _obscureConfirm,
                 onChanged: (_) {
                   if (_confirmError != null) setState(() => _confirmError = null);
                 },
@@ -141,6 +162,15 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                   required: true,
                   errorText: _confirmError,
                   prefixIcon: Icons.lock_clock,
+                ).copyWith(
+                  suffixIcon: IconButton(
+                    tooltip: _obscureConfirm ? 'Show password' : 'Hide password',
+                    onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                    icon: Icon(
+                      _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: Colors.white54,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 32),

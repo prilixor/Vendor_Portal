@@ -1231,11 +1231,11 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
         }
 
         order.Status = target;
-        // Admin marked delivered → delete order photos from S3/storage immediately.
+        // Admin marked delivered → close photo request + delete images from S3.
         if (target == "active")
         {
-            await CustomerOrderImageLifecycle.PurgeForOrderAsync(
-                customers, uploadStorage, order.Id, deletedBy: adminUserId, cancellationToken);
+            await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
+                customers, uploadStorage, order.Id, closedReason: "delivered", deletedBy: adminUserId, cancellationToken);
         }
 
         await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
@@ -1322,6 +1322,7 @@ public sealed record AdminReassignVendorOrderCommand(string AdminId, Guid OrderI
 internal sealed class AdminReassignVendorOrderCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
+    IVendorUploadStorageService uploadStorage,
     Microsoft.Extensions.Options.IOptions<Prilixor.VendorPortal.Domain.Options.CustomerPricingOptions> pricingOptions)
     : ICommandHandler<AdminReassignVendorOrderCommand, AdminOrderDto>
 {
@@ -1340,6 +1341,9 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
             return Result.Failure<AdminOrderDto>(new Error("admin.invalid_order_status", "Only dispatch_failed or confirmed orders can be reassigned.", ErrorCategory.Validation));
 
         var oldVendorId = orderRow.Listing?.VendorId;
+        // Reassignment ends the previous vendor fulfillment — hide/purge any photo request.
+        await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
+            customers, uploadStorage, order.Id, closedReason: "cancelled", deletedBy: adminUserId, cancellationToken);
         order.Status = "awaiting_vendor_acceptance";
         
         var agg = await customers.GetListingForCustomerAsync(order.VendorProductListingId, cancellationToken);
@@ -1401,6 +1405,8 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
         if (ranked.Count == 0)
         {
             order.Status = "dispatch_failed";
+            await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
+                customers, uploadStorage, order.Id, closedReason: "dispatch_failed", deletedBy: adminUserId, cancellationToken);
             await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
             return Result.Failure<AdminOrderDto>(new Error("admin.reassign.no_vendor", "No other eligible vendors available right now.", ErrorCategory.Validation));
@@ -1446,7 +1452,8 @@ public sealed record AdminForceCancelRefundOrderCommand(string AdminId, Guid Ord
 
 internal sealed class AdminForceCancelRefundOrderCommandHandler(
     ICustomerRepository customers,
-    IVendorOnboardingRepository vendors)
+    IVendorOnboardingRepository vendors,
+    IVendorUploadStorageService uploadStorage)
     : ICommandHandler<AdminForceCancelRefundOrderCommand, AdminOrderDto>
 {
     public async Task<Result<AdminOrderDto>> Handle(AdminForceCancelRefundOrderCommand request, CancellationToken cancellationToken)
@@ -1463,6 +1470,8 @@ internal sealed class AdminForceCancelRefundOrderCommandHandler(
             return Result.Failure<AdminOrderDto>(new Error("admin.invalid_order_status", "Order is already cancelled or returned.", ErrorCategory.Validation));
 
         o.Status = "cancelled";
+        await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
+            customers, uploadStorage, o.Id, closedReason: "cancelled", deletedBy: adminUserId, cancellationToken);
         await customers.UpdateCustomerRentalOrderAsync(o, cancellationToken);
 
         var auditLog = new AdminAuditLog
@@ -1504,6 +1513,7 @@ public sealed record AdminRestartOrderDispatchCommand(string AdminId, Guid Order
 internal sealed class AdminRestartOrderDispatchCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
+    IVendorUploadStorageService uploadStorage,
     Microsoft.Extensions.Options.IOptions<Prilixor.VendorPortal.Domain.Options.CustomerPricingOptions> pricingOptions)
     : ICommandHandler<AdminRestartOrderDispatchCommand, AdminOrderDto>
 {
@@ -1582,6 +1592,8 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
         if (ranked.Count == 0)
         {
             order.Status = "dispatch_failed";
+            await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
+                customers, uploadStorage, order.Id, closedReason: "dispatch_failed", deletedBy: adminUserId, cancellationToken);
             await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
             return Result.Failure<AdminOrderDto>(new Error("admin.restart.no_vendor", "Cannot restart dispatch: No eligible vendors found with sufficient stock or within delivery range.", ErrorCategory.Validation));

@@ -13,12 +13,12 @@ import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDial
 import { BackLink } from "@/app/components/shared/BackLink";
 import {
   RentalPeriodPlanDropdown,
-  planDiscountPercent,
-  planSavings,
   sortActiveRentalPlans,
 } from "@/app/components/shared/RentalPeriodPlanDropdown";
+import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
 import { toast } from "sonner";
 import {
+  AlertCircle,
   Check,
   ShoppingBag,
   ShoppingCart,
@@ -26,17 +26,10 @@ import {
   ShieldCheck,
   Truck,
 } from "lucide-react";
-import {
-  DEFAULT_UI_RENTAL_UNIT,
-  RENTAL_UNIT_LABELS,
-  RENTAL_UNITS_VISIBLE_IN_UI,
-  estimateRent,
-  evaluateRentVsBuy,
-  type RentalPeriodUnit,
-} from "@/app/helpers/rentalPeriod";
+import { evaluateRentVsBuy } from "@/app/helpers/rentalPeriod";
 import { cn } from "@/app/helpers/utils";
 
-function availabilityBadge(status: string, qty: number): { label: string; className: string } {
+function availabilityBadge(status: string, qty: number): { label: string; className: string } | null {
   const s = status.trim().toLowerCase();
   const listingVisible = s === "available" || s === "low_stock" || s === "out_of_stock";
   if (!listingVisible) {
@@ -63,10 +56,8 @@ function availabilityBadge(status: string, qty: number): { label: string; classN
       className: "border-0 bg-amber-600 text-white hover:bg-amber-600",
     };
   }
-  return {
-    label: "Available",
-    className: "border-0 bg-emerald-600 text-white hover:bg-emerald-600",
-  };
+  // In-stock / available: no badge per product requirement
+  return null;
 }
 
 function formatInr(value: number): string {
@@ -79,8 +70,6 @@ const CustomerListingDetail = () => {
   const { user } = useAuth();
   const { addLine } = useCart();
   const [qty, setQty] = useState(1);
-  const [periods, setPeriods] = useState(1);
-  const [periodUnit, setPeriodUnit] = useState<RentalPeriodUnit>(DEFAULT_UI_RENTAL_UNIT);
   const [orderType, setOrderType] = useState<"rent" | "buy">("rent");
   const [selectedVariantId, setSelectedVariantId] = useState<string>("");
   const [selectedPlanId, setSelectedPlanId] = useState<string>("");
@@ -192,27 +181,26 @@ const CustomerListingDetail = () => {
   const rentEstimate =
     actualOrderType === "buy"
       ? unitPrice * qty
-      : hasPricingPlans && selectedPlan
+      : selectedPlan
         ? Number(selectedPlan.finalRentalPrice) * qty
-        : estimateRent(periodUnit, periods, qty, rentRates);
+        : 0;
 
   const promptRentToBuyIfNeeded = (next: {
-    periods?: number;
-    periodUnit?: RentalPeriodUnit;
     qty?: number;
     plan?: RentalPricingPlanDto | null;
   }): boolean => {
     if (!canBuy || unitPrice <= 0) return false;
     const plan = next.plan !== undefined ? next.plan : selectedPlan;
+    if (!plan) return false;
     const check = evaluateRentVsBuy({
       buyPrice: unitPrice,
       isBuyEnabled: canBuy,
       quantity: next.qty ?? qty,
-      periods: plan?.durationDays ?? next.periods ?? periods,
-      unit: plan ? "day" : (next.periodUnit ?? periodUnit),
+      periods: plan.durationDays,
+      unit: "day",
       rates: rentRates,
-      planFinalPrice: hasPricingPlans && plan ? plan.finalRentalPrice : null,
-      planDurationLabel: hasPricingPlans && plan ? plan.durationLabel || `${plan.durationDays} days` : null,
+      planFinalPrice: plan.finalRentalPrice,
+      planDurationLabel: plan.durationLabel || `${plan.durationDays} days`,
     });
     if (!check.shouldForceBuy) return false;
     setRentToBuyInfo({
@@ -222,16 +210,6 @@ const CustomerListingDetail = () => {
     });
     setRentToBuyOpen(true);
     return true;
-  };
-
-  const handlePeriodsChange = (next: number) => {
-    if (promptRentToBuyIfNeeded({ periods: next })) return;
-    setPeriods(next);
-  };
-
-  const handlePeriodUnitChange = (next: RentalPeriodUnit) => {
-    if (promptRentToBuyIfNeeded({ periodUnit: next })) return;
-    setPeriodUnit(next);
   };
 
   const handleQtyChange = (next: number) => {
@@ -273,14 +251,15 @@ const CustomerListingDetail = () => {
       toast.error("Please select a packaging size.");
       return;
     }
-    if (actualOrderType === "rent" && hasPricingPlans) {
-      if (!selectedPlan) {
-        toast.error("Please select a rental duration.");
-        return;
-      }
-    } else if (qty < 1 || (actualOrderType === "rent" && periods < 1)) {
+    if (qty < 1) {
       toast.error("Please fill in the required fields.");
       return;
+    }
+    if (actualOrderType === "rent") {
+      if (!hasPricingPlans || !selectedPlan) {
+        toast.error("Rental plans are not configured for this product.");
+        return;
+      }
     }
     if (qty > currentAvailableQuantity) {
       toast.error(`Only ${currentAvailableQuantity} unit(s) available in stock.`);
@@ -295,7 +274,7 @@ const CustomerListingDetail = () => {
       ? `${data.title} (${selectedVariant.sizeValue} ${selectedVariant.sizeUnit})`
       : data.title;
 
-    const planBased = actualOrderType === "rent" && hasPricingPlans && selectedPlan;
+    const planBased = actualOrderType === "rent" && !!selectedPlan;
 
     addLine({
       listingId: data.id,
@@ -307,8 +286,8 @@ const CustomerListingDetail = () => {
       securityDeposit: data.securityDeposit,
       primaryImageUrl: images[0],
       quantity: qty,
-      rentalDays: actualOrderType === "buy" ? 0 : planBased ? selectedPlan.durationDays : periods,
-      rentalPeriodUnit: actualOrderType === "buy" ? "day" : planBased ? "day" : periodUnit,
+      rentalDays: actualOrderType === "buy" ? 0 : selectedPlan!.durationDays,
+      rentalPeriodUnit: "day",
       orderType: actualOrderType,
       prescriptionRequired: data.prescriptionRequired,
       productVariantId: selectedVariantId || undefined,
@@ -317,7 +296,10 @@ const CustomerListingDetail = () => {
       ...(planBased
         ? {
             rentalPricingPlanId: selectedPlan.id,
-            rentalDurationLabel: selectedPlan.durationLabel,
+            rentalDurationLabel: dayPlanTitle(
+              selectedPlan.durationDays,
+              selectedPlan.durationLabel,
+            ),
             rentalDurationDays: selectedPlan.durationDays,
             rentalNormalPrice: selectedPlan.normalPrice,
             rentalDiscountType: selectedPlan.discountType,
@@ -343,7 +325,7 @@ const CustomerListingDetail = () => {
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
                 Medical equipment
               </p>
-              <Badge className={badge.className}>{badge.label}</Badge>
+              {badge ? <Badge className={badge.className}>{badge.label}</Badge> : null}
             </div>
             <h1 className="text-2xl font-bold tracking-tight sm:text-[1.75rem] sm:leading-tight">
               {data.title}
@@ -429,7 +411,7 @@ const CustomerListingDetail = () => {
                               key={`alt-${v.id}`}
                               type="button"
                               onClick={() => setSelectedVariantId(v.id)}
-                              className="rounded-md border border-amber-400 bg-white px-2 py-1 font-semibold text-amber-900 hover:bg-amber-100 dark:bg-transparent dark:text-amber-100"
+                              className="rounded-md border border-amber-400 bg-white px-2 py-1 font-semibold text-amber-900 hover:bg-amber-100 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-500/15"
                             >
                               {v.sizeValue} {v.sizeUnit} · ₹{v.buyPrice.toFixed(0)} · {stock} left
                             </button>
@@ -444,38 +426,7 @@ const CustomerListingDetail = () => {
               </div>
             ) : (
               <div className="space-y-2 text-sm">
-                {canRent && !hasPricingPlans && (
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-lg bg-muted/40 px-2.5 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Daily
-                      </p>
-                      <p className="mt-0.5 font-bold tabular-nums">
-                        ₹
-                        {Math.round(
-                          (data.dailyRent ?? 0) > 0
-                            ? data.dailyRent
-                            : (data.weeklyRent ?? 0) > 0
-                              ? (data.weeklyRent ?? 0) / 7
-                              : 0,
-                        ).toLocaleString("en-IN")}
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-muted/40 px-2.5 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Monthly
-                      </p>
-                      <p className="mt-0.5 font-bold tabular-nums">₹{data.monthlyRent.toFixed(0)}</p>
-                    </div>
-                    <div className="rounded-lg bg-muted/40 px-2.5 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Deposit
-                      </p>
-                      <p className="mt-0.5 font-bold tabular-nums">₹{data.securityDeposit.toFixed(0)}</p>
-                    </div>
-                  </div>
-                )}
-                {canRent && hasPricingPlans && (
+                {canRent && (
                   <div className="flex items-baseline justify-between rounded-lg bg-muted/40 px-3 py-2">
                     <span className="text-sm text-muted-foreground">Security deposit</span>
                     <span className="font-bold tabular-nums">₹{data.securityDeposit.toFixed(0)}</span>
@@ -587,22 +538,22 @@ const CustomerListingDetail = () => {
                   />
 
                   {/* Live copy — same as production listing detail */}
-                  <p className="inline-flex items-center gap-2 text-[13px] font-medium text-slate-600">
-                    <Truck className="h-4 w-4 shrink-0 text-violet-500" />
+                  <p className="inline-flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
+                    <Truck className="h-4 w-4 shrink-0 text-violet-500 dark:text-violet-400" />
                     Starts when the order is delivered
                   </p>
 
                   {/* Checkout strip: qty + deposit + rent due */}
-                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                     <div className="flex items-center justify-between gap-3 px-4 py-4">
                       <div className="min-w-0">
-                        <p className="text-[14px] font-bold tracking-tight text-slate-900">
+                        <p className="text-[14px] font-bold tracking-tight text-foreground">
                           Quantity
                           <span className="ml-0.5 text-destructive" aria-hidden>
                             *
                           </span>
                         </p>
-                        <p className="mt-0.5 text-[12px] font-medium text-slate-500">
+                        <p className="mt-0.5 text-[12px] font-medium text-muted-foreground">
                           {currentAvailableQuantity > 0
                             ? `${currentAvailableQuantity} available`
                             : "Select how many units"}
@@ -620,23 +571,23 @@ const CustomerListingDetail = () => {
                       />
                     </div>
 
-                    <div className="space-y-3 border-t border-slate-100 bg-gradient-to-br from-slate-50 to-white px-4 py-4">
-                      <div className="flex items-center justify-between gap-3 rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200/80">
-                        <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-700">
-                          <ShieldCheck className="h-[18px] w-[18px] text-emerald-600" />
+                    <div className="space-y-3 border-t border-border bg-muted/30 px-4 py-4">
+                      <div className="flex items-center justify-between gap-3 rounded-xl bg-background px-3.5 py-3 ring-1 ring-inset ring-border">
+                        <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-foreground">
+                          <ShieldCheck className="h-[18px] w-[18px] text-emerald-600 dark:text-emerald-400" />
                           Refundable deposit
                         </span>
-                        <span className="text-[15px] font-bold tabular-nums text-slate-900">
+                        <span className="text-[15px] font-bold tabular-nums text-foreground">
                           {formatInr(data.securityDeposit * qty)}
                         </span>
                       </div>
 
                       <div className="flex items-end justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-[14px] font-bold tracking-tight text-slate-900">
+                          <p className="text-[14px] font-bold tracking-tight text-foreground">
                             You pay for rent
                           </p>
-                          <p className="mt-1 text-[12px] font-medium leading-snug text-slate-500">
+                          <p className="mt-1 text-[12px] font-medium leading-snug text-muted-foreground">
                             {qty > 1
                               ? `${formatInr(selectedPlan.finalRentalPrice)} × ${qty} units`
                               : "Excludes deposit & delivery"}
@@ -645,7 +596,9 @@ const CustomerListingDetail = () => {
                         <p
                           className={cn(
                             "text-[24px] font-extrabold leading-none tabular-nums tracking-tight",
-                            selectedPlan.isRecommended ? "text-blue-600" : "text-violet-600",
+                            selectedPlan.isRecommended
+                              ? "text-blue-600 dark:text-blue-400"
+                              : "text-violet-600 dark:text-violet-400",
                           )}
                         >
                           {formatInr(selectedPlan.finalRentalPrice * qty)}
@@ -657,24 +610,15 @@ const CustomerListingDetail = () => {
               ) : null}
 
               {actualOrderType === "rent" && !hasPricingPlans ? (
-                <div className="grid grid-cols-2 gap-2">
-                  {RENTAL_UNITS_VISIBLE_IN_UI.map((u) => {
-                    const selected = periodUnit === u;
-                    return (
-                      <button
-                        key={u}
-                        type="button"
-                        onClick={() => handlePeriodUnitChange(u)}
-                        className={`rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition-all ${
-                          selected
-                            ? "border-primary bg-gradient-primary text-primary-foreground shadow-md shadow-primary/20"
-                            : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                        }`}
-                      >
-                        {RENTAL_UNIT_LABELS[u].plural}
-                      </button>
-                    );
-                  })}
+                <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/80 px-3.5 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="font-semibold">Rental plans not configured</p>
+                    <p className="text-[13px] leading-snug opacity-90">
+                      This product cannot be rented until an admin adds rental pricing plans.
+                      {canBuy ? " You can still buy it if buy is enabled." : ""}
+                    </p>
+                  </div>
                 </div>
               ) : null}
 
@@ -692,24 +636,7 @@ const CustomerListingDetail = () => {
 
               {/* Qty lives in the rental checkout strip when pricing plans are shown */}
               {!(actualOrderType === "rent" && hasPricingPlans) ? (
-                <div
-                  className={`grid gap-2 ${
-                    actualOrderType === "rent" && !hasPricingPlans ? "sm:grid-cols-2" : ""
-                  }`}
-                >
-                  {actualOrderType === "rent" && !hasPricingPlans ? (
-                    <div className="rounded-xl border border-border bg-muted/20 px-2.5 py-1.5">
-                      <QuantityStepper
-                        orientation="inline"
-                        label={RENTAL_UNIT_LABELS[periodUnit].plural}
-                        required
-                        value={periods}
-                        min={1}
-                        max={366}
-                        onChange={handlePeriodsChange}
-                      />
-                    </div>
-                  ) : null}
+                <div className="grid gap-2">
                   <div className="rounded-xl border border-border bg-muted/20 px-2.5 py-1.5">
                     <QuantityStepper
                       orientation="inline"
@@ -729,7 +656,9 @@ const CustomerListingDetail = () => {
                   className="h-12 flex-1 rounded-xl bg-gradient-primary text-sm font-semibold shadow-glow hover:opacity-95"
                   type="button"
                   onClick={handleAdd}
-                  disabled={!canAddToCart}
+                  disabled={
+                    !canAddToCart || (actualOrderType === "rent" && (!hasPricingPlans || !selectedPlan))
+                  }
                 >
                   <ShoppingCart className="mr-2 h-4 w-4" />
                   {canAddToCart
@@ -749,7 +678,7 @@ const CustomerListingDetail = () => {
                     variant="ghost"
                     size="sm"
                     type="button"
-                    className="h-9 px-3 text-[13px] font-medium text-slate-600 hover:text-slate-900"
+                    className="h-9 px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
                     onClick={() => {
                       if (user?.role !== "customer") {
                         toast.message("Sign in to save favorites");
@@ -769,13 +698,13 @@ const CustomerListingDetail = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-9 px-3 text-[13px] font-medium text-slate-600 hover:text-slate-900"
+                    className="h-9 px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
                     asChild
                   >
                     <Link to="/customer/shop">More listings</Link>
                   </Button>
                 </div>
-                <p className="text-[12px] font-medium text-slate-500">
+                <p className="text-[12px] font-medium text-muted-foreground">
                   Excludes {actualOrderType === "buy" ? "delivery" : "deposit & delivery"}
                 </p>
               </div>

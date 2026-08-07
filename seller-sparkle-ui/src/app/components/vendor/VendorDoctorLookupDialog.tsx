@@ -129,7 +129,7 @@ export function VendorDoctorLookupDialog({ open, onOpenChange, initialCode }: Ve
           </div>
 
           {doctor && (
-            <div className="overflow-hidden rounded-2xl border border-teal-200 bg-gradient-to-br from-teal-50 to-white">
+            <div className="overflow-hidden rounded-2xl border border-teal-200 bg-gradient-to-br from-teal-50 to-card dark:border-teal-500/30 dark:from-teal-500/15 dark:to-card">
               <div className="bg-gradient-to-br from-teal-700 to-emerald-800 px-4 py-3 text-white">
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-teal-100/85">
                   <CheckCircle2 className="h-3.5 w-3.5" />
@@ -142,18 +142,24 @@ export function VendorDoctorLookupDialog({ open, onOpenChange, initialCode }: Ve
               </div>
               <div className="space-y-3 p-4">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-700">Unique ID</p>
-                  <p className="mt-0.5 font-mono text-xl font-bold tracking-wider text-teal-950">{doctor.uniqueCode}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-300">
+                    Unique ID
+                  </p>
+                  <p className="mt-0.5 font-mono text-xl font-bold tracking-wider text-teal-950 dark:text-teal-50">
+                    {doctor.uniqueCode}
+                  </p>
                 </div>
                 {doctor.contactNumber && (
                   <p className="text-sm text-muted-foreground">Contact: {doctor.contactNumber}</p>
                 )}
                 {doctor.hospitals && doctor.hospitals.length > 0 && (
                   <div className="space-y-1.5">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Hospitals</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Hospitals
+                    </p>
                     {doctor.hospitals.map((h) => (
-                      <div key={h.id} className="rounded-lg border bg-slate-50 px-3 py-2 text-sm">
-                        <p className="font-medium">{h.name}</p>
+                      <div key={h.id} className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
+                        <p className="font-medium text-foreground">{h.name}</p>
                         {[h.addressLine1, h.city, h.state].filter(Boolean).length > 0 && (
                           <p className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
                             <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
