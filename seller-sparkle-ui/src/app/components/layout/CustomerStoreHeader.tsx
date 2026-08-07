@@ -67,12 +67,9 @@ export function CustomerStoreHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 shadow-sm backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-3 px-3 sm:h-16 sm:px-6 lg:px-8">
-        <Link to="/customer/shop" className="flex shrink-0 items-center gap-2.5">
-          <BrandMark />
-          <div className="hidden min-w-0 sm:block">
-            <p className="truncate text-sm font-bold leading-tight">BlinksMed</p>
-            <p className="truncate text-[11px] text-muted-foreground">Buy · Rent · Care</p>
-          </div>
+        <Link to="/customer/shop" className="flex shrink-0 items-center" aria-label="BlinksMed shop">
+          {/* Full lockup already includes BLINKSMED + Buy | Rent | Care */}
+          <BrandMark size="lg" className="h-12 w-12 sm:h-14 sm:w-14" />
         </Link>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">

@@ -228,49 +228,44 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                   subtitle: 'Pick from Admin catalog — category cannot change after save.',
                   child: Column(
                     children: [
-                      _DropdownField(
+                      _SearchablePickerField(
                         label: 'Category',
                         value: _categoryId,
-                        items: categories
-                            .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                        options: categories
+                            .map((c) => (id: c.id, label: c.name))
                             .toList(),
                         errorText: _categoryError,
-                        onChanged: pending
-                            ? null
-                            : (value) {
-                                setState(() {
-                                  _categoryId = value;
-                                  final nextProducts = provider.productsForCategory(
-                                    value ?? '',
-                                    widget.isChemical,
-                                  );
-                                  _productId =
-                                      nextProducts.isNotEmpty ? nextProducts.first.id : null;
-                                  _variantRows = _buildVariantRows(provider);
-                                });
-                              },
+                        enabled: !pending,
+                        searchHint: 'Search category…',
+                        onChanged: (value) {
+                          setState(() {
+                            _categoryId = value;
+                            final nextProducts = provider.productsForCategory(
+                              value,
+                              widget.isChemical,
+                            );
+                            _productId =
+                                nextProducts.isNotEmpty ? nextProducts.first.id : null;
+                            _variantRows = _buildVariantRows(provider);
+                          });
+                        },
                       ),
                       const SizedBox(height: 12),
-                      _DropdownField(
+                      _SearchablePickerField(
                         label: 'Product',
                         value: _productId,
-                        items: products
-                            .map(
-                              (p) => DropdownMenuItem(
-                                value: p.id,
-                                child: Text(p.productName),
-                              ),
-                            )
+                        options: products
+                            .map((p) => (id: p.id, label: p.productName))
                             .toList(),
                         errorText: _productError,
-                        onChanged: pending
-                            ? null
-                            : (value) {
-                                setState(() {
-                                  _productId = value;
-                                  _variantRows = _buildVariantRows(provider);
-                                });
-                              },
+                        enabled: !pending,
+                        searchHint: 'Search product…',
+                        onChanged: (value) {
+                          setState(() {
+                            _productId = value;
+                            _variantRows = _buildVariantRows(provider);
+                          });
+                        },
                       ),
                     ],
                   ),
@@ -596,6 +591,192 @@ class _InfoBanner extends StatelessWidget {
             child: Text(text, style: TextStyle(color: color, fontSize: 13)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SearchablePickerField extends StatelessWidget {
+  final String label;
+  final String? value;
+  final List<({String id, String label})> options;
+  final ValueChanged<String> onChanged;
+  final String? errorText;
+  final bool enabled;
+  final String searchHint;
+
+  const _SearchablePickerField({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+    required this.searchHint,
+    this.errorText,
+    this.enabled = true,
+  });
+
+  Future<void> _openPicker(BuildContext context) async {
+    if (!enabled) return;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.card(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final filtered = options
+                .where((o) => o.label.toLowerCase().contains(query.toLowerCase()))
+                .toList();
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(ctx).bottom,
+                ),
+                child: SizedBox(
+                  height: MediaQuery.sizeOf(ctx).height * 0.65,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 10),
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Select $label',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              icon: const Icon(Icons.close, color: Colors.white54),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: TextField(
+                          autofocus: true,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: searchHint,
+                            hintStyle: const TextStyle(color: Colors.white38),
+                            prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                            filled: true,
+                            fillColor: AppTheme.bg(context),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                            ),
+                          ),
+                          onChanged: (v) => setModalState(() => query = v.trim()),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  'No results found.',
+                                  style: TextStyle(color: Colors.white54),
+                                ),
+                              )
+                            : ListView.separated(
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, __) => Divider(
+                                  height: 1,
+                                  color: Colors.white.withValues(alpha: 0.06),
+                                ),
+                                itemBuilder: (_, i) {
+                                  final option = filtered[i];
+                                  final selected = option.id == value;
+                                  return ListTile(
+                                    title: Text(
+                                      option.label,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight:
+                                            selected ? FontWeight.w700 : FontWeight.w500,
+                                      ),
+                                    ),
+                                    trailing: selected
+                                        ? const Icon(Icons.check, color: AppTheme.accent)
+                                        : null,
+                                    onTap: () => Navigator.pop(ctx, option.id),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (selected != null) onChanged(selected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String? selectedLabel;
+    for (final o in options) {
+      if (o.id == value) {
+        selectedLabel = o.label;
+        break;
+      }
+    }
+
+    return InkWell(
+      onTap: enabled ? () => _openPicker(context) : null,
+      borderRadius: BorderRadius.circular(12),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          errorText: errorText,
+          labelStyle: const TextStyle(color: Colors.white54),
+          filled: true,
+          fillColor: AppTheme.bg(context),
+          suffixIcon: const Icon(Icons.search, color: Colors.white54),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+        ),
+        child: Text(
+          selectedLabel ?? 'Select $label',
+          style: TextStyle(
+            color: selectedLabel == null ? Colors.white38 : Colors.white,
+            fontSize: 15,
+          ),
+        ),
       ),
     );
   }

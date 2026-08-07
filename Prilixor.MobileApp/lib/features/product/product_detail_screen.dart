@@ -788,103 +788,42 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       ),
                                     ],
                                   ] else ...[
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: RequiredLabel(
-                                      'Rental period',
-                                      required: true,
-                                      style: const TextStyle(color: Colors.white70, fontSize: 16),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    children: rentalUnitsVisibleInUi.map((unit) {
-                                      final selected = _periodUnit == unit;
-                                      final labels = rentalUnitLabels[unit]!;
-                                      return Expanded(
-                                        child: Padding(
-                                          padding: EdgeInsets.only(right: unit == rentalUnitsVisibleInUi.last ? 0 : 8),
-                                          child: InkWell(
-                                            onTap: () async {
-                                              final blocked = await _promptRentToBuyIfNeeded(
-                                                detail: detail,
-                                                unitBuyPrice: unitBuyPrice,
-                                                nextUnit: unit,
-                                              );
-                                              if (blocked || !mounted) return;
-                                              setState(() => _periodUnit = unit);
-                                            },
-                                            borderRadius: BorderRadius.circular(10),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(vertical: 10),
-                                              decoration: BoxDecoration(
-                                                color: selected
-                                                    ? const Color(0xFF6C63FF).withValues(alpha: 0.2)
-                                                    : const Color(0xFF0F172A),
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(
-                                                  color: selected ? const Color(0xFF6C63FF) : Colors.white12,
-                                                ),
-                                              ),
-                                              alignment: Alignment.center,
-                                              child: Text(
-                                                labels.plural,
-                                                style: TextStyle(
-                                                  color: selected ? const Color(0xFF6C63FF) : Colors.white70,
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 13,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      RequiredLabel(
-                                        rentalUnitLabels[_periodUnit]!.plural,
-                                        required: true,
-                                        style: const TextStyle(color: Colors.white70, fontSize: 16),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(14),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.45)),
                                       ),
-                                      Row(
+                                      child: const Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          IconButton(
-                                            icon: const Icon(Icons.remove_circle_outline, color: Colors.white),
-                                            onPressed: _periodCount > 1
-                                                ? () async {
-                                                    final next = _periodCount - 1;
-                                                    final blocked = await _promptRentToBuyIfNeeded(
-                                                      detail: detail,
-                                                      unitBuyPrice: unitBuyPrice,
-                                                      nextPeriods: next,
-                                                    );
-                                                    if (blocked || !mounted) return;
-                                                    setState(() => _periodCount = next);
-                                                  }
-                                                : null,
-                                          ),
-                                          Text('$_periodCount', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                                          IconButton(
-                                            icon: const Icon(Icons.add_circle_outline, color: Colors.white),
-                                            onPressed: () async {
-                                              final next = _periodCount + 1;
-                                              final blocked = await _promptRentToBuyIfNeeded(
-                                                detail: detail,
-                                                unitBuyPrice: unitBuyPrice,
-                                                nextPeriods: next,
-                                              );
-                                              if (blocked || !mounted) return;
-                                              setState(() => _periodCount = next);
-                                            },
+                                          Icon(Icons.info_outline, color: Color(0xFFFBBF24), size: 18),
+                                          SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Rental plans not configured',
+                                                  style: TextStyle(
+                                                    color: Color(0xFFFBBF24),
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                                SizedBox(height: 4),
+                                                Text(
+                                                  'This product cannot be rented until an admin adds rental pricing plans.',
+                                                  style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.35),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ],
                                       ),
-                                    ],
-                                  ),
+                                    ),
                                   ],
                                 ],
 
@@ -967,19 +906,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    onPressed: !canAdd || cannotFulfill
+                    onPressed: !canAdd ||
+                            cannotFulfill ||
+                            (actualOrderType == 'rent' &&
+                                (!detail.hasActiveRentalPlans || selectedPlan == null))
                         ? null
                         : () async {
                             if (_quantity < 1 ||
                                 (actualOrderType == 'rent' &&
-                                    (detail.hasActiveRentalPlans
-                                        ? selectedPlan == null
-                                        : _periodCount < 1))) {
+                                    (!detail.hasActiveRentalPlans || selectedPlan == null))) {
                               showRequiredFieldsBlocked(
                                 context,
                                 message: detail.hasActiveRentalPlans
                                     ? 'Please select a rental period and quantity.'
-                                    : 'Please fill in the required fields. Quantity and rental period must be positive.',
+                                    : 'Rental plans are not configured for this product.',
                               );
                               return;
                             }
@@ -1018,12 +958,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 monthlyRent: detail.monthlyRent,
                                 securityDeposit: detail.securityDeposit,
                                 quantity: _quantity,
-                                rentalDays: finalType == 'buy'
-                                    ? 0
-                                    : (selectedPlan?.durationDays ?? _periodCount),
-                                rentalPeriodUnit: finalType == 'buy'
-                                    ? rentalUnitDay
-                                    : (selectedPlan != null ? rentalUnitDay : _periodUnit),
+                                rentalDays: finalType == 'buy' ? 0 : selectedPlan!.durationDays,
+                                rentalPeriodUnit: rentalUnitDay,
                                 orderType: finalType,
                                 prescriptionRequired: detail.prescriptionRequired,
                                 productVariantId: _selectedVariantId,

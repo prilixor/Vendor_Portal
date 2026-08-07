@@ -978,7 +978,11 @@ const VendorOrderDetail = () => {
                         {order.rentalNormalPrice != null &&
                         Number(order.rentalNormalPrice) > Number(order.rentalFinalPrice) ? (
                           <>
-                            <span className="line-through">₹{Number(order.rentalNormalPrice).toFixed(0)}</span>{" "}
+                            <span className="strike-diagonal font-semibold text-rose-500 dark:text-rose-400">
+                              ₹{Number(order.rentalNormalPrice).toLocaleString("en-IN", {
+                                maximumFractionDigits: 0,
+                              })}
+                            </span>{" "}
                           </>
                         ) : null}
                         Plan price ₹{Number(order.rentalFinalPrice).toFixed(0)}

@@ -585,7 +585,7 @@ const AdminDoctors = () => {
                 </div>
               </div>
 
-              <div className="flex justify-center rounded-2xl border bg-white p-4">
+              <div className="flex justify-center rounded-2xl border border-border bg-card p-4">
                 {qrLoading || !qrUrl ? (
                   <div className="flex h-[220px] w-[220px] items-center justify-center text-muted-foreground">
                     <Loader2 className="h-6 w-6 animate-spin" />
@@ -594,7 +594,7 @@ const AdminDoctors = () => {
                   <img
                     src={qrUrl}
                     alt={`QR for ${qrDoctor.uniqueCode}`}
-                    className="h-[220px] w-[220px] rounded-lg border"
+                    className="h-[220px] w-[220px] rounded-lg border border-border bg-white"
                   />
                 )}
               </div>
@@ -604,10 +604,10 @@ const AdminDoctors = () => {
               </p>
 
               {qrDoctor.publicPageUrl && /localhost|127\.0\.0\.1/i.test(qrDoctor.publicPageUrl) && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
                   Share URL uses <span className="font-semibold">localhost</span>, so phones cannot open it.
-                  Set API <code className="rounded bg-amber-100 px-1">FrontendUrl</code> to your PC LAN IP
-                  (e.g. <code className="rounded bg-amber-100 px-1">http://192.168.x.x:5173</code>) or a
+                  Set API <code className="rounded bg-amber-100 px-1 dark:bg-amber-500/20">FrontendUrl</code> to your PC LAN IP
+                  (e.g. <code className="rounded bg-amber-100 px-1 dark:bg-amber-500/20">http://192.168.x.x:5173</code>) or a
                   deployed host, restart the API, then regenerate / resend this QR.
                 </div>
               )}

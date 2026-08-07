@@ -238,6 +238,9 @@ internal sealed class CreateProductCommandHandler(
         await repository.AddProductAsync(entity, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
 
+        var liveIcons = RentalDurationIconLiveResolve.ToLookup(
+            await repository.GetRentalDurationIconsAsync(activeOnly: false, cancellationToken));
+
         return Result.Success(new ProductDto(
             entity.Id.ToString(),
             entity.CategoryId.ToString(),
@@ -278,7 +281,7 @@ internal sealed class CreateProductCommandHandler(
             entity.ChemicalProperty?.SdsDocumentUrl,
             entity.ChemicalProperty?.CoaDocumentUrl,
             0,
-            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver)));
+            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver, liveIcons)));
     }
 }
 
@@ -311,6 +314,9 @@ internal sealed class GetProductsQueryHandler(
         {
             favoriteCounts = await customerRepository.GetFavoriteCountsByProductsAsync(cancellationToken);
         }
+
+        var liveIcons = RentalDurationIconLiveResolve.ToLookup(
+            await repository.GetRentalDurationIconsAsync(activeOnly: false, cancellationToken));
 
         var result = rows.Select(x => new ProductDto(
             x.Id.ToString(),
@@ -358,7 +364,7 @@ internal sealed class GetProductsQueryHandler(
             x.ChemicalProperty?.SdsDocumentUrl,
             x.ChemicalProperty?.CoaDocumentUrl,
             favoriteCounts.GetValueOrDefault(x.Id, 0),
-            ProductRentalPricingPlanSync.ToDtos(x.RentalPricingPlans, fileUrlResolver))).ToList();
+            ProductRentalPricingPlanSync.ToDtos(x.RentalPricingPlans, fileUrlResolver, liveIcons))).ToList();
 
         return Result.Success(result);
     }
@@ -1515,6 +1521,9 @@ internal sealed class UpdateProductCommandHandler(
         await repository.UpdateProductAsync(entity, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
 
+        var liveIcons = RentalDurationIconLiveResolve.ToLookup(
+            await repository.GetRentalDurationIconsAsync(activeOnly: false, cancellationToken));
+
         return Result.Success(new ProductDto(
             entity.Id.ToString(),
             entity.CategoryId.ToString(),
@@ -1555,7 +1564,7 @@ internal sealed class UpdateProductCommandHandler(
             entity.ChemicalProperty?.SdsDocumentUrl,
             entity.ChemicalProperty?.CoaDocumentUrl,
             0,
-            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver)));
+            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver, liveIcons)));
     }
 }
 
@@ -1563,38 +1572,36 @@ internal static class ProductRentalPricingPlanSync
 {
     public static List<ProductRentalPricingPlanDto> ToDtos(
         IEnumerable<ProductRentalPricingPlan>? plans,
-        IVendorFileUrlResolver? fileUrlResolver = null) =>
+        IVendorFileUrlResolver? fileUrlResolver = null,
+        IReadOnlyDictionary<Guid, RentalDurationIcon>? liveIcons = null) =>
         plans?
             .OrderBy(p => p.SortOrder)
             .ThenBy(p => p.DurationDays)
-            .Select(p => new ProductRentalPricingPlanDto(
-                p.Id.ToString(),
-                p.ProductId.ToString(),
-                p.DurationLabel,
-                p.DurationDays,
-                p.NormalPrice,
-                p.DiscountType,
-                p.DiscountValue,
-                p.FinalRentalPrice,
-                p.IsRecommended,
-                p.IsActive,
-                p.SortOrder,
-                p.RentalDurationMasterId?.ToString(),
-                p.BillingCycles,
-                p.RentalDurationIconId?.ToString(),
-                ResolveOptionalUrl(p.IconUrl, fileUrlResolver),
-                ResolveOptionalUrl(p.IconThumbnailUrl, fileUrlResolver),
-                p.ValueTier,
-                p.IconName))
+            .Select(p =>
+            {
+                var icon = RentalDurationIconLiveResolve.Resolve(p, liveIcons, fileUrlResolver);
+                return new ProductRentalPricingPlanDto(
+                    p.Id.ToString(),
+                    p.ProductId.ToString(),
+                    p.DurationLabel,
+                    p.DurationDays,
+                    p.NormalPrice,
+                    p.DiscountType,
+                    p.DiscountValue,
+                    p.FinalRentalPrice,
+                    p.IsRecommended,
+                    p.IsActive,
+                    p.SortOrder,
+                    p.RentalDurationMasterId?.ToString(),
+                    p.BillingCycles,
+                    p.RentalDurationIconId?.ToString(),
+                    icon.IconUrl,
+                    icon.IconThumbnailUrl,
+                    icon.ValueTier,
+                    icon.IconName);
+            })
             .ToList()
         ?? [];
-
-    private static string? ResolveOptionalUrl(string? stored, IVendorFileUrlResolver? fileUrlResolver)
-    {
-        if (string.IsNullOrWhiteSpace(stored))
-            return null;
-        return fileUrlResolver is null ? stored.Trim() : fileUrlResolver.Resolve(stored.Trim());
-    }
 
     /// <summary>
     /// Persist durable storage keys (S3 relative / uploads/…), never short-lived presigned URLs.

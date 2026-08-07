@@ -117,7 +117,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                     tooltip: _obscureCurrent ? 'Show password' : 'Hide password',
                     onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
                     icon: Icon(
-                      _obscureCurrent ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                      _obscureCurrent ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                       color: Colors.white54,
                     ),
                   ),
@@ -142,7 +142,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                     tooltip: _obscureNew ? 'Show password' : 'Hide password',
                     onPressed: () => setState(() => _obscureNew = !_obscureNew),
                     icon: Icon(
-                      _obscureNew ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                      _obscureNew ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                       color: Colors.white54,
                     ),
                   ),
@@ -167,7 +167,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                     tooltip: _obscureConfirm ? 'Show password' : 'Hide password',
                     onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                     icon: Icon(
-                      _obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                      _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                       color: Colors.white54,
                     ),
                   ),
