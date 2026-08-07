@@ -13,10 +13,10 @@ import { vendorOnboardingApi, type VendorProfileApiDto } from "@/app/services/ve
 import { toast } from "sonner";
 import { Eye, EyeOff, Save } from "lucide-react";
 import {
-  maskIndianMobileInput,
   normalizeIndianMobileDigits,
   requiredIndianMobileError,
 } from "@/app/helpers/indianMobilePhone";
+import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 
 const Settings = () => {
   const { user } = useAuth();
@@ -68,7 +68,7 @@ const Settings = () => {
         const profileRes = await vendorOnboardingApi.getVendorProfile(user.id);
         setProfile(profileRes);
         setFullName(profileRes.ownerName || user.name || "");
-        setPhone(profileRes.supportPhone || "");
+        setPhone(profileRes.supportPhone ? normalizeIndianMobileDigits(profileRes.supportPhone) : "");
       } catch {
         setProfile(null);
         setFullName(user.name || "");
@@ -119,7 +119,7 @@ const Settings = () => {
 
       setProfile(updated);
       setFullName(updated.ownerName || "");
-      setPhone(updated.supportPhone || "");
+      setPhone(updated.supportPhone ? normalizeIndianMobileDigits(updated.supportPhone) : "");
       toast.success("Profile saved.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save profile.";
@@ -255,14 +255,10 @@ const Settings = () => {
             </div>
             <div className="space-y-1.5">
               <Label required>Phone</Label>
-              <Input
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel"
-                placeholder="9876543210"
+              <IndianMobileInput
                 value={phone}
-                onChange={(e) => {
-                  setPhone(maskIndianMobileInput(e.target.value));
+                onChange={(v) => {
+                  setPhone(v);
                   setFieldErrors((prev) => {
                     if (!prev.phone) return prev;
                     const next = { ...prev };
@@ -271,7 +267,7 @@ const Settings = () => {
                   });
                 }}
                 disabled={loading || savingProfile}
-                className={fieldErrors.phone ? "border-destructive" : ""}
+                invalid={!!fieldErrors.phone}
               />
               <FieldError message={fieldErrors.phone} />
               {!fieldErrors.phone && (

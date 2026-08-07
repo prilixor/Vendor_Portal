@@ -535,6 +535,7 @@ class OnboardingTextField extends StatelessWidget {
   final TextCapitalization textCapitalization;
   final Widget? suffix;
   final List<TextInputFormatter>? inputFormatters;
+  final String? prefixText;
 
   const OnboardingTextField({
     super.key,
@@ -551,6 +552,7 @@ class OnboardingTextField extends StatelessWidget {
     this.textCapitalization = TextCapitalization.none,
     this.suffix,
     this.inputFormatters,
+    this.prefixText,
   });
 
   String get _displayLabel {
@@ -593,6 +595,12 @@ class OnboardingTextField extends StatelessWidget {
               filled: true,
               fillColor: AppTheme.bg(context),
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              prefixText: prefixText,
+              prefixStyle: const TextStyle(
+                color: Colors.white70,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
               suffixIcon: suffix,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),

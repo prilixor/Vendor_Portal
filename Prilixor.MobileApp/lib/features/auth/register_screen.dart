@@ -220,8 +220,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   context,
                   label: 'Phone Number (Optional)',
                   errorText: _phoneError,
-                  prefixIcon: Icons.phone_outlined,
                 ).copyWith(
+                  prefixText: '+91 ',
+                  prefixStyle: const TextStyle(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w600,
+                  ),
                   hintText: '9876543210',
                   hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.28)),
                   helperText: 'Indian mobile: 10 digits starting with 6–9',
