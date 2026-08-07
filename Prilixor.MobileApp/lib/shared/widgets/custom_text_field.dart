@@ -64,7 +64,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
                 tooltip: _obscure ? 'Show password' : 'Hide password',
                 onPressed: () => setState(() => _obscure = !_obscure),
                 icon: Icon(
-                  _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                  _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                   color: colors.textSecondary,
                 ),
               )

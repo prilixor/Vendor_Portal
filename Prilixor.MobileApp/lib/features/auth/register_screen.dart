@@ -244,7 +244,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   prefixIcon: Icons.lock_outline,
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                       color: Colors.white54,
                     ),
                     onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
@@ -270,8 +270,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscureConfirmPassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
                       color: Colors.white54,
                     ),
                     onPressed: () =>

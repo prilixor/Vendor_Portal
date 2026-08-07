@@ -1224,7 +1224,7 @@ class _BankTabState extends State<_BankTab> {
                 suffix: IconButton(
                   onPressed: () => setState(() => _obscureAccount = !_obscureAccount),
                   icon: Icon(
-                    _obscureAccount ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                    _obscureAccount ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                     color: Colors.white54,
                   ),
                 ),
@@ -1239,7 +1239,7 @@ class _BankTabState extends State<_BankTab> {
                 suffix: IconButton(
                   onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                   icon: Icon(
-                    _obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                    _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                     color: Colors.white54,
                   ),
                 ),

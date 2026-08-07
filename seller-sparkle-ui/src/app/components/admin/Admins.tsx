@@ -551,7 +551,7 @@ const Admins = () => {
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   aria-label={showCreatePassword ? "Hide password" : "Show password"}
                 >
-                  {showCreatePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showCreatePassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                 </button>
               </div>
               <FieldError message={fieldErrors.password} />
@@ -799,7 +799,7 @@ const Admins = () => {
                       onClick={() => setShowResetPassword((v) => !v)}
                       aria-label={showResetPassword ? "Hide password" : "Show password"}
                     >
-                      {showResetPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showResetPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                     </Button>
                   </div>
                   <FieldError message={fieldErrors.resetPassword} />
