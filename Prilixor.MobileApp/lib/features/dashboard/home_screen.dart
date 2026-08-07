@@ -739,7 +739,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildProductCard(ProductModel product) {
     final ls = product.listingStatus.trim().toLowerCase();
     final isBrowsable = ls == 'active' || ls == 'approved';
+    final isOutOfStock = product.availableQuantity <= 0 || product.availabilityStatus.trim().toLowerCase() == 'out_of_stock';
+    final isInteractive = isBrowsable && !isOutOfStock;
     final badge = product.getAvailabilityBadge();
+    final showBadge = badge['label'] != 'Available';
     final rate = primaryDisplayRate(
       dailyRent: product.dailyRent,
       weeklyRent: product.weeklyRent,
@@ -752,90 +755,95 @@ class _HomeScreenState extends State<HomeScreen> {
             : (product.buyPrice != null ? '₹${product.buyPrice!.toStringAsFixed(0)} buy' : '—'));
 
     return GestureDetector(
-      onTap: isBrowsable
+      onTap: isInteractive
           ? () {
               Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(listingId: product.id)));
             }
           : null,
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        clipBehavior: Clip.antiAlias,
-        // No AspectRatio — it overflows when grid cell is shorter than width/ratio (Chrome wide view).
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  const ColoredBox(color: Color(0xFF334155)),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 36, 10, 8),
-                    child: CatalogImage(url: product.primaryImageUrl, fit: BoxFit.contain),
-                  ),
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 104),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Color(badge['color'] as int),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        badge['label'] as String,
-                        maxLines: 1,
-                        softWrap: false,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          height: 1.15,
-                        ),
-                      ),
+      child: Opacity(
+        opacity: isInteractive ? 1.0 : 0.55,
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          clipBehavior: Clip.antiAlias,
+          // No AspectRatio — it overflows when grid cell is shorter than width/ratio (Chrome wide view).
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    const ColoredBox(color: Color(0xFF334155)),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 36, 10, 8),
+                      child: CatalogImage(url: product.primaryImageUrl, fit: BoxFit.contain),
                     ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Consumer<FavoriteProvider>(
-                      builder: (context, favoriteProvider, _) {
-                        final isFavorite = favoriteProvider.isFavorite(product.id);
-                        return Material(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: () async {
-                              final ok = await ensureAuthenticated(
-                                context,
-                                message: 'Sign in to save favorites.',
-                              );
-                              if (!ok || !context.mounted) return;
-                              await favoriteProvider.toggleFavorite(product.id);
-                            },
-                            child: SizedBox(
-                              width: 34,
-                              height: 34,
-                              child: Icon(
-                                isFavorite ? Icons.favorite : Icons.favorite_border,
-                                color: isFavorite ? Colors.red : Colors.white,
-                                size: 18,
-                              ),
+                    if (showBadge)
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 104),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Color(badge['color'] as int),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            badge['label'] as String,
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              height: 1.15,
                             ),
                           ),
-                        );
-                      },
+                        ),
+                      ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Consumer<FavoriteProvider>(
+                        builder: (context, favoriteProvider, _) {
+                          final isFavorite = favoriteProvider.isFavorite(product.id);
+                          return Material(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: isInteractive
+                                  ? () async {
+                                      final ok = await ensureAuthenticated(
+                                        context,
+                                        message: 'Sign in to save favorites.',
+                                      );
+                                      if (!ok || !context.mounted) return;
+                                      await favoriteProvider.toggleFavorite(product.id);
+                                    }
+                                  : null,
+                              child: SizedBox(
+                                width: 34,
+                                height: 34,
+                                child: Icon(
+                                  isFavorite ? Icons.favorite : Icons.favorite_border,
+                                  color: isFavorite ? Colors.red : Colors.white,
+                                  size: 18,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
               child: Column(
@@ -869,7 +877,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -1121,7 +1130,7 @@ class _FavoritesFilterRow extends StatelessWidget {
               ),
               Switch.adaptive(
                 value: value,
-                activeThumbColor: Colors.white,
+                activeColor: Colors.white,
                 activeTrackColor: const Color(0xFF6C63FF),
                 onChanged: onChanged,
               ),

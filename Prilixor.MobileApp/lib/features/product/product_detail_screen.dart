@@ -6,6 +6,7 @@ import '../../core/providers/checkout_provider.dart';
 import '../../core/providers/favorite_provider.dart';
 import '../../core/providers/cart_provider.dart';
 import '../../core/models/cart_model.dart';
+import '../../core/models/product_model.dart';
 import '../../core/models/product_detail_model.dart';
 import '../../core/models/product_variant_model.dart';
 import '../../core/models/rental_pricing_plan_model.dart';
@@ -36,6 +37,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   bool _orderTypeInitialized = false;
   int _imageIndex = 0;
   final PageController _imagePageController = PageController();
+  List<ProductModel> _relatedProducts = [];
+  ProductDetailModel? _localDetail;
+  bool _loadingDetail = true;
+  String? _detailError;
 
   @override
   void dispose() {
@@ -47,10 +52,51 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<CheckoutProvider>(context, listen: false).fetchProductDetail(widget.listingId);
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      if (auth.isAuthenticated) {
-        Provider.of<FavoriteProvider>(context, listen: false).fetchFavorites();
+      _fetchData();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant ProductDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.listingId != widget.listingId) {
+      _orderTypeInitialized = false;
+      _imageIndex = 0;
+      _selectedVariantId = null;
+      _selectedPlanId = null;
+      _relatedProducts = [];
+      _localDetail = null;
+      _loadingDetail = true;
+      _detailError = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _fetchData();
+      });
+    }
+  }
+
+  void _fetchData() {
+    final checkout = Provider.of<CheckoutProvider>(context, listen: false);
+    setState(() {
+      _loadingDetail = true;
+      _detailError = null;
+    });
+    checkout.fetchProductDetailModel(widget.listingId).then((detail) {
+      if (!mounted) return;
+      setState(() {
+        _localDetail = detail;
+        _loadingDetail = false;
+        if (detail == null) {
+          _detailError = checkout.errorMessage ?? 'Product not found.';
+        }
+      });
+    });
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (auth.isAuthenticated) {
+      Provider.of<FavoriteProvider>(context, listen: false).fetchFavorites();
+    }
+    checkout.fetchRelatedProducts(widget.listingId, limit: 6).then((related) {
+      if (mounted) {
+        setState(() => _relatedProducts = related);
       }
     });
   }
@@ -82,9 +128,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final checkoutProvider = Provider.of<CheckoutProvider>(context);
     final favoriteProvider = Provider.of<FavoriteProvider>(context);
-    final detail = checkoutProvider.productDetail;
+    final detail = _localDetail;
     final isFavorite = favoriteProvider.isFavorite(widget.listingId);
 
     if (detail != null && !_orderTypeInitialized) {
@@ -160,16 +205,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-          onPressed: () {
-            checkoutProvider.clearState();
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.maybePop(context),
         ),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.only(right: 12),
             child: Material(
-              color: const Color(0xFF1E293B),
+              color: Colors.white.withValues(alpha: 0.1),
               shape: const CircleBorder(),
               child: InkWell(
                 customBorder: const CircleBorder(),
@@ -195,10 +237,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
         ],
       ),
-      body: checkoutProvider.isLoading && detail == null
+      body: _loadingDetail && detail == null
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
-          : checkoutProvider.errorMessage != null
-              ? Center(child: Text(checkoutProvider.errorMessage!, style: const TextStyle(color: Colors.redAccent)))
+          : _detailError != null
+              ? Center(child: Text(_detailError!, style: const TextStyle(color: Colors.redAccent)))
               : detail == null
                   ? const Center(child: Text('Product not found.', style: TextStyle(color: Colors.white)))
                   : SingleChildScrollView(
@@ -319,7 +361,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       child: ListView.separated(
                                         scrollDirection: Axis.horizontal,
                                         itemCount: detail.imageUrls.length,
-                                        separatorBuilder: (_, _) => const SizedBox(width: 10),
+                                        separatorBuilder: (_, __) => const SizedBox(width: 10),
                                         itemBuilder: (_, i) {
                                           final selected = i == _imageIndex;
                                           return GestureDetector(
@@ -383,8 +425,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       ),
                                   ],
                                 ),
-                                const SizedBox(height: 8),
-                                if (badge != null)
+                                if (badge != null && badge['label'] != 'Available') ...[
+                                  const SizedBox(height: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
@@ -396,8 +438,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                                     ),
                                   ),
-                                const SizedBox(height: 16),
-
+                                  const SizedBox(height: 16),
+                                ] else
+                                  const SizedBox(height: 16),
                                 // Pricing / packaging sizes
                                 _sectionCard(
                                   title: 'Pricing',
@@ -941,6 +984,62 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       : 'Estimated ${actualOrderType == 'buy' ? 'buy amount' : 'rent'}: ₹${estimate.toStringAsFixed(0)}',
                                   style: const TextStyle(color: Colors.white54, fontSize: 13),
                                 ),
+                                if (_relatedProducts.isNotEmpty) ...[
+                                  const SizedBox(height: 24),
+                                  const Text(
+                                    'Related Products',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  GridView.builder(
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    shrinkWrap: true,
+                                    padding: EdgeInsets.zero,
+                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      mainAxisSpacing: 16,
+                                      crossAxisSpacing: 12,
+                                      mainAxisExtent: 260,
+                                    ),
+                                    itemCount: _relatedProducts.length,
+                                    itemBuilder: (context, index) {
+                                      return _buildRelatedProductCard(_relatedProducts[index]);
+                                    },
+                                  ),
+                                  const SizedBox(height: 16),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 46,
+                                    child: OutlinedButton(
+                                      onPressed: () {
+                                        Navigator.popUntil(context, (route) => route.isFirst);
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                        side: const BorderSide(color: Color(0xFF6C63FF), width: 1.5),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      ),
+                                      child: const Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'View More',
+                                            style: TextStyle(
+                                              color: Color(0xFF6C63FF),
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          SizedBox(width: 6),
+                                          Icon(Icons.arrow_forward_rounded, color: Color(0xFF6C63FF), size: 18),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 100),
                               ],
                             ),
@@ -1376,6 +1475,150 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           style: TextStyle(
             color: isSelected ? Colors.white : Colors.white70,
             fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRelatedProductCard(ProductModel product) {
+    final ls = product.listingStatus.trim().toLowerCase();
+    final isBrowsable = ls == 'active' || ls == 'approved';
+    final isOutOfStock = product.availableQuantity <= 0 || product.availabilityStatus.trim().toLowerCase() == 'out_of_stock';
+    final isInteractive = isBrowsable && !isOutOfStock;
+    final badge = product.getAvailabilityBadge();
+    final showBadge = badge['label'] != 'Available';
+    final rate = primaryDisplayRate(
+      dailyRent: product.dailyRent,
+      weeklyRent: product.weeklyRent,
+      monthlyRent: product.monthlyRent,
+    );
+    final priceText = product.isChemical
+        ? '₹${(product.buyPrice ?? 0).toStringAsFixed(0)}${product.baseUnit != null ? ' / ${product.baseUnit}' : ''}'
+        : (rate != null
+            ? '₹${rate.value.toStringAsFixed(0)}${rentalUnitLabels[rate.unit]!.per}'
+            : (product.buyPrice != null ? '₹${product.buyPrice!.toStringAsFixed(0)} buy' : '—'));
+
+    return GestureDetector(
+      onTap: isInteractive
+          ? () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(listingId: product.id)));
+            }
+          : null,
+      child: Opacity(
+        opacity: isInteractive ? 1.0 : 0.55,
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    const ColoredBox(color: Color(0xFF334155)),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 36, 10, 8),
+                      child: CatalogImage(url: product.primaryImageUrl, fit: BoxFit.contain),
+                    ),
+                    if (showBadge)
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 104),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Color(badge['color'] as int),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            badge['label'] as String,
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              height: 1.15,
+                            ),
+                          ),
+                        ),
+                      ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Consumer<FavoriteProvider>(
+                        builder: (context, favoriteProvider, _) {
+                          final isFavorite = favoriteProvider.isFavorite(product.id);
+                          return Material(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: isInteractive
+                                  ? () async {
+                                      final ok = await ensureAuthenticated(
+                                        context,
+                                        message: 'Sign in to save favorites.',
+                                      );
+                                      if (!ok || !context.mounted) return;
+                                      await favoriteProvider.toggleFavorite(product.id);
+                                    }
+                                  : null,
+                              child: SizedBox(
+                                width: 34,
+                                height: 34,
+                                child: Icon(
+                                  isFavorite ? Icons.favorite : Icons.favorite_border,
+                                  color: isFavorite ? Colors.red : Colors.white,
+                                  size: 18,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        height: 1.25,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      priceText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Color(0xFF6C63FF),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),

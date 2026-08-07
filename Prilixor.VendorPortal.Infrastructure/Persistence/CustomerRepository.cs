@@ -383,6 +383,55 @@ public sealed class CustomerRepository(
 
     }
 
+    public async Task<List<CustomerCatalogListingDto>> GetRelatedCatalogListingsAsync(
+        Guid listingId,
+        int limit,
+        Guid? customerId,
+        CancellationToken cancellationToken)
+    {
+        var fullCatalog = await GetPublicCatalogListingsAsync(null, null, customerId, cancellationToken);
+        if (fullCatalog is null || fullCatalog.Count == 0)
+            return [];
+
+        var target = fullCatalog.FirstOrDefault(x => x.Id == listingId);
+        if (target is null)
+            return [];
+
+        var targetCategory = target.CategoryName;
+        var targetIsChemical = target.IsChemical;
+        var maxLimit = Math.Clamp(limit, 1, 10);
+
+        var sameTypeCandidates = fullCatalog
+            .Where(x => x.Id != listingId &&
+                        !string.Equals(x.Title, target.Title, StringComparison.OrdinalIgnoreCase) &&
+                        x.IsChemical == targetIsChemical)
+            .ToList();
+
+        var related = sameTypeCandidates
+            .Where(x => !string.IsNullOrWhiteSpace(x.CategoryName) &&
+                        string.Equals(x.CategoryName, targetCategory, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => x.AvailableQuantity > 0 ? 1 : 0)
+            .ThenBy(x => x.Title)
+            .Take(maxLimit)
+            .ToList();
+
+        if (related.Count < maxLimit)
+        {
+            var sameCategoryIds = related.Select(x => x.Id).ToHashSet();
+            var remainingSlots = maxLimit - related.Count;
+
+            var fallbackSameTypeItems = sameTypeCandidates
+                .Where(x => !sameCategoryIds.Contains(x.Id))
+                .OrderByDescending(x => x.AvailableQuantity > 0 ? 1 : 0)
+                .ThenBy(x => x.Title)
+                .Take(remainingSlots);
+
+            related.AddRange(fallbackSameTypeItems);
+        }
+
+        return related;
+    }
+
     private static decimal CalculateDistanceKm(decimal lat1, decimal lon1, decimal lat2, decimal lon2)
     {
         const double earthRadiusKm = 6371d;

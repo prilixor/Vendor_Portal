@@ -59,8 +59,12 @@ class CartProvider extends ChangeNotifier {
   }
 
   bool get hasStockIssues => _lines.any((line) {
+        final detail = _listingDetails[line.listingId];
+        if (detail != null && detail.listingStatus.toLowerCase() != 'active' && detail.listingStatus.toLowerCase() != 'approved') {
+          return true;
+        }
         final avail = availableQuantityFor(line);
-        return avail != null && line.quantity > avail;
+        return avail != null && (avail <= 0 || line.quantity > avail);
       });
 
   Future<void> refreshStock() async {
@@ -78,9 +82,11 @@ class CartProvider extends ChangeNotifier {
           final response = await _apiClient.dio.get('/customers/catalog/listings/$id');
           if (response.statusCode == 200 && response.data is Map<String, dynamic>) {
             _listingDetails[id] = ProductDetailModel.fromJson(response.data as Map<String, dynamic>);
+          } else {
+            _markListingInactive(id);
           }
         } catch (_) {
-          // Keep previous cache for this listing if refresh fails.
+          _markListingInactive(id);
         }
       }
       // Drop details for listings no longer in cart.
@@ -105,6 +111,28 @@ class CartProvider extends ChangeNotifier {
       _isRefreshingStock = false;
       notifyListeners();
     }
+  }
+
+  void _markListingInactive(String id) {
+    _listingDetails[id] = ProductDetailModel(
+      id: id,
+      title: '',
+      vendorName: '',
+      vendorRating: 0,
+      serviceAreaHint: '',
+      categoryName: '',
+      dailyRent: 0,
+      weeklyRent: 0,
+      monthlyRent: 0,
+      securityDeposit: 0,
+      prescriptionRequired: false,
+      depositRequired: false,
+      listingStatus: 'inactive',
+      availableQuantity: 0,
+      availabilityStatus: 'out_of_stock',
+      description: '',
+      imageUrls: [],
+    );
   }
 
   int _indexOfLine(String listingId, {String? productVariantId}) {

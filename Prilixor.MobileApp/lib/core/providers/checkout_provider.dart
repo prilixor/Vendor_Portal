@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../api/api_client.dart';
+import '../models/product_model.dart';
 import '../models/product_detail_model.dart';
 import '../models/order_quote_model.dart';
 import '../models/cart_model.dart';
@@ -36,7 +37,38 @@ class CheckoutProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<List<ProductModel>> fetchRelatedProducts(String listingId, {int limit = 6}) async {
+    try {
+      final response = await _apiClient.dio.get('/customers/products/$listingId/related', queryParameters: {'limit': limit});
+      if (response.statusCode == 200 && response.data is List) {
+        return (response.data as List).map((json) => ProductModel.fromJson(json)).toList();
+      }
+    } catch (_) {
+      // Non-blocking: return empty list on failure
+    }
+    return [];
+  }
+
+  Future<ProductDetailModel?> fetchProductDetailModel(String listingId) async {
+    try {
+      final response = await _apiClient.dio.get('/customers/catalog/listings/$listingId');
+      if (response.statusCode == 200) {
+        return ProductDetailModel.fromJson(response.data);
+      }
+    } on DioException catch (e) {
+      _errorMessage = userFriendlyDioMessage(
+        e.response?.data,
+        e.message,
+        'Failed to load product details.',
+      );
+    } catch (e) {
+      _errorMessage = e.toString();
+    }
+    return null;
+  }
+
   Future<void> fetchProductDetail(String listingId) async {
+    _productDetail = null;
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
