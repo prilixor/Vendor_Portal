@@ -411,7 +411,7 @@ const CustomerListingDetail = () => {
                               key={`alt-${v.id}`}
                               type="button"
                               onClick={() => setSelectedVariantId(v.id)}
-                              className="rounded-md border border-amber-400 bg-white px-2 py-1 font-semibold text-amber-900 hover:bg-amber-100 dark:bg-transparent dark:text-amber-100"
+                              className="rounded-md border border-amber-400 bg-white px-2 py-1 font-semibold text-amber-900 hover:bg-amber-100 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-500/15"
                             >
                               {v.sizeValue} {v.sizeUnit} · ₹{v.buyPrice.toFixed(0)} · {stock} left
                             </button>
@@ -538,22 +538,22 @@ const CustomerListingDetail = () => {
                   />
 
                   {/* Live copy — same as production listing detail */}
-                  <p className="inline-flex items-center gap-2 text-[13px] font-medium text-slate-600">
-                    <Truck className="h-4 w-4 shrink-0 text-violet-500" />
+                  <p className="inline-flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
+                    <Truck className="h-4 w-4 shrink-0 text-violet-500 dark:text-violet-400" />
                     Starts when the order is delivered
                   </p>
 
                   {/* Checkout strip: qty + deposit + rent due */}
-                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                     <div className="flex items-center justify-between gap-3 px-4 py-4">
                       <div className="min-w-0">
-                        <p className="text-[14px] font-bold tracking-tight text-slate-900">
+                        <p className="text-[14px] font-bold tracking-tight text-foreground">
                           Quantity
                           <span className="ml-0.5 text-destructive" aria-hidden>
                             *
                           </span>
                         </p>
-                        <p className="mt-0.5 text-[12px] font-medium text-slate-500">
+                        <p className="mt-0.5 text-[12px] font-medium text-muted-foreground">
                           {currentAvailableQuantity > 0
                             ? `${currentAvailableQuantity} available`
                             : "Select how many units"}
@@ -571,23 +571,23 @@ const CustomerListingDetail = () => {
                       />
                     </div>
 
-                    <div className="space-y-3 border-t border-slate-100 bg-gradient-to-br from-slate-50 to-white px-4 py-4">
-                      <div className="flex items-center justify-between gap-3 rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200/80">
-                        <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-700">
-                          <ShieldCheck className="h-[18px] w-[18px] text-emerald-600" />
+                    <div className="space-y-3 border-t border-border bg-muted/30 px-4 py-4">
+                      <div className="flex items-center justify-between gap-3 rounded-xl bg-background px-3.5 py-3 ring-1 ring-inset ring-border">
+                        <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-foreground">
+                          <ShieldCheck className="h-[18px] w-[18px] text-emerald-600 dark:text-emerald-400" />
                           Refundable deposit
                         </span>
-                        <span className="text-[15px] font-bold tabular-nums text-slate-900">
+                        <span className="text-[15px] font-bold tabular-nums text-foreground">
                           {formatInr(data.securityDeposit * qty)}
                         </span>
                       </div>
 
                       <div className="flex items-end justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-[14px] font-bold tracking-tight text-slate-900">
+                          <p className="text-[14px] font-bold tracking-tight text-foreground">
                             You pay for rent
                           </p>
-                          <p className="mt-1 text-[12px] font-medium leading-snug text-slate-500">
+                          <p className="mt-1 text-[12px] font-medium leading-snug text-muted-foreground">
                             {qty > 1
                               ? `${formatInr(selectedPlan.finalRentalPrice)} × ${qty} units`
                               : "Excludes deposit & delivery"}
@@ -596,7 +596,9 @@ const CustomerListingDetail = () => {
                         <p
                           className={cn(
                             "text-[24px] font-extrabold leading-none tabular-nums tracking-tight",
-                            selectedPlan.isRecommended ? "text-blue-600" : "text-violet-600",
+                            selectedPlan.isRecommended
+                              ? "text-blue-600 dark:text-blue-400"
+                              : "text-violet-600 dark:text-violet-400",
                           )}
                         >
                           {formatInr(selectedPlan.finalRentalPrice * qty)}
@@ -676,7 +678,7 @@ const CustomerListingDetail = () => {
                     variant="ghost"
                     size="sm"
                     type="button"
-                    className="h-9 px-3 text-[13px] font-medium text-slate-600 hover:text-slate-900"
+                    className="h-9 px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
                     onClick={() => {
                       if (user?.role !== "customer") {
                         toast.message("Sign in to save favorites");
@@ -696,13 +698,13 @@ const CustomerListingDetail = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-9 px-3 text-[13px] font-medium text-slate-600 hover:text-slate-900"
+                    className="h-9 px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
                     asChild
                   >
                     <Link to="/customer/shop">More listings</Link>
                   </Button>
                 </div>
-                <p className="text-[12px] font-medium text-slate-500">
+                <p className="text-[12px] font-medium text-muted-foreground">
                   Excludes {actualOrderType === "buy" ? "delivery" : "deposit & delivery"}
                 </p>
               </div>

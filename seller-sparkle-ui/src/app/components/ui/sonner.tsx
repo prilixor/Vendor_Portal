@@ -1,14 +1,34 @@
-import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 import { Toaster as Sonner, toast } from "sonner";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
+function readAppTheme(): NonNullable<ToasterProps["theme"]> {
+  if (typeof document === "undefined") return "system";
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme();
+  // App theme is toggled via documentElement.classList (not next-themes ThemeProvider).
+  const [theme, setTheme] = useState<NonNullable<ToasterProps["theme"]>>(readAppTheme);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setTheme(readAppTheme());
+    sync();
+
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    window.addEventListener("storage", sync);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={theme}
       className="toaster group"
       position="top-right"
       toastOptions={{
@@ -18,6 +38,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
           description: "group-[.toast]:text-muted-foreground",
           actionButton: "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
           cancelButton: "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+          success: "group-[.toaster]:border-emerald-500/30",
+          error: "group-[.toaster]:border-destructive/40",
+          warning: "group-[.toaster]:border-amber-500/40",
         },
       }}
       {...props}

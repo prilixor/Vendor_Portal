@@ -112,11 +112,11 @@ function PlanOptionRow({
         "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/15",
         isActive
           ? plan.isRecommended
-            ? "border-blue-500 bg-blue-50 ring-1 ring-blue-200"
-            : "border-violet-500 bg-violet-50 ring-1 ring-violet-200"
+            ? "border-blue-500 bg-blue-50 ring-1 ring-blue-200 dark:border-blue-500 dark:bg-blue-950/40 dark:ring-blue-800"
+            : "border-violet-500 bg-violet-50 ring-1 ring-violet-200 dark:border-violet-500 dark:bg-violet-950/40 dark:ring-violet-800"
           : plan.isRecommended
-            ? "border-blue-200 bg-blue-50 hover:border-blue-300"
-            : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
+            ? "border-blue-200 bg-blue-50 hover:border-blue-300 dark:border-blue-800 dark:bg-blue-950/20 dark:hover:border-blue-600"
+            : "border-border bg-card hover:border-slate-300 hover:bg-muted/40 dark:hover:border-slate-600",
       )}
     >
       <div
@@ -126,7 +126,7 @@ function PlanOptionRow({
             ? plan.isRecommended
               ? "border-blue-600 bg-blue-600"
               : "border-violet-500 bg-violet-500"
-            : "border-slate-300 bg-white",
+            : "border-muted-foreground/40 bg-card",
         )}
       >
         {isActive ? <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} /> : null}
@@ -134,21 +134,21 @@ function PlanOptionRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <p className="truncate text-[13px] font-bold text-slate-900">{title}</p>
+          <p className="truncate text-[13px] font-bold text-foreground">{title}</p>
           {plan.isRecommended ? (
             <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
               Most Popular
             </span>
           ) : null}
           {isBestDeal ? (
-            <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-700">
+            <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
               Best deal
             </span>
           ) : null}
         </div>
-        <p className="mt-0.5 truncate text-[11px] font-medium text-slate-500">{meta}</p>
+        <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">{meta}</p>
         {savings > 0 ? (
-          <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+          <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
             {pctOff > 0 ? `${pctOff}% off · ` : null}
             Save {formatPlanInr(savings)}
           </span>
@@ -160,7 +160,7 @@ function PlanOptionRow({
             <p
               className={cn(
                 "text-[15px] font-extrabold tabular-nums",
-                plan.isRecommended ? "text-blue-600" : "text-slate-900",
+                plan.isRecommended ? "text-blue-600 dark:text-blue-400" : "text-foreground",
               )}
             >
               {formatPlanInr(plan.finalRentalPrice)}
@@ -173,7 +173,7 @@ function PlanOptionRow({
           </div>
           {iconUrl ? (
             <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-50 ring-1 ring-inset ring-slate-200"
+              className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border"
               title={tierLabel}
             >
               <img src={iconUrl} alt={tierLabel} className="h-7 w-7 object-contain drop-shadow-sm" />
@@ -187,7 +187,7 @@ function PlanOptionRow({
           <p
             className={cn(
               "text-[15px] font-extrabold tabular-nums",
-              plan.isRecommended ? "text-blue-600" : "text-slate-900",
+              plan.isRecommended ? "text-blue-600 dark:text-blue-400" : "text-foreground",
             )}
           >
             {formatPlanInr(plan.finalRentalPrice)}
@@ -200,7 +200,7 @@ function PlanOptionRow({
         </div>
         {iconUrl ? (
           <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-50 ring-1 ring-inset ring-slate-200"
+            className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border"
             title={tierLabel}
           >
             <img src={iconUrl} alt={tierLabel} className="h-8 w-8 object-contain drop-shadow-sm" />
@@ -317,21 +317,21 @@ export function RentalPeriodPlanDropdown({
       aria-haspopup={isMobile ? "dialog" : "listbox"}
       onClick={isMobile ? () => setOpen(true) : undefined}
       className={cn(
-        "group relative w-full overflow-hidden rounded-2xl border-2 bg-white p-3.5 text-left shadow-sm transition-all",
+        "group relative w-full overflow-hidden rounded-2xl border-2 bg-card p-3.5 text-left shadow-sm transition-all",
         "hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/15",
         open
           ? selected.isRecommended
-            ? "border-blue-500 ring-4 ring-blue-500/10"
-            : "border-violet-500 ring-4 ring-violet-500/10"
+            ? "border-blue-500 ring-4 ring-blue-500/10 dark:ring-blue-500/20"
+            : "border-violet-500 ring-4 ring-violet-500/10 dark:ring-violet-500/20"
           : selected.isRecommended
-            ? "border-blue-400"
-            : "border-slate-200 hover:border-violet-300",
+            ? "border-blue-400 dark:border-blue-500"
+            : "border-border hover:border-violet-300 dark:hover:border-violet-500",
       )}
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <p className="truncate text-[15px] font-bold tracking-tight text-slate-900">
+            <p className="truncate text-[15px] font-bold tracking-tight text-foreground">
               {selectedTitle}
             </p>
             {selected.isRecommended ? (
@@ -341,12 +341,12 @@ export function RentalPeriodPlanDropdown({
               </span>
             ) : null}
             {selectedIsBestDeal ? (
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 ring-1 ring-inset ring-amber-200">
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30">
                 Best deal
               </span>
             ) : null}
           </div>
-          <p className="mt-1 truncate text-[12px] font-medium text-slate-500">
+          <p className="mt-1 truncate text-[12px] font-medium text-muted-foreground">
             {selected.durationDays} days
             {selectedCycles ? ` · ${selectedCycles}` : ""}
             {selectedPerDay != null ? ` · ${formatPlanInr(selectedPerDay)}/day` : ""}
@@ -354,12 +354,12 @@ export function RentalPeriodPlanDropdown({
           {(selectedPctOff > 0 || selectedSavings > 0) && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               {selectedPctOff > 0 ? (
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/15">
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/15 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/25">
                   {selectedPctOff}% OFF
                 </span>
               ) : null}
               {selectedSavings > 0 ? (
-                <span className="inline-flex items-center gap-1 text-[12px] font-bold text-emerald-700">
+                <span className="inline-flex items-center gap-1 text-[12px] font-bold text-emerald-700 dark:text-emerald-400">
                   <Tag className="h-3 w-3" />
                   Save {formatPlanInr(selectedSavings)}
                 </span>
@@ -373,7 +373,9 @@ export function RentalPeriodPlanDropdown({
             <p
               className={cn(
                 "text-[18px] font-extrabold leading-none tabular-nums",
-                selected.isRecommended ? "text-blue-600" : "text-slate-900",
+                selected.isRecommended
+                  ? "text-blue-600 dark:text-blue-400"
+                  : "text-foreground",
               )}
             >
               {formatPlanInr(selected.finalRentalPrice)}
@@ -386,7 +388,7 @@ export function RentalPeriodPlanDropdown({
           </div>
           {selectedIconUrl ? (
             <div
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 ring-1 ring-inset ring-slate-200"
+              className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border"
               title={selectedTierLabel}
             >
               <img
@@ -398,7 +400,7 @@ export function RentalPeriodPlanDropdown({
           ) : null}
           <ChevronDown
             className={cn(
-              "h-5 w-5 shrink-0 text-slate-400 transition-transform duration-200",
+              "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
               open && "rotate-180 text-violet-500",
             )}
           />
@@ -411,19 +413,21 @@ export function RentalPeriodPlanDropdown({
     <div className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h3 className="text-base font-bold tracking-tight text-slate-900">Rental period</h3>
-          <p className="mt-0.5 text-[13px] font-medium text-violet-600">More days, more savings</p>
+          <h3 className="text-base font-bold tracking-tight text-foreground">Rental period</h3>
+          <p className="mt-0.5 text-[13px] font-medium text-violet-600 dark:text-violet-400">
+            More days, more savings
+          </p>
         </div>
         {legend.length > 0 ? (
           <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-0.5 sm:flex-wrap sm:justify-end sm:overflow-visible">
             {legend.map((item) => (
               <div
                 key={item.tier}
-                className="flex shrink-0 items-center gap-1.5 rounded-full bg-slate-50 px-2 py-1 ring-1 ring-inset ring-slate-200/80"
+                className="flex shrink-0 items-center gap-1.5 rounded-full bg-muted/50 px-2 py-1 ring-1 ring-inset ring-border"
                 title={item.label}
               >
                 <img src={item.url} alt="" className="h-5 w-5 object-contain" />
-                <span className="whitespace-nowrap text-[11px] font-semibold text-slate-600">
+                <span className="whitespace-nowrap text-[11px] font-semibold text-muted-foreground">
                   {item.label}
                 </span>
               </div>
@@ -438,17 +442,17 @@ export function RentalPeriodPlanDropdown({
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetContent
               side="bottom"
-              className="flex max-h-[min(85dvh,40rem)] flex-col gap-0 overflow-hidden rounded-t-2xl p-0"
+              className="flex max-h-[min(85dvh,40rem)] flex-col gap-0 overflow-hidden rounded-t-2xl border-border bg-card p-0"
             >
-              <SheetHeader className="shrink-0 space-y-0 border-b border-slate-100 bg-white px-4 py-3 text-left">
-                <SheetTitle className="pr-8 text-base font-bold text-slate-900">
+              <SheetHeader className="shrink-0 space-y-0 border-b border-border bg-card px-4 py-3 text-left">
+                <SheetTitle className="pr-8 text-base font-bold text-foreground">
                   Choose a rental plan
                 </SheetTitle>
-                <SheetDescription className="text-xs text-slate-500">
+                <SheetDescription className="text-xs text-muted-foreground">
                   More days, more savings
                 </SheetDescription>
               </SheetHeader>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-card pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <PlanList
                   plans={plans}
                   selectedId={selected.id}
@@ -468,10 +472,10 @@ export function RentalPeriodPlanDropdown({
             side="bottom"
             sideOffset={6}
             collisionPadding={16}
-            className="z-[60] w-[--radix-popover-trigger-width] max-w-none overflow-hidden rounded-2xl border-slate-200 bg-white p-0 shadow-2xl shadow-slate-900/10"
+            className="z-[60] w-[--radix-popover-trigger-width] max-w-none overflow-hidden rounded-2xl border-border bg-card p-0 shadow-2xl shadow-black/20"
           >
-            <div className="border-b border-slate-100 bg-slate-50 px-3.5 py-2.5">
-              <p className="text-[12px] font-semibold text-slate-600">Choose a rental plan</p>
+            <div className="border-b border-border bg-muted/40 px-3.5 py-2.5">
+              <p className="text-[12px] font-semibold text-muted-foreground">Choose a rental plan</p>
             </div>
             <PlanList
               plans={plans}

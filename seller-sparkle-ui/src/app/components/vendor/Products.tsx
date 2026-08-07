@@ -1969,9 +1969,9 @@ const Products = () => {
         if (!listing) return null;
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+            <Card className="w-full max-w-md bg-card p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20">
                   <Trash2 className="h-5 w-5 text-red-600" />
                 </div>
                 <div>
@@ -2021,9 +2021,9 @@ const Products = () => {
         const isActivating = statusConfirmAction === 'activate';
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="max-w-md w-full p-6 bg-white shadow-xl">
+            <Card className="w-full max-w-md bg-card p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isActivating ? 'bg-green-100' : 'bg-amber-100'}`}>
+                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${isActivating ? "bg-green-100 dark:bg-emerald-500/20" : "bg-amber-100 dark:bg-amber-500/20"}`}>
                   {isActivating ? (
                     <ImageIcon className="h-5 w-5 text-green-600" />
                   ) : (

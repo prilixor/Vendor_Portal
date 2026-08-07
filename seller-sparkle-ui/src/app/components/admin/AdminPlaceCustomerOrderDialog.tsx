@@ -105,7 +105,14 @@ function stockBadge(status: string, qty: number) {
     return <Badge variant="outline" className="text-[10px] bg-destructive/10 text-destructive border-destructive/20">Out of stock</Badge>;
   }
   if (status === "low_stock" || qty <= 3) {
-    return <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">Low · {qty}</Badge>;
+    return (
+      <Badge
+        variant="outline"
+        className="border-amber-200 bg-amber-50 text-[10px] text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+      >
+        Low · {qty}
+      </Badge>
+    );
   }
   return <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-800 border-emerald-200">{qty} available</Badge>;
 }
@@ -119,7 +126,10 @@ function typeBadge(isChemical: boolean) {
     );
   }
   return (
-    <Badge variant="outline" className="text-[10px] bg-teal-50 text-teal-800 border-teal-200">
+    <Badge
+      variant="outline"
+      className="border-teal-200 bg-teal-50 text-[10px] text-teal-800 dark:border-teal-500/30 dark:bg-teal-500/10 dark:text-teal-200"
+    >
       Equipment
     </Badge>
   );
@@ -158,7 +168,9 @@ function ListingThumb({ src, isChemical }: { src?: string | null; isChemical?: b
     return (
       <div className={cn(
         "h-full w-full flex items-center justify-center",
-        isChemical ? "bg-violet-50 text-violet-400" : "bg-teal-50 text-teal-400",
+        isChemical
+          ? "bg-violet-50 text-violet-400 dark:bg-violet-500/10 dark:text-violet-300"
+          : "bg-teal-50 text-teal-400 dark:bg-teal-500/10 dark:text-teal-300",
       )}>
         {isChemical ? <FlaskConical className="h-5 w-5" /> : <Package className="h-5 w-5" />}
       </div>
@@ -265,7 +277,10 @@ function CartItemTile({
                 {isRent ? "Rent" : "Buy"}
               </Badge>
               {line.prescriptionRequired && (
-                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
+                <Badge
+                  variant="outline"
+                  className="border-amber-200 bg-amber-50 text-[10px] text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                >
                   Rx required
                 </Badge>
               )}
@@ -1055,9 +1070,9 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                           className={cn(
                             "w-full flex gap-3 rounded-lg border p-3 text-left transition-colors",
                             row.isChemical
-                              ? "border-violet-100 hover:border-violet-300 hover:bg-violet-50/40"
-                              : "border-teal-100 hover:border-teal-300 hover:bg-teal-50/40",
-                            disabled && "opacity-50 cursor-not-allowed bg-muted/20 hover:bg-muted/20 hover:border-border",
+                              ? "border-violet-100 hover:border-violet-300 hover:bg-violet-50/40 dark:border-violet-500/20 dark:hover:border-violet-500/40 dark:hover:bg-violet-500/10"
+                              : "border-teal-100 hover:border-teal-300 hover:bg-teal-50/40 dark:border-teal-500/20 dark:hover:border-teal-500/40 dark:hover:bg-teal-500/10",
+                            disabled && "cursor-not-allowed bg-muted/20 opacity-50 hover:border-border hover:bg-muted/20",
                           )}
                         >
                           <div className="h-14 w-14 rounded-md border bg-muted/40 overflow-hidden shrink-0">
@@ -1107,7 +1122,9 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
               {selected && (
                 <div className={cn(
                   "flex gap-3 rounded-lg border p-3",
-                  selected.isChemical ? "bg-violet-50/40 border-violet-100" : "bg-teal-50/40 border-teal-100",
+                  selected.isChemical
+                    ? "border-violet-100 bg-violet-50/40 dark:border-violet-500/20 dark:bg-violet-500/10"
+                    : "border-teal-100 bg-teal-50/40 dark:border-teal-500/20 dark:bg-teal-500/10",
                 )}>
                   <div className="h-16 w-16 rounded-md border bg-background overflow-hidden shrink-0">
                     <ListingThumb src={imageUrl} isChemical={selected.isChemical} />
@@ -1232,7 +1249,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                     />
                   </div>
                 ) : orderType === "rent" ? (
-                  <div className="sm:col-span-2 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/80 px-3.5 py-3 text-sm text-amber-900">
+                  <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/80 px-3.5 py-3 text-sm text-amber-900 sm:col-span-2 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <div className="min-w-0 space-y-0.5">
                       <p className="font-semibold">Rental plans not configured</p>
@@ -1332,12 +1349,14 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                         )}
 
                         {prescriptionLines.length > 0 && (
-                          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3.5 space-y-2">
+                          <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/50 p-3.5 dark:border-amber-500/30 dark:bg-amber-500/10">
                             <div className="flex items-start gap-2">
                               <AlertCircle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
                               <div>
-                                <p className="text-sm font-semibold text-amber-900">Doctor reference (optional)</p>
-                                <p className="text-xs text-amber-800/90 mt-0.5">
+                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                                  Doctor reference (optional)
+                                </p>
+                                <p className="mt-0.5 text-xs text-amber-800/90 dark:text-amber-200/80">
                                   Doctors are managed under Catalog → Doctor References. Customers will attach a doctor by Unique ID at checkout (optional). Hospital selection has been removed.
                                 </p>
                               </div>
@@ -1433,8 +1452,10 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                 </div>
               )}
               {placeErrors.length > 0 && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-3.5 py-3 text-left space-y-1 max-w-sm mx-auto">
-                  <p className="text-sm font-medium text-amber-900">Some items still need attention</p>
+                <div className="mx-auto max-w-sm space-y-1 rounded-xl border border-amber-200 bg-amber-50/60 px-3.5 py-3 text-left dark:border-amber-500/30 dark:bg-amber-500/10">
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                    Some items still need attention
+                  </p>
                   {placeErrors.map((err, i) => (
                     <p key={i} className="text-xs text-amber-800">{err}</p>
                   ))}
