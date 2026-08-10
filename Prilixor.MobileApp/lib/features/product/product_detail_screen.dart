@@ -118,6 +118,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
+  String? _planIconUrl(RentalPricingPlanModel plan) {
+    return resolveMediaUrl(plan.iconThumbnailUrl) ?? resolveMediaUrl(plan.iconUrl);
+  }
+
+  Widget _planIconAvatar(RentalPricingPlanModel? plan, {double size = 40}) {
+    final url = plan == null ? null : _planIconUrl(plan);
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0xFF334155).withValues(alpha: 0.6),
+        border: Border.all(color: Colors.white12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: url == null
+          ? Icon(Icons.schedule_rounded, size: size * 0.5, color: Colors.white38)
+          : CatalogImage(url: url, width: size, height: size, fit: BoxFit.contain),
+    );
+  }
+
   RentalPricingPlanModel? _selectedPlan(ProductDetailModel detail) {
     if (!detail.hasActiveRentalPlans) return null;
     final plans = detail.activeRentalPlans;
@@ -708,6 +729,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         ),
                                         child: Row(
                                           children: [
+                                            if (selectedPlan != null) ...[
+                                              _planIconAvatar(selectedPlan, size: 44),
+                                              const SizedBox(width: 12),
+                                            ],
                                             Expanded(
                                               child: Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1263,6 +1288,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   ),
                                 ],
                               ),
+                              const SizedBox(width: 10),
+                              _planIconAvatar(plan, size: 36),
                             ],
                           ),
                         ),
@@ -1425,7 +1452,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final isOutOfStock = product.availableQuantity <= 0 || product.availabilityStatus.trim().toLowerCase() == 'out_of_stock';
     final isInteractive = isBrowsable && !isOutOfStock;
     final badge = product.getAvailabilityBadge();
-    final showBadge = badge['label'] != 'Available';
+    final showBadge = badge != null && badge['label'] != 'Available';
     final rate = primaryDisplayRate(
       dailyRent: product.dailyRent,
       weeklyRent: product.weeklyRent,
