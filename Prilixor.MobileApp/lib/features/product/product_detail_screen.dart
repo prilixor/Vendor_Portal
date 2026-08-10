@@ -641,7 +641,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
-                                                      '${selectedVariant.sizeLabel} Ã— $_quantity isn\'t available${currentQty > 0 ? ' (only $currentQty in stock)' : ' (out of stock)'}.',
+                                                      '${selectedVariant.sizeLabel} \u00d7 $_quantity isn\'t available${currentQty > 0 ? ' (only $currentQty in stock)' : ' (out of stock)'}.',
                                                       style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.w600, fontSize: 12),
                                                     ),
                                                     if (altVariants.isNotEmpty) ...[
@@ -962,7 +962,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                             Text(
                                                               selectedPlan != null
                                                                   ? formatPlanInr(selectedPlan.finalRentalPrice)
-                                                                  : 'â€”',
+                                                                  : '\u2014',
                                                               style: TextStyle(
                                                                 color: priceColor,
                                                                 fontWeight: FontWeight.w800,
@@ -1017,8 +1017,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                 ),
                                               ],
                                             ),
-                                            // Web checkout strip: qty â†’ deposit â†’ rent due
-                                            // (plan card already shows % OFF / Save â€” don't repeat).
+                                            // Web checkout strip: qty -> deposit -> rent due
+                                            // (plan card already shows % OFF / Save - don't repeat).
                                             if (selectedPlan != null) ...[
                                               const SizedBox(height: 12),
                                               Container(
@@ -1192,7 +1192,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                                     const SizedBox(height: 4),
                                                                     Text(
                                                                       _quantity > 1
-                                                                          ? '${formatPlanInr(selectedPlan.finalRentalPrice)} Ã— $_quantity units'
+                                                                          ? '${formatPlanInr(selectedPlan.finalRentalPrice)} \u00d7 $_quantity units'
                                                                           : 'Excludes deposit & delivery',
                                                                       style: const TextStyle(
                                                                         color: Colors.white54,
@@ -1516,7 +1516,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           },
                     child: Text(
                       canAdd
-                          ? (actualOrderType == 'buy' ? 'Add to cart â€” Buy' : 'Add to cart â€” Rent')
+                          ? (actualOrderType == 'buy'
+                              ? 'Add to cart \u2014 Buy'
+                              : 'Add to cart \u2014 Rent')
                           : 'Out of stock',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
