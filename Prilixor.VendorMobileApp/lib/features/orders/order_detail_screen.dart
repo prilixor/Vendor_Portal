@@ -8,6 +8,7 @@ import '../../core/models/order_image_model.dart';
 import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/struck_price.dart';
 import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
 import 'dispatch_details_sheet.dart';
 import 'order_group_utils.dart';
@@ -1017,6 +1018,37 @@ class _ItemDetailsPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _MetricStrip(order: order),
+          if (!isBuy) ...[
+            const SizedBox(height: 8),
+            _SubsectionLabel('Rental period'),
+            const SizedBox(height: 4),
+            Text(
+              order.rentalDurationLabel?.trim().isNotEmpty == true
+                  ? '${order.rentalDurationLabel}'
+                      '${order.rentalDurationDays != null ? ' (${order.rentalDurationDays} day${order.rentalDurationDays == 1 ? '' : 's'})' : ''}'
+                  : '${order.rentalDays} day${order.rentalDays == 1 ? '' : 's'}',
+              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            if (order.rentalFinalPrice != null) ...[
+              const SizedBox(height: 4),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                children: [
+                  if (order.rentalNormalPrice != null &&
+                      order.rentalNormalPrice! > order.rentalFinalPrice!)
+                    StruckPrice(
+                      '₹${order.rentalNormalPrice!.toStringAsFixed(0)}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  Text(
+                    'Plan price ₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ],
+              ),
+            ],
+          ],
           const SizedBox(height: 8),
           _CompactDetailList(rows: [
             ('Customer', order.customerName),

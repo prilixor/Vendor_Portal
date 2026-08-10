@@ -107,7 +107,7 @@ class ProfileScreen extends StatelessWidget {
           _MenuTile(
             icon: Icons.map_outlined,
             title: 'Service Areas',
-            subtitle: 'Delivery & service radius',
+            subtitle: 'Delivery pin (coverage set by Admin)',
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const ServiceAreasScreen()),
