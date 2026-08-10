@@ -494,16 +494,16 @@ class _CartLineCard extends StatelessWidget {
                           if (line.rentalNormalPrice != null &&
                               line.rentalNormalPrice! > (line.rentalFinalPrice ?? 0))
                             StruckPrice(
-                              '₹${line.rentalNormalPrice!.toStringAsFixed(0)}',
+                              formatPlanInr(line.rentalNormalPrice!),
                               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                           Text(
-                            '₹${(line.rentalFinalPrice ?? 0).toStringAsFixed(0)}',
+                            formatPlanInr(line.rentalFinalPrice ?? 0),
                             style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800),
                           ),
                           const Text('·', style: TextStyle(color: Colors.white24)),
                           Text(
-                            'Deposit ₹${line.securityDeposit.toStringAsFixed(0)}',
+                            'Deposit ${formatPlanInr(line.securityDeposit)}',
                             style: const TextStyle(color: Colors.white54, fontSize: 12),
                           ),
                         ],

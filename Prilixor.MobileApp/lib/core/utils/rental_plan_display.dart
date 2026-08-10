@@ -8,6 +8,24 @@ String dayPlanTitle(int durationDays, [String? fallbackLabel]) {
   return fallback.isEmpty ? 'Rental plan' : fallback;
 }
 
+/// Match web `formatPlanInr` (en-IN grouping).
+String formatPlanInr(num value) {
+  final rounded = value.round();
+  final sign = rounded < 0 ? '-' : '';
+  final digits = rounded.abs().toString();
+  if (digits.length <= 3) return '₹$sign$digits';
+
+  final last3 = digits.substring(digits.length - 3);
+  var rest = digits.substring(0, digits.length - 3);
+  final groups = <String>[];
+  while (rest.length > 2) {
+    groups.insert(0, rest.substring(rest.length - 2));
+    rest = rest.substring(0, rest.length - 2);
+  }
+  if (rest.isNotEmpty) groups.insert(0, rest);
+  return '₹$sign${groups.join(',')},$last3';
+}
+
 String formatBillingCycles(double cycles) {
   if (!(cycles > 0)) return '';
   final text = cycles == cycles.roundToDouble()
@@ -46,11 +64,22 @@ int? planPerDay(RentalPricingPlanModel plan) {
   return (plan.finalRentalPrice / plan.durationDays).round();
 }
 
-String planMetaLine(RentalPricingPlanModel plan) {
-  final parts = <String>['${plan.durationDays} days'];
-  final perDay = planPerDay(plan);
-  if (perDay != null) parts.add('₹$perDay/day');
+/// Closed trigger meta — web: `14 days · 0.5 Billing Cycles · ₹126/day`.
+String planTriggerMetaLine(RentalPricingPlanModel plan) {
   final cycles = formatBillingCycles(planBillingCycles(plan));
+  final perDay = planPerDay(plan);
+  final parts = <String>['${plan.durationDays} days'];
+  if (cycles.isNotEmpty) parts.add(cycles);
+  if (perDay != null) parts.add('${formatPlanInr(perDay)}/day');
+  return parts.join(' · ');
+}
+
+/// List-row meta — web PlanOptionRow: `14 days · ₹126/day · 0.5 Billing Cycles`.
+String planListMetaLine(RentalPricingPlanModel plan) {
+  final cycles = formatBillingCycles(planBillingCycles(plan));
+  final perDay = planPerDay(plan);
+  final parts = <String>['${plan.durationDays} days'];
+  if (perDay != null) parts.add('${formatPlanInr(perDay)}/day');
   if (cycles.isNotEmpty) parts.add(cycles);
   return parts.join(' · ');
 }
