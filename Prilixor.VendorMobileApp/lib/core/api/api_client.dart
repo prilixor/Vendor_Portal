@@ -20,8 +20,7 @@ class ApiClient {
   bool _isRefreshing = false;
   final List<Completer<String?>> _refreshWaiters = [];
 
-  // Production API from [AppUrls]. Local override (when API runs on your machine):
-  //final String baseUrl = "https://localhost:5001/api";
+  // [AppUrls.apiBaseUrl] uses local API on Flutter Web localhost (avoids prod CORS).
   final String baseUrl = AppUrls.apiBaseUrl;
 
   /// Vendor portal web UI (terms, privacy) — vendor subdomain, not api host.
