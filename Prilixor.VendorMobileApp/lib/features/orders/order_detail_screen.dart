@@ -816,6 +816,8 @@ class _RequestBox extends StatelessWidget {
 }
 
 class _PhotoRequestCard extends StatelessWidget {
+  static const int maxImages = 5;
+
   final OrderImageRequest request;
   final List<OrderImage> images;
   final bool busy;
@@ -866,27 +868,190 @@ class _PhotoRequestCard extends StatelessWidget {
     );
   }
 
+  Widget _addTile({required bool large}) {
+    final radius = BorderRadius.circular(large ? 14 : 10);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: busy ? null : onAdd,
+        borderRadius: radius,
+        child: CustomPaint(
+          painter: _DashedBorderPainter(
+            color: AppTheme.accent.withValues(alpha: 0.55),
+            radius: large ? 14 : 10,
+          ),
+          child: Ink(
+            decoration: BoxDecoration(
+              color: AppTheme.accent.withValues(alpha: 0.08),
+              borderRadius: radius,
+            ),
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: large ? 22 : 8, horizontal: 12),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      busy ? Icons.hourglass_top_rounded : Icons.add_photo_alternate_outlined,
+                      color: AppTheme.accent,
+                      size: large ? 32 : 22,
+                    ),
+                    SizedBox(height: large ? 8 : 4),
+                    Text(
+                      busy ? 'Uploading\u2026' : (large ? 'Tap to add photos' : 'Add photo'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.88),
+                        fontSize: large ? 13 : 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (large) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Up to $maxImages photos',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.45),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final message = request.message.trim().isEmpty
-        ? 'Please share up to 5 photos for this order so we can proceed.'
+        ? 'Please upload up to $maxImages photos so we can proceed.'
         : request.message;
-    final showAdd = canUpload && images.length < 5;
-    final itemCount = images.length + (showAdd ? 1 : 0);
+    final showAdd = canUpload && images.length < maxImages;
+    final emptyUpload = images.isEmpty && showAdd;
 
-    return _SectionCard(
-      title: 'Customer photo request',
-      subtitle: 'From customer for this item (not Admin chat) · ${images.length}/5 · $message',
-      compact: true,
-      child: itemCount == 0
-          ? Text(
-              'No photos uploaded yet.',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 13),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card(context),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppTheme.accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.photo_library_outlined, color: AppTheme.accent, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Customer photo request',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              height: 1.2,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '${images.length}/$maxImages',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.75),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'From the customer for this order item \u2014 upload here (not Admin chat).',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.48),
+                        fontSize: 11.5,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            ),
+            child: Text(
+              message,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.72),
+                fontSize: 12.5,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (emptyUpload)
+            SizedBox(
+              width: double.infinity,
+              height: 132,
+              child: _addTile(large: true),
             )
-          : GridView.builder(
+          else if (images.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Text(
+                'No photos uploaded yet.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 13),
+              ),
+            )
+          else
+            GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: itemCount,
+              itemCount: images.length + (showAdd ? 1 : 0),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3,
                 mainAxisSpacing: 8,
@@ -894,31 +1059,7 @@ class _PhotoRequestCard extends StatelessWidget {
               ),
               itemBuilder: (context, index) {
                 if (showAdd && index == images.length) {
-                  return Material(
-                    color: Colors.white.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(10),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: busy ? null : onAdd,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            busy ? Icons.hourglass_top : Icons.add_photo_alternate_outlined,
-                            color: Colors.white70,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            busy ? 'Uploading…' : 'Add photo',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.7),
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
+                  return _addTile(large: false);
                 }
 
                 final image = images[index];
@@ -942,16 +1083,16 @@ class _PhotoRequestCard extends StatelessWidget {
                     ),
                     if (canUpload)
                       Positioned(
-                        top: 2,
-                        right: 2,
+                        top: 4,
+                        right: 4,
                         child: Material(
-                          color: Colors.black54,
+                          color: Colors.black.withValues(alpha: 0.65),
                           shape: const CircleBorder(),
                           child: InkWell(
                             customBorder: const CircleBorder(),
                             onTap: busy ? null : () => onDelete(image.id),
                             child: const Padding(
-                              padding: EdgeInsets.all(4),
+                              padding: EdgeInsets.all(5),
                               child: Icon(Icons.close, size: 14, color: Colors.white),
                             ),
                           ),
@@ -961,8 +1102,54 @@ class _PhotoRequestCard extends StatelessWidget {
                 );
               },
             ),
+          const SizedBox(height: 10),
+          Text(
+            'JPEG, PNG, or WebP \u00b7 max 5 MB each \u00b7 cleared after delivery, cancel, or dispatch failure',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.4),
+              fontSize: 10.5,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
     );
   }
+}
+
+/// Light dashed outline for the upload tile (web dashed border parity).
+class _DashedBorderPainter extends CustomPainter {
+  final Color color;
+  final double radius;
+
+  _DashedBorderPainter({required this.color, required this.radius});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0.75, 0.75, size.width - 1.5, size.height - 1.5),
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+    const dash = 5.0;
+    const gap = 3.5;
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final next = (distance + dash).clamp(0.0, metric.length);
+        canvas.drawPath(metric.extractPath(distance, next), paint);
+        distance = next + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
 }
 
 class _ItemDetailsPanel extends StatelessWidget {
