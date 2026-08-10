@@ -92,19 +92,43 @@ class CartProvider extends ChangeNotifier {
       // Drop details for listings no longer in cart.
       _listingDetails.removeWhere((id, _) => !ids.contains(id));
 
-      // Fill missing cart thumbnails from listing primary/gallery images.
+      // Hydrate thumbnails + chemical/rent flags from live listing details.
       var hydrated = false;
       for (final line in _lines) {
-        if (line.primaryImageUrl != null && line.primaryImageUrl!.trim().isNotEmpty) continue;
         final detail = _listingDetails[line.listingId];
         if (detail == null) continue;
-        final url = resolveItemImageUrl(
-          primaryImageUrl: detail.primaryImageUrl,
-          imageUrls: detail.imageUrls,
-        );
-        if (url == null) continue;
-        line.primaryImageUrl = url;
-        hydrated = true;
+
+        if (line.primaryImageUrl == null || line.primaryImageUrl!.trim().isEmpty) {
+          final url = resolveItemImageUrl(
+            primaryImageUrl: detail.primaryImageUrl,
+            imageUrls: detail.imageUrls,
+          );
+          if (url != null) {
+            line.primaryImageUrl = url;
+            hydrated = true;
+          }
+        }
+
+        final nextChemical = detail.isChemical;
+        final nextRent = detail.isRentEnabled;
+        final nextBuy = detail.isBuyEnabled;
+        if (line.isChemical != nextChemical ||
+            line.isRentEnabled != nextRent ||
+            line.isBuyEnabled != nextBuy) {
+          line.isChemical = nextChemical;
+          line.isRentEnabled = nextRent;
+          line.isBuyEnabled = nextBuy;
+          hydrated = true;
+        }
+
+        // Chemicals / buy-only listings must stay on buy in the cart.
+        if (!line.canRent && line.orderType == 'rent') {
+          line.orderType = 'buy';
+          line.rentalDays = 0;
+          line.rentalPeriodUnit = 'day';
+          line.clearPricingPlan();
+          hydrated = true;
+        }
       }
       if (hydrated) _saveCart();
     } finally {
@@ -150,13 +174,15 @@ class CartProvider extends ChangeNotifier {
     );
     if (existingIndex >= 0) {
       _lines[existingIndex].quantity += newLine.quantity;
-      _lines[existingIndex].orderType = newLine.orderType;
-      _lines[existingIndex].rentalDays =
-          newLine.orderType == 'buy' ? 0 : newLine.rentalDays;
-      _lines[existingIndex].rentalPeriodUnit = newLine.orderType == 'buy'
-          ? 'day'
-          : newLine.rentalPeriodUnit;
-      if (newLine.orderType == 'buy') {
+      _lines[existingIndex].isChemical = newLine.isChemical;
+      _lines[existingIndex].isRentEnabled = newLine.isRentEnabled;
+      _lines[existingIndex].isBuyEnabled = newLine.isBuyEnabled;
+      final nextType = newLine.isChemical || !newLine.canRent ? 'buy' : newLine.orderType;
+      _lines[existingIndex].orderType = nextType;
+      _lines[existingIndex].rentalDays = nextType == 'buy' ? 0 : newLine.rentalDays;
+      _lines[existingIndex].rentalPeriodUnit =
+          nextType == 'buy' ? 'day' : newLine.rentalPeriodUnit;
+      if (nextType == 'buy') {
         _lines[existingIndex].clearPricingPlan();
       } else if (newLine.usesPricingPlan) {
         _lines[existingIndex].applyPricingPlan(
@@ -172,7 +198,8 @@ class CartProvider extends ChangeNotifier {
         _lines[existingIndex].clearPricingPlan();
       }
     } else {
-      if (newLine.orderType == 'buy') {
+      if (newLine.isChemical || !newLine.canRent || newLine.orderType == 'buy') {
+        newLine.orderType = 'buy';
         newLine.rentalDays = 0;
         newLine.rentalPeriodUnit = 'day';
         newLine.clearPricingPlan();
@@ -221,14 +248,17 @@ class CartProvider extends ChangeNotifier {
   void updateOrderType(String listingId, String orderType, {String? productVariantId}) {
     final index = _indexOfLine(listingId, productVariantId: productVariantId);
     if (index >= 0) {
-      _lines[index].orderType = orderType;
-      if (orderType == 'buy') {
-        _lines[index].rentalDays = 0;
-        _lines[index].rentalPeriodUnit = 'day';
-        _lines[index].clearPricingPlan();
-      } else if (_lines[index].rentalDays <= 0) {
-        _lines[index].rentalDays = 1;
-        _lines[index].rentalPeriodUnit = 'week';
+      final line = _lines[index];
+      // Never allow rent on chemicals / buy-only listings.
+      final nextType = !line.canRent ? 'buy' : (!line.canBuy ? 'rent' : orderType);
+      line.orderType = nextType;
+      if (nextType == 'buy') {
+        line.rentalDays = 0;
+        line.rentalPeriodUnit = 'day';
+        line.clearPricingPlan();
+      } else if (line.rentalDays <= 0) {
+        line.rentalDays = 1;
+        line.rentalPeriodUnit = 'week';
       }
       _saveCart();
       notifyListeners();

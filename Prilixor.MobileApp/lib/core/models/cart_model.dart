@@ -18,7 +18,9 @@ class CartLineModel {
   final bool prescriptionRequired;
   final String? productVariantId;
   final double? buyPrice;
-  final bool isBuyEnabled;
+  bool isBuyEnabled;
+  bool isRentEnabled;
+  bool isChemical;
 
   /// Admin duration plan snapshot (when listing has rentalPricingPlans).
   String? rentalPricingPlanId;
@@ -46,6 +48,8 @@ class CartLineModel {
     this.productVariantId,
     this.buyPrice,
     this.isBuyEnabled = false,
+    this.isRentEnabled = true,
+    this.isChemical = false,
     this.rentalPricingPlanId,
     this.rentalDurationLabel,
     this.rentalDurationDays,
@@ -63,6 +67,11 @@ class CartLineModel {
       rentalPricingPlanId != null &&
       rentalPricingPlanId!.isNotEmpty &&
       rentalFinalPrice != null;
+
+  /// Match listing detail / web cart: chemicals are buy-only.
+  bool get canRent => !isChemical && isRentEnabled;
+
+  bool get canBuy => isChemical || isBuyEnabled || orderType == 'buy';
 
   double get lineTotal {
     if (orderType == 'buy') {
@@ -130,6 +139,8 @@ class CartLineModel {
       'productVariantId': productVariantId,
       'buyPrice': buyPrice,
       'isBuyEnabled': isBuyEnabled,
+      'isRentEnabled': isRentEnabled,
+      'isChemical': isChemical,
       'rentalPricingPlanId': rentalPricingPlanId,
       'rentalDurationLabel': rentalDurationLabel,
       'rentalDurationDays': rentalDurationDays,
@@ -169,6 +180,8 @@ class CartLineModel {
       productVariantId: json['productVariantId'],
       buyPrice: (json['buyPrice'] as num?)?.toDouble(),
       isBuyEnabled: json['isBuyEnabled'] == true,
+      isRentEnabled: json['isRentEnabled'] != false,
+      isChemical: json['isChemical'] == true,
       rentalPricingPlanId: json['rentalPricingPlanId']?.toString(),
       rentalDurationLabel: json['rentalDurationLabel']?.toString(),
       rentalDurationDays: (json['rentalDurationDays'] as num?)?.toInt(),

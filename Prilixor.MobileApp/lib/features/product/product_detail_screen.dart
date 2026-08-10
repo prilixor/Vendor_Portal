@@ -1064,6 +1064,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 productVariantId: _selectedVariantId,
                                 buyPrice: unitBuyPrice > 0 ? unitBuyPrice : detail.buyPrice,
                                 isBuyEnabled: detail.canBuy,
+                                isRentEnabled: detail.isRentEnabled,
+                                isChemical: detail.isChemical,
                                 rentalPricingPlanId:
                                     finalType == 'rent' ? selectedPlan?.id : null,
                                 rentalDurationLabel:

@@ -106,13 +106,51 @@ class _CartScreenState extends State<CartScreen> {
                 if (cart.isRefreshingStock)
                   const LinearProgressIndicator(minHeight: 2, color: Color(0xFF6C63FF), backgroundColor: Colors.transparent),
                 Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: cart.lines.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      final line = cart.lines[index];
-                      return _CartLineCard(line: line, cart: cart);
+                  child: Builder(
+                    builder: (context) {
+                      final equipment = cart.lines.where((l) => !l.isChemical).toList();
+                      final chemicals = cart.lines.where((l) => l.isChemical).toList();
+                      return ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          if (equipment.isNotEmpty) ...[
+                            if (chemicals.isNotEmpty)
+                              const Padding(
+                                padding: EdgeInsets.only(bottom: 10),
+                                child: Text(
+                                  'Equipment',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            for (var i = 0; i < equipment.length; i++) ...[
+                              if (i > 0) const SizedBox(height: 16),
+                              _CartLineCard(line: equipment[i], cart: cart),
+                            ],
+                          ],
+                          if (chemicals.isNotEmpty) ...[
+                            if (equipment.isNotEmpty) const SizedBox(height: 20),
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: 10),
+                              child: Text(
+                                'Chemicals',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            for (var i = 0; i < chemicals.length; i++) ...[
+                              if (i > 0) const SizedBox(height: 16),
+                              _ChemicalCartLineCard(line: chemicals[i], cart: cart),
+                            ],
+                          ],
+                        ],
+                      );
                     },
                   ),
                 ),
@@ -193,6 +231,128 @@ class _CartScreenState extends State<CartScreen> {
   }
 }
 
+class _ChemicalCartLineCard extends StatelessWidget {
+  final CartLineModel line;
+  final CartProvider cart;
+
+  const _ChemicalCartLineCard({required this.line, required this.cart});
+
+  @override
+  Widget build(BuildContext context) {
+    final avail = cart.availableQuantityFor(line);
+    final overStock = avail != null && line.quantity > avail;
+    final unitPrice = line.buyPrice ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: overStock ? Colors.redAccent.withValues(alpha: 0.5) : Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: const Color(0xFF0F172A),
+                ),
+                child: CatalogImage(
+                  url: line.primaryImageUrl,
+                  width: 72,
+                  height: 72,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            line.title,
+                            style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                          tooltip: 'Remove',
+                          onPressed: () => cart.removeLine(line.listingId, productVariantId: line.productVariantId),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '₹${unitPrice.toStringAsFixed(0)} each · Purchase',
+                      style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '₹${(unitPrice * line.quantity).toStringAsFixed(0)}',
+                      style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(color: Colors.white10, height: 1),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.5)),
+            ),
+            child: const Text(
+              'Buy only',
+              style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.w700, fontSize: 13),
+            ),
+          ),
+          _StepperRow(
+            label: 'Quantity',
+            value: line.quantity,
+            min: 1,
+            max: avail ?? 999,
+            onChanged: (val) {
+              cart.updateQuantity(
+                line.listingId,
+                val,
+                productVariantId: line.productVariantId,
+              );
+            },
+          ),
+          if (overStock) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Only $avail unit(s) available in stock. Please reduce quantity to proceed.',
+              style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _CartLineCard extends StatelessWidget {
   final CartLineModel line;
   final CartProvider cart;
@@ -206,10 +366,10 @@ class _CartLineCard extends StatelessWidget {
     int? nextQty,
   }) async {
     final buyPrice = line.buyPrice ?? 0;
-    if (!line.isBuyEnabled || buyPrice <= 0 || line.orderType != 'rent') return false;
+    if (!line.canBuy || buyPrice <= 0 || line.orderType != 'rent') return false;
     final check = evaluateRentVsBuy(
       buyPrice: buyPrice,
-      isBuyEnabled: line.isBuyEnabled,
+      isBuyEnabled: line.canBuy,
       quantity: nextQty ?? line.quantity,
       periods: line.usesPricingPlan
           ? (line.rentalDurationDays ?? line.rentalDays)
@@ -223,7 +383,7 @@ class _CartLineCard extends StatelessWidget {
     );
     if (!check.shouldForceBuy) return false;
 
-    final buyAvailable = line.isBuyEnabled && buyPrice > 0;
+    final buyAvailable = line.canBuy && buyPrice > 0;
     final confirmed = await showRentExceedsBuyDialog(
       context,
       itemTitle: line.title,
@@ -243,7 +403,11 @@ class _CartLineCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final avail = cart.availableQuantityFor(line);
     final overStock = avail != null && line.quantity > avail;
-    final canBuy = line.isBuyEnabled || line.orderType == 'buy';
+    final canRent = line.canRent;
+    final canBuy = line.canBuy;
+    final actualOrderType = canRent && canBuy
+        ? line.orderType
+        : (canBuy ? 'buy' : 'rent');
     final unitRate = rateForUnit(
       line.rentalPeriodUnit,
       dailyRent: line.dailyRent,
@@ -308,7 +472,7 @@ class _CartLineCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      line.orderType == 'buy'
+                      actualOrderType == 'buy'
                           ? 'Buy · ₹${(line.buyPrice ?? (line.dailyRent * 30)).toStringAsFixed(0)}'
                           : line.usesPricingPlan
                               ? '${line.rentalDurationLabel ?? 'Plan'} · ₹${(line.rentalFinalPrice ?? 0).toStringAsFixed(0)}'
@@ -334,20 +498,39 @@ class _CartLineCard extends StatelessWidget {
           const SizedBox(height: 12),
           const Divider(color: Colors.white10, height: 1),
           const SizedBox(height: 12),
-          if (canBuy)
+          if (canRent && canBuy)
             _SegmentedToggle(
               options: const [
                 (value: 'rent', label: 'Rent'),
                 (value: 'buy', label: 'Buy'),
               ],
               selected: line.orderType,
-              onChanged: (v) {
+              onChanged: (v) async {
+                if (v == 'rent') {
+                  final blocked = await _promptRentToBuy(context);
+                  if (blocked || !context.mounted) return;
+                }
                 cart.updateOrderType(
                   line.listingId,
                   v,
                   productVariantId: line.productVariantId,
                 );
               },
+            )
+          else if (canRent && !canBuy)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.5)),
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'Rent only',
+                style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.w700, fontSize: 13),
+              ),
             )
           else
             Container(
@@ -359,12 +542,12 @@ class _CartLineCard extends StatelessWidget {
                 border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.5)),
               ),
               alignment: Alignment.center,
-              child: Text(
-                line.orderType == 'buy' ? 'Buy only' : 'Rent only',
-                style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.w700, fontSize: 13),
+              child: const Text(
+                'Buy only',
+                style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.w700, fontSize: 13),
               ),
             ),
-          if (line.orderType == 'rent') ...[
+          if (actualOrderType == 'rent') ...[
             const SizedBox(height: 12),
             if (line.usesPricingPlan)
               Container(
@@ -381,41 +564,41 @@ class _CartLineCard extends StatelessWidget {
                 ),
               )
             else ...[
-            Text('Rental period', style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            _SegmentedToggle(
-              options: rentalUnitsVisibleInUi
-                  .map((u) => (value: u, label: rentalUnitLabels[u]!.plural))
-                  .toList(),
-              selected: rentalUnitsVisibleInUi.contains(line.rentalPeriodUnit)
-                  ? line.rentalPeriodUnit
-                  : defaultUiRentalUnit,
-              onChanged: (v) async {
-                final blocked = await _promptRentToBuy(context, nextUnit: v);
-                if (blocked || !context.mounted) return;
-                cart.updateRentalPeriodUnit(
-                  line.listingId,
-                  v,
-                  productVariantId: line.productVariantId,
-                );
-              },
-            ),
-            const SizedBox(height: 4),
-            _StepperRow(
-              label: periodLabel.plural,
-              value: line.rentalDays,
-              min: 1,
-              max: 366,
-              onChanged: (val) async {
-                final blocked = await _promptRentToBuy(context, nextPeriods: val);
-                if (blocked || !context.mounted) return;
-                cart.updateRentalDays(
-                  line.listingId,
-                  val,
-                  productVariantId: line.productVariantId,
-                );
-              },
-            ),
+              Text('Rental period', style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              _SegmentedToggle(
+                options: rentalUnitsVisibleInUi
+                    .map((u) => (value: u, label: rentalUnitLabels[u]!.plural))
+                    .toList(),
+                selected: rentalUnitsVisibleInUi.contains(line.rentalPeriodUnit)
+                    ? line.rentalPeriodUnit
+                    : defaultUiRentalUnit,
+                onChanged: (v) async {
+                  final blocked = await _promptRentToBuy(context, nextUnit: v);
+                  if (blocked || !context.mounted) return;
+                  cart.updateRentalPeriodUnit(
+                    line.listingId,
+                    v,
+                    productVariantId: line.productVariantId,
+                  );
+                },
+              ),
+              const SizedBox(height: 4),
+              _StepperRow(
+                label: periodLabel.plural,
+                value: line.rentalDays,
+                min: 1,
+                max: 366,
+                onChanged: (val) async {
+                  final blocked = await _promptRentToBuy(context, nextPeriods: val);
+                  if (blocked || !context.mounted) return;
+                  cart.updateRentalDays(
+                    line.listingId,
+                    val,
+                    productVariantId: line.productVariantId,
+                  );
+                },
+              ),
             ],
           ],
           _StepperRow(
@@ -424,7 +607,7 @@ class _CartLineCard extends StatelessWidget {
             min: 1,
             max: avail ?? 999,
             onChanged: (val) async {
-              if (line.orderType == 'rent') {
+              if (actualOrderType == 'rent') {
                 final blocked = await _promptRentToBuy(context, nextQty: val);
                 if (blocked || !context.mounted) return;
               }
