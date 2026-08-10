@@ -742,7 +742,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isOutOfStock = product.availableQuantity <= 0 || product.availabilityStatus.trim().toLowerCase() == 'out_of_stock';
     final isInteractive = isBrowsable && !isOutOfStock;
     final badge = product.getAvailabilityBadge();
-    final showBadge = badge['label'] != 'Available';
+    final showBadge = badge != null && badge['label'] != 'Available';
     final rate = primaryDisplayRate(
       dailyRent: product.dailyRent,
       weeklyRent: product.weeklyRent,
@@ -779,7 +779,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.fromLTRB(10, 36, 10, 8),
                     child: CatalogImage(url: product.primaryImageUrl, fit: BoxFit.contain),
                   ),
-                  if (badge != null)
+                  if (showBadge)
                     Positioned(
                       top: 10,
                       left: 10,
@@ -787,7 +787,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         constraints: const BoxConstraints(maxWidth: 104),
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Color(badge['color'] as int),
+                          color: Color(badge!['color'] as int),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
@@ -873,8 +873,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-    ),
-  );
+    );
   }
 }
 
