@@ -15,6 +15,7 @@ import '../../core/utils/rental_period.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
+import '../../shared/widgets/struck_price.dart';
 import '../../shared/utils/require_auth.dart';
 import 'product_image_viewer_screen.dart';
 
@@ -785,13 +786,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                         ),
                                                       ),
                                                       if (selectedPlan.hasDiscount)
-                                                        Text(
+                                                        StruckPrice(
                                                           '₹${(selectedPlan.normalPrice * _quantity).toStringAsFixed(0)}',
                                                           style: const TextStyle(
-                                                            color: Colors.white38,
                                                             fontSize: 14,
-                                                            decoration: TextDecoration.lineThrough,
+                                                            fontWeight: FontWeight.w600,
                                                           ),
+                                                          color: const Color(0xFFF43F5E),
                                                         ),
                                                     ],
                                                   ),
@@ -1245,12 +1246,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
                                   if (plan.hasDiscount)
-                                    Text(
+                                    StruckPrice(
                                       '₹${plan.normalPrice.toStringAsFixed(0)}',
                                       style: const TextStyle(
-                                        color: Colors.white38,
                                         fontSize: 11,
-                                        decoration: TextDecoration.lineThrough,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   Text(

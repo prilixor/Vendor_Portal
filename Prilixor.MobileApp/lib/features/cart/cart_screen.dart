@@ -7,6 +7,7 @@ import '../../core/utils/rental_period.dart';
 import '../../shared/utils/require_auth.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
+import '../../shared/widgets/struck_price.dart';
 import '../checkout/checkout_screen.dart';
 
 class CartScreen extends StatefulWidget {
@@ -471,16 +472,44 @@ class _CartLineCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      actualOrderType == 'buy'
-                          ? 'Buy · ₹${(line.buyPrice ?? (line.dailyRent * 30)).toStringAsFixed(0)}'
-                          : line.usesPricingPlan
-                              ? '${line.rentalDurationLabel ?? 'Plan'} · ₹${(line.rentalFinalPrice ?? 0).toStringAsFixed(0)}'
-                                  '${line.rentalNormalPrice != null && line.rentalNormalPrice! > (line.rentalFinalPrice ?? 0) ? ' (was ₹${line.rentalNormalPrice!.toStringAsFixed(0)})' : ''}'
-                                  ' · deposit ₹${line.securityDeposit.toStringAsFixed(0)}'
-                              : '₹${unitRate.toStringAsFixed(0)}${periodLabel.per} · ${formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)} · deposit ₹${line.securityDeposit.toStringAsFixed(0)}',
-                      style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
-                    ),
+                    if (actualOrderType == 'buy')
+                      Text(
+                        'Buy · ₹${(line.buyPrice ?? (line.dailyRent * 30)).toStringAsFixed(0)}',
+                        style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+                      )
+                    else if (line.usesPricingPlan) ...[
+                      Text(
+                        line.rentalDurationLabel ?? 'Plan',
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 2),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        children: [
+                          if (line.rentalNormalPrice != null &&
+                              line.rentalNormalPrice! > (line.rentalFinalPrice ?? 0))
+                            StruckPrice(
+                              '₹${line.rentalNormalPrice!.toStringAsFixed(0)}',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          Text(
+                            '₹${(line.rentalFinalPrice ?? 0).toStringAsFixed(0)}',
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800),
+                          ),
+                          const Text('·', style: TextStyle(color: Colors.white24)),
+                          Text(
+                            'Deposit ₹${line.securityDeposit.toStringAsFixed(0)}',
+                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ]
+                    else
+                      Text(
+                        '₹${unitRate.toStringAsFixed(0)}${periodLabel.per} · ${formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)} · deposit ₹${line.securityDeposit.toStringAsFixed(0)}',
+                        style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+                      ),
                     const SizedBox(height: 6),
                     Text(
                       '₹${line.lineTotal.toStringAsFixed(0)}',

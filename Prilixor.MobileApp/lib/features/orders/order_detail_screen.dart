@@ -6,6 +6,7 @@ import '../../core/models/order_model.dart';
 import '../../core/models/order_image_request_model.dart';
 import '../../core/utils/rental_period.dart';
 import '../../shared/widgets/catalog_image.dart';
+import '../../shared/widgets/struck_price.dart';
 import '../product/product_detail_screen.dart';
 import '../../core/providers/chat_provider.dart';
 import '../chat/chat_detail_screen.dart';
@@ -565,13 +566,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                                 if (provider.currentOrder!.orderType.toLowerCase() == 'rent' &&
                                                     provider.currentOrder!.rentalFinalPrice != null) ...[
                                                   const SizedBox(height: 4),
-                                                  Text(
-                                                    provider.currentOrder!.rentalNormalPrice != null &&
-                                                            provider.currentOrder!.rentalNormalPrice! >
-                                                                provider.currentOrder!.rentalFinalPrice!
-                                                        ? 'Plan ₹${provider.currentOrder!.rentalFinalPrice!.toStringAsFixed(0)} (was ₹${provider.currentOrder!.rentalNormalPrice!.toStringAsFixed(0)})'
-                                                        : 'Plan ₹${provider.currentOrder!.rentalFinalPrice!.toStringAsFixed(0)}',
-                                                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                                  Wrap(
+                                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                                    spacing: 6,
+                                                    children: [
+                                                      if (provider.currentOrder!.rentalNormalPrice != null &&
+                                                          provider.currentOrder!.rentalNormalPrice! >
+                                                              provider.currentOrder!.rentalFinalPrice!)
+                                                        StruckPrice(
+                                                          '₹${provider.currentOrder!.rentalNormalPrice!.toStringAsFixed(0)}',
+                                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                                        ),
+                                                      Text(
+                                                        'Plan price ₹${provider.currentOrder!.rentalFinalPrice!.toStringAsFixed(0)}',
+                                                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                                      ),
+                                                    ],
                                                   ),
                                                 ],
                                               ],
