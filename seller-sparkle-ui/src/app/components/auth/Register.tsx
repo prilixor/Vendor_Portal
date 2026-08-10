@@ -9,10 +9,10 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import {
-  maskIndianMobileInput,
   normalizeIndianMobileDigits,
   requiredIndianMobileError,
 } from "@/app/helpers/indianMobilePhone";
+import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 
 const Field = ({ id, label, type, value, onChange, placeholder, error, required }: any) => (
   <div className="space-y-1.5">
@@ -130,19 +130,22 @@ const Register = () => {
         </p>
         <Field id="name" label="Full name" type="text" value={name} onChange={(e: any) => setName(e.target.value)} placeholder="John Doe" error={errors.name} required />
         <Field id="email" label="Work email" type="email" value={email} onChange={(e: any) => setEmail(e.target.value)} placeholder="you@company.com" error={errors.email} required />
-        <Field
-          id="phone"
-          label="Phone number"
-          type="tel"
-          value={phone}
-          onChange={(e: any) => setPhone(maskIndianMobileInput(e.target.value))}
-          placeholder="9876543210"
-          error={errors.phone}
-          required
-        />
-        <p className="text-[11px] text-muted-foreground -mt-2">
-          10-digit Indian mobile number starting with 6, 7, 8, or 9.
-        </p>
+        <div className="space-y-1.5">
+          <Label htmlFor="phone" required>Phone number</Label>
+          <IndianMobileInput
+            id="phone"
+            value={phone}
+            onChange={setPhone}
+            invalid={!!errors.phone}
+          />
+          {errors.phone ? (
+            <p className="text-xs text-destructive">{errors.phone}</p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              10-digit Indian mobile number starting with 6, 7, 8, or 9.
+            </p>
+          )}
+        </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <PasswordField
             id="password"

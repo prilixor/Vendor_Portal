@@ -232,11 +232,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   label: 'Phone number',
                   required: true,
                   errorText: _phoneError,
-                  prefixIcon: Icons.phone_outlined,
                 ).copyWith(
-                  prefixIcon: const Icon(
-                    Icons.phone_outlined,
-                    color: Color(0xFF6C63FF),
+                  prefixText: '+91 ',
+                  prefixStyle: const TextStyle(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w600,
                   ),
                   hintText: '9876543210',
                   hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.28)),

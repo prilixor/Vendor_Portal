@@ -26,7 +26,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final profile = Provider.of<ProfileProvider>(context, listen: false).profile;
     if (profile != null) {
       _nameController.text = profile.name;
-      _phoneController.text = profile.phoneNumber;
+      _phoneController.text = IndianMobilePhone.normalizeDigits(profile.phoneNumber);
       _initialized = true;
     }
   }
@@ -153,8 +153,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         context,
                         label: 'Phone',
                         errorText: _phoneError,
-                        prefixIcon: Icons.phone_outlined,
                       ).copyWith(
+                        prefixText: '+91 ',
+                        prefixStyle: const TextStyle(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
                         hintText: '9876543210',
                         hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.28)),
                         helperText: 'Indian mobile: 10 digits starting with 6–9',

@@ -40,7 +40,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           profile?.ownerName.isNotEmpty == true
               ? profile!.ownerName
               : (auth.displayName ?? '');
-      _phoneController.text = profile?.supportPhone ?? '';
+      _phoneController.text =
+          IndianMobilePhone.normalizeDigits(profile?.supportPhone ?? '');
       setState(() {});
     });
   }
@@ -170,11 +171,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       label: 'Support phone',
                       required: true,
                       errorText: _phoneError,
-                      prefixIcon: Icons.phone_outlined,
                     ).copyWith(
-                      prefixIcon: Icon(
-                        Icons.phone_outlined,
-                        color: AppTheme.accent,
+                      prefixText: '+91 ',
+                      prefixStyle: TextStyle(
+                        color: colors.textMuted,
+                        fontWeight: FontWeight.w600,
                       ),
                       hintText: '9876543210',
                       helperText: 'Indian mobile: 10 digits starting with 6–9',

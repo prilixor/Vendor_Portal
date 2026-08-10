@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff } from "lucide-react";
 import {
-  maskIndianMobileInput,
   normalizeIndianMobileDigits,
   optionalIndianMobileError,
 } from "@/app/helpers/indianMobilePhone";
@@ -11,6 +10,7 @@ import { Card, CardContent } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { FieldError } from "@/app/components/shared/FieldError";
+import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
@@ -39,7 +39,7 @@ const CustomerSettings = () => {
   useEffect(() => {
     if (data) {
       setFullName(data.fullName);
-      setPhone(data.phone ?? "");
+      setPhone(data.phone ? normalizeIndianMobileDigits(data.phone) : "");
     }
   }, [data]);
 
@@ -219,18 +219,14 @@ const CustomerSettings = () => {
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="customer-settings-phone">Phone</Label>
-                    <Input
+                    <IndianMobileInput
                       id="customer-settings-phone"
-                      type="tel"
-                      inputMode="numeric"
-                      autoComplete="tel"
-                      placeholder="9876543210"
                       value={phone}
-                      onChange={(e) => {
-                        setPhone(maskIndianMobileInput(e.target.value));
+                      onChange={(v) => {
+                        setPhone(v);
                         clearProfileFieldError("phone");
                       }}
-                      className={profileFieldErrors.phone ? "border-destructive" : ""}
+                      invalid={!!profileFieldErrors.phone}
                     />
                     <FieldError message={profileFieldErrors.phone} />
                     {!profileFieldErrors.phone && (

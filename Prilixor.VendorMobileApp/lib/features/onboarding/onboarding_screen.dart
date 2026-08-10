@@ -245,7 +245,7 @@ class _ProfileTabState extends State<_ProfileTab> {
     if (p == null) return;
     _businessController.text = p.businessName;
     _ownerController.text = p.ownerName;
-    _phoneController.text = p.supportPhone;
+    _phoneController.text = IndianMobilePhone.normalizeDigits(p.supportPhone);
     _gstController.text = p.gstNumber ?? '';
     _address1Controller.text = p.addressLine1;
     _address2Controller.text = p.addressLine2 ?? '';
@@ -486,6 +486,7 @@ class _ProfileTabState extends State<_ProfileTab> {
                 helperText: 'Indian mobile: 10 digits starting with 6–9',
                 keyboardType: TextInputType.phone,
                 maxLength: 10,
+                prefixText: '+91 ',
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               ),
               OnboardingTextField(

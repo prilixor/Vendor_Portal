@@ -14,6 +14,7 @@ import {
   isValidIndianMobile,
   normalizeIndianMobileDigits,
 } from "@/app/helpers/indianMobilePhone";
+import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 
 export function ContactContentManager() {
   const queryClient = useQueryClient();
@@ -24,7 +25,7 @@ export function ContactContentManager() {
   const [heroAccent, setHeroAccent] = useState("help.");
   const [heroSub, setHeroSub] = useState("Reach our team directly. We respond quickly to every enquiry.");
 
-  const [phone, setPhone] = useState("+91 8511225390");
+  const [phone, setPhone] = useState("8511225390");
   const [email, setEmail] = useState("info@blinksmed.com");
   const [operatingHours, setOperatingHours] = useState("Mon – Sat, 8:00 AM – 8:00 PM IST");
   const [institutionalNote, setInstitutionalNote] = useState(
@@ -46,7 +47,7 @@ export function ContactContentManager() {
         if (full.contact.heroTitle) setHeroTitle(full.contact.heroTitle);
         if (full.contact.heroAccent) setHeroAccent(full.contact.heroAccent);
         if (full.contact.heroSub) setHeroSub(full.contact.heroSub);
-        if (full.contact.phone) setPhone(full.contact.phone);
+        if (full.contact.phone) setPhone(normalizeIndianMobileDigits(full.contact.phone));
         if (full.contact.email) setEmail(full.contact.email);
         if (full.contact.operatingHours) setOperatingHours(full.contact.operatingHours);
         if (full.contact.institutionalNote) setInstitutionalNote(full.contact.institutionalNote);
@@ -100,7 +101,7 @@ export function ContactContentManager() {
     setHeroTitle("We are here to");
     setHeroAccent("help.");
     setHeroSub("Reach our team directly. We respond quickly to every enquiry.");
-    setPhone("+91 98765 43210");
+    setPhone("9876543210");
     setEmail("hello@blinksmed.com");
     setOperatingHours("Mon – Sat, 8:00 AM – 8:00 PM IST");
     setInstitutionalNote(
@@ -178,15 +179,13 @@ export function ContactContentManager() {
               <Label htmlFor="phone" className="flex items-center gap-1.5">
                 <Phone className="h-3.5 w-3.5 text-primary" /> Phone Number
               </Label>
-              <Input
+              <IndianMobileInput
                 id="phone"
-                type="tel"
-                placeholder="+91 9876543210"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={setPhone}
               />
               <p className="text-[11px] text-muted-foreground">
-                Indian mobile (10 digits starting with 6–9). Saved as +91…
+                10-digit Indian mobile starting with 6–9. Saved as +91…
               </p>
             </div>
 
