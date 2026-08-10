@@ -942,17 +942,6 @@ const CustomerOrderDetail = () => {
                                 ))}
                               </div>
                             )}
-                            {!waiting && !isActiveItem ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs"
-                                onClick={() => setSelectedItemId(item.id)}
-                              >
-                                View this product
-                              </Button>
-                            ) : null}
                           </div>
                         );
                       })}
