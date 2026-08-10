@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../api/api_client.dart';
 import '../models/cart_model.dart';
 import '../models/product_detail_model.dart';
+import '../models/rental_pricing_plan_model.dart';
 import '../utils/media_url.dart';
 
 class CartProvider extends ChangeNotifier {
@@ -128,6 +129,34 @@ class CartProvider extends ChangeNotifier {
           line.rentalPeriodUnit = 'day';
           line.clearPricingPlan();
           hydrated = true;
+        }
+
+        // Restore catalog plan snapshot if Buy/Rent toggle or old carts cleared it.
+        if (line.orderType == 'rent' &&
+            line.canRent &&
+            !line.usesPricingPlan &&
+            detail.hasActiveRentalPlans) {
+          RentalPricingPlanModel? matched;
+          for (final p in detail.activeRentalPlans) {
+            if (p.durationDays == line.rentalDays ||
+                p.durationDays == (line.rentalDurationDays ?? -1)) {
+              matched = p;
+              break;
+            }
+          }
+          final chosen = matched ?? detail.defaultRentalPlan;
+          if (chosen != null) {
+            line.applyPricingPlan(
+              planId: chosen.id,
+              durationLabel: chosen.durationLabel,
+              durationDays: chosen.durationDays,
+              normalPrice: chosen.normalPrice,
+              discountType: chosen.discountType,
+              discountValue: chosen.discountValue,
+              finalPrice: chosen.finalRentalPrice,
+            );
+            hydrated = true;
+          }
         }
       }
       if (hydrated) _saveCart();
