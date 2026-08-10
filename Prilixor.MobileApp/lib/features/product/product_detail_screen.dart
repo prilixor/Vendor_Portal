@@ -1606,7 +1606,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       final savings = planSavings(plan);
                       final pct = planDiscountPercent(plan);
                       final isBestDeal = bestId == plan.id && pct > 0;
-                      // Web: recommended â†’ blue, otherwise violet when selected.
+                      // Web: recommended -> blue, otherwise violet when selected.
                       final accent = plan.isRecommended
                           ? const Color(0xFF3B82F6)
                           : const Color(0xFF8B5CF6);
