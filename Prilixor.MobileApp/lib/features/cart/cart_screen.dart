@@ -582,57 +582,22 @@ class _CartLineCard extends StatelessWidget {
             ),
           if (actualOrderType == 'rent') ...[
             const SizedBox(height: 12),
-            if (line.usesPricingPlan)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: Text(
-                  'Rental period: ${line.rentalDurationLabel ?? '${line.rentalDurationDays ?? line.rentalDays} days'} (set by catalog)',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-              )
-            else ...[
-              Text('Rental period', style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              _SegmentedToggle(
-                options: rentalUnitsVisibleInUi
-                    .map((u) => (value: u, label: rentalUnitLabels[u]!.plural))
-                    .toList(),
-                selected: rentalUnitsVisibleInUi.contains(line.rentalPeriodUnit)
-                    ? line.rentalPeriodUnit
-                    : defaultUiRentalUnit,
-                onChanged: (v) async {
-                  final blocked = await _promptRentToBuy(context, nextUnit: v);
-                  if (blocked || !context.mounted) return;
-                  cart.updateRentalPeriodUnit(
-                    line.listingId,
-                    v,
-                    productVariantId: line.productVariantId,
-                  );
-                },
+            // Catalog plans only — no Week/Month editors in cart (change plan on PDP).
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white10),
               ),
-              const SizedBox(height: 4),
-              _StepperRow(
-                label: periodLabel.plural,
-                value: line.rentalDays,
-                min: 1,
-                max: 366,
-                onChanged: (val) async {
-                  final blocked = await _promptRentToBuy(context, nextPeriods: val);
-                  if (blocked || !context.mounted) return;
-                  cart.updateRentalDays(
-                    line.listingId,
-                    val,
-                    productVariantId: line.productVariantId,
-                  );
-                },
+              child: Text(
+                line.usesPricingPlan
+                    ? 'Rental period: ${dayPlanTitle(line.rentalDurationDays ?? line.rentalDays, line.rentalDurationLabel)} (set by catalog)'
+                    : 'Rental period: ${formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)} (change on product details)',
+                style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
               ),
-            ],
+            ),
           ],
           _StepperRow(
             label: 'Quantity',

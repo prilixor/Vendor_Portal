@@ -253,12 +253,16 @@ class CartProvider extends ChangeNotifier {
       final nextType = !line.canRent ? 'buy' : (!line.canBuy ? 'rent' : orderType);
       line.orderType = nextType;
       if (nextType == 'buy') {
+        // Keep catalog plan snapshot (web CartContext) so Rent can restore it.
         line.rentalDays = 0;
+      } else if (line.rentalPricingPlanId != null &&
+          line.rentalPricingPlanId!.isNotEmpty &&
+          (line.rentalDurationDays ?? 0) > 0) {
+        line.rentalDays = line.rentalDurationDays!;
         line.rentalPeriodUnit = 'day';
-        line.clearPricingPlan();
       } else if (line.rentalDays <= 0) {
         line.rentalDays = 1;
-        line.rentalPeriodUnit = 'week';
+        line.rentalPeriodUnit = 'day';
       }
       _saveCart();
       notifyListeners();
