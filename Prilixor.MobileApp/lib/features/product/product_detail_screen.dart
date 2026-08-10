@@ -12,6 +12,7 @@ import '../../core/models/product_variant_model.dart';
 import '../../core/models/rental_pricing_plan_model.dart';
 import '../../core/utils/media_url.dart';
 import '../../core/utils/rental_period.dart';
+import '../../core/utils/rental_plan_display.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
@@ -119,7 +120,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   String? _planIconUrl(RentalPricingPlanModel plan) {
-    return resolveMediaUrl(plan.iconThumbnailUrl) ?? resolveMediaUrl(plan.iconUrl);
+    // Match web: prefer iconUrl, then thumbnail.
+    return resolveMediaUrl(plan.iconUrl) ?? resolveMediaUrl(plan.iconThumbnailUrl);
   }
 
   /// Match web [RentalPeriodPlanDropdown]: only show catalog icons; blank when unset.
@@ -137,6 +139,104 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       clipBehavior: Clip.antiAlias,
       child: CatalogImage(url: url, width: size, height: size, fit: BoxFit.contain),
     );
+  }
+
+  Widget _mostPopularBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2563EB),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.star_rounded, size: 11, color: Colors.white),
+          SizedBox(width: 3),
+          Text(
+            'MOST POPULAR',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bestDealBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.35)),
+      ),
+      child: const Text(
+        'BEST DEAL',
+        style: TextStyle(
+          color: Color(0xFFFBBF24),
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+
+  Widget _pctOffBadge(int pct) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF10B981).withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        '$pct% OFF',
+        style: const TextStyle(
+          color: Color(0xFF34D399),
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _saveAmountLabel(double amount) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.local_offer_outlined, size: 12, color: Color(0xFF34D399)),
+        const SizedBox(width: 3),
+        Text(
+          'Save ₹${amount.toStringAsFixed(0)}',
+          style: const TextStyle(
+            color: Color(0xFF34D399),
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<({String tier, String label, String url})> _tierLegend(List<RentalPricingPlanModel> plans) {
+    const order = ['good', 'better', 'best_value', 'maximum_savings'];
+    final byTier = <String, ({String label, String url})>{};
+    for (final plan in plans) {
+      final tier = (plan.valueTier ?? '').toLowerCase().replaceAll('-', '_');
+      final url = _planIconUrl(plan);
+      if (tier.isEmpty || url == null || url.isEmpty || byTier.containsKey(tier)) continue;
+      byTier[tier] = (label: rentalValueTierLabel(tier), url: url);
+    }
+    return [
+      for (final t in order)
+        if (byTier[t] != null) (tier: t, label: byTier[t]!.label, url: byTier[t]!.url),
+    ];
   }
 
   RentalPricingPlanModel? _selectedPlan(ProductDetailModel detail) {
@@ -699,165 +799,321 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 if (actualOrderType == 'rent') ...[
                                   const SizedBox(height: 16),
                                   if (detail.hasActiveRentalPlans) ...[
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: RequiredLabel(
-                                        'Rental period',
-                                        required: true,
-                                        style: TextStyle(
-                                          color: Colors.white.withValues(alpha: 0.55),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.6,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    InkWell(
-                                      onTap: () => _openRentalPeriodSheet(
-                                        detail: detail,
-                                        unitBuyPrice: unitBuyPrice,
-                                      ),
-                                      borderRadius: BorderRadius.circular(14),
-                                      child: Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF0F172A),
-                                          borderRadius: BorderRadius.circular(14),
-                                          border: Border.all(color: const Color(0xFF6C63FF), width: 1.5),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            if (selectedPlan != null) ...[
-                                              if (_planIconAvatar(selectedPlan, size: 44) case final icon?) ...[
-                                                icon,
-                                                const SizedBox(width: 12),
-                                              ],
-                                            ],
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    selectedPlan?.durationLabel ?? 'Choose period',
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight: FontWeight.w700,
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
-                                                  if (selectedPlan != null)
-                                                    Text(
-                                                      '${selectedPlan.durationDays} days'
-                                                      '${selectedPlan.isRecommended ? ' · Best value' : ''}',
-                                                      style: const TextStyle(color: Colors.white54, fontSize: 12),
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                            Text(
-                                              selectedPlan != null
-                                                  ? '₹${selectedPlan.finalRentalPrice.toStringAsFixed(0)}'
-                                                  : '—',
-                                              style: const TextStyle(
-                                                color: Color(0xFF6C63FF),
-                                                fontWeight: FontWeight.w800,
-                                                fontSize: 16,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 6),
-                                            const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white54),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    const Text(
-                                      'Starts when the order is delivered',
-                                      style: TextStyle(color: Colors.white38, fontSize: 12),
-                                    ),
-                                    if (selectedPlan != null) ...[
-                                      const SizedBox(height: 12),
-                                      Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.all(16),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF0F172A),
-                                          borderRadius: BorderRadius.circular(14),
-                                          border: Border.all(color: Colors.white12),
-                                        ),
-                                        child: Column(
+                                    Builder(
+                                      builder: (context) {
+                                        final plans = detail.activeRentalPlans;
+                                        final bestId = bestSavingsPlanId(plans);
+                                        final selectedSavings =
+                                            selectedPlan == null ? 0.0 : planSavings(selectedPlan);
+                                        final selectedPct =
+                                            selectedPlan == null ? 0 : planDiscountPercent(selectedPlan);
+                                        final selectedIsBestDeal = selectedPlan != null &&
+                                            bestId == selectedPlan.id &&
+                                            selectedPct > 0;
+                                        final legend = _tierLegend(plans);
+
+                                        return Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            const Text(
-                                              'You pay for rent',
-                                              style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w600),
-                                            ),
-                                            const SizedBox(height: 6),
                                             Row(
                                               crossAxisAlignment: CrossAxisAlignment.end,
                                               children: [
                                                 Expanded(
-                                                  child: Wrap(
-                                                    crossAxisAlignment: WrapCrossAlignment.end,
-                                                    spacing: 8,
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
                                                     children: [
-                                                      Text(
-                                                        '₹${(selectedPlan.finalRentalPrice * _quantity).toStringAsFixed(0)}',
-                                                        style: const TextStyle(
-                                                          color: Colors.white,
-                                                          fontSize: 28,
+                                                      RequiredLabel(
+                                                        'Rental period',
+                                                        required: true,
+                                                        style: TextStyle(
+                                                          color: Colors.white.withValues(alpha: 0.85),
+                                                          fontSize: 15,
                                                           fontWeight: FontWeight.w800,
-                                                          height: 1.1,
                                                         ),
                                                       ),
-                                                      if (selectedPlan.hasDiscount)
-                                                        StruckPrice(
-                                                          '₹${(selectedPlan.normalPrice * _quantity).toStringAsFixed(0)}',
-                                                          style: const TextStyle(
-                                                            fontSize: 14,
-                                                            fontWeight: FontWeight.w600,
-                                                          ),
-                                                          color: const Color(0xFFF43F5E),
+                                                      const SizedBox(height: 2),
+                                                      const Text(
+                                                        'More days, more savings',
+                                                        style: TextStyle(
+                                                          color: Color(0xFFA78BFA),
+                                                          fontSize: 12,
+                                                          fontWeight: FontWeight.w600,
                                                         ),
+                                                      ),
                                                     ],
                                                   ),
                                                 ),
-                                                if (selectedPlan.hasDiscount)
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                                                      borderRadius: BorderRadius.circular(999),
-                                                    ),
-                                                    child: Text(
-                                                      'Save ₹${(selectedPlan.savings * _quantity).toStringAsFixed(0)}',
-                                                      style: const TextStyle(
-                                                        color: Color(0xFF34D399),
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.w700,
-                                                      ),
-                                                    ),
-                                                  ),
                                               ],
                                             ),
-                                            const SizedBox(height: 12),
-                                            Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+                                            if (legend.isNotEmpty) ...[
+                                              const SizedBox(height: 8),
+                                              SingleChildScrollView(
+                                                scrollDirection: Axis.horizontal,
+                                                child: Row(
+                                                  children: [
+                                                    for (var i = 0; i < legend.length; i++) ...[
+                                                      if (i > 0) const SizedBox(width: 6),
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 5,
+                                                        ),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.white.withValues(alpha: 0.06),
+                                                          borderRadius: BorderRadius.circular(999),
+                                                          border: Border.all(color: Colors.white12),
+                                                        ),
+                                                        child: Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            CatalogImage(
+                                                              url: legend[i].url,
+                                                              width: 18,
+                                                              height: 18,
+                                                              fit: BoxFit.contain,
+                                                            ),
+                                                            const SizedBox(width: 5),
+                                                            Text(
+                                                              legend[i].label,
+                                                              style: const TextStyle(
+                                                                color: Colors.white70,
+                                                                fontSize: 11,
+                                                                fontWeight: FontWeight.w600,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
                                             const SizedBox(height: 10),
-                                            Text(
-                                              detail.securityDeposit > 0
-                                                  ? 'Deposit ₹${(detail.securityDeposit * _quantity).toStringAsFixed(0)} (refundable)'
-                                                      '${_quantity > 1 ? ' · ₹${selectedPlan.finalRentalPrice.toStringAsFixed(0)} × $_quantity' : ''}'
-                                                  : (_quantity > 1
-                                                      ? '₹${selectedPlan.finalRentalPrice.toStringAsFixed(0)} × $_quantity'
-                                                      : 'No deposit required'),
-                                              style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                            InkWell(
+                                              onTap: () => _openRentalPeriodSheet(
+                                                detail: detail,
+                                                unitBuyPrice: unitBuyPrice,
+                                              ),
+                                              borderRadius: BorderRadius.circular(16),
+                                              child: Container(
+                                                width: double.infinity,
+                                                padding: const EdgeInsets.all(14),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF0F172A),
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  border: Border.all(
+                                                    color: selectedPlan?.isRecommended == true
+                                                        ? const Color(0xFF3B82F6)
+                                                        : const Color(0xFF6C63FF),
+                                                    width: 2,
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          Wrap(
+                                                            crossAxisAlignment: WrapCrossAlignment.center,
+                                                            spacing: 6,
+                                                            runSpacing: 4,
+                                                            children: [
+                                                              Text(
+                                                                selectedPlan == null
+                                                                    ? 'Choose a rental plan'
+                                                                    : dayPlanTitle(
+                                                                        selectedPlan.durationDays,
+                                                                        selectedPlan.durationLabel,
+                                                                      ),
+                                                                style: const TextStyle(
+                                                                  color: Colors.white,
+                                                                  fontWeight: FontWeight.w800,
+                                                                  fontSize: 15,
+                                                                ),
+                                                              ),
+                                                              if (selectedPlan?.isRecommended == true)
+                                                                _mostPopularBadge(),
+                                                              if (selectedIsBestDeal) _bestDealBadge(),
+                                                            ],
+                                                          ),
+                                                          if (selectedPlan != null) ...[
+                                                            const SizedBox(height: 4),
+                                                            Text(
+                                                              planMetaLine(selectedPlan),
+                                                              style: const TextStyle(
+                                                                color: Colors.white54,
+                                                                fontSize: 12,
+                                                                fontWeight: FontWeight.w500,
+                                                              ),
+                                                            ),
+                                                            if (selectedPct > 0 || selectedSavings > 0) ...[
+                                                              const SizedBox(height: 8),
+                                                              Wrap(
+                                                                crossAxisAlignment: WrapCrossAlignment.center,
+                                                                spacing: 8,
+                                                                runSpacing: 4,
+                                                                children: [
+                                                                  if (selectedPct > 0) _pctOffBadge(selectedPct),
+                                                                  if (selectedSavings > 0)
+                                                                    _saveAmountLabel(selectedSavings),
+                                                                ],
+                                                              ),
+                                                            ],
+                                                          ],
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                                      children: [
+                                                        Text(
+                                                          selectedPlan != null
+                                                              ? '₹${selectedPlan.finalRentalPrice.toStringAsFixed(0)}'
+                                                              : '—',
+                                                          style: TextStyle(
+                                                            color: selectedPlan?.isRecommended == true
+                                                                ? const Color(0xFF60A5FA)
+                                                                : const Color(0xFFA5B4FC),
+                                                            fontWeight: FontWeight.w800,
+                                                            fontSize: 18,
+                                                          ),
+                                                        ),
+                                                        if (selectedSavings > 0) ...[
+                                                          const SizedBox(height: 4),
+                                                          StruckPrice(
+                                                            '₹${selectedPlan!.normalPrice.toStringAsFixed(0)}',
+                                                            style: const TextStyle(
+                                                              fontSize: 12,
+                                                              fontWeight: FontWeight.w600,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ],
+                                                    ),
+                                                    if (_planIconAvatar(selectedPlan, size: 44)
+                                                        case final icon?) ...[
+                                                      const SizedBox(width: 8),
+                                                      icon,
+                                                    ],
+                                                    const SizedBox(width: 4),
+                                                    const Padding(
+                                                      padding: EdgeInsets.only(top: 2),
+                                                      child: Icon(
+                                                        Icons.keyboard_arrow_down_rounded,
+                                                        color: Colors.white54,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
                                             ),
+                                            const SizedBox(height: 8),
+                                            const Row(
+                                              children: [
+                                                Icon(Icons.local_shipping_outlined,
+                                                    size: 14, color: Color(0xFFA78BFA)),
+                                                SizedBox(width: 6),
+                                                Text(
+                                                  'Starts when the order is delivered',
+                                                  style: TextStyle(
+                                                    color: Color(0xFFA78BFA),
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            if (selectedPlan != null) ...[
+                                              const SizedBox(height: 12),
+                                              Container(
+                                                width: double.infinity,
+                                                padding: const EdgeInsets.all(16),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF0F172A),
+                                                  borderRadius: BorderRadius.circular(14),
+                                                  border: Border.all(color: Colors.white12),
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    const Text(
+                                                      'You pay for rent',
+                                                      style: TextStyle(
+                                                        color: Colors.white54,
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 6),
+                                                    Row(
+                                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                                      children: [
+                                                        Expanded(
+                                                          child: Wrap(
+                                                            crossAxisAlignment: WrapCrossAlignment.end,
+                                                            spacing: 8,
+                                                            runSpacing: 4,
+                                                            children: [
+                                                              Text(
+                                                                '₹${(selectedPlan.finalRentalPrice * _quantity).toStringAsFixed(0)}',
+                                                                style: const TextStyle(
+                                                                  color: Colors.white,
+                                                                  fontSize: 28,
+                                                                  fontWeight: FontWeight.w800,
+                                                                  height: 1.1,
+                                                                ),
+                                                              ),
+                                                              if (selectedSavings > 0)
+                                                                StruckPrice(
+                                                                  '₹${(selectedPlan.normalPrice * _quantity).toStringAsFixed(0)}',
+                                                                  style: const TextStyle(
+                                                                    fontSize: 14,
+                                                                    fontWeight: FontWeight.w600,
+                                                                  ),
+                                                                ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        if (selectedPct > 0 || selectedSavings > 0)
+                                                          Column(
+                                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                                            children: [
+                                                              if (selectedPct > 0) _pctOffBadge(selectedPct),
+                                                              if (selectedSavings > 0) ...[
+                                                                const SizedBox(height: 4),
+                                                                _saveAmountLabel(selectedSavings * _quantity),
+                                                              ],
+                                                            ],
+                                                          ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 12),
+                                                    Divider(
+                                                      color: Colors.white.withValues(alpha: 0.08),
+                                                      height: 1,
+                                                    ),
+                                                    const SizedBox(height: 10),
+                                                    Text(
+                                                      detail.securityDeposit > 0
+                                                          ? 'Deposit ₹${(detail.securityDeposit * _quantity).toStringAsFixed(0)} (refundable)'
+                                                              '${_quantity > 1 ? ' · ₹${selectedPlan.finalRentalPrice.toStringAsFixed(0)} × $_quantity' : ''}'
+                                                          : (_quantity > 1
+                                                              ? '₹${selectedPlan.finalRentalPrice.toStringAsFixed(0)} × $_quantity'
+                                                              : 'No deposit required'),
+                                                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
                                           ],
-                                        ),
-                                      ),
-                                    ],
+                                        );
+                                      },
+                                    ),
                                   ] else ...[
                                     Container(
                                       width: double.infinity,
@@ -1096,8 +1352,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 isChemical: detail.isChemical,
                                 rentalPricingPlanId:
                                     finalType == 'rent' ? selectedPlan?.id : null,
-                                rentalDurationLabel:
-                                    finalType == 'rent' ? selectedPlan?.durationLabel : null,
+                                rentalDurationLabel: finalType == 'rent' && selectedPlan != null
+                                    ? dayPlanTitle(
+                                        selectedPlan.durationDays,
+                                        selectedPlan.durationLabel,
+                                      )
+                                    : null,
                                 rentalDurationDays:
                                     finalType == 'rent' ? selectedPlan?.durationDays : null,
                                 rentalNormalPrice:
@@ -1135,6 +1395,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final plans = detail.activeRentalPlans;
     if (plans.isEmpty) return;
     final currentId = _selectedPlan(detail)?.id;
+    final bestId = bestSavingsPlanId(plans);
 
     await showModalBottomSheet<void>(
       context: context,
@@ -1147,7 +1408,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         return SafeArea(
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+              maxHeight: MediaQuery.of(ctx).size.height * 0.85,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1162,16 +1423,29 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                 ),
                 const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
+                  padding: EdgeInsets.fromLTRB(16, 14, 16, 4),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Select rental period',
+                      'Choose a rental plan',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'More days, more savings',
                       style: TextStyle(
                         color: Colors.white54,
                         fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -1181,10 +1455,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     shrinkWrap: true,
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
                     itemCount: plans.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 6),
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (_, index) {
                       final plan = plans[index];
                       final selected = plan.id == currentId;
+                      final savings = planSavings(plan);
+                      final pct = planDiscountPercent(plan);
+                      final isBestDeal = bestId == plan.id && pct > 0;
+                      final accent = plan.isRecommended
+                          ? const Color(0xFF3B82F6)
+                          : const Color(0xFF6C63FF);
+
                       return InkWell(
                         onTap: () async {
                           Navigator.pop(ctx);
@@ -1196,32 +1477,40 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           if (blocked || !mounted) return;
                           setState(() => _selectedPlanId = plan.id);
                         },
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(14),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                           decoration: BoxDecoration(
                             color: selected
-                                ? const Color(0xFF6C63FF).withValues(alpha: 0.16)
+                                ? accent.withValues(alpha: 0.14)
                                 : const Color(0xFF0F172A),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: selected ? const Color(0xFF6C63FF) : Colors.white12,
+                              color: selected
+                                  ? accent
+                                  : (plan.isRecommended
+                                      ? const Color(0xFF3B82F6).withValues(alpha: 0.45)
+                                      : Colors.white12),
+                              width: selected ? 1.5 : 1,
                             ),
                           ),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
-                                width: 22,
-                                height: 22,
+                                width: 20,
+                                height: 20,
+                                margin: const EdgeInsets.only(top: 2),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: selected ? const Color(0xFF6C63FF) : Colors.transparent,
+                                  color: selected ? accent : Colors.transparent,
                                   border: Border.all(
-                                    color: selected ? const Color(0xFF6C63FF) : Colors.white24,
+                                    color: selected ? accent : Colors.white24,
+                                    width: 2,
                                   ),
                                 ),
                                 child: selected
-                                    ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                    ? const Icon(Icons.check, size: 12, color: Colors.white)
                                     : null,
                               ),
                               const SizedBox(width: 10),
@@ -1229,71 +1518,75 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
+                                    Wrap(
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      spacing: 6,
+                                      runSpacing: 4,
                                       children: [
-                                        Flexible(
-                                          child: Text(
-                                            plan.durationLabel,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 14,
-                                            ),
+                                        Text(
+                                          dayPlanTitle(plan.durationDays, plan.durationLabel),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 13,
                                           ),
                                         ),
-                                        if (plan.isRecommended) ...[
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF10B981).withValues(alpha: 0.18),
-                                              borderRadius: BorderRadius.circular(999),
-                                            ),
-                                            child: const Text(
-                                              'Best',
-                                              style: TextStyle(
-                                                color: Color(0xFF34D399),
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w800,
-                                              ),
+                                        if (plan.isRecommended) _mostPopularBadge(),
+                                        if (isBestDeal) _bestDealBadge(),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      planMetaLine(plan),
+                                      style: const TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    if (savings > 0) ...[
+                                      const SizedBox(height: 5),
+                                      Text(
+                                        pct > 0
+                                            ? '$pct% off · Save ₹${savings.toStringAsFixed(0)}'
+                                            : 'Save ₹${savings.toStringAsFixed(0)}',
+                                        style: const TextStyle(
+                                          color: Color(0xFF34D399),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          '₹${plan.finalRentalPrice.toStringAsFixed(0)}',
+                                          style: TextStyle(
+                                            color: plan.isRecommended
+                                                ? const Color(0xFF60A5FA)
+                                                : Colors.white,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                        if (savings > 0) ...[
+                                          const SizedBox(width: 8),
+                                          StruckPrice(
+                                            '₹${plan.normalPrice.toStringAsFixed(0)}',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
                                             ),
                                           ),
                                         ],
+                                        const Spacer(),
+                                        if (_planIconAvatar(plan, size: 36) case final icon?) icon,
                                       ],
-                                    ),
-                                    Text(
-                                      '${plan.durationDays} days'
-                                      '${plan.hasDiscount ? ' · Save ₹${plan.savings.toStringAsFixed(0)}' : ''}',
-                                      style: const TextStyle(color: Colors.white54, fontSize: 12),
                                     ),
                                   ],
                                 ),
                               ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  if (plan.hasDiscount)
-                                    StruckPrice(
-                                      '₹${plan.normalPrice.toStringAsFixed(0)}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  Text(
-                                    '₹${plan.finalRentalPrice.toStringAsFixed(0)}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (_planIconAvatar(plan, size: 36) case final icon?) ...[
-                                const SizedBox(width: 10),
-                                icon,
-                              ],
                             ],
                           ),
                         ),

@@ -4,6 +4,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/providers/cart_provider.dart';
 import '../../core/utils/rental_period.dart';
+import '../../core/utils/rental_plan_display.dart';
 import '../../shared/utils/require_auth.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
@@ -479,7 +480,10 @@ class _CartLineCard extends StatelessWidget {
                       )
                     else if (line.usesPricingPlan) ...[
                       Text(
-                        line.rentalDurationLabel ?? 'Plan',
+                        dayPlanTitle(
+                          line.rentalDurationDays ?? line.rentalDays,
+                          line.rentalDurationLabel,
+                        ),
                         style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 2),

@@ -1,6 +1,7 @@
 import 'product_variant_model.dart';
 import 'rental_pricing_plan_model.dart';
 import '../utils/media_url.dart';
+import '../utils/rental_plan_display.dart';
 
 class ProductDetailModel {
   final String id;
@@ -74,13 +75,8 @@ class ProductDetailModel {
   List<ProductVariantModel> get activeVariants =>
       variants.where((v) => v.isActive).toList();
 
-  List<RentalPricingPlanModel> get activeRentalPlans {
-    final plans = rentalPricingPlans.where((p) => p.isActive && p.durationDays > 0).toList()
-      ..sort((a, b) => a.sortOrder != b.sortOrder
-          ? a.sortOrder.compareTo(b.sortOrder)
-          : a.durationDays.compareTo(b.durationDays));
-    return plans;
-  }
+  List<RentalPricingPlanModel> get activeRentalPlans =>
+      sortActiveRentalPlans(rentalPricingPlans);
 
   bool get hasActiveRentalPlans => activeRentalPlans.isNotEmpty;
 
