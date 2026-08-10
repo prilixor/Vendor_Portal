@@ -9,6 +9,7 @@ import '../../core/providers/favorite_provider.dart';
 import '../../core/models/product_model.dart';
 import '../../core/models/category_model.dart';
 import '../../core/utils/rental_period.dart';
+import '../../core/utils/rental_plan_display.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/utils/require_auth.dart';
 import '../product/product_detail_screen.dart';
@@ -378,8 +379,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 crossAxisCount: 2,
                                 mainAxisSpacing: 16,
                                 crossAxisSpacing: 12,
-                                // Tall enough for image + title + price on phones & web.
-                                mainAxisExtent: 260,
+                                // Image + title + day rate + deposit/Also-buy lines (web browse parity).
+                                mainAxisExtent: 300,
                               ),
                               itemCount: products.length,
                               itemBuilder: (context, index) {
@@ -739,20 +740,55 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildProductCard(ProductModel product) {
     final ls = product.listingStatus.trim().toLowerCase();
     final isBrowsable = ls == 'active' || ls == 'approved';
-    final isOutOfStock = product.availableQuantity <= 0 || product.availabilityStatus.trim().toLowerCase() == 'out_of_stock';
-    final isInteractive = isBrowsable && !isOutOfStock;
+    // Web opens active listings even when OOS (PDP may still block add-to-cart).
+    final isInteractive = isBrowsable;
     final badge = product.getAvailabilityBadge();
     final showBadge = badge != null && badge['label'] != 'Available';
-    final rate = primaryDisplayRate(
-      dailyRent: product.dailyRent,
-      weeklyRent: product.weeklyRent,
-      monthlyRent: product.monthlyRent,
-    );
-    final priceText = product.isChemical
-        ? '₹${(product.buyPrice ?? 0).toStringAsFixed(0)}${product.baseUnit != null ? ' / ${product.baseUnit}' : ''}'
-        : (rate != null
-            ? '₹${rate.value.toStringAsFixed(0)}${rentalUnitLabels[rate.unit]!.per}'
-            : (product.buyPrice != null ? '₹${product.buyPrice!.toStringAsFixed(0)} buy' : '—'));
+    final showRent = product.canRent;
+    final showBuy = product.canBuy;
+    final rate = showRent
+        ? primaryDisplayRate(
+            dailyRent: product.dailyRent,
+            weeklyRent: product.weeklyRent,
+            monthlyRent: product.monthlyRent,
+          )
+        : null;
+
+    String? primaryValue;
+    String? primaryUnit;
+    if (showRent && rate != null) {
+      primaryValue = formatPlanInr(rate.value);
+      primaryUnit = rate.unit == rentalUnitMonth ? '/month' : '/day';
+    } else if (showBuy && (product.buyPrice ?? 0) > 0) {
+      primaryValue = formatPlanInr(product.buyPrice!);
+      primaryUnit = product.baseUnit != null && product.baseUnit!.trim().isNotEmpty
+          ? ' / ${product.baseUnit}'
+          : '';
+    }
+
+    String? secondaryLine;
+    if (showRent) {
+      secondaryLine = product.depositRequired
+          ? 'Deposit ${formatPlanInr(product.securityDeposit)} · Plans on details'
+          : 'Rental plans on details';
+    }
+
+    String? tertiaryLine;
+    Color tertiaryColor = Colors.white54;
+    if (showBuy && showRent && (product.buyPrice ?? 0) > 0) {
+      final max = product.maxBuyPrice;
+      final range = max != null && max > product.buyPrice!
+          ? ' – ${formatPlanInr(max)}'
+          : '';
+      tertiaryLine = 'Also buy for ${formatPlanInr(product.buyPrice!)}$range';
+      tertiaryColor = const Color(0xFF34D399); // emerald — match web Also buy
+    } else if (showBuy &&
+        !showRent &&
+        (product.buyPrice ?? 0) > 0 &&
+        product.maxBuyPrice != null &&
+        product.maxBuyPrice! > product.buyPrice!) {
+      tertiaryLine = 'Up to ${formatPlanInr(product.maxBuyPrice!)}';
+    }
 
     return GestureDetector(
       onTap: isInteractive
@@ -784,10 +820,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       top: 10,
                       left: 10,
                       child: Container(
-                        constraints: const BoxConstraints(maxWidth: 104),
+                        constraints: const BoxConstraints(maxWidth: 118),
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Color(badge!['color'] as int),
+                          color: Color(badge['color'] as int),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
@@ -841,7 +877,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -856,17 +892,63 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    priceText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Color(0xFF6C63FF),
+                  if (primaryValue != null) ...[
+                    const SizedBox(height: 6),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: primaryValue,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              color: Colors.white,
+                              height: 1.1,
+                            ),
+                          ),
+                          if (primaryUnit != null && primaryUnit.isNotEmpty)
+                            TextSpan(
+                              text: ' $primaryUnit',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                fontSize: 11,
+                                color: Colors.white.withValues(alpha: 0.55),
+                                height: 1.1,
+                              ),
+                            ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
+                  ],
+                  if (secondaryLine != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      secondaryLine,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        height: 1.2,
+                        color: Colors.white.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ],
+                  if (tertiaryLine != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      tertiaryLine,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        height: 1.2,
+                        fontWeight: FontWeight.w600,
+                        color: tertiaryColor,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
