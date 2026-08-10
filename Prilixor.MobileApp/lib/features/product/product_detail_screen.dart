@@ -122,8 +122,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return resolveMediaUrl(plan.iconThumbnailUrl) ?? resolveMediaUrl(plan.iconUrl);
   }
 
-  Widget _planIconAvatar(RentalPricingPlanModel? plan, {double size = 40}) {
+  /// Match web [RentalPeriodPlanDropdown]: only show catalog icons; blank when unset.
+  Widget? _planIconAvatar(RentalPricingPlanModel? plan, {double size = 40}) {
     final url = plan == null ? null : _planIconUrl(plan);
+    if (url == null || url.isEmpty) return null;
     return Container(
       width: size,
       height: size,
@@ -133,9 +135,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         border: Border.all(color: Colors.white12),
       ),
       clipBehavior: Clip.antiAlias,
-      child: url == null
-          ? Icon(Icons.schedule_rounded, size: size * 0.5, color: Colors.white38)
-          : CatalogImage(url: url, width: size, height: size, fit: BoxFit.contain),
+      child: CatalogImage(url: url, width: size, height: size, fit: BoxFit.contain),
     );
   }
 
@@ -730,8 +730,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         child: Row(
                                           children: [
                                             if (selectedPlan != null) ...[
-                                              _planIconAvatar(selectedPlan, size: 44),
-                                              const SizedBox(width: 12),
+                                              if (_planIconAvatar(selectedPlan, size: 44) case final icon?) ...[
+                                                icon,
+                                                const SizedBox(width: 12),
+                                              ],
                                             ],
                                             Expanded(
                                               child: Column(
@@ -1288,8 +1290,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(width: 10),
-                              _planIconAvatar(plan, size: 36),
+                              if (_planIconAvatar(plan, size: 36) case final icon?) ...[
+                                const SizedBox(width: 10),
+                                icon,
+                              ],
                             ],
                           ),
                         ),
