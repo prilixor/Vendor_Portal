@@ -1353,7 +1353,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       crossAxisCount: 2,
                                       mainAxisSpacing: 16,
                                       crossAxisSpacing: 12,
-                                      mainAxisExtent: 300,
+                                      mainAxisExtent: 318,
                                     ),
                                     itemCount: _relatedProducts.length,
                                     itemBuilder: (context, index) {
@@ -1913,11 +1913,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           : '';
     }
 
-    String? secondaryLine;
+    // Narrow 2-col cards: split deposit / plans so SE-width never ellipsizes mid-phrase.
+    final List<String> secondaryLines = [];
     if (showRent) {
-      secondaryLine = product.depositRequired
-          ? 'Deposit ${formatPlanInr(product.securityDeposit)} · Plans on details'
-          : 'Rental plans on details';
+      if (product.depositRequired) {
+        secondaryLines.add('Deposit ${formatPlanInr(product.securityDeposit)}');
+        secondaryLines.add('Plans on details');
+      } else {
+        secondaryLines.add('Rental plans on details');
+      }
     }
 
     String? tertiaryLine;
@@ -2070,16 +2074,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                    if (secondaryLine != null) ...[
+                    if (secondaryLines.isNotEmpty) ...[
                       const SizedBox(height: 3),
-                      Text(
-                        secondaryLine,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          height: 1.2,
-                          color: Colors.white.withValues(alpha: 0.55),
+                      ...secondaryLines.map(
+                        (line) => Text(
+                          line,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            height: 1.25,
+                            color: Colors.white.withValues(alpha: 0.55),
+                          ),
                         ),
                       ),
                     ],
@@ -2087,11 +2093,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       const SizedBox(height: 2),
                       Text(
                         tertiaryLine,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 10.5,
-                          height: 1.2,
+                          height: 1.25,
                           fontWeight: FontWeight.w600,
                           color: tertiaryColor,
                         ),

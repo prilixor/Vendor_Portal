@@ -379,8 +379,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 crossAxisCount: 2,
                                 mainAxisSpacing: 16,
                                 crossAxisSpacing: 12,
-                                // Image + title + day rate + deposit/Also-buy lines (web browse parity).
-                                mainAxisExtent: 300,
+                                // Image + title + day rate + deposit/plans + Also-buy (narrow phones wrap).
+                                mainAxisExtent: 318,
                               ),
                               itemCount: products.length,
                               itemBuilder: (context, index) {
@@ -766,11 +766,15 @@ class _HomeScreenState extends State<HomeScreen> {
           : '';
     }
 
-    String? secondaryLine;
+    // Narrow 2-col cards: keep web copy but split so SE-width never ellipsizes mid-phrase.
+    final List<String> secondaryLines = [];
     if (showRent) {
-      secondaryLine = product.depositRequired
-          ? 'Deposit ${formatPlanInr(product.securityDeposit)} · Plans on details'
-          : 'Rental plans on details';
+      if (product.depositRequired) {
+        secondaryLines.add('Deposit ${formatPlanInr(product.securityDeposit)}');
+        secondaryLines.add('Plans on details');
+      } else {
+        secondaryLines.add('Rental plans on details');
+      }
     }
 
     String? tertiaryLine;
@@ -922,16 +926,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                  if (secondaryLine != null) ...[
+                  if (secondaryLines.isNotEmpty) ...[
                     const SizedBox(height: 3),
-                    Text(
-                      secondaryLine,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        height: 1.2,
-                        color: Colors.white.withValues(alpha: 0.55),
+                    ...secondaryLines.map(
+                      (line) => Text(
+                        line,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          height: 1.25,
+                          color: Colors.white.withValues(alpha: 0.55),
+                        ),
                       ),
                     ),
                   ],
@@ -939,11 +945,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 2),
                     Text(
                       tertiaryLine,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 10.5,
-                        height: 1.2,
+                        height: 1.25,
                         fontWeight: FontWeight.w600,
                         color: tertiaryColor,
                       ),
