@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
@@ -13,6 +13,7 @@ import '../../core/models/rental_pricing_plan_model.dart';
 import '../../core/utils/media_url.dart';
 import '../../core/utils/rental_period.dart';
 import '../../core/utils/rental_plan_display.dart';
+import '../../shared/widgets/browse_product_card.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
@@ -621,7 +622,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   style: const TextStyle(color: Colors.white70),
                                                 ),
                                                 Text(
-                                                  '₹${(selectedVariant?.buyPrice ?? 0).toStringAsFixed(0)}',
+                                                  'â‚¹${(selectedVariant?.buyPrice ?? 0).toStringAsFixed(0)}',
                                                   style: const TextStyle(color: Color(0xFF34D399), fontSize: 18, fontWeight: FontWeight.bold),
                                                 ),
                                               ],
@@ -640,7 +641,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
-                                                      '${selectedVariant.sizeLabel} × $_quantity isn\'t available${currentQty > 0 ? ' (only $currentQty in stock)' : ' (out of stock)'}.',
+                                                      '${selectedVariant.sizeLabel} Ã— $_quantity isn\'t available${currentQty > 0 ? ' (only $currentQty in stock)' : ' (out of stock)'}.',
                                                       style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.w600, fontSize: 12),
                                                     ),
                                                     if (altVariants.isNotEmpty) ...[
@@ -653,7 +654,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                         children: altVariants.map((v) {
                                                           final stock = detail.variantStockOf(v.id);
                                                           return ActionChip(
-                                                            label: Text('${v.sizeLabel} · ₹${v.buyPrice.toStringAsFixed(0)} · $stock'),
+                                                            label: Text('${v.sizeLabel} Â· â‚¹${v.buyPrice.toStringAsFixed(0)} Â· $stock'),
                                                             onPressed: () => setState(() => _selectedVariantId = v.id),
                                                             backgroundColor: Colors.amber.withValues(alpha: 0.15),
                                                             labelStyle: const TextStyle(color: Colors.amber, fontSize: 11),
@@ -961,7 +962,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                             Text(
                                                               selectedPlan != null
                                                                   ? formatPlanInr(selectedPlan.finalRentalPrice)
-                                                                  : '—',
+                                                                  : 'â€”',
                                                               style: TextStyle(
                                                                 color: priceColor,
                                                                 fontWeight: FontWeight.w800,
@@ -1016,8 +1017,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                 ),
                                               ],
                                             ),
-                                            // Web checkout strip: qty → deposit → rent due
-                                            // (plan card already shows % OFF / Save — don't repeat).
+                                            // Web checkout strip: qty â†’ deposit â†’ rent due
+                                            // (plan card already shows % OFF / Save â€” don't repeat).
                                             if (selectedPlan != null) ...[
                                               const SizedBox(height: 12),
                                               Container(
@@ -1191,7 +1192,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                                     const SizedBox(height: 4),
                                                                     Text(
                                                                       _quantity > 1
-                                                                          ? '${formatPlanInr(selectedPlan.finalRentalPrice)} × $_quantity units'
+                                                                          ? '${formatPlanInr(selectedPlan.finalRentalPrice)} Ã— $_quantity units'
                                                                           : 'Excludes deposit & delivery',
                                                                       style: const TextStyle(
                                                                         color: Colors.white54,
@@ -1330,7 +1331,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Estimated ${actualOrderType == 'buy' ? 'buy amount' : 'rent'}: ₹${estimate.toStringAsFixed(0)}',
+                                    'Estimated ${actualOrderType == 'buy' ? 'buy amount' : 'rent'}: â‚¹${estimate.toStringAsFixed(0)}',
                                     style: const TextStyle(color: Colors.white54, fontSize: 13),
                                   ),
                                 ],
@@ -1351,13 +1352,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     padding: EdgeInsets.zero,
                                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                                       crossAxisCount: 2,
-                                      mainAxisSpacing: 16,
+                                      mainAxisSpacing: 14,
                                       crossAxisSpacing: 12,
-                                      mainAxisExtent: 318,
+                                      mainAxisExtent: kBrowseProductCardExtent,
                                     ),
                                     itemCount: _relatedProducts.length,
                                     itemBuilder: (context, index) {
-                                      return _buildRelatedProductCard(_relatedProducts[index]);
+                                      final product = _relatedProducts[index];
+                                      return BrowseProductCard(
+                                        product: product,
+                                        dimWhenInactive: true,
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => ProductDetailScreen(listingId: product.id),
+                                            ),
+                                          );
+                                        },
+                                      );
                                     },
                                   ),
                                   const SizedBox(height: 16),
@@ -1503,7 +1516,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           },
                     child: Text(
                       canAdd
-                          ? (actualOrderType == 'buy' ? 'Add to cart — Buy' : 'Add to cart — Rent')
+                          ? (actualOrderType == 'buy' ? 'Add to cart â€” Buy' : 'Add to cart â€” Rent')
                           : 'Out of stock',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
@@ -1591,7 +1604,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       final savings = planSavings(plan);
                       final pct = planDiscountPercent(plan);
                       final isBestDeal = bestId == plan.id && pct > 0;
-                      // Web: recommended → blue, otherwise violet when selected.
+                      // Web: recommended â†’ blue, otherwise violet when selected.
                       final accent = plan.isRecommended
                           ? const Color(0xFF3B82F6)
                           : const Color(0xFF8B5CF6);
@@ -1683,7 +1696,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       const SizedBox(height: 5),
                                       Text(
                                         pct > 0
-                                            ? '$pct% off · Save ${formatPlanInr(savings)}'
+                                            ? '$pct% off Â· Save ${formatPlanInr(savings)}'
                                             : 'Save ${formatPlanInr(savings)}',
                                         style: const TextStyle(
                                           color: Color(0xFF34D399),
@@ -1884,232 +1897,4 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Widget _buildRelatedProductCard(ProductModel product) {
-    final ls = product.listingStatus.trim().toLowerCase();
-    final isBrowsable = ls == 'active' || ls == 'approved';
-    // Match browse: active listings open PDP even when OOS.
-    final isInteractive = isBrowsable;
-    final badge = product.getAvailabilityBadge();
-    final showBadge = badge != null && badge['label'] != 'Available';
-    final showRent = product.canRent;
-    final showBuy = product.canBuy;
-    final rate = showRent
-        ? primaryDisplayRate(
-            dailyRent: product.dailyRent,
-            weeklyRent: product.weeklyRent,
-            monthlyRent: product.monthlyRent,
-          )
-        : null;
-
-    String? primaryValue;
-    String? primaryUnit;
-    if (showRent && rate != null) {
-      primaryValue = formatPlanInr(rate.value);
-      primaryUnit = rate.unit == rentalUnitMonth ? '/month' : '/day';
-    } else if (showBuy && (product.buyPrice ?? 0) > 0) {
-      primaryValue = formatPlanInr(product.buyPrice!);
-      primaryUnit = product.baseUnit != null && product.baseUnit!.trim().isNotEmpty
-          ? ' / ${product.baseUnit}'
-          : '';
-    }
-
-    // Narrow 2-col cards: split deposit / plans so SE-width never ellipsizes mid-phrase.
-    final List<String> secondaryLines = [];
-    if (showRent) {
-      if (product.depositRequired) {
-        secondaryLines.add('Deposit ${formatPlanInr(product.securityDeposit)}');
-        secondaryLines.add('Plans on details');
-      } else {
-        secondaryLines.add('Rental plans on details');
-      }
-    }
-
-    String? tertiaryLine;
-    Color tertiaryColor = Colors.white54;
-    if (showBuy && showRent && (product.buyPrice ?? 0) > 0) {
-      final max = product.maxBuyPrice;
-      final range = max != null && max > product.buyPrice!
-          ? ' – ${formatPlanInr(max)}'
-          : '';
-      tertiaryLine = 'Also buy for ${formatPlanInr(product.buyPrice!)}$range';
-      tertiaryColor = const Color(0xFF34D399);
-    } else if (showBuy &&
-        !showRent &&
-        (product.buyPrice ?? 0) > 0 &&
-        product.maxBuyPrice != null &&
-        product.maxBuyPrice! > product.buyPrice!) {
-      tertiaryLine = 'Up to ${formatPlanInr(product.maxBuyPrice!)}';
-    }
-
-    return GestureDetector(
-      onTap: isInteractive
-          ? () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(listingId: product.id)));
-            }
-          : null,
-      child: Opacity(
-        opacity: isInteractive ? 1.0 : 0.55,
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    const ColoredBox(color: Color(0xFF334155)),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 36, 10, 8),
-                      child: CatalogImage(url: product.primaryImageUrl, fit: BoxFit.contain),
-                    ),
-                    if (showBadge)
-                      Positioned(
-                        top: 10,
-                        left: 10,
-                        child: Container(
-                          constraints: const BoxConstraints(maxWidth: 118),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Color(badge['color'] as int),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            badge['label'] as String,
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              height: 1.15,
-                            ),
-                          ),
-                        ),
-                      ),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Consumer<FavoriteProvider>(
-                        builder: (context, favoriteProvider, _) {
-                          final isFavorite = favoriteProvider.isFavorite(product.id);
-                          return Material(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            shape: const CircleBorder(),
-                            child: InkWell(
-                              customBorder: const CircleBorder(),
-                              onTap: () async {
-                                final ok = await ensureAuthenticated(
-                                  context,
-                                  message: 'Sign in to save favorites.',
-                                );
-                                if (!ok || !context.mounted) return;
-                                await favoriteProvider.toggleFavorite(product.id);
-                              },
-                              child: SizedBox(
-                                width: 34,
-                                height: 34,
-                                child: Icon(
-                                  isFavorite ? Icons.favorite : Icons.favorite_border,
-                                  color: isFavorite ? Colors.red : Colors.white,
-                                  size: 18,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      product.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        height: 1.25,
-                        color: Colors.white,
-                      ),
-                    ),
-                    if (primaryValue != null) ...[
-                      const SizedBox(height: 6),
-                      Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: primaryValue,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 15,
-                                color: Colors.white,
-                                height: 1.1,
-                              ),
-                            ),
-                            if (primaryUnit != null && primaryUnit.isNotEmpty)
-                              TextSpan(
-                                text: ' $primaryUnit',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 11,
-                                  color: Colors.white.withValues(alpha: 0.55),
-                                  height: 1.1,
-                                ),
-                              ),
-                          ],
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                    if (secondaryLines.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      ...secondaryLines.map(
-                        (line) => Text(
-                          line,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            height: 1.25,
-                            color: Colors.white.withValues(alpha: 0.55),
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (tertiaryLine != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        tertiaryLine,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          height: 1.25,
-                          fontWeight: FontWeight.w600,
-                          color: tertiaryColor,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

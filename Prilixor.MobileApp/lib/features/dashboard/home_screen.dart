@@ -8,10 +8,8 @@ import '../../core/providers/product_provider.dart';
 import '../../core/providers/favorite_provider.dart';
 import '../../core/models/product_model.dart';
 import '../../core/models/category_model.dart';
-import '../../core/utils/rental_period.dart';
-import '../../core/utils/rental_plan_display.dart';
-import '../../shared/widgets/catalog_image.dart';
 import '../../shared/utils/require_auth.dart';
+import '../../shared/widgets/browse_product_card.dart';
 import '../product/product_detail_screen.dart';
 import '../profile/addresses_screen.dart';
 
@@ -377,15 +375,24 @@ class _HomeScreenState extends State<HomeScreen> {
                               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 2,
-                                mainAxisSpacing: 16,
+                                mainAxisSpacing: 14,
                                 crossAxisSpacing: 12,
-                                // Image + title + day rate + deposit/plans + Also-buy (narrow phones wrap).
-                                mainAxisExtent: 318,
+                                mainAxisExtent: kBrowseProductCardExtent,
                               ),
                               itemCount: products.length,
                               itemBuilder: (context, index) {
                                 final product = products[index];
-                                return _buildProductCard(product);
+                                return BrowseProductCard(
+                                  product: product,
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ProductDetailScreen(listingId: product.id),
+                                      ),
+                                    );
+                                  },
+                                );
                               },
                             ),
             ),
@@ -737,232 +744,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildProductCard(ProductModel product) {
-    final ls = product.listingStatus.trim().toLowerCase();
-    final isBrowsable = ls == 'active' || ls == 'approved';
-    // Web opens active listings even when OOS (PDP may still block add-to-cart).
-    final isInteractive = isBrowsable;
-    final badge = product.getAvailabilityBadge();
-    final showBadge = badge != null && badge['label'] != 'Available';
-    final showRent = product.canRent;
-    final showBuy = product.canBuy;
-    final rate = showRent
-        ? primaryDisplayRate(
-            dailyRent: product.dailyRent,
-            weeklyRent: product.weeklyRent,
-            monthlyRent: product.monthlyRent,
-          )
-        : null;
-
-    String? primaryValue;
-    String? primaryUnit;
-    if (showRent && rate != null) {
-      primaryValue = formatPlanInr(rate.value);
-      primaryUnit = rate.unit == rentalUnitMonth ? '/month' : '/day';
-    } else if (showBuy && (product.buyPrice ?? 0) > 0) {
-      primaryValue = formatPlanInr(product.buyPrice!);
-      primaryUnit = product.baseUnit != null && product.baseUnit!.trim().isNotEmpty
-          ? ' / ${product.baseUnit}'
-          : '';
-    }
-
-    // Narrow 2-col cards: keep web copy but split so SE-width never ellipsizes mid-phrase.
-    final List<String> secondaryLines = [];
-    if (showRent) {
-      if (product.depositRequired) {
-        secondaryLines.add('Deposit ${formatPlanInr(product.securityDeposit)}');
-        secondaryLines.add('Plans on details');
-      } else {
-        secondaryLines.add('Rental plans on details');
-      }
-    }
-
-    String? tertiaryLine;
-    Color tertiaryColor = Colors.white54;
-    if (showBuy && showRent && (product.buyPrice ?? 0) > 0) {
-      final max = product.maxBuyPrice;
-      final range = max != null && max > product.buyPrice!
-          ? ' – ${formatPlanInr(max)}'
-          : '';
-      tertiaryLine = 'Also buy for ${formatPlanInr(product.buyPrice!)}$range';
-      tertiaryColor = const Color(0xFF34D399); // emerald — match web Also buy
-    } else if (showBuy &&
-        !showRent &&
-        (product.buyPrice ?? 0) > 0 &&
-        product.maxBuyPrice != null &&
-        product.maxBuyPrice! > product.buyPrice!) {
-      tertiaryLine = 'Up to ${formatPlanInr(product.maxBuyPrice!)}';
-    }
-
-    return GestureDetector(
-      onTap: isInteractive
-          ? () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(listingId: product.id)));
-            }
-          : null,
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        clipBehavior: Clip.antiAlias,
-        // No AspectRatio — it overflows when grid cell is shorter than width/ratio (Chrome wide view).
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  const ColoredBox(color: Color(0xFF334155)),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 36, 10, 8),
-                    child: CatalogImage(url: product.primaryImageUrl, fit: BoxFit.contain),
-                  ),
-                  if (showBadge)
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 118),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Color(badge['color'] as int),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          badge['label'] as String,
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            height: 1.15,
-                          ),
-                        ),
-                      ),
-                    ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Consumer<FavoriteProvider>(
-                      builder: (context, favoriteProvider, _) {
-                        final isFavorite = favoriteProvider.isFavorite(product.id);
-                        return Material(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: () async {
-                              final ok = await ensureAuthenticated(
-                                context,
-                                message: 'Sign in to save favorites.',
-                              );
-                              if (!ok || !context.mounted) return;
-                              await favoriteProvider.toggleFavorite(product.id);
-                            },
-                            child: SizedBox(
-                              width: 34,
-                              height: 34,
-                              child: Icon(
-                                isFavorite ? Icons.favorite : Icons.favorite_border,
-                                color: isFavorite ? Colors.red : Colors.white,
-                                size: 18,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      height: 1.25,
-                      color: Colors.white,
-                    ),
-                  ),
-                  if (primaryValue != null) ...[
-                    const SizedBox(height: 6),
-                    Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: primaryValue,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 15,
-                              color: Colors.white,
-                              height: 1.1,
-                            ),
-                          ),
-                          if (primaryUnit != null && primaryUnit.isNotEmpty)
-                            TextSpan(
-                              text: ' $primaryUnit',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w500,
-                                fontSize: 11,
-                                color: Colors.white.withValues(alpha: 0.55),
-                                height: 1.1,
-                              ),
-                            ),
-                        ],
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (secondaryLines.isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    ...secondaryLines.map(
-                      (line) => Text(
-                        line,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          height: 1.25,
-                          color: Colors.white.withValues(alpha: 0.55),
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (tertiaryLine != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      tertiaryLine,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        height: 1.25,
-                        fontWeight: FontWeight.w600,
-                        color: tertiaryColor,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _ActiveFilterChip extends StatelessWidget {
