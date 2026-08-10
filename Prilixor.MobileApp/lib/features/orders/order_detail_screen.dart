@@ -988,11 +988,14 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
     final withRequest = items.where((o) => requestsByOrderId.containsKey(o.id)).toList();
     final multi = items.length > 1;
 
-    return Container(
+    return Material(
+      color: Colors.white.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white12),
       ),
@@ -1176,6 +1179,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
             ],
           ],
         ],
+      ),
       ),
     );
   }

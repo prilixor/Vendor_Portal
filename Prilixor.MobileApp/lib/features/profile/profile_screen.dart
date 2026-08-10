@@ -148,11 +148,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ],
                       const SizedBox(height: 32),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                      // Material (not DecoratedBox) so ListTile ink/splash paint correctly.
+                      Material(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(16),
+                        clipBehavior: Clip.antiAlias,
                         child: Column(
                           children: [
                             _buildMenuItem(icon: Icons.person_outline, title: 'Edit Profile', onTap: _openEditProfile),
