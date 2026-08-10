@@ -1024,88 +1024,208 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                 ),
                                               ],
                                             ),
+                                            // Web checkout strip: qty → deposit → rent due
+                                            // (plan card already shows % OFF / Save — don't repeat).
                                             if (selectedPlan != null) ...[
                                               const SizedBox(height: 12),
                                               Container(
                                                 width: double.infinity,
-                                                padding: const EdgeInsets.all(16),
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFF0F172A),
-                                                  borderRadius: BorderRadius.circular(14),
+                                                  color: const Color(0xFF1E293B),
+                                                  borderRadius: BorderRadius.circular(16),
                                                   border: Border.all(color: Colors.white12),
                                                 ),
                                                 child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
-                                                    const Text(
-                                                      'You pay for rent',
-                                                      style: TextStyle(
-                                                        color: Colors.white54,
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.w600,
+                                                    Padding(
+                                                      padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
+                                                      child: Row(
+                                                        children: [
+                                                          Expanded(
+                                                            child: Column(
+                                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                                              children: [
+                                                                const RequiredLabel(
+                                                                  'Quantity',
+                                                                  required: true,
+                                                                  style: TextStyle(
+                                                                    color: Colors.white,
+                                                                    fontSize: 14,
+                                                                    fontWeight: FontWeight.w800,
+                                                                  ),
+                                                                ),
+                                                                const SizedBox(height: 2),
+                                                                Text(
+                                                                  currentQty > 0
+                                                                      ? '$currentQty available'
+                                                                      : 'Select how many units',
+                                                                  style: const TextStyle(
+                                                                    color: Colors.white54,
+                                                                    fontSize: 12,
+                                                                    fontWeight: FontWeight.w500,
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          Row(
+                                                            children: [
+                                                              IconButton(
+                                                                icon: Icon(
+                                                                  Icons.remove_circle_outline,
+                                                                  color: _quantity > 1
+                                                                      ? Colors.white70
+                                                                      : Colors.white24,
+                                                                ),
+                                                                onPressed: _quantity > 1
+                                                                    ? () async {
+                                                                        final next = _quantity - 1;
+                                                                        final blocked =
+                                                                            await _promptRentToBuyIfNeeded(
+                                                                          detail: detail,
+                                                                          unitBuyPrice: unitBuyPrice,
+                                                                          nextQty: next,
+                                                                        );
+                                                                        if (blocked || !mounted) return;
+                                                                        setState(() => _quantity = next);
+                                                                      }
+                                                                    : null,
+                                                              ),
+                                                              Text(
+                                                                '$_quantity',
+                                                                style: const TextStyle(
+                                                                  color: Colors.white,
+                                                                  fontSize: 16,
+                                                                  fontWeight: FontWeight.bold,
+                                                                ),
+                                                              ),
+                                                              IconButton(
+                                                                icon: Icon(
+                                                                  Icons.add_circle_outline,
+                                                                  color: _quantity <
+                                                                          (currentQty > 0 ? currentQty : 1)
+                                                                      ? Colors.white70
+                                                                      : Colors.white24,
+                                                                ),
+                                                                onPressed: _quantity <
+                                                                        (currentQty > 0 ? currentQty : 1)
+                                                                    ? () async {
+                                                                        final next = _quantity + 1;
+                                                                        final blocked =
+                                                                            await _promptRentToBuyIfNeeded(
+                                                                          detail: detail,
+                                                                          unitBuyPrice: unitBuyPrice,
+                                                                          nextQty: next,
+                                                                        );
+                                                                        if (blocked || !mounted) return;
+                                                                        setState(() => _quantity = next);
+                                                                      }
+                                                                    : null,
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ],
                                                       ),
                                                     ),
-                                                    const SizedBox(height: 6),
-                                                    Row(
-                                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                                      children: [
-                                                        Expanded(
-                                                          child: Wrap(
-                                                            crossAxisAlignment: WrapCrossAlignment.end,
-                                                            spacing: 8,
-                                                            runSpacing: 4,
+                                                    Container(
+                                                      width: double.infinity,
+                                                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.white.withValues(alpha: 0.04),
+                                                        border: const Border(
+                                                          top: BorderSide(color: Colors.white12),
+                                                        ),
+                                                      ),
+                                                      child: Column(
+                                                        children: [
+                                                          Container(
+                                                            padding: const EdgeInsets.symmetric(
+                                                              horizontal: 12,
+                                                              vertical: 12,
+                                                            ),
+                                                            decoration: BoxDecoration(
+                                                              color: const Color(0xFF0F172A),
+                                                              borderRadius: BorderRadius.circular(12),
+                                                              border: Border.all(color: Colors.white12),
+                                                            ),
+                                                            child: Row(
+                                                              children: [
+                                                                const Icon(
+                                                                  Icons.verified_user_outlined,
+                                                                  size: 18,
+                                                                  color: Color(0xFF34D399),
+                                                                ),
+                                                                const SizedBox(width: 8),
+                                                                const Expanded(
+                                                                  child: Text(
+                                                                    'Refundable deposit',
+                                                                    style: TextStyle(
+                                                                      color: Colors.white,
+                                                                      fontSize: 13,
+                                                                      fontWeight: FontWeight.w700,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                                Text(
+                                                                  formatPlanInr(
+                                                                    detail.securityDeposit * _quantity,
+                                                                  ),
+                                                                  style: const TextStyle(
+                                                                    color: Colors.white,
+                                                                    fontSize: 15,
+                                                                    fontWeight: FontWeight.w800,
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const SizedBox(height: 12),
+                                                          Row(
+                                                            crossAxisAlignment: CrossAxisAlignment.end,
                                                             children: [
+                                                              Expanded(
+                                                                child: Column(
+                                                                  crossAxisAlignment:
+                                                                      CrossAxisAlignment.start,
+                                                                  children: [
+                                                                    const Text(
+                                                                      'You pay for rent',
+                                                                      style: TextStyle(
+                                                                        color: Colors.white,
+                                                                        fontSize: 14,
+                                                                        fontWeight: FontWeight.w800,
+                                                                      ),
+                                                                    ),
+                                                                    const SizedBox(height: 4),
+                                                                    Text(
+                                                                      _quantity > 1
+                                                                          ? '${formatPlanInr(selectedPlan.finalRentalPrice)} × $_quantity units'
+                                                                          : 'Excludes deposit & delivery',
+                                                                      style: const TextStyle(
+                                                                        color: Colors.white54,
+                                                                        fontSize: 12,
+                                                                        fontWeight: FontWeight.w500,
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
                                                               Text(
                                                                 formatPlanInr(
-                                                                  selectedPlan.finalRentalPrice * _quantity,
+                                                                  selectedPlan.finalRentalPrice *
+                                                                      _quantity,
                                                                 ),
                                                                 style: TextStyle(
                                                                   color: priceColor,
-                                                                  fontSize: 28,
+                                                                  fontSize: 24,
                                                                   fontWeight: FontWeight.w800,
-                                                                  height: 1.1,
+                                                                  height: 1,
                                                                 ),
                                                               ),
-                                                              if (selectedSavings > 0)
-                                                                StruckPrice(
-                                                                  formatPlanInr(
-                                                                    selectedPlan.normalPrice * _quantity,
-                                                                  ),
-                                                                  style: const TextStyle(
-                                                                    fontSize: 14,
-                                                                    fontWeight: FontWeight.w600,
-                                                                  ),
-                                                                ),
                                                             ],
                                                           ),
-                                                        ),
-                                                        if (selectedPct > 0 || selectedSavings > 0)
-                                                          Column(
-                                                            crossAxisAlignment: CrossAxisAlignment.end,
-                                                            children: [
-                                                              if (selectedPct > 0) _pctOffBadge(selectedPct),
-                                                              if (selectedSavings > 0) ...[
-                                                                const SizedBox(height: 4),
-                                                                _saveAmountLabel(selectedSavings * _quantity),
-                                                              ],
-                                                            ],
-                                                          ),
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 12),
-                                                    Divider(
-                                                      color: Colors.white.withValues(alpha: 0.08),
-                                                      height: 1,
-                                                    ),
-                                                    const SizedBox(height: 10),
-                                                    Text(
-                                                      detail.securityDeposit > 0
-                                                          ? 'Deposit ${formatPlanInr(detail.securityDeposit * _quantity)} (refundable)'
-                                                              '${_quantity > 1 ? ' · ${formatPlanInr(selectedPlan.finalRentalPrice)} × $_quantity' : ''}'
-                                                          : (_quantity > 1
-                                                              ? '${formatPlanInr(selectedPlan.finalRentalPrice)} × $_quantity'
-                                                              : 'No deposit required'),
-                                                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                                        ],
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
@@ -1155,59 +1275,73 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   ],
                                 ],
 
-                                const SizedBox(height: 12),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const RequiredLabel('Quantity', required: true, style: TextStyle(color: Colors.white70, fontSize: 16)),
-                                    Row(
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.remove_circle_outline, color: Colors.white),
-                                          onPressed: _quantity > 1
-                                              ? () async {
-                                                  final next = _quantity - 1;
-                                                  if (actualOrderType == 'rent') {
-                                                    final blocked = await _promptRentToBuyIfNeeded(
-                                                      detail: detail,
-                                                      unitBuyPrice: unitBuyPrice,
-                                                      nextQty: next,
-                                                    );
-                                                    if (blocked || !mounted) return;
+                                // Quantity lives inside the rent checkout strip when plans exist.
+                                if (!(actualOrderType == 'rent' &&
+                                    detail.hasActiveRentalPlans &&
+                                    selectedPlan != null)) ...[
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const RequiredLabel(
+                                        'Quantity',
+                                        required: true,
+                                        style: TextStyle(color: Colors.white70, fontSize: 16),
+                                      ),
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.remove_circle_outline, color: Colors.white),
+                                            onPressed: _quantity > 1
+                                                ? () async {
+                                                    final next = _quantity - 1;
+                                                    if (actualOrderType == 'rent') {
+                                                      final blocked = await _promptRentToBuyIfNeeded(
+                                                        detail: detail,
+                                                        unitBuyPrice: unitBuyPrice,
+                                                        nextQty: next,
+                                                      );
+                                                      if (blocked || !mounted) return;
+                                                    }
+                                                    setState(() => _quantity = next);
                                                   }
-                                                  setState(() => _quantity = next);
-                                                }
-                                              : null,
-                                        ),
-                                        Text('$_quantity', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                                        IconButton(
-                                          icon: const Icon(Icons.add_circle_outline, color: Colors.white),
-                                          onPressed: _quantity < (currentQty > 0 ? currentQty : 1)
-                                              ? () async {
-                                                  final next = _quantity + 1;
-                                                  if (actualOrderType == 'rent') {
-                                                    final blocked = await _promptRentToBuyIfNeeded(
-                                                      detail: detail,
-                                                      unitBuyPrice: unitBuyPrice,
-                                                      nextQty: next,
-                                                    );
-                                                    if (blocked || !mounted) return;
+                                                : null,
+                                          ),
+                                          Text(
+                                            '$_quantity',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.add_circle_outline, color: Colors.white),
+                                            onPressed: _quantity < (currentQty > 0 ? currentQty : 1)
+                                                ? () async {
+                                                    final next = _quantity + 1;
+                                                    if (actualOrderType == 'rent') {
+                                                      final blocked = await _promptRentToBuyIfNeeded(
+                                                        detail: detail,
+                                                        unitBuyPrice: unitBuyPrice,
+                                                        nextQty: next,
+                                                      );
+                                                      if (blocked || !mounted) return;
+                                                    }
+                                                    setState(() => _quantity = next);
                                                   }
-                                                  setState(() => _quantity = next);
-                                                }
-                                              : null,
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  detail.hasActiveRentalPlans && actualOrderType == 'rent'
-                                      ? 'Tap period above to change duration'
-                                      : 'Estimated ${actualOrderType == 'buy' ? 'buy amount' : 'rent'}: ₹${estimate.toStringAsFixed(0)}',
-                                  style: const TextStyle(color: Colors.white54, fontSize: 13),
-                                ),
+                                                : null,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Estimated ${actualOrderType == 'buy' ? 'buy amount' : 'rent'}: ₹${estimate.toStringAsFixed(0)}',
+                                    style: const TextStyle(color: Colors.white54, fontSize: 13),
+                                  ),
+                                ],
                                 if (_relatedProducts.isNotEmpty) ...[
                                   const SizedBox(height: 24),
                                   const Text(
