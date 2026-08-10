@@ -9,6 +9,7 @@ import '../../shared/utils/require_auth.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
+import '../../shared/widgets/struck_price.dart';
 import '../../core/utils/rental_period.dart';
 import 'medical_reference_screen.dart';
 
@@ -226,9 +227,38 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Qty: ${line.quantity} • ${line.orderType == 'buy' ? 'Buy' : 'Rent ${formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)}'}',
+                                  'Qty: ${line.quantity} • ${line.orderType == 'buy' ? 'Buy' : line.usesPricingPlan ? (line.rentalDurationLabel ?? '${line.rentalDurationDays ?? line.rentalDays}-Day Plan') : 'Rent ${formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)}'}',
                                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                                 ),
+                                if (line.orderType == 'rent' && line.usesPricingPlan) ...[
+                                  const SizedBox(height: 2),
+                                  Wrap(
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    spacing: 6,
+                                    children: [
+                                      const Text(
+                                        'Starts on delivery',
+                                        style: TextStyle(color: Colors.white38, fontSize: 11),
+                                      ),
+                                      if (line.rentalNormalPrice != null &&
+                                          line.rentalNormalPrice! > (line.rentalFinalPrice ?? 0)) ...[
+                                        const Text('·', style: TextStyle(color: Colors.white24, fontSize: 11)),
+                                        StruckPrice(
+                                          '₹${line.rentalNormalPrice!.toStringAsFixed(0)}',
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                                        ),
+                                        Text(
+                                          '₹${(line.rentalFinalPrice ?? 0).toStringAsFixed(0)}',
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
                               ],
                             ),
                           ),
