@@ -669,20 +669,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         )
                                       : Column(
                                           children: [
-                                            if (detail.canRent) ...[
-                                              if (detail.hasActiveRentalPlans) ...[
-                                                _priceRow('Daily rate', '₹${detail.dailyRent.toStringAsFixed(0)}'),
-                                                _priceRow('Security deposit', '₹${detail.securityDeposit.toStringAsFixed(0)}'),
-                                              ] else ...[
-                                                _priceRow('Weekly rent', '₹${detail.weeklyRent.toStringAsFixed(0)}'),
-                                                _priceRow('Monthly rent', '₹${detail.monthlyRent.toStringAsFixed(0)}'),
-                                                _priceRow('Security deposit', '₹${detail.securityDeposit.toStringAsFixed(0)}'),
-                                              ],
-                                            ],
+                                            // Web compact strip: deposit + buy only (plans pick the rent price).
+                                            if (detail.canRent)
+                                              _priceRow(
+                                                'Security deposit',
+                                                formatPlanInr(detail.securityDeposit),
+                                              ),
                                             if (detail.canBuy)
                                               _priceRow(
                                                 'Buy price',
-                                                '₹${(detail.buyPrice ?? 0).toStringAsFixed(0)}${detail.baseUnit != null ? ' / ${detail.baseUnit}' : ''}',
+                                                '${formatPlanInr(detail.buyPrice ?? 0)}${detail.baseUnit != null ? ' / ${detail.baseUnit}' : ' / Unit'}',
                                                 highlight: true,
                                               ),
                                           ],
@@ -692,23 +688,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 if (detail.prescriptionRequired) ...[
                                   const SizedBox(height: 12),
                                   Container(
-                                    padding: const EdgeInsets.all(12),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                     decoration: BoxDecoration(
                                       color: Colors.amber.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(10),
+                                      borderRadius: BorderRadius.circular(999),
                                       border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
                                     ),
-                                    child: const Row(
-                                      children: [
-                                        Icon(Icons.medical_information, color: Colors.amber, size: 18),
-                                        SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            'Doctor Unique ID can be added optionally at checkout.',
-                                            style: TextStyle(color: Colors.amber, fontSize: 13),
-                                          ),
-                                        ),
-                                      ],
+                                    child: const Text(
+                                      'Prescription may be required',
+                                      style: TextStyle(
+                                        color: Colors.amber,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -1361,7 +1353,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       crossAxisCount: 2,
                                       mainAxisSpacing: 16,
                                       crossAxisSpacing: 12,
-                                      mainAxisExtent: 260,
+                                      mainAxisExtent: 300,
                                     ),
                                     itemCount: _relatedProducts.length,
                                     itemBuilder: (context, index) {
@@ -1510,8 +1502,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             );
                           },
                     child: Text(
-                      canAdd ? 'Add to Cart' : 'Out of Stock',
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
+                      canAdd
+                          ? (actualOrderType == 'buy' ? 'Add to cart — Buy' : 'Add to cart — Rent')
+                          : 'Out of stock',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ),
                 ),
@@ -1893,20 +1887,55 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Widget _buildRelatedProductCard(ProductModel product) {
     final ls = product.listingStatus.trim().toLowerCase();
     final isBrowsable = ls == 'active' || ls == 'approved';
-    final isOutOfStock = product.availableQuantity <= 0 || product.availabilityStatus.trim().toLowerCase() == 'out_of_stock';
-    final isInteractive = isBrowsable && !isOutOfStock;
+    // Match browse: active listings open PDP even when OOS.
+    final isInteractive = isBrowsable;
     final badge = product.getAvailabilityBadge();
     final showBadge = badge != null && badge['label'] != 'Available';
-    final rate = primaryDisplayRate(
-      dailyRent: product.dailyRent,
-      weeklyRent: product.weeklyRent,
-      monthlyRent: product.monthlyRent,
-    );
-    final priceText = product.isChemical
-        ? '₹${(product.buyPrice ?? 0).toStringAsFixed(0)}${product.baseUnit != null ? ' / ${product.baseUnit}' : ''}'
-        : (rate != null
-            ? '₹${rate.value.toStringAsFixed(0)}${rentalUnitLabels[rate.unit]!.per}'
-            : (product.buyPrice != null ? '₹${product.buyPrice!.toStringAsFixed(0)} buy' : '—'));
+    final showRent = product.canRent;
+    final showBuy = product.canBuy;
+    final rate = showRent
+        ? primaryDisplayRate(
+            dailyRent: product.dailyRent,
+            weeklyRent: product.weeklyRent,
+            monthlyRent: product.monthlyRent,
+          )
+        : null;
+
+    String? primaryValue;
+    String? primaryUnit;
+    if (showRent && rate != null) {
+      primaryValue = formatPlanInr(rate.value);
+      primaryUnit = rate.unit == rentalUnitMonth ? '/month' : '/day';
+    } else if (showBuy && (product.buyPrice ?? 0) > 0) {
+      primaryValue = formatPlanInr(product.buyPrice!);
+      primaryUnit = product.baseUnit != null && product.baseUnit!.trim().isNotEmpty
+          ? ' / ${product.baseUnit}'
+          : '';
+    }
+
+    String? secondaryLine;
+    if (showRent) {
+      secondaryLine = product.depositRequired
+          ? 'Deposit ${formatPlanInr(product.securityDeposit)} · Plans on details'
+          : 'Rental plans on details';
+    }
+
+    String? tertiaryLine;
+    Color tertiaryColor = Colors.white54;
+    if (showBuy && showRent && (product.buyPrice ?? 0) > 0) {
+      final max = product.maxBuyPrice;
+      final range = max != null && max > product.buyPrice!
+          ? ' – ${formatPlanInr(max)}'
+          : '';
+      tertiaryLine = 'Also buy for ${formatPlanInr(product.buyPrice!)}$range';
+      tertiaryColor = const Color(0xFF34D399);
+    } else if (showBuy &&
+        !showRent &&
+        (product.buyPrice ?? 0) > 0 &&
+        product.maxBuyPrice != null &&
+        product.maxBuyPrice! > product.buyPrice!) {
+      tertiaryLine = 'Up to ${formatPlanInr(product.maxBuyPrice!)}';
+    }
 
     return GestureDetector(
       onTap: isInteractive
@@ -1939,7 +1968,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         top: 10,
                         left: 10,
                         child: Container(
-                          constraints: const BoxConstraints(maxWidth: 104),
+                          constraints: const BoxConstraints(maxWidth: 118),
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: Color(badge['color'] as int),
@@ -1970,16 +1999,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             shape: const CircleBorder(),
                             child: InkWell(
                               customBorder: const CircleBorder(),
-                              onTap: isInteractive
-                                  ? () async {
-                                      final ok = await ensureAuthenticated(
-                                        context,
-                                        message: 'Sign in to save favorites.',
-                                      );
-                                      if (!ok || !context.mounted) return;
-                                      await favoriteProvider.toggleFavorite(product.id);
-                                    }
-                                  : null,
+                              onTap: () async {
+                                final ok = await ensureAuthenticated(
+                                  context,
+                                  message: 'Sign in to save favorites.',
+                                );
+                                if (!ok || !context.mounted) return;
+                                await favoriteProvider.toggleFavorite(product.id);
+                              },
                               child: SizedBox(
                                 width: 34,
                                 height: 34,
@@ -1998,7 +2025,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2013,17 +2040,63 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         color: Colors.white,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      priceText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: Color(0xFF6C63FF),
+                    if (primaryValue != null) ...[
+                      const SizedBox(height: 6),
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: primaryValue,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                                color: Colors.white,
+                                height: 1.1,
+                              ),
+                            ),
+                            if (primaryUnit != null && primaryUnit.isNotEmpty)
+                              TextSpan(
+                                text: ' $primaryUnit',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 11,
+                                  color: Colors.white.withValues(alpha: 0.55),
+                                  height: 1.1,
+                                ),
+                              ),
+                          ],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
+                    ],
+                    if (secondaryLine != null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        secondaryLine,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          height: 1.2,
+                          color: Colors.white.withValues(alpha: 0.55),
+                        ),
+                      ),
+                    ],
+                    if (tertiaryLine != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        tertiaryLine,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          height: 1.2,
+                          fontWeight: FontWeight.w600,
+                          color: tertiaryColor,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -191,7 +191,7 @@ class ProductDetailModel {
       return {'label': 'Only 1 left', 'color': 0xFFEF6C00};
     }
     if (s == 'low_stock' || qty <= 3) {
-      return {'label': 'Low stock', 'color': 0xFFF57C00};
+      return {'label': 'Limited stock', 'color': 0xFFF57C00};
     }
     // In-stock / available: no badge per product requirement
     return null;
