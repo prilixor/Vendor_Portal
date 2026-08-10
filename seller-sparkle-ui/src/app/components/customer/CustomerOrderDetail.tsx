@@ -364,6 +364,10 @@ const CustomerOrderDetail = () => {
   });
 
   const imageRequestLoading = imageRequestQueries.some((q) => q.isLoading || q.isFetching);
+  /** True until every item's request status has been fetched at least once (avoid treating "unknown" as eligible). */
+  const imageRequestsReady =
+    groupItemIds.length === 0 ||
+    imageRequestQueries.every((q) => q.isFetched || q.isError);
   const imageRequestsByItemId = useMemo(() => {
     const map = new Map<string, CustomerOrderImageRequestApi | null>();
     groupItemIds.forEach((itemId, index) => {
@@ -422,11 +426,24 @@ const CustomerOrderDetail = () => {
   }, [groupKey]);
 
   useEffect(() => {
-    if (photoSelectionInitialized) return;
-    if (photoEligibleItems.length === 0) return;
-    setPhotoRequestSelection(photoEligibleItems.map((item) => item.id));
-    setPhotoSelectionInitialized(true);
-  }, [photoEligibleItems, photoSelectionInitialized]);
+    // Wait until open-request status is known — otherwise null (still loading) looks "eligible"
+    // and Request selected can show (2) while the list only has 1 item (e.g. one already requested).
+    if (!imageRequestsReady) return;
+
+    const eligibleIds = photoEligibleItems.map((item) => item.id);
+    const eligibleSet = new Set(eligibleIds);
+
+    if (!photoSelectionInitialized) {
+      setPhotoRequestSelection(eligibleIds);
+      setPhotoSelectionInitialized(true);
+      return;
+    }
+
+    setPhotoRequestSelection((prev) => {
+      const next = prev.filter((id) => eligibleSet.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [imageRequestsReady, photoEligibleItems, photoSelectionInitialized]);
 
   const createImageRequestMut = useMutation({
     mutationFn: async (itemIds: string[]) => {
@@ -698,7 +715,7 @@ const CustomerOrderDetail = () => {
             </p>
           </CardHeader>
           <CardContent className="space-y-5">
-            {imageRequestLoading ? (
+            {!imageRequestsReady || imageRequestLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading photo requests…
