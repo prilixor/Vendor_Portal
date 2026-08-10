@@ -81,6 +81,40 @@ public sealed class GetCustomerCatalogEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetCustomerRelatedProductsRequest
+{
+    public Guid ProductId { get; set; }
+
+    [QueryParam]
+    public int Limit { get; set; } = 6;
+}
+
+public sealed class GetCustomerRelatedProductsEndpoint(IMediator mediator)
+    : Endpoint<GetCustomerRelatedProductsRequest, Results<Ok<List<CustomerCatalogListingDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("products/{ProductId:guid}/related");
+        AllowAnonymous();
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<List<CustomerCatalogListingDto>>, ProblemHttpResult>> ExecuteAsync(GetCustomerRelatedProductsRequest req, CancellationToken ct)
+    {
+        Guid? customerId = null;
+        var subject = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(subject, out var parsedCustomerId))
+        {
+            customerId = parsedCustomerId;
+        }
+
+        var result = await mediator.Send(new GetCustomerRelatedProductsQuery(req.ProductId, Math.Clamp(req.Limit, 1, 10), customerId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 /// <summary>Active product categories for customer browse filters (public).</summary>
 public sealed class GetCustomerCatalogCategoriesEndpoint(IMediator mediator)
     : EndpointWithoutRequest<Results<Ok<List<ProductCategoryDto>>, ProblemHttpResult>>

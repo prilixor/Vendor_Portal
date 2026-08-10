@@ -739,7 +739,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildProductCard(ProductModel product) {
     final ls = product.listingStatus.trim().toLowerCase();
     final isBrowsable = ls == 'active' || ls == 'approved';
+    final isOutOfStock = product.availableQuantity <= 0 || product.availabilityStatus.trim().toLowerCase() == 'out_of_stock';
+    final isInteractive = isBrowsable && !isOutOfStock;
     final badge = product.getAvailabilityBadge();
+    final showBadge = badge['label'] != 'Available';
     final rate = primaryDisplayRate(
       dailyRent: product.dailyRent,
       weeklyRent: product.weeklyRent,
@@ -752,7 +755,7 @@ class _HomeScreenState extends State<HomeScreen> {
             : (product.buyPrice != null ? '₹${product.buyPrice!.toStringAsFixed(0)} buy' : '—'));
 
     return GestureDetector(
-      onTap: isBrowsable
+      onTap: isInteractive
           ? () {
               Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(listingId: product.id)));
             }
@@ -870,7 +873,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -1122,7 +1126,7 @@ class _FavoritesFilterRow extends StatelessWidget {
               ),
               Switch.adaptive(
                 value: value,
-                activeThumbColor: Colors.white,
+                activeColor: Colors.white,
                 activeTrackColor: const Color(0xFF6C63FF),
                 onChanged: onChanged,
               ),

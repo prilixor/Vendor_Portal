@@ -407,6 +407,18 @@ internal sealed class GetCustomerCatalogListingsQueryHandler(ICustomerRepository
     }
 }
 
+public sealed record GetCustomerRelatedProductsQuery(Guid ProductId, int Limit = 6, Guid? CustomerId = null) : IQuery<List<CustomerCatalogListingDto>>;
+
+internal sealed class GetCustomerRelatedProductsQueryHandler(ICustomerRepository customers)
+    : IQueryHandler<GetCustomerRelatedProductsQuery, List<CustomerCatalogListingDto>>
+{
+    public async Task<Result<List<CustomerCatalogListingDto>>> Handle(GetCustomerRelatedProductsQuery request, CancellationToken cancellationToken)
+    {
+        var list = await customers.GetRelatedCatalogListingsAsync(request.ProductId, request.Limit, request.CustomerId, cancellationToken);
+        return Result.Success(list);
+    }
+}
+
 public sealed record CartLineRequest(
     Guid ListingId,
     int Quantity,
