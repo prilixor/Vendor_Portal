@@ -290,28 +290,49 @@ const CustomerCheckout = () => {
               <p className="text-base font-semibold">Delivery address</p>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="checkout-address">Saved address</Label>
-                <Select
-                  value={addressId || "none"}
-                  onValueChange={(v) => setAddressId(v === "none" ? "" : v)}
-                >
-                  <SelectTrigger id="checkout-address" className="h-11 w-full">
-                    <SelectValue placeholder="Select address" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {(addresses ?? []).map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {formatAddressOption(a)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button variant="link" className="h-auto px-0 text-xs text-muted-foreground" asChild>
-                <Link to="/customer/addresses">Manage addresses</Link>
-              </Button>
+              {(addresses ?? []).length === 0 ? (
+                <div className="space-y-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">No delivery address yet</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Add an address with a map pin to continue checkout.
+                    </p>
+                  </div>
+                  <Button asChild className="w-full sm:w-auto">
+                    <Link to="/customer/addresses">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Address
+                    </Link>
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="checkout-address" required>
+                      Saved address
+                    </Label>
+                    <Select
+                      value={addressId || "none"}
+                      onValueChange={(v) => setAddressId(v === "none" ? "" : v)}
+                    >
+                      <SelectTrigger id="checkout-address" className="h-11 w-full">
+                        <SelectValue placeholder="Select address" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {(addresses ?? []).map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {formatAddressOption(a)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button variant="link" className="h-auto px-0 text-xs text-muted-foreground" asChild>
+                    <Link to="/customer/addresses">Manage addresses</Link>
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
 

@@ -11,6 +11,7 @@ import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
 import '../../shared/widgets/struck_price.dart';
 import '../../core/utils/rental_period.dart';
+import '../profile/addresses_screen.dart';
 import 'medical_reference_screen.dart';
 
 /// Temporary: hide Vendor pickup from checkout UI (keep code for later).
@@ -60,7 +61,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Future<void> _fetchQuote() async {
     final cart = Provider.of<CartProvider>(context, listen: false);
     if (cart.lines.isEmpty) return;
-    // Vendor pickup does not require address; others prefer one for distance fees.
+    // Distance quote needs a delivery address — avoid 400 spam when none selected.
+    if (_selectedAddressId == null || _selectedAddressId!.isEmpty) {
+      return;
+    }
     final provider = Provider.of<CheckoutProvider>(context, listen: false);
     await provider.getQuote(
       cart.lines,
@@ -278,9 +282,76 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   if (addressProvider.isLoading)
                     const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
                   else if (addresses.isEmpty)
-                    const Text(
-                      'No addresses found. Please add an address in your Profile.',
-                      style: TextStyle(color: Colors.white70),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: kFieldErrorColor.withValues(alpha: 0.55),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text(
+                            'No delivery address yet',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Add an address with a map pin to continue checkout.',
+                            style: TextStyle(color: Colors.white70, fontSize: 13),
+                          ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const AddressesScreen(openAddOnLoad: true),
+                                  ),
+                                );
+                                if (!mounted) return;
+                                await addressProvider.fetchAddresses();
+                                if (!mounted) return;
+                                final refreshed = addressProvider.addresses;
+                                if (refreshed.isNotEmpty) {
+                                  setState(() {
+                                    _selectedAddressId = refreshed.first.id;
+                                  });
+                                  _fetchQuote();
+                                }
+                              },
+                              icon: const Icon(Icons.add_location_alt_outlined,
+                                  color: Colors.white, size: 18),
+                              label: const Text(
+                                'Add Address',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF6C63FF),
+                                elevation: 0,
+                                minimumSize: const Size.fromHeight(48),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     )
                   else
                     Container(

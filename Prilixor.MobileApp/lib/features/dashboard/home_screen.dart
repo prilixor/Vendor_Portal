@@ -34,6 +34,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// all | low_stock | out_of_stock — inventory on active listings (matches web Stock filter).
   String _stockFilter = 'all';
   bool _locationPromptChecked = false;
+  /// "Later" only snoozes for this app session — not forever across logins.
+  bool _locationPromptSnoozed = false;
+  bool _addressesLoaded = false;
 
   @override
   void initState() {
@@ -68,18 +71,37 @@ class _HomeScreenState extends State<HomeScreen> {
     _onSearch();
   }
 
+  bool _hasGeoAddress(AddressProvider addressProvider) =>
+      addressProvider.addresses.any(
+        (a) =>
+            a.latitude != null &&
+            a.longitude != null &&
+            !(a.latitude == 0 && a.longitude == 0),
+      );
+
   Future<void> _maybeShowLocationPrompt() async {
     if (_locationPromptChecked || !mounted) return;
     _locationPromptChecked = true;
     final auth = Provider.of<AuthProvider>(context, listen: false);
     if (!auth.isAuthenticated) return;
-    final dismissed = await _storage.read(key: _locationPromptKey);
-    if (dismissed == 'true' || !mounted) return;
+
     final addressProvider = Provider.of<AddressProvider>(context, listen: false);
     await addressProvider.fetchAddresses();
     if (!mounted) return;
-    final hasGeo = addressProvider.addresses.any((a) => a.latitude != null && a.longitude != null);
-    if (hasGeo) return;
+    setState(() => _addressesLoaded = true);
+
+    final hasGeo = _hasGeoAddress(addressProvider);
+    if (hasGeo) {
+      // Clear any legacy permanent dismiss once they have a pin.
+      await _storage.delete(key: _locationPromptKey);
+      return;
+    }
+
+    // Legacy: old builds stored permanent dismiss — clear so login can re-prompt.
+    await _storage.delete(key: _locationPromptKey);
+
+    if (_locationPromptSnoozed) return;
+
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -91,23 +113,101 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () async {
-              await _storage.write(key: _locationPromptKey, value: 'true');
-              if (ctx.mounted) Navigator.pop(ctx);
+            onPressed: () {
+              // Session snooze only — soft banner stays; re-login shows dialog again.
+              setState(() => _locationPromptSnoozed = true);
+              Navigator.pop(ctx);
             },
             child: const Text('Later', style: TextStyle(color: Colors.white70)),
           ),
           TextButton(
-            onPressed: () async {
-              await _storage.write(key: _locationPromptKey, value: 'true');
-              if (!ctx.mounted) return;
+            onPressed: () {
+              setState(() => _locationPromptSnoozed = true);
               Navigator.pop(ctx);
               if (!mounted) return;
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressesScreen()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AddressesScreen(openAddOnLoad: true),
+                ),
+              ).then((_) {
+                if (!mounted) return;
+                Provider.of<AddressProvider>(context, listen: false)
+                    .fetchAddresses();
+              });
             },
-            child: const Text('Set address now', style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Set address now',
+              style: TextStyle(
+                color: Color(0xFF6C63FF),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _locationBanner(AddressProvider addressProvider) {
+    if (!_addressesLoaded || _hasGeoAddress(addressProvider)) {
+      return const SizedBox.shrink();
+    }
+    return Material(
+      color: const Color(0xFF1E293B),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const AddressesScreen(openAddOnLoad: true),
+            ),
+          ).then((_) {
+            if (!mounted) return;
+            Provider.of<AddressProvider>(context, listen: false)
+                .fetchAddresses();
+          });
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: const Color(0xFF6C63FF).withValues(alpha: 0.45),
+            ),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.add_location_alt_outlined,
+                  color: Color(0xFF6C63FF), size: 22),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Add delivery address',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Needed for checkout and delivery charges.',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.white38),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -176,6 +276,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final productProvider = Provider.of<ProductProvider>(context);
     final favoriteProvider = Provider.of<FavoriteProvider>(context);
+    final addressProvider = Provider.of<AddressProvider>(context);
+    final auth = Provider.of<AuthProvider>(context);
 
     var products = _catalogBeforeCategory(productProvider.products, favoriteProvider);
     if (_selectedCategoryName != null) {
@@ -215,6 +317,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     'Medical equipment and chemicals from verified vendors.',
                     style: TextStyle(color: Colors.white54, fontSize: 13),
                   ),
+                  if (auth.isAuthenticated) ...[
+                    const SizedBox(height: 12),
+                    _locationBanner(addressProvider),
+                  ],
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(4),

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, type MouseEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import { Heart, ImageOff } from "lucide-react";
+import { Heart, ImageOff, MapPin } from "lucide-react";
 import { customerApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/app/components/ui/card";
@@ -195,19 +195,37 @@ const CustomerBrowse = () => {
     enabled: user?.role === "customer",
   });
 
+  const hasGeoAddress = useMemo(
+    () =>
+      addresses.some(
+        (a) =>
+          typeof a.latitude === "number" &&
+          typeof a.longitude === "number" &&
+          !(a.latitude === 0 && a.longitude === 0),
+      ),
+    [addresses],
+  );
+
   useEffect(() => {
     if (user?.role !== "customer" || addressesLoading) {
       return;
     }
 
-    const hasGeoAddress = addresses.some((a) => typeof a.latitude === "number" && typeof a.longitude === "number");
-    const isDismissed = sessionStorage.getItem("locationPromptDismissed") === "true";
-    
-    setShowLocationPrompt(!hasGeoAddress && !isDismissed);
-  }, [addresses, user?.role, addressesLoading]);
+    // Session snooze only — never permanently block users with zero addresses.
+    // Clear legacy permanent dismiss keys from older builds.
+    if (hasGeoAddress) {
+      sessionStorage.removeItem("locationPromptDismissed");
+      setShowLocationPrompt(false);
+      return;
+    }
+
+    sessionStorage.removeItem("locationPromptDismissed");
+    const snoozed = sessionStorage.getItem("locationPromptSnoozed") === "true";
+    setShowLocationPrompt(!snoozed);
+  }, [addresses, hasGeoAddress, user?.role, addressesLoading]);
 
   const handleDismissPrompt = () => {
-    sessionStorage.setItem("locationPromptDismissed", "true");
+    sessionStorage.setItem("locationPromptSnoozed", "true");
     setShowLocationPrompt(false);
   };
 
@@ -337,6 +355,24 @@ const CustomerBrowse = () => {
 
   return (
     <div className="space-y-5">
+      {user?.role === "customer" && !addressesLoading && !hasGeoAddress && (
+        <Link
+          to="/customer/addresses"
+          className="flex items-center gap-3 rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 transition-colors hover:bg-primary/10"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <MapPin className="h-4 w-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-foreground">Add delivery address</span>
+            <span className="block text-xs text-muted-foreground">
+              Needed for checkout and accurate delivery charges.
+            </span>
+          </span>
+          <span className="text-sm font-medium text-primary">Set now</span>
+        </Link>
+      )}
+
       {/* Storefront controls */}
       <div className="rounded-2xl border border-border/80 bg-card/80 p-3 shadow-sm sm:p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -680,7 +716,7 @@ const CustomerBrowse = () => {
             <Button variant="outline" onClick={handleDismissPrompt}>
               Later
             </Button>
-            <Button asChild>
+            <Button asChild onClick={handleDismissPrompt}>
               <Link to="/customer/addresses">Set address now</Link>
             </Button>
           </DialogFooter>

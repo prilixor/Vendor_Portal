@@ -168,6 +168,8 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     await _storage.delete(key: 'jwt_token');
     await _storage.delete(key: 'refresh_token');
+    // Re-prompt location on next login if they still have no delivery address.
+    await _storage.delete(key: 'locationPromptDismissed');
     _isAuthenticated = false;
     notifyListeners();
   }

@@ -46,7 +46,8 @@ class PlaceSearch {
             receiveTimeout: const Duration(seconds: 12),
             headers: {
               'Accept': 'application/json',
-              'User-Agent': userAgent,
+              // Browsers forbid setting User-Agent; only send it on native.
+              if (!kIsWeb) 'User-Agent': userAgent,
             },
           ),
         );
