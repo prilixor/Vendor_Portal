@@ -12,7 +12,8 @@ public record SupportTicketDto(
     string? VendorBusinessName,
     DateTimeOffset CreatedAt,
     DateTimeOffset? UpdatedAt,
-    SupportMessageDto? LatestMessage = null);
+    SupportMessageDto? LatestMessage = null,
+    int UnreadCount = 0);
 
 public record SupportMessageDto(
     string Id,

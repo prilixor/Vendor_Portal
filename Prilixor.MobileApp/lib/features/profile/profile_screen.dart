@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/profile_provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/utils/require_auth.dart';
 import '../../shared/widgets/guest_sign_in_prompt.dart';
 import '../auth/login_screen.dart';
@@ -143,7 +144,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (profileProvider.profile!.phoneNumber.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
-                          profileProvider.profile!.phoneNumber,
+                          IndianMobilePhone.formatDisplay(
+                            profileProvider.profile!.phoneNumber,
+                          ),
                           style: const TextStyle(color: Colors.white54, fontSize: 14),
                         ),
                       ],

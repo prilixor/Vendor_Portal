@@ -22,6 +22,9 @@ function relativeTime(iso: string): string {
 const getCustomerRoute = (notificationType?: string, title?: string): string | null => {
   const type = notificationType?.trim().toLowerCase() ?? "";
   
+  if (type === "support_chat_reply" || type.includes("support_chat") || type.includes("blinksmed")) {
+    return "/customer/orders";
+  }
   if (type.startsWith("order_") || type.includes("order") || type === "order_expiring_soon") {
     return "/customer/orders";
   }
@@ -31,6 +34,9 @@ const getCustomerRoute = (notificationType?: string, title?: string): string | n
   
   // Fallback to title matching
   const t = title?.toLowerCase() ?? "";
+  if (t.includes("support") || t.includes("blinksmed") || t.includes("replied")) {
+    return "/customer/orders";
+  }
   if (t.includes("order") || t.includes("rental") || t.includes("placed") || t.includes("expired") || t.includes("expiring")) {
     return "/customer/orders";
   }

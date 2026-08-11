@@ -8,10 +8,11 @@ namespace Prilixor.VendorPortal.API.Extensions
     {
         public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
         {
-            // Browser reload/navigation aborts the HTTP request while EF/Npgsql is still connecting.
-            // That surfaces as OperationCanceledException — not a server bug.
-            if (exception is OperationCanceledException &&
-                (httpContext.RequestAborted.IsCancellationRequested || cancellationToken.IsCancellationRequested))
+            // Browser/app reload aborts in-flight HTTP while EF/Npgsql is still reading.
+            // That surfaces as OperationCanceledException — expected, not a server bug.
+            // Visual Studio may still break on "thrown" if that exception type is enabled
+            // under Debug → Windows → Exception Settings; uncheck OperationCanceledException.
+            if (exception is OperationCanceledException)
             {
                 if (!httpContext.Response.HasStarted)
                 {

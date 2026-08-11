@@ -1282,7 +1282,7 @@ const Onboarding = () => {
                     <p className="text-xs text-muted-foreground">This is the email tied to your account and cannot be changed here.</p>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="phone">Phone Number *</Label>
+                    <Label htmlFor="phone" required>Phone Number</Label>
                     <IndianMobileInput
                       id="phone"
                       value={profile.phone}

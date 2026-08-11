@@ -8,6 +8,7 @@ import '../../core/providers/vendor_notification_provider.dart';
 import '../../core/providers/vendor_onboarding_provider.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
+import '../../core/providers/vendor_home_provider.dart';
 import '../../core/providers/vendor_support_provider.dart';
 import '../../shared/widgets/pending_approval_banner.dart';
 import '../../shared/widgets/support_fab.dart';
@@ -34,6 +35,10 @@ class _VendorDashboardState extends State<VendorDashboard>
   bool _homeSupportFabVisible = true;
   bool _refreshInFlight = false;
   bool _paused = false;
+  bool _secondaryPrimed = false;
+
+  /// Lazy-mount tabs so Requests/Orders/Alerts don't fetch until first open.
+  final Set<int> _builtTabs = {0};
 
   static const _titles = [
     'Dashboard',
@@ -48,7 +53,7 @@ class _VendorDashboardState extends State<VendorDashboard>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _refreshAll(silent: true);
+      _refreshShell(silent: true, includeSecondary: true);
       _startPolling();
     });
   }
@@ -66,8 +71,7 @@ class _VendorDashboardState extends State<VendorDashboard>
       case AppLifecycleState.resumed:
         _paused = false;
         _startPolling();
-        // Light silent refresh after returning from another app — avoid stampede.
-        _refreshAll(silent: true);
+        _refreshShell(silent: true, includeSecondary: true);
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -84,11 +88,16 @@ class _VendorDashboardState extends State<VendorDashboard>
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (!mounted || _paused) return;
-      _refreshAll(silent: true);
+      // Poll badges only — never re-pull onboarding/orders on the timer.
+      _refreshShell(silent: true, includeSecondary: false);
     });
   }
 
-  Future<void> _refreshAll({bool silent = true}) async {
+  /// Badge-critical shell refresh. Heavy work (support + onboarding) is deferred.
+  Future<void> _refreshShell({
+    required bool silent,
+    required bool includeSecondary,
+  }) async {
     if (_refreshInFlight || !mounted) return;
     _refreshInFlight = true;
     try {
@@ -101,19 +110,22 @@ class _VendorDashboardState extends State<VendorDashboard>
           Provider.of<VendorNotificationProvider>(context, listen: false);
       final profile =
           Provider.of<VendorProfileProvider>(context, listen: false);
-      final support =
-          Provider.of<VendorSupportProvider>(context, listen: false);
-      final onboarding =
-          Provider.of<VendorOnboardingProvider>(context, listen: false);
 
+      // Critical path for nav badges + pending banner status (3 calls).
       await Future.wait([
         orders.fetchOffers(vendorId, silent: silent),
-        orders.fetchOrders(vendorId, silent: silent),
         alerts.fetchNotifications(vendorId, silent: silent),
         profile.fetchStatus(vendorId, silent: silent),
-        support.refreshUnreadAdminReplyCount(vendorId),
-        onboarding.loadAll(vendorId),
       ]);
+
+      if (!mounted) return;
+      final shouldLoadSecondary =
+          includeSecondary || !_secondaryPrimed;
+      if (shouldLoadSecondary) {
+        _secondaryPrimed = true;
+        // Don't block Home — run after badges land.
+        unawaited(_refreshSecondary(vendorId));
+      }
     } catch (_) {
       // Never crash the shell on background poll / resume refresh failures.
     } finally {
@@ -121,9 +133,27 @@ class _VendorDashboardState extends State<VendorDashboard>
     }
   }
 
+  Future<void> _refreshSecondary(String vendorId) async {
+    if (!mounted) return;
+    final support =
+        Provider.of<VendorSupportProvider>(context, listen: false);
+    final onboarding =
+        Provider.of<VendorOnboardingProvider>(context, listen: false);
+    try {
+      await Future.wait([
+        support.refreshUnreadAdminReplyCount(
+          vendorId,
+          allowMessageFallback: false,
+        ),
+        onboarding.loadAll(vendorId, silent: true),
+      ]);
+    } catch (_) {}
+  }
+
   void _goToTab(int index, {String? ordersStatusFilter}) {
     if (index < 0 || index > 4) return;
     setState(() {
+      _builtTabs.add(index);
       _index = index;
       _ordersStatusFilter = index == 2 ? ordersStatusFilter : null;
       if (index == 0) _homeSupportFabVisible = true;
@@ -135,6 +165,32 @@ class _VendorDashboardState extends State<VendorDashboard>
     setState(() => _homeSupportFabVisible = visible);
   }
 
+  Widget _tabChild(int index) {
+    if (!_builtTabs.contains(index)) {
+      return const SizedBox.shrink();
+    }
+    switch (index) {
+      case 0:
+        return HomeScreen(
+          onNavigateTab: _goToTab,
+          onSupportFabVisibilityChanged: _onHomeSupportFabVisibility,
+        );
+      case 1:
+        return OrderRequestsScreen(isActive: _index == 1);
+      case 2:
+        return OrdersScreen(
+          key: ValueKey('orders-${_ordersStatusFilter ?? 'all'}'),
+          initialStatusFilter: _ordersStatusFilter,
+        );
+      case 3:
+        return const NotificationsScreen();
+      case 4:
+        return const ProfileScreen();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pendingCount =
@@ -143,6 +199,10 @@ class _VendorDashboardState extends State<VendorDashboard>
         Provider.of<VendorNotificationProvider>(context).unreadCount;
     final supportUnread =
         Provider.of<VendorSupportProvider>(context).unreadAdminReplyCount;
+    final homeLoading =
+        Provider.of<VendorHomeProvider>(context).showInitialSkeleton;
+    final showHomeFab =
+        _index == 0 && _homeSupportFabVisible && !homeLoading;
 
     return Scaffold(
       appBar: AppBar(
@@ -161,16 +221,13 @@ class _VendorDashboardState extends State<VendorDashboard>
           ? AnimatedSlide(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
-              offset: _homeSupportFabVisible ? Offset.zero : const Offset(0, 1.4),
+              offset: showHomeFab ? Offset.zero : const Offset(0, 1.4),
               child: IgnorePointer(
-                ignoring: !_homeSupportFabVisible,
+                ignoring: !showHomeFab,
                 child: AnimatedOpacity(
                   duration: const Duration(milliseconds: 220),
-                  opacity: _homeSupportFabVisible ? 1 : 0,
-                  child: const Padding(
-                    padding: EdgeInsets.only(bottom: 64),
-                    child: SupportFab(),
-                  ),
+                  opacity: showHomeFab ? 1 : 0,
+                  child: SupportFab(unreadCount: supportUnread),
                 ),
               ),
             )
@@ -183,17 +240,11 @@ class _VendorDashboardState extends State<VendorDashboard>
             child: IndexedStack(
               index: _index,
               children: [
-                HomeScreen(
-                  onNavigateTab: _goToTab,
-                  onSupportFabVisibilityChanged: _onHomeSupportFabVisibility,
-                ),
-                const OrderRequestsScreen(),
-                OrdersScreen(
-                  key: ValueKey('orders-${_ordersStatusFilter ?? 'all'}'),
-                  initialStatusFilter: _ordersStatusFilter,
-                ),
-                const NotificationsScreen(),
-                const ProfileScreen(),
+                _tabChild(0),
+                _tabChild(1),
+                _tabChild(2),
+                _tabChild(3),
+                _tabChild(4),
               ],
             ),
           ),
@@ -201,11 +252,7 @@ class _VendorDashboardState extends State<VendorDashboard>
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() {
-          _index = i;
-          _ordersStatusFilter = null;
-          if (i == 0) _homeSupportFabVisible = true;
-        }),
+        onDestinationSelected: (i) => _goToTab(i),
         destinations: [
           const NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),

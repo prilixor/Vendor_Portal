@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -22,24 +24,75 @@ class OrderDetailScreen extends StatefulWidget {
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
 }
 
-class _OrderDetailScreenState extends State<OrderDetailScreen> {
+class _OrderDetailScreenState extends State<OrderDetailScreen>
+    with WidgetsBindingObserver {
   late String _selectedOrderId;
+  Timer? _pollTimer;
+  bool _refreshInFlight = false;
+
+  /// Match Customer Mobile: keep status/photos/continuations fresh while open.
+  static const _pollInterval = Duration(seconds: 15);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _selectedOrderId = widget.orderId;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _load(silent: false);
+      _pollTimer = Timer.periodic(_pollInterval, (_) {
+        if (mounted) _load(silent: true);
+      });
+    });
   }
 
-  Future<void> _load() async {
-    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
-    if (vendorId == null) return;
-    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
-    await Future.wait([
-      provider.fetchOrders(vendorId, silent: true),
-      provider.fetchOrderDetail(vendorId, _selectedOrderId),
-    ]);
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      _load(silent: true);
+    }
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!mounted) return;
+    if (_refreshInFlight) {
+      if (silent) return;
+      while (_refreshInFlight) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        if (!mounted) return;
+      }
+    }
+    _refreshInFlight = true;
+    try {
+      final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+      if (vendorId == null) return;
+      final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+      await Future.wait([
+        provider.fetchOrders(vendorId, silent: true),
+        provider.fetchOrderDetail(vendorId, _selectedOrderId, silent: silent),
+      ]);
+      if (!mounted) return;
+      final selected = provider.selectedOrder;
+      if (selected == null) return;
+      final groupIds = orderGroupItems(
+        anchor: selected,
+        allOrders: provider.orders,
+      ).map((o) => o.orderId).toList();
+      await provider.fetchGroupPhotoRequestMeta(
+        vendorId,
+        groupIds,
+        silent: silent,
+      );
+    } finally {
+      _refreshInFlight = false;
+    }
   }
 
   Future<void> _selectItem(String orderId) async {
@@ -47,8 +100,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     setState(() => _selectedOrderId = orderId);
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
-    await Provider.of<VendorOrderProvider>(context, listen: false)
-        .fetchOrderDetail(vendorId, orderId);
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    await provider.fetchOrderDetail(vendorId, orderId);
   }
 
   Future<void> _updateStatus(String status, {List<String>? assetTags}) async {
@@ -289,7 +342,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         title: Text(baseOrderNumber.isEmpty ? 'Order' : baseOrderNumber),
         actions: [
           IconButton(
-            onPressed: busy ? null : _load,
+            onPressed: busy ? null : () => _load(),
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -322,6 +375,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             child: Column(
                               children: groupItems.map((item) {
                                 final selected = item.orderId == _selectedOrderId;
+                                final photoCount =
+                                    provider.groupPhotoCountFor(item.orderId);
+                                final photoWaiting = photoCount == 0;
+                                final photoReceived =
+                                    photoCount != null && photoCount > 0;
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 6),
                                   child: Material(
@@ -375,6 +433,51 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                                         ),
                                                     ],
                                                   ),
+                                                  if (photoWaiting) ...[
+                                                    const SizedBox(height: 4),
+                                                    Row(
+                                                      children: [
+                                                        Icon(
+                                                          Icons.photo_library_outlined,
+                                                          size: 12,
+                                                          color: Colors.amber.shade300,
+                                                        ),
+                                                        const SizedBox(width: 4),
+                                                        Expanded(
+                                                          child: Text(
+                                                            'Customer photos requested \u00b7 upload needed',
+                                                            style: TextStyle(
+                                                              color: Colors.amber.shade300,
+                                                              fontSize: 10.5,
+                                                              fontWeight: FontWeight.w700,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ] else if (photoReceived) ...[
+                                                    const SizedBox(height: 4),
+                                                    Row(
+                                                      children: [
+                                                        const Icon(
+                                                          Icons.photo_library_outlined,
+                                                          size: 12,
+                                                          color: Color(0xFF34D399),
+                                                        ),
+                                                        const SizedBox(width: 4),
+                                                        Expanded(
+                                                          child: Text(
+                                                            '$photoCount/5 customer photos uploaded',
+                                                            style: const TextStyle(
+                                                              color: Color(0xFF34D399),
+                                                              fontSize: 10.5,
+                                                              fontWeight: FontWeight.w700,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
                                                 ],
                                               ),
                                             ),
@@ -410,6 +513,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             const SizedBox(height: 10),
                             _PhotoRequestCard(
                               request: provider.imageRequest!,
+                              listingTitle: (activeItem ?? order).listingTitle,
                               images: provider.orderImages,
                               busy: busy,
                               canUpload: () {
@@ -819,6 +923,7 @@ class _PhotoRequestCard extends StatelessWidget {
   static const int maxImages = 5;
 
   final OrderImageRequest request;
+  final String listingTitle;
   final List<OrderImage> images;
   final bool busy;
   final bool canUpload;
@@ -827,6 +932,7 @@ class _PhotoRequestCard extends StatelessWidget {
 
   const _PhotoRequestCard({
     required this.request,
+    required this.listingTitle,
     required this.images,
     required this.busy,
     required this.canUpload,
@@ -854,12 +960,20 @@ class _PhotoRequestCard extends StatelessWidget {
                 ),
               ),
             ),
+            // Dark chip so the close control stays visible on light images too.
             Positioned(
-              top: 4,
-              right: 4,
-              child: IconButton(
-                onPressed: () => Navigator.pop(ctx),
-                icon: const Icon(Icons.close, color: Colors.white),
+              top: 8,
+              right: 8,
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.62),
+                shape: const CircleBorder(),
+                elevation: 2,
+                child: IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.pop(ctx),
+                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                  visualDensity: VisualDensity.compact,
+                ),
               ),
             ),
           ],
@@ -990,11 +1104,40 @@ class _PhotoRequestCard extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (images.isEmpty) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              'Action needed',
+                              style: TextStyle(
+                                color: Colors.amber.shade200,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
+                    if (listingTitle.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        listingTitle,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Text(
-                      'From the customer for this order item \u2014 upload here (not Admin chat).',
+                      'From the customer for this product only \u2014 upload here (not Admin chat).',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.48),
                         fontSize: 11.5,

@@ -1830,6 +1830,65 @@ public sealed class CustomerRepository(
     public async Task AddChatMessageAsync(ChatMessage message, CancellationToken cancellationToken) =>
         await customerDb.ChatMessages.AddAsync(message, cancellationToken);
 
+    public Task<int> CountUnreadChatMessagesAsync(Guid sessionId, string senderType, CancellationToken cancellationToken) =>
+        customerDb.ChatMessages.CountAsync(
+            m => m.ChatSessionId == sessionId
+                 && !m.IsDeleted
+                 && !m.IsRead
+                 && m.SenderType == senderType,
+            cancellationToken);
+
+    public Task<int> CountUnreadAdminInboxMessagesAsync(CancellationToken cancellationToken) =>
+        customerDb.ChatMessages
+            .Where(m => !m.IsDeleted
+                        && !m.IsRead
+                        && m.SenderType == "Customer"
+                        && m.ChatSession!.CounterpartyType == ChatCounterpartyTypes.Admin
+                        && !m.ChatSession.IsDeleted)
+            .CountAsync(cancellationToken);
+
+    public async Task<Dictionary<Guid, int>> GetUnreadChatCountsBySessionAsync(
+        IReadOnlyCollection<Guid> sessionIds,
+        string senderType,
+        CancellationToken cancellationToken)
+    {
+        if (sessionIds.Count == 0)
+            return new Dictionary<Guid, int>();
+
+        var rows = await customerDb.ChatMessages
+            .Where(m => sessionIds.Contains(m.ChatSessionId)
+                        && !m.IsDeleted
+                        && !m.IsRead
+                        && m.SenderType == senderType)
+            .GroupBy(m => m.ChatSessionId)
+            .Select(g => new { SessionId = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(x => x.SessionId, x => x.Count);
+    }
+
+    public async Task<int> MarkChatMessagesReadAsync(Guid sessionId, string senderType, CancellationToken cancellationToken)
+    {
+        var messages = await customerDb.ChatMessages
+            .Where(m => m.ChatSessionId == sessionId
+                        && !m.IsDeleted
+                        && !m.IsRead
+                        && m.SenderType == senderType)
+            .ToListAsync(cancellationToken);
+
+        if (messages.Count == 0)
+            return 0;
+
+        var now = DateTime.UtcNow;
+        foreach (var m in messages)
+        {
+            m.IsRead = true;
+            m.ModifiedOnUtc = now;
+        }
+
+        return messages.Count;
+    }
+
     public Task<string?> GetVendorBusinessNameAsync(Guid vendorId, CancellationToken cancellationToken) =>
         vendorDb.VendorProfiles.Where(p => p.VendorId == vendorId).Select(p => p.BusinessName).FirstOrDefaultAsync(cancellationToken);
 

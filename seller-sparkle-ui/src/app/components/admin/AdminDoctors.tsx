@@ -380,7 +380,7 @@ const AdminDoctors = () => {
           </DialogHeader>
           <FormGrid>
             <div className="space-y-2 sm:col-span-2">
-              <Label>Full name *</Label>
+              <Label required>Full name</Label>
               <Input
                 value={form.fullName}
                 onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
@@ -389,7 +389,7 @@ const AdminDoctors = () => {
               <FieldError message={fieldErrors.fullName} />
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label>Email *</Label>
+              <Label required>Email</Label>
               <Input
                 type="email"
                 value={form.email}

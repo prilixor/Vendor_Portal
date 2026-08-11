@@ -43,11 +43,27 @@ class VendorNotificationProvider extends ChangeNotifier {
     return copy;
   }
 
+  Future<void>? _notificationsInflight;
+
   Future<void> fetchNotifications(
     String vendorId, {
     bool silent = false,
   }) async {
     if (vendorId.isEmpty) return;
+    if (_notificationsInflight != null) return _notificationsInflight!;
+    _notificationsInflight =
+        _fetchNotificationsInternal(vendorId, silent: silent);
+    try {
+      await _notificationsInflight;
+    } finally {
+      _notificationsInflight = null;
+    }
+  }
+
+  Future<void> _fetchNotificationsInternal(
+    String vendorId, {
+    bool silent = false,
+  }) async {
     final showLoading = !silent || _notifications.isEmpty;
     if (showLoading) {
       _isLoading = true;

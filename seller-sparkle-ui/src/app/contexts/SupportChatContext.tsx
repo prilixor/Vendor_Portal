@@ -5,16 +5,26 @@ export type SupportChatOpenRequest = {
   category?: string;
 };
 
+export type SupportPanelOpenRequest = {
+  ticketId?: string;
+  nonce: number;
+};
+
 type SupportChatContextValue = {
   openSupportChat: (request: SupportChatOpenRequest) => void;
   pendingRequest: SupportChatOpenRequest | null;
   consumePendingRequest: () => void;
+  /** Open the Support FAB panel (optionally to a ticket). Used when vendor taps a support notification. */
+  openSupportPanel: (opts?: { ticketId?: string }) => void;
+  panelOpenRequest: SupportPanelOpenRequest | null;
+  consumePanelOpenRequest: () => void;
 };
 
 const SupportChatContext = createContext<SupportChatContextValue | null>(null);
 
 export function SupportChatProvider({ children }: { children: ReactNode }) {
   const [pendingRequest, setPendingRequest] = useState<SupportChatOpenRequest | null>(null);
+  const [panelOpenRequest, setPanelOpenRequest] = useState<SupportPanelOpenRequest | null>(null);
 
   const openSupportChat = useCallback((request: SupportChatOpenRequest) => {
     setPendingRequest(request);
@@ -24,9 +34,24 @@ export function SupportChatProvider({ children }: { children: ReactNode }) {
     setPendingRequest(null);
   }, []);
 
+  const openSupportPanel = useCallback((opts?: { ticketId?: string }) => {
+    setPanelOpenRequest({ ticketId: opts?.ticketId, nonce: Date.now() });
+  }, []);
+
+  const consumePanelOpenRequest = useCallback(() => {
+    setPanelOpenRequest(null);
+  }, []);
+
   return (
     <SupportChatContext.Provider
-      value={{ openSupportChat, pendingRequest, consumePendingRequest }}
+      value={{
+        openSupportChat,
+        pendingRequest,
+        consumePendingRequest,
+        openSupportPanel,
+        panelOpenRequest,
+        consumePanelOpenRequest,
+      }}
     >
       {children}
     </SupportChatContext.Provider>

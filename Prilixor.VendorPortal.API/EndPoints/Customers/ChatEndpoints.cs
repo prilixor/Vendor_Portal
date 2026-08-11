@@ -122,7 +122,7 @@ public sealed class GetCustomerChatMessagesEndpoint(IMediator mediator)
         if (!Guid.TryParse(req.SessionId, out var sessionId))
             return TypedResults.Problem(title: "chats.invalid_id", detail: "Invalid session id.", statusCode: 400);
 
-        var result = await mediator.Send(new GetChatMessagesQuery(sessionId), ct);
+        var result = await mediator.Send(new GetChatMessagesQuery(sessionId, MarkReadForReaderType: "Customer"), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -175,7 +175,7 @@ public sealed class GetVendorChatMessagesEndpoint(IMediator mediator)
         if (!Guid.TryParse(req.SessionId, out var sessionId))
             return TypedResults.Problem(title: "chats.invalid_id", detail: "Invalid session id.", statusCode: 400);
 
-        var result = await mediator.Send(new GetChatMessagesQuery(sessionId), ct);
+        var result = await mediator.Send(new GetChatMessagesQuery(sessionId, MarkReadForReaderType: "Vendor"), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

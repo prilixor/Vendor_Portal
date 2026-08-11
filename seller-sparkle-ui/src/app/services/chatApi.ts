@@ -13,6 +13,8 @@ export interface ChatSessionApi {
   subject: string;
   lastMessageAt: string;
   isClosed: boolean;
+  /** Unread messages from the other party (Customer→Admin for admin inbox). */
+  unreadCount?: number;
 }
 
 export interface ChatMessageApi {
@@ -47,6 +49,10 @@ export const chatApi = {
   // Admin Chat Methods (Customer ↔ Admin inbox)
   getAdminSessions(): Promise<ChatSessionApi[]> {
     return apiClient.get<ChatSessionApi[]>("/admin/chats/sessions");
+  },
+
+  getAdminUnreadCount(): Promise<{ count: number }> {
+    return apiClient.get<{ count: number }>("/admin/chats/unread-count");
   },
 
   getAdminMessages(sessionId: string): Promise<ChatMessageApi[]> {

@@ -20,6 +20,8 @@ import { getAdminPortalHref } from "@/app/helpers/portalHost";
 import { clearImpersonationSession } from "@/app/helpers/authSession";
 
 import { adminApi } from "@/app/services/adminApi";
+import { chatApi } from "@/app/services/chatApi";
+import { supportApi } from "@/app/services/supportApi";
 
 import { useAuth } from "@/app/guards/AuthContext";
 
@@ -266,6 +268,23 @@ export const AppShell = ({ variant }: AppShellProps) => {
     refetchInterval: 30000,
   });
 
+  const { data: adminChatUnread } = useQuery({
+    queryKey: ["admin-customer-chat-unread"],
+    queryFn: () => chatApi.getAdminUnreadCount(),
+    enabled: variant === "admin" && !!user,
+    refetchInterval: 15000,
+  });
+
+  const { data: adminSupportUnread } = useQuery({
+    queryKey: ["admin-vendor-support-unread"],
+    queryFn: () => supportApi.getAdminUnreadCount(),
+    enabled: variant === "admin" && !!user,
+    refetchInterval: 15000,
+  });
+
+  const customerChatUnread = adminChatUnread?.count ?? 0;
+  const vendorSupportUnread = adminSupportUnread?.count ?? 0;
+
   const unreadAdminCount = useMemo(() => {
     const criticalOrders = (adminOrders || []).filter((o) => {
       if (!o || !o.status) return false;
@@ -280,8 +299,9 @@ export const AppShell = ({ variant }: AppShellProps) => {
       return a === "vendor.listing.created" || a === "vendor.listing.updated";
     }).length;
 
-    return criticalOrders + pendingVendors + listingPricingAlerts;
-  }, [adminOrders, adminVendors, adminAuditLogs]);
+    // Live unread Customer→Admin + Vendor→Admin support (clears when admin opens the thread).
+    return criticalOrders + pendingVendors + listingPricingAlerts + customerChatUnread + vendorSupportUnread;
+  }, [adminOrders, adminVendors, adminAuditLogs, customerChatUnread, vendorSupportUnread]);
 
 
 
@@ -327,7 +347,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
     variant === "admin"
 
-      ? getAdminNav(unreadAdminCount, user?.permissions)
+      ? getAdminNav(unreadAdminCount, user?.permissions, customerChatUnread, vendorSupportUnread)
 
       : variant === "customer"
 

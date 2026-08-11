@@ -44,6 +44,10 @@ class VendorSupportProvider extends ChangeNotifier {
   Map<String, DateTime> _lastReadByTicket = {};
   String? _readStateVendorId;
 
+  /// Mirrors Vendor Web `forceNextAsNewTicket` — next AI send creates a new ticket.
+  bool _forceNextAsNewTicket = false;
+  bool get forceNextAsNewTicket => _forceNextAsNewTicket;
+
   bool get isTicketClosed =>
       (_activeTicketStatus ?? '').trim().toLowerCase() == 'closed';
 
@@ -73,16 +77,26 @@ class VendorSupportProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshUnreadAdminReplyCount(String vendorId) async {
+  Future<void> refreshUnreadAdminReplyCount(
+    String vendorId, {
+    bool allowMessageFallback = true,
+  }) async {
     if (vendorId.isEmpty) return;
     try {
-      if (_tickets.isEmpty) {
-        final response = await _api.dio.get('/support/tickets/vendor/$vendorId');
-        final list = _parseList(response.data);
-        _tickets = list.map((e) => SupportTicket.fromJson(e)).toList();
-      }
+      // Always re-fetch — stale ticket.updatedAt missed new admin replies (Web parity).
+      final response = await _api.dio.get('/support/tickets/vendor/$vendorId');
+      final list = _parseList(response.data);
+      _tickets = list.map((e) => SupportTicket.fromJson(e)).toList()
+        ..sort((a, b) {
+          final aTime = a.updatedAt ?? a.createdAt;
+          final bTime = b.updatedAt ?? b.createdAt;
+          return bTime.compareTo(aTime);
+        });
       await _ensureReadStateLoaded(vendorId);
-      await _recomputeUnreadAdminReplyCount(vendorId);
+      await _recomputeUnreadAdminReplyCount(
+        vendorId,
+        allowMessageFallback: allowMessageFallback,
+      );
     } catch (_) {
       // Silent poll failures.
     }
@@ -108,14 +122,26 @@ class VendorSupportProvider extends ChangeNotifier {
     _lastReadByTicket = await SupportReadStorage.load(vendorId);
   }
 
-  Future<void> _recomputeUnreadAdminReplyCount(String vendorId) async {
+  Future<void> _recomputeUnreadAdminReplyCount(
+    String vendorId, {
+    bool allowMessageFallback = true,
+  }) async {
     var unread = 0;
     for (final ticket in _tickets.where((t) => !t.isClosed)) {
       final lastRead =
           _lastReadByTicket[ticket.id] ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      final latest = ticket.latestMessage;
+      if (latest != null) {
+        if (latest.isAdmin && latest.createdAt.toUtc().isAfter(lastRead)) {
+          unread++;
+        }
+        continue;
+      }
+
+      // Fallback when API omits latestMessage (skip on silent shell polls — N+1).
+      if (!allowMessageFallback) continue;
       final ticketUpdated = (ticket.updatedAt ?? ticket.createdAt).toUtc();
       if (!ticketUpdated.isAfter(lastRead)) continue;
-
       try {
         final response =
             await _api.dio.get('/support/tickets/${ticket.id}/messages');
@@ -129,7 +155,8 @@ class VendorSupportProvider extends ChangeNotifier {
             break;
           }
         }
-        if (latestAdmin != null && latestAdmin.createdAt.toUtc().isAfter(lastRead)) {
+        if (latestAdmin != null &&
+            latestAdmin.createdAt.toUtc().isAfter(lastRead)) {
           unread++;
         }
       } catch (_) {
@@ -220,6 +247,7 @@ class VendorSupportProvider extends ChangeNotifier {
     _activeTicketId = null;
     _activeTicketStatus = null;
     _messages = [];
+    _forceNextAsNewTicket = true;
     _error = null;
     notifyListeners();
   }
@@ -233,11 +261,14 @@ class VendorSupportProvider extends ChangeNotifier {
   }) async {
     if (vendorId.isEmpty || text.trim().isEmpty) return false;
 
+    final startNewTicket =
+        forceNewTicket || (_forceNextAsNewTicket && (_activeTicketId == null || _activeTicketId!.isEmpty));
+
     final useAi = shouldUseAiChat(
       ticketId: _activeTicketId,
       ticketStatus: _activeTicketStatus,
       messages: _messages,
-      forceNewTicket: forceNewTicket,
+      forceNewTicket: startNewTicket,
     );
 
     final optimistic = SupportMessage(
@@ -263,7 +294,8 @@ class VendorSupportProvider extends ChangeNotifier {
             'vendorId': vendorId,
             'message': text.trim(),
             'category': ?category,
-            'forceNewTicket': forceNewTicket && (_activeTicketId == null || _activeTicketId!.isEmpty),
+            'forceNewTicket':
+                startNewTicket && (_activeTicketId == null || _activeTicketId!.isEmpty),
             if (attachmentUrls != null && attachmentUrls.isNotEmpty)
               'attachmentUrls': attachmentUrls,
           },
@@ -284,6 +316,7 @@ class VendorSupportProvider extends ChangeNotifier {
           _activeTicketId = ticket.id;
           _activeTicketStatus = ticket.status;
         }
+        _forceNextAsNewTicket = false;
       } else {
         final ticketId = _activeTicketId;
         if (ticketId == null || ticketId.isEmpty) {
@@ -298,6 +331,8 @@ class VendorSupportProvider extends ChangeNotifier {
             'senderId': vendorId,
             'senderType': 'Vendor',
             'message': text.trim(),
+            if (attachmentUrls != null && attachmentUrls.isNotEmpty)
+              'attachmentUrls': attachmentUrls,
           },
         );
       }

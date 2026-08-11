@@ -13,7 +13,10 @@ import 'order_group_utils.dart';
 
 /// Order Requests — grouped by base order number like Vendor Web.
 class OrderRequestsScreen extends StatefulWidget {
-  const OrderRequestsScreen({super.key});
+  /// When false (tab hidden), countdown ticker is paused to avoid 1Hz rebuilds.
+  final bool isActive;
+
+  const OrderRequestsScreen({super.key, this.isActive = true});
 
   @override
   State<OrderRequestsScreen> createState() => _OrderRequestsScreenState();
@@ -31,10 +34,27 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.isActive) _startTicker();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load(silent: true));
+  }
+
+  @override
+  void didUpdateWidget(covariant OrderRequestsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _startTicker();
+      _load(silent: true);
+    } else if (!widget.isActive && oldWidget.isActive) {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  void _startTicker() {
+    _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
+      if (mounted && widget.isActive) setState(() {});
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override

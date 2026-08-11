@@ -20,4 +20,7 @@ public static class CustomerNotificationTypes
 
     /// <summary>Rental item will expire soon.</summary>
     public const string OrderExpiringSoon = "order_expiring_soon";
+
+    /// <summary>BlinksMed support (admin) replied on an order chat.</summary>
+    public const string SupportChatReply = "support_chat_reply";
 }

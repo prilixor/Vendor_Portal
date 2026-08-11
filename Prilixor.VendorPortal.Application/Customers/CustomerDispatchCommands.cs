@@ -90,17 +90,26 @@ internal sealed class GetVendorOrdersQueryHandler(ICustomerRepository customers)
 
         var rows = await customers.GetVendorOrdersAsync(vendorId, request.Status, cancellationToken);
         var now = DateTimeOffset.UtcNow;
-        var changed = false;
-        foreach (var row in rows)
+        if (!cancellationToken.IsCancellationRequested)
         {
-            changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, row.Order.Id, now, cancellationToken);
+            var changed = false;
+            foreach (var row in rows)
+            {
+                changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(
+                    customers, row.Order.Id, now, DispatchStateReconciler.SideEffectToken);
+            }
+
+            if (changed)
+            {
+                await customers.SaveChangesAsync(DispatchStateReconciler.SideEffectToken);
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    rows = await customers.GetVendorOrdersAsync(vendorId, request.Status, cancellationToken);
+                }
+            }
         }
 
-        if (changed)
-        {
-            await customers.SaveChangesAsync(cancellationToken);
-            rows = await customers.GetVendorOrdersAsync(vendorId, request.Status, cancellationToken);
-        }
+        cancellationToken.ThrowIfCancellationRequested();
 
         var orderIds = rows.Select(r => r.Order.Id).ToList();
         var assetTagsMap = await customers.GetCustomerOrderAssetTagsByOrderIdsAsync(orderIds, cancellationToken);
@@ -124,9 +133,15 @@ internal sealed class GetVendorOrderByIdQueryHandler(ICustomerRepository custome
         if (!Guid.TryParse(request.VendorId, out var vendorId))
             return Result.Failure<VendorOrderDto>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
 
-        var changed = await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, request.OrderId, DateTimeOffset.UtcNow, cancellationToken);
-        if (changed)
-            await customers.SaveChangesAsync(cancellationToken);
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            var changed = await DispatchStateReconciler.ReconcileAwaitingOrderAsync(
+                customers, request.OrderId, DateTimeOffset.UtcNow, DispatchStateReconciler.SideEffectToken);
+            if (changed)
+                await customers.SaveChangesAsync(DispatchStateReconciler.SideEffectToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         var row = await customers.GetVendorOrderAsync(vendorId, request.OrderId, cancellationToken);
         if (row is null)
@@ -530,6 +545,12 @@ internal static class VendorOrderMapper
 
 internal static class DispatchStateReconciler
 {
+    /// <summary>
+    /// Use for reconcile/save side-effects on GET handlers. Client disconnect
+    /// (browser refresh) must not cancel mid-write via RequestAborted.
+    /// </summary>
+    public static CancellationToken SideEffectToken => CancellationToken.None;
+
     public static async Task<bool> ReconcileAwaitingOrderAsync(
         ICustomerRepository customers,
         Guid orderId,
@@ -583,14 +604,17 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
         var now = DateTimeOffset.UtcNow;
         var result = new List<VendorDispatchOfferDto>();
         var changed = false;
+        var sideEffectCt = DispatchStateReconciler.SideEffectToken;
 
         foreach (var offer in offers)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (offer.Status == "pending" && offer.ExpiresAt <= now)
             {
                 offer.Status = "expired";
                 offer.RespondedAt = now;
-                await customers.UpdateCustomerOrderVendorOfferAsync(offer, cancellationToken);
+                await customers.UpdateCustomerOrderVendorOfferAsync(offer, sideEffectCt);
                 changed = true;
             }
 
@@ -606,7 +630,7 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
                 {
                     offer.Status = "expired";
                     offer.RespondedAt = now;
-                    await customers.UpdateCustomerOrderVendorOfferAsync(offer, cancellationToken);
+                    await customers.UpdateCustomerOrderVendorOfferAsync(offer, sideEffectCt);
                     changed = true;
                 }
                 continue;
@@ -649,11 +673,11 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
                 RentalDiscountValue: order.RentalDiscountValue,
                 RentalFinalPrice: order.RentalFinalPrice));
 
-            changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, order.Id, now, cancellationToken);
+            changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, order.Id, now, sideEffectCt);
         }
 
         if (changed)
-            await customers.SaveChangesAsync(cancellationToken);
+            await customers.SaveChangesAsync(sideEffectCt);
         return Result.Success(result.OrderBy(x => x.ExpiresAt).ToList());
     }
 }

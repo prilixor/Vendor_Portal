@@ -108,7 +108,12 @@ export const adminNav: NavSection[] = adminNavBase.map((section) => ({
   items: section.items.map(({ label, to, icon }) => ({ label, to, icon })),
 }));
 
-export const getAdminNav = (unreadCount: number, permissions?: string[] | null): NavSection[] => {
+export const getAdminNav = (
+  unreadCount: number,
+  permissions?: string[] | null,
+  customerChatUnread = 0,
+  vendorSupportUnread = 0
+): NavSection[] => {
   const perms = permissions ?? null;
   const allow = (permission?: string) => {
     if (!permission) return true;
@@ -125,6 +130,22 @@ export const getAdminNav = (unreadCount: number, permissions?: string[] | null):
         .map((item) => {
           if (item.label === "Notifications" && unreadCount > 0) {
             return { label: item.label, to: item.to, icon: item.icon, badge: unreadCount.toString() };
+          }
+          if (item.label === "Support" && vendorSupportUnread > 0) {
+            return {
+              label: item.label,
+              to: item.to,
+              icon: item.icon,
+              badge: vendorSupportUnread > 99 ? "99+" : vendorSupportUnread.toString(),
+            };
+          }
+          if (item.label === "Customer Chats" && customerChatUnread > 0) {
+            return {
+              label: item.label,
+              to: item.to,
+              icon: item.icon,
+              badge: customerChatUnread > 99 ? "99+" : customerChatUnread.toString(),
+            };
           }
           return { label: item.label, to: item.to, icon: item.icon };
         }),

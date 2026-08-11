@@ -1486,6 +1486,7 @@ public sealed class VendorOnboardingRepository(
     public Task<List<SupportTicket>> GetSupportTicketsByVendorIdAsync(Guid vendorId, CancellationToken cancellationToken)
     {
         return dbContext.SupportTickets
+            .Include(x => x.Messages)
             .Where(x => x.VendorId == vendorId && !x.IsDeleted)
             .OrderByDescending(x => x.CreatedOnUtc)
             .ToListAsync(cancellationToken);
@@ -1494,7 +1495,9 @@ public sealed class VendorOnboardingRepository(
     public Task<List<SupportTicket>> GetSupportTicketsAsync(CancellationToken cancellationToken)
     {
         return dbContext.SupportTickets
-            .Include(x => x.Vendor)
+            .Include(x => x.Vendor)!
+                .ThenInclude(v => v!.Profile)
+            .Include(x => x.Messages)
             .Where(x => !x.IsDeleted)
             .OrderByDescending(x => x.CreatedOnUtc)
             .ToListAsync(cancellationToken);
@@ -1517,6 +1520,61 @@ public sealed class VendorOnboardingRepository(
             .Where(x => x.TicketId == ticketId && !x.IsDeleted)
             .OrderBy(x => x.CreatedOnUtc)
             .ToListAsync(cancellationToken);
+    }
+
+    public Task<int> CountUnreadAdminSupportMessagesAsync(CancellationToken cancellationToken) =>
+        (
+            from m in dbContext.SupportMessages
+            join t in dbContext.SupportTickets on m.TicketId equals t.Id
+            where !m.IsDeleted
+                  && !m.IsRead
+                  && (m.SenderType == "Vendor" || m.SenderType == "AI")
+                  && !t.IsDeleted
+                  && t.Status != "Closed"
+            select m
+        ).CountAsync(cancellationToken);
+
+    public async Task<Dictionary<Guid, int>> GetUnreadAdminSupportCountsByTicketAsync(CancellationToken cancellationToken)
+    {
+        var rows = await (
+            from m in dbContext.SupportMessages
+            join t in dbContext.SupportTickets on m.TicketId equals t.Id
+            where !m.IsDeleted
+                  && !m.IsRead
+                  && (m.SenderType == "Vendor" || m.SenderType == "AI")
+                  && !t.IsDeleted
+                  && t.Status != "Closed"
+            group m by m.TicketId into g
+            select new { TicketId = g.Key, Count = g.Count() }
+        ).ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(x => x.TicketId, x => x.Count);
+    }
+
+    public Task<int> CountUnreadAdminSupportMessagesForTicketAsync(Guid ticketId, CancellationToken cancellationToken) =>
+        dbContext.SupportMessages
+            .Where(m => m.TicketId == ticketId
+                        && !m.IsDeleted
+                        && !m.IsRead
+                        && (m.SenderType == "Vendor" || m.SenderType == "AI"))
+            .CountAsync(cancellationToken);
+
+    public async Task<int> MarkSupportMessagesReadForAdminAsync(Guid ticketId, CancellationToken cancellationToken)
+    {
+        var messages = await dbContext.SupportMessages
+            .Where(m => m.TicketId == ticketId
+                        && !m.IsDeleted
+                        && !m.IsRead
+                        && (m.SenderType == "Vendor" || m.SenderType == "AI"))
+            .ToListAsync(cancellationToken);
+
+        foreach (var message in messages)
+        {
+            message.IsRead = true;
+            message.ModifiedOnUtc = DateTime.UtcNow;
+        }
+
+        return messages.Count;
     }
 
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken)

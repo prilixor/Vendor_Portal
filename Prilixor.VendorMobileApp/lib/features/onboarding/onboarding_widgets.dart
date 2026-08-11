@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../core/models/vendor_onboarding_model.dart';
 import '../../core/theme.dart';
 import '../../shared/widgets/admin_comment_hint.dart';
+import '../../shared/widgets/required_field_ux.dart';
 
 class OnboardingStatusBanner extends StatelessWidget {
   final String accountStatus;
@@ -555,11 +556,13 @@ class OnboardingTextField extends StatelessWidget {
     this.prefixText,
   });
 
-  String get _displayLabel {
-    final trimmed = label.trim();
-    if (!required) return label;
-    if (trimmed.endsWith('*')) return trimmed;
-    return '$label *';
+  /// Strip legacy trailing `*` from call sites; star is rendered in red via [RequiredLabel].
+  String get _cleanLabel {
+    var trimmed = label.trim();
+    if (trimmed.endsWith('*')) {
+      trimmed = trimmed.substring(0, trimmed.length - 1).trimRight();
+    }
+    return trimmed;
   }
 
   @override
@@ -569,8 +572,9 @@ class OnboardingTextField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _displayLabel,
+          RequiredLabel(
+            _cleanLabel,
+            required: required,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.72),
               fontSize: 12,

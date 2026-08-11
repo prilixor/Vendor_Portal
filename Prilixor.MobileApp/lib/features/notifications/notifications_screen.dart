@@ -148,7 +148,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           final type = notification.notificationType.toLowerCase();
           final title = notification.title.toLowerCase();
           
-          if (type.startsWith("order_") || type.contains("order") || 
+          if (type.contains("support_chat") ||
+              title.contains("blinksmed support") ||
+              title.contains("support replied")) {
+            if (context.mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const OrdersScreen()),
+              );
+            }
+          } else if (type.startsWith("order_") || type.contains("order") || 
               title.contains("order") || title.contains("rental") || 
               title.contains("placed") || title.contains("expired") || title.contains("expiring")) {
             if (context.mounted) {

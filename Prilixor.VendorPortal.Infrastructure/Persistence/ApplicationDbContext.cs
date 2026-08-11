@@ -853,6 +853,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.SenderType).HasColumnName("sender_type");
             entity.Property(x => x.Message).HasColumnName("message");
             entity.Property(x => x.AttachmentUrls).HasColumnName("attachment_urls");
+            entity.Property(x => x.IsRead).HasColumnName("is_read");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
             entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");

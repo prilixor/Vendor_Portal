@@ -48,8 +48,8 @@
         }, 200);
       }
       window.addEventListener('flutter-first-frame', dismissBootSplash, { once: true });
-      // Fallback if the event was missed (hot restart / delayed listener).
-      window.setTimeout(dismissBootSplash, 12000);
+      // Keep splash until Flutter paints. Only fall back after a long debug cold-start.
+      window.setTimeout(dismissBootSplash, 120000);
     })();
   </script>
   <script src="flutter_bootstrap.js" async></script>

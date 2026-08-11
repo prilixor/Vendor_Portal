@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/models/support_model.dart';
 import '../../core/providers/vendor_support_provider.dart';
+import '../../core/utils/chat_day_label.dart';
 import '../../core/utils/media_url.dart';
 import '../../core/utils/multipart_file_util.dart';
 import '../../core/utils/support_chat_routing.dart';
@@ -17,11 +19,17 @@ enum SupportView { welcome, chat, tickets }
 class SupportChatScreen extends StatefulWidget {
   final String? initialCategory;
   final String? initialMessage;
+  /// When true (e.g. from Alerts / FAB badge), open the ticket list first.
+  final bool openTicketsInitially;
+  /// Optional ticket number from notification body (`Ticket TK-...`).
+  final String? initialTicketNumber;
 
   const SupportChatScreen({
     super.key,
     this.initialCategory,
     this.initialMessage,
+    this.openTicketsInitially = false,
+    this.initialTicketNumber,
   });
 
   @override
@@ -29,15 +37,19 @@ class SupportChatScreen extends StatefulWidget {
 }
 
 class _SupportChatScreenState extends State<SupportChatScreen> {
-  SupportView _view = SupportView.welcome;
+  late SupportView _view;
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   Timer? _pollTimer;
   bool _handledInitialPrompt = false;
+  bool _handledInitialTicket = false;
 
   @override
   void initState() {
     super.initState();
+    final openTickets = widget.openTicketsInitially ||
+        (widget.initialTicketNumber?.trim().isNotEmpty ?? false);
+    _view = openTickets ? SupportView.tickets : SupportView.welcome;
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted) return;
       if (_view == SupportView.chat) {
@@ -51,7 +63,12 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         }
       }
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeStartInitialPrompt());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (openTickets) {
+        _openTicketsAndMaybeSelect();
+      }
+      _maybeStartInitialPrompt();
+    });
   }
 
   Future<void> _maybeStartInitialPrompt() async {
@@ -188,12 +205,36 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   }
 
   Future<void> _openTickets() async {
+    await _openTicketsAndMaybeSelect();
+  }
+
+  Future<void> _openTicketsAndMaybeSelect() async {
     final vendorId =
         Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     setState(() => _view = SupportView.tickets);
-    await Provider.of<VendorSupportProvider>(context, listen: false)
-        .fetchTickets(vendorId);
+    final provider =
+        Provider.of<VendorSupportProvider>(context, listen: false);
+    await provider.fetchTickets(vendorId);
+    if (!mounted || _handledInitialTicket) return;
+
+    final wanted = widget.initialTicketNumber?.trim().toUpperCase();
+    if (wanted == null || wanted.isEmpty) return;
+    _handledInitialTicket = true;
+
+    SupportTicket? match;
+    for (final ticket in provider.tickets) {
+      if (ticket.ticketNumber.toUpperCase() == wanted) {
+        match = ticket;
+        break;
+      }
+    }
+    if (match == null) return;
+
+    final ok = await provider.openTicket(match, vendorId: vendorId);
+    if (!mounted || !ok) return;
+    setState(() => _view = SupportView.chat);
+    _scrollToBottom();
   }
 
   @override
@@ -495,7 +536,39 @@ class _ChatViewState extends State<_ChatView> {
         }
 
         final msg = provider.messages[index];
-        return _MessageBubble(message: msg);
+        final prev = index > 0 ? provider.messages[index - 1] : null;
+        final showDay =
+            prev == null || !isSameChatDay(prev.createdAt, msg.createdAt);
+        return Column(
+          children: [
+            if (showDay)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10, top: 4),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Text(
+                      formatChatDayLabel(msg.createdAt),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            _MessageBubble(message: msg),
+          ],
+        );
       },
     );
   }
@@ -520,14 +593,24 @@ class _MessageBubble extends StatelessWidget {
           crossAxisAlignment:
               isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            Text(
-              message.senderLabel.toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white38,
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.8,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  message.senderLabel.toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white38,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  formatChatTime(message.createdAt),
+                  style: const TextStyle(color: Colors.white38, fontSize: 9),
+                ),
+              ],
             ),
             const SizedBox(height: 4),
             Container(
@@ -581,18 +664,27 @@ class _AttachmentPreview extends StatelessWidget {
     final isImage = RegExp(r'\.(jpg|jpeg|png|gif|webp|svg|bmp)$', caseSensitive: false)
         .hasMatch(clean);
 
+    Future<void> openAttachment() async {
+      final uri = Uri.tryParse(resolved);
+      if (uri == null) return;
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+
     if (isImage) {
       return Padding(
         padding: const EdgeInsets.only(top: 8),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(
-            resolved,
-            height: 120,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => const Text(
-              'Image attachment',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
+        child: GestureDetector(
+          onTap: openAttachment,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              resolved,
+              height: 120,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => const Text(
+                'Image attachment',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
             ),
           ),
         ),
@@ -601,19 +693,23 @@ class _AttachmentPreview extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.attach_file, size: 14, color: Colors.white70),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              'Attachment',
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-              overflow: TextOverflow.ellipsis,
+      child: GestureDetector(
+        onTap: openAttachment,
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.attach_file, size: 14, color: Colors.white70),
+            SizedBox(width: 4),
+            Text(
+              'Download attachment',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                decoration: TextDecoration.underline,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

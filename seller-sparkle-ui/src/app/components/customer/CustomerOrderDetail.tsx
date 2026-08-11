@@ -17,7 +17,9 @@ import { Skeleton } from "@/app/components/ui/skeleton";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/app/components/ui/sheet";
 import { Input } from "@/app/components/ui/input";
 import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea";
+import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { toast } from "sonner";
+import { isSameChatDay } from "@/app/helpers/chatDayLabel";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
@@ -1173,27 +1175,31 @@ const CustomerOrderDetail = () => {
             ) : (
               <div className="flex flex-col space-y-3">
                 {messages && messages.length > 0 ? (
-                  messages.map((msg) => {
+                  messages.map((msg, index) => {
                     const isMe = msg.senderType === "Customer";
+                    const prev = index > 0 ? messages[index - 1] : null;
+                    const showDay = !prev || !isSameChatDay(prev.sentAt, msg.sentAt);
                     return (
-                      <div
-                        key={msg.id}
-                        className={cn(
-                          "flex w-fit max-w-[85%] flex-col rounded-lg p-3 text-sm shadow-sm",
-                          isMe
-                            ? "ml-auto self-end rounded-tr-none bg-primary text-primary-foreground"
-                            : "mr-auto self-start rounded-tl-none border bg-muted text-muted-foreground"
-                        )}
-                      >
-                        {!isMe && (
-                          <span className="mb-1 text-[10px] font-bold uppercase tracking-wide opacity-80">
-                            {msg.senderType === "Admin" ? "Admin" : msg.senderType}
+                      <div key={msg.id} className="flex flex-col space-y-3">
+                        {showDay && <ChatDaySeparator date={msg.sentAt} />}
+                        <div
+                          className={cn(
+                            "flex w-fit max-w-[85%] flex-col rounded-lg p-3 text-sm shadow-sm",
+                            isMe
+                              ? "ml-auto self-end rounded-tr-none bg-primary text-primary-foreground"
+                              : "mr-auto self-start rounded-tl-none border bg-muted text-muted-foreground"
+                          )}
+                        >
+                          {!isMe && (
+                            <span className="mb-1 text-[10px] font-bold uppercase tracking-wide opacity-80">
+                              {msg.senderType === "Admin" ? "Admin" : msg.senderType}
+                            </span>
+                          )}
+                          <p className="break-words whitespace-pre-wrap font-medium leading-relaxed">{msg.messageText}</p>
+                          <span className="mt-1.5 self-end text-[10px] font-semibold opacity-75">
+                            {new Date(msg.sentAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
-                        )}
-                        <p className="break-words whitespace-pre-wrap font-medium leading-relaxed">{msg.messageText}</p>
-                        <span className="mt-1.5 self-end text-[10px] font-semibold opacity-75">
-                          {new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                        </div>
                       </div>
                     );
                   })

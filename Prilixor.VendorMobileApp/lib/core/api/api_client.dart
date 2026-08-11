@@ -20,6 +20,9 @@ class ApiClient {
   bool _isRefreshing = false;
   final List<Completer<String?>> _refreshWaiters = [];
 
+  /// In-memory JWT so concurrent GETs after login don't each hit secure storage.
+  String? _cachedAccessToken;
+
   // [AppUrls.apiBaseUrl] uses local API on Flutter Web localhost (avoids prod CORS).
   final String baseUrl = AppUrls.apiBaseUrl;
 
@@ -39,7 +42,7 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final token = await _storage.read(key: VendorAuthStorage.jwtToken);
+          final token = await _resolveAccessToken();
           if (token != null && token.trim().isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
@@ -81,7 +84,31 @@ class ApiClient {
     );
   }
 
+  /// Prefer memory; fall back to secure storage once and cache.
+  Future<String?> _resolveAccessToken() async {
+    final cached = _cachedAccessToken;
+    if (cached != null && cached.trim().isNotEmpty) return cached;
+    final stored = await _storage.read(key: VendorAuthStorage.jwtToken);
+    if (stored != null && stored.trim().isNotEmpty) {
+      _cachedAccessToken = stored;
+      return stored;
+    }
+    return null;
+  }
+
+  /// Call after login / session restore so the next request stampede skips storage I/O.
+  void setAccessToken(String? token) {
+    final trimmed = token?.trim();
+    _cachedAccessToken =
+        (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+  }
+
+  void clearAccessToken() {
+    _cachedAccessToken = null;
+  }
+
   Future<void> _forceSessionExpired() async {
+    clearAccessToken();
     await _storage.delete(key: VendorAuthStorage.jwtToken);
     await _storage.delete(key: VendorAuthStorage.refreshToken);
     onSessionExpired?.call();
@@ -96,7 +123,7 @@ class ApiClient {
 
     _isRefreshing = true;
     try {
-      final access = await _storage.read(key: VendorAuthStorage.jwtToken);
+      final access = await _resolveAccessToken();
       final refresh = await _storage.read(key: VendorAuthStorage.refreshToken);
       if (access == null ||
           access.trim().isEmpty ||
@@ -128,6 +155,7 @@ class ApiClient {
         final newToken = data['token']?.toString();
         final newRefresh = data['refreshToken']?.toString();
         if (newToken != null && newToken.isNotEmpty) {
+          setAccessToken(newToken);
           await _storage.write(
             key: VendorAuthStorage.jwtToken,
             value: newToken,
