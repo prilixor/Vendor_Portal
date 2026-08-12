@@ -7,6 +7,7 @@ import '../../core/models/vendor_onboarding_model.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/utils/device_location.dart';
 import '../../core/utils/place_search.dart';
+import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/state_city_picker.dart';
 import '../../core/providers/vendor_service_area_provider.dart';
 import '../../core/theme.dart';
@@ -584,7 +585,8 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
             subtitle: 'Pick the state first, then the city for this service zone.',
             child: Column(
               children: [
-                OnboardingTextField(controller: _nameController, label: 'Area name *'),
+                const RequiredFieldsNote(),
+                OnboardingTextField(controller: _nameController, label: 'Area name'),
                 StateCityPickerFields(
                   key: ValueKey('service-area-state-city-$_stateCityKey'),
                   stateController: _stateController,

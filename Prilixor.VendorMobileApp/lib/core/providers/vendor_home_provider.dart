@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
@@ -29,7 +27,8 @@ class DashboardTopListing {
 class VendorHomeProvider extends ChangeNotifier {
   final ApiClient _api = ApiClient();
 
-  bool _loading = false;
+  /// Start true so the first Home frame is a skeleton (avoids empty→skeleton flash).
+  bool _loading = true;
   bool get loading => _loading;
 
   String? _error;
@@ -59,93 +58,84 @@ class VendorHomeProvider extends ChangeNotifier {
   List<DashboardTopListing> _topListings = [];
   List<DashboardTopListing> get topListings => _topListings;
 
+  Future<void>? _inflightLoad;
+
+  bool get hasSeedData =>
+      _businessName.isNotEmpty ||
+      totalListings > 0 ||
+      _topListings.isNotEmpty ||
+      confirmedOrders > 0 ||
+      inTransitOrders > 0;
+
+  /// True until the first load attempt finishes (success or failure).
+  bool get showInitialSkeleton => _loading && !hasSeedData;
+
+  /// Seed display name from auth so hero isn't blank while profile loads.
+  void seedBusinessName(String? name) {
+    final trimmed = name?.trim() ?? '';
+    if (trimmed.isEmpty || _businessName.isNotEmpty) return;
+    _businessName = trimmed;
+    notifyListeners();
+  }
+
   Future<void> loadDashboard(String vendorId) async {
     if (vendorId.isEmpty) return;
-    _loading = true;
-    _error = null;
-    notifyListeners();
+    if (_inflightLoad != null) return _inflightLoad!;
+    _inflightLoad = _loadDashboardInternal(vendorId);
     try {
-      final results = await Future.wait([
-        _api.dio.get('/vendors/$vendorId/profile'),
-        _api.dio.get('/vendors/$vendorId/documents'),
-        _api.dio.get('/vendors/$vendorId/bank-accounts'),
-        _api.dio.get('/vendors/$vendorId/listings'),
-        _api.dio.get('/vendors/$vendorId/notifications'),
-        _api.dio.get('/vendors/catalog/products'),
-        _api.dio.get('/vendors/catalog/categories'),
-        _api.dio.get('/vendors/$vendorId/dispatch/offers'),
-        _api.dio.get('/vendors/$vendorId/orders', queryParameters: {'status': 'confirmed'}),
-        _api.dio.get('/vendors/$vendorId/orders', queryParameters: {'status': 'in_transit'}),
-        _api.dio.get('/vendors/$vendorId/orders/expirations', queryParameters: {'withinDays': 7}),
+      await _inflightLoad;
+    } finally {
+      _inflightLoad = null;
+    }
+  }
+
+  Future<void> _loadDashboardInternal(String vendorId) async {
+    final showSkeleton = !hasSeedData;
+    if (showSkeleton) {
+      _loading = true;
+      _error = null;
+      notifyListeners();
+    } else {
+      _error = null;
+    }
+
+    try {
+      // Wave 1 — hero + catalog stats (paint ASAP).
+      final wave1 = await Future.wait([
+        _safeGet('/vendors/$vendorId/profile'),
+        _safeGet('/vendors/$vendorId/listings'),
       ]);
 
-      if (results[0].data is Map) {
-        final profile = Map<String, dynamic>.from(results[0].data as Map);
-        _businessName = profile['businessName']?.toString() ?? '';
+      final profileRes = wave1[0];
+      if (profileRes?.data is Map) {
+        final profile = Map<String, dynamic>.from(profileRes!.data as Map);
+        final fromApi = profile['businessName']?.toString().trim() ?? '';
+        if (fromApi.isNotEmpty) _businessName = fromApi;
       }
 
-      final docs = _parseList(results[1].data);
-      final banks = _parseList(results[2].data);
-      final docsOk = docs.isNotEmpty &&
-          docs.every((d) => (d['verificationStatus']?.toString() ?? '').toLowerCase() == 'approved');
-      final bankOk = banks.any(
-        (b) => (b['verificationStatus']?.toString() ?? '').toLowerCase() == 'approved',
-      );
-      _isVerified = docsOk && bankOk;
-      _verificationMessage = _isVerified
-          ? 'Your verification documents and bank details are approved.'
-          : 'Complete document and bank verification in Onboarding.';
-
-      final listings = _parseList(results[3].data);
+      final listings = _parseList(wave1[1]?.data);
       totalListings = listings.length;
       activeListings = listings.where((l) {
         final s = (l['listingStatus']?.toString() ?? '').toLowerCase();
         return s == 'active' || s == 'approved';
       }).length;
-
-      final notifications = _parseList(results[4].data);
-      _recentActivity = notifications
-          .map((e) => VendorNotification.fromJson(e))
-          .toList()
-        ..sort((a, b) {
-          final at = a.sentAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final bt = b.sentAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-          return bt.compareTo(at);
-        });
-      unreadNotifications =
-          _recentActivity.where((n) => n.isUnread).length;
-      if (_recentActivity.length > 5) {
-        _recentActivity = _recentActivity.sublist(0, 5);
-      }
-
-      final products = _parseList(results[5].data);
-      final categories = _parseList(results[6].data);
-      final productById = {for (final p in products) p['id']?.toString(): p};
-      final categoryById = {for (final c in categories) c['id']?.toString(): c};
-
-      // Show dashboard immediately using listing quantities — avoid N+1 inventory waits.
       inventoryUnits = listings.fold<int>(
         0,
         (sum, l) => sum + _toInt(l['availableQuantity']),
       );
 
-      pendingRequests = _parseList(results[7].data).length;
-      confirmedOrders = _parseList(results[8].data).length;
-      inTransitOrders = _parseList(results[9].data).length;
-      dueReturns = _parseList(results[10].data).length;
-
       final sortedListings = List<Map<String, dynamic>>.from(listings)
         ..sort((a, b) =>
             _toInt(b['availableQuantity']).compareTo(_toInt(a['availableQuantity'])));
       _topListings = sortedListings.take(4).map((l) {
-        final product = productById[l['productId']?.toString()];
-        final category = product == null
-            ? null
-            : categoryById[product['categoryId']?.toString()];
+        final category = l['categoryName']?.toString() ??
+            l['productCategory']?.toString() ??
+            l['category']?.toString() ??
+            'Listing';
         return DashboardTopListing(
           id: l['id']?.toString() ?? '',
           title: l['listingTitle']?.toString() ?? '',
-          category: category?['categoryName']?.toString() ?? 'Unknown',
+          category: category,
           dailyRent: _toDouble(l['dailyRent']),
           weeklyRent: _toDouble(l['weeklyRent']),
           monthlyRent: _toDouble(l['monthlyRent']),
@@ -153,11 +143,30 @@ class VendorHomeProvider extends ChangeNotifier {
         );
       }).toList();
 
+      // Unblock UI after catalog wave — order counts fill in next.
       _loading = false;
       notifyListeners();
 
-      // Refine inventory totals in the background (capped) without blocking the UI.
-      unawaited(_refineInventoryUnits(vendorId, listings));
+      // Wave 2 — order operation tiles (non-blocking for first paint).
+      final wave2 = await Future.wait([
+        _safeGet(
+          '/vendors/$vendorId/orders',
+          query: {'status': 'confirmed'},
+        ),
+        _safeGet(
+          '/vendors/$vendorId/orders',
+          query: {'status': 'in_transit'},
+        ),
+        _safeGet(
+          '/vendors/$vendorId/orders/expirations',
+          query: {'withinDays': 7},
+        ),
+      ]);
+
+      confirmedOrders = _parseList(wave2[0]?.data).length;
+      inTransitOrders = _parseList(wave2[1]?.data).length;
+      dueReturns = _parseList(wave2[2]?.data).length;
+      notifyListeners();
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to load dashboard.');
       _loading = false;
@@ -169,36 +178,25 @@ class VendorHomeProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _refineInventoryUnits(
-    String vendorId,
-    List<Map<String, dynamic>> listings,
-  ) async {
-    var inventorySum = 0;
-    final sample = listings.take(12);
-    for (final listing in sample) {
-      final listingId = listing['id']?.toString() ?? '';
-      if (listingId.isEmpty) {
-        inventorySum += _toInt(listing['availableQuantity']);
-        continue;
-      }
-      try {
-        final invRes =
-            await _api.dio.get('/vendors/$vendorId/listings/$listingId/inventory');
-        if (invRes.data is Map) {
-          final inv = Map<String, dynamic>.from(invRes.data as Map);
-          inventorySum += _toInt(inv['totalQuantity']);
-          continue;
-        }
-      } catch (_) {}
-      inventorySum += _toInt(listing['availableQuantity']);
-    }
-    // Include remaining listings by availableQuantity only.
-    for (final listing in listings.skip(12)) {
-      inventorySum += _toInt(listing['availableQuantity']);
-    }
-    if (inventorySum == inventoryUnits) return;
-    inventoryUnits = inventorySum;
+  void applyVerification({
+    required bool isVerified,
+    required String message,
+  }) {
+    if (_isVerified == isVerified && _verificationMessage == message) return;
+    _isVerified = isVerified;
+    _verificationMessage = message;
     notifyListeners();
+  }
+
+  Future<Response?> _safeGet(
+    String path, {
+    Map<String, dynamic>? query,
+  }) async {
+    try {
+      return await _api.dio.get(path, queryParameters: query);
+    } catch (_) {
+      return null;
+    }
   }
 
   List<Map<String, dynamic>> _parseList(dynamic data) {

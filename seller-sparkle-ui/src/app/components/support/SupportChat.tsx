@@ -3,11 +3,13 @@ import { MessageCircle, X, Send, Loader2, Paperclip, Bot, User, FileText, Plus, 
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea";
+import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { Badge } from "@/app/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import { supportApi, SupportMessageDto, SupportTicketDto, AiChatResult } from "@/app/services/supportApi";
 import { useSupportChat } from "@/app/contexts/SupportChatContext";
+import { isSameChatDay } from "@/app/helpers/chatDayLabel";
 import { cn } from "@/app/helpers/utils";
 import { shouldUseAiChat } from "@/app/helpers/supportChatRouting";
 import { formatDistanceToNow } from "date-fns";
@@ -18,6 +20,37 @@ interface SupportChatProps {
 }
 
 const SUPPORT_CHAT_POLL_MS = 3000;
+const SUPPORT_UNREAD_POLL_MS = 30_000;
+
+const supportReadStorageKey = (vendorId: string) => `vendor-support-last-read:${vendorId}`;
+
+const loadSupportLastRead = (vendorId: string): Record<string, string> => {
+  try {
+    const raw = localStorage.getItem(supportReadStorageKey(vendorId));
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const markSupportTicketReadLocal = (vendorId: string, ticketId: string) => {
+  const map = loadSupportLastRead(vendorId);
+  map[ticketId] = new Date().toISOString();
+  localStorage.setItem(supportReadStorageKey(vendorId), JSON.stringify(map));
+};
+
+const countUnreadAdminReplies = (tickets: SupportTicketDto[], vendorId: string): number => {
+  const lastRead = loadSupportLastRead(vendorId);
+  return tickets.reduce((count, ticket) => {
+    if (ticket.status.trim().toLowerCase() === "closed") return count;
+    const latest = ticket.latestMessage;
+    if (!latest || latest.senderType !== "Admin") return count;
+    const readAt = lastRead[ticket.id] ? new Date(lastRead[ticket.id]).getTime() : 0;
+    return new Date(latest.createdAt).getTime() > readAt ? count + 1 : count;
+  }, 0);
+};
 
 const QUICK_REPLIES = [
   { label: "Product Issue", icon: "📦", category: "Products" },
@@ -48,7 +81,12 @@ const getStatusIcon = (status: string) => {
 };
 
 export const SupportChat = ({ vendorId }: SupportChatProps) => {
-  const { pendingRequest, consumePendingRequest } = useSupportChat();
+  const {
+    pendingRequest,
+    consumePendingRequest,
+    panelOpenRequest,
+    consumePanelOpenRequest,
+  } = useSupportChat();
   const [isOpen, setIsOpen] = useState(false);
   const [view, setView] = useState<"welcome" | "chat" | "tickets">("welcome");
   const [messages, setMessages] = useState<SupportMessageDto[]>([]);
@@ -59,8 +97,38 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
   const [newMessage, setNewMessage] = useState("");
   const [ticketStatus, setTicketStatus] = useState<string | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [unreadAdminReplyCount, setUnreadAdminReplyCount] = useState(0);
+  const [forceNextAsNewTicket, setForceNextAsNewTicket] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const refreshUnreadBadge = useCallback(async () => {
+    if (!vendorId || vendorId === "undefined") return;
+    try {
+      const data = await supportApi.getVendorTickets(vendorId);
+      setTickets(data);
+      setUnreadAdminReplyCount(countUnreadAdminReplies(data, vendorId));
+    } catch {
+      // silent background refresh
+    }
+  }, [vendorId]);
+
+  // Poll for admin replies while FAB is closed (bell notification is separate)
+  useEffect(() => {
+    if (!vendorId || vendorId === "undefined") return;
+    void refreshUnreadBadge();
+    const interval = setInterval(() => {
+      void refreshUnreadBadge();
+    }, SUPPORT_UNREAD_POLL_MS);
+    const onFocus = () => {
+      void refreshUnreadBadge();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [vendorId, refreshUnreadBadge]);
 
   // Load tickets when widget opens or ticket list view is shown
   useEffect(() => {
@@ -77,10 +145,13 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
         supportApi.getVendorTickets(vendorId),
       ]);
       setMessages(msgs);
+      setTickets(ticketList);
       const active = ticketList.find((t) => t.id === ticketId);
       if (active) {
         setTicketStatus(active.status);
       }
+      markSupportTicketReadLocal(vendorId, ticketId);
+      setUnreadAdminReplyCount(countUnreadAdminReplies(ticketList, vendorId));
     } catch {
       // silent background refresh
     }
@@ -126,6 +197,7 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
     try {
       const data = await supportApi.getVendorTickets(vendorId);
       setTickets(data);
+      setUnreadAdminReplyCount(countUnreadAdminReplies(data, vendorId));
     } catch {
       toast.error("Failed to load tickets.");
     } finally {
@@ -140,6 +212,8 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
       const msgs = await supportApi.getTicketMessages(t.id);
       setMessages(msgs);
       setView("chat");
+      markSupportTicketReadLocal(vendorId, t.id);
+      void refreshUnreadBadge();
     } catch {
       toast.error("Failed to load messages.");
     }
@@ -155,11 +229,12 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
   ) => {
     if (!text.trim() || vendorId === "undefined") return;
 
+    const startNewTicket = forceNewTicket || (forceNextAsNewTicket && !ticketId);
     const useAi = shouldUseAiChat({
       ticketId,
       ticketStatus,
       messages,
-      forceNewTicket,
+      forceNewTicket: startNewTicket,
     });
 
     setAiThinking(useAi);
@@ -184,13 +259,14 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
           vendorId,
           message: text.trim(),
           category: category,
-          forceNewTicket: forceNewTicket && ticketId === null,
+          forceNewTicket: startNewTicket && ticketId === null,
           attachmentUrls: fileUrls,
         });
 
         activeTicketId = result.ticket.id;
         setTicketId(result.ticket.id);
         setTicketStatus(result.ticket.status);
+        setForceNextAsNewTicket(false);
       } else {
         if (!ticketId) {
           throw new Error("Missing active ticket.");
@@ -200,6 +276,7 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
           senderId: vendorId,
           senderType: "Vendor",
           message: text.trim(),
+          attachmentUrls: fileUrls,
         });
 
         const tickets = await supportApi.getVendorTickets(vendorId);
@@ -250,12 +327,46 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
     );
   }, [pendingRequest, consumePendingRequest]);
 
+  // Open panel from Notifications / Dashboard (admin support reply tap)
+  useEffect(() => {
+    if (!panelOpenRequest) return;
+    const { ticketId: openTicketId } = panelOpenRequest;
+    consumePanelOpenRequest();
+
+    setIsOpen(true);
+    setAiThinking(false);
+    setNewMessage("");
+
+    void (async () => {
+      try {
+        const data = await supportApi.getVendorTickets(vendorId);
+        setTickets(data);
+        setUnreadAdminReplyCount(countUnreadAdminReplies(data, vendorId));
+
+        if (openTicketId) {
+          const match = data.find((t) => t.id === openTicketId);
+          if (match) {
+            await loadMessagesForTicket(match);
+            return;
+          }
+        }
+        setView("tickets");
+        setTicketId(null);
+        setTicketStatus(null);
+        setMessages([]);
+      } catch {
+        setView("tickets");
+      }
+    })();
+  }, [panelOpenRequest, consumePanelOpenRequest, vendorId]);
+
   const handleNewConversation = () => {
     setTicketId(null);
     setTicketStatus(null);
     setMessages([]);
     setNewMessage("");
     setAiThinking(false);
+    setForceNextAsNewTicket(true);
     setView("welcome");
   };
 
@@ -480,9 +591,13 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
                 )}
 
                 {/* Messages */}
-                {view === "chat" && messages.map((msg) => (
+                {view === "chat" && messages.map((msg, index) => {
+                  const prev = index > 0 ? messages[index - 1] : null;
+                  const showDay = !prev || !isSameChatDay(prev.createdAt, msg.createdAt);
+                  return (
+                  <div key={msg.id} className="flex flex-col gap-2">
+                    {showDay && <ChatDaySeparator date={msg.createdAt} />}
                   <div
-                    key={msg.id}
                     className={cn(
                       "flex flex-col max-w-[88%]",
                       msg.senderType === "Vendor" ? "ml-auto items-end" : "mr-auto items-start"
@@ -508,7 +623,7 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
                         </Badge>
                       )}
                       <span className="text-[8px] text-slate-400 font-medium">
-                        {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
+                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </span>
                     </div>
                     <div
@@ -525,7 +640,9 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
                       {getAttachmentPreview(msg)}
                     </div>
                   </div>
-                ))}
+                  </div>
+                  );
+                })}
 
                 {/* Ticket Status Banner */}
                 {ticketStatus && (
@@ -641,7 +758,11 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
 
       {/* Floating Button — Icon only */}
       <Button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          const next = !isOpen;
+          setIsOpen(next);
+          if (next) void refreshUnreadBadge();
+        }}
         size="icon"
         className={cn(
           "h-14 w-14 rounded-full shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 group relative",
@@ -653,15 +774,23 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
         ) : (
           <div className="relative">
             <MessageCircle className="h-7 w-7" />
-            <span className="absolute -top-1 -right-1 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-40" />
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-white" />
-            </span>
+            {unreadAdminReplyCount > 0 ? (
+              <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center border-2 border-primary shadow-sm">
+                {unreadAdminReplyCount > 9 ? "9+" : unreadAdminReplyCount}
+              </span>
+            ) : (
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-40" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-white" />
+              </span>
+            )}
           </div>
         )}
         {!isOpen && (
           <div className="absolute -top-12 right-0 bg-card text-foreground text-[11px] font-bold py-1.5 px-3 rounded-full shadow-lg border border-border whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-            Need help? Chat with us!
+            {unreadAdminReplyCount > 0
+              ? `${unreadAdminReplyCount} support ${unreadAdminReplyCount === 1 ? "reply" : "replies"}`
+              : "Need help? Chat with us!"}
             <div className="absolute -bottom-1 right-6 w-2 h-2 bg-card border-r border-b border-border rotate-45" />
           </div>
         )}

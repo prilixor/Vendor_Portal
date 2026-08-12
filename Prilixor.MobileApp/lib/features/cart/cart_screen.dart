@@ -5,9 +5,11 @@ import '../../core/models/cart_model.dart';
 import '../../core/providers/cart_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/rental_period.dart';
+import '../../core/utils/rental_plan_display.dart';
 import '../../shared/utils/require_auth.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
+import '../../shared/widgets/struck_price.dart';
 import '../checkout/checkout_screen.dart';
 
 class CartScreen extends StatefulWidget {
@@ -35,11 +37,16 @@ class _CartScreenState extends State<CartScreen> {
     final auth = Provider.of<AuthProvider>(context);
     final checkoutLabel = auth.isAuthenticated ? 'Proceed to Checkout' : 'Sign in to Checkout';
 
+    final itemCount = cart.itemCount;
+
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
         centerTitle: true,
-        title: Text('My Cart', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold, fontSize: 20)),
+        title: Text(
+          itemCount > 0 ? 'My Cart ($itemCount)' : 'My Cart',
+          style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold, fontSize: 20),
+        ),
         backgroundColor: colors.background,
         iconTheme: IconThemeData(color: colors.textPrimary),
         elevation: 0,
@@ -86,7 +93,7 @@ class _CartScreenState extends State<CartScreen> {
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
                       color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
@@ -94,12 +101,12 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.medical_information_outlined, color: Color(0xFF60A5FA), size: 20),
+                        Icon(Icons.medical_information_outlined, color: Color(0xFF60A5FA), size: 18),
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Some items support an optional doctor Unique ID at checkout.',
-                            style: TextStyle(color: Color(0xFF93C5FD), fontSize: 13),
+                            'Optional doctor Unique ID available at checkout.',
+                            style: TextStyle(color: Color(0xFF93C5FD), fontSize: 12),
                           ),
                         ),
                       ],
@@ -108,84 +115,159 @@ class _CartScreenState extends State<CartScreen> {
                 if (cart.isRefreshingStock)
                   const LinearProgressIndicator(minHeight: 2, color: Color(0xFF6C63FF), backgroundColor: Colors.transparent),
                 Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: cart.lines.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      final line = cart.lines[index];
-                      return _CartLineCard(line: line, cart: cart);
+                  child: Builder(
+                    builder: (context) {
+                      final equipment = cart.lines.where((l) => !l.isChemical).toList();
+                      final chemicals = cart.lines.where((l) => l.isChemical).toList();
+                      return ListView(
+                        // Extra bottom pad so last card clears the sticky checkout bar.
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                        children: [
+                          if (equipment.isNotEmpty) ...[
+                            _sectionHeader(
+                              'Equipment',
+                              '${equipment.length} ${equipment.length == 1 ? 'item' : 'items'}',
+                            ),
+                            for (var i = 0; i < equipment.length; i++) ...[
+                              if (i > 0) const SizedBox(height: 10),
+                              _CartLineCard(line: equipment[i], cart: cart),
+                            ],
+                          ],
+                          if (chemicals.isNotEmpty) ...[
+                            if (equipment.isNotEmpty) const SizedBox(height: 16),
+                            _sectionHeader(
+                              'Chemicals',
+                              '${chemicals.length} ${chemicals.length == 1 ? 'item' : 'items'} · buy only',
+                            ),
+                            for (var i = 0; i < chemicals.length; i++) ...[
+                              if (i > 0) const SizedBox(height: 10),
+                              _ChemicalCartLineCard(line: chemicals[i], cart: cart),
+                            ],
+                          ],
+                        ],
+                      );
                     },
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: colors.surface,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                    border: Border(top: BorderSide(color: colors.border)),
-                  ),
-                  child: SafeArea(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _summaryRow(context, 'Subtotal', '₹${cart.totalEstimatedRent.toStringAsFixed(0)}'),
-                        const SizedBox(height: 8),
-                        _summaryRow(context, 'Refundable deposit', '₹${cart.totalDeposit.toStringAsFixed(0)}'),
-                        // Service fee UI hidden — keep for future re-enable
-                        // const SizedBox(height: 8),
-                        // _summaryRow(context, 'Service fee', '₹0'),
-                        Divider(color: colors.border, height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Total', style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                            Text(
-                              '₹${cart.totalEstimatedRent.toStringAsFixed(0)}',
-                              style: TextStyle(color: colors.textPrimary, fontSize: 24, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                        if (cart.hasStockIssues) ...[
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Fix stock issues above before checkout.',
-                            style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: cart.hasStockIssues
-                              ? null
-                              : () async {
-                                  final ok = await ensureAuthenticated(
-                                    context,
-                                    message: 'Sign in to checkout and place your order.',
-                                  );
-                                  if (!ok || !context.mounted) return;
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => const CheckoutScreen()),
-                                  );
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6C63FF),
-                            disabledBackgroundColor: colors.border,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                          child: Text(checkoutLabel, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                        ),
-                      ],
-                    ),
-                  ),
+                // Web-style compact sticky checkout — leaves room to scroll many items.
+                _StickyCheckoutBar(
+                  total: cart.totalEstimatedRent,
+                  deposit: cart.totalDeposit,
+                  checkoutLabel: checkoutLabel,
+                  hasStockIssues: cart.hasStockIssues,
+                  onCheckout: () async {
+                    final ok = await ensureAuthenticated(
+                      context,
+                      message: 'Sign in to checkout and place your order.',
+                    );
+                    if (!ok || !context.mounted) return;
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CheckoutScreen()),
+                    );
+                  },
                 ),
               ],
             ),
     );
   }
 
-  Widget _summaryRow(BuildContext context, String label, String value) {
+  Widget _sectionHeader(String title, String meta) {
+    final colors = context.appColors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: TextStyle(color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+          const Spacer(),
+          Text(
+            meta,
+            style: TextStyle(color: colors.textMuted, fontSize: 11, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StickyCheckoutBar extends StatelessWidget {
+  final double total;
+  final double deposit;
+  final String checkoutLabel;
+  final bool hasStockIssues;
+  final Future<void> Function() onCheckout;
+
+  const _StickyCheckoutBar({
+    required this.total,
+    required this.deposit,
+    required this.checkoutLabel,
+    required this.hasStockIssues,
+    required this.onCheckout,
+  });
+
+  void _showSummary(BuildContext context) {
+    final colors = context.appColors;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: colors.border,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Order summary',
+                  style: TextStyle(color: colors.textPrimary, fontSize: 17, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 14),
+                _sheetRow(context, 'Subtotal', formatPlanInr(total)),
+                const SizedBox(height: 8),
+                _sheetRow(context, 'Refundable deposit', formatPlanInr(deposit)),
+                const SizedBox(height: 4),
+                Text(
+                  'Deposit collected at delivery',
+                  style: TextStyle(color: colors.textMuted, fontSize: 11),
+                ),
+                Divider(color: colors.border, height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Estimated total', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
+                    Text(
+                      formatPlanInr(total),
+                      style: TextStyle(color: colors.textPrimary, fontSize: 22, fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _sheetRow(BuildContext context, String label, String value) {
     final colors = context.appColors;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -193,6 +275,227 @@ class _CartScreenState extends State<CartScreen> {
         Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 14)),
         Text(value, style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
       ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return Material(
+      color: colors.surfaceElevated,
+      elevation: 12,
+      shadowColor: Colors.black54,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasStockIssues)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Fix stock issues above before checkout.',
+                    style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => _showSummary(context),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'ESTIMATED TOTAL',
+                                  style: TextStyle(
+                                    color: colors.textMuted,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.6,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(Icons.info_outline, size: 14, color: colors.textMuted),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              formatPlanInr(total),
+                              style: TextStyle(
+                                color: colors.textPrimary,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                height: 1.1,
+                              ),
+                            ),
+                            if (deposit > 0)
+                              Text(
+                                'Deposit ${formatPlanInr(deposit)}',
+                                style: TextStyle(
+                                  color: colors.textMuted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: hasStockIssues ? null : onCheckout,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6C63FF),
+                        disabledBackgroundColor: colors.border.withValues(alpha: 0.5),
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        checkoutLabel.length > 18 ? 'Checkout' : checkoutLabel,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChemicalCartLineCard extends StatelessWidget {
+  final CartLineModel line;
+  final CartProvider cart;
+
+  const _ChemicalCartLineCard({required this.line, required this.cart});
+
+  @override
+  Widget build(BuildContext context) {
+    final avail = cart.availableQuantityFor(line);
+    final overStock = avail != null && line.quantity > avail;
+    final unitPrice = line.buyPrice ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: overStock ? Colors.redAccent.withValues(alpha: 0.5) : Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: const Color(0xFF0F172A),
+                ),
+                child: CatalogImage(
+                  url: line.primaryImageUrl,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            line.title,
+                            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700, height: 1.25),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          tooltip: 'Remove',
+                          onPressed: () => cart.removeLine(line.listingId, productVariantId: line.productVariantId),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '${formatPlanInr(unitPrice)} each · Purchase',
+                      style: const TextStyle(color: Colors.white54, fontSize: 11.5, height: 1.3),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      formatPlanInr(unitPrice * line.quantity),
+                      style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 15, fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.45)),
+                ),
+                child: const Text(
+                  'Buy only',
+                  style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.w700, fontSize: 12),
+                ),
+              ),
+              const Spacer(),
+              _CompactQtyStepper(
+                value: line.quantity,
+                min: 1,
+                max: avail ?? 999,
+                onChanged: (val) {
+                  cart.updateQuantity(
+                    line.listingId,
+                    val,
+                    productVariantId: line.productVariantId,
+                  );
+                },
+              ),
+            ],
+          ),
+          if (overStock) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Only $avail available \u2014 please reduce quantity.',
+              style: const TextStyle(color: Colors.redAccent, fontSize: 11.5, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -210,10 +513,10 @@ class _CartLineCard extends StatelessWidget {
     int? nextQty,
   }) async {
     final buyPrice = line.buyPrice ?? 0;
-    if (!line.isBuyEnabled || buyPrice <= 0 || line.orderType != 'rent') return false;
+    if (!line.canBuy || buyPrice <= 0 || line.orderType != 'rent') return false;
     final check = evaluateRentVsBuy(
       buyPrice: buyPrice,
-      isBuyEnabled: line.isBuyEnabled,
+      isBuyEnabled: line.canBuy,
       quantity: nextQty ?? line.quantity,
       periods: line.usesPricingPlan
           ? (line.rentalDurationDays ?? line.rentalDays)
@@ -227,7 +530,7 @@ class _CartLineCard extends StatelessWidget {
     );
     if (!check.shouldForceBuy) return false;
 
-    final buyAvailable = line.isBuyEnabled && buyPrice > 0;
+    final buyAvailable = line.canBuy && buyPrice > 0;
     final confirmed = await showRentExceedsBuyDialog(
       context,
       itemTitle: line.title,
@@ -248,7 +551,12 @@ class _CartLineCard extends StatelessWidget {
     final colors = context.appColors;
     final avail = cart.availableQuantityFor(line);
     final overStock = avail != null && line.quantity > avail;
-    final canBuy = line.isBuyEnabled || line.orderType == 'buy';
+    final canRent = line.canRent;
+    final canBuy = line.canBuy;
+    final actualOrderType = canRent && canBuy
+        ? line.orderType
+        : (canBuy ? 'buy' : 'rent');
+    final isPlanBased = actualOrderType == 'rent' && line.usesPricingPlan;
     final unitRate = rateForUnit(
       line.rentalPeriodUnit,
       dailyRent: line.dailyRent,
@@ -256,6 +564,13 @@ class _CartLineCard extends StatelessWidget {
       monthlyRent: line.monthlyRent,
     );
     final periodLabel = rentalUnitLabels[normalizeRentalUnit(line.rentalPeriodUnit)]!;
+    final durationDays = line.rentalDurationDays ?? line.rentalDays;
+    final planLabel = dayPlanTitle(durationDays, line.rentalDurationLabel);
+    final planSavings = isPlanBased &&
+            line.rentalNormalPrice != null &&
+            line.rentalNormalPrice! > (line.rentalFinalPrice ?? 0)
+        ? line.rentalNormalPrice! - (line.rentalFinalPrice ?? 0)
+        : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -267,6 +582,7 @@ class _CartLineCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Web layout: thumb | details ... line total + delete
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -277,6 +593,7 @@ class _CartLineCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color: colors.background,
+                  border: Border.all(color: colors.border),
                 ),
                 child: CatalogImage(
                   url: line.primaryImageUrl,
@@ -290,161 +607,193 @@ class _CartLineCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            line.title,
-                            style: TextStyle(color: colors.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                          tooltip: 'Remove',
-                          onPressed: () => cart.removeLine(line.listingId, productVariantId: line.productVariantId),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
                     Text(
-                      line.orderType == 'buy'
-                          ? 'Buy · ₹${(line.buyPrice ?? (line.dailyRent * 30)).toStringAsFixed(0)}'
-                          : line.usesPricingPlan
-                              ? '${line.rentalDurationLabel ?? 'Plan'} · ₹${(line.rentalFinalPrice ?? 0).toStringAsFixed(0)}'
-                                  '${line.rentalNormalPrice != null && line.rentalNormalPrice! > (line.rentalFinalPrice ?? 0) ? ' (was ₹${line.rentalNormalPrice!.toStringAsFixed(0)})' : ''}'
-                                  ' · deposit ₹${line.securityDeposit.toStringAsFixed(0)}'
-                              : '₹${unitRate.toStringAsFixed(0)}${periodLabel.per} · ${formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)} · deposit ₹${line.securityDeposit.toStringAsFixed(0)}',
-                      style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.35),
+                      line.title,
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        height: 1.25,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      '₹${line.lineTotal.toStringAsFixed(0)}',
-                      style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                    if (actualOrderType == 'buy')
+                      Text(
+                        '${formatPlanInr(line.buyPrice ?? (line.dailyRent * 30))} each',
+                        style: const TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.w500),
+                      )
+                    else if (isPlanBased) ...[
+                      Text(
+                        planLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 2,
+                        children: [
+                          if (planSavings > 0)
+                            StruckPrice(
+                              formatPlanInr(line.rentalNormalPrice!),
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          Text(
+                            formatPlanInr(line.rentalFinalPrice ?? 0),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            '\u00b7',
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.25)),
+                          ),
+                          Text(
+                            'Deposit ${formatPlanInr(line.securityDeposit)}',
+                            style: const TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Starts on delivery \u00b7 $durationDays day rental',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.45),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ] else
+                      Text(
+                        '${formatPlanInr(unitRate)}${periodLabel.per} \u00b7 ${formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)} \u00b7 Deposit ${formatPlanInr(line.securityDeposit)}',
+                        style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+                      ),
                     if (line.prescriptionRequired) ...[
                       const SizedBox(height: 4),
-                      const Text('Rx optional', style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w600)),
+                      const Text(
+                        'Rx optional',
+                        style: TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
                     ],
                   ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    formatPlanInr(line.lineTotal),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.white54, size: 20),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    tooltip: 'Remove',
+                    onPressed: () => cart.removeLine(line.listingId, productVariantId: line.productVariantId),
+                  ),
+                ],
               ),
             ],
           ),
           const SizedBox(height: 12),
           Divider(color: colors.border, height: 1),
           const SizedBox(height: 12),
-          if (canBuy)
-            _SegmentedToggle(
-              options: const [
-                (value: 'rent', label: 'Rent'),
-                (value: 'buy', label: 'Buy'),
-              ],
-              selected: line.orderType,
-              onChanged: (v) {
-                cart.updateOrderType(
-                  line.listingId,
-                  v,
-                  productVariantId: line.productVariantId,
-                );
-              },
-            )
-          else
+          if (line.orderType == 'rent' && line.usesPricingPlan) ...[
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
+                color: colors.background,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.5)),
+                border: Border.all(color: colors.border),
               ),
-              alignment: Alignment.center,
               child: Text(
-                line.orderType == 'buy' ? 'Buy only' : 'Rent only',
-                style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.w700, fontSize: 13),
+                'Rental period: ${line.rentalDurationLabel ?? '${line.rentalDurationDays ?? line.rentalDays} days'} (set by catalog)',
+                style: TextStyle(color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
               ),
             ),
-          if (line.orderType == 'rent') ...[
             const SizedBox(height: 12),
-            if (line.usesPricingPlan)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: colors.background,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: colors.border),
-                ),
-                child: Text(
-                  'Rental period: ${line.rentalDurationLabel ?? '${line.rentalDurationDays ?? line.rentalDays} days'} (set by catalog)',
-                  style: TextStyle(color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-              )
-            else ...[
-            Text('Rental period', style: TextStyle(color: colors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            _SegmentedToggle(
-              options: rentalUnitsVisibleInUi
-                  .map((u) => (value: u, label: rentalUnitLabels[u]!.plural))
-                  .toList(),
-              selected: rentalUnitsVisibleInUi.contains(line.rentalPeriodUnit)
-                  ? line.rentalPeriodUnit
-                  : defaultUiRentalUnit,
-              onChanged: (v) async {
-                final blocked = await _promptRentToBuy(context, nextUnit: v);
-                if (blocked || !context.mounted) return;
-                cart.updateRentalPeriodUnit(
-                  line.listingId,
-                  v,
-                  productVariantId: line.productVariantId,
-                );
-              },
-            ),
-            const SizedBox(height: 4),
-            _StepperRow(
-              label: periodLabel.plural,
-              value: line.rentalDays,
-              min: 1,
-              max: 366,
-              onChanged: (val) async {
-                final blocked = await _promptRentToBuy(context, nextPeriods: val);
-                if (blocked || !context.mounted) return;
-                cart.updateRentalDays(
-                  line.listingId,
-                  val,
-                  productVariantId: line.productVariantId,
-                );
-              },
-            ),
-            ],
           ],
-          _StepperRow(
-            label: 'Quantity',
-            value: line.quantity,
-            min: 1,
-            max: avail ?? 999,
-            onChanged: (val) async {
-              if (line.orderType == 'rent') {
-                final blocked = await _promptRentToBuy(context, nextQty: val);
-                if (blocked || !context.mounted) return;
-              }
-              cart.updateQuantity(
-                line.listingId,
-                val,
-                productVariantId: line.productVariantId,
-              );
-            },
+          // Web: Rent/Buy + Quantity on one controls row
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (canRent && canBuy)
+                SizedBox(
+                  width: 168,
+                  child: _SegmentedToggle(
+                    dense: true,
+                    options: const [
+                      (value: 'rent', label: 'Rent'),
+                      (value: 'buy', label: 'Buy'),
+                    ],
+                    selected: line.orderType,
+                    onChanged: (v) async {
+                      if (v == 'rent') {
+                        final blocked = await _promptRentToBuy(context);
+                        if (blocked || !context.mounted) return;
+                      }
+                      cart.updateOrderType(
+                        line.listingId,
+                        v,
+                        productVariantId: line.productVariantId,
+                      );
+                    },
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.45)),
+                  ),
+                  child: Text(
+                    canRent ? 'Rent only' : 'Buy only',
+                    style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.w700, fontSize: 12),
+                  ),
+                ),
+              _LabeledQtyStepper(
+                value: line.quantity,
+                min: 1,
+                max: avail ?? 999,
+                onChanged: (val) async {
+                  if (actualOrderType == 'rent') {
+                    final blocked = await _promptRentToBuy(context, nextQty: val);
+                    if (blocked || !context.mounted) return;
+                  }
+                  cart.updateQuantity(
+                    line.listingId,
+                    val,
+                    productVariantId: line.productVariantId,
+                  );
+                },
+              ),
+            ],
           ),
           if (overStock) ...[
             const SizedBox(height: 8),
             Text(
-              'Only $avail unit(s) available in stock. Please reduce quantity to proceed.',
-              style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
+              'Only $avail available \u2014 please reduce quantity.',
+              style: const TextStyle(color: Colors.redAccent, fontSize: 11.5, fontWeight: FontWeight.w600),
             ),
           ],
         ],
@@ -457,34 +806,40 @@ class _SegmentedToggle extends StatelessWidget {
   final List<({String value, String label})> options;
   final String selected;
   final ValueChanged<String> onChanged;
+  final bool dense;
 
   const _SegmentedToggle({
     required this.options,
     required this.selected,
     required this.onChanged,
+    this.dense = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
+    final vPad = dense ? 7.0 : 10.0;
+    final fontSize = dense ? 12.0 : 13.0;
+    final gap = dense ? 6.0 : 8.0;
+    final radius = dense ? 8.0 : 10.0;
     return Row(
       children: [
         for (var i = 0; i < options.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
+          if (i > 0) SizedBox(width: gap),
           Expanded(
             child: Material(
               color: Colors.transparent,
               child: InkWell(
                 onTap: selected == options[i].value ? null : () => onChanged(options[i].value),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(radius),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: EdgeInsets.symmetric(vertical: vPad),
                   decoration: BoxDecoration(
                     color: selected == options[i].value
                         ? const Color(0xFF6C63FF).withValues(alpha: 0.22)
                         : colors.background,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(radius),
                     border: Border.all(
                       color: selected == options[i].value ? const Color(0xFF6C63FF) : colors.border,
                     ),
@@ -493,9 +848,9 @@ class _SegmentedToggle extends StatelessWidget {
                   child: Text(
                     options[i].label,
                     style: TextStyle(
-                      color: selected == options[i].value ? const Color(0xFFA5B4FC) : colors.textSecondary,
+                      color: selected == options[i].value ? const Color(0xFF6C63FF) : colors.textSecondary,
                       fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                      fontSize: fontSize,
                     ),
                   ),
                 ),
@@ -508,15 +863,13 @@ class _SegmentedToggle extends StatelessWidget {
   }
 }
 
-class _StepperRow extends StatelessWidget {
-  final String label;
+class _CompactQtyStepper extends StatelessWidget {
   final int value;
   final int min;
   final int max;
   final ValueChanged<int> onChanged;
 
-  const _StepperRow({
-    required this.label,
+  const _CompactQtyStepper({
     required this.value,
     required this.min,
     required this.max,
@@ -526,56 +879,86 @@ class _StepperRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colors.border),
+      ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
+          IconButton(
+            icon: Icon(
+              Icons.remove,
+              size: 18,
+              color: value > min ? colors.textSecondary : colors.textMuted,
+            ),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+            onPressed: value > min ? () => onChanged(value - 1) : null,
+          ),
+          SizedBox(
+            width: 24,
             child: Text(
-              label,
-              style: TextStyle(color: colors.textSecondary, fontSize: 14, fontWeight: FontWeight.w600),
+              '$value',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
             ),
           ),
-          Container(
-            decoration: BoxDecoration(
-              color: colors.background,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: colors.border),
+          IconButton(
+            icon: Icon(
+              Icons.add,
+              size: 18,
+              color: value < max ? colors.textSecondary : colors.textMuted,
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(
-                    Icons.remove_circle_outline,
-                    size: 22,
-                    color: value > min ? colors.textSecondary : colors.border,
-                  ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                  onPressed: value > min ? () => onChanged(value - 1) : null,
-                ),
-                SizedBox(
-                  width: 28,
-                  child: Text(
-                    '$value',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: colors.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.add_circle_outline,
-                    size: 22,
-                    color: value < max ? colors.textSecondary : colors.border,
-                  ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                  onPressed: value < max ? () => onChanged(value + 1) : null,
-                ),
-              ],
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+            onPressed: value < max ? () => onChanged(value + 1) : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Web cart quantity control: labeled stepper.
+class _LabeledQtyStepper extends StatelessWidget {
+  final int value;
+  final int min;
+  final int max;
+  final ValueChanged<int> onChanged;
+
+  const _LabeledQtyStepper({
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: colors.surfaceElevated,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Quantity',
+            style: TextStyle(
+              color: colors.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
           ),
+          const SizedBox(width: 8),
+          _CompactQtyStepper(value: value, min: min, max: max, onChanged: onChanged),
         ],
       ),
     );

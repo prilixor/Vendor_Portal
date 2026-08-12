@@ -44,10 +44,13 @@ class OrderDetailProvider extends ChangeNotifier {
 
   List<OrderImageModel> get orderImages => imageRequest?.images ?? const [];
 
-  Future<void> fetchOrderDetail(String orderId) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+  Future<void> fetchOrderDetail(String orderId, {bool silent = false}) async {
+    final showLoading = !silent || _currentOrder == null;
+    if (showLoading) {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+    }
 
     try {
       final response = await _apiClient.dio.get(
@@ -65,29 +68,48 @@ class OrderDetailProvider extends ChangeNotifier {
         await fetchImageRequest(orderId, silent: true);
       }
     } on DioException catch (e) {
-      _errorMessage = 'Failed to load order: ${e.message}';
+      if (e.type == DioExceptionType.cancel ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        return;
+      }
+      if (!silent || _currentOrder == null) {
+        _errorMessage = 'Failed to load order: ${e.message}';
+      }
     } catch (e) {
-      _errorMessage = 'An unexpected error occurred.';
+      if (!silent || _currentOrder == null) {
+        _errorMessage = 'An unexpected error occurred.';
+      }
     } finally {
-      _isLoading = false;
+      if (showLoading) {
+        _isLoading = false;
+      }
       notifyListeners();
     }
   }
 
-  Future<void> fetchGroupImageRequests(List<String> orderIds) async {
+  Future<void> fetchGroupImageRequests(
+    List<String> orderIds, {
+    bool silent = false,
+  }) async {
     final ids = orderIds.where((id) => id.isNotEmpty).toSet().toList();
     if (ids.isEmpty) {
       _imageRequestsByOrderId.clear();
       notifyListeners();
       return;
     }
-    _imageRequestLoading = true;
-    notifyListeners();
+    if (!silent) {
+      _imageRequestLoading = true;
+      notifyListeners();
+    }
     try {
       await Future.wait(ids.map((id) => fetchImageRequest(id, silent: true)));
       _imageRequestsByOrderId.removeWhere((key, _) => !ids.contains(key));
     } finally {
-      _imageRequestLoading = false;
+      if (!silent) {
+        _imageRequestLoading = false;
+      }
       notifyListeners();
     }
   }

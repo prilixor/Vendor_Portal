@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { adminApi } from "@/app/services/adminApi";
+import { chatApi } from "@/app/services/chatApi";
+import { supportApi } from "@/app/services/supportApi";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 import { Card, CardContent } from "@/app/components/ui/card";
@@ -30,14 +32,16 @@ import { cn } from "@/app/helpers/utils";
 export const AdminNotifications = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = (searchParams.get("tab") as "all" | "orders" | "vendors" | "listings" | "logs") ?? "all";
-  const [activeTab, setActiveTab] = useState<"all" | "orders" | "vendors" | "listings" | "logs">(
-    ["all", "orders", "vendors", "listings", "logs"].includes(initialTab) ? initialTab : "all"
+  const tabValues = ["all", "orders", "vendors", "listings", "chats", "support", "logs"] as const;
+  type AdminAlertTab = (typeof tabValues)[number];
+  const initialTab = (searchParams.get("tab") as AdminAlertTab) ?? "all";
+  const [activeTab, setActiveTab] = useState<AdminAlertTab>(
+    tabValues.includes(initialTab) ? initialTab : "all"
   );
 
   useEffect(() => {
-    const t = searchParams.get("tab") as "all" | "orders" | "vendors" | "listings" | "logs";
-    if (t && ["all", "orders", "vendors", "listings", "logs"].includes(t)) {
+    const t = searchParams.get("tab") as AdminAlertTab;
+    if (t && tabValues.includes(t)) {
       setActiveTab(t);
     } else if (!t) {
       setActiveTab("all");
@@ -48,7 +52,7 @@ export const AdminNotifications = () => {
   const PAGE_SIZE = 15;
 
   const handleTabChange = (v: string) => {
-    const val = v as "all" | "orders" | "vendors" | "listings" | "logs";
+    const val = v as AdminAlertTab;
     setActiveTab(val);
     setPage(1); // Reset pagination on tab change
     if (val === "all") {
@@ -87,11 +91,30 @@ export const AdminNotifications = () => {
     refetchInterval: 30000,
   });
 
-  const isLoading = isLoadingOrders || isLoadingVendors || isLoadingLogs || isLoadingContinuations;
-  const isFetching = isFetchingOrders || isFetchingVendors || isFetchingLogs || isFetchingContinuations;
+  const { data: chatSessions = [], isLoading: isLoadingChats, refetch: refetchChats, isFetching: isFetchingChats } = useQuery({
+    queryKey: ["admin-customer-chat-sessions"],
+    queryFn: () => chatApi.getAdminSessions(),
+    refetchInterval: 15000,
+  });
+
+  const { data: supportTickets = [], isLoading: isLoadingSupport, refetch: refetchSupport, isFetching: isFetchingSupport } = useQuery({
+    queryKey: ["admin-vendor-support-tickets"],
+    queryFn: () => supportApi.getAllTickets(),
+    refetchInterval: 15000,
+  });
+
+  const isLoading = isLoadingOrders || isLoadingVendors || isLoadingLogs || isLoadingContinuations || isLoadingChats || isLoadingSupport;
+  const isFetching = isFetchingOrders || isFetchingVendors || isFetchingLogs || isFetchingContinuations || isFetchingChats || isFetchingSupport;
 
   const handleRefreshAll = async () => {
-    await Promise.all([refetchOrders(), refetchVendors(), refetchLogs(), refetchContinuations()]);
+    await Promise.all([
+      refetchOrders(),
+      refetchVendors(),
+      refetchLogs(),
+      refetchContinuations(),
+      refetchChats(),
+      refetchSupport(),
+    ]);
   };
 
   // Process dispatch failed and critical alerts
@@ -221,11 +244,65 @@ export const AdminNotifications = () => {
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [logs]);
 
+  const chatAlerts = useMemo(() => {
+    return chatSessions
+      .filter((s) => (s.unreadCount ?? 0) > 0)
+      .map((s) => ({
+        id: `chat-${s.id}`,
+        type: "chat" as const,
+        title: "Customer needs BlinksMed support",
+        description:
+          s.unreadCount === 1
+            ? `${s.customerName} sent a new message${s.orderNumber ? ` on order ${s.orderNumber}` : ""}.`
+            : `${s.customerName} has ${s.unreadCount} unread messages${s.orderNumber ? ` on order ${s.orderNumber}` : ""}.`,
+        status: "unread",
+        timestamp: s.lastMessageAt,
+        meta: {
+          customerName: s.customerName,
+          orderNumber: s.orderNumber,
+          unreadCount: s.unreadCount ?? 0,
+          subject: s.subject,
+        },
+        link: `/admin/customer-chats?sessionId=${encodeURIComponent(s.id)}`,
+      }))
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [chatSessions]);
+
+  const supportAlerts = useMemo(() => {
+    return supportTickets
+      .filter((t) => (t.unreadCount ?? 0) > 0)
+      .map((t) => {
+        const vendorLabel = t.vendorBusinessName || t.vendorEmail || "Vendor";
+        const unread = t.unreadCount ?? 0;
+        const latest = t.latestMessage?.message?.trim();
+        return {
+          id: `support-${t.id}`,
+          type: "support" as const,
+          title: "Vendor needs BlinksMed support",
+          description: latest
+            ? `${vendorLabel} · ${t.ticketNumber}: "${latest.length > 80 ? `${latest.slice(0, 80)}…` : latest}"`
+            : unread === 1
+              ? `${vendorLabel} needs help on ${t.ticketNumber}.`
+              : `${vendorLabel} has ${unread} unread messages on ${t.ticketNumber}.`,
+          status: t.status,
+          timestamp: t.updatedAt ?? t.createdAt,
+          meta: {
+            vendorEmail: t.vendorEmail,
+            ticketNumber: t.ticketNumber,
+            unreadCount: unread,
+            subject: t.subject,
+          },
+          link: `/admin/support?ticketId=${encodeURIComponent(t.id)}`,
+        };
+      })
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [supportTickets]);
+
   // Combine Alerts
   const allAlerts = useMemo(() => {
-    const list = [...criticalOrders, ...pendingVendors, ...listingAlerts];
+    const list = [...criticalOrders, ...pendingVendors, ...listingAlerts, ...chatAlerts, ...supportAlerts];
     return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [criticalOrders, pendingVendors, listingAlerts]);
+  }, [criticalOrders, pendingVendors, listingAlerts, chatAlerts, supportAlerts]);
 
   // Count Badges
   const counts = useMemo(() => ({
@@ -233,8 +310,10 @@ export const AdminNotifications = () => {
     orders: criticalOrders.length,
     vendors: pendingVendors.length,
     listings: listingAlerts.length,
+    chats: chatAlerts.length,
+    support: supportAlerts.length,
     logs: logs.length,
-  }), [allAlerts, criticalOrders, pendingVendors, listingAlerts, logs]);
+  }), [allAlerts, criticalOrders, pendingVendors, listingAlerts, chatAlerts, supportAlerts, logs]);
 
   // Helper to format audit log timeline icons
   const getLogIcon = (action: string) => {
@@ -308,6 +387,12 @@ export const AdminNotifications = () => {
           </TabsTrigger>
           <TabsTrigger value="listings" className="text-xs">
             Listing Pricing ({counts.listings})
+          </TabsTrigger>
+          <TabsTrigger value="chats" className="text-xs">
+            Customer Chats ({counts.chats})
+          </TabsTrigger>
+          <TabsTrigger value="support" className="text-xs">
+            Vendor Support ({counts.support})
           </TabsTrigger>
           <TabsTrigger value="logs" className="text-xs">
             System Activity Stream ({counts.logs})
@@ -415,6 +500,54 @@ export const AdminNotifications = () => {
             )
           )}
 
+          {/* TAB: CUSTOMER CHATS */}
+          {activeTab === "chats" && (
+            chatAlerts.length === 0 ? (
+              <Card className="border-border/60 p-12 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
+                <h3 className="mt-4 text-base font-bold text-foreground">No Unread Customer Chats</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  You&apos;re caught up. New messages from customers appear here until you open the conversation.
+                </p>
+              </Card>
+            ) : (
+              <div>
+                {chatAlerts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((alert) => (
+                  <div key={alert.id} className="mb-4 last:mb-0">
+                    <AlertCard alert={alert} navigate={navigate} />
+                  </div>
+                ))}
+                {renderPagination(chatAlerts.length)}
+              </div>
+            )
+          )}
+
+          {/* TAB: VENDOR SUPPORT */}
+          {activeTab === "support" && (
+            supportAlerts.length === 0 ? (
+              <Card className="border-border/60 p-12 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
+                <h3 className="mt-4 text-base font-bold text-foreground">No Unread Vendor Support</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  You&apos;re caught up. Bot escalations and vendor follow-ups appear here until you open the ticket.
+                </p>
+              </Card>
+            ) : (
+              <div>
+                {supportAlerts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((alert) => (
+                  <div key={alert.id} className="mb-4 last:mb-0">
+                    <AlertCard alert={alert} navigate={navigate} />
+                  </div>
+                ))}
+                {renderPagination(supportAlerts.length)}
+              </div>
+            )
+          )}
+
           {/* TAB: SYSTEM ACTIVITY STREAM */}
           {activeTab === "logs" && (
             sortedLogs.length === 0 ? (
@@ -488,7 +621,7 @@ const AlertCard = ({
 }: {
   alert: {
     id: string;
-    type: "order" | "vendor" | "extension" | "buyout" | "listing";
+    type: "order" | "vendor" | "extension" | "buyout" | "listing" | "chat" | "support";
     title: string;
     description: string;
     status: string;
@@ -507,11 +640,13 @@ const AlertCard = ({
           : alert.type === "extension" ? "bg-blue-500/10 text-blue-500"
           : alert.type === "buyout" ? "bg-fuchsia-500/10 text-fuchsia-500"
           : alert.type === "listing" ? "bg-indigo-500/10 text-indigo-500"
+          : alert.type === "chat" || alert.type === "support" ? "bg-primary/10 text-primary"
           : "bg-amber-500/10 text-amber-500"
         )}>
           {alert.type === "order" ? <AlertTriangle className="h-5 w-5" /> 
            : alert.type === "extension" ? <Clock className="h-5 w-5" />
            : alert.type === "buyout" || alert.type === "listing" ? <Package className="h-5 w-5" />
+           : alert.type === "chat" || alert.type === "support" ? <MessageSquare className="h-5 w-5" />
            : <Building className="h-5 w-5" />}
         </div>
         <div className="space-y-1">
@@ -527,6 +662,8 @@ const AlertCard = ({
                 ? "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-500/20 dark:bg-fuchsia-900/30 dark:text-fuchsia-300"
                 : alert.type === "listing"
                 ? "bg-indigo-100 text-indigo-800 border-indigo-500/20 dark:bg-indigo-900/30 dark:text-indigo-300"
+                : alert.type === "chat" || alert.type === "support"
+                ? "bg-primary/15 text-primary border-primary/20"
                 : "bg-amber-100 text-amber-950 border-amber-500/20"
             )}>
               {alert.status.replace("_", " ").toUpperCase()}
@@ -546,6 +683,24 @@ const AlertCard = ({
               <>
                 <p>Listing: <span className="text-foreground">{alert.meta.listingTitle}</span></p>
                 <p>Catalog: <span className="text-foreground capitalize">{alert.meta.kind || "product"}</span></p>
+              </>
+            ) : alert.type === "chat" ? (
+              <>
+                <p>Customer: <span className="text-foreground">{alert.meta.customerName}</span></p>
+                {alert.meta.orderNumber ? (
+                  <p>Order: <span className="text-foreground font-mono">{alert.meta.orderNumber}</span></p>
+                ) : null}
+                <p>Unread: <span className="text-foreground font-bold">{alert.meta.unreadCount}</span></p>
+              </>
+            ) : alert.type === "support" ? (
+              <>
+                <p>Ticket: <span className="text-foreground font-mono">{alert.meta.ticketNumber}</span></p>
+                {alert.meta.vendorEmail ? (
+                  <p className="flex items-center gap-1 flex-wrap">
+                    Vendor: <CopyableEmail email={alert.meta.vendorEmail} textClassName="text-foreground" />
+                  </p>
+                ) : null}
+                <p>Unread: <span className="text-foreground font-bold">{alert.meta.unreadCount}</span></p>
               </>
             ) : (
               <>
@@ -574,7 +729,11 @@ const AlertCard = ({
             navigate(alert.link);
           }
         }}>
-          {alert.type === "listing" ? "Open Catalog" : "Resolve Action"}
+          {alert.type === "listing"
+            ? "Open Catalog"
+            : alert.type === "chat" || alert.type === "support"
+              ? "Open Chat"
+              : "Resolve Action"}
           <ChevronRight className="ml-1 h-3.5 w-3.5" />
         </Button>
       </div>

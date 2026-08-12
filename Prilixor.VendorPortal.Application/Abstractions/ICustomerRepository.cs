@@ -92,6 +92,16 @@ public interface ICustomerRepository
     Task UpdateChatSessionAsync(ChatSession session, CancellationToken cancellationToken);
     Task<List<ChatMessage>> GetChatMessagesAsync(Guid sessionId, CancellationToken cancellationToken);
     Task AddChatMessageAsync(ChatMessage message, CancellationToken cancellationToken);
+    /// <summary>Unread messages in a session from the given sender type.</summary>
+    Task<int> CountUnreadChatMessagesAsync(Guid sessionId, string senderType, CancellationToken cancellationToken);
+    /// <summary>Total unread Customer→Admin messages across all BlinksMed support sessions.</summary>
+    Task<int> CountUnreadAdminInboxMessagesAsync(CancellationToken cancellationToken);
+    Task<Dictionary<Guid, int>> GetUnreadChatCountsBySessionAsync(
+        IReadOnlyCollection<Guid> sessionIds,
+        string senderType,
+        CancellationToken cancellationToken);
+    /// <summary>Marks messages from <paramref name="senderType"/> as read in the session.</summary>
+    Task<int> MarkChatMessagesReadAsync(Guid sessionId, string senderType, CancellationToken cancellationToken);
     Task<string?> GetVendorBusinessNameAsync(Guid vendorId, CancellationToken cancellationToken);
 
     Task<bool> HasActiveOrdersForListingAsync(Guid listingId, CancellationToken cancellationToken);

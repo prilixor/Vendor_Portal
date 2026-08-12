@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/chat_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/chat_day_label.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final String sessionId;
@@ -57,12 +58,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
+        toolbarHeight: 72,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Chat with Admin', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(
+              'Chat with BlinksMed support',
+              style: TextStyle(color: colors.textPrimary, fontSize: 17, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 2),
-            Text('Order: ${widget.orderNumber} • ${widget.listingTitle}', style: TextStyle(color: colors.textSecondary, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(
+              'Message BlinksMed about this order — not your product supplier. '
+              'Order: ${widget.orderNumber} • ${widget.listingTitle}',
+              style: TextStyle(color: colors.textSecondary, fontSize: 11),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
         backgroundColor: colors.surface,
@@ -92,39 +103,96 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         reverse: true, // Show latest messages at the bottom
                         itemCount: provider.messages.length,
                         itemBuilder: (context, index) {
-                      // Reverse order
-                      final message = provider.messages[provider.messages.length - 1 - index];
-                      final isMe = message.isMe;
+                          final messages = provider.messages;
+                          final chronologicalIndex = messages.length - 1 - index;
+                          final message = messages[chronologicalIndex];
+                          final previous = chronologicalIndex > 0
+                              ? messages[chronologicalIndex - 1]
+                              : null;
+                          final showDay = previous == null ||
+                              !isSameChatDay(previous.sentAt, message.sentAt);
+                          final isMe = message.isMe;
 
-                      return Align(
-                        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: isMe ? const Color(0xFF6C63FF) : colors.surface,
-                            borderRadius: BorderRadius.only(
-                              topLeft: const Radius.circular(16),
-                              topRight: const Radius.circular(16),
-                              bottomLeft: isMe ? const Radius.circular(16) : const Radius.circular(4),
-                              bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(16),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                          return Column(
                             children: [
-                              Text(message.text, style: TextStyle(color: isMe ? Colors.white : colors.textPrimary, fontSize: 16)),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${message.sentAt.hour.toString().padLeft(2, '0')}:${message.sentAt.minute.toString().padLeft(2, '0')}',
-                                style: TextStyle(color: isMe ? Colors.white70 : colors.textMuted, fontSize: 10),
+                              if (showDay)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 12, top: 4),
+                                  child: Center(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: colors.surfaceElevated,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: colors.border),
+                                      ),
+                                      child: Text(
+                                        formatChatDayLabel(message.sentAt),
+                                        style: TextStyle(
+                                          color: colors.textMuted,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              Align(
+                                alignment: isMe
+                                    ? Alignment.centerRight
+                                    : Alignment.centerLeft,
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isMe
+                                        ? const Color(0xFF6C63FF)
+                                        : colors.surface,
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: const Radius.circular(16),
+                                      topRight: const Radius.circular(16),
+                                      bottomLeft: isMe
+                                          ? const Radius.circular(16)
+                                          : const Radius.circular(4),
+                                      bottomRight: isMe
+                                          ? const Radius.circular(4)
+                                          : const Radius.circular(16),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: isMe
+                                        ? CrossAxisAlignment.end
+                                        : CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        message.text,
+                                        style: TextStyle(
+                                          color: isMe ? Colors.white : colors.textPrimary,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        formatChatTime(message.sentAt),
+                                        style: TextStyle(
+                                          color: isMe ? Colors.white70 : colors.textMuted,
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                          );
+                        },
+                      ),
           ),
           
           // Input Bar

@@ -1,13 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_notification_model.dart';
 import '../../core/providers/vendor_home_provider.dart';
+import '../../core/providers/vendor_notification_provider.dart';
+import '../../core/providers/vendor_onboarding_provider.dart';
+import '../../core/providers/vendor_order_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/vendor_notification_utils.dart';
 import '../../core/utils/vendor_notification_route.dart';
+import '../../shared/widgets/pending_approval_banner.dart';
 import '../inventory/inventory_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../orders/expirations_screen.dart';
@@ -43,7 +49,13 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    // Seed name + kick load immediately so frame 1 is skeleton (not empty content).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      Provider.of<VendorHomeProvider>(context, listen: false)
+          .seedBusinessName(auth.displayName);
+      _load();
+    });
   }
 
   @override
@@ -80,8 +92,30 @@ class _HomeScreenState extends State<HomeScreen> {
     final vendorId =
         Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
-    await Provider.of<VendorHomeProvider>(context, listen: false)
-        .loadDashboard(vendorId);
+    final home = Provider.of<VendorHomeProvider>(context, listen: false);
+    final orders = Provider.of<VendorOrderProvider>(context, listen: false);
+    final alerts =
+        Provider.of<VendorNotificationProvider>(context, listen: false);
+    final onboarding =
+        Provider.of<VendorOnboardingProvider>(context, listen: false);
+
+    // Home critical path only — shell already refreshes offers/alerts for badges.
+    // Pull-to-refresh still revalidates badges without blocking first paint.
+    await home.loadDashboard(vendorId);
+    unawaited(Future.wait([
+      orders.fetchOffers(vendorId, silent: true),
+      alerts.fetchNotifications(vendorId, silent: true),
+    ]));
+    if (!mounted) return;
+    // Verification banner prefers shell onboarding data when available.
+    if (onboarding.documents.isNotEmpty || onboarding.primaryBank != null) {
+      home.applyVerification(
+        isVerified: onboarding.isVerified,
+        message: onboarding.isVerified
+            ? 'Your verification documents and bank details are approved.'
+            : 'Complete document and bank verification in Onboarding.',
+      );
+    }
   }
 
   void _push(Widget screen) {
@@ -105,17 +139,44 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final home = Provider.of<VendorHomeProvider>(context);
-    final pending = Provider.of<VendorProfileProvider>(context).isPending;
-    final name = home.businessName.isNotEmpty ? home.businessName : 'Vendor';
-    final isInitialLoad =
-        home.loading && home.totalListings == 0 && home.recentActivity.isEmpty;
+    final profile = Provider.of<VendorProfileProvider>(context);
+    final pending = profile.isPending;
+    final orders = Provider.of<VendorOrderProvider>(context);
+    final alerts = Provider.of<VendorNotificationProvider>(context);
+    final onboarding = Provider.of<VendorOnboardingProvider>(context);
+    final unreadAlerts = alerts.unreadCount;
+    final pendingRequests = orders.pendingOffers.length;
+    final recentActivity = alerts.notifications.take(5).toList();
+    final isVerified = onboarding.documents.isNotEmpty ||
+            onboarding.primaryBank != null
+        ? onboarding.isVerified
+        : home.isVerified;
+    final verificationMessage = onboarding.documents.isNotEmpty ||
+            onboarding.primaryBank != null
+        ? (onboarding.isVerified
+            ? 'Your verification documents and bank details are approved.'
+            : 'Complete document and bank verification in Onboarding.')
+        : home.verificationMessage;
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final name = home.businessName.isNotEmpty
+        ? home.businessName
+        : (auth.displayName?.trim().isNotEmpty == true
+            ? auth.displayName!.trim()
+            : 'Vendor');
+    final isInitialLoad = home.showInitialSkeleton;
+    final shellBannerVisible =
+        PendingApprovalBanner.isVisible(profile, onboarding);
 
     return RefreshIndicator(
       color: AppTheme.accent,
       onRefresh: _load,
       child: isInitialLoad
           ? const _DashboardSkeleton()
-          : ListView(
+          : Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: ListView(
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 108),
@@ -126,12 +187,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   onAddListing: pending ? null : _openAddListing,
                   onViewInventory: () => _push(const InventoryScreen()),
                 ),
-                const SizedBox(height: 16),
-                _VerificationBanner(
-                  isVerified: home.isVerified,
-                  message: home.verificationMessage,
-                  onManage: () => _push(const OnboardingScreen()),
-                ),
+                if (!shellBannerVisible) ...[
+                  const SizedBox(height: 16),
+                  _VerificationBanner(
+                    isVerified: isVerified,
+                    message: verificationMessage,
+                    onManage: () => _push(const OnboardingScreen()),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 _SectionHeader(
                   title: 'Catalog overview',
@@ -166,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     _StatTile(
                       label: 'Unread alerts',
-                      value: home.unreadNotifications,
+                      value: unreadAlerts,
                       icon: Icons.notifications_active_outlined,
                       accent: const Color(0xFFFBBF24),
                       onTap: () => widget.onNavigateTab?.call(3),
@@ -184,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     _StatTile(
                       label: 'Pending requests',
-                      value: home.pendingRequests,
+                      value: pendingRequests,
                       icon: Icons.assignment_outlined,
                       accent: const Color(0xFFF59E0B),
                       onTap: () => widget.onNavigateTab?.call(1),
@@ -265,7 +328,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 10),
                 _RecentActivityCard(
-                  items: home.recentActivity,
+                  items: recentActivity,
                   onItemTap: (notification) =>
                       navigateForVendorNotification(context, notification),
                   onViewAll: () => widget.onNavigateTab?.call(3),
@@ -290,6 +353,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ],
+                ),
+              ),
             ),
     );
   }
@@ -549,30 +614,28 @@ class _StatGrid extends StatelessWidget {
 
   const _StatGrid({required this.children});
 
-  double _tileHeight(double maxWidth) {
-    final cellWidth = (maxWidth - 10) / 2;
-    // Fixed row height — include buffer for web font metrics on narrow widths.
-    if (cellWidth < 150) return 126;
-    if (cellWidth < 170) return 118;
-    return 112;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio:
-              (constraints.maxWidth - 10) / 2 / _tileHeight(constraints.maxWidth),
-          children: children,
-        );
-      },
-    );
+    // Intrinsic-height tiles — avoids wide-web aspect-ratio clipping (icons-only look).
+    final rows = <Widget>[];
+    for (var i = 0; i < children.length; i += 2) {
+      final left = children[i];
+      final right = i + 1 < children.length ? children[i + 1] : null;
+      rows.add(
+        Padding(
+          padding: EdgeInsets.only(bottom: i + 2 < children.length ? 10 : 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: left),
+              const SizedBox(width: 10),
+              Expanded(child: right ?? const SizedBox.shrink()),
+            ],
+          ),
+        ),
+      );
+    }
+    return Column(children: rows);
   }
 }
 
@@ -601,14 +664,14 @@ class _StatTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Ink(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: colors.border.withValues(alpha: 0.7)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
@@ -629,27 +692,25 @@ class _StatTile extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Text(
                 '$value',
                 style: TextStyle(
                   color: colors.textPrimary,
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
-                  height: 1,
+                  height: 1.1,
                 ),
               ),
-              const SizedBox(height: 2),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.textSecondary,
-                    fontSize: 11,
-                    height: 1.15,
-                  ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  height: 1.2,
                 ),
               ),
             ],
@@ -1062,33 +1123,51 @@ class _DashboardSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 108),
-      children: [
-        _SkeletonBox(height: 168, radius: 20),
-        const SizedBox(height: 16),
-        _SkeletonBox(height: 88, radius: 16),
-        const SizedBox(height: 20),
-        _SkeletonBox(height: 18, width: 140, radius: 6),
-        const SizedBox(height: 10),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 1.45,
-          children: List.generate(4, (_) => _SkeletonBox(height: 100, radius: 16)),
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 108),
+          children: [
+            const _SkeletonBox(height: 168, radius: 20),
+            const SizedBox(height: 20),
+            const _SkeletonBox(height: 18, width: 140, radius: 6),
+            const SizedBox(height: 10),
+            Row(
+              children: const [
+                Expanded(child: _SkeletonBox(height: 108, radius: 16)),
+                SizedBox(width: 10),
+                Expanded(child: _SkeletonBox(height: 108, radius: 16)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: const [
+                Expanded(child: _SkeletonBox(height: 108, radius: 16)),
+                SizedBox(width: 10),
+                Expanded(child: _SkeletonBox(height: 108, radius: 16)),
+              ],
+            ),
+            const SizedBox(height: 24),
+            const _SkeletonBox(height: 18, width: 160, radius: 6),
+            const SizedBox(height: 10),
+            Row(
+              children: const [
+                Expanded(child: _SkeletonBox(height: 108, radius: 16)),
+                SizedBox(width: 10),
+                Expanded(child: _SkeletonBox(height: 108, radius: 16)),
+              ],
+            ),
+          ],
         ),
-        const SizedBox(height: 24),
-        _SkeletonBox(height: 220, radius: 16),
-      ],
+      ),
     );
   }
 }
 
-class _SkeletonBox extends StatelessWidget {
+class _SkeletonBox extends StatefulWidget {
   final double height;
   final double? width;
   final double radius;
@@ -1100,15 +1179,43 @@ class _SkeletonBox extends StatelessWidget {
   });
 
   @override
+  State<_SkeletonBox> createState() => _SkeletonBoxState();
+}
+
+class _SkeletonBoxState extends State<_SkeletonBox>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: AppTheme.card(context),
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: colors.border.withValues(alpha: 0.5)),
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.45, end: 0.9).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      ),
+      child: Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: AppTheme.card(context),
+          borderRadius: BorderRadius.circular(widget.radius),
+          border: Border.all(color: colors.border.withValues(alpha: 0.5)),
+        ),
       ),
     );
   }

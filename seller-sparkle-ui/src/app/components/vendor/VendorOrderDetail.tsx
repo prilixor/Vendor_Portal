@@ -308,6 +308,8 @@ const VendorOrderDetail = () => {
   const [doctorLookupCode, setDoctorLookupCode] = useState("");
   const [imageRequest, setImageRequest] = useState<VendorOrderImageRequestApiDto | null>(null);
   const [imageRequestLoading, setImageRequestLoading] = useState(false);
+  /** Open photo requests across the order group — for item-list badges. */
+  const [groupPhotoMeta, setGroupPhotoMeta] = useState<Map<string, { count: number }>>(new Map());
   const [uploadingOrderImage, setUploadingOrderImage] = useState(false);
   const [deletingOrderImageId, setDeletingOrderImageId] = useState<string | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
@@ -403,6 +405,42 @@ const VendorOrderDetail = () => {
       : [order, ...matches.filter((o) => o.orderId !== order.orderId)];
     return [...items].sort((a, b) => a.orderNumber.localeCompare(b.orderNumber));
   }, [order, allOrders]);
+
+  const groupPhotoKey = useMemo(
+    () => orderGroupItems.map((item) => item.orderId).join("|"),
+    [orderGroupItems],
+  );
+
+  useEffect(() => {
+    if (!user?.id || !groupPhotoKey) {
+      setGroupPhotoMeta(new Map());
+      return;
+    }
+    let cancelled = false;
+    const ids = groupPhotoKey.split("|").filter(Boolean);
+    void (async () => {
+      const entries = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const row = await vendorOnboardingApi.getVendorOrderImageRequest(user.id, id);
+            if (!row) return [id, null] as const;
+            return [id, { count: row.images?.length ?? 0 }] as const;
+          } catch {
+            return [id, null] as const;
+          }
+        }),
+      );
+      if (cancelled) return;
+      const map = new Map<string, { count: number }>();
+      for (const [id, meta] of entries) {
+        if (meta) map.set(id, meta);
+      }
+      setGroupPhotoMeta(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, groupPhotoKey, imageRequest?.id, orderImages.length]);
 
   const groupPayoutAmount = useMemo(
     () => orderGroupItems.reduce((sum, item) => sum + itemPayout(item), 0),
@@ -718,6 +756,9 @@ const VendorOrderDetail = () => {
             {orderGroupItems.map((item) => {
               const isSelected = item.orderId === currentItemId;
               const imageUrl = resolveItemImageUrl(item);
+              const photoMeta = groupPhotoMeta.get(item.orderId);
+              const photoWaiting = photoMeta != null && photoMeta.count === 0;
+              const photoReceived = photoMeta != null && photoMeta.count > 0;
               return (
                 <button
                   key={item.orderId}
@@ -730,19 +771,19 @@ const VendorOrderDetail = () => {
                       : "bg-transparent border-border/60 hover:bg-accent/20",
                   )}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     {imageUrl ? (
                       <img
                         src={imageUrl}
                         alt={item.listingTitle}
-                        className="h-10 w-10 rounded-md object-cover border border-border/40 bg-muted"
+                        className="h-10 w-10 shrink-0 rounded-md object-cover border border-border/40 bg-muted"
                       />
                     ) : (
-                      <div className="h-10 w-10 rounded-md bg-muted border border-border/40 flex items-center justify-center text-[10px] text-muted-foreground">
+                      <div className="h-10 w-10 shrink-0 rounded-md bg-muted border border-border/40 flex items-center justify-center text-[10px] text-muted-foreground">
                         No Img
                       </div>
                     )}
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground">{item.listingTitle}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Qty: {item.quantity}
@@ -754,6 +795,18 @@ const VendorOrderDetail = () => {
                         <p className="mt-1.5 text-[10px] font-medium text-primary">
                           {item.assignedAssetTags.length} serial number
                           {item.assignedAssetTags.length === 1 ? "" : "s"} assigned
+                        </p>
+                      ) : null}
+                      {photoWaiting ? (
+                        <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                          <Images className="h-3 w-3" />
+                          Customer photos requested · upload needed
+                        </p>
+                      ) : null}
+                      {photoReceived ? (
+                        <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                          <Images className="h-3 w-3" />
+                          {photoMeta.count}/{MAX_ORDER_IMAGES} customer photos uploaded
                         </p>
                       ) : null}
                     </div>
@@ -1012,7 +1065,7 @@ const VendorOrderDetail = () => {
           {/* Customer photo request — vendor uploads (hidden when no open request) */}
           {!imageRequestLoading && imageRequest && (
             <>
-              <Card className="border-border/80 shadow-sm">
+              <Card className="border-border/80 shadow-sm border-amber-200/70 dark:border-amber-500/30">
                 <CardHeader className="pb-3">
                   <div className="flex items-start gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -1024,9 +1077,17 @@ const VendorOrderDetail = () => {
                         <Badge variant="secondary" className="font-normal tabular-nums">
                           {orderImages.length}/{MAX_ORDER_IMAGES}
                         </Badge>
+                        {orderImages.length === 0 ? (
+                          <Badge className="border-0 bg-amber-100 text-amber-900 hover:bg-amber-100 dark:bg-amber-950/50 dark:text-amber-200">
+                            Action needed
+                          </Badge>
+                        ) : null}
                       </div>
+                      <p className="mt-1 text-sm font-semibold text-foreground">
+                        {order.listingTitle}
+                      </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        From the customer for this order item — upload here (not Admin chat).{" "}
+                        From the customer for this product only — upload here (not Admin chat).{" "}
                         {imageRequest.message}
                       </p>
                     </div>

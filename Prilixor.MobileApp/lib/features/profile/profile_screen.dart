@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/profile_provider.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/utils/require_auth.dart';
 import '../../shared/widgets/guest_sign_in_prompt.dart';
 import '../auth/login_screen.dart';
@@ -145,17 +146,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (profileProvider.profile!.phoneNumber.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
-                          profileProvider.profile!.phoneNumber,
+                          IndianMobilePhone.formatDisplay(
+                            profileProvider.profile!.phoneNumber,
+                          ),
                           style: TextStyle(color: colors.textMuted, fontSize: 14),
                         ),
                       ],
                       const SizedBox(height: 32),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: colors.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: colors.border),
-                        ),
+                      // Material (not DecoratedBox) so ListTile ink/splash paint correctly.
+                      Material(
+                        color: colors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        clipBehavior: Clip.antiAlias,
                         child: Column(
                           children: [
                             _buildMenuItem(context, icon: Icons.person_outline, title: 'Edit Profile', onTap: _openEditProfile),

@@ -16,6 +16,8 @@ internal sealed class GetVendorProfileQueryHandler(IVendorOnboardingRepository r
             return Result.Failure<VendorProfileDto>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
         }
 
+        // Client reload/navigation cancels RequestAborted → OperationCanceledException here.
+        // Handled as HTTP 499 by GlobalExceptionHandler (not a data bug).
         var vendor = await repository.GetVendorByIdAsync(vendorId, cancellationToken);
         if (vendor is null)
         {

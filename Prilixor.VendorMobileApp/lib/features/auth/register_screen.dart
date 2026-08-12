@@ -1,6 +1,5 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -9,6 +8,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/config/app_urls.dart';
 import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/custom_text_field.dart';
+import '../../shared/widgets/indian_mobile_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import 'login_screen.dart';
 import 'verify_email_sent_screen.dart';
@@ -216,36 +216,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              TextField(
+              IndianMobileField(
                 controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
-                ],
-                style: const TextStyle(color: Colors.white),
+                label: 'Phone number',
+                required: true,
+                errorText: _phoneError,
+                textInputAction: TextInputAction.next,
                 onChanged: (_) {
                   if (_phoneError != null) setState(() => _phoneError = null);
                 },
-                decoration: requiredInputDecoration(
-                  context,
-                  label: 'Phone number',
-                  required: true,
-                  errorText: _phoneError,
-                ).copyWith(
-                  prefixText: '+91 ',
-                  prefixStyle: const TextStyle(
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  hintText: '9876543210',
-                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.28)),
-                  helperText: 'Indian mobile: 10 digits starting with 6–9',
-                  helperStyle: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
-                    fontSize: 11,
-                  ),
-                ),
               ),
               const SizedBox(height: 16),
               CustomTextField(

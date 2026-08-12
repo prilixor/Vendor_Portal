@@ -16,13 +16,23 @@ internal static class SupportAiReplyPolicy
     public static bool IsEscalationText(string? message)
     {
         var normalized = message?.Trim().TrimEnd('.') ?? string.Empty;
-        return string.Equals(normalized, EscalationFallback.TrimEnd('.'), StringComparison.OrdinalIgnoreCase);
+        if (string.Equals(normalized, EscalationFallback.TrimEnd('.'), StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Frontend / Groq custom escalate copy often includes this phrase.
+        return normalized.Contains("support team will assist", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool HasEscalationReply(IReadOnlyList<SupportMessage> messages) =>
         messages.Any(m =>
             string.Equals(m.SenderType, "AI", StringComparison.OrdinalIgnoreCase)
             && IsEscalationText(m.Message));
+
+    /// <summary>Normalize AI escalate replies so FE/BE agree the thread is waiting for a human.</summary>
+    public static string NormalizeAiReply(string? message, bool canAnswer) =>
+        canAnswer
+            ? (message?.Trim() ?? string.Empty)
+            : (IsEscalationText(message) ? message!.Trim() : EscalationFallback);
 
     /// <summary>
     /// AI replies once per thread for escalation, and never after an admin joins.

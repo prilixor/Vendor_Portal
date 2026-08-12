@@ -4,13 +4,13 @@ import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/providers/vendor_support_provider.dart';
+import '../../core/utils/indian_mobile_phone.dart';
 import '../products/products_screen.dart';
 import '../inventory/inventory_screen.dart';
 import '../auth/login_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../service_areas/service_areas_screen.dart';
 import '../support/support_chat_screen.dart';
-import '../chat/chat_sessions_screen.dart';
 import 'settings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -87,7 +87,10 @@ class ProfileScreen extends StatelessWidget {
               if (businessName != null && businessName.isNotEmpty)
                 const Divider(color: Colors.white12, height: 24),
               if (phone != null && phone.isNotEmpty) ...[
-                _InfoRow(label: 'Phone', value: phone),
+                _InfoRow(
+                  label: 'Phone',
+                  value: IndianMobilePhone.formatDisplay(phone),
+                ),
                 const Divider(color: Colors.white12, height: 24),
               ],
               _InfoRow(label: 'Account status', value: accountStatus),
@@ -107,7 +110,7 @@ class ProfileScreen extends StatelessWidget {
           _MenuTile(
             icon: Icons.map_outlined,
             title: 'Service Areas',
-            subtitle: 'Delivery & service radius',
+            subtitle: 'Delivery pin (coverage set by Admin)',
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const ServiceAreasScreen()),
@@ -149,21 +152,15 @@ class ProfileScreen extends StatelessWidget {
             title: 'BlinksMed Support',
             subtitle: supportUnread > 0
                 ? '$supportUnread new support ${supportUnread == 1 ? 'reply' : 'replies'}'
-                : 'AI help & admin tickets',
+                : 'Chat with BlinksMed admin',
             badgeCount: supportUnread,
             onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SupportChatScreen()),
-              );
-            },
-          ),
-          _MenuTile(
-            icon: Icons.chat_bubble_outline,
-            title: 'Chats',
-            subtitle: 'Customer order conversations',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ChatSessionsScreen()),
+                MaterialPageRoute(
+                  builder: (_) => SupportChatScreen(
+                    openTicketsInitially: supportUnread > 0,
+                  ),
+                ),
               );
             },
           ),

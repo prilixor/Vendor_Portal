@@ -77,6 +77,7 @@ class AuthProvider extends ChangeNotifier {
       }
 
       if (!JwtDecoder.isExpired(token)) {
+        _apiClient.setAccessToken(token);
         await _hydrateUserFromStorageOrJwt(token);
         _isAuthenticated = true;
         return true;
@@ -119,6 +120,7 @@ class AuthProvider extends ChangeNotifier {
             if (newRefresh != null && newRefresh.isNotEmpty) {
               await _storage.write(key: VendorAuthStorage.refreshToken, value: newRefresh);
             }
+            _apiClient.setAccessToken(newToken);
             await _hydrateUserFromStorageOrJwt(newToken);
             _isAuthenticated = true;
             return true;
@@ -180,6 +182,7 @@ class AuthProvider extends ChangeNotifier {
         if (refreshToken != null && refreshToken.isNotEmpty) {
           await _storage.write(key: VendorAuthStorage.refreshToken, value: refreshToken);
         }
+        _apiClient.setAccessToken(token);
 
         final id = user?['id']?.toString();
         final userEmail = user?['email']?.toString();
@@ -226,6 +229,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    _apiClient.clearAccessToken();
     await _storage.delete(key: VendorAuthStorage.jwtToken);
     await _storage.delete(key: VendorAuthStorage.refreshToken);
     await _storage.delete(key: _kVendorId);

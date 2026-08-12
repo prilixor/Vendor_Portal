@@ -21,6 +21,23 @@ class IndianMobilePhone {
     return digits;
   }
 
+  /// Restrict typing/paste to 10 national digits (strips +91 / 91 / 0 when pasted).
+  static String maskInput(String? value) {
+    final digits = digitsOnly(value);
+    if (digits.length >= 11) {
+      final normalized = normalizeDigits(value);
+      return normalized.length > 10 ? normalized.substring(0, 10) : normalized;
+    }
+    return digits.length > 10 ? digits.substring(0, 10) : digits;
+  }
+
+  /// Display form e.g. `+91 9909999099` (empty → empty).
+  static String formatDisplay(String? value) {
+    final digits = normalizeDigits(value);
+    if (digits.isEmpty) return '';
+    return '+91 $digits';
+  }
+
   static bool isValid(String? value) => pattern.hasMatch(normalizeDigits(value));
 
   /// Empty is OK for optional fields; non-empty must be valid.

@@ -283,7 +283,7 @@ const AdminHospitals = () => {
           </DialogHeader>
           <FormGrid>
             <div className="space-y-2 sm:col-span-2">
-              <Label>Name *</Label>
+              <Label required>Name</Label>
               <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
               <FieldError message={fieldErrors.name} />
             </div>

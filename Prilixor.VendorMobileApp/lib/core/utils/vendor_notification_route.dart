@@ -6,6 +6,7 @@ import '../../features/orders/order_detail_screen.dart';
 import '../../features/orders/order_requests_screen.dart';
 import '../../features/orders/orders_screen.dart';
 import '../../features/products/products_screen.dart';
+import '../../features/support/support_chat_screen.dart';
 import '../models/vendor_notification_model.dart';
 import 'vendor_notification_utils.dart';
 
@@ -19,16 +20,29 @@ enum VendorNotificationDestination {
   onboardingProfile,
   onboardingDocuments,
   onboardingBank,
+  supportChat,
 }
 
 class VendorNotificationRoute {
   final VendorNotificationDestination destination;
   final String? orderId;
+  final String? supportTicketNumber;
 
   const VendorNotificationRoute({
     required this.destination,
     this.orderId,
+    this.supportTicketNumber,
   });
+}
+
+/// Extracts `TK-...` from notification bodies like `Ticket TK-20260811-0933: hello`.
+String? extractSupportTicketNumber(String? message) {
+  if (message == null || message.isEmpty) return null;
+  final match = RegExp(
+    r'\b(TK-[A-Z0-9-]+)\b',
+    caseSensitive: false,
+  ).firstMatch(message);
+  return match?.group(1)?.toUpperCase();
 }
 
 /// Mirrors `seller-sparkle-ui/src/app/helpers/vendorNav.ts` → `getVendorRoute`.
@@ -36,9 +50,19 @@ VendorNotificationRoute? resolveVendorNotificationRoute({
   required String? notificationType,
   required String? title,
   String? orderIdFromMessage,
+  String? supportTicketNumber,
 }) {
   final type = notificationType?.trim().toLowerCase() ?? '';
   final t = title?.trim().toLowerCase() ?? '';
+
+  if (type == 'support_chat_reply' ||
+      type.contains('support_chat') ||
+      type == 'support_reply') {
+    return VendorNotificationRoute(
+      destination: VendorNotificationDestination.supportChat,
+      supportTicketNumber: supportTicketNumber,
+    );
+  }
 
   if (type == 'dispatch_offer' ||
       type == 'new_order' ||
@@ -89,6 +113,15 @@ VendorNotificationRoute? resolveVendorNotificationRoute({
   if (type.startsWith('vendor_')) {
     return const VendorNotificationRoute(
       destination: VendorNotificationDestination.onboardingProfile,
+    );
+  }
+
+  if (t.contains('blinksmed support') ||
+      t.contains('support replied') ||
+      t.contains('support reply')) {
+    return VendorNotificationRoute(
+      destination: VendorNotificationDestination.supportChat,
+      supportTicketNumber: supportTicketNumber,
     );
   }
 
@@ -143,6 +176,7 @@ VendorNotificationRoute? resolveVendorNotificationRouteFor(VendorNotification n)
     notificationType: n.notificationType,
     title: n.title,
     orderIdFromMessage: extractOrderIdFromMessage(n.message),
+    supportTicketNumber: extractSupportTicketNumber(n.message),
   );
 }
 
@@ -210,6 +244,16 @@ void navigateVendorNotificationRoute(
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => const OnboardingScreen(initialTab: 2),
+        ),
+      );
+      return;
+    case VendorNotificationDestination.supportChat:
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => SupportChatScreen(
+            openTicketsInitially: true,
+            initialTicketNumber: route.supportTicketNumber,
+          ),
         ),
       );
       return;

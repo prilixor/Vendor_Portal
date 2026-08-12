@@ -11,6 +11,7 @@ export interface SupportTicketDto {
   createdAt: string;
   updatedAt?: string;
   latestMessage?: SupportMessageDto;
+  unreadCount?: number;
 }
 
 export interface SupportMessageDto {
@@ -34,6 +35,7 @@ export interface SendSupportMessageRequest {
   senderId: string;
   senderType: string;
   message: string;
+  attachmentUrls?: string[];
 }
 
 export interface UpdateTicketStatusRequest {
@@ -71,8 +73,9 @@ export const supportApi = {
   getVendorTickets: (vendorId: string) => {
     return apiClient.get<SupportTicketDto[]>(`/support/tickets/vendor/${vendorId}`);
   },
-  getTicketMessages: (ticketId: string) => {
-    return apiClient.get<SupportMessageDto[]>(`/support/tickets/${ticketId}/messages`);
+  getTicketMessages: (ticketId: string, opts?: { markReadForAdmin?: boolean }) => {
+    const qs = opts?.markReadForAdmin ? "?markReadForAdmin=true" : "";
+    return apiClient.get<SupportMessageDto[]>(`/support/tickets/${ticketId}/messages${qs}`);
   },
   sendMessage: (ticketId: string, request: SendSupportMessageRequest) => {
     return apiClient.post<SupportMessageDto>(`/support/tickets/${ticketId}/messages`, request);
@@ -94,6 +97,9 @@ export const supportApi = {
   // Admin
   getAllTickets: () => {
     return apiClient.get<SupportTicketDto[]>("/support/admin/tickets");
+  },
+  getAdminUnreadCount: () => {
+    return apiClient.get<{ count: number }>("/support/admin/unread-count");
   },
   updateTicketStatus: (ticketId: string, request: UpdateTicketStatusRequest) => {
     return apiClient.patch<void>(`/support/admin/tickets/${ticketId}/status`, request);

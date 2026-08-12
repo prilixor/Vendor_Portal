@@ -17,6 +17,8 @@ import { useCart } from "@/app/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
 import { adminApi } from "@/app/services/adminApi";
+import { chatApi } from "@/app/services/chatApi";
+import { supportApi } from "@/app/services/supportApi";
 import { getVendorPortalHref } from "@/app/helpers/portalHost";
 import { VendorDoctorLookupDialog } from "@/app/components/vendor/VendorDoctorLookupDialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
@@ -67,14 +69,30 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
     refetchInterval: 30000, // every 30 seconds
   });
 
+  const { data: adminChatUnread } = useQuery({
+    queryKey: ["admin-customer-chat-unread"],
+    queryFn: () => chatApi.getAdminUnreadCount(),
+    enabled: variant === "admin" && !!user,
+    refetchInterval: 15000,
+  });
+
+  const { data: adminSupportUnread } = useQuery({
+    queryKey: ["admin-vendor-support-unread"],
+    queryFn: () => supportApi.getAdminUnreadCount(),
+    enabled: variant === "admin" && !!user,
+    refetchInterval: 15000,
+  });
+
   const unreadAdminCount = useMemo(() => {
     const criticalOrders = adminOrders.filter((o) => {
       const s = o.status.toLowerCase().replace(/_/g, " ");
       return s.includes("dispatch failed") || s.includes("cancelled");
     }).length;
     const pendingVendors = adminVendors.filter((v) => v.accountStatus === "pending").length;
-    return criticalOrders + pendingVendors;
-  }, [adminOrders, adminVendors]);
+    const chatUnread = adminChatUnread?.count ?? 0;
+    const supportUnread = adminSupportUnread?.count ?? 0;
+    return criticalOrders + pendingVendors + chatUnread + supportUnread;
+  }, [adminOrders, adminVendors, adminChatUnread, adminSupportUnread]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);

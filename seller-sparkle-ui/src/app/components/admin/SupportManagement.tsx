@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { 
   Ticket, 
   MessageSquare, 
   Search, 
-  Filter, 
-  ChevronRight, 
-  Clock, 
   User, 
   CheckCircle2, 
   XCircle, 
@@ -16,15 +15,18 @@ import {
   Mail,
   MoreVertical,
   FileText,
-  ImageIcon
+  ChevronRight,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card";
+import { Card, CardHeader } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea";
+import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { Badge } from "@/app/components/ui/badge";
 import { ScrollArea } from "@/app/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
+import { isSameChatDay } from "@/app/helpers/chatDayLabel";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -44,6 +46,8 @@ const SUPPORT_TICKETS_POLL_MS = 10000;
 
 export default function SupportManagement() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tickets, setTickets] = useState<SupportTicketDto[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicketDto | null>(null);
   const [messages, setMessages] = useState<SupportMessageDto[]>([]);
@@ -56,20 +60,13 @@ export default function SupportManagement() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const selectedTicketIdRef = useRef<string | null>(null);
+  const deepLinkHandledRef = useRef<string | null>(null);
 
   useEffect(() => {
     selectedTicketIdRef.current = selectedTicket?.id ?? null;
   }, [selectedTicket?.id]);
 
-  useEffect(() => {
-    void loadTickets();
-    const interval = setInterval(() => {
-      void loadTickets(true);
-    }, SUPPORT_TICKETS_POLL_MS);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadTickets = async (silent = false) => {
+  const loadTickets = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
       const data = await supportApi.getAllTickets();
@@ -83,24 +80,47 @@ export default function SupportManagement() {
           );
         }
       }
-    } catch (error) {
+    } catch {
       if (!silent) toast.error("Failed to load tickets.");
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void loadTickets();
+    const interval = setInterval(() => {
+      void loadTickets(true);
+    }, SUPPORT_TICKETS_POLL_MS);
+    return () => clearInterval(interval);
+  }, [loadTickets]);
 
   const loadMessages = useCallback(async (ticketId: string, silent = false) => {
     if (!silent) setMessagesLoading(true);
     try {
-      const data = await supportApi.getTicketMessages(ticketId);
+      const data = await supportApi.getTicketMessages(ticketId, { markReadForAdmin: true });
       setMessages(data);
-    } catch (error) {
+      void queryClient.invalidateQueries({ queryKey: ["admin-vendor-support-unread"] });
+      setTickets((prev) =>
+        prev.map((t) => (t.id === ticketId ? { ...t, unreadCount: 0 } : t)),
+      );
+    } catch {
       if (!silent) toast.error("Failed to load messages.");
     } finally {
       if (!silent) setMessagesLoading(false);
     }
-  }, []);
+  }, [queryClient]);
+
+  // Deep-link from Admin Notifications: /admin/support?ticketId=...
+  useEffect(() => {
+    const ticketId = searchParams.get("ticketId");
+    if (!ticketId || tickets.length === 0) return;
+    if (deepLinkHandledRef.current === ticketId) return;
+    const match = tickets.find((t) => t.id === ticketId);
+    if (!match) return;
+    deepLinkHandledRef.current = ticketId;
+    setSelectedTicket(match);
+  }, [searchParams, tickets]);
 
   useEffect(() => {
     if (!selectedTicket) {
@@ -143,7 +163,8 @@ export default function SupportManagement() {
       setNewMessage("");
       await loadMessages(selectedTicket.id, true);
       await loadTickets(true);
-    } catch (error) {
+      void queryClient.invalidateQueries({ queryKey: ["admin-vendor-support-unread"] });
+    } catch {
       toast.error("Failed to send message.");
     } finally {
       setSending(false);
@@ -166,16 +187,30 @@ export default function SupportManagement() {
     }
   };
 
-  const filteredTickets = tickets.filter(t => {
-    const matchesSearch = 
-      t.ticketNumber.toLowerCase().includes(search.toLowerCase()) ||
-      t.subject.toLowerCase().includes(search.toLowerCase()) ||
-      t.vendorEmail?.toLowerCase().includes(search.toLowerCase());
-    
-    const matchesStatus = statusFilter === "all" || t.status.toLowerCase() === statusFilter.toLowerCase();
-    
+  const filteredTickets = tickets.filter((t) => {
+    const q = search.toLowerCase();
+    const matchesSearch =
+      t.ticketNumber.toLowerCase().includes(q) ||
+      t.subject.toLowerCase().includes(q) ||
+      t.vendorEmail?.toLowerCase().includes(q) ||
+      t.vendorBusinessName?.toLowerCase().includes(q);
+
+    const status = t.status.toLowerCase();
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "done"
+        ? status === "closed" || status === "resolved"
+        : status === statusFilter.toLowerCase());
+
     return matchesSearch && matchesStatus;
   });
+
+  const selectTicket = (ticket: SupportTicketDto) => {
+    setSelectedTicket(ticket);
+    const next = new URLSearchParams(searchParams);
+    next.set("ticketId", ticket.id);
+    setSearchParams(next, { replace: true });
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
@@ -213,76 +248,116 @@ export default function SupportManagement() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-250px)]">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[calc(100vh-220px)] min-h-[560px]">
         {/* Ticket List */}
-        <Card className="lg:col-span-4 flex flex-col overflow-hidden shadow-xl border-primary/5">
-          <CardHeader className="px-4 py-4 space-y-4 border-b border-border">
+        <Card className="lg:col-span-5 xl:col-span-4 flex flex-col overflow-hidden border-border/70 shadow-sm">
+          <CardHeader className="shrink-0 space-y-3 border-b border-border/70 px-4 py-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">Tickets</p>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {filteredTickets.length}
+              </span>
+            </div>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search tickets, email..." 
-                className="pl-9 h-11 bg-muted/30 border-none shadow-inner"
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search ticket, vendor, email..."
+                className="h-10 border-border/60 bg-background pl-9 shadow-none"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             <Tabs defaultValue="all" className="w-full" onValueChange={setStatusFilter}>
-              <TabsList className="grid grid-cols-4 w-full h-10 p-1 bg-muted/50">
-                <TabsTrigger value="all" className="text-[10px] font-bold uppercase">All</TabsTrigger>
-                <TabsTrigger value="open" className="text-[10px] font-bold uppercase">Open</TabsTrigger>
-                <TabsTrigger value="in progress" className="text-[10px] font-bold uppercase">Active</TabsTrigger>
-                <TabsTrigger value="closed" className="text-[10px] font-bold uppercase">Done</TabsTrigger>
+              <TabsList className="grid h-9 w-full grid-cols-4 bg-muted/60 p-1">
+                <TabsTrigger value="all" className="text-xs font-semibold">All</TabsTrigger>
+                <TabsTrigger value="open" className="text-xs font-semibold">Open</TabsTrigger>
+                <TabsTrigger value="in progress" className="text-xs font-semibold">Active</TabsTrigger>
+                <TabsTrigger value="done" className="text-xs font-semibold">Done</TabsTrigger>
               </TabsList>
             </Tabs>
           </CardHeader>
-          <ScrollArea className="flex-1 bg-secondary/20">
-            <div className="p-2 space-y-1">
+          <ScrollArea className="flex-1">
+            <div className="space-y-2 p-3">
               {loading ? (
                 <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
-                  <Loader2 className="h-8 w-8 animate-spin mb-4 text-primary" />
-                  <p className="text-sm font-bold animate-pulse">Loading tickets...</p>
+                  <Loader2 className="mb-4 h-7 w-7 animate-spin text-primary" />
+                  <p className="text-sm font-medium">Loading tickets...</p>
                 </div>
               ) : filteredTickets.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-12 text-muted-foreground text-center">
-                  <Ticket className="h-12 w-12 mb-4 opacity-10" />
-                  <p className="text-sm font-bold">No tickets found</p>
-                  <p className="text-xs">Adjust your search or filters.</p>
+                <div className="flex flex-col items-center justify-center px-6 py-14 text-center text-muted-foreground">
+                  <Ticket className="mb-3 h-10 w-10 opacity-20" />
+                  <p className="text-sm font-semibold text-foreground">No tickets found</p>
+                  <p className="mt-1 text-xs">Try another search or status filter.</p>
                 </div>
               ) : (
-                filteredTickets.map((t) => (
-                  <div 
-                    key={t.id}
-                    onClick={() => setSelectedTicket(t)}
-                    className={cn(
-                      "p-3 rounded-xl border transition-all cursor-pointer group relative overflow-hidden",
-                      selectedTicket?.id === t.id 
-                        ? "bg-card border-primary shadow-lg ring-1 ring-primary/20" 
-                        : "bg-card/50 border-transparent hover:bg-card hover:border-border"
-                    )}
-                  >
-                    {selectedTicket?.id === t.id && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />
-                    )}
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] font-mono font-bold text-muted-foreground group-hover:text-primary transition-colors">{t.ticketNumber}</span>
-                      <Badge variant="outline" className={cn("text-[9px] px-1.5 py-0 h-4 border-none font-bold uppercase", getStatusBadge(t.status))}>
-                        {t.status}
-                      </Badge>
-                    </div>
-                    <h4 className="text-[13px] font-bold truncate group-hover:text-primary transition-colors">{t.subject}</h4>
-                    <div className="flex items-center justify-between mt-2">
-                       <div className="flex items-center gap-1.5 min-w-0">
-                          <div className="h-5 w-5 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                            <User className="h-3 w-3 text-slate-500" />
+                filteredTickets.map((t) => {
+                  const selected = selectedTicket?.id === t.id;
+                  const unread = t.unreadCount ?? 0;
+                  const vendorLabel = t.vendorBusinessName || t.vendorEmail || "Vendor";
+                  const preview = t.latestMessage?.message?.trim();
+
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => selectTicket(t)}
+                      className={cn(
+                        "w-full rounded-xl border px-3.5 py-3 text-left transition-all",
+                        selected
+                          ? "border-primary/40 bg-primary/5 shadow-sm ring-1 ring-primary/15"
+                          : unread > 0
+                            ? "border-primary/25 bg-card hover:border-primary/40 hover:bg-primary/[0.04]"
+                            : "border-border/60 bg-card hover:border-border hover:bg-muted/40",
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-mono text-[11px] font-semibold tracking-wide text-muted-foreground">
+                          {t.ticketNumber}
+                        </span>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          {unread > 0 && (
+                            <Badge className="h-5 min-w-5 justify-center border-none bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
+                              {unread > 9 ? "9+" : unread}
+                            </Badge>
+                          )}
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "h-5 border px-1.5 text-[10px] font-semibold uppercase tracking-wide",
+                              getStatusBadge(t.status),
+                            )}
+                          >
+                            {t.status}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <p className="mt-1.5 line-clamp-2 text-sm font-semibold leading-snug text-foreground">
+                        {t.subject}
+                      </p>
+
+                      {preview ? (
+                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                          {preview}
+                        </p>
+                      ) : null}
+
+                      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border/50 pt-2">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted">
+                            <User className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
-                          <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{t.vendorEmail}</span>
-                       </div>
-                       <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap">
-                         {formatDistanceToNow(new Date(t.updatedAt), { addSuffix: true })}
-                       </span>
-                    </div>
-                  </div>
-                ))
+                          <span className="truncate text-xs font-medium text-foreground/80" title={vendorLabel}>
+                            {vendorLabel}
+                          </span>
+                        </div>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          {formatDistanceToNow(new Date(t.updatedAt ?? t.createdAt), { addSuffix: true })}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </div>
           </ScrollArea>
@@ -290,7 +365,7 @@ export default function SupportManagement() {
 
         {/* Chat Area */}
         <Card className={cn(
-            "lg:col-span-8 flex flex-col overflow-hidden shadow-2xl border-primary/5 bg-secondary/20",
+            "lg:col-span-7 xl:col-span-8 flex flex-col overflow-hidden border-border/70 bg-secondary/15 shadow-sm",
           !selectedTicket && "items-center justify-center text-center p-12"
         )}>
           {selectedTicket ? (
@@ -356,9 +431,13 @@ export default function SupportManagement() {
                     <Loader2 className="h-8 w-8 animate-spin text-primary/30" />
                   </div>
                 ) : (
-                  messages.map((m) => (
+                  messages.map((m, index) => {
+                    const prev = index > 0 ? messages[index - 1] : null;
+                    const showDay = !prev || !isSameChatDay(prev.createdAt, m.createdAt);
+                    return (
+                    <div key={m.id} className="flex flex-col gap-2">
+                      {showDay && <ChatDaySeparator date={m.createdAt} />}
                     <div 
-                      key={m.id}
                       className={cn(
                         "flex flex-col max-w-[75%]",
                         m.senderType === "Admin" ? "ml-auto items-end" : "mr-auto items-start"
@@ -374,7 +453,7 @@ export default function SupportManagement() {
                           </Badge>
                         )}
                         <span className="text-[9px] text-slate-400 font-medium">
-                          {formatDistanceToNow(new Date(m.createdAt), { addSuffix: true })}
+                          {new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </span>
                       </div>
                       <div 
@@ -404,7 +483,9 @@ export default function SupportManagement() {
                           }) : null}
                         </div>
                       </div>
-                    ))
+                    </div>
+                    );
+                  })
                   )}
                 </div>
 

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/profile_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
+import '../../shared/widgets/indian_mobile_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -140,32 +140,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    TextField(
+                    IndianMobileField(
                       controller: _phoneController,
-                      style: TextStyle(color: colors.textPrimary),
-                      keyboardType: TextInputType.phone,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(10),
-                      ],
+                      label: 'Phone',
+                      errorText: _phoneError,
                       onChanged: (_) {
                         if (_phoneError != null) setState(() => _phoneError = null);
                       },
-                      decoration: requiredInputDecoration(
-                        context,
-                        label: 'Phone',
-                        errorText: _phoneError,
-                      ).copyWith(
-                        prefixText: '+91 ',
-                        prefixStyle: TextStyle(
-                          color: colors.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        hintText: '9876543210',
-                        hintStyle: TextStyle(color: colors.textMuted),
-                        helperText: 'Indian mobile: 10 digits starting with 6–9',
-                        helperStyle: TextStyle(color: colors.textMuted, fontSize: 11),
-                      ),
                     ),
                     const SizedBox(height: 32),
                     SizedBox(

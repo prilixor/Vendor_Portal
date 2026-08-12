@@ -20,7 +20,8 @@ import {
   isVerificationRejectionNotification,
   notificationDisplayMessage,
 } from "@/app/helpers/adminComment";
-import { getVendorRoute } from "@/app/helpers/vendorNav";
+import { getVendorRoute, VENDOR_SUPPORT_PANEL_ROUTE } from "@/app/helpers/vendorNav";
+import { useSupportChat } from "@/app/contexts/SupportChatContext";
 
 const typeIcons = {
   info: { icon: Info, cls: "bg-info-soft text-info" },
@@ -33,6 +34,7 @@ const Notifications = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { refreshUnreadCount } = useNotificationContext();
+  const { openSupportPanel } = useSupportChat();
   const [items, setItems] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [prefs, setPrefs] = useState({ email: true, push: false, orders: true });
@@ -288,6 +290,11 @@ const Notifications = () => {
                       void toggleRead(n.id);
                     }
                     let route = getVendorRoute(n.notificationType, n.title);
+
+                    if (route === VENDOR_SUPPORT_PANEL_ROUTE) {
+                      openSupportPanel();
+                      return;
+                    }
                     
                     // Try to extract order ID from message
                     const uuidRegex = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;

@@ -27,6 +27,13 @@ class VendorOrder {
   final String? hospitalCity;
   final List<String> assignedAssetTags;
   final String? productVariantId;
+  final String? rentalPricingPlanId;
+  final String? rentalDurationLabel;
+  final int? rentalDurationDays;
+  final double? rentalNormalPrice;
+  final String? rentalDiscountType;
+  final double? rentalDiscountValue;
+  final double? rentalFinalPrice;
 
   const VendorOrder({
     required this.orderId,
@@ -55,6 +62,13 @@ class VendorOrder {
     this.hospitalCity,
     this.assignedAssetTags = const [],
     this.productVariantId,
+    this.rentalPricingPlanId,
+    this.rentalDurationLabel,
+    this.rentalDurationDays,
+    this.rentalNormalPrice,
+    this.rentalDiscountType,
+    this.rentalDiscountValue,
+    this.rentalFinalPrice,
   });
 
   double get payoutAmount =>
@@ -113,6 +127,13 @@ class VendorOrder {
               .toList() ??
           const [],
       productVariantId: json['productVariantId']?.toString(),
+      rentalPricingPlanId: json['rentalPricingPlanId']?.toString(),
+      rentalDurationLabel: json['rentalDurationLabel']?.toString(),
+      rentalDurationDays: (json['rentalDurationDays'] as num?)?.toInt(),
+      rentalNormalPrice: (json['rentalNormalPrice'] as num?)?.toDouble(),
+      rentalDiscountType: json['rentalDiscountType']?.toString(),
+      rentalDiscountValue: (json['rentalDiscountValue'] as num?)?.toDouble(),
+      rentalFinalPrice: (json['rentalFinalPrice'] as num?)?.toDouble(),
     );
   }
 }

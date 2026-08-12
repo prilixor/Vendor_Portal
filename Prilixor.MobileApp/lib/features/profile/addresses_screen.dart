@@ -8,22 +8,37 @@ import '../../shared/widgets/state_city_picker.dart';
 import 'mock_map_picker_screen.dart';
 
 class AddressesScreen extends StatefulWidget {
-  const AddressesScreen({super.key});
+  /// When true, opens the Add Address sheet after the first load (checkout / prompt).
+  final bool openAddOnLoad;
+
+  const AddressesScreen({super.key, this.openAddOnLoad = false});
 
   @override
   State<AddressesScreen> createState() => _AddressesScreenState();
 }
 
 class _AddressesScreenState extends State<AddressesScreen> {
+  bool _openedAddOnLoad = false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<AddressProvider>(context, listen: false).fetchAddresses();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final provider = Provider.of<AddressProvider>(context, listen: false);
+      await provider.fetchAddresses();
+      if (!mounted || !widget.openAddOnLoad || _openedAddOnLoad) return;
+      _openedAddOnLoad = true;
+      // From checkout / location prompt — jump straight into map pin flow.
+      _showAddAddressSheet(context, provider, openMapImmediately: true);
     });
   }
 
-  void _showAddAddressSheet(BuildContext context, AddressProvider provider, {AddressModel? existingAddress}) {
+  void _showAddAddressSheet(
+    BuildContext context,
+    AddressProvider provider, {
+    AddressModel? existingAddress,
+    bool openMapImmediately = false,
+  }) {
     final labelCtrl = TextEditingController(text: existingAddress?.label ?? (existingAddress != null ? 'Address' : ''));
     final streetCtrl = TextEditingController(text: existingAddress?.line1 ?? '');
     final zipCtrl = TextEditingController(text: existingAddress?.postal ?? '');
@@ -103,6 +118,21 @@ class _AddressesScreenState extends State<AddressesScreen> {
       }
     }
 
+    Future<void> openMapPicker(void Function(void Function()) setState) async {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MockMapPickerScreen(
+            initialLatitude: latitude,
+            initialLongitude: longitude,
+          ),
+        ),
+      );
+      if (result != null && result is Map) {
+        applyMapResult(Map<String, dynamic>.from(result), setState);
+      }
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: context.appColors.surface,
@@ -112,6 +142,12 @@ class _AddressesScreenState extends State<AddressesScreen> {
         return StatefulBuilder(
           builder: (context, setState) {
             final colors = context.appColors;
+            if (openMapImmediately && !pinConfirmed) {
+              openMapImmediately = false;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (sheetContext.mounted) openMapPicker(setState);
+              });
+            }
             return Padding(
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
               child: SingleChildScrollView(
@@ -124,15 +160,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
                       children: [
                         Text(existingAddress == null ? 'Add New Address' : 'Edit Address', style: TextStyle(color: colors.textPrimary, fontSize: 20, fontWeight: FontWeight.bold)),
                         TextButton.icon(
-                          onPressed: () async {
-                            final result = await Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const MockMapPickerScreen()),
-                            );
-                            if (result != null && result is Map) {
-                              applyMapResult(Map<String, dynamic>.from(result), setState);
-                            }
-                          },
+                          onPressed: () => openMapPicker(setState),
                           icon: const Icon(Icons.map, color: Color(0xFF6C63FF)),
                           label: const Text('Pick on Map', style: TextStyle(color: Color(0xFF6C63FF))),
                         )
@@ -140,12 +168,35 @@ class _AddressesScreenState extends State<AddressesScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Address text alone is not enough. Use Pick on Map to set delivery coordinates.',
+                      'Search or pin your place on the map — we fill address fields from the pin.',
                       style: TextStyle(color: colors.textMuted, fontSize: 12),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        onPressed: () => openMapPicker(setState),
+                        icon: Icon(
+                          pinConfirmed ? Icons.edit_location_alt_outlined : Icons.map_outlined,
+                          color: const Color(0xFF6C63FF),
+                        ),
+                        label: Text(
+                          pinConfirmed ? 'Adjust pin on map' : 'Find on map',
+                          style: const TextStyle(
+                            color: Color(0xFF6C63FF),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF6C63FF)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
                     ),
                     if (pinConfirmed && latitude != null && longitude != null)
                       Padding(
-                        padding: const EdgeInsets.only(top: 8.0),
+                        padding: const EdgeInsets.only(top: 10.0),
                         child: Text(
                           'Pin set: ${latitude!.toStringAsFixed(4)}, ${longitude!.toStringAsFixed(4)}',
                           style: const TextStyle(color: Color(0xFF34D399), fontSize: 12, fontWeight: FontWeight.w600),
@@ -153,9 +204,9 @@ class _AddressesScreenState extends State<AddressesScreen> {
                       )
                     else
                       const Padding(
-                        padding: EdgeInsets.only(top: 8.0),
+                        padding: EdgeInsets.only(top: 10.0),
                         child: Text(
-                          'Map pin not confirmed yet — tap Pick on Map to continue.',
+                          'Map pin required — use Find on map to continue.',
                           style: TextStyle(color: Color(0xFFFBBF24), fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                       ),
@@ -320,20 +371,78 @@ class _AddressesScreenState extends State<AddressesScreen> {
       body: provider.isLoading && provider.addresses.isEmpty
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
           : provider.addresses.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.location_off_outlined, size: 64, color: colors.textMuted),
-                      const SizedBox(height: 16),
-                      Text('No addresses found.', style: TextStyle(color: colors.textSecondary, fontSize: 16)),
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
-                        onPressed: () => _showAddAddressSheet(context, provider),
-                        child: const Text('Add Address', style: TextStyle(color: Colors.white)),
-                      ),
-                    ],
+              ? SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 88,
+                          height: 88,
+                          decoration: BoxDecoration(
+                            color: colors.surfaceElevated,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.location_off_outlined,
+                            size: 40,
+                            color: colors.textMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'No addresses found',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: colors.textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Add a delivery address with a map pin to place orders.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: colors.textSecondary,
+                            fontSize: 14,
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () =>
+                                _showAddAddressSheet(context, provider),
+                            icon: const Icon(Icons.add_location_alt_outlined,
+                                color: Colors.white, size: 20),
+                            label: const Text(
+                              'Add Address',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6C63FF),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              minimumSize: const Size.fromHeight(52),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 14,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 )
               : ListView.separated(
