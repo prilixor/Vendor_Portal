@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/providers/cart_provider.dart';
+import '../../core/theme.dart';
 import '../../core/utils/rental_period.dart';
 import '../../shared/utils/require_auth.dart';
 import '../../shared/widgets/catalog_image.dart';
@@ -29,17 +30,18 @@ class _CartScreenState extends State<CartScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final cart = Provider.of<CartProvider>(context);
     final auth = Provider.of<AuthProvider>(context);
     final checkoutLabel = auth.isAuthenticated ? 'Proceed to Checkout' : 'Sign in to Checkout';
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
         centerTitle: true,
-        title: const Text('My Cart', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
-        backgroundColor: const Color(0xFF0F172A),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('My Cart', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold, fontSize: 20)),
+        backgroundColor: colors.background,
+        iconTheme: IconThemeData(color: colors.textPrimary),
         elevation: 0,
       ),
       body: cart.lines.isEmpty
@@ -49,16 +51,16 @@ class _CartScreenState extends State<CartScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(24),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF1E293B),
+                    decoration: BoxDecoration(
+                      color: colors.surface,
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.shopping_cart_outlined, size: 80, color: Color(0xFF6C63FF)),
                   ),
                   const SizedBox(height: 24),
-                  const Text('Your cart is empty', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                  Text('Your cart is empty', style: TextStyle(color: colors.textPrimary, fontSize: 22, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  const Text('Looks like you haven\'t added\nanything to your cart yet.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 16)),
+                  Text('Looks like you haven\'t added\nanything to your cart yet.', textAlign: TextAlign.center, style: TextStyle(color: colors.textMuted, fontSize: 16)),
                   const SizedBox(height: 32),
                   ElevatedButton(
                     onPressed: () {
@@ -118,28 +120,29 @@ class _CartScreenState extends State<CartScreen> {
                 ),
                 Container(
                   padding: const EdgeInsets.all(24),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF1E293B),
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+                  decoration: BoxDecoration(
+                    color: colors.surface,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                    border: Border(top: BorderSide(color: colors.border)),
                   ),
                   child: SafeArea(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _summaryRow('Subtotal', '₹${cart.totalEstimatedRent.toStringAsFixed(0)}'),
+                        _summaryRow(context, 'Subtotal', '₹${cart.totalEstimatedRent.toStringAsFixed(0)}'),
                         const SizedBox(height: 8),
-                        _summaryRow('Refundable deposit', '₹${cart.totalDeposit.toStringAsFixed(0)}'),
+                        _summaryRow(context, 'Refundable deposit', '₹${cart.totalDeposit.toStringAsFixed(0)}'),
                         // Service fee UI hidden — keep for future re-enable
                         // const SizedBox(height: 8),
-                        // _summaryRow('Service fee', '₹0'),
-                        const Divider(color: Colors.white12, height: 24),
+                        // _summaryRow(context, 'Service fee', '₹0'),
+                        Divider(color: colors.border, height: 24),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Total', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                            Text('Total', style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                             Text(
                               '₹${cart.totalEstimatedRent.toStringAsFixed(0)}',
-                              style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                              style: TextStyle(color: colors.textPrimary, fontSize: 24, fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -167,7 +170,7 @@ class _CartScreenState extends State<CartScreen> {
                                 },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF6C63FF),
-                            disabledBackgroundColor: Colors.white12,
+                            disabledBackgroundColor: colors.border,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           ),
@@ -182,12 +185,13 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _summaryRow(String label, String value) {
+  Widget _summaryRow(BuildContext context, String label, String value) {
+    final colors = context.appColors;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 14)),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+        Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 14)),
+        Text(value, style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
       ],
     );
   }
@@ -241,6 +245,7 @@ class _CartLineCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final avail = cart.availableQuantityFor(line);
     final overStock = avail != null && line.quantity > avail;
     final canBuy = line.isBuyEnabled || line.orderType == 'buy';
@@ -255,9 +260,9 @@ class _CartLineCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: overStock ? Colors.redAccent.withValues(alpha: 0.5) : Colors.white10),
+        border: Border.all(color: overStock ? Colors.redAccent.withValues(alpha: 0.5) : colors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,7 +276,7 @@ class _CartLineCard extends StatelessWidget {
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  color: const Color(0xFF0F172A),
+                  color: colors.background,
                 ),
                 child: CatalogImage(
                   url: line.primaryImageUrl,
@@ -291,7 +296,7 @@ class _CartLineCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             line.title,
-                            style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: colors.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -315,7 +320,7 @@ class _CartLineCard extends StatelessWidget {
                                   '${line.rentalNormalPrice != null && line.rentalNormalPrice! > (line.rentalFinalPrice ?? 0) ? ' (was ₹${line.rentalNormalPrice!.toStringAsFixed(0)})' : ''}'
                                   ' · deposit ₹${line.securityDeposit.toStringAsFixed(0)}'
                               : '₹${unitRate.toStringAsFixed(0)}${periodLabel.per} · ${formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)} · deposit ₹${line.securityDeposit.toStringAsFixed(0)}',
-                      style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+                      style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.35),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -332,7 +337,7 @@ class _CartLineCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          const Divider(color: Colors.white10, height: 1),
+          Divider(color: colors.border, height: 1),
           const SizedBox(height: 12),
           if (canBuy)
             _SegmentedToggle(
@@ -371,17 +376,17 @@ class _CartLineCard extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
+                  color: colors.background,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white10),
+                  border: Border.all(color: colors.border),
                 ),
                 child: Text(
                   'Rental period: ${line.rentalDurationLabel ?? '${line.rentalDurationDays ?? line.rentalDays} days'} (set by catalog)',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                  style: TextStyle(color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               )
             else ...[
-            Text('Rental period', style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12, fontWeight: FontWeight.w600)),
+            Text('Rental period', style: TextStyle(color: colors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             _SegmentedToggle(
               options: rentalUnitsVisibleInUi
@@ -461,6 +466,7 @@ class _SegmentedToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return Row(
       children: [
         for (var i = 0; i < options.length; i++) ...[
@@ -477,17 +483,17 @@ class _SegmentedToggle extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: selected == options[i].value
                         ? const Color(0xFF6C63FF).withValues(alpha: 0.22)
-                        : const Color(0xFF0F172A),
+                        : colors.background,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: selected == options[i].value ? const Color(0xFF6C63FF) : Colors.white12,
+                      color: selected == options[i].value ? const Color(0xFF6C63FF) : colors.border,
                     ),
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     options[i].label,
                     style: TextStyle(
-                      color: selected == options[i].value ? const Color(0xFFA5B4FC) : Colors.white70,
+                      color: selected == options[i].value ? const Color(0xFFA5B4FC) : colors.textSecondary,
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
                     ),
@@ -519,6 +525,7 @@ class _StepperRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Row(
@@ -526,14 +533,14 @@ class _StepperRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600),
+              style: TextStyle(color: colors.textSecondary, fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ),
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: colors.background,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(color: colors.border),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -542,7 +549,7 @@ class _StepperRow extends StatelessWidget {
                   icon: Icon(
                     Icons.remove_circle_outline,
                     size: 22,
-                    color: value > min ? Colors.white70 : Colors.white24,
+                    color: value > min ? colors.textSecondary : colors.border,
                   ),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
@@ -553,14 +560,14 @@ class _StepperRow extends StatelessWidget {
                   child: Text(
                     '$value',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: colors.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                 ),
                 IconButton(
                   icon: Icon(
                     Icons.add_circle_outline,
                     size: 22,
-                    color: value < max ? Colors.white70 : Colors.white24,
+                    color: value < max ? colors.textSecondary : colors.border,
                   ),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 40, minHeight: 40),

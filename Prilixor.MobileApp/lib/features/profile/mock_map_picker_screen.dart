@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../core/theme.dart';
 import '../../core/utils/debouncer.dart';
 import '../../core/utils/place_search.dart';
 
@@ -108,13 +109,15 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: colors.background,
         elevation: 0,
-        title: const Text('Pick Location', style: TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('Pick Location', style: TextStyle(color: colors.textPrimary)),
+        iconTheme: IconThemeData(color: colors.textPrimary),
       ),
       body: Stack(
         children: [
@@ -148,7 +151,7 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
             right: 16,
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: colors.surface,
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: const [
                   BoxShadow(
@@ -160,12 +163,12 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
               ),
               child: TextField(
                 controller: _searchController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colors.textPrimary),
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
-                  hintText: 'Search city, area, or zip...',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.search, color: Color(0xFF6C63FF)),
+                  hintText: 'Search area / landmark / pincode...',
+                  hintStyle: TextStyle(color: colors.textMuted),
+                  prefixIcon: Icon(Icons.search, color: colors.textMuted),
                   suffixIcon: _isSearching
                       ? const Padding(
                           padding: EdgeInsets.all(12),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/theme.dart';
 import '../../core/providers/checkout_provider.dart';
 import '../../core/providers/cart_provider.dart';
 import '../../core/providers/address_provider.dart';
@@ -169,34 +170,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final quote = provider.quote;
     final needsPrescription = cart.needsPrescription;
     final rxLines = cart.lines.where((l) => l.prescriptionRequired).toList();
+    final colors = context.appColors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('Checkout', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF1E293B),
+        title: Text('Checkout', style: TextStyle(color: colors.textPrimary)),
+        backgroundColor: colors.surface,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: colors.textPrimary),
       ),
       body: !_authChecked
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
           : cart.lines.isEmpty
-          ? const Center(child: Text('Cart is empty', style: TextStyle(color: Colors.white)))
+          ? Center(child: Text('Cart is empty', style: TextStyle(color: colors.textPrimary)))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Order Items', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('Order Items', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   ...cart.lines.map((line) {
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: colors.surface,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white10),
+                        border: Border.all(color: colors.border),
                       ),
                       child: Row(
                         children: [
@@ -220,21 +222,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               children: [
                                 Text(
                                   line.title,
-                                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   'Qty: ${line.quantity} • ${line.orderType == 'buy' ? 'Buy' : 'Rent ${formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)}'}',
-                                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                  style: TextStyle(color: colors.textSecondary, fontSize: 12),
                                 ),
                               ],
                             ),
                           ),
                           Text(
                             '₹${line.lineTotal.toStringAsFixed(0)}',
-                            style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 14, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: colors.accent, fontSize: 14, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -242,34 +244,34 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   }),
 
                   const SizedBox(height: 24),
-                  const RequiredLabel('Delivery Address', required: true, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  RequiredLabel('Delivery Address', required: true, style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   const RequiredFieldsNote(padding: EdgeInsets.only(bottom: 12)),
                   if (addressProvider.isLoading)
-                    const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+                    Center(child: CircularProgressIndicator(color: colors.accent))
                   else if (addresses.isEmpty)
-                    const Text(
+                    Text(
                       'No addresses found. Please add an address in your Profile.',
-                      style: TextStyle(color: Colors.white70),
+                      style: TextStyle(color: colors.textSecondary),
                     )
                   else
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: colors.surface,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: _selectedAddressId == null ? kFieldErrorColor : Colors.white10,
+                          color: _selectedAddressId == null ? kFieldErrorColor : colors.border,
                         ),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: _selectedAddressId,
                           isExpanded: true,
-                          dropdownColor: const Color(0xFF1E293B),
+                          dropdownColor: colors.surface,
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          style: const TextStyle(color: Colors.white, fontSize: 15),
-                          icon: const Icon(Icons.arrow_drop_down, color: Colors.white54),
-                          hint: const Text('Select address', style: TextStyle(color: Colors.white54)),
+                          style: TextStyle(color: colors.textPrimary, fontSize: 15),
+                          icon: Icon(Icons.arrow_drop_down, color: colors.textMuted),
+                          hint: Text('Select address', style: TextStyle(color: colors.textMuted)),
                           onChanged: (String? newValue) {
                             setState(() => _selectedAddressId = newValue);
                             _fetchQuote();
@@ -287,7 +289,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     const FieldErrorText('Delivery address is required'),
 
                   const SizedBox(height: 24),
-                  const Text('Delivery option', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('Delivery option', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   _deliveryOptionTile(
                     value: 'standard',
@@ -311,9 +313,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     Container(
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: colors.surface,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.35)),
+                        border: Border.all(color: colors.accent.withValues(alpha: 0.35)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -322,16 +324,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
+                              color: colors.accent.withValues(alpha: 0.12),
                               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                             ),
-                            child: const Column(
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Icon(Icons.description_outlined, color: Color(0xFF60A5FA)),
+                                    Icon(Icons.description_outlined, color: colors.accent),
                                     SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
@@ -339,12 +341,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                         children: [
                                           Text(
                                             'Doctor reference (optional)',
-                                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                            style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold),
                                           ),
-                                          SizedBox(height: 4),
+                                          const SizedBox(height: 4),
                                           Text(
                                             'Enter a doctor Unique ID from their QR / share page, or skip and place the order without one.',
-                                            style: TextStyle(color: Colors.white70, fontSize: 13),
+                                            style: TextStyle(color: colors.textSecondary, fontSize: 13),
                                           ),
                                         ],
                                       ),
@@ -365,7 +367,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(line.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                        Text(line.title, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600)),
                                         const SizedBox(height: 4),
                                         Text(
                                           filled
@@ -385,7 +387,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                                     ? '${ref.hospitals.first.name} · ${ref.hospitals.first.placeLabel}'
                                                     : ref.hospitals.first.name)
                                                 : '${ref.hospitals.length} affiliated hospitals',
-                                            style: const TextStyle(color: Colors.white54, fontSize: 11),
+                                            style: TextStyle(color: colors.textMuted, fontSize: 11),
                                           ),
                                         ],
                                       ],
@@ -400,20 +402,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                         final apply = await showDialog<bool>(
                                           context: context,
                                           builder: (ctx) => AlertDialog(
-                                            backgroundColor: const Color(0xFF1E293B),
-                                            title: const Text('Apply to all?', style: TextStyle(color: Colors.white)),
-                                            content: const Text(
+                                            backgroundColor: colors.surface,
+                                            title: Text('Apply to all?', style: TextStyle(color: colors.textPrimary)),
+                                            content: Text(
                                               'Use the same doctor Unique ID for all prescription items?',
-                                              style: TextStyle(color: Colors.white70),
+                                              style: TextStyle(color: colors.textSecondary),
                                             ),
                                             actions: [
                                               TextButton(
                                                 onPressed: () => Navigator.pop(ctx, false),
-                                                child: const Text('No', style: TextStyle(color: Colors.white54)),
+                                                child: Text('No', style: TextStyle(color: colors.textMuted)),
                                               ),
                                               TextButton(
                                                 onPressed: () => Navigator.pop(ctx, true),
-                                                child: const Text('Yes', style: TextStyle(color: Color(0xFF6C63FF))),
+                                                child: Text('Yes', style: TextStyle(color: colors.accent)),
                                               ),
                                             ],
                                           ),
@@ -425,7 +427,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                     },
                                     child: Text(
                                       filled ? 'Change' : 'Add Unique ID',
-                                      style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold),
+                                      style: TextStyle(color: colors.accent, fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                 ],
@@ -470,9 +472,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   ),
                                   if (suggestions.isNotEmpty) ...[
                                     const SizedBox(height: 6),
-                                    const Text(
+                                    Text(
                                       'Available packaging sizes:',
-                                      style: TextStyle(color: Colors.white54, fontSize: 11),
+                                      style: TextStyle(color: colors.textMuted, fontSize: 11),
                                     ),
                                     const SizedBox(height: 6),
                                     Wrap(
@@ -486,21 +488,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                         return Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                           decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha: 0.06),
+                                            color: colors.surfaceElevated,
                                             borderRadius: BorderRadius.circular(999),
                                             border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
                                           ),
                                           child: Text(
                                             '$sizeValue $sizeUnit · ₹${buyPrice.toStringAsFixed(0)} · $qty in stock',
-                                            style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                            style: TextStyle(color: colors.textSecondary, fontSize: 11),
                                           ),
                                         );
                                       }).toList(),
                                     ),
                                     const SizedBox(height: 4),
-                                    const Text(
+                                    Text(
                                       'Update packaging size or quantity in your cart, then try again.',
-                                      style: TextStyle(color: Colors.white38, fontSize: 11),
+                                      style: TextStyle(color: colors.textMuted, fontSize: 11),
                                     ),
                                   ],
                                 ],
@@ -513,13 +515,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ],
 
                   const SizedBox(height: 24),
-                  const Text('Order Summary', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('Order Summary', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   if (provider.isLoading)
-                    const Center(
+                    Center(
                       child: Padding(
                         padding: EdgeInsets.all(20),
-                        child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
+                        child: CircularProgressIndicator(color: colors.accent),
                       ),
                     )
                   else if (provider.errorMessage != null)
@@ -528,9 +530,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: colors.surface,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white10),
+                        border: Border.all(color: colors.border),
                       ),
                       child: Column(
                         children: [
@@ -547,7 +549,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             const SizedBox(height: 8),
                             _buildQuoteRow('Distance delivery fee', quote.distanceFeeAmount),
                           ],
-                          // Service fee UI hidden — keep for future re-enable
                           if (false && quote.serviceFeeAmount > 0) ...[
                             const SizedBox(height: 8),
                             _buildQuoteRow('Service Fee', quote.serviceFeeAmount),
@@ -556,17 +557,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             const SizedBox(height: 8),
                             _buildQuoteRow('Taxes (GST)', quote.gstAmount),
                           ],
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Divider(color: Colors.white24),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Divider(color: colors.border),
                           ),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Total Amount', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                              Text('Total Amount', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
                               Text(
                                 '₹${quote.totalAmount.toStringAsFixed(0)}',
-                                style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 20, fontWeight: FontWeight.bold),
+                                style: TextStyle(color: colors.accent, fontSize: 20, fontWeight: FontWeight.bold),
                               ),
                             ],
                           ),
@@ -580,14 +581,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       bottomSheet: quote != null
           ? Container(
               padding: const EdgeInsets.all(20),
-              color: const Color(0xFF1E293B),
+              color: colors.surface,
               child: SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
-                    disabledBackgroundColor: Colors.white12,
+                    backgroundColor: colors.accent,
+                    disabledBackgroundColor: colors.border,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   onPressed: provider.isPlacingOrder ||
@@ -641,6 +642,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     required String title,
     required String trailing,
   }) {
+    final colors = context.appColors;
     final selected = _deliveryOption == value;
     return GestureDetector(
       onTap: () {
@@ -651,20 +653,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: colors.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? const Color(0xFF6C63FF) : Colors.white10),
+          border: Border.all(color: selected ? const Color(0xFF6C63FF) : colors.border),
         ),
         child: Row(
           children: [
             Icon(
               selected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: selected ? const Color(0xFF6C63FF) : Colors.white38,
+              color: selected ? const Color(0xFF6C63FF) : colors.border,
               size: 20,
             ),
             const SizedBox(width: 12),
-            Expanded(child: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500))),
-            Text(trailing, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+            Expanded(child: Text(title, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w500))),
+            Text(trailing, style: TextStyle(color: colors.textMuted, fontSize: 13)),
           ],
         ),
       ),
@@ -672,11 +674,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildQuoteRow(String label, double amount) {
+    final colors = context.appColors;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 15)),
-        Text('₹${amount.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
+        Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 15)),
+        Text('₹${amount.toStringAsFixed(0)}', style: TextStyle(color: colors.textPrimary, fontSize: 15, fontWeight: FontWeight.w500)),
       ],
     );
   }

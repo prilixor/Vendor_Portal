@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/theme.dart';
 import '../../core/utils/debouncer.dart';
 import '../../core/providers/address_provider.dart';
 import '../../core/providers/product_provider.dart';
@@ -83,33 +84,36 @@ class _HomeScreenState extends State<HomeScreen> {
     if (hasGeo) return;
     await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Set location first', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Add your address with map location to see nearest available products first and get correct delivery charges.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await _storage.write(key: _locationPromptKey, value: 'true');
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Later', style: TextStyle(color: Colors.white70)),
+      builder: (ctx) {
+        final colors = ctx.appColors;
+        return AlertDialog(
+          backgroundColor: colors.surface,
+          title: Text('Set location first', style: TextStyle(color: colors.textPrimary)),
+          content: Text(
+            'Add your address with map location to see nearest available products first and get correct delivery charges.',
+            style: TextStyle(color: colors.textSecondary),
           ),
-          TextButton(
-            onPressed: () async {
-              await _storage.write(key: _locationPromptKey, value: 'true');
-              if (!ctx.mounted) return;
-              Navigator.pop(ctx);
-              if (!mounted) return;
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressesScreen()));
-            },
-            child: const Text('Set address now', style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await _storage.write(key: _locationPromptKey, value: 'true');
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: Text('Later', style: TextStyle(color: colors.textSecondary)),
+            ),
+            TextButton(
+              onPressed: () async {
+                await _storage.write(key: _locationPromptKey, value: 'true');
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                if (!mounted) return;
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressesScreen()));
+              },
+              child: const Text('Set address now', style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -196,8 +200,10 @@ class _HomeScreenState extends State<HomeScreen> {
       {'id': 'out_of_stock', 'label': 'Out of stock'},
     ];
 
+    final colors = context.appColors;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -207,20 +213,20 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Discover',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: colors.textPrimary),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Medical equipment and chemicals from verified vendors.',
-                    style: TextStyle(color: Colors.white54, fontSize: 13),
+                    style: TextStyle(color: colors.textMuted, fontSize: 13),
                   ),
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: colors.surface,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -238,13 +244,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           controller: _searchController,
                           onSubmitted: (_) => _submitSearchNow(),
                           textInputAction: TextInputAction.search,
-                          style: const TextStyle(color: Colors.white),
+                          style: TextStyle(color: colors.textPrimary),
                           decoration: InputDecoration(
                             hintText: _browseMode == 'chemicals' ? 'Search chemicals...' : 'Search equipment...',
-                            hintStyle: const TextStyle(color: Colors.white54),
-                            prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                            hintStyle: TextStyle(color: colors.textMuted),
+                            prefixIcon: Icon(Icons.search, color: colors.textSecondary),
                             filled: true,
-                            fillColor: const Color(0xFF1E293B),
+                            fillColor: colors.surface,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
                               borderSide: BorderSide.none,
@@ -254,32 +260,39 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      Material(
-                        color: _hasActiveFilters
-                            ? const Color(0xFF6C63FF)
-                            : const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(16),
-                        child: InkWell(
-                          onTap: () => _openFiltersSheet(modeCategories),
+                      Container(
+                        decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(16),
-                          child: SizedBox(
-                            width: 52,
-                            height: 52,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Icon(
-                                  Icons.tune_rounded,
-                                  color: _hasActiveFilters ? Colors.white : Colors.white70,
-                                ),
-                                if (_activeFilterCount > 0)
-                                  Positioned(
-                                    top: 10,
-                                    right: 10,
-                                    child: Container(
-                                      width: 16,
-                                      height: 16,
-                                      alignment: Alignment.center,
+                          border: Border.all(
+                            color: context.isDarkMode ? Colors.transparent : colors.border,
+                          ),
+                        ),
+                        child: Material(
+                          color: _hasActiveFilters
+                              ? const Color(0xFF6C63FF)
+                              : colors.surface,
+                          borderRadius: BorderRadius.circular(15),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: () => _openFiltersSheet(modeCategories),
+                            child: SizedBox(
+                              width: 52,
+                              height: 52,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.tune_rounded,
+                                    color: _hasActiveFilters ? Colors.white : colors.textSecondary,
+                                  ),
+                                  if (_activeFilterCount > 0)
+                                    Positioned(
+                                      top: 10,
+                                      right: 10,
+                                      child: Container(
+                                        width: 16,
+                                        height: 16,
+                                        alignment: Alignment.center,
                                       decoration: const BoxDecoration(
                                         color: Colors.white,
                                         shape: BoxShape.circle,
@@ -298,6 +311,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         ),
+                      ),
                       ),
                     ],
                   ),
@@ -345,7 +359,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           TextButton(
                             onPressed: _clearAllFilters,
                             style: TextButton.styleFrom(
-                              foregroundColor: Colors.white70,
+                              foregroundColor: colors.textSecondary,
                               padding: const EdgeInsets.symmetric(horizontal: 8),
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -366,10 +380,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   : productProvider.errorMessage != null
                       ? Center(child: Text(productProvider.errorMessage!, style: const TextStyle(color: Colors.redAccent)))
                       : products.isEmpty
-                          ? const Center(
+                          ? Center(
                               child: Text(
                                 'No listings match your filters.',
-                                style: TextStyle(color: Colors.white70),
+                                style: TextStyle(color: colors.textSecondary),
                               ),
                             )
                           : GridView.builder(
@@ -455,13 +469,30 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
+            final colors = ctx.appColors;
             final maxH = MediaQuery.of(ctx).size.height * 0.82;
             final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
             final count = draftCount();
             final productProvider = Provider.of<ProductProvider>(ctx, listen: false);
             final favoriteProvider = Provider.of<FavoriteProvider>(ctx, listen: false);
-            // Match web: counts reflect applied stock/favorites/tab filters (not draft category).
-            final catalogSnapshot = _catalogBeforeCategory(productProvider.products, favoriteProvider);
+            // Counts reflect draft stock and draft favorites filters.
+            List<ProductModel> draftCatalogSnapshot(List<ProductModel> all, FavoriteProvider favorites) {
+              var result = all.where(_isActiveListing).toList();
+              if (_browseMode == 'equipment') {
+                result = result.where((p) => p.baseUnit == null).toList();
+              } else {
+                result = result.where((p) => p.baseUnit != null).toList();
+              }
+              if (draftStock != 'all') {
+                result = result.where((p) => p.availabilityStatus.trim().toLowerCase() == draftStock).toList();
+              }
+              if (draftFavorites) {
+                result = result.where((p) => favorites.isFavorite(p.id)).toList();
+              }
+              return result;
+            }
+
+            final catalogSnapshot = draftCatalogSnapshot(productProvider.products, favoriteProvider);
             final categoryCountsSnapshot = _categoryCounts(catalogSnapshot);
             final allCategoriesCount = catalogSnapshot.length;
 
@@ -476,11 +507,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 alignment: Alignment.bottomCenter,
                 child: Container(
                   constraints: BoxConstraints(maxHeight: maxH),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF0F172A),
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  decoration: BoxDecoration(
+                    color: colors.surface,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                     border: Border(
-                      top: BorderSide(color: Color(0xFF334155)),
+                      top: BorderSide(color: colors.border),
                     ),
                   ),
                   child: Column(
@@ -492,7 +523,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           width: 36,
                           height: 4,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF475569),
+                            color: colors.border,
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -501,11 +532,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
                         child: Row(
                           children: [
-                            const Expanded(
+                            Expanded(
                               child: Text(
                                 'Filters',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: colors.textPrimary,
                                   fontSize: 22,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: -0.3,
@@ -521,14 +552,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                   categorySearchController.clear();
                                 });
                               },
-                              child: const Text(
+                              child: Text(
                                 'Clear all',
-                                style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w600),
+                                style: TextStyle(color: colors.textMuted, fontWeight: FontWeight.w600),
                               ),
                             ),
                             IconButton(
                               onPressed: () => Navigator.pop(ctx, false),
-                              icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                              icon: Icon(Icons.close_rounded, color: colors.textMuted),
                               tooltip: 'Close',
                             ),
                           ],
@@ -538,10 +569,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                         child: Text(
                           'Filter by stock level, category, and saved items. Only active listings are shown.',
-                          style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12, height: 1.35),
+                          style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.35),
                         ),
                       ),
-                      const Divider(height: 1, color: Color(0xFF1E293B)),
+                      Divider(height: 1, color: colors.border),
                       Expanded(
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -592,22 +623,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                         child: TextField(
                                           controller: categorySearchController,
                                           onChanged: (_) => setSheetState(() {}),
-                                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                                          style: TextStyle(color: colors.textPrimary, fontSize: 14),
                                           decoration: InputDecoration(
                                             hintText: 'Search categories…',
-                                            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                                            prefixIcon: const Icon(Icons.search, color: Color(0xFF64748B), size: 20),
+                                            hintStyle: TextStyle(color: colors.textMuted, fontSize: 13),
+                                            prefixIcon: Icon(Icons.search, color: colors.textMuted, size: 20),
                                             filled: true,
-                                            fillColor: const Color(0xFF0F172A),
+                                            fillColor: colors.background,
                                             isDense: true,
                                             contentPadding: const EdgeInsets.symmetric(vertical: 10),
                                             border: OutlineInputBorder(
                                               borderRadius: BorderRadius.circular(10),
-                                              borderSide: const BorderSide(color: Color(0xFF334155)),
+                                              borderSide: BorderSide(color: colors.border),
                                             ),
                                             enabledBorder: OutlineInputBorder(
                                               borderRadius: BorderRadius.circular(10),
-                                              borderSide: const BorderSide(color: Color(0xFF334155)),
+                                              borderSide: BorderSide(color: colors.border),
                                             ),
                                           ),
                                         ),
@@ -634,12 +665,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                             );
                                           }),
                                           if (filteredCategories().isEmpty)
-                                            const Padding(
-                                              padding: EdgeInsets.all(20),
+                                            Padding(
+                                              padding: const EdgeInsets.all(20),
                                               child: Text(
                                                 'No categories match',
                                                 textAlign: TextAlign.center,
-                                                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                                                style: TextStyle(color: colors.textMuted, fontSize: 13),
                                               ),
                                             ),
                                         ],
@@ -654,9 +685,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       Container(
                         padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomInset),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF0F172A),
-                          border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+                        decoration: BoxDecoration(
+                          color: colors.background,
+                          border: Border(top: BorderSide(color: colors.border)),
                         ),
                         child: Row(
                           children: [
@@ -664,8 +695,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: OutlinedButton(
                                 onPressed: () => Navigator.pop(ctx, false),
                                 style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.white70,
-                                  side: const BorderSide(color: Color(0xFF334155)),
+                                  foregroundColor: colors.textSecondary,
+                                  side: BorderSide(color: colors.border),
                                   minimumSize: const Size.fromHeight(48),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                 ),
@@ -678,7 +709,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: ElevatedButton(
                                 onPressed: () => Navigator.pop(ctx, true),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF6C63FF),
+                                  backgroundColor: colors.accent,
                                   foregroundColor: Colors.white,
                                   elevation: 0,
                                   minimumSize: const Size.fromHeight(48),
@@ -715,6 +746,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _browseModeChip(String mode, String label) {
+    final colors = context.appColors;
     final selected = _browseMode == mode;
     return GestureDetector(
       onTap: () => _setBrowseMode(mode),
@@ -728,7 +760,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : Colors.white70,
+            color: selected ? Colors.white : colors.textSecondary,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -737,12 +769,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildProductCard(ProductModel product) {
+    final colors = context.appColors;
     final ls = product.listingStatus.trim().toLowerCase();
     final isBrowsable = ls == 'active' || ls == 'approved';
     final isOutOfStock = product.availableQuantity <= 0 || product.availabilityStatus.trim().toLowerCase() == 'out_of_stock';
     final isInteractive = isBrowsable && !isOutOfStock;
     final badge = product.getAvailabilityBadge();
-    final showBadge = badge['label'] != 'Available';
+    final showBadge = badge != null && badge['label'] != 'Available';
     final rate = primaryDisplayRate(
       dailyRent: product.dailyRent,
       weeklyRent: product.weeklyRent,
@@ -760,11 +793,13 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(listingId: product.id)));
             }
           : null,
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(16),
-        ),
+      child: Opacity(
+        opacity: isInteractive ? 1.0 : 0.55,
+        child: Container(
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(16),
+          ),
         clipBehavior: Clip.antiAlias,
         // No AspectRatio — it overflows when grid cell is shorter than width/ratio (Chrome wide view).
         child: Column(
@@ -774,7 +809,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  const ColoredBox(color: Color(0xFF334155)),
+                  ColoredBox(color: colors.surfaceElevated),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(10, 36, 10, 8),
                     child: CatalogImage(url: product.primaryImageUrl, fit: BoxFit.contain),
@@ -849,11 +884,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     product.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
                       height: 1.25,
-                      color: Colors.white,
+                      color: colors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -874,7 +909,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     ),
-  );
+    );
   }
 }
 
@@ -886,23 +921,24 @@ class _ActiveFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return Container(
       padding: const EdgeInsets.only(left: 12, right: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF6C63FF).withValues(alpha: 0.18),
+        color: colors.accent.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.45)),
+        border: Border.all(color: colors.accent.withValues(alpha: 0.45)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             label,
-            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+            style: TextStyle(color: colors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
           ),
           IconButton(
             onPressed: onClear,
-            icon: const Icon(Icons.close, size: 16, color: Colors.white70),
+            icon: Icon(Icons.close, size: 16, color: colors.textSecondary),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             visualDensity: VisualDensity.compact,
@@ -922,11 +958,12 @@ class _FilterSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: colors.surfaceElevated,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF334155).withValues(alpha: 0.7)),
+        border: Border.all(color: colors.border.withValues(alpha: 0.7)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -939,8 +976,8 @@ class _FilterSectionCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(
-                      color: Color(0xFF94A3B8),
+                    style: TextStyle(
+                      color: colors.textMuted,
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.6,
@@ -950,7 +987,7 @@ class _FilterSectionCard extends StatelessWidget {
                 if (trailing != null)
                   Text(
                     trailing!,
-                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w600),
+                    style: TextStyle(color: colors.textMuted, fontSize: 11, fontWeight: FontWeight.w600),
                   ),
               ],
             ),
@@ -979,11 +1016,12 @@ class _FilterSelectRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return Column(
       children: [
-        if (showDivider) const Divider(height: 1, color: Color(0xFF334155)),
+        if (showDivider) Divider(height: 1, color: colors.border),
         Material(
-          color: selected ? const Color(0xFF6C63FF).withValues(alpha: 0.12) : Colors.transparent,
+          color: selected ? colors.accent.withValues(alpha: 0.12) : Colors.transparent,
           child: InkWell(
             onTap: onTap,
             child: Padding(
@@ -994,7 +1032,7 @@ class _FilterSelectRow extends StatelessWidget {
                     child: Text(
                       label,
                       style: TextStyle(
-                        color: selected ? Colors.white : const Color(0xFFE2E8F0),
+                        color: selected ? colors.textPrimary : colors.textSecondary,
                         fontSize: 14,
                         fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                       ),
@@ -1007,23 +1045,20 @@ class _FilterSelectRow extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: selected
                             ? const Color(0xFF6C63FF).withValues(alpha: 0.25)
-                            : const Color(0xFF334155),
+                            : colors.border,
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
                         '$count',
                         style: TextStyle(
-                          color: selected ? Colors.white : const Color(0xFF94A3B8),
+                          color: selected ? colors.textPrimary : colors.textMuted,
                           fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                  Icon(
-                    selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-                    size: 22,
-                    color: selected ? const Color(0xFF6C63FF) : const Color(0xFF64748B),
-                  ),
+                  if (selected)
+                    const Icon(Icons.check_circle_rounded, color: Color(0xFF6C63FF), size: 20),
                 ],
               ),
             ),
@@ -1047,8 +1082,9 @@ class _StockFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return Material(
-      color: selected ? const Color(0xFF1E293B) : Colors.transparent,
+      color: selected ? colors.surface : Colors.transparent,
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         onTap: onTap,
@@ -1058,16 +1094,16 @@ class _StockFilterChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected ? const Color(0xFF6C63FF) : const Color(0xFF334155),
+              color: selected ? const Color(0xFF6C63FF) : colors.border,
             ),
             boxShadow: selected
-                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 4, offset: const Offset(0, 1))]
+                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 4, offset: const Offset(0, 1))]
                 : null,
           ),
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? Colors.white : const Color(0xFFCBD5E1),
+              color: selected ? colors.textPrimary : colors.textSecondary,
               fontSize: 13,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             ),
@@ -1086,6 +1122,7 @@ class _FavoritesFilterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1098,36 +1135,36 @@ class _FavoritesFilterRow extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
+                  color: colors.background,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   value ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                  color: value ? const Color(0xFFEF4444) : const Color(0xFF94A3B8),
+                  color: value ? const Color(0xFFEF4444) : colors.textMuted,
                   size: 20,
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Favorites only',
-                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
                       'Show items you have saved',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                      style: TextStyle(color: colors.textMuted, fontSize: 12),
                     ),
                   ],
                 ),
               ),
               Switch.adaptive(
                 value: value,
-                activeColor: Colors.white,
-                activeTrackColor: const Color(0xFF6C63FF),
+                activeColor: colors.surface,
+                activeTrackColor: colors.accent,
                 onChanged: onChanged,
               ),
             ],

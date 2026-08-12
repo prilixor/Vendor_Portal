@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/profile_provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/theme.dart';
 import '../../shared/utils/require_auth.dart';
 import '../../shared/widgets/guest_sign_in_prompt.dart';
 import '../auth/login_screen.dart';
@@ -59,13 +60,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final profileProvider = Provider.of<ProfileProvider>(context);
     final authProvider = Provider.of<AuthProvider>(context);
+    final colors = context.appColors;
 
     if (!authProvider.isAuthenticated) {
       return Scaffold(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: colors.background,
         appBar: AppBar(
-          title: const Text('My Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          backgroundColor: const Color(0xFF0F172A),
+          title: Text('My Profile', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold)),
+          backgroundColor: colors.background,
           elevation: 0,
         ),
         body: GuestSignInPrompt.guest(
@@ -77,14 +79,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('My Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF0F172A),
+        title: Text('My Profile', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold)),
+        backgroundColor: colors.background,
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit_outlined, color: Colors.white),
+            icon: Icon(Icons.edit_outlined, color: colors.textPrimary),
             tooltip: 'Edit profile',
             onPressed: profileProvider.profile == null ? null : _openEditProfile,
           ),
@@ -94,10 +96,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
           : profileProvider.profile == null
               ? Scaffold(
-                  backgroundColor: const Color(0xFF0F172A),
+                  backgroundColor: colors.background,
                   appBar: AppBar(
-                    title: const Text('My Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    backgroundColor: const Color(0xFF0F172A),
+                    title: Text('My Profile', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold)),
+                    backgroundColor: colors.background,
                     elevation: 0,
                   ),
                   body: profileProvider.errorMessage == 'auth_required' ||
@@ -133,61 +135,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 16),
                       Text(
                         profileProvider.profile!.name,
-                        style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: colors.textPrimary, fontSize: 24, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         profileProvider.profile!.email,
-                        style: const TextStyle(color: Colors.white70, fontSize: 16),
+                        style: TextStyle(color: colors.textSecondary, fontSize: 16),
                       ),
                       if (profileProvider.profile!.phoneNumber.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
                           profileProvider.profile!.phoneNumber,
-                          style: const TextStyle(color: Colors.white54, fontSize: 14),
+                          style: TextStyle(color: colors.textMuted, fontSize: 14),
                         ),
                       ],
                       const SizedBox(height: 32),
                       Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B),
+                          color: colors.surface,
                           borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: colors.border),
                         ),
                         child: Column(
                           children: [
-                            _buildMenuItem(icon: Icons.person_outline, title: 'Edit Profile', onTap: _openEditProfile),
-                            const Divider(color: Colors.white10, height: 1),
+                            _buildMenuItem(context, icon: Icons.person_outline, title: 'Edit Profile', onTap: _openEditProfile),
+                            Divider(color: colors.border, height: 1),
                             _buildMenuItem(
+                              context,
                               icon: Icons.location_on_outlined,
                               title: 'Delivery Addresses',
                               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressesScreen())),
                             ),
-                            const Divider(color: Colors.white10, height: 1),
+                            Divider(color: colors.border, height: 1),
                             _buildMenuItem(
+                              context,
                               icon: Icons.event_busy_outlined,
                               title: 'Rental expirations',
                               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExpirationsScreen())),
                             ),
-                            const Divider(color: Colors.white10, height: 1),
+                            Divider(color: colors.border, height: 1),
                             _buildMenuItem(
+                              context,
                               icon: Icons.chat_bubble_outline,
                               title: 'Messages',
                               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatSessionsScreen())),
                             ),
-                            const Divider(color: Colors.white10, height: 1),
+                            Divider(color: colors.border, height: 1),
                             _buildMenuItem(
+                              context,
                               icon: Icons.support_agent,
                               title: 'Support',
                               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen())),
                             ),
-                            const Divider(color: Colors.white10, height: 1),
+                            Divider(color: colors.border, height: 1),
                             _buildMenuItem(
+                              context,
                               icon: Icons.notifications_active_outlined,
                               title: 'Notification preferences',
                               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPreferencesScreen())),
                             ),
-                            const Divider(color: Colors.white10, height: 1),
+                            Divider(color: colors.border, height: 1),
                             _buildMenuItem(
+                              context,
                               icon: Icons.shield_outlined,
                               title: 'Privacy & Security',
                               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatePasswordScreen())),
@@ -224,11 +233,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildMenuItem({required IconData icon, required String title, required VoidCallback onTap}) {
+  Widget _buildMenuItem(BuildContext context, {required IconData icon, required String title, required VoidCallback onTap}) {
+    final colors = context.appColors;
     return ListTile(
       leading: Icon(icon, color: const Color(0xFF6C63FF)),
-      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 16)),
-      trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+      title: Text(title, style: TextStyle(color: colors.textPrimary, fontSize: 16)),
+      trailing: Icon(Icons.chevron_right, color: colors.textMuted),
       onTap: onTap,
     );
   }

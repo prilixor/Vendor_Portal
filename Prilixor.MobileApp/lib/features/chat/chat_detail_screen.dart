@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/chat_provider.dart';
+import '../../core/theme.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final String sessionId;
@@ -51,20 +52,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<ChatProvider>(context);
+    final colors = context.appColors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Chat with Admin', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('Chat with Admin', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 2),
-            Text('Order: ${widget.orderNumber} • ${widget.listingTitle}', style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text('Order: ${widget.orderNumber} • ${widget.listingTitle}', style: TextStyle(color: colors.textSecondary, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),
-        backgroundColor: const Color(0xFF1E293B),
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: colors.surface,
+        iconTheme: IconThemeData(color: colors.textPrimary),
         elevation: 0,
       ),
       body: Column(
@@ -77,11 +79,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.chat_bubble_outline, size: 48, color: Colors.white38),
+                            Icon(Icons.chat_bubble_outline, size: 48, color: colors.textMuted),
                             const SizedBox(height: 16),
-                            const Text('No active conversation', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                            Text('No active conversation', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 8),
-                            const Text('Start a chat with BlinksMed support about this order.', style: TextStyle(color: Colors.white54, fontSize: 14), textAlign: TextAlign.center),
+                            Text('Start a chat with BlinksMed support about this order.', style: TextStyle(color: colors.textSecondary, fontSize: 14), textAlign: TextAlign.center),
                           ],
                         ),
                       )
@@ -100,7 +102,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
-                            color: isMe ? const Color(0xFF6C63FF) : const Color(0xFF1E293B),
+                            color: isMe ? const Color(0xFF6C63FF) : colors.surface,
                             borderRadius: BorderRadius.only(
                               topLeft: const Radius.circular(16),
                               topRight: const Radius.circular(16),
@@ -111,11 +113,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           child: Column(
                             crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: [
-                              Text(message.text, style: const TextStyle(color: Colors.white, fontSize: 16)),
+                              Text(message.text, style: TextStyle(color: isMe ? Colors.white : colors.textPrimary, fontSize: 16)),
                               const SizedBox(height: 4),
                               Text(
                                 '${message.sentAt.hour.toString().padLeft(2, '0')}:${message.sentAt.minute.toString().padLeft(2, '0')}',
-                                style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10),
+                                style: TextStyle(color: isMe ? Colors.white70 : colors.textMuted, fontSize: 10),
                               ),
                             ],
                           ),
@@ -128,9 +130,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           // Input Bar
           Container(
             padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 8, left: 16, right: 16, top: 8),
-            decoration: const BoxDecoration(
-              color: Color(0xFF1E293B),
-              border: Border(top: BorderSide(color: Colors.white10)),
+            decoration: BoxDecoration(
+              color: colors.surface,
+              border: Border(top: BorderSide(color: colors.border)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -138,16 +140,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: colors.textPrimary),
                     keyboardType: TextInputType.multiline,
                     textInputAction: TextInputAction.newline,
                     minLines: 1,
                     maxLines: 5,
                     decoration: InputDecoration(
                       hintText: 'Type a message...',
-                      hintStyle: const TextStyle(color: Colors.white38),
+                      hintStyle: TextStyle(color: colors.textMuted),
                       filled: true,
-                      fillColor: Colors.white10,
+                      fillColor: colors.background,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
                     ),

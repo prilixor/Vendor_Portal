@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/medical_model.dart';
 import '../../core/providers/medical_provider.dart';
+import '../../core/theme.dart';
 
 /// Doctor Unique ID lookup — mirrors React CustomerMedicalReference (with hospitals).
 class MedicalReferenceScreen extends StatefulWidget {
@@ -88,16 +89,17 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
   Widget build(BuildContext context) {
     final medical = Provider.of<MedicalProvider>(context);
     final error = _localError ?? medical.errorMessage;
+    final colors = context.appColors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: colors.background,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
+        iconTheme: IconThemeData(color: colors.textPrimary),
+        title: Text(
           'Doctor Unique ID',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold),
         ),
         actions: [
           TextButton(
@@ -111,12 +113,12 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
         children: [
           Text(
             widget.title,
-            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+            style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Enter the Unique ID from your doctor (or from their QR / share page). This is optional.',
-            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+            style: TextStyle(color: colors.textSecondary, fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 24),
           if (_ref.hasDoctor)
@@ -266,17 +268,17 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
                               margin: const EdgeInsets.only(bottom: 8),
                               padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1E293B),
+                                color: colors.surface,
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                                border: Border.all(color: colors.border),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     h.name,
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                    style: TextStyle(
+                                      color: colors.textPrimary,
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -294,7 +296,7 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
                                         Expanded(
                                           child: Text(
                                             detail,
-                                            style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.35),
+                                            style: TextStyle(color: colors.textSecondary, fontSize: 12, height: 1.35),
                                           ),
                                         ),
                                       ],
@@ -311,9 +313,9 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
               ),
             )
           else ...[
-            const Text(
+            Text(
               'Doctor Unique ID',
-              style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+              style: TextStyle(color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Row(
@@ -322,17 +324,17 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
                   child: TextField(
                     controller: _codeController,
                     textCapitalization: TextCapitalization.characters,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: colors.textPrimary,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.1,
                       fontFamily: 'monospace',
                     ),
                     decoration: InputDecoration(
                       hintText: 'e.g. DRDS26001',
-                      hintStyle: const TextStyle(color: Colors.white38, letterSpacing: 0.5),
+                      hintStyle: TextStyle(color: colors.textMuted, letterSpacing: 0.5),
                       filled: true,
-                      fillColor: const Color(0xFF1E293B),
+                      fillColor: colors.surface,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,

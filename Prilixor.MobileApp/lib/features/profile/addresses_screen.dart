@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/address_provider.dart';
 import '../../core/models/address_model.dart';
+import '../../core/theme.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/state_city_picker.dart';
 import 'mock_map_picker_screen.dart';
@@ -49,61 +50,49 @@ class _AddressesScreenState extends State<AddressesScreen> {
       final nextLng = (result['longitude'] as num?)?.toDouble();
       if (nextLat == null ||
           nextLng == null ||
-          nextLat < -90 ||
-          nextLat > 90 ||
-          nextLng < -180 ||
-          nextLng > 180 ||
           (nextLat == 0 && nextLng == 0)) {
-        setState(() {
-          locationError = 'Please set a valid map pin location.';
-        });
         return;
       }
-
       latitude = nextLat;
       longitude = nextLng;
       pinConfirmed = true;
       locationError = null;
 
-      final line1 = result['line1']?.toString().trim();
-      final state = result['state']?.toString().trim();
-      final city = result['city']?.toString().trim();
-      final postal = result['postal']?.toString().trim();
+      final subLocality = (result['subLocality'] as String?)?.trim() ?? '';
+      final locality = (result['locality'] as String?)?.trim() ?? '';
+      final administrativeArea = (result['administrativeArea'] as String?)?.trim() ?? '';
+      final postalCode = (result['postalCode'] as String?)?.trim() ?? '';
+      final addressLine = (result['addressLine'] as String?)?.trim() ?? '';
 
-      if (line1 != null && line1.isNotEmpty) {
-        streetCtrl.text = line1;
+      final parts = <String>[];
+      if (subLocality.isNotEmpty) parts.add(subLocality);
+      if (locality.isNotEmpty) parts.add(locality);
+      final derivedStreet = parts.isNotEmpty ? parts.join(', ') : addressLine;
+      if (derivedStreet.isNotEmpty) {
+        streetCtrl.text = derivedStreet;
         line1Error = null;
       }
-      if (postal != null && postal.isNotEmpty) {
-        zipCtrl.text = postal;
-        postalError = null;
-      }
-      if (state != null && state.isNotEmpty) {
-        stateCtrl.text = state;
+      if (administrativeArea.isNotEmpty) {
+        stateCtrl.text = administrativeArea;
         stateError = null;
       }
-      if (city != null && city.isNotEmpty) {
-        cityCtrl.text = city;
+      if (locality.isNotEmpty) {
+        cityCtrl.text = locality;
         cityError = null;
       }
-      if ((state != null && state.isNotEmpty) || (city != null && city.isNotEmpty)) {
-        stateCityKey++;
+      if (postalCode.isNotEmpty) {
+        zipCtrl.text = postalCode;
+        postalError = null;
       }
+      stateCityKey++;
+      setState(() {});
 
       final missing = <String>[];
       if (streetCtrl.text.trim().isEmpty) missing.add('address line');
       if (stateCtrl.text.trim().isEmpty) missing.add('state');
       if (cityCtrl.text.trim().isEmpty) missing.add('city');
       if (zipCtrl.text.trim().isEmpty) missing.add('postal code');
-
-      setState(() {});
-
-      if (!context.mounted) return;
-      if (missing.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location applied from map.')),
-        );
-      } else {
+      if (missing.isNotEmpty && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -116,12 +105,13 @@ class _AddressesScreenState extends State<AddressesScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: context.appColors.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setState) {
+            final colors = context.appColors;
             return Padding(
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
               child: SingleChildScrollView(
@@ -132,7 +122,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(existingAddress == null ? 'Add New Address' : 'Edit Address', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                        Text(existingAddress == null ? 'Add New Address' : 'Edit Address', style: TextStyle(color: colors.textPrimary, fontSize: 20, fontWeight: FontWeight.bold)),
                         TextButton.icon(
                           onPressed: () async {
                             final result = await Navigator.push(
@@ -151,7 +141,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
                     const SizedBox(height: 6),
                     Text(
                       'Address text alone is not enough. Use Pick on Map to set delivery coordinates.',
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12),
+                      style: TextStyle(color: colors.textMuted, fontSize: 12),
                     ),
                     if (pinConfirmed && latitude != null && longitude != null)
                       Padding(
@@ -242,7 +232,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
                             return;
                           }
 
-                          bool success;
+                          final bool success;
                           if (existingAddress == null) {
                             success = await provider.addAddress(
                               label: labelCtrl.text.isNotEmpty ? labelCtrl.text : 'Home',
@@ -297,10 +287,11 @@ class _AddressesScreenState extends State<AddressesScreen> {
     String? errorText,
     ValueChanged<String>? onChanged,
   }) {
+    final colors = context.appColors;
     return TextFormField(
       controller: controller,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: colors.textPrimary),
       onChanged: onChanged,
       decoration: requiredInputDecoration(
         context,
@@ -308,7 +299,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
         required: required,
         hintText: hint,
         errorText: errorText,
-        fillColor: Colors.white10,
+        fillColor: colors.background,
       ),
     );
   }
@@ -316,13 +307,14 @@ class _AddressesScreenState extends State<AddressesScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<AddressProvider>(context);
+    final colors = context.appColors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('Delivery Addresses', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0F172A),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('Delivery Addresses', style: TextStyle(color: colors.textPrimary)),
+        backgroundColor: colors.background,
+        iconTheme: IconThemeData(color: colors.textPrimary),
         elevation: 0,
       ),
       body: provider.isLoading && provider.addresses.isEmpty
@@ -332,9 +324,9 @@ class _AddressesScreenState extends State<AddressesScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.location_off_outlined, size: 64, color: Colors.white24),
+                      Icon(Icons.location_off_outlined, size: 64, color: colors.textMuted),
                       const SizedBox(height: 16),
-                      const Text('No addresses found.', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                      Text('No addresses found.', style: TextStyle(color: colors.textSecondary, fontSize: 16)),
                       const SizedBox(height: 24),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
@@ -353,15 +345,15 @@ class _AddressesScreenState extends State<AddressesScreen> {
                     return Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: colors.surface,
                         borderRadius: BorderRadius.circular(12),
-                        border: addr.isDefault ? Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.5)) : null,
+                        border: addr.isDefault ? Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.5)) : Border.all(color: colors.border),
                       ),
                       child: Row(
                         children: [
                           Container(
                             padding: const EdgeInsets.all(10),
-                            decoration: const BoxDecoration(color: Colors.white10, shape: BoxShape.circle),
+                            decoration: BoxDecoration(color: colors.surfaceElevated, shape: BoxShape.circle),
                             child: const Icon(Icons.location_on, color: Color(0xFF6C63FF)),
                           ),
                           const SizedBox(width: 16),
@@ -371,7 +363,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
                               children: [
                                 Row(
                                   children: [
-                                    Text(addr.label ?? 'Address', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                    Text(addr.label ?? 'Address', style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                                     if (addr.isDefault) ...[
                                       const SizedBox(width: 8),
                                       Container(
@@ -383,7 +375,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 4),
-                                Text('${addr.line1}, ${addr.city}, ${addr.state} ${addr.postal}', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                                Text('${addr.line1}, ${addr.city}, ${addr.state} ${addr.postal}', style: TextStyle(color: colors.textSecondary, fontSize: 14)),
                               ],
                             ),
                           ),
