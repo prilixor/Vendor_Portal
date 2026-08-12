@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import '../../shared/utils/razorpay_web_checkout.dart';
 import '../../core/providers/checkout_provider.dart';
 import '../../core/providers/cart_provider.dart';
 import '../../core/providers/address_provider.dart';
@@ -30,9 +33,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final Map<String, MedicalRefModel> _medicalRefs = {};
   bool _authChecked = false;
 
+  late Razorpay _razorpay;
+  bool _isProcessingCheckout = false;
+  String? _activeCheckoutSessionId;
+
   @override
   void initState() {
     super.initState();
+    if (!kIsWeb) {
+      _razorpay = Razorpay();
+      _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+      _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+      _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final ok = await ensureAuthenticated(
         context,
@@ -56,6 +70,73 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
       _fetchQuote();
     });
+  }
+
+  @override
+  void dispose() {
+    if (!kIsWeb) {
+      _razorpay.clear();
+    }
+    super.dispose();
+  }
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    final sessionId = _activeCheckoutSessionId;
+    if (sessionId == null || !mounted) {
+      if (mounted) setState(() => _isProcessingCheckout = false);
+      return;
+    }
+
+    final provider = Provider.of<CheckoutProvider>(context, listen: false);
+    final cart = Provider.of<CartProvider>(context, listen: false);
+
+    final verified = await provider.verifyCheckout(
+      checkoutSessionId: sessionId,
+      razorpayOrderId: response.orderId ?? '',
+      razorpayPaymentId: response.paymentId ?? '',
+      razorpaySignature: response.signature ?? '',
+    );
+
+    if (!mounted) return;
+    setState(() => _isProcessingCheckout = false);
+
+    if (verified) {
+      cart.clearCart();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Payment successful! Your order has been submitted.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.errorMessage ?? 'Payment verification failed. Please contact support.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    if (!mounted) return;
+    setState(() => _isProcessingCheckout = false);
+    final message = response.message ?? 'Payment cancelled or failed.';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orangeAccent,
+      ),
+    );
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    if (!mounted) return;
+    setState(() => _isProcessingCheckout = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('External Wallet: ${response.walletName}')),
+    );
   }
 
   Future<void> _fetchQuote() async {
@@ -692,6 +773,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   onPressed: provider.isPlacingOrder ||
+                          _isProcessingCheckout ||
                           provider.errorMessage != null
                       ? null
                       : () async {
@@ -703,32 +785,78 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             );
                             return;
                           }
-                          final success = await provider.placeOrder(
+                          setState(() => _isProcessingCheckout = true);
+
+                          final session = await provider.createCheckout(
                             cart.lines,
                             addressId: _selectedAddressId,
                             deliveryOption: _deliveryOption,
                             medicalRefs: _medicalRefs,
                           );
-                          if (success && mounted) {
-                            cart.clearCart();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Order placed successfully!'),
-                                backgroundColor: Colors.green,
-                              ),
+
+                          if (!mounted) return;
+                          if (session == null) {
+                            setState(() => _isProcessingCheckout = false);
+                            if (provider.errorMessage != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(provider.errorMessage!), backgroundColor: Colors.redAccent),
+                              );
+                            }
+                            return;
+                          }
+
+                          _activeCheckoutSessionId = session.checkoutSessionId;
+
+                          final amountPaise = (session.amount * 100).round();
+                          if (kIsWeb) {
+                            await openRazorpayWeb(
+                              key: session.razorpayKeyId,
+                              amountPaise: amountPaise,
+                              currency: session.currency,
+                              orderId: session.razorpayOrderId ?? '',
+                              name: 'BlinksMed',
+                              description: 'Pay for ${session.orders.length} order(s)',
+                              email: '',
+                              contact: '',
+                              onSuccess: (paymentId, orderId, signature) {
+                                _handlePaymentSuccess(PaymentSuccessResponse(
+                                  paymentId,
+                                  orderId,
+                                  signature,
+                                  null,
+                                ));
+                              },
+                              onError: (message) {
+                                _handlePaymentError(PaymentFailureResponse(0, message, null));
+                              },
                             );
-                            Navigator.of(context).popUntil((route) => route.isFirst);
-                          } else if (provider.errorMessage != null && mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(provider.errorMessage!), backgroundColor: Colors.redAccent),
-                            );
+                          } else {
+                            final options = {
+                              'key': session.razorpayKeyId,
+                              'amount': amountPaise,
+                              'currency': session.currency,
+                              'name': 'BlinksMed',
+                              'description': 'Pay for ${session.orders.length} order(s)',
+                              'order_id': session.razorpayOrderId,
+                            };
+
+                            try {
+                              _razorpay.open(options);
+                            } catch (e) {
+                              if (mounted) {
+                                setState(() => _isProcessingCheckout = false);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Unable to launch Razorpay: $e'), backgroundColor: Colors.redAccent),
+                                );
+                              }
+                            }
                           }
                         },
-                  child: provider.isPlacingOrder
+                  child: provider.isPlacingOrder || _isProcessingCheckout
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : Text(
+                      : const Text(
                           'Place Order',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                 ),
               ),
