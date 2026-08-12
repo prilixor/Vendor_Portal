@@ -20,7 +20,6 @@ import {
   Bell,
 
   Settings,
-  MessageSquare,
 } from "lucide-react";
 
 import type { NavSection } from "@/app/helpers/navigation";
@@ -92,7 +91,6 @@ export const vendorNav: NavSection[] = [
 
     items: [
       { label: "Notifications", to: "/vendor/notifications", icon: Bell },
-      { label: "Chats", to: "/vendor/chats", icon: MessageSquare },
       { label: "Settings", to: "/vendor/settings", icon: Settings },
 
     ],
@@ -142,8 +140,19 @@ export const getVendorNav = (
   }));
 };
 
+/** Sentinel — Vendor Notifications opens the Support FAB instead of navigating. */
+export const VENDOR_SUPPORT_PANEL_ROUTE = "__support_panel__";
+
 export const getVendorRoute = (notificationType?: string, title?: string): string | null => {
   const type = notificationType?.trim().toLowerCase() ?? "";
+
+  if (
+    type === "support_chat_reply" ||
+    type.includes("support_chat") ||
+    type === "support_reply"
+  ) {
+    return VENDOR_SUPPORT_PANEL_ROUTE;
+  }
   
   if (type === "dispatch_offer" || type === "new_order" || type.includes("order_request")) {
     return "/vendor/order-requests";
@@ -185,6 +194,9 @@ export const getVendorRoute = (notificationType?: string, title?: string): strin
   
   // Fallback to title matching
   const t = title?.toLowerCase() ?? "";
+  if (t.includes("blinksmed support") || t.includes("support replied") || t.includes("support reply")) {
+    return VENDOR_SUPPORT_PANEL_ROUTE;
+  }
   if (t.includes("order request") || t.includes("dispatch offer")) {
     return "/vendor/order-requests";
   }

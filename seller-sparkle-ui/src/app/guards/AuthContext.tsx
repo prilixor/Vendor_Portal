@@ -96,6 +96,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     clearPortalSession();
     clearImpersonationSession();
+    // Re-prompt location on next login if they still have no delivery address.
+    sessionStorage.removeItem("locationPromptSnoozed");
+    sessionStorage.removeItem("locationPromptDismissed");
   };
 
   useEffect(() => {

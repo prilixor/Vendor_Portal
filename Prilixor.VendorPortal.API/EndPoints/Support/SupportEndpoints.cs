@@ -40,6 +40,9 @@ public static class SupportEndpoints
         group.MapGet("admin/tickets", GetAllTickets)
             .WithName("GetAllSupportTickets");
 
+        group.MapGet("admin/unread-count", GetAdminUnreadCount)
+            .WithName("GetAdminSupportUnreadCount");
+
         group.MapPatch("admin/tickets/{ticketId}/status", UpdateTicketStatus)
             .WithName("UpdateSupportTicketStatus");
     }
@@ -67,9 +70,10 @@ public static class SupportEndpoints
     private static async Task<IResult> GetTicketMessages(
         string ticketId,
         [FromServices] IMediator mediator,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] bool markReadForAdmin = false)
     {
-        var query = new GetSupportTicketMessagesQuery(ticketId);
+        var query = new GetSupportTicketMessagesQuery(ticketId, markReadForAdmin);
         var result = await mediator.Send(query, cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -80,7 +84,18 @@ public static class SupportEndpoints
         [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var command = new SendSupportMessageCommand(ticketId, request.SenderId, request.SenderType, request.Message);
+        string? attachmentUrls = null;
+        if (request.AttachmentUrls is { Count: > 0 })
+        {
+            attachmentUrls = System.Text.Json.JsonSerializer.Serialize(request.AttachmentUrls);
+        }
+
+        var command = new SendSupportMessageCommand(
+            ticketId,
+            request.SenderId,
+            request.SenderType,
+            request.Message,
+            attachmentUrls);
         var result = await mediator.Send(command, cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -145,6 +160,14 @@ public static class SupportEndpoints
         return result.IsSuccess ? Results.Ok(result.Value) : result.ToErrorResponse();
     }
 
+    private static async Task<IResult> GetAdminUnreadCount(
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetAdminSupportUnreadCountQuery(), cancellationToken);
+        return result.IsSuccess ? Results.Ok(new { count = result.Value }) : result.ToErrorResponse();
+    }
+
     private static async Task<IResult> UpdateTicketStatus(
         string ticketId,
         [FromBody] UpdateTicketStatusRequest request,
@@ -158,6 +181,10 @@ public static class SupportEndpoints
 }
 
 public record CreateSupportTicketRequest(string VendorId, string Category, string Subject, string Message);
-public record SendSupportMessageRequest(string SenderId, string SenderType, string Message);
+public record SendSupportMessageRequest(
+    string SenderId,
+    string SenderType,
+    string Message,
+    List<string>? AttachmentUrls = null);
 public record UpdateTicketStatusRequest(string Status, string AdminId);
 public record AiChatRequest(string VendorId, string Message, string? Category, string? Subject, bool ForceNewTicket = false, List<string>? AttachmentUrls = null);

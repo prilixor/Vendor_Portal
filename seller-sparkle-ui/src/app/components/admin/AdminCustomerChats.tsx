@@ -10,15 +10,17 @@ import {
   Search,
   User,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { chatApi, type ChatSessionApi } from "@/app/services/chatApi";
 import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea";
+import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardHeader } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { ScrollArea } from "@/app/components/ui/scroll-area";
+import { isSameChatDay } from "@/app/helpers/chatDayLabel";
 import { cn } from "@/app/helpers/utils";
 
 const SESSIONS_POLL_MS = 10000;
@@ -26,7 +28,9 @@ const MESSAGES_POLL_MS = 5000;
 
 export default function AdminCustomerChats() {
   const queryClient = useQueryClient();
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sessionFromUrl = searchParams.get("sessionId");
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(sessionFromUrl);
   const [search, setSearch] = useState("");
   const [replyText, setReplyText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -41,6 +45,22 @@ export default function AdminCustomerChats() {
     queryFn: () => chatApi.getAdminSessions(),
     refetchInterval: SESSIONS_POLL_MS,
   });
+
+  useEffect(() => {
+    if (sessionFromUrl && sessionFromUrl !== selectedSessionId) {
+      setSelectedSessionId(sessionFromUrl);
+    }
+  }, [sessionFromUrl]);
+
+  const selectSession = (sessionId: string | null) => {
+    setSelectedSessionId(sessionId);
+    if (sessionId) {
+      searchParams.set("sessionId", sessionId);
+    } else {
+      searchParams.delete("sessionId");
+    }
+    setSearchParams(searchParams, { replace: true });
+  };
 
   const activeSession = useMemo(() => {
     return sessions.find((s) => s.id === selectedSessionId) ?? null;
@@ -57,6 +77,13 @@ export default function AdminCustomerChats() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Opening a thread marks customer messages read — refresh badges.
+  useEffect(() => {
+    if (!selectedSessionId || loadingMessages) return;
+    void queryClient.invalidateQueries({ queryKey: ["admin-customer-chat-sessions"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin-customer-chat-unread"] });
+  }, [selectedSessionId, loadingMessages, messages.length, queryClient]);
+
   const sendMut = useMutation({
     mutationFn: (text: string) => chatApi.sendAdminMessage(selectedSessionId!, text),
     onSuccess: () => {
@@ -65,48 +92,43 @@ export default function AdminCustomerChats() {
         queryKey: ["admin-customer-chat-messages", selectedSessionId],
       });
       queryClient.invalidateQueries({ queryKey: ["admin-customer-chat-sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-customer-chat-unread"] });
     },
     onError: (err: Error) => toast.error(err.message || "Failed to send message."),
   });
 
   const filteredSessions = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return sessions;
-    return sessions.filter(
-      (s) =>
-        s.customerName.toLowerCase().includes(term) ||
-        (s.subject && s.subject.toLowerCase().includes(term)) ||
-        (s.orderNumber && s.orderNumber.toLowerCase().includes(term)) ||
-        (s.vendorName && s.vendorName.toLowerCase().includes(term))
-    );
-  }, [sessions, search]);
+    const list = !term
+      ? [...sessions]
+      : sessions.filter(
+          (s) =>
+            s.customerName.toLowerCase().includes(term) ||
+            (s.subject && s.subject.toLowerCase().includes(term)) ||
+            (s.orderNumber && s.orderNumber.toLowerCase().includes(term)) ||
+            (s.vendorName && s.vendorName.toLowerCase().includes(term)),
+        );
 
-  const renderSessionMeta = (s: ChatSessionApi) => (
-    <div className="mt-2 flex items-center justify-between gap-2">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100">
-          <User className="h-3 w-3 text-slate-500" />
-        </div>
-        <span className="truncate text-[10px] text-muted-foreground">{s.customerName}</span>
-      </div>
-      <span className="whitespace-nowrap text-[9px] font-bold text-slate-400">
-        {formatDistanceToNow(new Date(s.lastMessageAt), { addSuffix: true })}
-      </span>
-    </div>
-  );
+    return list.sort((a, b) => {
+      const unreadA = (a.unreadCount ?? 0) > 0 ? 1 : 0;
+      const unreadB = (b.unreadCount ?? 0) > 0 ? 1 : 0;
+      if (unreadA !== unreadB) return unreadB - unreadA;
+      return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
+    });
+  }, [sessions, search]);
 
   const showListOnMobile = !selectedSessionId;
   const showChatOnMobile = !!selectedSessionId;
 
   return (
-    <div className="flex min-h-0 flex-col gap-4 sm:gap-6">
+    <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight text-foreground sm:gap-3 sm:text-3xl">
-            <MessageSquare className="h-7 w-7 shrink-0 text-primary sm:h-8 sm:w-8" />
+          <h1 className="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-foreground">
+            <MessageSquare className="h-8 w-8 shrink-0 text-primary" />
             <span className="truncate">Customer Order Chats</span>
           </h1>
-          <p className="mt-1 text-sm font-medium text-muted-foreground sm:text-base">
+          <p className="mt-1 font-medium text-muted-foreground">
             Reply to customer chats started from order details.
           </p>
         </div>
@@ -121,74 +143,125 @@ export default function AdminCustomerChats() {
         </Button>
       </div>
 
-      <div className="grid min-h-[min(70dvh,640px)] grid-cols-1 gap-4 lg:h-[calc(100dvh-220px)] lg:grid-cols-12 lg:gap-6">
-        {/* Session list — full width on mobile until a chat is opened */}
+      <div className="grid min-h-[560px] grid-cols-1 gap-5 lg:h-[calc(100vh-220px)] lg:grid-cols-12">
+        {/* Session list — same card pattern as Vendor Support Center */}
         <Card
           className={cn(
-            "flex min-h-0 flex-col overflow-hidden border-primary/5 shadow-xl",
-            "lg:col-span-4",
+            "flex min-h-0 flex-col overflow-hidden border-border/70 shadow-sm",
+            "lg:col-span-5 xl:col-span-4",
             showListOnMobile ? "flex" : "hidden",
-            "lg:flex"
+            "lg:flex",
           )}
         >
-          <CardHeader className="space-y-4 border-b border-border px-3 py-3 sm:px-4 sm:py-4">
+          <CardHeader className="shrink-0 space-y-3 border-b border-border/70 px-4 py-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">Conversations</p>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {filteredSessions.length}
+              </span>
+            </div>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search customer, order..."
-                className="h-11 border-none bg-muted/30 pl-9 shadow-inner"
+                className="h-10 border-border/60 bg-background pl-9 shadow-none"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
           </CardHeader>
-          <ScrollArea className="min-h-0 flex-1 bg-secondary/20">
-            <div className="space-y-1 p-2">
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="space-y-2 p-3">
               {loadingSessions ? (
                 <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
-                  <Loader2 className="mb-4 h-8 w-8 animate-spin text-primary" />
-                  <p className="animate-pulse text-sm font-bold">Loading chats...</p>
+                  <Loader2 className="mb-4 h-7 w-7 animate-spin text-primary" />
+                  <p className="text-sm font-medium">Loading chats...</p>
                 </div>
               ) : filteredSessions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
-                  <MessageSquare className="mb-4 h-12 w-12 opacity-10" />
-                  <p className="text-sm font-bold">No customer chats yet</p>
-                  <p className="text-xs">Chats appear when customers message from an order.</p>
+                <div className="flex flex-col items-center justify-center px-6 py-14 text-center text-muted-foreground">
+                  <MessageSquare className="mb-3 h-10 w-10 opacity-20" />
+                  <p className="text-sm font-semibold text-foreground">No customer chats yet</p>
+                  <p className="mt-1 text-xs">
+                    Chats appear when customers message from an order.
+                  </p>
                 </div>
               ) : (
-                filteredSessions.map((s) => (
-                  <button
-                    type="button"
-                    key={s.id}
-                    onClick={() => setSelectedSessionId(s.id)}
-                    className={cn(
-                      "relative w-full overflow-hidden rounded-xl border p-3 text-left transition-all",
-                      selectedSessionId === s.id
-                        ? "border-primary bg-card shadow-lg ring-1 ring-primary/20"
-                        : "border-transparent bg-card/50 hover:border-border hover:bg-card"
-                    )}
-                  >
-                    {selectedSessionId === s.id && (
-                      <div className="absolute bottom-0 left-0 top-0 w-1 bg-primary" />
-                    )}
-                    <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <span className="truncate font-mono text-[10px] font-bold text-muted-foreground">
-                        {s.orderNumber || "No order"}
-                      </span>
-                      {s.isClosed ? (
-                        <Badge variant="outline" className="shrink-0 text-[9px] uppercase">Closed</Badge>
-                      ) : (
-                        <Badge className="shrink-0 border-none bg-success/10 text-[9px] uppercase text-success">
-                          Open
-                        </Badge>
+                filteredSessions.map((s) => {
+                  const selected = selectedSessionId === s.id;
+                  const unread = s.unreadCount ?? 0;
+                  return (
+                    <button
+                      type="button"
+                      key={s.id}
+                      onClick={() => selectSession(s.id)}
+                      className={cn(
+                        "w-full rounded-xl border px-3.5 py-3 text-left transition-all",
+                        selected
+                          ? "border-primary/40 bg-primary/5 shadow-sm ring-1 ring-primary/15"
+                          : unread > 0
+                            ? "border-primary/25 bg-card hover:border-primary/40 hover:bg-primary/[0.04]"
+                            : "border-border/60 bg-card hover:border-border hover:bg-muted/40",
                       )}
-                    </div>
-                    <h4 className="truncate text-[13px] font-bold transition-colors group-hover:text-primary">
-                      {s.subject || "Order chat"}
-                    </h4>
-                    {renderSessionMeta(s)}
-                  </button>
-                ))
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="truncate font-mono text-[11px] font-semibold tracking-wide text-muted-foreground">
+                          {s.orderNumber || "No order"}
+                        </span>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          {unread > 0 && (
+                            <Badge className="h-5 min-w-5 justify-center border-none bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
+                              {unread > 9 ? "9+" : unread}
+                            </Badge>
+                          )}
+                          {s.isClosed ? (
+                            <Badge
+                              variant="outline"
+                              className="h-5 border px-1.5 text-[10px] font-semibold uppercase tracking-wide"
+                            >
+                              Closed
+                            </Badge>
+                          ) : (
+                            <Badge className="h-5 border-none bg-success/10 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-success">
+                              Open
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <p
+                        className={cn(
+                          "mt-1.5 line-clamp-2 text-sm leading-snug text-foreground",
+                          unread > 0 ? "font-bold" : "font-semibold",
+                        )}
+                      >
+                        {s.subject || "Order chat"}
+                      </p>
+
+                      {s.vendorName ? (
+                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                          Vendor: {s.vendorName}
+                        </p>
+                      ) : null}
+
+                      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border/50 pt-2">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted">
+                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+                          </div>
+                          <span
+                            className="truncate text-xs font-medium text-foreground/80"
+                            title={s.customerName}
+                          >
+                            {s.customerName}
+                          </span>
+                        </div>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          {formatDistanceToNow(new Date(s.lastMessageAt), { addSuffix: true })}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </div>
           </ScrollArea>
@@ -197,11 +270,11 @@ export default function AdminCustomerChats() {
         {/* Conversation — replaces list on mobile when a session is selected */}
         <Card
           className={cn(
-            "flex min-h-0 flex-col overflow-hidden border-primary/5 bg-secondary/20 shadow-2xl",
-            "lg:col-span-8",
+            "flex min-h-0 flex-col overflow-hidden border-border/70 bg-secondary/15 shadow-sm",
+            "lg:col-span-7 xl:col-span-8",
             showChatOnMobile ? "flex" : "hidden",
             "lg:flex",
-            !activeSession && "items-center justify-center p-8 text-center sm:p-12"
+            !activeSession && "items-center justify-center p-8 text-center sm:p-12",
           )}
         >
           {!activeSession ? (
@@ -212,40 +285,54 @@ export default function AdminCustomerChats() {
             </div>
           ) : (
             <>
-              <div className="flex shrink-0 flex-col gap-3 border-b border-border bg-card px-3 py-3 shadow-sm sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-4">
-                <div className="min-w-0 flex-1">
-                  <div className="mb-1 flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 lg:hidden"
-                      onClick={() => setSelectedSessionId(null)}
-                      aria-label="Back to chat list"
-                    >
-                      <ArrowLeft className="h-4 w-4" />
-                    </Button>
-                    <h2 className="truncate text-base font-extrabold tracking-tight sm:text-lg">
-                      {activeSession.customerName}
-                    </h2>
+              <div className="relative z-10 flex shrink-0 flex-col gap-3 border-b border-border bg-card px-3 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5">
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="mt-0.5 h-8 w-8 shrink-0 lg:hidden"
+                    onClick={() => selectSession(null)}
+                    aria-label="Back to chat list"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
+                    <User className="h-5 w-5" />
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 pl-10 lg:pl-0">
-                    {activeSession.orderNumber && (
-                      <Badge variant="outline" className="max-w-full truncate font-mono text-[10px]">
-                        <Hash className="mr-1 h-3 w-3 shrink-0" />
-                        <span className="truncate">{activeSession.orderNumber}</span>
-                      </Badge>
-                    )}
-                    {activeSession.orderId && (
-                      <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                        <Link to={`/admin/orders/${activeSession.orderId}`}>View order</Link>
-                      </Button>
-                    )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="truncate text-lg font-extrabold tracking-tight">
+                        {activeSession.customerName}
+                      </h2>
+                      {activeSession.isClosed ? (
+                        <Badge variant="outline" className="text-[10px] uppercase">
+                          Closed
+                        </Badge>
+                      ) : (
+                        <Badge className="border-none bg-success/10 text-[10px] uppercase text-success">
+                          Open
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      {activeSession.orderNumber && (
+                        <Badge variant="outline" className="max-w-full truncate font-mono text-[10px]">
+                          <Hash className="mr-1 h-3 w-3 shrink-0" />
+                          <span className="truncate">{activeSession.orderNumber}</span>
+                        </Badge>
+                      )}
+                      {activeSession.orderId && (
+                        <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                          <Link to={`/admin/orders/${activeSession.orderId}`}>View order</Link>
+                        </Button>
+                      )}
+                    </div>
+                    <p className="mt-1.5 line-clamp-2 text-sm text-muted-foreground">
+                      {activeSession.subject}
+                      {activeSession.vendorName ? ` · Vendor: ${activeSession.vendorName}` : ""}
+                    </p>
                   </div>
-                  <p className="mt-1 line-clamp-2 pl-10 text-xs font-medium text-muted-foreground sm:text-sm lg:pl-0">
-                    {activeSession.subject}
-                    {activeSession.vendorName ? ` • Vendor: ${activeSession.vendorName}` : ""}
-                  </p>
                 </div>
               </div>
 
@@ -260,28 +347,32 @@ export default function AdminCustomerChats() {
                       No messages yet. Reply to start helping this customer.
                     </p>
                   ) : (
-                    messages.map((msg) => {
+                    messages.map((msg, index) => {
                       const isAdmin = msg.senderType === "Admin";
+                      const prev = index > 0 ? messages[index - 1] : null;
+                      const showDay = !prev || !isSameChatDay(prev.sentAt, msg.sentAt);
                       return (
-                        <div
-                          key={msg.id}
-                          className={cn(
-                            "flex w-fit max-w-[85%] flex-col rounded-lg p-3 text-sm shadow-sm sm:max-w-[80%]",
-                            isAdmin
-                              ? "ml-auto self-end rounded-tr-none bg-primary text-primary-foreground"
-                              : "mr-auto self-start rounded-tl-none border bg-card text-foreground"
-                          )}
-                        >
-                          <span className="mb-1 text-[10px] font-bold uppercase tracking-wide opacity-80">
-                            {isAdmin ? "You (Admin)" : "Customer"}
-                          </span>
-                          <p className="break-words whitespace-pre-wrap leading-relaxed">{msg.messageText}</p>
-                          <span className="mt-1.5 self-end text-[10px] font-semibold opacity-75">
-                            {new Date(msg.sentAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
+                        <div key={msg.id} className="flex flex-col space-y-3">
+                          {showDay && <ChatDaySeparator date={msg.sentAt} />}
+                          <div
+                            className={cn(
+                              "flex w-fit max-w-[85%] flex-col rounded-lg p-3 text-sm shadow-sm sm:max-w-[80%]",
+                              isAdmin
+                                ? "ml-auto self-end rounded-tr-none bg-primary text-primary-foreground"
+                                : "mr-auto self-start rounded-tl-none border bg-card text-foreground"
+                            )}
+                          >
+                            <span className="mb-1 text-[10px] font-bold uppercase tracking-wide opacity-80">
+                              {isAdmin ? "You (Admin)" : "Customer"}
+                            </span>
+                            <p className="break-words whitespace-pre-wrap leading-relaxed">{msg.messageText}</p>
+                            <span className="mt-1.5 self-end text-[10px] font-semibold opacity-75">
+                              {new Date(msg.sentAt).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </div>
                         </div>
                       );
                     })

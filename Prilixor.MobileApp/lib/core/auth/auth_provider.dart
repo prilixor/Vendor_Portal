@@ -30,65 +30,20 @@ class AuthProvider extends ChangeNotifier {
 
   /// Restore session from stored JWT (web-like stay logged in).
   /// If access token expired, tries refresh once.
+  ///
+  /// Bounded so a hung secure-storage / refresh call cannot leave AuthGate
+  /// on BrandSplash forever (especially painful on Flutter web).
   Future<bool> tryRestoreSession() async {
     _isBootstrapping = true;
     notifyListeners();
     try {
-      final token = await _storage.read(key: 'jwt_token');
-      if (token == null || token.trim().isEmpty) {
-        _isAuthenticated = false;
-        return false;
-      }
-
-      // Token still valid — keep session.
-      if (!JwtDecoder.isExpired(token)) {
-        _isAuthenticated = true;
-        return true;
-      }
-
-      // Access token expired — try refresh before forcing login.
-      final refresh = await _storage.read(key: 'refresh_token');
-      if (refresh == null || refresh.trim().isEmpty) {
-        await logout();
-        return false;
-      }
-
-      try {
-        final refreshDio = Dio(
-          BaseOptions(
-            baseUrl: _apiClient.baseUrl,
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-          ),
-        );
-        final response = await refreshDio.post(
-          '/auth/refresh',
-          data: {
-            'token': token,
-            'refreshToken': refresh,
-          },
-        );
-        if (response.statusCode == 200 && response.data is Map) {
-          final data = Map<String, dynamic>.from(response.data as Map);
-          final newToken = data['token']?.toString();
-          final newRefresh = data['refreshToken']?.toString();
-          if (newToken != null && newToken.isNotEmpty) {
-            await _storage.write(key: 'jwt_token', value: newToken);
-            if (newRefresh != null && newRefresh.isNotEmpty) {
-              await _storage.write(key: 'refresh_token', value: newRefresh);
-            }
-            _isAuthenticated = true;
-            return true;
-          }
-        }
-      } catch (_) {
-        // Fall through to logout.
-      }
-
-      await logout();
-      return false;
+      return await _restoreSessionBody().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          _isAuthenticated = false;
+          return false;
+        },
+      );
     } catch (_) {
       _isAuthenticated = false;
       return false;
@@ -96,6 +51,66 @@ class AuthProvider extends ChangeNotifier {
       _isBootstrapping = false;
       notifyListeners();
     }
+  }
+
+  Future<bool> _restoreSessionBody() async {
+    final token = await _storage.read(key: 'jwt_token');
+    if (token == null || token.trim().isEmpty) {
+      _isAuthenticated = false;
+      return false;
+    }
+
+    // Token still valid — keep session.
+    if (!JwtDecoder.isExpired(token)) {
+      _isAuthenticated = true;
+      return true;
+    }
+
+    // Access token expired — try refresh before forcing login.
+    final refresh = await _storage.read(key: 'refresh_token');
+    if (refresh == null || refresh.trim().isEmpty) {
+      await logout();
+      return false;
+    }
+
+    try {
+      final refreshDio = Dio(
+        BaseOptions(
+          baseUrl: _apiClient.baseUrl,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          connectTimeout: const Duration(seconds: 6),
+          receiveTimeout: const Duration(seconds: 6),
+        ),
+      );
+      final response = await refreshDio.post(
+        '/auth/refresh',
+        data: {
+          'token': token,
+          'refreshToken': refresh,
+        },
+      );
+      if (response.statusCode == 200 && response.data is Map) {
+        final data = Map<String, dynamic>.from(response.data as Map);
+        final newToken = data['token']?.toString();
+        final newRefresh = data['refreshToken']?.toString();
+        if (newToken != null && newToken.isNotEmpty) {
+          await _storage.write(key: 'jwt_token', value: newToken);
+          if (newRefresh != null && newRefresh.isNotEmpty) {
+            await _storage.write(key: 'refresh_token', value: newRefresh);
+          }
+          _isAuthenticated = true;
+          return true;
+        }
+      }
+    } catch (_) {
+      // Fall through to logout.
+    }
+
+    await logout();
+    return false;
   }
 
   Future<bool> login(String email, String password) async {
@@ -153,6 +168,8 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     await _storage.delete(key: 'jwt_token');
     await _storage.delete(key: 'refresh_token');
+    // Re-prompt location on next login if they still have no delivery address.
+    await _storage.delete(key: 'locationPromptDismissed');
     _isAuthenticated = false;
     notifyListeners();
   }

@@ -19,6 +19,7 @@ class ProductModel {
   final String availabilityStatus;
   final String? primaryImageUrl;
   final double? buyPrice;
+  final double? maxBuyPrice;
   final bool isRentEnabled;
   final bool isBuyEnabled;
   final bool isChemical;
@@ -43,11 +44,15 @@ class ProductModel {
     required this.availabilityStatus,
     this.primaryImageUrl,
     this.buyPrice,
+    this.maxBuyPrice,
     this.isRentEnabled = true,
     this.isBuyEnabled = false,
     this.isChemical = false,
     this.baseUnit,
   });
+
+  bool get canRent => !isChemical && isRentEnabled;
+  bool get canBuy => isChemical || isBuyEnabled;
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
     return ProductModel(
@@ -69,6 +74,7 @@ class ProductModel {
       availabilityStatus: json['availabilityStatus'] ?? '',
       primaryImageUrl: resolveItemImageUrl(json: json),
       buyPrice: json['buyPrice'] != null ? (json['buyPrice'] as num).toDouble() : null,
+      maxBuyPrice: json['maxBuyPrice'] != null ? (json['maxBuyPrice'] as num).toDouble() : null,
       isRentEnabled: json['isRentEnabled'] ?? true,
       isBuyEnabled: json['isBuyEnabled'] ?? false,
       isChemical: json['isChemical'] ?? false,
@@ -84,7 +90,7 @@ class ProductModel {
       return {'label': 'Unavailable', 'color': 0xFF9E9E9E};
     }
     if (availableQuantity <= 0 && productTotalAvailableQuantity > 0) {
-      return {'label': 'Out here', 'color': 0xFFFF5722};
+      return {'label': 'Out at this vendor', 'color': 0xFFFF5722};
     }
     if (s == 'out_of_stock' || availableQuantity <= 0) {
       return {'label': 'Out of stock', 'color': 0xFFF44336};
@@ -93,7 +99,7 @@ class ProductModel {
       return {'label': 'Only 1 left', 'color': 0xFFEF6C00};
     }
     if (s == 'low_stock' || availableQuantity <= 3) {
-      return {'label': 'Low stock', 'color': 0xFFF57C00};
+      return {'label': 'Limited stock', 'color': 0xFFF57C00};
     }
     // In-stock / available: no badge per product requirement
     return null;

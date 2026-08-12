@@ -1,8 +1,11 @@
 using FluentValidation;
+using MediatR;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.Domain.Support;
+using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Extensions;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -64,10 +67,18 @@ internal sealed class CreateSupportTicketCommandHandler(
             SenderId = vendorId,
             SenderType = "Vendor",
             Message = request.InitialMessage,
+            IsRead = false,
             CreatedOnUtc = DateTime.UtcNow
         };
 
         await repository.AddSupportMessageAsync(message, cancellationToken);
+        await SupportAdminAlertHelper.NotifyAdminsAsync(
+            repository,
+            ticket,
+            vendor.Email,
+            request.InitialMessage,
+            "vendor.support.message",
+            cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new SupportTicketDto(
@@ -97,22 +108,47 @@ internal sealed class GetVendorSupportTicketsQueryHandler(IVendorOnboardingRepos
 
         var tickets = await repository.GetSupportTicketsByVendorIdAsync(vendorId, cancellationToken);
         
-        var dtos = tickets.Select(t => new SupportTicketDto(
-            t.Id.ToString(),
-            t.TicketNumber,
-            t.Category,
-            t.Subject,
-            t.Status,
-            null,
-            null,
-            t.CreatedOnUtc.ToSafeDateTimeOffset(),
-            t.ModifiedOnUtc.ToSafeDateTimeOffset())).ToList();
+        var dtos = tickets.Select(t =>
+        {
+            SupportMessageDto? latestMessage = null;
+            var latestMsg = t.Messages?.Where(m => !m.IsDeleted).OrderByDescending(m => m.CreatedOnUtc).FirstOrDefault();
+            if (latestMsg is not null)
+            {
+                List<string>? attachmentUrls = null;
+                if (!string.IsNullOrWhiteSpace(latestMsg.AttachmentUrls))
+                {
+                    try { attachmentUrls = JsonSerializer.Deserialize<List<string>>(latestMsg.AttachmentUrls); }
+                    catch { /* ignore */ }
+                }
+
+                latestMessage = new SupportMessageDto(
+                    latestMsg.Id.ToString(),
+                    latestMsg.TicketId.ToString(),
+                    latestMsg.SenderId.ToString(),
+                    latestMsg.SenderType,
+                    latestMsg.Message,
+                    latestMsg.CreatedOnUtc.ToSafeDateTimeOffset(),
+                    attachmentUrls);
+            }
+
+            return new SupportTicketDto(
+                t.Id.ToString(),
+                t.TicketNumber,
+                t.Category,
+                t.Subject,
+                t.Status,
+                null,
+                null,
+                t.CreatedOnUtc.ToSafeDateTimeOffset(),
+                t.ModifiedOnUtc.ToSafeDateTimeOffset(),
+                latestMessage);
+        }).ToList();
 
         return Result.Success(dtos);
     }
 }
 
-public sealed record GetSupportTicketMessagesQuery(string TicketId) : IQuery<List<SupportMessageDto>>;
+public sealed record GetSupportTicketMessagesQuery(string TicketId, bool MarkReadForAdmin = false) : IQuery<List<SupportMessageDto>>;
 
 internal sealed class GetSupportTicketMessagesQueryHandler(IVendorOnboardingRepository repository)
     : IQueryHandler<GetSupportTicketMessagesQuery, List<SupportMessageDto>>
@@ -122,6 +158,13 @@ internal sealed class GetSupportTicketMessagesQueryHandler(IVendorOnboardingRepo
         if (!Guid.TryParse(request.TicketId, out var ticketId))
         {
             return Result.Failure<List<SupportMessageDto>>(new Error("tickets.invalid_id", "Invalid ticket id.", ErrorCategory.Validation));
+        }
+
+        if (request.MarkReadForAdmin)
+        {
+            var marked = await repository.MarkSupportMessagesReadForAdminAsync(ticketId, cancellationToken);
+            if (marked > 0)
+                await repository.SaveChangesAsync(cancellationToken);
         }
 
         var messages = await repository.GetSupportMessagesByTicketIdAsync(ticketId, cancellationToken);
@@ -153,6 +196,7 @@ public sealed record SendSupportMessageCommand(string TicketId, string SenderId,
 
 internal sealed class SendSupportMessageCommandHandler(
     IVendorOnboardingRepository repository,
+    IMediator mediator,
     ILogger<SendSupportMessageCommandHandler> logger)
     : ICommandHandler<SendSupportMessageCommand, SupportMessageDto>
 {
@@ -179,6 +223,13 @@ internal sealed class SendSupportMessageCommandHandler(
             return Result.Failure<SupportMessageDto>(new Error("tickets.closed", "Cannot send messages to a closed ticket.", ErrorCategory.Validation));
         }
 
+        var isAdmin = string.Equals(request.SenderType, "Admin", StringComparison.OrdinalIgnoreCase);
+        var isVendor = string.Equals(request.SenderType, "Vendor", StringComparison.OrdinalIgnoreCase);
+
+        var priorUnreadForAdmin = 0;
+        if (isVendor)
+            priorUnreadForAdmin = await repository.CountUnreadAdminSupportMessagesForTicketAsync(ticketId, cancellationToken);
+
         var message = new SupportMessage
         {
             TicketId = ticketId,
@@ -186,18 +237,64 @@ internal sealed class SendSupportMessageCommandHandler(
             SenderType = request.SenderType,
             Message = request.Message,
             AttachmentUrls = request.AttachmentUrls,
+            IsRead = !isVendor, // vendor → admin inbox unread; admin/AI already "seen"
             CreatedOnUtc = DateTime.UtcNow
         };
 
         await repository.AddSupportMessageAsync(message, cancellationToken);
         
-        if (request.SenderType == "Admin" && ticket.Status == "Open")
+        if (isAdmin && ticket.Status == "Open")
         {
             ticket.Status = "In Progress";
         }
+
+        // Vendor follow-up on a Resolved ticket reopens it for the admin inbox.
+        if (isVendor && string.Equals(ticket.Status, "Resolved", StringComparison.OrdinalIgnoreCase))
+        {
+            ticket.Status = "Open";
+        }
         
         await repository.UpdateSupportTicketAsync(ticket, cancellationToken);
+
+        if (isVendor && priorUnreadForAdmin == 0)
+        {
+            var vendor = await repository.GetVendorByIdAsync(ticket.VendorId, cancellationToken);
+            await SupportAdminAlertHelper.NotifyAdminsAsync(
+                repository,
+                ticket,
+                vendor?.Email ?? "Vendor",
+                request.Message,
+                "vendor.support.message",
+                cancellationToken);
+        }
+
         await repository.SaveChangesAsync(cancellationToken);
+
+        if (isAdmin)
+        {
+            // Admin reply clears their inbox unread for this ticket.
+            await repository.MarkSupportMessagesReadForAdminAsync(ticketId, cancellationToken);
+            await repository.SaveChangesAsync(cancellationToken);
+
+            var snippet = request.Message.Trim();
+            if (snippet.Length > 100) snippet = snippet[..100] + "…";
+            try
+            {
+                await mediator.Send(
+                    new CreateVendorNotificationCommand(
+                        ticket.VendorId.ToString(),
+                        "support_chat_reply",
+                        "BlinksMed support replied",
+                        $"Ticket {ticket.TicketNumber}: {snippet}",
+                        "in_app",
+                        "sent"),
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to notify vendor {VendorId} of support reply on ticket {TicketId}", ticket.VendorId, ticket.Id);
+            }
+        }
 
         List<string>? attachmentUrls = null;
         if (!string.IsNullOrWhiteSpace(message.AttachmentUrls))
@@ -229,11 +326,15 @@ internal sealed class GetAllSupportTicketsQueryHandler(IVendorOnboardingReposito
     public async Task<Result<List<SupportTicketDto>>> Handle(GetAllSupportTicketsQuery request, CancellationToken cancellationToken)
     {
         var tickets = await repository.GetSupportTicketsAsync(cancellationToken);
+        var unreadByTicket = await repository.GetUnreadAdminSupportCountsByTicketAsync(cancellationToken);
         
         var dtos = tickets.Select(t =>
         {
             SupportMessageDto? latestMessage = null;
-            var latestMsg = t.Messages.OrderByDescending(m => m.CreatedOnUtc).FirstOrDefault();
+            var latestMsg = t.Messages?
+                .Where(m => !m.IsDeleted)
+                .OrderByDescending(m => m.CreatedOnUtc)
+                .FirstOrDefault();
             if (latestMsg != null)
             {
                 List<string>? attachmentUrls = null;
@@ -252,20 +353,48 @@ internal sealed class GetAllSupportTicketsQueryHandler(IVendorOnboardingReposito
                     attachmentUrls);
             }
 
-            return new SupportTicketDto(
-                t.Id.ToString(),
-                t.TicketNumber,
-                t.Category,
-                t.Subject,
-                t.Status,
-                t.Vendor?.Email,
-                null,
-                t.CreatedOnUtc.ToSafeDateTimeOffset(),
-                t.ModifiedOnUtc.ToSafeDateTimeOffset(),
-                latestMessage);
-        }).ToList();
+            unreadByTicket.TryGetValue(t.Id, out var unread);
+
+            var activityAt = latestMsg?.CreatedOnUtc.ToSafeDateTimeOffset()
+                ?? t.ModifiedOnUtc.ToSafeDateTimeOffset()
+                ?? t.CreatedOnUtc.ToSafeDateTimeOffset();
+
+            return new
+            {
+                Dto = new SupportTicketDto(
+                    t.Id.ToString(),
+                    t.TicketNumber,
+                    t.Category,
+                    t.Subject,
+                    t.Status,
+                    t.Vendor?.Email,
+                    t.Vendor?.Profile?.BusinessName,
+                    t.CreatedOnUtc.ToSafeDateTimeOffset(),
+                    activityAt,
+                    latestMessage,
+                    unread),
+                SortAt = activityAt,
+                Unread = unread
+            };
+        })
+        .OrderByDescending(x => x.Unread > 0)
+        .ThenByDescending(x => x.SortAt)
+        .Select(x => x.Dto)
+        .ToList();
 
         return Result.Success(dtos);
+    }
+}
+
+public sealed record GetAdminSupportUnreadCountQuery() : IQuery<int>;
+
+internal sealed class GetAdminSupportUnreadCountQueryHandler(IVendorOnboardingRepository repository)
+    : IQueryHandler<GetAdminSupportUnreadCountQuery, int>
+{
+    public async Task<Result<int>> Handle(GetAdminSupportUnreadCountQuery request, CancellationToken cancellationToken)
+    {
+        var count = await repository.CountUnreadAdminSupportMessagesAsync(cancellationToken);
+        return Result.Success(count);
     }
 }
 
@@ -366,6 +495,9 @@ internal sealed class AiChatCommandHandler(
             ? JsonSerializer.Serialize(request.AttachmentUrls)
             : null;
 
+        var priorUnreadForAdmin =
+            await repository.CountUnreadAdminSupportMessagesForTicketAsync(ticket.Id, cancellationToken);
+
         var vendorMessage = new SupportMessage
         {
             TicketId = ticket.Id,
@@ -374,6 +506,7 @@ internal sealed class AiChatCommandHandler(
             SenderType = "Vendor",
             Message = request.Message,
             AttachmentUrls = attachmentUrlsJson,
+            IsRead = false,
             CreatedOnUtc = DateTime.UtcNow
         };
         await repository.AddSupportMessageAsync(vendorMessage, cancellationToken);
@@ -397,6 +530,17 @@ internal sealed class AiChatCommandHandler(
                 await repository.UpdateSupportTicketAsync(ticket, cancellationToken);
             }
 
+            if (priorUnreadForAdmin == 0)
+            {
+                await SupportAdminAlertHelper.NotifyAdminsAsync(
+                    repository,
+                    ticket,
+                    vendor.Email,
+                    request.Message,
+                    "vendor.support.message",
+                    cancellationToken);
+            }
+
             await repository.SaveChangesAsync(cancellationToken);
 
             var humanThreadTicketDto = new SupportTicketDto(
@@ -414,6 +558,7 @@ internal sealed class AiChatCommandHandler(
         }
 
         SupportMessage? aiMessage = null;
+        var escalatedToHuman = false;
 
         if (SupportAiReplyPolicy.ShouldGenerateAiReply(ticket, orderedMessages))
         {
@@ -429,10 +574,13 @@ internal sealed class AiChatCommandHandler(
                 cancellationToken,
                 conversationHistory);
 
-            var shouldPersistAiReply = !SupportAiReplyPolicy.IsEscalationText(aiResponse.Message)
+            var replyText = SupportAiReplyPolicy.NormalizeAiReply(aiResponse.Message, aiResponse.CanAnswer);
+            escalatedToHuman = !aiResponse.CanAnswer || SupportAiReplyPolicy.IsEscalationText(replyText);
+
+            var shouldPersistAiReply = !SupportAiReplyPolicy.IsEscalationText(replyText)
                 || !SupportAiReplyPolicy.HasEscalationReply(orderedMessages);
 
-            if (shouldPersistAiReply)
+            if (shouldPersistAiReply && !string.IsNullOrWhiteSpace(replyText))
             {
                 aiMessage = new SupportMessage
                 {
@@ -440,7 +588,9 @@ internal sealed class AiChatCommandHandler(
                     Ticket = ticket,
                     SenderId = Guid.Empty,
                     SenderType = "AI",
-                    Message = aiResponse.Message,
+                    Message = replyText,
+                    // Escalation is an admin inbox signal: vendor needs a human.
+                    IsRead = !escalatedToHuman,
                     CreatedOnUtc = DateTime.UtcNow
                 };
                 await repository.AddSupportMessageAsync(aiMessage, cancellationToken);
@@ -461,6 +611,23 @@ internal sealed class AiChatCommandHandler(
                 ticket.Status = "Open";
             }
             await repository.UpdateSupportTicketAsync(ticket, cancellationToken);
+        }
+
+        // Only alert admins when the bot hands off — normal AI Q&A should not ping Support.
+        if (escalatedToHuman)
+        {
+            await SupportAdminAlertHelper.NotifyAdminsAsync(
+                repository,
+                ticket,
+                vendor.Email,
+                $"Vendor needs human support: \"{SupportAdminAlertHelper.TrimSnippet(request.Message)}\"",
+                "vendor.support.escalation",
+                cancellationToken);
+        }
+        else
+        {
+            // AI answered without escalation — do not leave admin-inbox unread noise.
+            vendorMessage.IsRead = true;
         }
 
         await repository.SaveChangesAsync(cancellationToken);
@@ -491,3 +658,41 @@ internal sealed class AiChatCommandHandler(
 }
 
 #endregion
+
+internal static class SupportAdminAlertHelper
+{
+    public static string TrimSnippet(string message)
+    {
+        var snippet = message.Trim();
+        return snippet.Length > 80 ? snippet[..80] + "…" : snippet;
+    }
+
+    public static async Task NotifyAdminsAsync(
+        IVendorOnboardingRepository repository,
+        SupportTicket ticket,
+        string vendorLabel,
+        string messageText,
+        string actionType,
+        CancellationToken cancellationToken)
+    {
+        var admins = await repository.GetAdminUsersAsync(cancellationToken);
+        var systemAdmin = admins.FirstOrDefault(a => a.IsActive) ?? admins.FirstOrDefault();
+        if (systemAdmin is null)
+            return;
+
+        var snippet = TrimSnippet(messageText);
+        await repository.AddAdminAuditLogAsync(
+            new AdminAuditLog
+            {
+                Id = Guid.NewGuid(),
+                AdminId = systemAdmin.Id,
+                ActionType = actionType,
+                EntityType = "support_ticket",
+                EntityId = ticket.Id,
+                NewValue =
+                    $"{{\"ticketId\":\"{ticket.Id}\",\"ticketNumber\":\"{ticket.TicketNumber}\",\"vendorId\":\"{ticket.VendorId}\"}}",
+                Notes = $"{vendorLabel} · {ticket.TicketNumber}: \"{snippet}\"",
+            },
+            cancellationToken);
+    }
+}

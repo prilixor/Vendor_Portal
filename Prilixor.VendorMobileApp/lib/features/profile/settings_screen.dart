@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:flutter/services.dart';
-
 import '../../core/auth/auth_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/custom_text_field.dart';
+import '../../shared/widgets/indian_mobile_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -40,7 +39,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           profile?.ownerName.isNotEmpty == true
               ? profile!.ownerName
               : (auth.displayName ?? '');
-      _phoneController.text = profile?.supportPhone ?? '';
+      _phoneController.text =
+          IndianMobilePhone.normalizeDigits(profile?.supportPhone ?? '');
       setState(() {});
     });
   }
@@ -152,33 +152,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  TextField(
+                  IndianMobileField(
                     controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(10),
-                    ],
-                    style: TextStyle(color: colors.textPrimary),
+                    label: 'Support phone',
+                    required: true,
+                    errorText: _phoneError,
                     onChanged: (_) {
                       if (_phoneError != null) {
                         setState(() => _phoneError = null);
                       }
                     },
-                    decoration: requiredInputDecoration(
-                      context,
-                      label: 'Support phone',
-                      required: true,
-                      errorText: _phoneError,
-                      prefixIcon: Icons.phone_outlined,
-                    ).copyWith(
-                      prefixIcon: Icon(
-                        Icons.phone_outlined,
-                        color: AppTheme.accent,
-                      ),
-                      hintText: '9876543210',
-                      helperText: 'Indian mobile: 10 digits starting with 6–9',
-                    ),
                   ),
                   if (provider.profile!.businessName.isNotEmpty) ...[
                     const SizedBox(height: 16),

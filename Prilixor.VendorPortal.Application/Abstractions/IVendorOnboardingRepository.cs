@@ -166,6 +166,10 @@ public interface IVendorOnboardingRepository
 
     Task AddSupportMessageAsync(SupportMessage message, CancellationToken cancellationToken);
     Task<List<SupportMessage>> GetSupportMessagesByTicketIdAsync(Guid ticketId, CancellationToken cancellationToken);
+    Task<int> CountUnreadAdminSupportMessagesAsync(CancellationToken cancellationToken);
+    Task<Dictionary<Guid, int>> GetUnreadAdminSupportCountsByTicketAsync(CancellationToken cancellationToken);
+    Task<int> CountUnreadAdminSupportMessagesForTicketAsync(Guid ticketId, CancellationToken cancellationToken);
+    Task<int> MarkSupportMessagesReadForAdminAsync(Guid ticketId, CancellationToken cancellationToken);
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

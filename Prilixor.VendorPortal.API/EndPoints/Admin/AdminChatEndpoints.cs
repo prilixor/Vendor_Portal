@@ -25,6 +25,30 @@ public sealed class GetAdminChatSessionsEndpoint(IMediator mediator)
     }
 }
 
+public sealed class AdminChatUnreadCountResponse
+{
+    public int Count { get; set; }
+}
+
+public sealed class GetAdminChatUnreadCountEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<AdminChatUnreadCountResponse>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("chats/unread-count");
+        Group<AdminApiGroup>();
+        Policies($"Perm:{AdminPermissions.SupportManage}");
+    }
+
+    public override async Task<Results<Ok<AdminChatUnreadCountResponse>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetAdminChatUnreadCountQuery(), ct);
+        return result.IsSuccess
+            ? TypedResults.Ok(new AdminChatUnreadCountResponse { Count = result.Value })
+            : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetAdminChatMessagesRequest
 {
     public string SessionId { get; set; } = string.Empty;
@@ -46,7 +70,7 @@ public sealed class GetAdminChatMessagesEndpoint(IMediator mediator)
         if (!Guid.TryParse(req.SessionId, out var sessionId))
             return TypedResults.Problem(title: "chats.invalid_id", detail: "Invalid session id.", statusCode: 400);
 
-        var result = await mediator.Send(new GetChatMessagesQuery(sessionId), ct);
+        var result = await mediator.Send(new GetChatMessagesQuery(sessionId, MarkReadForReaderType: "Admin"), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

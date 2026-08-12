@@ -128,21 +128,15 @@ RentVsBuyCheck evaluateRentVsBuy({
   );
 }
 
-/// Primary display rate for browse cards (first visible unit with a positive price).
+/// Primary rent rate for browse cards — match web day-first flow.
+/// Prefer daily; else derive day rate from weekly/7; else monthly.
 ({double value, String unit})? primaryDisplayRate({
   double dailyRent = 0,
   double weeklyRent = 0,
   double monthlyRent = 0,
 }) {
-  for (final unit in rentalUnitsVisibleInUi) {
-    final value = rateForUnit(
-      unit,
-      dailyRent: dailyRent,
-      weeklyRent: weeklyRent,
-      monthlyRent: monthlyRent,
-    );
-    if (value > 0) return (value: value, unit: unit);
-  }
-  if (dailyRent > 0) return (value: dailyRent, unit: rentalUnitDay);
+  final dayRate = dailyRent > 0 ? dailyRent : (weeklyRent > 0 ? weeklyRent / 7 : 0.0);
+  if (dayRate > 0) return (value: dayRate.roundToDouble(), unit: rentalUnitDay);
+  if (monthlyRent > 0) return (value: monthlyRent, unit: rentalUnitMonth);
   return null;
 }

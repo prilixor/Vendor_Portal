@@ -53,11 +53,25 @@ class VendorOnboardingProvider extends ChangeNotifier {
   bool get hasRejectedBankAccount =>
       _bankAccounts.any((b) => b.verificationStatus.toLowerCase() == 'rejected');
 
-  Future<void> loadAll(String vendorId) async {
+  Future<void>? _loadAllInflight;
+
+  Future<void> loadAll(String vendorId, {bool silent = false}) async {
     if (vendorId.isEmpty) return;
-    _loading = true;
-    _error = null;
-    notifyListeners();
+    if (_loadAllInflight != null) return _loadAllInflight!;
+    _loadAllInflight = _loadAllInternal(vendorId, silent: silent);
+    try {
+      await _loadAllInflight;
+    } finally {
+      _loadAllInflight = null;
+    }
+  }
+
+  Future<void> _loadAllInternal(String vendorId, {bool silent = false}) async {
+    if (!silent) {
+      _loading = true;
+      _error = null;
+      notifyListeners();
+    }
     try {
       final results = await Future.wait([
         _api.dio.get('/vendors/$vendorId/documents'),

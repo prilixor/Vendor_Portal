@@ -8,10 +8,10 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import {
-  maskIndianMobileInput,
   normalizeIndianMobileDigits,
   optionalIndianMobileError,
 } from "@/app/helpers/indianMobilePhone";
+import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 
 const CustomerRegister = () => {
   const { registerCustomer, login } = useAuth();
@@ -92,16 +92,11 @@ const CustomerRegister = () => {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="phone">Phone (optional)</Label>
-          <Input
+          <IndianMobileInput
             id="phone"
-            type="tel"
-            inputMode="numeric"
-            autoComplete="tel"
-            placeholder="9876543210"
             value={phone}
-            onChange={(e) => setPhone(maskIndianMobileInput(e.target.value))}
-            aria-invalid={!!errors.phone}
-            className={errors.phone ? "border-destructive" : ""}
+            onChange={setPhone}
+            invalid={!!errors.phone}
           />
           {errors.phone ? (
             <p className="text-xs text-destructive">{errors.phone}</p>

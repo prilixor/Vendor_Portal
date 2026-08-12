@@ -1,7 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -20,6 +19,7 @@ import '../../core/utils/multipart_file_util.dart';
 import '../../core/utils/place_search.dart';
 import 'document_preview_screen.dart';
 import '../../shared/widgets/admin_comment_hint.dart';
+import '../../shared/widgets/indian_mobile_field.dart';
 import 'onboarding_widgets.dart';
 import '../service_areas/service_area_map_picker.dart';
 import '../support/support_chat_screen.dart';
@@ -245,7 +245,7 @@ class _ProfileTabState extends State<_ProfileTab> {
     if (p == null) return;
     _businessController.text = p.businessName;
     _ownerController.text = p.ownerName;
-    _phoneController.text = p.supportPhone;
+    _phoneController.text = IndianMobilePhone.normalizeDigits(p.supportPhone);
     _gstController.text = p.gstNumber ?? '';
     _address1Controller.text = p.addressLine1;
     _address2Controller.text = p.addressLine2 ?? '';
@@ -477,17 +477,14 @@ class _ProfileTabState extends State<_ProfileTab> {
           subtitle: 'Shown to customers on your store profile.',
           child: Column(
             children: [
-              OnboardingTextField(controller: _businessController, label: 'Business name *'),
-              OnboardingTextField(controller: _ownerController, label: 'Owner name *'),
-              OnboardingTextField(
+              OnboardingTextField(controller: _businessController, label: 'Business name'),
+              OnboardingTextField(controller: _ownerController, label: 'Owner name'),
+              IndianMobileField(
                 controller: _phoneController,
-                label: 'Support phone *',
-                hint: '9876543210',
-                helperText: 'Indian mobile: 10 digits starting with 6–9',
-                keyboardType: TextInputType.phone,
-                maxLength: 10,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                label: 'Support phone',
+                required: true,
               ),
+              const SizedBox(height: 12),
               OnboardingTextField(
                 controller: _gstController,
                 label: 'GST number (optional)',
@@ -499,7 +496,7 @@ class _ProfileTabState extends State<_ProfileTab> {
           title: 'Business address',
           child: Column(
             children: [
-              OnboardingTextField(controller: _address1Controller, label: 'Address line 1 *'),
+              OnboardingTextField(controller: _address1Controller, label: 'Address line 1'),
               OnboardingTextField(controller: _address2Controller, label: 'Address line 2'),
               StateCityPickerFields(
                 key: ValueKey('onboarding-state-city-$_stateCityKey'),
@@ -532,7 +529,7 @@ class _ProfileTabState extends State<_ProfileTab> {
                 ),
               OnboardingTextField(
                 controller: _postalController,
-                label: 'Postal code *',
+                label: 'Postal code',
                 keyboardType: TextInputType.number,
               ),
             ],

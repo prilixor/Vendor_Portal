@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/profile_provider.dart';
 import '../../core/utils/indian_mobile_phone.dart';
+import '../../shared/widgets/indian_mobile_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -26,7 +26,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final profile = Provider.of<ProfileProvider>(context, listen: false).profile;
     if (profile != null) {
       _nameController.text = profile.name;
-      _phoneController.text = profile.phoneNumber;
+      _phoneController.text = IndianMobilePhone.normalizeDigits(profile.phoneNumber);
       _initialized = true;
     }
   }
@@ -138,28 +138,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    TextField(
+                    IndianMobileField(
                       controller: _phoneController,
-                      style: const TextStyle(color: Colors.white),
-                      keyboardType: TextInputType.phone,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(10),
-                      ],
+                      label: 'Phone',
+                      errorText: _phoneError,
                       onChanged: (_) {
                         if (_phoneError != null) setState(() => _phoneError = null);
                       },
-                      decoration: requiredInputDecoration(
-                        context,
-                        label: 'Phone',
-                        errorText: _phoneError,
-                        prefixIcon: Icons.phone_outlined,
-                      ).copyWith(
-                        hintText: '9876543210',
-                        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.28)),
-                        helperText: 'Indian mobile: 10 digits starting with 6–9',
-                        helperStyle: const TextStyle(color: Colors.white38, fontSize: 11),
-                      ),
                     ),
                     const SizedBox(height: 32),
                     SizedBox(

@@ -4,6 +4,7 @@ export const CUSTOMER_NOTIFICATION_TYPES_PHASE1 = [
   "welcome",
   "order_pending",
   "order_cancelled",
+  "support_chat_reply",
 ] as const;
 
 export type CustomerNotificationTypePhase1 = (typeof CUSTOMER_NOTIFICATION_TYPES_PHASE1)[number];
@@ -12,6 +13,7 @@ const PHASE1_BADGE_LABELS: Record<Exclude<CustomerNotificationTypePhase1, "gener
   welcome: "Welcome",
   order_pending: "Order pending",
   order_cancelled: "Order cancelled",
+  support_chat_reply: "Support reply",
 };
 
 /**

@@ -52,6 +52,12 @@ class VendorOrderProvider extends ChangeNotifier {
 
   List<OrderImage> get orderImages => _imageRequest?.images ?? const [];
 
+  /// Open photo requests across an order group: orderId -> photo count.
+  final Map<String, int> _groupPhotoCounts = {};
+  Map<String, int> get groupPhotoCounts => Map.unmodifiable(_groupPhotoCounts);
+
+  int? groupPhotoCountFor(String orderId) => _groupPhotoCounts[orderId];
+
   bool _expirationsLoading = false;
   bool get expirationsLoading => _expirationsLoading;
 
@@ -66,8 +72,22 @@ class VendorOrderProvider extends ChangeNotifier {
       ..sort((a, b) => b.expiresAt.compareTo(a.expiresAt));
   }
 
+  Future<void>? _offersInflight;
+  Future<void>? _ordersInflight;
+  String? _ordersInflightKey;
+
   Future<void> fetchOffers(String vendorId, {bool silent = false}) async {
     if (vendorId.isEmpty) return;
+    if (_offersInflight != null) return _offersInflight!;
+    _offersInflight = _fetchOffersInternal(vendorId, silent: silent);
+    try {
+      await _offersInflight;
+    } finally {
+      _offersInflight = null;
+    }
+  }
+
+  Future<void> _fetchOffersInternal(String vendorId, {bool silent = false}) async {
     if (!silent) {
       _offersLoading = true;
       _error = null;
@@ -94,6 +114,25 @@ class VendorOrderProvider extends ChangeNotifier {
 
   Future<void> fetchOrders(String vendorId, {String? status, bool silent = false}) async {
     if (vendorId.isEmpty) return;
+    final key = '$vendorId|${status ?? 'all'}';
+    if (_ordersInflight != null && _ordersInflightKey == key) {
+      return _ordersInflight!;
+    }
+    _ordersInflightKey = key;
+    _ordersInflight = _fetchOrdersInternal(vendorId, status: status, silent: silent);
+    try {
+      await _ordersInflight;
+    } finally {
+      _ordersInflight = null;
+      _ordersInflightKey = null;
+    }
+  }
+
+  Future<void> _fetchOrdersInternal(
+    String vendorId, {
+    String? status,
+    bool silent = false,
+  }) async {
     if (!silent) {
       _ordersLoading = true;
       _error = null;
@@ -114,20 +153,39 @@ class VendorOrderProvider extends ChangeNotifier {
           .map((e) => VendorOrder.fromJson(Map<String, dynamic>.from(e)))
           .toList();
     } on DioException catch (e) {
-      _error = _dioMessage(e, 'Failed to load orders.');
+      if (e.type == DioExceptionType.cancel ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        return;
+      }
+      if (!silent || _orders.isEmpty) {
+        _error = _dioMessage(e, 'Failed to load orders.');
+      }
     } catch (_) {
-      _error = 'Failed to load orders.';
+      if (!silent || _orders.isEmpty) {
+        _error = 'Failed to load orders.';
+      }
     } finally {
-      _ordersLoading = false;
+      if (!silent) {
+        _ordersLoading = false;
+      }
       notifyListeners();
     }
   }
 
-  Future<VendorOrder?> fetchOrderDetail(String vendorId, String orderId) async {
+  Future<VendorOrder?> fetchOrderDetail(
+    String vendorId,
+    String orderId, {
+    bool silent = false,
+  }) async {
     if (vendorId.isEmpty || orderId.isEmpty) return null;
-    _detailLoading = true;
-    _error = null;
-    notifyListeners();
+    final showLoading = !silent || _selectedOrder == null;
+    if (showLoading) {
+      _detailLoading = true;
+      _error = null;
+      notifyListeners();
+    }
     try {
       final response =
           await _api.dio.get('/vendors/$vendorId/orders/$orderId');
@@ -141,18 +199,32 @@ class VendorOrderProvider extends ChangeNotifier {
         ]);
         return _selectedOrder;
       }
-      _continuations = OrderContinuations.empty;
-      _imageRequest = null;
+      if (!silent) {
+        _continuations = OrderContinuations.empty;
+        _imageRequest = null;
+      }
     } on DioException catch (e) {
-      _error = _dioMessage(e, 'Failed to load order.');
-      _continuations = OrderContinuations.empty;
-      _imageRequest = null;
+      if (e.type == DioExceptionType.cancel ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        return _selectedOrder;
+      }
+      if (!silent || _selectedOrder == null) {
+        _error = _dioMessage(e, 'Failed to load order.');
+        _continuations = OrderContinuations.empty;
+        _imageRequest = null;
+      }
     } catch (_) {
-      _error = 'Failed to load order.';
-      _continuations = OrderContinuations.empty;
-      _imageRequest = null;
+      if (!silent || _selectedOrder == null) {
+        _error = 'Failed to load order.';
+        _continuations = OrderContinuations.empty;
+        _imageRequest = null;
+      }
     } finally {
-      _detailLoading = false;
+      if (showLoading) {
+        _detailLoading = false;
+      }
       notifyListeners();
     }
     return null;
@@ -179,18 +251,56 @@ class VendorOrderProvider extends ChangeNotifier {
       if (data is Map) {
         _imageRequest =
             OrderImageRequest.fromJson(Map<String, dynamic>.from(data));
+        _groupPhotoCounts[orderId] = _imageRequest!.images.length;
       } else {
         _imageRequest = null;
+        _groupPhotoCounts.remove(orderId);
       }
     } on DioException catch (_) {
       _imageRequest = null;
+      _groupPhotoCounts.remove(orderId);
     } catch (_) {
       _imageRequest = null;
+      _groupPhotoCounts.remove(orderId);
     } finally {
       _orderImagesLoading = false;
       if (!silent) notifyListeners();
     }
     return _imageRequest;
+  }
+
+  /// Loads open photo-request counts for all items in an order group (item-list badges).
+  Future<void> fetchGroupPhotoRequestMeta(
+    String vendorId,
+    List<String> orderIds, {
+    bool silent = false,
+  }) async {
+    if (vendorId.isEmpty || orderIds.isEmpty) {
+      if (!silent) {
+        _groupPhotoCounts.clear();
+        notifyListeners();
+      }
+      return;
+    }
+    final ids = orderIds.toSet().toList();
+    _groupPhotoCounts.removeWhere((key, _) => !ids.contains(key));
+    await Future.wait(ids.map((id) async {
+      try {
+        final response =
+            await _api.dio.get('/vendors/$vendorId/orders/$id/image-request');
+        final data = response.data;
+        if (data is Map) {
+          final req =
+              OrderImageRequest.fromJson(Map<String, dynamic>.from(data));
+          _groupPhotoCounts[id] = req.images.length;
+        } else {
+          _groupPhotoCounts.remove(id);
+        }
+      } catch (_) {
+        // Keep previous meta for this id if a single lookup fails.
+      }
+    }));
+    notifyListeners();
   }
 
   Future<bool> uploadOrderImage({

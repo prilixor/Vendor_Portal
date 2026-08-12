@@ -13,9 +13,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import type { VerificationStatus } from "@/app/models";
-import { getVendorRoute } from "@/app/helpers/vendorNav";
+import { getVendorRoute, VENDOR_SUPPORT_PANEL_ROUTE } from "@/app/helpers/vendorNav";
 import { notificationDisplayMessage } from "@/app/helpers/adminComment";
 import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
+import { useSupportChat } from "@/app/contexts/SupportChatContext";
 
 type DashboardNotification = {
   id: string;
@@ -63,6 +64,7 @@ const mapNotificationType = (type: string): DashboardNotification["type"] => {
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { openSupportPanel } = useSupportChat();
 
   const [ownerName, setOwnerName] = useState<string>("");
   const [businessName, setBusinessName] = useState<string>("");
@@ -444,6 +446,10 @@ const Dashboard = () => {
                 className="flex cursor-pointer items-start gap-3 py-3 transition-colors hover:bg-muted/30 rounded px-2 -mx-2"
                 onClick={() => {
                   const route = getVendorRoute(n.notificationType, n.title);
+                  if (route === VENDOR_SUPPORT_PANEL_ROUTE) {
+                    openSupportPanel();
+                    return;
+                  }
                   if (route) {
                     navigate(route);
                   }

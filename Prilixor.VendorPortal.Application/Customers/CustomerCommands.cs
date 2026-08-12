@@ -407,6 +407,18 @@ internal sealed class GetCustomerCatalogListingsQueryHandler(ICustomerRepository
     }
 }
 
+public sealed record GetCustomerRelatedProductsQuery(Guid ProductId, int Limit = 6, Guid? CustomerId = null) : IQuery<List<CustomerCatalogListingDto>>;
+
+internal sealed class GetCustomerRelatedProductsQueryHandler(ICustomerRepository customers)
+    : IQueryHandler<GetCustomerRelatedProductsQuery, List<CustomerCatalogListingDto>>
+{
+    public async Task<Result<List<CustomerCatalogListingDto>>> Handle(GetCustomerRelatedProductsQuery request, CancellationToken cancellationToken)
+    {
+        var list = await customers.GetRelatedCatalogListingsAsync(request.ProductId, request.Limit, request.CustomerId, cancellationToken);
+        return Result.Success(list);
+    }
+}
+
 public sealed record CartLineRequest(
     Guid ListingId,
     int Quantity,
@@ -1474,17 +1486,31 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
     {
         var rows = await customers.GetCustomerOrdersAsync(request.CustomerId, cancellationToken);
         var now = DateTimeOffset.UtcNow;
-        var changed = false;
-        foreach (var row in rows)
+
+        // Browser refresh / navigation aborts HttpContext.RequestAborted. Do not pass that
+        // token into dispatch reconciliation: cancelling mid-update leaves inconsistent
+        // offer/order state and surfaces OperationCanceledException while debugging.
+        // Completed responses (web + mobile) are unchanged; only aborted requests differ.
+        if (!cancellationToken.IsCancellationRequested)
         {
-            changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, row.Order.Id, now, cancellationToken);
+            var changed = false;
+            foreach (var row in rows)
+            {
+                changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(
+                    customers, row.Order.Id, now, DispatchStateReconciler.SideEffectToken);
+            }
+
+            if (changed)
+            {
+                await customers.SaveChangesAsync(DispatchStateReconciler.SideEffectToken);
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    rows = await customers.GetCustomerOrdersAsync(request.CustomerId, cancellationToken);
+                }
+            }
         }
 
-        if (changed)
-        {
-            await customers.SaveChangesAsync(cancellationToken);
-            rows = await customers.GetCustomerOrdersAsync(request.CustomerId, cancellationToken);
-        }
+        cancellationToken.ThrowIfCancellationRequested();
 
         var list = new List<CustomerOrderDto>();
         foreach (var row in rows)
@@ -1547,9 +1573,16 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
 {
     public async Task<Result<CustomerOrderDto>> Handle(GetCustomerOrderDetailQuery request, CancellationToken cancellationToken)
     {
-        var changed = await DispatchStateReconciler.ReconcileAwaitingOrderAsync(customers, request.OrderId, DateTimeOffset.UtcNow, cancellationToken);
-        if (changed)
-            await customers.SaveChangesAsync(cancellationToken);
+        // See GetCustomerOrdersQueryHandler — reconcile side-effects must not use RequestAborted.
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            var changed = await DispatchStateReconciler.ReconcileAwaitingOrderAsync(
+                customers, request.OrderId, DateTimeOffset.UtcNow, DispatchStateReconciler.SideEffectToken);
+            if (changed)
+                await customers.SaveChangesAsync(DispatchStateReconciler.SideEffectToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         var row = await customers.GetCustomerOrderAsync(request.CustomerId, request.OrderId, cancellationToken);
         if (row is null)

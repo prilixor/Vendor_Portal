@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff } from "lucide-react";
 import {
-  maskIndianMobileInput,
   normalizeIndianMobileDigits,
   optionalIndianMobileError,
 } from "@/app/helpers/indianMobilePhone";
@@ -11,6 +10,8 @@ import { Card, CardContent } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { FieldError } from "@/app/components/shared/FieldError";
+import { FormGrid } from "@/app/components/shared/FormGrid";
+import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
@@ -39,7 +40,7 @@ const CustomerSettings = () => {
   useEffect(() => {
     if (data) {
       setFullName(data.fullName);
-      setPhone(data.phone ?? "");
+      setPhone(data.phone ? normalizeIndianMobileDigits(data.phone) : "");
     }
   }, [data]);
 
@@ -186,60 +187,68 @@ const CustomerSettings = () => {
         </TabsList>
 
         <TabsContent value="profile" className="mt-4">
-          <Card>
-            <CardContent className="p-5">
+          <Card className="max-w-2xl border-border/60">
+            <CardContent className="p-5 sm:p-6">
               {isLoading || !data ? (
                 <div className="space-y-4">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-24" />
+                  <Skeleton className="h-5 w-28" />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                  <Skeleton className="h-10 w-28" />
                 </div>
               ) : (
-                <form onSubmit={saveProfile} className="space-y-4">
-                  <p className="text-xs text-muted-foreground -mt-1">
+                <form onSubmit={saveProfile}>
+                  <h2 className="mb-1 text-sm font-semibold">Account</h2>
+                  <p className="mb-4 text-xs text-muted-foreground">
                     Fields marked <span className="text-destructive">*</span> are required.
                   </p>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="customer-settings-name" required>Full name</Label>
-                    <Input
-                      id="customer-settings-name"
-                      value={fullName}
-                      onChange={(e) => {
-                        setFullName(e.target.value);
-                        clearProfileFieldError("fullName");
-                      }}
-                      className={profileFieldErrors.fullName ? "border-destructive" : ""}
-                    />
-                    <FieldError message={profileFieldErrors.fullName} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="customer-settings-email">Email</Label>
-                    <Input id="customer-settings-email" type="email" value={data.email} disabled className="bg-muted/50" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="customer-settings-phone">Phone</Label>
-                    <Input
-                      id="customer-settings-phone"
-                      type="tel"
-                      inputMode="numeric"
-                      autoComplete="tel"
-                      placeholder="9876543210"
-                      value={phone}
-                      onChange={(e) => {
-                        setPhone(maskIndianMobileInput(e.target.value));
-                        clearProfileFieldError("phone");
-                      }}
-                      className={profileFieldErrors.phone ? "border-destructive" : ""}
-                    />
-                    <FieldError message={profileFieldErrors.phone} />
-                    {!profileFieldErrors.phone && (
-                      <p className="text-[11px] text-muted-foreground">
-                        10-digit Indian mobile starting with 6–9 (optional).
-                      </p>
-                    )}
-                  </div>
-                  <Button type="submit" disabled={saveProfileMut.isPending}>
+                  <FormGrid cols={2}>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="customer-settings-name" required>Full name</Label>
+                      <Input
+                        id="customer-settings-name"
+                        value={fullName}
+                        onChange={(e) => {
+                          setFullName(e.target.value);
+                          clearProfileFieldError("fullName");
+                        }}
+                        className={profileFieldErrors.fullName ? "border-destructive" : ""}
+                      />
+                      <FieldError message={profileFieldErrors.fullName} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="customer-settings-email">Email</Label>
+                      <Input
+                        id="customer-settings-email"
+                        type="email"
+                        value={data.email}
+                        disabled
+                        className="bg-muted/50"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="customer-settings-phone">Phone</Label>
+                      <IndianMobileInput
+                        id="customer-settings-phone"
+                        value={phone}
+                        onChange={(v) => {
+                          setPhone(v);
+                          clearProfileFieldError("phone");
+                        }}
+                        invalid={!!profileFieldErrors.phone}
+                      />
+                      <FieldError message={profileFieldErrors.phone} />
+                      {!profileFieldErrors.phone && (
+                        <p className="text-[11px] text-muted-foreground">
+                          10-digit Indian mobile starting with 6–9 (optional).
+                        </p>
+                      )}
+                    </div>
+                  </FormGrid>
+                  <Button type="submit" className="mt-5" disabled={saveProfileMut.isPending}>
                     Save changes
                   </Button>
                 </form>
@@ -249,113 +258,116 @@ const CustomerSettings = () => {
         </TabsContent>
 
         <TabsContent value="security" className="mt-4">
-          <Card>
-            <CardContent className="space-y-4 p-5">
-              <form className="space-y-4" onSubmit={(e) => void updatePassword(e)}>
-                <p className="text-xs text-muted-foreground -mt-1">
+          <Card className="max-w-2xl border-border/60">
+            <CardContent className="p-5 sm:p-6">
+              <form onSubmit={(e) => void updatePassword(e)}>
+                <h2 className="mb-1 text-sm font-semibold">Password</h2>
+                <p className="mb-4 text-xs text-muted-foreground">
                   Fields marked <span className="text-destructive">*</span> are required.
                 </p>
-                <div className="space-y-1.5">
-                  <Label htmlFor="customer-settings-cur-pw" required>Current password</Label>
-                  <div className="relative">
-                    <Input
-                      id="customer-settings-cur-pw"
-                      type={showCurrentPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={currentPassword}
-                      onChange={(e) => {
-                        setCurrentPassword(e.target.value);
-                        clearPasswordFieldError("currentPassword");
-                      }}
-                      autoComplete="current-password"
-                      className={
-                        passwordFieldErrors.currentPassword
-                          ? "border-destructive pr-10"
-                          : "pr-10"
-                      }
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowCurrentPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
-                    >
-                      {showCurrentPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <FieldError message={passwordFieldErrors.currentPassword} />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="customer-settings-new-pw" required>New password</Label>
+                    <Label htmlFor="customer-settings-cur-pw" required>Current password</Label>
                     <div className="relative">
                       <Input
-                        id="customer-settings-new-pw"
-                        type={showNewPassword ? "text" : "password"}
+                        id="customer-settings-cur-pw"
+                        type={showCurrentPassword ? "text" : "password"}
                         placeholder="••••••••"
-                        value={newPassword}
+                        value={currentPassword}
                         onChange={(e) => {
-                          setNewPassword(e.target.value);
-                          clearPasswordFieldError("newPassword");
+                          setCurrentPassword(e.target.value);
+                          clearPasswordFieldError("currentPassword");
                         }}
-                        autoComplete="new-password"
+                        autoComplete="current-password"
                         className={
-                          passwordFieldErrors.newPassword
+                          passwordFieldErrors.currentPassword
                             ? "border-destructive pr-10"
                             : "pr-10"
                         }
                       />
                       <button
                         type="button"
-                        onClick={() => setShowNewPassword((v) => !v)}
+                        onClick={() => setShowCurrentPassword((v) => !v)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                        aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
                       >
-                        {showNewPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                        {showCurrentPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                       </button>
                     </div>
-                    <FieldError message={passwordFieldErrors.newPassword} />
+                    <FieldError message={passwordFieldErrors.currentPassword} />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="customer-settings-cp-pw" required>Confirm</Label>
-                    <div className="relative">
-                      <Input
-                        id="customer-settings-cp-pw"
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        value={confirmPassword}
-                        onChange={(e) => {
-                          setConfirmPassword(e.target.value);
-                          clearPasswordFieldError("confirmPassword");
-                        }}
-                        autoComplete="new-password"
-                        className={
-                          passwordFieldErrors.confirmPassword
-                            ? "border-destructive pr-10"
-                            : "pr-10"
-                        }
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
-                      >
-                        {showConfirmPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                      </button>
+                  <FormGrid cols={2}>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="customer-settings-new-pw" required>New password</Label>
+                      <div className="relative">
+                        <Input
+                          id="customer-settings-new-pw"
+                          type={showNewPassword ? "text" : "password"}
+                          placeholder="••••••••"
+                          value={newPassword}
+                          onChange={(e) => {
+                            setNewPassword(e.target.value);
+                            clearPasswordFieldError("newPassword");
+                          }}
+                          autoComplete="new-password"
+                          className={
+                            passwordFieldErrors.newPassword
+                              ? "border-destructive pr-10"
+                              : "pr-10"
+                          }
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword((v) => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                        >
+                          {showNewPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <FieldError message={passwordFieldErrors.newPassword} />
                     </div>
-                    <FieldError message={passwordFieldErrors.confirmPassword} />
-                  </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="customer-settings-cp-pw" required>Confirm</Label>
+                      <div className="relative">
+                        <Input
+                          id="customer-settings-cp-pw"
+                          type={showConfirmPassword ? "text" : "password"}
+                          placeholder="••••••••"
+                          value={confirmPassword}
+                          onChange={(e) => {
+                            setConfirmPassword(e.target.value);
+                            clearPasswordFieldError("confirmPassword");
+                          }}
+                          autoComplete="new-password"
+                          className={
+                            passwordFieldErrors.confirmPassword
+                              ? "border-destructive pr-10"
+                              : "pr-10"
+                          }
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword((v) => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                        >
+                          {showConfirmPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <FieldError message={passwordFieldErrors.confirmPassword} />
+                    </div>
+                  </FormGrid>
                 </div>
-                <Button type="submit">Update password</Button>
+                <Button type="submit" className="mt-5">Update password</Button>
               </form>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="preferences" className="mt-4">
-          <Card>
-            <CardContent className="space-y-3 p-5">
+          <Card className="max-w-2xl border-border/60">
+            <CardContent className="space-y-3 p-5 sm:p-6">
               {loadingPrefs || !dbPrefs ? (
                 <div className="space-y-4">
                   <Skeleton className="h-14 w-full" />
@@ -386,7 +398,7 @@ const CustomerSettings = () => {
                   />
                   <PrefRow
                     title="Direct Messages"
-                    desc="Allow vendors to contact you directly regarding your rentals."
+                    desc="Allow BlinksMed support to contact you directly regarding your rentals."
                     checked={dbPrefs.directMessagesEnabled}
                     onChange={(v) => togglePref("directMessagesEnabled", v)}
                   />

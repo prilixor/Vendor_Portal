@@ -25,8 +25,35 @@ enum _BannerVariant {
 class PendingApprovalBanner extends StatefulWidget {
   const PendingApprovalBanner({super.key});
 
+  /// Used by Home to hide the duplicate in-body verification banner.
+  static bool isVisible(
+    VendorProfileProvider profile,
+    VendorOnboardingProvider onboarding,
+  ) =>
+      _resolveBannerVariant(profile, onboarding) != null;
+
   @override
   State<PendingApprovalBanner> createState() => _PendingApprovalBannerState();
+}
+
+_BannerVariant? _resolveBannerVariant(
+  VendorProfileProvider profile,
+  VendorOnboardingProvider onboarding,
+) {
+  final status = (profile.status?.accountStatus ?? '').trim().toLowerCase();
+  final docs = onboarding.documents;
+  final uploadedTypes = docs.map((d) => d.documentType).toSet();
+  final missing = _requiredDocTypes.where((t) => !uploadedTypes.contains(t)).toList();
+  final hasRejected = onboarding.hasRejectedVerificationItems;
+
+  if (status == 'rejected') return _BannerVariant.accountRejected;
+  if (status == 'suspended' || status == 'banned') {
+    return _BannerVariant.accountSuspended;
+  }
+  if (hasRejected) return _BannerVariant.rejected;
+  if (missing.isNotEmpty) return _BannerVariant.missingDocs;
+  if (status == 'pending') return _BannerVariant.pendingReview;
+  return null;
 }
 
 class _PendingApprovalBannerState extends State<PendingApprovalBanner> {
@@ -35,22 +62,8 @@ class _PendingApprovalBannerState extends State<PendingApprovalBanner> {
   _BannerVariant? _resolveVariant(
     VendorProfileProvider profile,
     VendorOnboardingProvider onboarding,
-  ) {
-    final status = (profile.status?.accountStatus ?? '').trim().toLowerCase();
-    final docs = onboarding.documents;
-    final uploadedTypes = docs.map((d) => d.documentType).toSet();
-    final missing = _requiredDocTypes.where((t) => !uploadedTypes.contains(t)).toList();
-    final hasRejected = onboarding.hasRejectedVerificationItems;
-
-    if (status == 'rejected') return _BannerVariant.accountRejected;
-    if (status == 'suspended' || status == 'banned') {
-      return _BannerVariant.accountSuspended;
-    }
-    if (hasRejected) return _BannerVariant.rejected;
-    if (missing.isNotEmpty) return _BannerVariant.missingDocs;
-    if (status == 'pending') return _BannerVariant.pendingReview;
-    return null;
-  }
+  ) =>
+      _resolveBannerVariant(profile, onboarding);
 
   @override
   Widget build(BuildContext context) {

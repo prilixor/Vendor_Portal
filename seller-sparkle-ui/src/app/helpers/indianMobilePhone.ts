@@ -24,9 +24,14 @@ export function isValidIndianMobile(value: string): boolean {
   return INDIAN_MOBILE_PATTERN.test(normalizeIndianMobileDigits(value));
 }
 
-/** Restrict input to 10 digits for phone fields. */
+/** Restrict input to 10 national digits (strips +91 / 91 / 0 when pasted). */
 export function maskIndianMobileInput(value: string): string {
-  return digitsOnly(value).slice(0, 10);
+  const digits = digitsOnly(value);
+  // Prefer normalize when a full intl/local form was pasted.
+  if (digits.length >= 11) {
+    return normalizeIndianMobileDigits(value).slice(0, 10);
+  }
+  return digits.slice(0, 10);
 }
 
 /**

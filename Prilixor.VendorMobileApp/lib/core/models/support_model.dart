@@ -6,6 +6,7 @@ class SupportTicket {
   final String status;
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final SupportMessage? latestMessage;
 
   const SupportTicket({
     required this.id,
@@ -15,9 +16,11 @@ class SupportTicket {
     required this.status,
     required this.createdAt,
     this.updatedAt,
+    this.latestMessage,
   });
 
   factory SupportTicket.fromJson(Map<String, dynamic> json) {
+    final latest = json['latestMessage'];
     return SupportTicket(
       id: json['id']?.toString() ?? '',
       ticketNumber: json['ticketNumber']?.toString() ?? '',
@@ -29,6 +32,9 @@ class SupportTicket {
       updatedAt: json['updatedAt'] == null
           ? null
           : DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
+      latestMessage: latest is Map
+          ? SupportMessage.fromJson(Map<String, dynamic>.from(latest))
+          : null,
     );
   }
 

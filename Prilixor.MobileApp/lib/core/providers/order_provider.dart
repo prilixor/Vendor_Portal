@@ -43,10 +43,11 @@ class OrderProvider extends ChangeNotifier {
         return s == 'confirmed' || s == 'in transit' || s == 'pending' || s == 'awaiting vendor acceptance';
       }).length;
 
-  Future<void> fetchOrders({bool silent = false}) async {
+  Future<void> fetchOrders({bool silent = false, bool force = false}) async {
     // Match web React Query: coalesce concurrent reads; skip noisy silent polls.
     if (_inFlightOrders != null) return _inFlightOrders!;
-    if (silent &&
+    if (!force &&
+        silent &&
         _orders.isNotEmpty &&
         _lastSilentAttemptAt != null &&
         DateTime.now().difference(_lastSilentAttemptAt!) < _silentCooldown) {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/order_detail_provider.dart';
@@ -6,6 +8,7 @@ import '../../core/models/order_model.dart';
 import '../../core/models/order_image_request_model.dart';
 import '../../core/utils/rental_period.dart';
 import '../../shared/widgets/catalog_image.dart';
+import '../../shared/widgets/struck_price.dart';
 import '../product/product_detail_screen.dart';
 import '../../core/providers/chat_provider.dart';
 import '../chat/chat_detail_screen.dart';
@@ -21,31 +24,92 @@ class OrderDetailScreen extends StatefulWidget {
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
 }
 
-class _OrderDetailScreenState extends State<OrderDetailScreen> {
+class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindingObserver {
   int _extensionDays = 1;
   int _selectedOrderIndex = 0;
   final Set<String> _photoRequestSelection = {};
+  late List<OrderModel> _ordersInGroup;
+  Timer? _pollTimer;
+  bool _refreshInFlight = false;
+
+  /// Keep status/photos in sync with vendor actions while this screen is open.
+  static const _pollInterval = Duration(seconds: 15);
 
   @override
   void initState() {
     super.initState();
-    
-    _selectedOrderIndex = widget.ordersInGroup.indexWhere((o) => o.orderNumber == widget.orderNumber);
+    WidgetsBinding.instance.addObserver(this);
+    _ordersInGroup = List<OrderModel>.from(widget.ordersInGroup);
+
+    _selectedOrderIndex = _ordersInGroup.indexWhere((o) => o.orderNumber == widget.orderNumber);
     if (_selectedOrderIndex == -1) _selectedOrderIndex = 0;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchCurrentSubOrder();
+      _refreshLive(silent: false);
+      _pollTimer = Timer.periodic(_pollInterval, (_) {
+        if (mounted) _refreshLive(silent: true);
+      });
     });
   }
 
-  Future<void> _fetchCurrentSubOrder() async {
-    final provider = Provider.of<OrderDetailProvider>(context, listen: false);
-    await provider.fetchOrderDetail(widget.ordersInGroup[_selectedOrderIndex].id);
-    await provider.fetchGroupImageRequests(
-      widget.ordersInGroup.map((o) => o.id).toList(),
-    );
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      _refreshLive(silent: true);
+    }
+  }
+
+  Future<void> _fetchCurrentSubOrder() => _refreshLive(silent: false);
+
+  Future<void> _refreshLive({required bool silent}) async {
     if (!mounted) return;
-    _syncPhotoSelection(provider);
+    if (_refreshInFlight) {
+      if (silent) return;
+      // Let the in-flight silent poll finish, then run a focused reload.
+    }
+    while (_refreshInFlight) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      if (!mounted) return;
+    }
+    _refreshInFlight = true;
+    try {
+      final detail = Provider.of<OrderDetailProvider>(context, listen: false);
+      final orders = Provider.of<OrderProvider>(context, listen: false);
+
+      // Force bypasses list silent-cooldown so detail stays fresh vs dashboard polls.
+      await orders.fetchOrders(silent: silent, force: silent);
+      if (!mounted) return;
+
+      final byId = {for (final o in orders.orders) o.id: o};
+      final merged = _ordersInGroup.map((o) => byId[o.id] ?? o).toList();
+
+      final selectedId = merged[_selectedOrderIndex].id;
+      await detail.fetchOrderDetail(selectedId, silent: silent);
+      if (!mounted) return;
+
+      if (detail.currentOrder != null) {
+        final idx = merged.indexWhere((o) => o.id == detail.currentOrder!.id);
+        if (idx >= 0) merged[idx] = detail.currentOrder!;
+      }
+
+      setState(() => _ordersInGroup = merged);
+
+      await detail.fetchGroupImageRequests(
+        _ordersInGroup.map((o) => o.id).toList(),
+        silent: silent,
+      );
+      if (!mounted) return;
+      _syncPhotoSelection(detail);
+    } finally {
+      _refreshInFlight = false;
+    }
   }
 
   bool _canRequestForStatus(String status) {
@@ -54,7 +118,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   List<OrderModel> _eligiblePhotoItems(OrderDetailProvider provider) {
-    return widget.ordersInGroup
+    return _ordersInGroup
         .where(
           (o) =>
               _canRequestForStatus(o.status) &&
@@ -75,7 +139,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   void _showExtensionBottomSheet(BuildContext context, OrderDetailProvider provider) {
     _extensionDays = 1;
     provider.clearQuotes();
-    provider.quoteExtension(widget.ordersInGroup[_selectedOrderIndex].id, _extensionDays);
+    provider.quoteExtension(_ordersInGroup[_selectedOrderIndex].id, _extensionDays);
 
     showModalBottomSheet(
       context: context,
@@ -110,7 +174,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             onPressed: _extensionDays > 1
                                 ? () {
                                     setStateBottomSheet(() => _extensionDays--);
-                                    provider.quoteExtension(widget.ordersInGroup[_selectedOrderIndex].id, _extensionDays);
+                                    provider.quoteExtension(_ordersInGroup[_selectedOrderIndex].id, _extensionDays);
                                   }
                                 : null,
                           ),
@@ -119,7 +183,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             icon: const Icon(Icons.add_circle_outline, color: Color(0xFF6C63FF)),
                             onPressed: () {
                               setStateBottomSheet(() => _extensionDays++);
-                              provider.quoteExtension(widget.ordersInGroup[_selectedOrderIndex].id, _extensionDays);
+                              provider.quoteExtension(_ordersInGroup[_selectedOrderIndex].id, _extensionDays);
                             },
                           ),
                         ],
@@ -165,7 +229,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       onPressed: provider.isActionLoading || provider.extensionQuote == null
                           ? null
                           : () async {
-                              final success = await provider.processExtension(widget.ordersInGroup[_selectedOrderIndex].id, _extensionDays);
+                              final success = await provider.processExtension(_ordersInGroup[_selectedOrderIndex].id, _extensionDays);
                               if (success && context.mounted) {
                                 Navigator.pop(context);
                                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rental extended successfully!'), backgroundColor: Colors.green));
@@ -188,7 +252,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   void _showBuyoutBottomSheet(BuildContext context, OrderDetailProvider provider) {
     provider.clearQuotes();
-    provider.quoteBuyout(widget.ordersInGroup[_selectedOrderIndex].id);
+    provider.quoteBuyout(_ordersInGroup[_selectedOrderIndex].id);
 
     showModalBottomSheet(
       context: context,
@@ -242,7 +306,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       onPressed: provider.isActionLoading || provider.buyoutQuote == null
                           ? null
                           : () async {
-                              final success = await provider.processBuyout(widget.ordersInGroup[_selectedOrderIndex].id);
+                              final success = await provider.processBuyout(_ordersInGroup[_selectedOrderIndex].id);
                               if (success && context.mounted) {
                                 Navigator.pop(context);
                                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item purchased successfully!'), backgroundColor: Colors.green));
@@ -274,9 +338,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<OrderDetailProvider>(context);
-    final groupTotal = widget.ordersInGroup.fold<double>(0, (sum, o) => sum + o.totalAmount);
-    final groupDeposit = widget.ordersInGroup.fold<double>(0, (sum, o) => sum + o.depositAmount);
-    final cleanOrderGroupNumber = widget.ordersInGroup.first.orderNumber.replaceAll(RegExp(r'-\d{2}$'), '');
+    final groupTotal = _ordersInGroup.fold<double>(0, (sum, o) => sum + o.totalAmount);
+    final groupDeposit = _ordersInGroup.fold<double>(0, (sum, o) => sum + o.depositAmount);
+    final cleanOrderGroupNumber = _ordersInGroup.first.orderNumber.replaceAll(RegExp(r'-\d{2}$'), '');
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
@@ -355,9 +419,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   const SizedBox(height: 4),
                                   const Text('Select an item below to track its individual timeline and details.', style: TextStyle(color: Colors.white54, fontSize: 12)),
                                   const SizedBox(height: 16),
-                                  ...List.generate(widget.ordersInGroup.length, (index) {
-                                    final order = widget.ordersInGroup[index];
+                                  ...List.generate(_ordersInGroup.length, (index) {
+                                    final order = _ordersInGroup[index];
                                     final isSelected = _selectedOrderIndex == index;
+                                    final openRequest = provider.imageRequestFor(order.id);
+                                    final photoCount = openRequest?.images.length ?? 0;
+                                    final photoLabel = openRequest == null
+                                        ? null
+                                        : photoCount == 0
+                                            ? 'Photos requested · waiting'
+                                            : '$photoCount photo${photoCount == 1 ? '' : 's'} received';
                                     return GestureDetector(
                                       onTap: () {
                                         setState(() => _selectedOrderIndex = index);
@@ -394,6 +465,33 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                                   Text(order.listingTitle, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
                                                   const SizedBox(height: 4),
                                                   Text('Qty: ${order.quantity}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                                                  if (photoLabel != null) ...[
+                                                    const SizedBox(height: 4),
+                                                    Row(
+                                                      children: [
+                                                        Icon(
+                                                          Icons.photo_library_outlined,
+                                                          size: 12,
+                                                          color: photoCount == 0
+                                                              ? Colors.amber
+                                                              : const Color(0xFF34D399),
+                                                        ),
+                                                        const SizedBox(width: 4),
+                                                        Expanded(
+                                                          child: Text(
+                                                            photoLabel,
+                                                            style: TextStyle(
+                                                              color: photoCount == 0
+                                                                  ? Colors.amber
+                                                                  : const Color(0xFF34D399),
+                                                              fontSize: 11,
+                                                              fontWeight: FontWeight.w600,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
                                                   const SizedBox(height: 6),
                                                   Wrap(
                                                     children: [
@@ -565,13 +663,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                                 if (provider.currentOrder!.orderType.toLowerCase() == 'rent' &&
                                                     provider.currentOrder!.rentalFinalPrice != null) ...[
                                                   const SizedBox(height: 4),
-                                                  Text(
-                                                    provider.currentOrder!.rentalNormalPrice != null &&
-                                                            provider.currentOrder!.rentalNormalPrice! >
-                                                                provider.currentOrder!.rentalFinalPrice!
-                                                        ? 'Plan ₹${provider.currentOrder!.rentalFinalPrice!.toStringAsFixed(0)} (was ₹${provider.currentOrder!.rentalNormalPrice!.toStringAsFixed(0)})'
-                                                        : 'Plan ₹${provider.currentOrder!.rentalFinalPrice!.toStringAsFixed(0)}',
-                                                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                                  Wrap(
+                                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                                    spacing: 6,
+                                                    children: [
+                                                      if (provider.currentOrder!.rentalNormalPrice != null &&
+                                                          provider.currentOrder!.rentalNormalPrice! >
+                                                              provider.currentOrder!.rentalFinalPrice!)
+                                                        StruckPrice(
+                                                          '₹${provider.currentOrder!.rentalNormalPrice!.toStringAsFixed(0)}',
+                                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                                        ),
+                                                      Text(
+                                                        'Plan price ₹${provider.currentOrder!.rentalFinalPrice!.toStringAsFixed(0)}',
+                                                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                                      ),
+                                                    ],
                                                   ),
                                                 ],
                                               ],
@@ -592,9 +699,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             if (_shouldShowGroupPhotoSection(provider)) ...[
                               const SizedBox(height: 24),
                               _GroupVendorPhotoRequestCard(
-                                items: widget.ordersInGroup,
+                                items: _ordersInGroup,
                                 requestsByOrderId: provider.imageRequestsByOrderId,
                                 selectedIds: _photoRequestSelection,
+                                viewingOrderId: _ordersInGroup[_selectedOrderIndex].id,
                                 loading: provider.imageRequestLoading,
                                 busy: provider.isActionLoading,
                                 onToggle: (orderId, selected) {
@@ -771,7 +879,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   bool _shouldShowGroupPhotoSection(OrderDetailProvider provider) {
     if (provider.imageRequestsByOrderId.isNotEmpty) return true;
-    return widget.ordersInGroup.any((o) {
+    return _ordersInGroup.any((o) {
       final compact = o.status.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
       return compact == 'pending' ||
           compact == 'confirmed' ||
@@ -794,7 +902,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final result = await provider.createImageRequests(orderIds);
     if (!mounted) return;
     await provider.fetchGroupImageRequests(
-      widget.ordersInGroup.map((o) => o.id).toList(),
+      _ordersInGroup.map((o) => o.id).toList(),
     );
     if (!mounted) return;
     _syncPhotoSelection(provider);
@@ -910,6 +1018,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
   final List<OrderModel> items;
   final Map<String, OrderImageRequestModel> requestsByOrderId;
   final Set<String> selectedIds;
+  final String viewingOrderId;
   final bool loading;
   final bool busy;
   final void Function(String orderId, bool selected) onToggle;
@@ -922,6 +1031,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
     required this.items,
     required this.requestsByOrderId,
     required this.selectedIds,
+    required this.viewingOrderId,
     required this.loading,
     required this.busy,
     required this.onToggle,
@@ -956,12 +1066,20 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                 ),
               ),
             ),
+            // Dark chip so the close control stays visible on light images too.
             Positioned(
-              top: 4,
-              right: 4,
-              child: IconButton(
-                onPressed: () => Navigator.pop(ctx),
-                icon: const Icon(Icons.close, color: Colors.white),
+              top: 8,
+              right: 8,
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.62),
+                shape: const CircleBorder(),
+                elevation: 2,
+                child: IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.pop(ctx),
+                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                  visualDensity: VisualDensity.compact,
+                ),
               ),
             ),
           ],
@@ -978,11 +1096,14 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
     final withRequest = items.where((o) => requestsByOrderId.containsKey(o.id)).toList();
     final multi = items.length > 1;
 
-    return Container(
+    return Material(
+      color: Colors.white.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white12),
       ),
@@ -1103,32 +1224,104 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                 style: TextStyle(color: Colors.white54, fontSize: 13),
               ),
             if (withRequest.isNotEmpty) ...[
-              Text(
-                multi
-                    ? 'Supplier photos for this order'
-                    : 'Supplier photos received',
-                style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'PHOTO REQUEST STATUS BY PRODUCT',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    () {
+                      final totalPhotos = withRequest.fold<int>(
+                        0,
+                        (sum, item) => sum + (requestsByOrderId[item.id]?.images.length ?? 0),
+                      );
+                      return '$totalPhotos photo${totalPhotos == 1 ? '' : 's'} received'
+                          '${withRequest.length > 1 ? ' · ${withRequest.length} products requested' : ''}';
+                    }(),
+                    style: const TextStyle(color: Colors.white54, fontSize: 11),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               ...withRequest.map((item) {
                 final images = requestsByOrderId[item.id]?.images ?? const <OrderImageModel>[];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
+                final waiting = images.isEmpty;
+                final viewing = item.id == viewingOrderId;
+                return Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: waiting
+                        ? Colors.amber.withValues(alpha: 0.08)
+                        : Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: waiting
+                          ? Colors.amber.withValues(alpha: 0.35)
+                          : Colors.white12,
+                    ),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (multi)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text(
-                            '${item.listingTitle} · ${images.isEmpty ? 'Waiting on supplier' : '${images.length}/5'}',
-                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.listingTitle,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${item.status.replaceAll('_', ' ')}${viewing ? ' · currently viewing' : ''}',
+                                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      if (images.isEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: waiting
+                                  ? Colors.amber.withValues(alpha: 0.2)
+                                  : const Color(0xFF34D399).withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              waiting
+                                  ? 'Waiting for supplier photos'
+                                  : '${images.length}/5 received',
+                              style: TextStyle(
+                                color: waiting ? Colors.amber : const Color(0xFF34D399),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (waiting)
                         const Text(
-                          'Request sent to the supplier — photos not uploaded yet.',
-                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                          'Request already sent for this product \u2014 supplier has not uploaded photos yet.',
+                          style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
                         )
                       else
                         GridView.builder(
@@ -1166,6 +1359,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
             ],
           ],
         ],
+      ),
       ),
     );
   }

@@ -38,7 +38,6 @@ import VendorOrderDetail from "@/app/components/vendor/VendorOrderDetail";
 import VendorExpirations from "@/app/components/vendor/VendorExpirations";
 import Notifications from "@/app/components/vendor/Notifications";
 import Settings from "@/app/components/vendor/Settings";
-import VendorChats from "@/app/components/vendor/VendorChats";
 import { VendorOperationsGuard } from "@/app/components/vendor/VendorOperationsGuard";
 
 import AdminDashboard from "@/app/components/admin/AdminDashboard";
@@ -133,7 +132,8 @@ const App = () => (
               <Route path="expirations" element={<VendorOperationsGuard><VendorExpirations /></VendorOperationsGuard>} />
               <Route path="notifications" element={<Notifications />} />
               <Route path="settings" element={<Settings />} />
-              <Route path="chats" element={<VendorChats />} />
+              {/* Legacy customer↔vendor chats removed — vendors use BlinksMed Support (FAB). */}
+              <Route path="chats" element={<Navigate to="/vendor" replace />} />
             </Route>
 
             <Route path="/admin" element={<AppShell variant="admin" />}>

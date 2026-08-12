@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +10,7 @@ import '../../core/models/order_image_model.dart';
 import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/struck_price.dart';
 import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
 import 'dispatch_details_sheet.dart';
 import 'order_group_utils.dart';
@@ -21,24 +24,75 @@ class OrderDetailScreen extends StatefulWidget {
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
 }
 
-class _OrderDetailScreenState extends State<OrderDetailScreen> {
+class _OrderDetailScreenState extends State<OrderDetailScreen>
+    with WidgetsBindingObserver {
   late String _selectedOrderId;
+  Timer? _pollTimer;
+  bool _refreshInFlight = false;
+
+  /// Match Customer Mobile: keep status/photos/continuations fresh while open.
+  static const _pollInterval = Duration(seconds: 15);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _selectedOrderId = widget.orderId;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _load(silent: false);
+      _pollTimer = Timer.periodic(_pollInterval, (_) {
+        if (mounted) _load(silent: true);
+      });
+    });
   }
 
-  Future<void> _load() async {
-    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
-    if (vendorId == null) return;
-    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
-    await Future.wait([
-      provider.fetchOrders(vendorId, silent: true),
-      provider.fetchOrderDetail(vendorId, _selectedOrderId),
-    ]);
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      _load(silent: true);
+    }
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!mounted) return;
+    if (_refreshInFlight) {
+      if (silent) return;
+      while (_refreshInFlight) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        if (!mounted) return;
+      }
+    }
+    _refreshInFlight = true;
+    try {
+      final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+      if (vendorId == null) return;
+      final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+      await Future.wait([
+        provider.fetchOrders(vendorId, silent: true),
+        provider.fetchOrderDetail(vendorId, _selectedOrderId, silent: silent),
+      ]);
+      if (!mounted) return;
+      final selected = provider.selectedOrder;
+      if (selected == null) return;
+      final groupIds = orderGroupItems(
+        anchor: selected,
+        allOrders: provider.orders,
+      ).map((o) => o.orderId).toList();
+      await provider.fetchGroupPhotoRequestMeta(
+        vendorId,
+        groupIds,
+        silent: silent,
+      );
+    } finally {
+      _refreshInFlight = false;
+    }
   }
 
   Future<void> _selectItem(String orderId) async {
@@ -46,8 +100,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     setState(() => _selectedOrderId = orderId);
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
-    await Provider.of<VendorOrderProvider>(context, listen: false)
-        .fetchOrderDetail(vendorId, orderId);
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    await provider.fetchOrderDetail(vendorId, orderId);
   }
 
   Future<void> _updateStatus(String status, {List<String>? assetTags}) async {
@@ -288,7 +342,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         title: Text(baseOrderNumber.isEmpty ? 'Order' : baseOrderNumber),
         actions: [
           IconButton(
-            onPressed: busy ? null : _load,
+            onPressed: busy ? null : () => _load(),
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -321,6 +375,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             child: Column(
                               children: groupItems.map((item) {
                                 final selected = item.orderId == _selectedOrderId;
+                                final photoCount =
+                                    provider.groupPhotoCountFor(item.orderId);
+                                final photoWaiting = photoCount == 0;
+                                final photoReceived =
+                                    photoCount != null && photoCount > 0;
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 6),
                                   child: Material(
@@ -374,6 +433,51 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                                         ),
                                                     ],
                                                   ),
+                                                  if (photoWaiting) ...[
+                                                    const SizedBox(height: 4),
+                                                    Row(
+                                                      children: [
+                                                        Icon(
+                                                          Icons.photo_library_outlined,
+                                                          size: 12,
+                                                          color: Colors.amber.shade300,
+                                                        ),
+                                                        const SizedBox(width: 4),
+                                                        Expanded(
+                                                          child: Text(
+                                                            'Customer photos requested \u00b7 upload needed',
+                                                            style: TextStyle(
+                                                              color: Colors.amber.shade300,
+                                                              fontSize: 10.5,
+                                                              fontWeight: FontWeight.w700,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ] else if (photoReceived) ...[
+                                                    const SizedBox(height: 4),
+                                                    Row(
+                                                      children: [
+                                                        const Icon(
+                                                          Icons.photo_library_outlined,
+                                                          size: 12,
+                                                          color: Color(0xFF34D399),
+                                                        ),
+                                                        const SizedBox(width: 4),
+                                                        Expanded(
+                                                          child: Text(
+                                                            '$photoCount/5 customer photos uploaded',
+                                                            style: const TextStyle(
+                                                              color: Color(0xFF34D399),
+                                                              fontSize: 10.5,
+                                                              fontWeight: FontWeight.w700,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
                                                 ],
                                               ),
                                             ),
@@ -409,6 +513,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             const SizedBox(height: 10),
                             _PhotoRequestCard(
                               request: provider.imageRequest!,
+                              listingTitle: (activeItem ?? order).listingTitle,
                               images: provider.orderImages,
                               busy: busy,
                               canUpload: () {
@@ -815,7 +920,10 @@ class _RequestBox extends StatelessWidget {
 }
 
 class _PhotoRequestCard extends StatelessWidget {
+  static const int maxImages = 5;
+
   final OrderImageRequest request;
+  final String listingTitle;
   final List<OrderImage> images;
   final bool busy;
   final bool canUpload;
@@ -824,6 +932,7 @@ class _PhotoRequestCard extends StatelessWidget {
 
   const _PhotoRequestCard({
     required this.request,
+    required this.listingTitle,
     required this.images,
     required this.busy,
     required this.canUpload,
@@ -851,12 +960,20 @@ class _PhotoRequestCard extends StatelessWidget {
                 ),
               ),
             ),
+            // Dark chip so the close control stays visible on light images too.
             Positioned(
-              top: 4,
-              right: 4,
-              child: IconButton(
-                onPressed: () => Navigator.pop(ctx),
-                icon: const Icon(Icons.close, color: Colors.white),
+              top: 8,
+              right: 8,
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.62),
+                shape: const CircleBorder(),
+                elevation: 2,
+                child: IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.pop(ctx),
+                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                  visualDensity: VisualDensity.compact,
+                ),
               ),
             ),
           ],
@@ -865,27 +982,219 @@ class _PhotoRequestCard extends StatelessWidget {
     );
   }
 
+  Widget _addTile({required bool large}) {
+    final radius = BorderRadius.circular(large ? 14 : 10);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: busy ? null : onAdd,
+        borderRadius: radius,
+        child: CustomPaint(
+          painter: _DashedBorderPainter(
+            color: AppTheme.accent.withValues(alpha: 0.55),
+            radius: large ? 14 : 10,
+          ),
+          child: Ink(
+            decoration: BoxDecoration(
+              color: AppTheme.accent.withValues(alpha: 0.08),
+              borderRadius: radius,
+            ),
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: large ? 22 : 8, horizontal: 12),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      busy ? Icons.hourglass_top_rounded : Icons.add_photo_alternate_outlined,
+                      color: AppTheme.accent,
+                      size: large ? 32 : 22,
+                    ),
+                    SizedBox(height: large ? 8 : 4),
+                    Text(
+                      busy ? 'Uploading\u2026' : (large ? 'Tap to add photos' : 'Add photo'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.88),
+                        fontSize: large ? 13 : 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (large) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Up to $maxImages photos',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.45),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final message = request.message.trim().isEmpty
-        ? 'Please share up to 5 photos for this order so we can proceed.'
+        ? 'Please upload up to $maxImages photos so we can proceed.'
         : request.message;
-    final showAdd = canUpload && images.length < 5;
-    final itemCount = images.length + (showAdd ? 1 : 0);
+    final showAdd = canUpload && images.length < maxImages;
+    final emptyUpload = images.isEmpty && showAdd;
 
-    return _SectionCard(
-      title: 'Customer photo request',
-      subtitle: 'From customer for this item (not Admin chat) · ${images.length}/5 · $message',
-      compact: true,
-      child: itemCount == 0
-          ? Text(
-              'No photos uploaded yet.',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 13),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.card(context),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppTheme.accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.photo_library_outlined, color: AppTheme.accent, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Customer photo request',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              height: 1.2,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '${images.length}/$maxImages',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.75),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        if (images.isEmpty) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              'Action needed',
+                              style: TextStyle(
+                                color: Colors.amber.shade200,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (listingTitle.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        listingTitle,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 4),
+                    Text(
+                      'From the customer for this product only \u2014 upload here (not Admin chat).',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.48),
+                        fontSize: 11.5,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            ),
+            child: Text(
+              message,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.72),
+                fontSize: 12.5,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (emptyUpload)
+            SizedBox(
+              width: double.infinity,
+              height: 132,
+              child: _addTile(large: true),
             )
-          : GridView.builder(
+          else if (images.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Text(
+                'No photos uploaded yet.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 13),
+              ),
+            )
+          else
+            GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: itemCount,
+              itemCount: images.length + (showAdd ? 1 : 0),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3,
                 mainAxisSpacing: 8,
@@ -893,31 +1202,7 @@ class _PhotoRequestCard extends StatelessWidget {
               ),
               itemBuilder: (context, index) {
                 if (showAdd && index == images.length) {
-                  return Material(
-                    color: Colors.white.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(10),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: busy ? null : onAdd,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            busy ? Icons.hourglass_top : Icons.add_photo_alternate_outlined,
-                            color: Colors.white70,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            busy ? 'Uploading…' : 'Add photo',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.7),
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
+                  return _addTile(large: false);
                 }
 
                 final image = images[index];
@@ -941,16 +1226,16 @@ class _PhotoRequestCard extends StatelessWidget {
                     ),
                     if (canUpload)
                       Positioned(
-                        top: 2,
-                        right: 2,
+                        top: 4,
+                        right: 4,
                         child: Material(
-                          color: Colors.black54,
+                          color: Colors.black.withValues(alpha: 0.65),
                           shape: const CircleBorder(),
                           child: InkWell(
                             customBorder: const CircleBorder(),
                             onTap: busy ? null : () => onDelete(image.id),
                             child: const Padding(
-                              padding: EdgeInsets.all(4),
+                              padding: EdgeInsets.all(5),
                               child: Icon(Icons.close, size: 14, color: Colors.white),
                             ),
                           ),
@@ -960,8 +1245,54 @@ class _PhotoRequestCard extends StatelessWidget {
                 );
               },
             ),
+          const SizedBox(height: 10),
+          Text(
+            'JPEG, PNG, or WebP \u00b7 max 5 MB each \u00b7 cleared after delivery, cancel, or dispatch failure',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.4),
+              fontSize: 10.5,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
     );
   }
+}
+
+/// Light dashed outline for the upload tile (web dashed border parity).
+class _DashedBorderPainter extends CustomPainter {
+  final Color color;
+  final double radius;
+
+  _DashedBorderPainter({required this.color, required this.radius});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0.75, 0.75, size.width - 1.5, size.height - 1.5),
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+    const dash = 5.0;
+    const gap = 3.5;
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final next = (distance + dash).clamp(0.0, metric.length);
+        canvas.drawPath(metric.extractPath(distance, next), paint);
+        distance = next + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
 }
 
 class _ItemDetailsPanel extends StatelessWidget {
@@ -1017,6 +1348,37 @@ class _ItemDetailsPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _MetricStrip(order: order),
+          if (!isBuy) ...[
+            const SizedBox(height: 8),
+            _SubsectionLabel('Rental period'),
+            const SizedBox(height: 4),
+            Text(
+              order.rentalDurationLabel?.trim().isNotEmpty == true
+                  ? '${order.rentalDurationLabel}'
+                      '${order.rentalDurationDays != null ? ' (${order.rentalDurationDays} day${order.rentalDurationDays == 1 ? '' : 's'})' : ''}'
+                  : '${order.rentalDays} day${order.rentalDays == 1 ? '' : 's'}',
+              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            if (order.rentalFinalPrice != null) ...[
+              const SizedBox(height: 4),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                children: [
+                  if (order.rentalNormalPrice != null &&
+                      order.rentalNormalPrice! > order.rentalFinalPrice!)
+                    StruckPrice(
+                      '₹${order.rentalNormalPrice!.toStringAsFixed(0)}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  Text(
+                    'Plan price ₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ],
+              ),
+            ],
+          ],
           const SizedBox(height: 8),
           _CompactDetailList(rows: [
             ('Customer', order.customerName),

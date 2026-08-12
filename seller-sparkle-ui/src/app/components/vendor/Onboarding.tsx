@@ -37,7 +37,12 @@ import { sanitizeAdminComment, buildVerificationSupportMessage } from "@/app/hel
 import { useSupportChat } from "@/app/contexts/SupportChatContext";
 import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
 import { cn, toCamelCase } from "@/app/helpers/utils";
-import { INDIAN_MOBILE_MESSAGE, isValidIndianMobile } from "@/app/helpers/indianMobilePhone";
+import {
+  INDIAN_MOBILE_MESSAGE,
+  isValidIndianMobile,
+  normalizeIndianMobileDigits,
+} from "@/app/helpers/indianMobilePhone";
+import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 
 const steps = [
   { label: "Basic Info", description: "Account" },
@@ -365,7 +370,7 @@ const Onboarding = () => {
             ...prev,
             businessName: profileDto.businessName,
             ownerName: profileDto.ownerName,
-            phone: profileDto.supportPhone,
+            phone: normalizeIndianMobileDigits(profileDto.supportPhone || ""),
             gstNumber: profileDto.gstNumber ?? "",
             addressLine1: profileDto.addressLine1,
             addressLine2: profileDto.addressLine2 ?? "",
@@ -957,7 +962,15 @@ const Onboarding = () => {
                     <FormGrid cols={3}>
                       <Field required label="Business name" value={profile.businessName} onChange={(v) => updateProfile("businessName", v)} error={fieldErrors.businessName} />
                       <Field required label="Owner name" value={profile.ownerName} onChange={(v) => updateProfile("ownerName", v)} error={fieldErrors.ownerName} />
-                      <Field label="Phone" value={profile.phone} onChange={(v) => updateProfile("phone", v)} readonly />
+                      <div className="space-y-1.5">
+                        <Label>Phone</Label>
+                        <IndianMobileInput
+                          value={profile.phone}
+                          onChange={() => {}}
+                          readOnly
+                          className="bg-muted/50"
+                        />
+                      </div>
                       <Field label="GST number" value={profile.gstNumber} onChange={(v) => updateProfile("gstNumber", v)} />
                       <StateCityCombobox
                         required
@@ -1269,11 +1282,11 @@ const Onboarding = () => {
                     <p className="text-xs text-muted-foreground">This is the email tied to your account and cannot be changed here.</p>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="phone">Phone Number *</Label>
-                    <Input
+                    <Label htmlFor="phone" required>Phone Number</Label>
+                    <IndianMobileInput
                       id="phone"
-                      type="tel"
                       value={profile.phone}
+                      onChange={() => {}}
                       readOnly
                       placeholder="Phone from your account"
                       className="bg-muted/50"

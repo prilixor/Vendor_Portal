@@ -11,7 +11,6 @@ import 'core/providers/vendor_location_provider.dart';
 import 'core/providers/vendor_onboarding_provider.dart';
 import 'core/providers/vendor_service_area_provider.dart';
 import 'core/providers/vendor_catalog_provider.dart';
-import 'core/providers/vendor_chat_provider.dart';
 import 'core/providers/vendor_notification_provider.dart';
 import 'core/providers/vendor_order_provider.dart';
 import 'core/providers/vendor_profile_provider.dart';
@@ -59,7 +58,6 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => VendorOrderProvider()),
         ChangeNotifierProvider(create: (_) => VendorNotificationProvider()),
-        ChangeNotifierProvider(create: (_) => VendorChatProvider()),
         ChangeNotifierProvider(create: (_) => VendorProfileProvider()),
         ChangeNotifierProvider(create: (_) => VendorCatalogProvider()),
         ChangeNotifierProvider(create: (_) => VendorSupportProvider()),
