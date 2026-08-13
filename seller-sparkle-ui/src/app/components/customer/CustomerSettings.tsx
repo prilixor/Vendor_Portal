@@ -27,7 +27,7 @@ import {
 import { toast } from "sonner";
 
 const CustomerSettings = () => {
-  const { user, setSessionUser } = useAuth();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
@@ -41,20 +41,13 @@ const CustomerSettings = () => {
   });
 
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [otpOpen, setOtpOpen] = useState(false);
-  const [resendingEmail, setResendingEmail] = useState(false);
-
-  const hasStoredEmail = !!(data?.email?.trim());
-  const emailLocked = hasStoredEmail;
-  const emailVerified = !!data?.isEmailVerified;
 
   useEffect(() => {
     if (data) {
       setFullName(data.fullName);
-      setEmail(data.email?.trim() || "");
       setPhone(data.phone ? normalizeIndianMobileDigits(data.phone) : "");
       setPhoneVerified(!!data.isPhoneVerified);
     }
@@ -118,19 +111,10 @@ const CustomerSettings = () => {
       customerApi.updateProfile(
         fullName.trim(),
         phone.trim() ? normalizeIndianMobileDigits(phone) : undefined,
-        emailLocked ? undefined : email.trim() || undefined,
       ),
-    onSuccess: (updated) => {
-      const addedEmail = !hasStoredEmail && !!updated.email?.trim();
-      toast.success(
-        addedEmail
-          ? "Profile updated. Check your inbox to verify the new email."
-          : "Profile updated.",
-      );
+    onSuccess: () => {
+      toast.success("Profile updated.");
       queryClient.invalidateQueries({ queryKey: ["customer-profile"] });
-      if (user && updated.email?.trim()) {
-        setSessionUser({ ...user, email: updated.email.trim() });
-      }
     },
     onError: (err: Error) => {
       const message = err.message || "Failed to update profile.";
@@ -140,11 +124,6 @@ const CustomerSettings = () => {
         (lower.includes("already") || lower.includes("exists") || lower.includes("in use"))
       ) {
         setProfileFieldErrors({ phone: "This phone number is already used by another account." });
-      } else if (
-        lower.includes("email") &&
-        (lower.includes("already") || lower.includes("exists") || lower.includes("in use"))
-      ) {
-        setProfileFieldErrors({ email: "This email is already used by another account." });
       }
       toast.error(message);
     },
@@ -158,14 +137,8 @@ const CustomerSettings = () => {
     }
     const phoneErr = optionalIndianMobileError(phone);
     if (phoneErr) errors.phone = phoneErr;
-    const emailTrimmed = email.trim();
-    if (!emailLocked && emailTrimmed && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailTrimmed)) {
-      errors.email = "Enter a valid email address.";
-    }
-    if (!phone.trim() && !emailLocked && !emailTrimmed) {
-      errors.phone = "Add a phone number, or add an email first.";
-    }
-    if (!phone.trim() && emailLocked && !hasStoredEmail) {
+    const hasEmail = !!(data?.email?.trim());
+    if (!phone.trim() && !hasEmail) {
       errors.phone = "Add a phone number (this account has no email).";
     }
     if (Object.keys(errors).length > 0) {
@@ -175,23 +148,6 @@ const CustomerSettings = () => {
     }
     setProfileFieldErrors({});
     saveProfileMut.mutate();
-  };
-
-  const resendVerificationEmail = async () => {
-    const mail = (data?.email || email).trim();
-    if (!mail) {
-      toast.error("Add and save an email first.");
-      return;
-    }
-    setResendingEmail(true);
-    try {
-      await authApi.resendVerification(mail, "customer");
-      toast.success("Verification email sent.");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to resend verification email.");
-    } finally {
-      setResendingEmail(false);
-    }
   };
 
   const updatePassword = async (e: FormEvent) => {
@@ -291,49 +247,19 @@ const CustomerSettings = () => {
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="customer-settings-email">Email</Label>
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                        <div className="flex-1 space-y-1.5">
-                          <Input
-                            id="customer-settings-email"
-                            type="email"
-                            value={email}
-                            onChange={(e) => {
-                              setEmail(e.target.value);
-                              clearProfileFieldError("email");
-                            }}
-                            placeholder={emailLocked ? undefined : "you@example.com"}
-                            disabled={emailLocked}
-                            className={
-                              emailLocked
-                                ? "bg-muted/50"
-                                : profileFieldErrors.email
-                                  ? "border-destructive"
-                                  : ""
-                            }
-                          />
-                          <FieldError message={profileFieldErrors.email} />
-                          {!profileFieldErrors.email && (
-                            <p className="text-[11px] text-muted-foreground">
-                              {!hasStoredEmail
-                                ? "Optional. Add an email to sign in with email/password and receive email alerts. We'll send a verification link."
-                                : emailVerified
-                                  ? "Verified email on this account."
-                                  : "Email added but not verified yet — open the link we sent, or resend."}
-                            </p>
-                          )}
-                        </div>
-                        {hasStoredEmail && !emailVerified ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="shrink-0"
-                            disabled={resendingEmail}
-                            onClick={() => void resendVerificationEmail()}
-                          >
-                            {resendingEmail ? "Sending…" : "Resend verify"}
-                          </Button>
-                        ) : null}
-                      </div>
+                      <Input
+                        id="customer-settings-email"
+                        type="email"
+                        value={data.email?.trim() || ""}
+                        placeholder={data.email?.trim() ? undefined : "No email on this account"}
+                        disabled
+                        className="bg-muted/50"
+                      />
+                      {!data.email?.trim() && (
+                        <p className="text-[11px] text-muted-foreground">
+                          Phone-only account — use your mobile number to sign in.
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="customer-settings-phone">Phone</Label>

@@ -87,13 +87,6 @@ export interface PhoneOtpActionResponse {
   phone?: string | null;
 }
 
-export interface ForgotPasswordSmsVerifiedResponse {
-  success: boolean;
-  message: string;
-  resetToken: string;
-  phone?: string | null;
-}
-
 export const authApi = {
   async login(email: string, password: string, role: Role): Promise<{ token: string; user: User }> {
     const response = await apiClient.post<LoginResponse>('/auth/login', {
@@ -166,28 +159,16 @@ export const authApi = {
     return apiClient.post<PhoneOtpActionResponse>('/auth/forgot-password/sms/send-otp', { phone, role });
   },
 
-  async verifyForgotPasswordSmsOtp(
-    phone: string,
-    code: string,
-    role: 'customer' | 'vendor' = 'customer',
-  ): Promise<ForgotPasswordSmsVerifiedResponse> {
-    return apiClient.post<ForgotPasswordSmsVerifiedResponse>('/auth/forgot-password/sms/verify-otp', {
-      phone,
-      code,
-      role,
-    });
-  },
-
   async resetPasswordWithSmsOtp(
     phone: string,
-    resetToken: string,
+    code: string,
     newPassword: string,
     confirmPassword: string,
     role: 'customer' | 'vendor' = 'customer',
   ): Promise<PhoneOtpActionResponse> {
     return apiClient.post<PhoneOtpActionResponse>('/auth/forgot-password/sms/reset', {
       phone,
-      resetToken,
+      code,
       newPassword,
       confirmPassword,
       role,

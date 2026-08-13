@@ -371,12 +371,8 @@ export const customerApi = {
     return apiClient.get<CustomerProfileApi>("/customers/me/profile");
   },
 
-  updateProfile(fullName: string, phone?: string, email?: string | null): Promise<CustomerProfileApi> {
-    return apiClient.put<CustomerProfileApi>("/customers/me/profile", {
-      fullName,
-      phone: phone?.trim() || undefined,
-      email: email?.trim() || undefined,
-    });
+  updateProfile(fullName: string, phone?: string): Promise<CustomerProfileApi> {
+    return apiClient.put<CustomerProfileApi>("/customers/me/profile", { fullName, phone: phone?.trim() || undefined });
   },
 
   getAddresses(): Promise<CustomerAddressApi[]> {

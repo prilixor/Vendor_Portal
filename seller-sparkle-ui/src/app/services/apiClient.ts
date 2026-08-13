@@ -79,35 +79,10 @@ class ApiClient {
     };
   }
 
-  /** Login/credential challenges return 401 — must throw so the form can show an error. */
-  private isCredentialChallengeEndpoint(endpoint: string): boolean {
-    const path = endpoint.split("?")[0].toLowerCase();
-    return (
-      path.endsWith("/auth/login") ||
-      path.endsWith("/auth/change-password") ||
-      path.includes("/auth/forgot-password") ||
-      path.endsWith("/auth/reset-password") ||
-      path.includes("/auth/phone/") ||
-      path.includes("/auth/forgot-password/sms/")
-    );
-  }
-
-  private async handleResponse<T>(
-    response: Response,
-    meta?: { endpoint?: string; sentAuth?: boolean },
-  ): Promise<T> {
-    const endpoint = meta?.endpoint ?? "";
-    const sentAuth = !!meta?.sentAuth;
-
-    // Expired/missing session on protected APIs: clear client session and redirect.
-    // Do NOT do this for login/credential endpoints — those 401s mean bad credentials.
-    if (
-      response.status === 401 &&
-      sentAuth &&
-      !this.isCredentialChallengeEndpoint(endpoint)
-    ) {
-      window.dispatchEvent(new Event("unauthorized"));
-      // Never resolves so in-flight UI does not toast while the page redirects.
+  private async handleResponse<T>(response: Response): Promise<T> {
+    if (response.status === 401) {
+      window.dispatchEvent(new Event('unauthorized'));
+      // Return a promise that never resolves so we don't throw an error while redirecting
       return new Promise(() => {}) as Promise<T>;
     }
 
@@ -133,7 +108,7 @@ class ApiClient {
         (detail && !/^[a-z0-9_.-]+$/i.test(detail) ? detail : "") ||
         (description && !/^[a-z0-9_.-]+$/i.test(description) ? description : "") ||
         (typeof error.message === "string" ? String(error.message).trim() : "") ||
-        (response.status === 401 ? "Invalid email/phone or password." : "An error occurred");
+        "An error occurred";
 
       let code =
         error.code || error.errorCode || error.errorType || undefined;
@@ -178,68 +153,62 @@ class ApiClient {
   }
 
   async get<T>(endpoint: string): Promise<T> {
-    const sentAuth = !!this.getToken();
     const response = await fetch(this.buildUrl(endpoint), {
       method: 'GET',
       headers: this.getHeaders(false),
     });
 
-    return this.handleResponse<T>(response, { endpoint, sentAuth });
+    return this.handleResponse<T>(response);
   }
 
   async post<T>(endpoint: string, data?: unknown): Promise<T> {
-    const sentAuth = !!this.getToken();
     const response = await fetch(this.buildUrl(endpoint), {
       method: 'POST',
       headers: this.getHeaders(true),
       body: data ? JSON.stringify(data) : undefined,
     });
 
-    return this.handleResponse<T>(response, { endpoint, sentAuth });
+    return this.handleResponse<T>(response);
   }
 
   async put<T>(endpoint: string, data?: unknown): Promise<T> {
-    const sentAuth = !!this.getToken();
     const response = await fetch(this.buildUrl(endpoint), {
       method: 'PUT',
       headers: this.getHeaders(true),
       body: data ? JSON.stringify(data) : undefined,
     });
 
-    return this.handleResponse<T>(response, { endpoint, sentAuth });
+    return this.handleResponse<T>(response);
   }
 
   async patch<T>(endpoint: string, data?: unknown): Promise<T> {
     const hasBody = data !== undefined;
-    const sentAuth = !!this.getToken();
     const response = await fetch(this.buildUrl(endpoint), {
       method: 'PATCH',
       headers: this.getHeaders(hasBody),
       body: hasBody ? JSON.stringify(data) : undefined,
     });
 
-    return this.handleResponse<T>(response, { endpoint, sentAuth });
+    return this.handleResponse<T>(response);
   }
 
   async delete<T>(endpoint: string): Promise<T> {
-    const sentAuth = !!this.getToken();
     const response = await fetch(this.buildUrl(endpoint), {
       method: 'DELETE',
       headers: this.getHeaders(false),
     });
 
-    return this.handleResponse<T>(response, { endpoint, sentAuth });
+    return this.handleResponse<T>(response);
   }
 
   async postForm<T>(endpoint: string, data: FormData): Promise<T> {
-    const sentAuth = !!this.getToken();
     const response = await fetch(this.buildUrl(endpoint), {
       method: "POST",
       headers: this.getAuthHeaders(),
       body: data,
     });
 
-    return this.handleResponse<T>(response, { endpoint, sentAuth });
+    return this.handleResponse<T>(response);
   }
 
   setAuthToken(token: string): void {

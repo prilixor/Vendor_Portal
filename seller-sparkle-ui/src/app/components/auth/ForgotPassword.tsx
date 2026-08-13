@@ -2,14 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AuthLayout } from "@/app/components/layout/AuthLayout";
 import { Button } from "@/app/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/app/components/ui/dialog";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { authApi } from "@/app/services/authApi";
@@ -35,8 +27,6 @@ import {
 } from "@/app/helpers/portalHost";
 
 type Mode = "email" | "sms";
-/** phone → enter number; otp → enter SMS code; password dialog opens after Continue. */
-type SmsStep = "phone" | "otp";
 
 type SmsFieldErrors = {
   code?: string;
@@ -79,9 +69,7 @@ const ForgotPassword = () => {
   const [error, setError] = useState("");
   const [smsErrors, setSmsErrors] = useState<SmsFieldErrors>({});
   const [emailSuccess, setEmailSuccess] = useState(false);
-  const [smsStep, setSmsStep] = useState<SmsStep>("phone");
-  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
-  const [smsResetToken, setSmsResetToken] = useState("");
+  const [smsStep, setSmsStep] = useState<"phone" | "reset">("phone");
   const [cooldown, setCooldown] = useState(0);
   const [smsSuccess, setSmsSuccess] = useState(false);
 
@@ -109,27 +97,19 @@ const ForgotPassword = () => {
     return true;
   };
 
-  const validateSmsCode = (): boolean => {
+  const validateSmsReset = (): boolean => {
+    const next: SmsFieldErrors = {};
     if (code.length !== 6 || !/^\d{6}$/.test(code)) {
-      setSmsErrors((prev) => ({ ...prev, code: "Enter the 6-digit verification code" }));
-      return false;
+      next.code = "Enter the 6-digit verification code";
     }
-    setSmsErrors((prev) => ({ ...prev, code: undefined }));
-    return true;
-  };
-
-  const validateSmsPasswords = (): boolean => {
-    const next: SmsFieldErrors = { ...smsErrors, code: undefined };
     const pwdErr = passwordLengthError(newPassword, {
       shortMessage: "Password must be at least 8 characters",
     });
     if (pwdErr) next.newPassword = pwdErr;
-    else delete next.newPassword;
     const confErr = confirmPasswordError(newPassword, confirmPassword);
     if (confErr) next.confirmPassword = confErr;
-    else delete next.confirmPassword;
     setSmsErrors(next);
-    return !next.newPassword && !next.confirmPassword;
+    return Object.keys(next).length === 0;
   };
 
   const onNewPasswordChange = (value: string) => {
@@ -186,12 +166,8 @@ const ForgotPassword = () => {
       const normalized = normalizeIndianMobileDigits(phone);
       const res = await authApi.sendForgotPasswordSmsOtp(normalized, smsRole);
       setPhone(normalized);
-      setSmsStep("otp");
-      setPasswordDialogOpen(false);
-      setSmsResetToken("");
+      setSmsStep("reset");
       setCode("");
-      setNewPassword("");
-      setConfirmPassword("");
       setSmsErrors({});
       setCooldown(45);
       toast.success(res.message || "If an account exists, a code was sent.");
@@ -203,56 +179,18 @@ const ForgotPassword = () => {
     }
   };
 
-  const openPasswordDialog = async () => {
-    if (!validateSmsCode()) return;
-    setLoading(true);
-    try {
-      const res = await authApi.verifyForgotPasswordSmsOtp(phone, code, smsRole);
-      setSmsResetToken(res.resetToken);
-      setNewPassword("");
-      setConfirmPassword("");
-      setSmsErrors({});
-      setPasswordDialogOpen(true);
-      toast.success(res.message || "Code verified.");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Invalid verification code.";
-      setSmsResetToken("");
-      setSmsErrors((prev) => ({ ...prev, code: message }));
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSmsReset = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (!smsResetToken) {
-      setPasswordDialogOpen(false);
-      setSmsErrors((prev) => ({ ...prev, code: "Verify the code again before resetting." }));
-      return;
-    }
-    if (!validateSmsPasswords()) return;
+    if (!validateSmsReset()) return;
     setLoading(true);
     try {
-      await authApi.resetPasswordWithSmsOtp(
-        phone,
-        smsResetToken,
-        newPassword,
-        confirmPassword,
-        smsRole,
-      );
-      setPasswordDialogOpen(false);
-      setSmsResetToken("");
+      await authApi.resetPasswordWithSmsOtp(phone, code, newPassword, confirmPassword, smsRole);
       setSmsSuccess(true);
       toast.success("Password reset successfully.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to reset password.";
       toast.error(message);
-      if (message.toLowerCase().includes("token") || message.toLowerCase().includes("code")) {
-        setPasswordDialogOpen(false);
-        setSmsResetToken("");
-        setSmsErrors((prev) => ({ ...prev, code: message }));
-      }
+      setSmsErrors((prev) => ({ ...prev, code: message.toLowerCase().includes("code") ? message : prev.code }));
     } finally {
       setLoading(false);
     }
@@ -297,17 +235,17 @@ const ForgotPassword = () => {
   }
 
   const authTitle =
-    mode === "sms" && smsStep === "otp" ? "Verify code" : "Forgot Password";
+    mode === "sms" && smsStep === "reset" ? "Verify & reset" : "Forgot Password";
   const authSubtitle =
     mode === "email"
       ? emailSubtitle
-      : smsStep === "otp"
-        ? "Enter the 6-digit code we sent to your phone."
+      : smsStep === "reset"
+        ? "Enter the code we sent, then choose a new password."
         : `Reset your ${accountLabel} account with an SMS code.`;
 
   return (
     <AuthLayout title={authTitle} subtitle={authSubtitle} portalType={portalType}>
-      {smsAllowed && !(mode === "sms" && smsStep === "otp") && (
+      {smsAllowed && !(mode === "sms" && smsStep === "reset") && (
         <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl border bg-muted/40 p-1">
           <Button
             type="button"
@@ -406,7 +344,7 @@ const ForgotPassword = () => {
           </Button>
         </div>
       ) : (
-        <div className="space-y-5">
+        <form onSubmit={(e) => void handleSmsReset(e)} className="space-y-5">
           <div className="flex items-start gap-3 rounded-xl border bg-muted/30 px-3 py-3">
             <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
               <MessageSquare className="h-4 w-4" />
@@ -463,18 +401,95 @@ const ForgotPassword = () => {
             )}
           </div>
 
+          <div className="relative py-1">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-[11px] uppercase tracking-wide">
+              <span className="bg-background px-2 text-muted-foreground">New password</span>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="newPassword" required>
+              New password
+            </Label>
+            <div className="relative">
+              <Input
+                id="newPassword"
+                type={showPwd ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => onNewPasswordChange(e.target.value)}
+                placeholder="At least 8 characters"
+                autoComplete="new-password"
+                aria-invalid={!!smsErrors.newPassword}
+                className={cn(
+                  "pr-10",
+                  smsErrors.newPassword && "border-destructive focus-visible:ring-destructive",
+                )}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={showPwd ? "Hide password" : "Show password"}
+              >
+                {showPwd ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              </button>
+            </div>
+            {smsErrors.newPassword ? (
+              <p className="text-xs text-destructive">{smsErrors.newPassword}</p>
+            ) : newPassword.length > 0 && newPassword.length < 8 ? (
+              <p className="text-[11px] text-muted-foreground">{newPassword.length}/8 characters</p>
+            ) : null}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="confirmPassword" required>
+              Confirm password
+            </Label>
+            <div className="relative">
+              <Input
+                id="confirmPassword"
+                type={showConfirmPwd ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => onConfirmPasswordChange(e.target.value)}
+                placeholder="Re-enter new password"
+                autoComplete="new-password"
+                aria-invalid={!!smsErrors.confirmPassword}
+                className={cn(
+                  "pr-10",
+                  smsErrors.confirmPassword && "border-destructive focus-visible:ring-destructive",
+                  pairOk && !smsErrors.confirmPassword && "border-emerald-500/60",
+                )}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPwd((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={showConfirmPwd ? "Hide confirm password" : "Show confirm password"}
+              >
+                {showConfirmPwd ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              </button>
+            </div>
+            {smsErrors.confirmPassword ? (
+              <p className="text-xs text-destructive">{smsErrors.confirmPassword}</p>
+            ) : pairOk ? (
+              <p className="text-xs text-emerald-600">Passwords match</p>
+            ) : null}
+          </div>
+
           <Button
-            type="button"
+            type="submit"
             className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11"
-            disabled={loading || code.length !== 6}
-            onClick={() => void openPasswordDialog()}
+            disabled={loading || code.length !== 6 || !pairOk}
           >
             {loading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying…
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resetting…
               </>
             ) : (
-              "Verify & continue"
+              "Reset password"
             )}
           </Button>
 
@@ -484,8 +499,6 @@ const ForgotPassword = () => {
             className="w-full"
             onClick={() => {
               setSmsStep("phone");
-              setPasswordDialogOpen(false);
-              setSmsResetToken("");
               setCode("");
               setNewPassword("");
               setConfirmPassword("");
@@ -495,120 +508,8 @@ const ForgotPassword = () => {
           >
             Use a different number
           </Button>
-        </div>
+        </form>
       )}
-
-      <Dialog
-        open={passwordDialogOpen}
-        onOpenChange={(open) => {
-          if (loading) return;
-          setPasswordDialogOpen(open);
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Set new password</DialogTitle>
-            <DialogDescription>
-              Choose a new password for {maskPhone(phone)}.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={(e) => void handleSmsReset(e)} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="newPassword" required>
-                New password
-              </Label>
-              <div className="relative">
-                <Input
-                  id="newPassword"
-                  type={showPwd ? "text" : "password"}
-                  value={newPassword}
-                  onChange={(e) => onNewPasswordChange(e.target.value)}
-                  placeholder="At least 8 characters"
-                  autoComplete="new-password"
-                  autoFocus
-                  aria-invalid={!!smsErrors.newPassword}
-                  className={cn(
-                    "pr-10",
-                    smsErrors.newPassword && "border-destructive focus-visible:ring-destructive",
-                  )}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPwd((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showPwd ? "Hide password" : "Show password"}
-                >
-                  {showPwd ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                </button>
-              </div>
-              {smsErrors.newPassword ? (
-                <p className="text-xs text-destructive">{smsErrors.newPassword}</p>
-              ) : newPassword.length > 0 && newPassword.length < 8 ? (
-                <p className="text-[11px] text-muted-foreground">{newPassword.length}/8 characters</p>
-              ) : null}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="confirmPassword" required>
-                Confirm password
-              </Label>
-              <div className="relative">
-                <Input
-                  id="confirmPassword"
-                  type={showConfirmPwd ? "text" : "password"}
-                  value={confirmPassword}
-                  onChange={(e) => onConfirmPasswordChange(e.target.value)}
-                  placeholder="Re-enter new password"
-                  autoComplete="new-password"
-                  aria-invalid={!!smsErrors.confirmPassword}
-                  className={cn(
-                    "pr-10",
-                    smsErrors.confirmPassword && "border-destructive focus-visible:ring-destructive",
-                    pairOk && !smsErrors.confirmPassword && "border-emerald-500/60",
-                  )}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPwd((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showConfirmPwd ? "Hide confirm password" : "Show confirm password"}
-                >
-                  {showConfirmPwd ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                </button>
-              </div>
-              {smsErrors.confirmPassword ? (
-                <p className="text-xs text-destructive">{smsErrors.confirmPassword}</p>
-              ) : pairOk ? (
-                <p className="text-xs text-emerald-600">Passwords match</p>
-              ) : null}
-            </div>
-
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={loading}
-                onClick={() => setPasswordDialogOpen(false)}
-              >
-                Back
-              </Button>
-              <Button
-                type="submit"
-                className="bg-gradient-primary hover:opacity-95 shadow-glow"
-                disabled={loading || !pairOk}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resetting…
-                  </>
-                ) : (
-                  "Reset password"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Remember your password?{" "}

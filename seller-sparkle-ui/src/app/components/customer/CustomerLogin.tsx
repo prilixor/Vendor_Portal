@@ -24,7 +24,7 @@ const CustomerLogin = () => {
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [otpOpen, setOtpOpen] = useState(false);
   const [pendingPhone, setPendingPhone] = useState("");
 
@@ -46,7 +46,6 @@ const CustomerLogin = () => {
     ev.preventDefault();
     if (!validate()) return;
     setLoading(true);
-    setErrors((prev) => ({ ...prev, form: undefined }));
     try {
       const identifier = email.trim();
       await login(identifier, password, "customer");
@@ -63,20 +62,13 @@ const CustomerLogin = () => {
       goAfterAuth();
     } catch (error) {
       let message = error instanceof Error ? error.message : "Sign in failed.";
-      const code =
-        error && typeof error === "object" && "code" in error
-          ? String((error as { code?: string }).code ?? "")
-          : "";
-      const rawMessage = `${message} ${code}`;
-      message = message.replace(/\n?\[.*?\]/g, "").trim() || "Invalid email/phone or password.";
+      const rawMessage = message;
+      message = message.replace(/\n?\[.*?\]/g, "").trim();
 
       if (rawMessage.includes("EMAIL_NOT_VERIFIED")) {
         setNeedsVerification(true);
-        setErrors((prev) => ({ ...prev, form: undefined }));
         toast.error("Please verify your email before logging in.");
       } else {
-        setNeedsVerification(false);
-        setErrors((prev) => ({ ...prev, form: message }));
         toast.error(message);
       }
     } finally {
@@ -150,12 +142,6 @@ const CustomerLogin = () => {
           </div>
           {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
         </div>
-
-        {errors.form && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-            {errors.form}
-          </div>
-        )}
 
         {needsVerification && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 space-y-2">
