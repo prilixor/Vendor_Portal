@@ -15,6 +15,7 @@ export interface VendorProfileApiDto {
   latitude?: number;
   longitude?: number;
   onboardingCompleted: boolean;
+  isPhoneVerified?: boolean;
 }
 
 export interface VendorStatusDto {
@@ -424,6 +425,7 @@ export interface UpsertVendorNotificationPreferencePayload {
   emailNotificationsEnabled: boolean;
   pushNotificationsEnabled: boolean;
   newOrderNotifications: boolean;
+  smsNotificationsEnabled?: boolean;
 }
 
 export interface VendorNotificationPreferenceDto {
@@ -432,6 +434,7 @@ export interface VendorNotificationPreferenceDto {
   emailNotificationsEnabled: boolean;
   pushNotificationsEnabled: boolean;
   newOrderNotifications: boolean;
+  smsNotificationsEnabled?: boolean;
 }
 
 export interface VendorNotificationDto {

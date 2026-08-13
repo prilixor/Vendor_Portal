@@ -7,6 +7,13 @@ import { Label } from "@/app/components/ui/label";
 import { adminApi } from "@/app/services/adminApi";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import {
+  applyPasswordPairLiveErrors,
+  confirmPasswordError,
+  passwordLengthError,
+  passwordsMatch,
+} from "@/app/helpers/passwordValidation";
+import { cn } from "@/app/helpers/utils";
 
 const Field = ({ id, label, type, value, onChange, placeholder, error, disabled = false, required }: any) => (
   <div className="space-y-1.5">
@@ -32,6 +39,8 @@ const PasswordField = ({
   onChange,
   placeholder,
   error,
+  hint,
+  successHint,
   required,
   show,
   onToggle,
@@ -42,6 +51,8 @@ const PasswordField = ({
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
   error?: string;
+  hint?: string;
+  successHint?: string;
   required?: boolean;
   show: boolean;
   onToggle: () => void;
@@ -56,7 +67,11 @@ const PasswordField = ({
         onChange={onChange}
         placeholder={placeholder}
         aria-invalid={!!error}
-        className={error ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
+        className={cn(
+          "pr-10",
+          error && "border-destructive focus-visible:ring-destructive",
+          !error && successHint && "border-emerald-500/60",
+        )}
       />
       <button
         type="button"
@@ -67,7 +82,13 @@ const PasswordField = ({
         {show ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
       </button>
     </div>
-    {error && <p className="text-xs text-destructive">{error}</p>}
+    {error ? (
+      <p className="text-xs text-destructive">{error}</p>
+    ) : successHint ? (
+      <p className="text-xs text-emerald-600">{successHint}</p>
+    ) : hint ? (
+      <p className="text-[11px] text-muted-foreground">{hint}</p>
+    ) : null}
   </div>
 );
 
@@ -112,11 +133,27 @@ const AdminRegister = () => {
     const e: Record<string, string> = {};
     if (fullName.trim().length < 2) e.fullName = "Please enter your full name";
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) e.email = "Enter a valid email";
-    if (password.length < 8) e.password = "Use at least 8 characters";
-    if (confirm !== password) e.confirm = "Passwords don't match";
+    const pwdErr = passwordLengthError(password, { shortMessage: "At least 8 characters" });
+    if (pwdErr) e.password = pwdErr;
+    const confErr = confirmPasswordError(password, confirm);
+    if (confErr) e.confirm = confErr;
     if (!role) e.role = "Please select a role";
     setErrors(e);
     return Object.keys(e).length === 0;
+  };
+
+  const onPasswordChange = (value: string) => {
+    setPassword(value);
+    setErrors((prev) =>
+      applyPasswordPairLiveErrors(prev, value, confirm, { password: "password", confirm: "confirm" }),
+    );
+  };
+
+  const onConfirmChange = (value: string) => {
+    setConfirm(value);
+    setErrors((prev) =>
+      applyPasswordPairLiveErrors(prev, password, value, { password: "password", confirm: "confirm" }),
+    );
   };
 
   const submit = async (ev: React.FormEvent) => {
@@ -135,7 +172,10 @@ const AdminRegister = () => {
       navigate("/admin/login");
     } catch (error) {
       let message = error instanceof Error ? error.message : "Registration failed.";
-      if (message.toLowerCase().includes("already exists") || message.toLowerCase().includes("email already in use")) {
+      if (
+        message.toLowerCase().includes("already exists")
+        || message.toLowerCase().includes("email already in use")
+      ) {
         message = "Registration failed. If an account with this email exists, please try logging in.";
       }
       toast.error(message);
@@ -184,9 +224,10 @@ const AdminRegister = () => {
             id="password"
             label="Password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => onPasswordChange(e.target.value)}
             placeholder="••••••••"
             error={errors.password}
+            hint={password.length > 0 && password.length < 8 ? `${password.length}/8 characters` : undefined}
             required
             show={showPwd}
             onToggle={() => setShowPwd((v) => !v)}
@@ -195,9 +236,10 @@ const AdminRegister = () => {
             id="confirm"
             label="Confirm"
             value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
+            onChange={(e) => onConfirmChange(e.target.value)}
             placeholder="••••••••"
             error={errors.confirm}
+            successHint={passwordsMatch(password, confirm) ? "Passwords match" : undefined}
             required
             show={showConfirmPwd}
             onToggle={() => setShowConfirmPwd((v) => !v)}

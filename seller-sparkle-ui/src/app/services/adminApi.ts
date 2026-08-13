@@ -777,6 +777,10 @@ export const adminApi = {
     return apiClient.post<AdminUserDto>('/admin/users', data);
   },
 
+  async getOwnAdminProfile(): Promise<AdminUserDto> {
+    return apiClient.get<AdminUserDto>('/admin/me');
+  },
+
   async updateAdminUser(adminId: string, data: {
     fullName?: string;
     email?: string;
@@ -1150,4 +1154,34 @@ export const adminApi = {
   async deleteHospital(id: string): Promise<void> {
     return apiClient.delete<void>(`/admin/hospitals/${id}`);
   },
+
+  async getPlatformSmsSettings(): Promise<PlatformSmsSettingsDto> {
+    return apiClient.get<PlatformSmsSettingsDto>("/admin/sms-settings");
+  },
+
+  async updatePlatformSmsSettings(
+    data: Omit<PlatformSmsSettingsDto, "twilioConfigured">,
+  ): Promise<PlatformSmsSettingsDto> {
+    return apiClient.put<PlatformSmsSettingsDto>("/admin/sms-settings", data);
+  },
 };
+
+export interface PlatformSmsSettingsDto {
+  transactionalSmsEnabled: boolean;
+  customerOrderPlaced: boolean;
+  customerOrderConfirmed: boolean;
+  customerOrderCancelled: boolean;
+  customerOrderStatusUpdated: boolean;
+  customerOrderDispatchFailed: boolean;
+  customerOrderExpiring: boolean;
+  vendorNewOrder: boolean;
+  vendorAccountApproved: boolean;
+  vendorAccountRejected: boolean;
+  vendorAccountSuspended: boolean;
+  vendorAccountBanned: boolean;
+  vendorAccountReactivated: boolean;
+  vendorBankVerified: boolean;
+  vendorDocumentVerified: boolean;
+  vendorServiceAreaUpdated: boolean;
+  twilioConfigured: boolean;
+}

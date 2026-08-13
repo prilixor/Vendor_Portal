@@ -1,4 +1,5 @@
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Domain.Vendors;
@@ -30,7 +31,10 @@ public sealed class VendorOnboardingRepository(
 
     public Task<Vendor?> GetVendorByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
     {
-        var normalized = new string(phoneNumber.Where(char.IsDigit).ToArray());
+        var normalized = IndianMobilePhone.NormalizeDigits(phoneNumber);
+        if (string.IsNullOrEmpty(normalized))
+            return Task.FromResult<Vendor?>(null);
+
         return dbContext.Vendors
             .FirstOrDefaultAsync(x => x.SupportPhone == normalized && !x.IsDeleted, cancellationToken);
     }
@@ -1280,6 +1284,14 @@ public sealed class VendorOnboardingRepository(
         return adminDbContext.AdminUsers
             .Include(x => x.AdminRole)
             .FirstOrDefaultAsync(x => x.Email == normalized && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task<AdminUser?> GetAdminUserByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
+    {
+        var normalized = new string(phoneNumber.Where(char.IsDigit).ToArray());
+        return adminDbContext.AdminUsers
+            .Include(x => x.AdminRole)
+            .FirstOrDefaultAsync(x => x.Phone == normalized && !x.IsDeleted, cancellationToken);
     }
 
     public async Task AddAdminUserAsync(AdminUser adminUser, CancellationToken cancellationToken)

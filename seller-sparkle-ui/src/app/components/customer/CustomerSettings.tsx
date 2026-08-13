@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff } from "lucide-react";
 import {
+  isValidIndianMobile,
   normalizeIndianMobileDigits,
   optionalIndianMobileError,
 } from "@/app/helpers/indianMobilePhone";
@@ -12,12 +13,17 @@ import { Label } from "@/app/components/ui/label";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
+import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { useAuth } from "@/app/guards/AuthContext";
 import { authApi } from "@/app/services/authApi";
 import { customerApi, type CustomerNotificationPreferenceApi } from "@/app/services/customerApi";
+import {
+  applyPasswordPairLiveErrors,
+  passwordsMatch,
+} from "@/app/helpers/passwordValidation";
 import { toast } from "sonner";
 
 const CustomerSettings = () => {
@@ -36,11 +42,14 @@ const CustomerSettings = () => {
 
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [otpOpen, setOtpOpen] = useState(false);
 
   useEffect(() => {
     if (data) {
       setFullName(data.fullName);
       setPhone(data.phone ? normalizeIndianMobileDigits(data.phone) : "");
+      setPhoneVerified(!!data.isPhoneVerified);
     }
   }, [data]);
 
@@ -91,6 +100,7 @@ const CustomerSettings = () => {
       depositRefundsEnabled: dbPrefs.depositRefundsEnabled,
       directMessagesEnabled: dbPrefs.directMessagesEnabled,
       marketingEmailsEnabled: dbPrefs.marketingEmailsEnabled,
+      smsNotificationsEnabled: dbPrefs.smsNotificationsEnabled !== false,
       [key]: value,
     };
     updatePrefsMut.mutate(next);
@@ -106,7 +116,17 @@ const CustomerSettings = () => {
       toast.success("Profile updated.");
       queryClient.invalidateQueries({ queryKey: ["customer-profile"] });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      const message = err.message || "Failed to update profile.";
+      const lower = message.toLowerCase();
+      if (
+        lower.includes("phone") &&
+        (lower.includes("already") || lower.includes("exists") || lower.includes("in use"))
+      ) {
+        setProfileFieldErrors({ phone: "This phone number is already used by another account." });
+      }
+      toast.error(message);
+    },
   });
 
   const saveProfile = (e: FormEvent) => {
@@ -117,6 +137,10 @@ const CustomerSettings = () => {
     }
     const phoneErr = optionalIndianMobileError(phone);
     if (phoneErr) errors.phone = phoneErr;
+    const hasEmail = !!(data?.email?.trim());
+    if (!phone.trim() && !hasEmail) {
+      errors.phone = "Add a phone number (this account has no email).";
+    }
     if (Object.keys(errors).length > 0) {
       setProfileFieldErrors(errors);
       toast.error("Please fill in the required fields.");
@@ -128,7 +152,9 @@ const CustomerSettings = () => {
 
   const updatePassword = async (e: FormEvent) => {
     e.preventDefault();
-    if (!user?.email) {
+    const accountIdentifier =
+      (data?.email?.trim() || user?.email?.trim() || data?.phone?.trim() || phone.trim() || "");
+    if (!accountIdentifier) {
       toast.error("You must be signed in.");
       return;
     }
@@ -147,7 +173,7 @@ const CustomerSettings = () => {
 
     try {
       await authApi.changePassword({
-        email: user.email,
+        email: accountIdentifier,
         currentPassword,
         newPassword,
       });
@@ -224,28 +250,50 @@ const CustomerSettings = () => {
                       <Input
                         id="customer-settings-email"
                         type="email"
-                        value={data.email}
+                        value={data.email?.trim() || ""}
+                        placeholder={data.email?.trim() ? undefined : "No email on this account"}
                         disabled
                         className="bg-muted/50"
                       />
+                      {!data.email?.trim() && (
+                        <p className="text-[11px] text-muted-foreground">
+                          Phone-only account — use your mobile number to sign in.
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="customer-settings-phone">Phone</Label>
-                      <IndianMobileInput
-                        id="customer-settings-phone"
-                        value={phone}
-                        onChange={(v) => {
-                          setPhone(v);
-                          clearProfileFieldError("phone");
-                        }}
-                        invalid={!!profileFieldErrors.phone}
-                      />
-                      <FieldError message={profileFieldErrors.phone} />
-                      {!profileFieldErrors.phone && (
-                        <p className="text-[11px] text-muted-foreground">
-                          10-digit Indian mobile starting with 6–9 (optional).
-                        </p>
-                      )}
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                        <div className="flex-1 space-y-1.5">
+                          <IndianMobileInput
+                            id="customer-settings-phone"
+                            value={phone}
+                            onChange={(v) => {
+                              setPhone(v);
+                              setPhoneVerified(false);
+                              clearProfileFieldError("phone");
+                            }}
+                            invalid={!!profileFieldErrors.phone}
+                          />
+                          <FieldError message={profileFieldErrors.phone} />
+                          {!profileFieldErrors.phone && (
+                            <p className="text-[11px] text-muted-foreground">
+                              {phoneVerified
+                                ? "Verified — SMS order updates can be delivered."
+                                : "10-digit Indian mobile starting with 6–9. Verify to enable SMS alerts."}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="shrink-0"
+                          disabled={!isValidIndianMobile(phone) || phoneVerified}
+                          onClick={() => setOtpOpen(true)}
+                        >
+                          {phoneVerified ? "Verified" : "Verify SMS"}
+                        </Button>
+                      </div>
                     </div>
                   </FormGrid>
                   <Button type="submit" className="mt-5" disabled={saveProfileMut.isPending}>
@@ -306,8 +354,22 @@ const CustomerSettings = () => {
                           placeholder="••••••••"
                           value={newPassword}
                           onChange={(e) => {
-                            setNewPassword(e.target.value);
-                            clearPasswordFieldError("newPassword");
+                            const value = e.target.value;
+                            setNewPassword(value);
+                            setPasswordFieldErrors((prev) =>
+                              applyPasswordPairLiveErrors(
+                                prev,
+                                value,
+                                confirmPassword,
+                                { password: "newPassword", confirm: "confirmPassword" },
+                                {
+                                  passwordEmptyMessage: "Please enter a new password.",
+                                  passwordShortMessage: "New password must be at least 8 characters.",
+                                  confirmEmptyMessage: "Please confirm your new password.",
+                                  confirmMismatchMessage: "New password and confirm password must match.",
+                                },
+                              ),
+                            );
                           }}
                           autoComplete="new-password"
                           className={
@@ -336,14 +398,30 @@ const CustomerSettings = () => {
                           placeholder="••••••••"
                           value={confirmPassword}
                           onChange={(e) => {
-                            setConfirmPassword(e.target.value);
-                            clearPasswordFieldError("confirmPassword");
+                            const value = e.target.value;
+                            setConfirmPassword(value);
+                            setPasswordFieldErrors((prev) =>
+                              applyPasswordPairLiveErrors(
+                                prev,
+                                newPassword,
+                                value,
+                                { password: "newPassword", confirm: "confirmPassword" },
+                                {
+                                  passwordEmptyMessage: "Please enter a new password.",
+                                  passwordShortMessage: "New password must be at least 8 characters.",
+                                  confirmEmptyMessage: "Please confirm your new password.",
+                                  confirmMismatchMessage: "New password and confirm password must match.",
+                                },
+                              ),
+                            );
                           }}
                           autoComplete="new-password"
                           className={
                             passwordFieldErrors.confirmPassword
                               ? "border-destructive pr-10"
-                              : "pr-10"
+                              : passwordsMatch(newPassword, confirmPassword)
+                                ? "border-emerald-500/60 pr-10"
+                                : "pr-10"
                           }
                         />
                         <button
@@ -356,6 +434,10 @@ const CustomerSettings = () => {
                         </button>
                       </div>
                       <FieldError message={passwordFieldErrors.confirmPassword} />
+                      {!passwordFieldErrors.confirmPassword &&
+                        passwordsMatch(newPassword, confirmPassword) && (
+                          <p className="text-xs text-emerald-600">Passwords match</p>
+                        )}
                     </div>
                   </FormGrid>
                 </div>
@@ -408,12 +490,45 @@ const CustomerSettings = () => {
                     checked={dbPrefs.marketingEmailsEnabled}
                     onChange={(v) => togglePref("marketingEmailsEnabled", v)}
                   />
+                  {(!phone.trim() || !phoneVerified) && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-950">
+                      {!phone.trim()
+                        ? "Add and verify a phone number in Profile to receive SMS alerts."
+                        : "Verify your phone number in Profile to enable SMS alerts."}
+                    </div>
+                  )}
+                  <PrefRow
+                    title="SMS notifications"
+                    desc="Text alerts for order updates (requires a verified phone number)."
+                    checked={dbPrefs.smsNotificationsEnabled !== false}
+                    onChange={(v) => {
+                      if (v && (!phone.trim() || !phoneVerified)) {
+                        toast.message(
+                          !phone.trim()
+                            ? "Add and verify a phone in Profile first."
+                            : "Verify your phone in Profile first.",
+                        );
+                        return;
+                      }
+                      togglePref("smsNotificationsEnabled", v);
+                    }}
+                  />
                 </>
               )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+      <PhoneOtpDialog
+        open={otpOpen}
+        onOpenChange={setOtpOpen}
+        phone={normalizeIndianMobileDigits(phone)}
+        role="customer"
+        onVerified={() => {
+          setPhoneVerified(true);
+          queryClient.invalidateQueries({ queryKey: ["customer-profile"] });
+        }}
+      />
     </div>
   );
 };

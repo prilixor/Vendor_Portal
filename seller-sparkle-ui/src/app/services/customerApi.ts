@@ -130,9 +130,11 @@ export interface CustomerListingDetailApi {
 
 export interface CustomerProfileApi {
   id: string;
-  email: string;
+  email?: string | null;
   fullName: string;
   phone?: string | null;
+  isPhoneVerified?: boolean;
+  isEmailVerified?: boolean;
 }
 
 export interface CustomerAddressApi {
@@ -572,6 +574,7 @@ export interface CustomerNotificationPreferenceApi {
   depositRefundsEnabled: boolean;
   directMessagesEnabled: boolean;
   marketingEmailsEnabled: boolean;
+  smsNotificationsEnabled?: boolean;
 }
 
 /** @deprecated Use HospitalApi / DoctorApi */

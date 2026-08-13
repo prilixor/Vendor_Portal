@@ -1,18 +1,20 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { AuthLayout } from "@/app/components/layout/AuthLayout";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
 import { authApi } from "@/app/services/authApi";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getCustomerPortalHref } from "@/app/helpers/portalHost";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { isValidIndianMobile } from "@/app/helpers/indianMobilePhone";
+import { isValidIndianMobile, normalizeIndianMobileDigits } from "@/app/helpers/indianMobilePhone";
+import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
+import { PORTAL_USER_KEY } from "@/app/helpers/authSession";
 
 const Login = () => {
-  const navigate = useNavigate();
   const { login } = useAuth();
   const customerLoginHref = getCustomerPortalHref("/customer/login");
   const [email, setEmail] = useState("");
@@ -22,6 +24,12 @@ const Login = () => {
   const [resendLoading, setResendLoading] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [otpOpen, setOtpOpen] = useState(false);
+  const [pendingPhone, setPendingPhone] = useState("");
+
+  const goToVendor = () => {
+    window.location.href = "/vendor";
+  };
 
   const validate = () => {
     const e: typeof errors = {};
@@ -40,9 +48,32 @@ const Login = () => {
     try {
       await login(email, password, "vendor");
       setNeedsVerification(false);
+
+      let vendorId = "";
+      try {
+        const raw = localStorage.getItem(PORTAL_USER_KEY);
+        if (raw) vendorId = String((JSON.parse(raw) as { id?: string }).id ?? "");
+      } catch {
+        /* ignore */
+      }
+
+      if (vendorId) {
+        try {
+          const profile = await vendorOnboardingApi.getVendorProfile(vendorId);
+          const rawPhone = profile.supportPhone?.trim() ?? "";
+          if (rawPhone && !profile.isPhoneVerified) {
+            setPendingPhone(normalizeIndianMobileDigits(rawPhone));
+            setOtpOpen(true);
+            toast.message("Verify your phone to continue.");
+            return;
+          }
+        } catch {
+          /* shell gate will catch if needed */
+        }
+      }
+
       toast.success("Welcome back, Vendor!");
-      // Use window.location.href to force full page reload
-      window.location.href = "/vendor";
+      goToVendor();
     } catch (error) {
       let message = error instanceof Error ? error.message : "Sign in failed. Please try again.";
       const rawMessage = message;
@@ -68,7 +99,7 @@ const Login = () => {
 
     setResendLoading(true);
     try {
-      await authApi.resendVerification(candidateEmail);
+      await authApi.resendVerification(candidateEmail, "vendor");
       toast.success("Verification link has been resent.");
     } catch (error) {
       let message = error instanceof Error ? error.message : "Failed to resend verification link.";
@@ -102,7 +133,7 @@ const Login = () => {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password" required>Password</Label>
-            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
+            <Link to="/forgot-password?portal=vendor" className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
           </div>
           <div className="relative">
             <Input
@@ -152,6 +183,17 @@ const Login = () => {
         </a>
       </p>
 
+      <PhoneOtpDialog
+        open={otpOpen}
+        onOpenChange={setOtpOpen}
+        phone={pendingPhone}
+        role="vendor"
+        required
+        onVerified={() => {
+          toast.success("Welcome back, Vendor!");
+          goToVendor();
+        }}
+      />
     </AuthLayout>
   );
 };

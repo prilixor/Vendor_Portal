@@ -21,7 +21,7 @@ public sealed class CustomersRouteGroup : Group
 
 public sealed class RegisterCustomerRequest
 {
-    public string Email { get; set; } = string.Empty;
+    public string? Email { get; set; }
     public string Password { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? Phone { get; set; }
@@ -834,6 +834,7 @@ public sealed class UpdateCustomerNotificationPreferenceRequest
     public bool DepositRefundsEnabled { get; set; }
     public bool DirectMessagesEnabled { get; set; }
     public bool MarketingEmailsEnabled { get; set; }
+    public bool SmsNotificationsEnabled { get; set; } = true;
 }
 
 public sealed class UpdateCustomerNotificationPreferenceEndpoint(IMediator mediator)
@@ -860,7 +861,8 @@ public sealed class UpdateCustomerNotificationPreferenceEndpoint(IMediator media
             req.ExpirationRemindersEnabled,
             req.DepositRefundsEnabled,
             req.DirectMessagesEnabled,
-            req.MarketingEmailsEnabled), ct);
+            req.MarketingEmailsEnabled,
+            req.SmsNotificationsEnabled), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }

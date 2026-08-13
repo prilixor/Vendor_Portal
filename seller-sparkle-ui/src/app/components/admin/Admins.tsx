@@ -822,7 +822,7 @@ const Admins = () => {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Share it securely (e.g. phone/secure chat). After login they should open Settings and set a new password.
+                Share it securely (e.g. email/secure chat). After login they should open Settings and set a new password.
               </p>
             </div>
           )}
