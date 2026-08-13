@@ -156,7 +156,7 @@ public sealed class LoginEndpoint(
 
             if (customer is null || customer.IsDeleted || !passwordHasher.VerifyPassword(req.Password, customer.PasswordHash))
             {
-                return TypedResults.Problem(title: "auth.invalid_credentials", detail: "Invalid email or password.", statusCode: 401);
+                return TypedResults.Problem(title: "auth.invalid_credentials", detail: "Invalid email/phone or password.", statusCode: 401);
             }
 
             // Email-only accounts must verify before login/app access.
@@ -188,7 +188,7 @@ public sealed class LoginEndpoint(
 
             if (vendor is null || vendor.IsDeleted || !passwordHasher.VerifyPassword(req.Password, vendor.PasswordHash))
             {
-                return TypedResults.Problem(title: "auth.invalid_credentials", detail: "Invalid email or password.", statusCode: 401);
+                return TypedResults.Problem(title: "auth.invalid_credentials", detail: "Invalid email/phone or password.", statusCode: 401);
             }
 
             if (!vendor.IsEmailVerified)

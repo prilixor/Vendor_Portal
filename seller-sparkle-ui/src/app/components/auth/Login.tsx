@@ -23,7 +23,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({});
   const [otpOpen, setOtpOpen] = useState(false);
   const [pendingPhone, setPendingPhone] = useState("");
 
@@ -45,6 +45,7 @@ const Login = () => {
     ev.preventDefault();
     if (!validate()) return;
     setLoading(true);
+    setErrors((prev) => ({ ...prev, form: undefined }));
     try {
       await login(email, password, "vendor");
       setNeedsVerification(false);
@@ -76,13 +77,20 @@ const Login = () => {
       goToVendor();
     } catch (error) {
       let message = error instanceof Error ? error.message : "Sign in failed. Please try again.";
-      const rawMessage = message;
-      message = message.replace(/\n?\[.*?\]/g, "").trim();
-      
+      const code =
+        error && typeof error === "object" && "code" in error
+          ? String((error as { code?: string }).code ?? "")
+          : "";
+      const rawMessage = `${message} ${code}`;
+      message = message.replace(/\n?\[.*?\]/g, "").trim() || "Invalid email/phone or password.";
+
       if (rawMessage.includes("EMAIL_NOT_VERIFIED")) {
         setNeedsVerification(true);
+        setErrors((prev) => ({ ...prev, form: undefined }));
         toast.error("Please verify your email before logging in.");
       } else {
+        setNeedsVerification(false);
+        setErrors((prev) => ({ ...prev, form: message }));
         toast.error(message);
       }
     } finally {
@@ -156,6 +164,12 @@ const Login = () => {
           </div>
           {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
         </div>
+
+        {errors.form && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {errors.form}
+          </div>
+        )}
 
         <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>
           {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in…</> : "Sign in"}

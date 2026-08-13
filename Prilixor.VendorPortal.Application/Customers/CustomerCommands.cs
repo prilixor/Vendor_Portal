@@ -229,7 +229,11 @@ internal sealed class GetCustomerProfileQueryHandler(ICustomerRepository custome
     }
 }
 
-public sealed record UpdateCustomerProfileCommand(Guid CustomerId, string FullName, string? Phone) : ICommand<CustomerProfileDto>;
+public sealed record UpdateCustomerProfileCommand(
+    Guid CustomerId,
+    string FullName,
+    string? Phone,
+    string? Email = null) : ICommand<CustomerProfileDto>;
 
 public sealed class UpdateCustomerProfileCommandValidator : AbstractValidator<UpdateCustomerProfileCommand>
 {
@@ -239,10 +243,17 @@ public sealed class UpdateCustomerProfileCommandValidator : AbstractValidator<Up
         RuleFor(x => x.Phone)
             .Must(p => string.IsNullOrWhiteSpace(p) || IndianMobilePhone.IsValid(p))
             .WithMessage(IndianMobilePhone.InvalidMessage);
+        RuleFor(x => x.Email)
+            .EmailAddress()
+            .When(x => !string.IsNullOrWhiteSpace(x.Email));
     }
 }
 
-internal sealed class UpdateCustomerProfileCommandHandler(ICustomerRepository customers)
+internal sealed class UpdateCustomerProfileCommandHandler(
+    ICustomerRepository customers,
+    IEmailService emailService,
+    IConfiguration configuration,
+    ILogger<UpdateCustomerProfileCommandHandler> logger)
     : ICommandHandler<UpdateCustomerProfileCommand, CustomerProfileDto>
 {
     public async Task<Result<CustomerProfileDto>> Handle(UpdateCustomerProfileCommand request, CancellationToken cancellationToken)
@@ -252,6 +263,48 @@ internal sealed class UpdateCustomerProfileCommandHandler(ICustomerRepository cu
             return Result.Failure<CustomerProfileDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
 
         c.FullName = request.FullName.Trim();
+
+        // Phone-only accounts may add an email once; existing email cannot be changed here.
+        var hadEmail = !string.IsNullOrWhiteSpace(c.Email);
+        var emailAdded = false;
+        if (!hadEmail && !string.IsNullOrWhiteSpace(request.Email))
+        {
+            if (!CustomerEmail.TryNormalize(request.Email, out var normalizedEmail))
+            {
+                return Result.Failure<CustomerProfileDto>(new Error(
+                    "customers.invalid_email",
+                    "Enter a valid email address.",
+                    ErrorCategory.Validation));
+            }
+
+            var emailOwner = await customers.GetCustomerByEmailAsync(normalizedEmail, cancellationToken);
+            if (emailOwner is not null && emailOwner.Id != c.Id)
+            {
+                return Result.Failure<CustomerProfileDto>(new Error(
+                    "customers.email_exists",
+                    "This email is already used by another customer account.",
+                    ErrorCategory.Validation));
+            }
+
+            c.Email = normalizedEmail;
+            c.IsEmailVerified = false;
+            c.EmailVerificationToken = VerificationTokenGenerator.GenerateSecureToken();
+            c.EmailVerificationTokenExpiresAt = DateTimeOffset.UtcNow.AddHours(24);
+            emailAdded = true;
+        }
+        else if (hadEmail && !string.IsNullOrWhiteSpace(request.Email))
+        {
+            var requested = CustomerEmail.Normalize(request.Email);
+            var current = CustomerEmail.Normalize(c.Email);
+            if (!string.Equals(requested, current, StringComparison.Ordinal))
+            {
+                return Result.Failure<CustomerProfileDto>(new Error(
+                    "customers.email_locked",
+                    "Email cannot be changed from Settings. Contact support if you need to update it.",
+                    ErrorCategory.Validation));
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(request.Phone))
         {
             if (string.IsNullOrWhiteSpace(c.Email))
@@ -291,6 +344,25 @@ internal sealed class UpdateCustomerProfileCommandHandler(ICustomerRepository cu
 
         await customers.UpdateCustomerAsync(c, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
+
+        if (emailAdded && !string.IsNullOrWhiteSpace(c.Email) && !string.IsNullOrWhiteSpace(c.EmailVerificationToken))
+        {
+            try
+            {
+                var frontendUrl = configuration["FrontendUrl"] ?? "https://blinksmed.com";
+                var verificationLink =
+                    $"{frontendUrl}/verify-email?token={Uri.EscapeDataString(c.EmailVerificationToken)}&portal=customer";
+                var body = EmailTemplates.VendorEmailVerificationRequested(
+                    c.Email,
+                    verificationLink,
+                    c.FullName);
+                await emailService.SendEmailAsync(c.Email, "Verify Your Email Address", body, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to send customer email verification after profile update to {Email}", c.Email);
+            }
+        }
 
         return Result.Success(new CustomerProfileDto(
             c.Id, c.Email, c.FullName, c.Phone, c.PhoneVerifiedAt.HasValue, c.IsEmailVerified));

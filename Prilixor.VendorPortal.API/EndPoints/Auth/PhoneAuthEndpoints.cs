@@ -29,10 +29,19 @@ public sealed class SendForgotPasswordSmsOtpRequest
     public string Role { get; set; } = "customer";
 }
 
-public sealed class ResetPasswordWithSmsOtpRequest
+public sealed class VerifyForgotPasswordSmsOtpRequest
 {
     public string Phone { get; set; } = string.Empty;
     public string Code { get; set; } = string.Empty;
+    /// <summary>customer | vendor</summary>
+    public string Role { get; set; } = "customer";
+}
+
+public sealed class ResetPasswordWithSmsOtpRequest
+{
+    public string Phone { get; set; } = string.Empty;
+    /// <summary>Short-lived token from forgot-password SMS verify-otp.</summary>
+    public string ResetToken { get; set; } = string.Empty;
     public string NewPassword { get; set; } = string.Empty;
     public string ConfirmPassword { get; set; } = string.Empty;
     /// <summary>customer | vendor | admin</summary>
@@ -115,6 +124,26 @@ public sealed class SendForgotPasswordSmsOtpEndpoint(IMediator mediator)
     }
 }
 
+public sealed class VerifyForgotPasswordSmsOtpEndpoint(IMediator mediator)
+    : Endpoint<VerifyForgotPasswordSmsOtpRequest, Results<Ok<ForgotPasswordSmsVerifiedDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("auth/forgot-password/sms/verify-otp");
+        AllowAnonymous();
+    }
+
+    public override async Task<Results<Ok<ForgotPasswordSmsVerifiedDto>, ProblemHttpResult>> ExecuteAsync(
+        VerifyForgotPasswordSmsOtpRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(
+            new VerifyForgotPasswordSmsOtpCommand(req.Phone, req.Code, req.Role),
+            ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class ResetPasswordWithSmsOtpEndpoint(IMediator mediator)
     : Endpoint<ResetPasswordWithSmsOtpRequest, Results<Ok<PhoneOtpActionDto>, ProblemHttpResult>>
 {
@@ -131,7 +160,7 @@ public sealed class ResetPasswordWithSmsOtpEndpoint(IMediator mediator)
         var result = await mediator.Send(
             new ResetPasswordWithSmsOtpCommand(
                 req.Phone,
-                req.Code,
+                req.ResetToken,
                 req.NewPassword,
                 req.ConfirmPassword,
                 req.Role),

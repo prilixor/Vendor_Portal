@@ -348,6 +348,8 @@ public sealed class UpdateCustomerProfileRequest
 {
     public string FullName { get; set; } = string.Empty;
     public string? Phone { get; set; }
+    /// <summary>Optional. Phone-only accounts may set email once (verification email is sent).</summary>
+    public string? Email { get; set; }
 }
 
 public sealed class UpdateCustomerProfileEndpoint(IMediator mediator)
@@ -368,7 +370,9 @@ public sealed class UpdateCustomerProfileEndpoint(IMediator mediator)
         if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
 
-        var result = await mediator.Send(new UpdateCustomerProfileCommand(customerId, req.FullName, req.Phone), ct);
+        var result = await mediator.Send(
+            new UpdateCustomerProfileCommand(customerId, req.FullName, req.Phone, req.Email),
+            ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
