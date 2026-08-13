@@ -1,14 +1,12 @@
 using FluentValidation;
 using MediatR;
 using Prilixor.VendorPortal.Application.Abstractions;
-using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Prilixor.Shared.Extensions;
 using Prilixor.VendorPortal.Application.Customers;
-using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Customers;
 
 namespace Prilixor.VendorPortal.Application.Onboarding;
@@ -75,8 +73,6 @@ internal sealed class RegisterAdminUserCommandHandler(
             Email = request.Email.Trim().ToLowerInvariant(),
             PasswordHash = passwordHasherService.HashPassword(request.Password),
             FullName = request.FullName,
-            Phone = null,
-            PhoneVerifiedAt = null,
             Role = roleEntity.Code,
             RoleId = roleEntity.Id,
             IsActive = request.IsActive,
@@ -209,10 +205,6 @@ internal sealed class UpdateAdminUserCommandHandler(IVendorOnboardingRepository 
             }
         }
 
-        // Admin accounts are email-only (phone not used).
-        target.Phone = null;
-        target.PhoneVerifiedAt = null;
-
         AdminRole? newRole = null;
         if (request.RoleId is Guid rid)
             newRole = await repository.GetAdminRoleByIdAsync(rid, cancellationToken);
@@ -312,21 +304,6 @@ internal sealed class UpdateAdminUserCommandHandler(IVendorOnboardingRepository 
     }
 }
 
-public sealed record GetOwnAdminProfileQuery(Guid AdminId) : IQuery<AdminUserDto>;
-
-internal sealed class GetOwnAdminProfileQueryHandler(IVendorOnboardingRepository repository)
-    : IQueryHandler<GetOwnAdminProfileQuery, AdminUserDto>
-{
-    public async Task<Result<AdminUserDto>> Handle(GetOwnAdminProfileQuery request, CancellationToken cancellationToken)
-    {
-        var admin = await repository.GetAdminUserByIdAsync(request.AdminId, cancellationToken);
-        if (admin is null || admin.IsDeleted)
-            return Result.Failure<AdminUserDto>(new Error("admin.not_found", "Admin user not found.", ErrorCategory.NotFound));
-
-        return Result.Success(RegisterAdminUserCommandHandler.ToDto(admin));
-    }
-}
-
 public sealed record UpdateOwnAdminProfileCommand(
     Guid AdminId,
     string? FullName,
@@ -359,10 +336,6 @@ internal sealed class UpdateOwnAdminProfileCommandHandler(
                 admin.Email = email;
             }
         }
-
-        // Admin accounts are email-only (phone not used).
-        admin.Phone = null;
-        admin.PhoneVerifiedAt = null;
 
         if (!string.IsNullOrWhiteSpace(request.NewPassword))
         {
@@ -641,10 +614,7 @@ public sealed class VerifyVendorBankAccountCommandValidator : AbstractValidator<
     }
 }
 
-internal sealed class VerifyVendorBankAccountCommandHandler(
-    IVendorOnboardingRepository repository,
-    IMediator mediator,
-    VendorSmsNotifier vendorSms)
+internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRepository repository, IMediator mediator)
     : ICommandHandler<VerifyVendorBankAccountCommand, VendorBankAccountDto>
 {
     public async Task<Result<VendorBankAccountDto>> Handle(VerifyVendorBankAccountCommand request, CancellationToken cancellationToken)
@@ -682,10 +652,7 @@ internal sealed class VerifyVendorBankAccountCommandHandler(
 
         await repository.UpdateVendorBankAccountAsync(bankAccount, cancellationToken);
 
-        var last4 = GetLast4(bankAccount.AccountNumber);
-        var statusChanged = !string.Equals(oldStatus, request.VerificationStatus, StringComparison.OrdinalIgnoreCase);
-
-        if (statusChanged
+        if (!string.Equals(oldStatus, "rejected", StringComparison.OrdinalIgnoreCase)
             && string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase))
         {
             await mediator.Send(new CreateVendorNotificationCommand(
@@ -693,7 +660,7 @@ internal sealed class VerifyVendorBankAccountCommandHandler(
                 "bank_rejected",
                 "Bank account verification rejected",
                 AdminNotificationMessageBuilder.WithReason(
-                    $"Your bank account ending with {last4} was rejected. Please review and resubmit.",
+                    $"Your bank account ending with {GetLast4(bankAccount.AccountNumber)} was rejected. Please review and resubmit.",
                     request.Notes),
                 "in_app",
                 "sent"), cancellationToken);
@@ -713,19 +680,6 @@ internal sealed class VerifyVendorBankAccountCommandHandler(
 
         await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
-
-        if (statusChanged
-            && (string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase)))
-        {
-            await vendorSms.TrySendAsync(
-                vendorId,
-                SmsTemplates.VendorBankVerified(
-                    string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase),
-                    last4),
-                VendorSmsKind.BankVerified,
-                cancellationToken);
-        }
 
         return Result.Success(new VendorBankAccountDto(
             bankAccount.Id.ToString(),
@@ -775,8 +729,7 @@ public sealed class VerifyVendorDocumentCommandValidator : AbstractValidator<Ver
 internal sealed class VerifyVendorDocumentCommandHandler(
     IVendorOnboardingRepository repository,
     IVendorFileUrlResolver fileUrlResolver,
-    IMediator mediator,
-    VendorSmsNotifier vendorSms)
+    IMediator mediator)
     : ICommandHandler<VerifyVendorDocumentCommand, VendorDocumentDto>
 {
     public async Task<Result<VendorDocumentDto>> Handle(VerifyVendorDocumentCommand request, CancellationToken cancellationToken)
@@ -831,9 +784,7 @@ internal sealed class VerifyVendorDocumentCommandHandler(
             }
         }
 
-        var statusChanged = !string.Equals(oldStatus, request.VerificationStatus, StringComparison.OrdinalIgnoreCase);
-
-        if (statusChanged
+        if (!string.Equals(oldStatus, "rejected", StringComparison.OrdinalIgnoreCase)
             && string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase))
         {
             await mediator.Send(new CreateVendorNotificationCommand(
@@ -847,7 +798,7 @@ internal sealed class VerifyVendorDocumentCommandHandler(
                 "sent"), cancellationToken);
         }
 
-        if (statusChanged
+        if (!string.Equals(oldStatus, "approved", StringComparison.OrdinalIgnoreCase)
             && string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase))
         {
             await mediator.Send(new CreateVendorNotificationCommand(
@@ -872,19 +823,6 @@ internal sealed class VerifyVendorDocumentCommandHandler(
         };
         await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
-
-        if (statusChanged
-            && (string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase)))
-        {
-            await vendorSms.TrySendAsync(
-                vendorId,
-                SmsTemplates.VendorDocumentVerified(
-                    string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase),
-                    document.DocumentType),
-                VendorSmsKind.DocumentVerified,
-                cancellationToken);
-        }
 
         return Result.Success(new VendorDocumentDto(
             document.Id.ToString(),
@@ -1576,8 +1514,7 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
     IVendorUploadStorageService uploadStorage,
-    Microsoft.Extensions.Options.IOptions<Prilixor.VendorPortal.Domain.Options.CustomerPricingOptions> pricingOptions,
-    VendorSmsNotifier vendorSms)
+    Microsoft.Extensions.Options.IOptions<Prilixor.VendorPortal.Domain.Options.CustomerPricingOptions> pricingOptions)
     : ICommandHandler<AdminRestartOrderDispatchCommand, AdminOrderDto>
 {
     public async Task<Result<AdminOrderDto>> Handle(AdminRestartOrderDispatchCommand request, CancellationToken cancellationToken)
@@ -1699,10 +1636,6 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
                 Status = "sent",
                 SentAt = DateTimeOffset.UtcNow
             }, cancellationToken);
-            await vendorSms.TrySendAsync(
-                candidate.VendorId,
-                SmsTemplates.VendorDispatchOffer(order.OrderNumber),
-                cancellationToken);
         }
         
         var auditLog = new Prilixor.VendorPortal.Domain.Vendors.AdminAuditLog

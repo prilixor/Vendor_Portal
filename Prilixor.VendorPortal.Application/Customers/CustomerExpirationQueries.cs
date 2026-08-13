@@ -1,5 +1,4 @@
 using Prilixor.VendorPortal.Application.Abstractions;
-using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Customers;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
@@ -24,8 +23,7 @@ public sealed record GetVendorOrderExpirationsQuery(string VendorId, int WithinD
 public sealed record GetAdminOrderExpirationsQuery(int WithinDays = 7) : IQuery<List<ExpiringOrderDto>>;
 
 internal sealed class GetCustomerOrderExpirationsQueryHandler(
-    ICustomerRepository customers,
-    CustomerExpirationReminderNotifier expirationReminders)
+    ICustomerRepository customers)
     : IQueryHandler<GetCustomerOrderExpirationsQuery, List<ExpiringOrderDto>>
 {
     public async Task<Result<List<ExpiringOrderDto>>> Handle(GetCustomerOrderExpirationsQuery request, CancellationToken cancellationToken)
@@ -40,7 +38,31 @@ internal sealed class GetCustomerOrderExpirationsQueryHandler(
         var rows = await customers.GetExpiringOrdersForCustomerAsync(request.CustomerId, fromDate, toDate, cancellationToken);
         var list = rows.Select(r => ExpiringOrderMapper.MapDto(r, fromDate)).ToList();
 
-        await expirationReminders.EnsureRemindersAsync(request.CustomerId, rows, fromDate, cancellationToken);
+        var existing = await customers.GetCustomerNotificationsAsync(request.CustomerId, cancellationToken);
+        var existingKeys = existing
+            .Where(x => x.NotificationType == CustomerNotificationTypes.OrderExpiringSoon && x.RelatedOrderId.HasValue)
+            .Select(x => x.RelatedOrderId!.Value)
+            .ToHashSet();
+
+        foreach (var row in rows.Where(r => r.DaysLeft(fromDate) <= 3))
+        {
+            if (existingKeys.Contains(row.OrderId))
+                continue;
+
+            await customers.AddCustomerNotificationAsync(
+                new CustomerNotification
+                {
+                    Id = Guid.NewGuid(),
+                    CustomerId = request.CustomerId,
+                    Title = $"Order {row.OrderNumber} expires in {row.DaysLeft(fromDate)} day(s)",
+                    Body = $"Your {row.OrderType} item \"{row.ListingTitle}\" is due on {row.EndDate:dd MMM yyyy}.",
+                    NotificationType = CustomerNotificationTypes.OrderExpiringSoon,
+                    RelatedOrderId = row.OrderId,
+                },
+                cancellationToken);
+        }
+
+        await customers.SaveChangesAsync(cancellationToken);
         return Result.Success(list);
     }
 }

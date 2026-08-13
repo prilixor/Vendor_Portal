@@ -7,11 +7,9 @@ using Microsoft.IdentityModel.Tokens;
 using Prilixor.VendorPortal.API.Extensions;
 using Prilixor.VendorPortal.API.Services;
 using Prilixor.VendorPortal.Application.Abstractions;
-using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Auth;
-using Prilixor.VendorPortal.Domain.Customers;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Domain.Vendors;
 using System.IdentityModel.Tokens.Jwt;
@@ -48,8 +46,6 @@ public sealed record VerifyEmailResponse(bool Success, string Message);
 public sealed class ResendVerificationRequest
 {
     public string Email { get; set; } = string.Empty;
-    /// <summary>Optional: customer | vendor — when omitted, tries customer then vendor.</summary>
-    public string? Role { get; set; }
 }
 
 public sealed record ResendVerificationResponse(bool Success, string Message);
@@ -66,8 +62,6 @@ public sealed record ChangePasswordResponse(bool Success, string Message, DateTi
 public sealed class ForgotPasswordRequest
 {
     public string Email { get; set; } = string.Empty;
-    /// <summary>Optional: customer | vendor | admin — preserved on the email reset link for UI branding.</summary>
-    public string? Portal { get; set; }
 }
 
 public sealed record ForgotPasswordResponse(bool Success, string Message);
@@ -140,36 +134,20 @@ public sealed class LoginEndpoint(
         }
         else if (role == "customer")
         {
-            Customer? customer;
-            if (identifier.Contains('@'))
-            {
-                customer = await customerRepository.GetCustomerByEmailAsync(email, ct);
-            }
-            else if (IndianMobilePhone.TryNormalize(identifier, out var phoneDigits))
-            {
-                customer = await customerRepository.GetCustomerByPhoneAsync(phoneDigits, ct);
-            }
-            else
-            {
-                customer = null;
-            }
-
+            var customer = await customerRepository.GetCustomerByEmailAsync(email, ct);
             if (customer is null || customer.IsDeleted || !passwordHasher.VerifyPassword(req.Password, customer.PasswordHash))
             {
                 return TypedResults.Problem(title: "auth.invalid_credentials", detail: "Invalid email or password.", statusCode: 401);
             }
 
-            // Email-only accounts must verify before login/app access.
-            if (!string.IsNullOrWhiteSpace(customer.Email) && !customer.IsEmailVerified)
+            if (!customer.IsEmailVerified)
             {
                 return TypedResults.Problem(title: "EMAIL_NOT_VERIFIED", detail: "Please verify your email before logging in.", statusCode: 403);
             }
 
             userId = customer.Id.ToString();
-            name = !string.IsNullOrWhiteSpace(customer.FullName)
-                ? customer.FullName
-                : (customer.Email ?? customer.Phone ?? "Customer");
-            email = customer.Email ?? customer.Phone ?? string.Empty;
+            name = string.IsNullOrWhiteSpace(customer.FullName) ? customer.Email : customer.FullName;
+            email = customer.Email;
             customer.LastLoginAt = DateTimeOffset.UtcNow;
             await customerRepository.UpdateCustomerAsync(customer, ct);
             await customerRepository.SaveChangesAsync(ct);
@@ -232,8 +210,7 @@ public sealed class LoginEndpoint(
 }
 
 public sealed class VerifyEmailEndpoint(
-    IVendorOnboardingRepository repository,
-    ICustomerRepository customerRepository)
+    IVendorOnboardingRepository repository)
     : Endpoint<VerifyEmailRequest, Results<Ok<VerifyEmailResponse>, ProblemHttpResult>>
 {
     public override void Configure()
@@ -251,37 +228,21 @@ public sealed class VerifyEmailEndpoint(
         }
 
         var vendor = await repository.GetVendorByEmailVerificationTokenAsync(token, ct);
-        if (vendor is not null)
-        {
-            if (vendor.VerificationTokenExpiryUtc is null || vendor.VerificationTokenExpiryUtc < DateTimeOffset.UtcNow)
-            {
-                return TypedResults.Problem(title: "auth.token_expired", detail: "Verification link has expired.", statusCode: 400);
-            }
-
-            vendor.IsEmailVerified = true;
-            vendor.EmailVerificationToken = null;
-            vendor.VerificationTokenExpiryUtc = null;
-            await repository.UpdateVendorAsync(vendor, ct);
-            await repository.SaveChangesAsync(ct);
-            return TypedResults.Ok(new VerifyEmailResponse(true, "Email verified successfully."));
-        }
-
-        var customer = await customerRepository.GetCustomerByEmailVerificationTokenAsync(token, ct);
-        if (customer is null)
+        if (vendor is null)
         {
             return TypedResults.Problem(title: "auth.invalid_token", detail: "Invalid verification token.", statusCode: 400);
         }
 
-        if (customer.EmailVerificationTokenExpiresAt is null || customer.EmailVerificationTokenExpiresAt < DateTimeOffset.UtcNow)
+        if (vendor.VerificationTokenExpiryUtc is null || vendor.VerificationTokenExpiryUtc < DateTimeOffset.UtcNow)
         {
             return TypedResults.Problem(title: "auth.token_expired", detail: "Verification link has expired.", statusCode: 400);
         }
 
-        customer.IsEmailVerified = true;
-        customer.EmailVerificationToken = null;
-        customer.EmailVerificationTokenExpiresAt = null;
-        await customerRepository.UpdateCustomerAsync(customer, ct);
-        await customerRepository.SaveChangesAsync(ct);
+        vendor.IsEmailVerified = true;
+        vendor.EmailVerificationToken = null;
+        vendor.VerificationTokenExpiryUtc = null;
+        await repository.UpdateVendorAsync(vendor, ct);
+        await repository.SaveChangesAsync(ct);
 
         return TypedResults.Ok(new VerifyEmailResponse(true, "Email verified successfully."));
     }
@@ -290,7 +251,6 @@ public sealed class VerifyEmailEndpoint(
 public sealed class ResendVerificationEndpoint(
     IConfiguration configuration,
     IVendorOnboardingRepository repository,
-    ICustomerRepository customerRepository,
     IEmailService emailService,
     ILogger<ResendVerificationEndpoint> logger)
     : Endpoint<ResendVerificationRequest, Results<Ok<ResendVerificationResponse>, ProblemHttpResult>>
@@ -316,56 +276,6 @@ public sealed class ResendVerificationEndpoint(
             return TypedResults.Problem(title: "auth.resend_cooldown", detail: "Please wait a minute before requesting another verification email.", statusCode: 429);
         }
 
-        var role = (req.Role ?? string.Empty).Trim().ToLowerInvariant();
-        var preferCustomer = role is "customer" or "";
-        var preferVendor = role is "vendor" or "";
-
-        if (preferCustomer)
-        {
-            var customer = await customerRepository.GetCustomerByEmailAsync(email, ct);
-            if (customer is not null && !customer.IsDeleted)
-            {
-                if (customer.IsEmailVerified)
-                {
-                    return TypedResults.Ok(new ResendVerificationResponse(true, "Email is already verified."));
-                }
-
-                customer.EmailVerificationToken = VerificationTokenGenerator.GenerateSecureToken();
-                customer.EmailVerificationTokenExpiresAt = DateTimeOffset.UtcNow.AddHours(24);
-                await customerRepository.UpdateCustomerAsync(customer, ct);
-                await customerRepository.SaveChangesAsync(ct);
-
-                try
-                {
-                    var frontendUrl = configuration["FrontendUrl"] ?? "https://blinksmed.com";
-                    var verificationLink =
-                        $"{frontendUrl}/verify-email?token={Uri.EscapeDataString(customer.EmailVerificationToken)}&portal=customer";
-                    var body = EmailTemplates.VendorEmailVerificationRequested(
-                        customer.Email!,
-                        verificationLink,
-                        customer.FullName);
-                    await emailService.SendEmailAsync(customer.Email!, "Verify Your Email Address", body, ct);
-                    LastSent[email] = DateTimeOffset.UtcNow;
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Failed to resend customer verification email to {Email}", email);
-                }
-
-                return TypedResults.Ok(new ResendVerificationResponse(true, "Verification email sent."));
-            }
-
-            if (role == "customer")
-            {
-                return TypedResults.Problem(title: "auth.user_not_found", detail: "User not found.", statusCode: 404);
-            }
-        }
-
-        if (!preferVendor)
-        {
-            return TypedResults.Problem(title: "auth.user_not_found", detail: "User not found.", statusCode: 404);
-        }
-
         var vendor = await repository.GetVendorByEmailAsync(email, ct);
         if (vendor is null || vendor.IsDeleted)
         {
@@ -385,7 +295,7 @@ public sealed class ResendVerificationEndpoint(
         try
         {
             var frontendUrl = configuration["FrontendUrl"] ?? "https://blinksmed.com";
-            var verificationLink = $"{frontendUrl}/verify-email?token={Uri.EscapeDataString(vendor.EmailVerificationToken)}&portal=vendor";
+            var verificationLink = $"{frontendUrl}/verify-email?token={Uri.EscapeDataString(vendor.EmailVerificationToken)}";
             var body = EmailTemplates.VendorEmailVerificationRequested(vendor.Email, verificationLink, vendor.Profile?.OwnerName ?? string.Empty);
             await emailService.SendEmailAsync(vendor.Email, "Verify Your Email Address", body, ct);
             LastSent[email] = DateTimeOffset.UtcNow;
@@ -418,12 +328,11 @@ public sealed class ChangePasswordEndpoint(
             return TypedResults.Problem(title: "auth.impersonation_blocked", detail: "Password changes are not allowed during impersonation.", statusCode: 403);
         }
 
-        var identifier = (req.Email ?? string.Empty).Trim();
-        var email = identifier.ToLowerInvariant();
+        var email = (req.Email ?? string.Empty).Trim().ToLowerInvariant();
 
-        if (string.IsNullOrWhiteSpace(identifier) || string.IsNullOrWhiteSpace(req.CurrentPassword) || string.IsNullOrWhiteSpace(req.NewPassword))
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(req.CurrentPassword) || string.IsNullOrWhiteSpace(req.NewPassword))
         {
-            return TypedResults.Problem(title: "auth.invalid_input", detail: "Email or phone, current password, and new password are required.", statusCode: 400);
+            return TypedResults.Problem(title: "auth.invalid_input", detail: "Email, current password, and new password are required.", statusCode: 400);
         }
 
         if (req.NewPassword.Length < 8)
@@ -431,61 +340,49 @@ public sealed class ChangePasswordEndpoint(
             return TypedResults.Problem(title: "auth.invalid_password", detail: "New password must be at least 8 characters.", statusCode: 400);
         }
 
-        // Try admin first (email only)
-        if (identifier.Contains('@'))
+        // Try admin first
+        var admin = await repository.GetAdminUserByEmailAsync(email, ct);
+        if (admin != null && !admin.IsDeleted && admin.IsActive)
         {
-            var admin = await repository.GetAdminUserByEmailAsync(email, ct);
-            if (admin != null && !admin.IsDeleted && admin.IsActive)
-            {
-                if (!passwordHasher.VerifyPassword(req.CurrentPassword, admin.PasswordHash))
-                {
-                    return TypedResults.Problem(title: "auth.invalid_password", detail: "Current password is incorrect.", statusCode: 400);
-                }
-
-                admin.PasswordHash = passwordHasher.HashPassword(req.NewPassword);
-                await repository.SaveChangesAsync(ct);
-                return TypedResults.Ok(new ChangePasswordResponse(true, "Password updated successfully.", DateTimeOffset.UtcNow));
-            }
-        }
-
-        Vendor? vendor = null;
-        if (identifier.Contains('@'))
-            vendor = await repository.GetVendorByEmailAsync(email, ct);
-        else if (IndianMobilePhone.TryNormalize(identifier, out var vendorPhone))
-            vendor = await repository.GetVendorByPhoneAsync(vendorPhone, ct);
-
-        if (vendor is not null && !vendor.IsDeleted)
-        {
-            if (!passwordHasher.VerifyPassword(req.CurrentPassword, vendor.PasswordHash))
+            if (!passwordHasher.VerifyPassword(req.CurrentPassword, admin.PasswordHash))
             {
                 return TypedResults.Problem(title: "auth.invalid_password", detail: "Current password is incorrect.", statusCode: 400);
             }
 
-            vendor.PasswordHash = passwordHasher.HashPassword(req.NewPassword);
-            await repository.UpdateVendorAsync(vendor, ct);
+            admin.PasswordHash = passwordHasher.HashPassword(req.NewPassword);
             await repository.SaveChangesAsync(ct);
             return TypedResults.Ok(new ChangePasswordResponse(true, "Password updated successfully.", DateTimeOffset.UtcNow));
         }
 
-        Customer? customer = null;
-        if (identifier.Contains('@'))
-            customer = await customerRepository.GetCustomerByEmailAsync(email, ct);
-        else if (IndianMobilePhone.TryNormalize(identifier, out var customerPhone))
-            customer = await customerRepository.GetCustomerByPhoneAsync(customerPhone, ct);
-
-        if (customer is null || customer.IsDeleted)
+        // Try vendor
+        var vendor = await repository.GetVendorByEmailAsync(email, ct);
+        if (vendor is null || vendor.IsDeleted)
         {
-            return TypedResults.Problem(title: "auth.user_not_found", detail: "User not found.", statusCode: 404);
+            var customer = await customerRepository.GetCustomerByEmailAsync(email, ct);
+            if (customer is null || customer.IsDeleted)
+            {
+                return TypedResults.Problem(title: "auth.user_not_found", detail: "User not found.", statusCode: 404);
+            }
+
+            if (!passwordHasher.VerifyPassword(req.CurrentPassword, customer.PasswordHash))
+            {
+                return TypedResults.Problem(title: "auth.invalid_password", detail: "Current password is incorrect.", statusCode: 400);
+            }
+
+            customer.PasswordHash = passwordHasher.HashPassword(req.NewPassword);
+            await customerRepository.UpdateCustomerAsync(customer, ct);
+            await customerRepository.SaveChangesAsync(ct);
+            return TypedResults.Ok(new ChangePasswordResponse(true, "Password updated successfully.", DateTimeOffset.UtcNow));
         }
 
-        if (!passwordHasher.VerifyPassword(req.CurrentPassword, customer.PasswordHash))
+        if (!passwordHasher.VerifyPassword(req.CurrentPassword, vendor.PasswordHash))
         {
             return TypedResults.Problem(title: "auth.invalid_password", detail: "Current password is incorrect.", statusCode: 400);
         }
 
-        customer.PasswordHash = passwordHasher.HashPassword(req.NewPassword);
-        await customerRepository.UpdateCustomerAsync(customer, ct);
-        await customerRepository.SaveChangesAsync(ct);
+        vendor.PasswordHash = passwordHasher.HashPassword(req.NewPassword);
+        await repository.UpdateVendorAsync(vendor, ct);
+        await repository.SaveChangesAsync(ct);
         return TypedResults.Ok(new ChangePasswordResponse(true, "Password updated successfully.", DateTimeOffset.UtcNow));
     }
 }
@@ -536,11 +433,7 @@ public sealed class ForgotPasswordEndpoint(
 
             // Send reset link email (FrontendUrl in appsettings / env — must match deployed SPA host)
             var frontendBase = configuration["FrontendUrl"]?.Trim().TrimEnd('/') ?? "https://blinksmed.com";
-            var portal = (req.Portal ?? string.Empty).Trim().ToLowerInvariant();
-            var portalQs = portal is "customer" or "vendor" or "admin"
-                ? $"&portal={Uri.EscapeDataString(portal)}"
-                : string.Empty;
-            var resetLink = $"{frontendBase}/reset-password?token={Uri.EscapeDataString(token)}{portalQs}";
+            var resetLink = $"{frontendBase}/reset-password?token={Uri.EscapeDataString(token)}";
             var subject = "Reset Your Password";
             var body = $@"
                 <h2>Password Reset Request</h2>
@@ -748,12 +641,7 @@ public sealed class RefreshTokenEndpoint(
         else if (role == "customer")
         {
             var customer = await customerRepository.GetCustomerByEmailAsync(email, ct);
-            if (customer != null)
-            {
-                name = !string.IsNullOrWhiteSpace(customer.FullName)
-                    ? customer.FullName
-                    : (customer.Email ?? customer.Phone ?? email);
-            }
+            if (customer != null) name = string.IsNullOrWhiteSpace(customer.FullName) ? customer.Email : customer.FullName;
         }
         else
         {

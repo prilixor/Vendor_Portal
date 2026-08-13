@@ -39,10 +39,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.PasswordHash).HasColumnName("password_hash");
             entity.Property(x => x.FullName).HasColumnName("full_name");
             entity.Property(x => x.Phone).HasColumnName("phone");
-            entity.Property(x => x.PhoneVerifiedAt).HasColumnName("phone_verified_at");
             entity.Property(x => x.IsEmailVerified).HasColumnName("email_verified");
-            entity.Property(x => x.EmailVerificationToken).HasColumnName("email_verification_token");
-            entity.Property(x => x.EmailVerificationTokenExpiresAt).HasColumnName("email_verification_token_expires_at");
             entity.Property(x => x.LastLoginAt).HasColumnName("last_login_at");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
@@ -347,7 +344,6 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.DepositRefundsEnabled).HasColumnName("deposit_refunds_enabled");
             entity.Property(x => x.DirectMessagesEnabled).HasColumnName("direct_messages_enabled");
             entity.Property(x => x.MarketingEmailsEnabled).HasColumnName("marketing_emails_enabled");
-            entity.Property(x => x.SmsNotificationsEnabled).HasColumnName("sms_notifications_enabled");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
             entity.Ignore(x => x.CreatedBy);

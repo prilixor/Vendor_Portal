@@ -37,7 +37,7 @@ const Notifications = () => {
   const { openSupportPanel } = useSupportChat();
   const [items, setItems] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
-  const [prefs, setPrefs] = useState({ email: true, push: false, orders: true, sms: true });
+  const [prefs, setPrefs] = useState({ email: true, push: false, orders: true });
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -88,7 +88,6 @@ const Notifications = () => {
           email: prefRes.value.emailNotificationsEnabled,
           push: prefRes.value.pushNotificationsEnabled,
           orders: prefRes.value.newOrderNotifications,
-          sms: prefRes.value.smsNotificationsEnabled !== false,
         });
       }
 
@@ -134,7 +133,6 @@ const Notifications = () => {
         emailNotificationsEnabled: next.email,
         pushNotificationsEnabled: next.push,
         newOrderNotifications: next.orders,
-        smsNotificationsEnabled: next.sms,
       });
 
       // Handle push subscription when toggle changes
@@ -377,7 +375,6 @@ const Notifications = () => {
             {[
               { key: "email" as const, label: "Email notifications", desc: "Receive updates in your inbox" },
               { key: "push" as const, label: "Push notifications", desc: "Browser push alerts" },
-              { key: "sms" as const, label: "SMS notifications", desc: "Text alerts for new order requests (verified phone)" },
               { key: "orders" as const, label: "Order alerts", desc: "Real-time rental requests" },
             ].map((p) => (
               <div key={p.key} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">

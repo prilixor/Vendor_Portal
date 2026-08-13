@@ -25,8 +25,7 @@ public sealed record VendorProfileDto(
     string PostalCode,
     decimal? Latitude,
     decimal? Longitude,
-    bool OnboardingCompleted,
-    bool IsPhoneVerified = false);
+    bool OnboardingCompleted);
 
 public sealed record VendorDocumentDto(
     string Id,
@@ -259,8 +258,7 @@ public sealed record VendorNotificationPreferenceDto(
     string VendorId,
     bool EmailNotificationsEnabled,
     bool PushNotificationsEnabled,
-    bool NewOrderNotifications,
-    bool SmsNotificationsEnabled = true);
+    bool NewOrderNotifications);
 
 public sealed record VendorNotificationDto(
     string Id,

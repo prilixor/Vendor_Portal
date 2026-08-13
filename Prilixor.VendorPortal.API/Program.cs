@@ -23,7 +23,6 @@ builder.Services.ConfigureServices(builder.Configuration, builder.Environment);
 builder.Services.Configure<Prilixor.VendorPortal.Domain.Options.BootstrapSuperAdminOptions>(
     builder.Configuration.GetSection(Prilixor.VendorPortal.Domain.Options.BootstrapSuperAdminOptions.SectionName));
 builder.Services.AddHostedService<Prilixor.VendorPortal.API.Services.BootstrapSuperAdminHostedService>();
-builder.Services.AddHostedService<Prilixor.VendorPortal.API.Services.CustomerExpirationReminderHostedService>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpClient();

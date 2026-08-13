@@ -11,7 +11,6 @@ public sealed class UpsertVendorNotificationPreferenceRequest : VendorIdRequest
     public bool EmailNotificationsEnabled { get; set; } = true;
     public bool PushNotificationsEnabled { get; set; } = true;
     public bool NewOrderNotifications { get; set; } = true;
-    public bool SmsNotificationsEnabled { get; set; } = true;
 }
 
 public sealed class CreateVendorNotificationRequest : VendorIdRequest
@@ -48,8 +47,7 @@ public sealed class UpsertVendorNotificationPreferenceEndpoint(IMediator mediato
             req.VendorId,
             req.EmailNotificationsEnabled,
             req.PushNotificationsEnabled,
-            req.NewOrderNotifications,
-            req.SmsNotificationsEnabled), ct);
+            req.NewOrderNotifications), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }

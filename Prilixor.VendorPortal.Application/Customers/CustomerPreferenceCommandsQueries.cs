@@ -11,8 +11,7 @@ public sealed record CustomerNotificationPreferenceDto(
     bool ExpirationRemindersEnabled,
     bool DepositRefundsEnabled,
     bool DirectMessagesEnabled,
-    bool MarketingEmailsEnabled,
-    bool SmsNotificationsEnabled = true);
+    bool MarketingEmailsEnabled);
 
 public sealed record GetCustomerNotificationPreferenceQuery(Guid CustomerId) 
     : IQuery<CustomerNotificationPreferenceDto>;
@@ -38,8 +37,7 @@ internal sealed class GetCustomerNotificationPreferenceQueryHandler(ICustomerRep
                 ExpirationRemindersEnabled: true,
                 DepositRefundsEnabled: true,
                 DirectMessagesEnabled: true,
-                MarketingEmailsEnabled: false,
-                SmsNotificationsEnabled: true));
+                MarketingEmailsEnabled: false));
         }
 
         return Result.Success(new CustomerNotificationPreferenceDto(
@@ -48,8 +46,7 @@ internal sealed class GetCustomerNotificationPreferenceQueryHandler(ICustomerRep
             pref.ExpirationRemindersEnabled,
             pref.DepositRefundsEnabled,
             pref.DirectMessagesEnabled,
-            pref.MarketingEmailsEnabled,
-            pref.SmsNotificationsEnabled));
+            pref.MarketingEmailsEnabled));
     }
 }
 
@@ -59,8 +56,7 @@ public sealed record UpsertCustomerNotificationPreferenceCommand(
     bool ExpirationRemindersEnabled,
     bool DepositRefundsEnabled,
     bool DirectMessagesEnabled,
-    bool MarketingEmailsEnabled,
-    bool SmsNotificationsEnabled = true) : ICommand<CustomerNotificationPreferenceDto>;
+    bool MarketingEmailsEnabled) : ICommand<CustomerNotificationPreferenceDto>;
 
 internal sealed class UpsertCustomerNotificationPreferenceCommandHandler(ICustomerRepository customers)
     : ICommandHandler<UpsertCustomerNotificationPreferenceCommand, CustomerNotificationPreferenceDto>
@@ -86,7 +82,6 @@ internal sealed class UpsertCustomerNotificationPreferenceCommandHandler(ICustom
                 DepositRefundsEnabled = request.DepositRefundsEnabled,
                 DirectMessagesEnabled = request.DirectMessagesEnabled,
                 MarketingEmailsEnabled = request.MarketingEmailsEnabled,
-                SmsNotificationsEnabled = request.SmsNotificationsEnabled,
                 CreatedOnUtc = DateTime.UtcNow,
                 ModifiedOnUtc = DateTime.UtcNow
             };
@@ -99,7 +94,6 @@ internal sealed class UpsertCustomerNotificationPreferenceCommandHandler(ICustom
             pref.DepositRefundsEnabled = request.DepositRefundsEnabled;
             pref.DirectMessagesEnabled = request.DirectMessagesEnabled;
             pref.MarketingEmailsEnabled = request.MarketingEmailsEnabled;
-            pref.SmsNotificationsEnabled = request.SmsNotificationsEnabled;
             pref.ModifiedOnUtc = DateTime.UtcNow;
             await customers.UpdateCustomerNotificationPreferenceAsync(pref, cancellationToken);
         }
@@ -112,7 +106,6 @@ internal sealed class UpsertCustomerNotificationPreferenceCommandHandler(ICustom
             pref.ExpirationRemindersEnabled,
             pref.DepositRefundsEnabled,
             pref.DirectMessagesEnabled,
-            pref.MarketingEmailsEnabled,
-            pref.SmsNotificationsEnabled));
+            pref.MarketingEmailsEnabled));
     }
 }

@@ -28,14 +28,6 @@ export interface RegisterVendorResponse {
   email: string;
 }
 
-export interface RegisterCustomerResponse {
-  id: string;
-  email?: string | null;
-  fullName: string;
-  requiresPhoneOtp: boolean;
-  requiresEmailVerification: boolean;
-}
-
 export interface ChangePasswordPayload {
   email: string;
   currentPassword: string;
@@ -50,8 +42,6 @@ export interface ChangePasswordResponse {
 
 export interface ForgotPasswordRequest {
   email: string;
-  /** customer | vendor | admin — preserved on the email reset link */
-  portal?: "customer" | "vendor" | "admin";
 }
 
 export interface ForgotPasswordResponse {
@@ -78,13 +68,6 @@ export interface VerifyEmailResponse {
 export interface ResendVerificationResponse {
   success: boolean;
   message: string;
-}
-
-export interface PhoneOtpActionResponse {
-  success: boolean;
-  message: string;
-  isPhoneVerified: boolean;
-  phone?: string | null;
 }
 
 export const authApi = {
@@ -116,17 +99,12 @@ export const authApi = {
     });
   },
 
-  async registerCustomer(
-    email: string | null | undefined,
-    password: string,
-    fullName: string,
-    phone: string | null | undefined,
-  ): Promise<RegisterCustomerResponse> {
+  async registerCustomer(email: string, password: string, fullName: string, phone?: string): Promise<RegisterCustomerResponse> {
     return apiClient.post<RegisterCustomerResponse>('/customers/register', {
-      email: email?.trim() || null,
+      email,
       password,
       fullName,
-      phone: phone?.trim() || null,
+      phone: phone?.trim() || undefined,
     });
   },
 
@@ -134,45 +112,16 @@ export const authApi = {
     return apiClient.get<VerifyEmailResponse>(`/auth/verify-email?token=${encodeURIComponent(token)}`);
   },
 
-  async resendVerification(
-    email: string,
-    role?: "customer" | "vendor",
-  ): Promise<ResendVerificationResponse> {
-    return apiClient.post<ResendVerificationResponse>('/auth/resend-verification', { email, role });
+  async resendVerification(email: string): Promise<ResendVerificationResponse> {
+    return apiClient.post<ResendVerificationResponse>('/auth/resend-verification', { email });
   },
 
   async changePassword(payload: ChangePasswordPayload): Promise<ChangePasswordResponse> {
     return apiClient.post<ChangePasswordResponse>('/auth/change-password', payload);
   },
 
-  async forgotPassword(
-    email: string,
-    portal?: "customer" | "vendor" | "admin",
-  ): Promise<ForgotPasswordResponse> {
-    return apiClient.post<ForgotPasswordResponse>('/auth/forgot-password', { email, portal });
-  },
-
-  async sendForgotPasswordSmsOtp(
-    phone: string,
-    role: 'customer' | 'vendor' = 'customer',
-  ): Promise<PhoneOtpActionResponse> {
-    return apiClient.post<PhoneOtpActionResponse>('/auth/forgot-password/sms/send-otp', { phone, role });
-  },
-
-  async resetPasswordWithSmsOtp(
-    phone: string,
-    code: string,
-    newPassword: string,
-    confirmPassword: string,
-    role: 'customer' | 'vendor' = 'customer',
-  ): Promise<PhoneOtpActionResponse> {
-    return apiClient.post<PhoneOtpActionResponse>('/auth/forgot-password/sms/reset', {
-      phone,
-      code,
-      newPassword,
-      confirmPassword,
-      role,
-    });
+  async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
+    return apiClient.post<ForgotPasswordResponse>('/auth/forgot-password', { email });
   },
 
   async resetPassword(token: string, newPassword: string, confirmPassword: string): Promise<ResetPasswordResponse> {
@@ -181,14 +130,6 @@ export const authApi = {
       newPassword,
       confirmPassword,
     });
-  },
-
-  async sendPhoneOtp(phone: string, role: 'vendor' | 'customer'): Promise<PhoneOtpActionResponse> {
-    return apiClient.post<PhoneOtpActionResponse>('/auth/phone/send-otp', { phone, role });
-  },
-
-  async verifyPhoneOtp(phone: string, code: string, role: 'vendor' | 'customer'): Promise<PhoneOtpActionResponse> {
-    return apiClient.post<PhoneOtpActionResponse>('/auth/phone/verify-otp', { phone, code, role });
   },
 
   logout(): void {

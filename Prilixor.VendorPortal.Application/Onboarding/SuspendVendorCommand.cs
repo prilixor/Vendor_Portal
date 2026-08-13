@@ -26,7 +26,6 @@ internal sealed class SuspendVendorCommandHandler(
     IVendorOnboardingRepository repository,
     IEmailService emailService,
     IMediator mediator,
-    VendorSmsNotifier vendorSms,
     ILogger<SuspendVendorCommandHandler> logger)
     : ICommandHandler<SuspendVendorCommand, VendorDto>
 {
@@ -109,12 +108,6 @@ internal sealed class SuspendVendorCommandHandler(
                 logger.LogError(notificationEx, "Failed to create notification record for vendor {VendorId}", vendorId);
             }
         }
-
-        await vendorSms.TrySendAsync(
-            vendorId,
-            SmsTemplates.VendorAccountSuspended(request.Reason),
-            VendorSmsKind.AccountSuspended,
-            cancellationToken);
 
         return Result.Success(new VendorDto(
             vendor.Id.ToString(),

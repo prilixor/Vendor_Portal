@@ -7,17 +7,11 @@ import { Label } from "@/app/components/ui/label";
 import { authApi } from "@/app/services/authApi";
 import { toast } from "sonner";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
-import {
-  authPortalLoginPath,
-  resolveAuthPortalType,
-} from "@/app/helpers/portalHost";
 
 const VerifyEmail = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") || "";
-  const portalType = resolveAuthPortalType(searchParams.get("portal"));
-  const loginPath = authPortalLoginPath(portalType);
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState("Verifying your email...");
   const [email, setEmail] = useState(sessionStorage.getItem("pending_verification_email") || "");
@@ -55,10 +49,7 @@ const VerifyEmail = () => {
 
     setResendLoading(true);
     try {
-      await authApi.resendVerification(
-        value,
-        portalType === "customer" ? "customer" : portalType === "vendor" ? "vendor" : undefined,
-      );
+      await authApi.resendVerification(value);
       sessionStorage.setItem("pending_verification_email", value.toLowerCase());
       toast.success("Verification link has been resent.");
     } catch (error) {
@@ -70,7 +61,7 @@ const VerifyEmail = () => {
   };
 
   return (
-    <AuthLayout title="Email verification" subtitle="We’re checking your link." portalType={portalType}>
+    <AuthLayout title="Email verification" subtitle="We’re checking your link.">
       <div className="space-y-5">
         {status === "loading" && (
           <div className="flex items-center justify-center rounded-lg border bg-muted/30 py-10">
@@ -85,14 +76,7 @@ const VerifyEmail = () => {
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-5 text-center space-y-3 text-emerald-950">
             <CheckCircle2 className="mx-auto h-10 w-10" />
             <p className="text-sm">{message}</p>
-            {portalType === "vendor" && (
-              <p className="text-xs text-emerald-900/80">
-                Phone and email are verified. You can sign in to continue onboarding.
-              </p>
-            )}
-            <Button className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" onClick={() => navigate(loginPath)}>
-              Go to sign in
-            </Button>
+            <Button className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" onClick={() => navigate("/login")}>Go To Login</Button>
           </div>
         )}
 
@@ -113,7 +97,7 @@ const VerifyEmail = () => {
             </Button>
 
             <Button variant="outline" className="w-full h-11" asChild>
-              <Link to={loginPath}>Go To Login</Link>
+              <Link to="/login">Go To Login</Link>
             </Button>
           </div>
         )}
