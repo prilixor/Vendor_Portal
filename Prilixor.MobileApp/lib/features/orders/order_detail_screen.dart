@@ -958,8 +958,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
         Widget? icon;
         
         if (isDone && !isCurrent) {
-          dotColor = Colors.white; // Or dark grey in dark mode
-          icon = Icon(Icons.check, size: 14, color: Colors.black);
+          dotColor = colors.textPrimary;
+          icon = Icon(Icons.check, size: 14, color: colors.surface);
         } else if (isCurrent) {
           dotColor = Color(0xFF10B981); // Emerald Green
           icon = Container(width: 8, height: 8, decoration: BoxDecoration(color: colors.textPrimary, shape: BoxShape.circle));
@@ -1000,7 +1000,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                     Text(
                       steps[index],
                       style: TextStyle(
-                        color: isDone || isCurrent ? Colors.white : colors.textMuted,
+                        color: isDone || isCurrent ? colors.textPrimary : colors.textMuted,
                         fontSize: 16,
                       ),
                     ),
