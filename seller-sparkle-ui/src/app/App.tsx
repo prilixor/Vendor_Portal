@@ -57,6 +57,7 @@ import AdminLogin from "@/app/components/admin/AdminLogin";
 import SupportManagement from "@/app/components/admin/SupportManagement";
 import AdminCustomerChats from "@/app/components/admin/AdminCustomerChats";
 import AdminOrders from "@/app/components/admin/AdminOrders";
+import AdminExpirations from "@/app/components/admin/AdminExpirations";
 import AdminOrderDetail from "@/app/components/admin/AdminOrderDetail";
 import { AdminNotifications } from "@/app/components/admin/AdminNotifications";
 import AdminSettings from "@/app/components/admin/AdminSettings";
@@ -160,6 +161,7 @@ const App = () => (
               <Route path="customer-chats" element={<AdminCustomerChats />} />
               <Route path="orders" element={<AdminOrders />} />
               <Route path="orders/:orderId" element={<AdminOrderDetail />} />
+              <Route path="expirations" element={<AdminExpirations />} />
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="settings" element={<AdminSettings />} />
               <Route path="website-content" element={<WebsiteContentManagement />} />

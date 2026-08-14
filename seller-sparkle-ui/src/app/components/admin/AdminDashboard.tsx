@@ -6,7 +6,7 @@ import { Button } from "@/app/components/ui/button";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { adminApi, AdminAuditLogDto, VendorDto } from "@/app/services/adminApi";
-import { Building2, Clock, CheckCircle2, ScrollText, ArrowUpRight, Loader2 } from "lucide-react";
+import { Building2, Clock, CheckCircle2, ScrollText, ArrowUpRight, Loader2, TimerReset } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { safeFormatDistance } from "@/app/utils/dateUtils";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [auditLogs, setAuditLogs] = useState<AdminAuditLogDto[]>([]);
   const [vendors, setVendors] = useState<VendorDto[]>([]);
+  const [dueReturnsCount, setDueReturnsCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -25,12 +26,14 @@ const AdminDashboard = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [logsData, vendorsData] = await Promise.all([
+      const [logsData, vendorsData, expirationsData] = await Promise.all([
         adminApi.getAuditLogs().catch(() => []),
         adminApi.getVendors().catch(() => []),
+        adminApi.getAdminOrderExpirations(7).catch(() => []),
       ]);
       setAuditLogs(logsData);
       setVendors(vendorsData);
+      setDueReturnsCount(expirationsData.length);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load data.";
       toast.error(message);
@@ -56,8 +59,8 @@ const AdminDashboard = () => {
       <PageHeader title="Admin overview" description="Monitor platform health, vendor verification queue, and recent activity." />
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-pulse">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 animate-pulse">
+          {[1, 2, 3, 4, 5].map((i) => (
             <Card key={i} className="border-border/60 p-4">
               <div className="flex items-center gap-3">
                 <Skeleton className="h-8 w-8 rounded-lg" />
@@ -70,7 +73,7 @@ const AdminDashboard = () => {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard 
             label="Total vendors" 
             value={total} 
@@ -98,6 +101,13 @@ const AdminDashboard = () => {
             icon={ScrollText} 
             accent="info" 
             onClick={() => navigate("/admin/notifications?tab=logs")}
+          />
+          <StatCard
+            label="Due in 7 days"
+            value={dueReturnsCount}
+            icon={TimerReset}
+            accent="warning"
+            onClick={() => navigate("/admin/expirations")}
           />
         </div>
       )}
