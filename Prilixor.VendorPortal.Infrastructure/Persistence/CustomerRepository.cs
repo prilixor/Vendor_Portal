@@ -1027,7 +1027,7 @@ public sealed class CustomerRepository(
                 o.EndDate.Value >= fromDate &&
                 o.EndDate.Value <= toDate &&
                 o.OrderType.ToLower() != "buy" &&
-                (o.Status == "confirmed" || o.Status == "active" || o.Status == "in_transit"))
+                o.Status == "active")
             .OrderBy(o => o.EndDate)
             .ToListAsync(cancellationToken);
 
@@ -1061,7 +1061,7 @@ public sealed class CustomerRepository(
                 o.EndDate.Value >= fromDate &&
                 o.EndDate.Value <= toDate &&
                 o.OrderType.ToLower() != "buy" &&
-                (o.Status == "confirmed" || o.Status == "active" || o.Status == "in_transit"))
+                o.Status == "active")
             .OrderBy(o => o.EndDate)
             .ToListAsync(cancellationToken);
 
@@ -1082,7 +1082,7 @@ public sealed class CustomerRepository(
                 o.EndDate.Value >= fromDate &&
                 o.EndDate.Value <= toDate &&
                 o.OrderType.ToLower() != "buy" &&
-                (o.Status == "confirmed" || o.Status == "active" || o.Status == "in_transit"))
+                o.Status == "active")
             .OrderBy(o => o.EndDate)
             .ToListAsync(cancellationToken);
 
