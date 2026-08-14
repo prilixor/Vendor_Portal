@@ -66,8 +66,8 @@ class OnboardingStatusBanner extends StatelessWidget {
                   children: [
                     Text(
                       isVerified ? 'Verification complete' : 'Complete your onboarding',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.appColors.textPrimary,
                         fontWeight: FontWeight.w800,
                         fontSize: 15,
                       ),
@@ -76,7 +76,7 @@ class OnboardingStatusBanner extends StatelessWidget {
                     Text(
                       'Account · ${accountStatus.trim().isEmpty ? 'unknown' : accountStatus}',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.6),
+                        color: context.appColors.textSecondary,
                         fontSize: 12,
                       ),
                     ),
@@ -93,7 +93,7 @@ class OnboardingStatusBanner extends StatelessWidget {
             child: LinearProgressIndicator(
               value: isVerified ? 1 : progress,
               minHeight: 6,
-              backgroundColor: Colors.white.withValues(alpha: 0.08),
+              backgroundColor: context.appColors.border,
               color: isVerified ? const Color(0xFF34D399) : AppTheme.accent,
             ),
           ),
@@ -141,12 +141,12 @@ class _ChecklistChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: (done ? const Color(0xFF34D399) : Colors.white)
-            .withValues(alpha: done ? 0.14 : 0.06),
+        color: (done ? const Color(0xFF34D399) : context.appColors.textMuted)
+            .withValues(alpha: done ? 0.14 : 0.08),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: (done ? const Color(0xFF34D399) : Colors.white)
-              .withValues(alpha: done ? 0.35 : 0.1),
+          color: (done ? const Color(0xFF34D399) : context.appColors.border)
+              .withValues(alpha: done ? 0.35 : 1.0),
         ),
       ),
       child: Row(
@@ -155,13 +155,13 @@ class _ChecklistChip extends StatelessWidget {
           Icon(
             done ? Icons.check_circle : Icons.radio_button_unchecked,
             size: 14,
-            color: done ? const Color(0xFF34D399) : Colors.white38,
+            color: done ? const Color(0xFF34D399) : context.appColors.textMuted,
           ),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
-              color: done ? const Color(0xFF34D399) : Colors.white60,
+              color: done ? const Color(0xFF34D399) : context.appColors.textSecondary,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
@@ -279,7 +279,7 @@ class SavedBankAccountCard extends StatelessWidget {
                       Text(
                         'Saved bank account',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.55),
+                          color: context.appColors.textMuted,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.4,
@@ -288,8 +288,8 @@ class SavedBankAccountCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         bankName,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.appColors.textPrimary,
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
                         ),
@@ -298,7 +298,7 @@ class SavedBankAccountCard extends StatelessWidget {
                       Text(
                         accountHolderName,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.72),
+                          color: context.appColors.textSecondary,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -339,7 +339,7 @@ class _BankMetaChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.bg(context).withValues(alpha: 0.65),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -347,7 +347,7 @@ class _BankMetaChip extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.38),
+              color: context.appColors.textMuted,
               fontSize: 9,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
@@ -356,8 +356,8 @@ class _BankMetaChip extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             value,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.appColors.textPrimary,
               fontSize: 12,
               fontWeight: FontWeight.w700,
               fontFamily: 'monospace',
@@ -391,7 +391,7 @@ class OnboardingFormSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.card(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -417,8 +417,8 @@ class OnboardingFormSection extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.appColors.textPrimary,
                         fontWeight: FontWeight.w800,
                         fontSize: 16,
                       ),
@@ -428,7 +428,7 @@ class OnboardingFormSection extends StatelessWidget {
                       Text(
                         subtitle!,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.48),
+                          color: context.appColors.textMuted,
                           fontSize: 12,
                           height: 1.35,
                         ),
@@ -463,12 +463,12 @@ class OnboardingSubsectionTitle extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10, top: 4),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: Colors.white.withValues(alpha: 0.45)),
+          Icon(icon, size: 16, color: context.appColors.textMuted),
           const SizedBox(width: 8),
           Text(
             title,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.72),
+              color: context.appColors.textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.3,
@@ -510,7 +510,7 @@ class OnboardingHintBanner extends StatelessWidget {
             child: Text(
               message,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.72),
+                color: context.appColors.textSecondary,
                 fontSize: 12,
                 height: 1.35,
               ),
@@ -576,7 +576,7 @@ class OnboardingTextField extends StatelessWidget {
             _cleanLabel,
             required: required,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.72),
+              color: context.appColors.textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -591,47 +591,46 @@ class OnboardingTextField extends StatelessWidget {
             maxLength: maxLength,
             inputFormatters: inputFormatters,
             textCapitalization: textCapitalization,
-            style: const TextStyle(color: Colors.white, fontSize: 15),
+            style: TextStyle(color: context.appColors.textPrimary, fontSize: 15),
             decoration: InputDecoration(
               hintText: hint,
               counterText: '',
-              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.28)),
+              hintStyle: TextStyle(color: context.appColors.textMuted),
               filled: true,
               fillColor: AppTheme.bg(context),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              suffixIcon: suffix,
               prefixText: prefixText,
-              prefixStyle: const TextStyle(
-                color: Colors.white70,
+              prefixStyle: TextStyle(
+                color: context.appColors.textPrimary,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
-              suffixIcon: suffix,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                borderSide: BorderSide(color: context.appColors.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              disabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                borderSide: BorderSide(color: context.appColors.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppTheme.accent, width: 1.4),
+                borderSide: const BorderSide(color: AppTheme.accent, width: 1.5),
+              ),
+              disabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: context.appColors.border.withValues(alpha: 0.5)),
               ),
             ),
           ),
           if (helperText != null) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
               helperText!,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.42),
+                color: context.appColors.textMuted,
                 fontSize: 11,
-                height: 1.3,
               ),
             ),
           ],

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../core/utils/media_url.dart';
+import '../../core/theme.dart';
 
 /// Catalog product image with React-like empty/error placeholders.
 /// Fixes Flutter web relative `/api/...` URLs and prefers HTML <img> on web
@@ -64,6 +65,7 @@ class _CatalogImagePlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return LayoutBuilder(
       builder: (context, constraints) {
         final h = constraints.maxHeight;
@@ -75,7 +77,7 @@ class _CatalogImagePlaceholder extends StatelessWidget {
         return Container(
           width: double.infinity,
           height: double.infinity,
-          color: const Color(0xFF334155),
+          color: colors.surfaceElevated,
           alignment: Alignment.center,
           padding: EdgeInsets.symmetric(
             horizontal: tight ? 6 : 10,
@@ -84,7 +86,7 @@ class _CatalogImagePlaceholder extends StatelessWidget {
           child: iconOnly
               ? Icon(
                   Icons.image_not_supported_outlined,
-                  color: Colors.white.withValues(alpha: 0.35),
+                  color: colors.textMuted.withValues(alpha: 0.6),
                   size: h.isFinite ? (h * 0.28).clamp(18.0, 28.0) : 22,
                 )
               : FittedBox(
@@ -97,7 +99,7 @@ class _CatalogImagePlaceholder extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.image_not_supported_outlined,
-                          color: Colors.white.withValues(alpha: 0.35),
+                          color: colors.textMuted.withValues(alpha: 0.6),
                           size: tight ? 22 : 28,
                         ),
                         SizedBox(height: tight ? 4 : 8),
@@ -107,7 +109,7 @@ class _CatalogImagePlaceholder extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.7),
+                            color: colors.textPrimary,
                             fontSize: tight ? 10 : 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -119,7 +121,7 @@ class _CatalogImagePlaceholder extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.45),
+                            color: colors.textMuted,
                             fontSize: tight ? 9 : 10,
                           ),
                         ),

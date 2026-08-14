@@ -189,7 +189,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
         decoration: BoxDecoration(
           color: AppTheme.card(context),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          border: Border.all(color: context.appColors.border),
         ),
         child: SafeArea(
           top: false,
@@ -204,7 +204,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                     width: 36,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
+                      color: context.appColors.border,
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
@@ -216,10 +216,10 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Dispatch details',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: context.appColors.textPrimary,
                               fontWeight: FontWeight.w800,
                               fontSize: 18,
                             ),
@@ -228,7 +228,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                           Text(
                             widget.listingTitle,
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.5),
+                              color: context.appColors.textSecondary,
                               fontSize: 12,
                             ),
                           ),
@@ -237,7 +237,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                     ),
                     IconButton(
                       onPressed: () => Navigator.pop(context),
-                      icon: Icon(Icons.close, color: Colors.white.withValues(alpha: 0.6)),
+                      icon: Icon(Icons.close, color: context.appColors.textMuted),
                     ),
                   ],
                 ),
@@ -246,7 +246,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                   Text(
                     'These serial numbers are already assigned to this item. Review and confirm dispatch.',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.55),
+                      color: context.appColors.textSecondary,
                       fontSize: 13,
                       height: 1.4,
                     ),
@@ -256,7 +256,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                     decoration: BoxDecoration(
                       color: AppTheme.bg(context),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      border: Border.all(color: context.appColors.border),
                     ),
                     child: Column(
                       children: [
@@ -264,7 +264,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                           if (i > 0)
                             Divider(
                               height: 1,
-                              color: Colors.white.withValues(alpha: 0.06),
+                              color: context.appColors.border,
                             ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -289,8 +289,8 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                                 Expanded(
                                   child: Text(
                                     preassigned[i],
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                    style: TextStyle(
+                                      color: context.appColors.textPrimary,
                                       fontWeight: FontWeight.w700,
                                       fontFamily: 'monospace',
                                     ),
@@ -314,7 +314,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                     '${widget.quantity == 1 ? 'item' : 'items'} being dispatched. '
                     'Optional — pick from this product\'s stock or type new ones.',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.55),
+                      color: context.appColors.textSecondary,
                       fontSize: 13,
                       height: 1.4,
                     ),
@@ -346,7 +346,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                         child: Text(
                           'No pre-registered stock for this product. You can type a serial or batch number, or leave blank.',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.45),
+                            color: context.appColors.textMuted,
                             fontSize: 12,
                           ),
                         ),
@@ -363,7 +363,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                             Text(
                               'Item ${index + 1} serial number (optional)',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.55),
+                                color: context.appColors.textSecondary,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -371,7 +371,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                             const SizedBox(height: 6),
                             TextField(
                               controller: _controllers[index],
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(color: context.appColors.textPrimary),
                               onChanged: (_) => setState(() {
                                 if (_availableAssets.isNotEmpty) {
                                   _openDropdowns[index] = true;
@@ -388,26 +388,26 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                                     ? 'Enter or select serial number…'
                                     : 'Enter serial or batch number (optional)…',
                                 hintStyle: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.28),
+                                  color: context.appColors.textMuted,
                                 ),
                                 filled: true,
                                 fillColor: AppTheme.bg(context),
                                 suffixIcon: Icon(
                                   Icons.inventory_2_outlined,
                                   color: _availableAssets.isEmpty
-                                      ? Colors.white.withValues(alpha: 0.2)
+                                      ? context.appColors.textMuted
                                       : AppTheme.accent,
                                 ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                   borderSide: BorderSide(
-                                    color: Colors.white.withValues(alpha: 0.08),
+                                    color: context.appColors.border,
                                   ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                   borderSide: BorderSide(
-                                    color: Colors.white.withValues(alpha: 0.08),
+                                    color: context.appColors.border,
                                   ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
@@ -424,7 +424,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                                   color: AppTheme.bg(context),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.1),
+                                    color: context.appColors.border,
                                   ),
                                 ),
                                 child: ListView.separated(
@@ -433,7 +433,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                                   itemCount: matching.length,
                                   separatorBuilder: (context, i) => Divider(
                                     height: 1,
-                                    color: Colors.white.withValues(alpha: 0.06),
+                                    color: context.appColors.border,
                                   ),
                                   itemBuilder: (context, i) {
                                     final asset = matching[i];
@@ -441,8 +441,8 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                                       dense: true,
                                       title: Text(
                                         asset.assetTag,
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                        style: TextStyle(
+                                          color: context.appColors.textPrimary,
                                           fontWeight: FontWeight.w600,
                                           fontSize: 14,
                                         ),
@@ -451,7 +451,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                                           ? Text(
                                               asset.condition!,
                                               style: TextStyle(
-                                                color: Colors.white.withValues(alpha: 0.45),
+                                                color: context.appColors.textMuted,
                                                 fontSize: 11,
                                               ),
                                             )
@@ -470,7 +470,7 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                                 child: Text(
                                   'All remaining serial numbers are already assigned to other items.',
                                   style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.45),
+                                    color: context.appColors.textMuted,
                                     fontSize: 11,
                                   ),
                                 ),
@@ -489,8 +489,8 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size.fromHeight(48),
-                          foregroundColor: Colors.white70,
-                          side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+                          foregroundColor: context.appColors.textSecondary,
+                          side: BorderSide(color: context.appColors.border),
                         ),
                         child: const Text('Cancel'),
                       ),

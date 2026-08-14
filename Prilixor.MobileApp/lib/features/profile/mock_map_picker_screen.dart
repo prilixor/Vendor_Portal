@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../core/theme.dart';
 import '../../core/utils/debouncer.dart';
 import '../../core/utils/device_location.dart';
 import '../../core/utils/place_search.dart';
@@ -243,15 +244,16 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: colors.background,
         elevation: 0,
-        title: const Text('Pick Location', style: TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('Pick Location', style: TextStyle(color: colors.textPrimary)),
+        iconTheme: IconThemeData(color: colors.textPrimary),
         actions: [
           IconButton(
             tooltip: 'Use my location',
@@ -302,12 +304,12 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Material(
-                  color: const Color(0xFF1E293B),
+                  color: colors.surface,
                   elevation: 6,
                   borderRadius: BorderRadius.circular(12),
                   child: TextField(
                     controller: _searchController,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: colors.textPrimary),
                     textInputAction: TextInputAction.search,
                     onChanged: _onSearchChanged,
                     onSubmitted: (value) {
@@ -317,7 +319,7 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
                     },
                     decoration: InputDecoration(
                       hintText: 'Search area, landmark, or pincode…',
-                      hintStyle: const TextStyle(color: Colors.white54),
+                      hintStyle: TextStyle(color: colors.textMuted),
                       prefixIcon: const Icon(Icons.search, color: _accent),
                       suffixIcon: _isSearching
                           ? const Padding(
@@ -333,7 +335,7 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
                             )
                           : (_searchController.text.isNotEmpty
                               ? IconButton(
-                                  icon: const Icon(Icons.close, color: Colors.white54, size: 18),
+                                  icon: Icon(Icons.close, color: colors.textMuted, size: 18),
                                   onPressed: () {
                                     _searchController.clear();
                                     setState(() {
@@ -357,7 +359,7 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
                 if (_results.isNotEmpty || _searchError != null) ...[
                   const SizedBox(height: 8),
                   Material(
-                    color: const Color(0xFF1E293B),
+                    color: colors.surface,
                     elevation: 6,
                     borderRadius: BorderRadius.circular(12),
                     child: ConstrainedBox(
@@ -367,9 +369,9 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
                               shrinkWrap: true,
                               padding: EdgeInsets.zero,
                               itemCount: _results.length,
-                              separatorBuilder: (_, _) => const Divider(
+                              separatorBuilder: (_, _) => Divider(
                                 height: 1,
-                                color: Colors.white10,
+                                color: colors.border,
                               ),
                               itemBuilder: (context, index) {
                                 final result = _results[index];
@@ -380,7 +382,7 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
                                     result.label,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                                    style: TextStyle(color: colors.textPrimary, fontSize: 13),
                                   ),
                                   onTap: () => _selectResult(result),
                                 );
@@ -390,7 +392,7 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
                               padding: const EdgeInsets.all(14),
                               child: Text(
                                 _searchError!,
-                                style: const TextStyle(color: Colors.white54, fontSize: 13),
+                                style: TextStyle(color: colors.textMuted, fontSize: 13),
                               ),
                             ),
                     ),
@@ -408,7 +410,7 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Material(
-                  color: const Color(0xFF1E293B).withValues(alpha: 0.96),
+                  color: colors.surface.withValues(alpha: 0.96),
                   borderRadius: BorderRadius.circular(12),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -427,24 +429,24 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
                               Text(
                                 'Move the map or tap to set pin',
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.55),
+                                  color: colors.textMuted,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               if (_isResolving)
-                                const Text(
+                                Text(
                                   'Finding address…',
-                                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                                  style: TextStyle(color: colors.textSecondary, fontSize: 13),
                                 )
                               else if (_previewHeadline != null && _previewHeadline!.isNotEmpty)
                                 Text(
                                   _previewHeadline!,
                                   maxLines: 3,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: colors.textPrimary,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                     height: 1.3,
@@ -453,7 +455,7 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
                               else
                                 Text(
                                   '${_center.latitude.toStringAsFixed(5)}, ${_center.longitude.toStringAsFixed(5)}',
-                                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                  style: TextStyle(color: colors.textSecondary, fontSize: 13),
                                 ),
                             ],
                           ),

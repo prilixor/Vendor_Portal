@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/providers/medical_provider.dart';
 import '../../core/providers/product_provider.dart';
+import '../../core/theme.dart';
 import '../dashboard/customer_dashboard.dart';
 
 class DoctorPublicScreen extends StatefulWidget {
@@ -61,12 +62,14 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
   @override
   Widget build(BuildContext context) {
     final doctor = Provider.of<MedicalProvider>(context).lastLookup;
+    final colors = context.appColors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('Doctor reference'),
-        backgroundColor: const Color(0xFF0F172A),
+        title: Text('Doctor reference', style: TextStyle(color: colors.textPrimary)),
+        backgroundColor: colors.background,
+        iconTheme: IconThemeData(color: colors.textPrimary),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
@@ -87,17 +90,17 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: colors.surface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white12),
+                      border: Border.all(color: colors.border),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           doctor.fullName,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: colors.textPrimary,
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
                           ),
@@ -106,7 +109,7 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
                           const SizedBox(height: 4),
                           Text(
                             doctor.specialization!,
-                            style: const TextStyle(color: Colors.white54),
+                            style: TextStyle(color: colors.textSecondary),
                           ),
                         ],
                         const SizedBox(height: 14),
@@ -123,23 +126,23 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
                             ),
                             IconButton(
                               onPressed: () => _copyCode(doctor.uniqueCode),
-                              icon: const Icon(Icons.copy, color: Colors.white70),
+                              icon: Icon(Icons.copy, color: colors.textSecondary),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
-                        const Text(
+                        Text(
                           'Use this Unique ID at checkout as an optional doctor reference.',
-                          style: TextStyle(color: Colors.white38, fontSize: 12),
+                          style: TextStyle(color: colors.textMuted, fontSize: 12),
                         ),
                       ],
                     ),
                   ),
                   if (doctor.hospitals.isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       'Affiliated hospitals',
-                      style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
+                      style: TextStyle(color: colors.textSecondary, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 8),
                     ...doctor.hospitals.map(
@@ -148,9 +151,9 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B),
+                          color: colors.surface,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white12),
+                          border: Border.all(color: colors.border),
                         ),
                         child: Text(
                           [
@@ -158,7 +161,7 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
                             if ((h.city ?? '').isNotEmpty) h.city!,
                             if ((h.state ?? '').isNotEmpty) h.state!,
                           ].where((s) => s.trim().isNotEmpty).join(' · '),
-                          style: const TextStyle(color: Colors.white70),
+                          style: TextStyle(color: colors.textPrimary),
                         ),
                       ),
                     ),

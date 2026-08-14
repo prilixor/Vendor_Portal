@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../features/auth/login_screen.dart';
 
 /// Polished empty state for guest users or expired sessions (Orders, Alerts, Profile, etc.).
@@ -77,6 +78,8 @@ class GuestSignInPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -86,9 +89,9 @@ class GuestSignInPrompt extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
+              color: colors.surface,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              border: Border.all(color: colors.border),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.25),
@@ -114,8 +117,8 @@ class GuestSignInPrompt extends StatelessWidget {
                 Text(
                   title,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: colors.textPrimary,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     height: 1.25,
@@ -125,8 +128,8 @@ class GuestSignInPrompt extends StatelessWidget {
                 Text(
                   message,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white60,
+                  style: TextStyle(
+                    color: colors.textSecondary,
                     fontSize: 14,
                     height: 1.45,
                   ),

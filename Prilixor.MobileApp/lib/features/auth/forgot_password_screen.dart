@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/theme.dart';
 import '../../shared/widgets/required_field_ux.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -52,13 +53,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<AuthProvider>(context);
+    final colors = context.appColors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: colors.textPrimary),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -78,22 +80,22 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-              const Text(
+              Text(
                 'Forgot Password?',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: colors.textPrimary),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Enter your email and we will send you a link to reset your password.',
-                style: TextStyle(color: Colors.white60, fontSize: 16),
+                style: TextStyle(color: colors.textSecondary, fontSize: 16),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
               const RequiredFieldsNote(),
               TextField(
                 controller: _emailController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colors.textPrimary),
                 keyboardType: TextInputType.emailAddress,
                 onChanged: (_) {
                   if (_emailError != null) setState(() => _emailError = null);

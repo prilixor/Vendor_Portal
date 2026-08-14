@@ -238,7 +238,7 @@ class _StateCityPickerFieldsState extends State<StateCityPickerFields> {
                 )
               : Icon(
                   Icons.expand_more_rounded,
-                  color: disabled ? Colors.white24 : AppTheme.accent,
+                  color: disabled ? context.appColors.textMuted.withValues(alpha: 0.4) : AppTheme.accent,
                 ),
         ),
       ),
@@ -326,7 +326,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white24,
+                color: context.appColors.border,
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
@@ -337,8 +337,8 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                   Expanded(
                     child: Text(
                       widget.title,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.appColors.textPrimary,
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                       ),
@@ -346,7 +346,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: Colors.white54),
+                    icon: Icon(Icons.close, color: context.appColors.textMuted),
                   ),
                 ],
               ),
@@ -354,10 +354,10 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: TextField(
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: context.appColors.textPrimary),
                 decoration: InputDecoration(
                   hintText: 'Search…',
-                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.35)),
+                  hintStyle: TextStyle(color: context.appColors.textMuted),
                   prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.accent),
                   filled: true,
                   fillColor: AppTheme.bg(context),
@@ -375,7 +375,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                   ? Center(
                       child: Text(
                         'No matches',
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                        style: TextStyle(color: context.appColors.textMuted),
                       ),
                     )
                   : ListView.separated(
@@ -383,15 +383,15 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                       itemCount: filtered.length,
                       separatorBuilder: (context, index) => Divider(
                         height: 1,
-                        color: Colors.white.withValues(alpha: 0.06),
+                        color: context.appColors.border,
                       ),
                       itemBuilder: (context, index) {
                         final item = filtered[index];
                         return ListTile(
                           title: Text(
                             item.label,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: context.appColors.textPrimary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),

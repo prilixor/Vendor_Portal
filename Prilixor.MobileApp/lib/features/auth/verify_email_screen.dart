@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/theme.dart';
 import 'login_screen.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
@@ -80,11 +81,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final colors = context.appColors;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('Verify email'),
-        backgroundColor: const Color(0xFF0F172A),
+        title: Text('Verify email', style: TextStyle(color: colors.textPrimary)),
+        backgroundColor: colors.background,
+        iconTheme: IconThemeData(color: colors.textPrimary),
+        elevation: 0,
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -130,20 +135,20 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           ],
           if (_success != true) ...[
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'Didn’t get the email? Enter your address to resend.',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: colors.textSecondary),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: colors.textPrimary),
               decoration: InputDecoration(
                 labelText: 'Email',
-                labelStyle: const TextStyle(color: Colors.white54),
+                labelStyle: TextStyle(color: colors.textSecondary),
                 filled: true,
-                fillColor: const Color(0xFF1E293B),
+                fillColor: colors.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,

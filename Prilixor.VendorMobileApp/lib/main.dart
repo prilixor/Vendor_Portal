@@ -78,9 +78,9 @@ class PrilixorVendorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'BlinksMed Vendor',
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark,
+      themeMode: ThemeMode.system,
       home: const AuthGate(),
       debugShowCheckedModeBanner: false,
       builder: (context, child) => OfflineAwareAppShell(child: child),

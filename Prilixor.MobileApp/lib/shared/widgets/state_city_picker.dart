@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/providers/location_provider.dart';
+import '../../core/theme.dart';
 import '../../shared/widgets/required_field_ux.dart';
 
 /// State → City dependent pickers (same API as Vendor Web onboarding).
@@ -62,7 +63,7 @@ class _StateCityPickerFieldsState extends State<StateCityPickerFields> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: context.appColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -92,7 +93,7 @@ class _StateCityPickerFieldsState extends State<StateCityPickerFields> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: context.appColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -122,14 +123,14 @@ class _StateCityPickerFieldsState extends State<StateCityPickerFields> {
         child: TextFormField(
           controller: controller,
           enabled: enabled,
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: context.appColors.textPrimary),
           decoration: requiredInputDecoration(
             context,
             label: label,
             required: true,
             hintText: hint,
             errorText: errorText,
-            fillColor: Colors.white10,
+            fillColor: context.appColors.background,
             suffixIcon: suffix,
           ),
         ),
@@ -199,7 +200,7 @@ class _StateCityPickerFieldsState extends State<StateCityPickerFields> {
                     )
                   : Icon(
                       Icons.expand_more_rounded,
-                      color: _selectedStateIso2 == null ? Colors.white24 : const Color(0xFF6C63FF),
+                      color: _selectedStateIso2 == null ? context.appColors.textMuted : const Color(0xFF6C63FF),
                     ),
             ),
           ],
@@ -229,6 +230,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final filtered = widget.items
         .where((item) => item.label.toLowerCase().contains(_query.toLowerCase()))
         .toList();
@@ -243,19 +245,19 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
                 widget.title,
-                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: TextField(
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colors.textPrimary),
                 decoration: InputDecoration(
                   hintText: 'Search…',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                  hintStyle: TextStyle(color: colors.textMuted),
+                  prefixIcon: Icon(Icons.search, color: colors.textMuted),
                   filled: true,
-                  fillColor: Colors.white10,
+                  fillColor: colors.background,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide.none,
@@ -271,7 +273,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                 itemBuilder: (context, index) {
                   final item = filtered[index];
                   return ListTile(
-                    title: Text(item.label, style: const TextStyle(color: Colors.white)),
+                    title: Text(item.label, style: TextStyle(color: colors.textPrimary)),
                     onTap: () {
                       widget.onSelected(item.value, item.label);
                       Navigator.pop(context);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/providers/profile_provider.dart';
+import '../../core/theme.dart';
 import '../../shared/widgets/required_field_ux.dart';
 
 class UpdatePasswordScreen extends StatefulWidget {
@@ -83,14 +84,15 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final isLoading = Provider.of<AuthProvider>(context).isLoading;
+    final colors = context.appColors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('Update Password', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0F172A),
+        title: Text('Update Password', style: TextStyle(color: colors.textPrimary)),
+        backgroundColor: colors.background,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: colors.textPrimary),
       ),
       body: SafeArea(
         child: Padding(
@@ -101,7 +103,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
               const RequiredFieldsNote(),
               TextField(
                 controller: _currentPasswordController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colors.textPrimary),
                 obscureText: _obscureCurrent,
                 onChanged: (_) {
                   if (_currentError != null) setState(() => _currentError = null);
@@ -118,7 +120,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                     onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
                     icon: Icon(
                       _obscureCurrent ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: Colors.white54,
+                      color: colors.textMuted,
                     ),
                   ),
                 ),
@@ -126,7 +128,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _newPasswordController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colors.textPrimary),
                 obscureText: _obscureNew,
                 onChanged: (_) {
                   if (_newError != null) setState(() => _newError = null);
@@ -143,7 +145,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                     onPressed: () => setState(() => _obscureNew = !_obscureNew),
                     icon: Icon(
                       _obscureNew ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: Colors.white54,
+                      color: colors.textMuted,
                     ),
                   ),
                 ),
@@ -151,7 +153,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _confirmPasswordController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colors.textPrimary),
                 obscureText: _obscureConfirm,
                 onChanged: (_) {
                   if (_confirmError != null) setState(() => _confirmError = null);
@@ -168,7 +170,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                     onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                     icon: Icon(
                       _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: Colors.white54,
+                      color: colors.textMuted,
                     ),
                   ),
                 ),

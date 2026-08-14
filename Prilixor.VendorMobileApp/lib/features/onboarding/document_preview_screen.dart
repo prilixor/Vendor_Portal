@@ -186,14 +186,14 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 48, color: Colors.white.withValues(alpha: 0.35)),
+            Icon(Icons.error_outline, size: 48, color: context.appColors.textMuted),
             const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+            Text(message, textAlign: TextAlign.center, style: TextStyle(color: context.appColors.textPrimary)),
             const SizedBox(height: 6),
             Text(
               fileName,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
+              style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
@@ -258,13 +258,13 @@ class _FilePreviewFallback extends StatelessWidget {
             Text(
               document.displayFileName,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+              style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(
               document.isPdfFile ? pdfOpenHint : 'Tap below to open this file.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 13),
+              style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(

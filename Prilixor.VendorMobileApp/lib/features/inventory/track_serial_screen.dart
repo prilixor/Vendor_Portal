@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
+import '../../core/theme.dart';
 
 class TrackSerialScreen extends StatefulWidget {
   const TrackSerialScreen({super.key});
@@ -56,25 +57,32 @@ class _TrackSerialScreenState extends State<TrackSerialScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text(
+          Text(
             'Look up a serial or batch number across your inventory.',
-            style: TextStyle(color: Colors.white54, fontSize: 13),
+            style: TextStyle(color: context.appColors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: _tagController,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: context.appColors.textPrimary),
             textInputAction: TextInputAction.search,
             onSubmitted: (_) => _track(),
             decoration: InputDecoration(
               labelText: 'Serial / batch tag',
-              labelStyle: const TextStyle(color: Colors.white54),
+              labelStyle: TextStyle(color: context.appColors.textMuted),
               filled: true,
-              fillColor: const Color(0xFF1E293B),
-              border: const OutlineInputBorder(borderSide: BorderSide.none),
+              fillColor: AppTheme.card(context),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: context.appColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: context.appColors.border),
+              ),
               suffixIcon: IconButton(
                 onPressed: _loading ? null : _track,
-                icon: const Icon(Icons.search, color: Color(0xFF6C63FF)),
+                icon: const Icon(Icons.search, color: AppTheme.accent),
               ),
             ),
           ),
@@ -83,7 +91,7 @@ class _TrackSerialScreenState extends State<TrackSerialScreen> {
             const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
+                child: CircularProgressIndicator(color: AppTheme.accent),
               ),
             )
           else if (_error != null)
@@ -114,17 +122,17 @@ class _TrackedAssetCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: AppTheme.card(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             asset.assetTag,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.appColors.textPrimary,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -163,12 +171,12 @@ class _Row extends StatelessWidget {
         children: [
           SizedBox(
             width: 90,
-            child: Text(label, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+            child: Text(label, style: TextStyle(color: context.appColors.textSecondary, fontSize: 13)),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w600),
             ),
           ),
         ],
