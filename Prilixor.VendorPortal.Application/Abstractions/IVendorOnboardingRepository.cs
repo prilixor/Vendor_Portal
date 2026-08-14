@@ -127,6 +127,7 @@ public interface IVendorOnboardingRepository
 
     Task<AdminUser?> GetAdminUserByIdAsync(Guid adminUserId, CancellationToken cancellationToken);
     Task<AdminUser?> GetAdminUserByEmailAsync(string email, CancellationToken cancellationToken);
+    Task<AdminUser?> GetAdminUserByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
     Task AddAdminUserAsync(AdminUser adminUser, CancellationToken cancellationToken);
     Task UpdateAdminUserAsync(AdminUser adminUser, CancellationToken cancellationToken);
     Task<List<AdminUser>> GetAdminUsersAsync(CancellationToken cancellationToken);

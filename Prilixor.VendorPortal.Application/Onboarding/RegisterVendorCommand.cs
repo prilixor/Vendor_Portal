@@ -68,6 +68,7 @@ internal sealed class RegisterVendorCommandHandler(
         {
             Email = request.Email.Trim().ToLowerInvariant(),
             SupportPhone = request.SupportPhone,
+            PhoneVerifiedAt = null,
             PasswordHash = passwordHasherService.HashPassword(request.Password),
             IsEmailVerified = false,
             EmailVerificationToken = VerificationTokenGenerator.GenerateSecureToken(),
@@ -102,7 +103,8 @@ internal sealed class RegisterVendorCommandHandler(
         try
         {
             var frontendUrl = configuration["FrontendUrl"] ?? "https://blinksmed.com";
-            var verificationLink = $"{frontendUrl}/verify-email?token={Uri.EscapeDataString(vendor.EmailVerificationToken ?? string.Empty)}";
+            var verificationLink =
+                $"{frontendUrl}/verify-email?token={Uri.EscapeDataString(vendor.EmailVerificationToken ?? string.Empty)}&portal=vendor";
             var emailBody = EmailTemplates.VendorEmailVerificationRequested(vendor.Email, verificationLink);
             await emailService.SendEmailAsync(vendor.Email, "Verify Your Email Address", emailBody, cancellationToken);
         }

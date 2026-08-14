@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Role, User } from "@/app/models";
 import { authApi } from "@/app/services/authApi";
-import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import {
   ADMIN_USER_KEY,
   PORTAL_USER_KEY,
@@ -19,7 +18,18 @@ interface AuthContextValue {
   isHydrating: boolean;
   login: (email: string, password: string, role: Role) => Promise<void>;
   register: (email: string, password: string, phone: string) => Promise<{ id: string; email: string }>;
-  registerCustomer: (email: string, password: string, fullName: string, phone?: string) => Promise<{ id: string; email: string; fullName: string }>;
+  registerCustomer: (
+    email: string | null | undefined,
+    password: string,
+    fullName: string,
+    phone: string | null | undefined,
+  ) => Promise<{
+    id: string;
+    email?: string | null;
+    fullName: string;
+    requiresPhoneOtp: boolean;
+    requiresEmailVerification: boolean;
+  }>;
   logout: () => void;
   switchRole: (role: Role) => void;
   hasPermission: (permission: string) => boolean;
@@ -163,21 +173,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const register = async (email: string, password: string, phone: string) => {
+    // Register + phone OTP are anonymous. A leftover portal JWT makes send/verify-otp
+    // treat the new phone as a conflict with the previous vendor session.
+    clearImpersonationSession();
+    clearPortalSession();
+    setUser(null);
+
     const result = await authApi.registerVendor(email, password, phone);
-    try {
-      await vendorOnboardingApi.upsertVendorNotificationPreference(result.id, {
-        vendorId: result.id,
-        emailNotificationsEnabled: true,
-        pushNotificationsEnabled: false,
-        newOrderNotifications: true,
-      });
-    } catch (error) {
-      console.error("Failed to set notification preferences:", error);
-    }
+    // Prefs require auth; set them after the vendor logs in / verifies email.
     return result;
   };
 
-  const registerCustomer = async (email: string, password: string, fullName: string, phone?: string) => {
+  const registerCustomer = async (
+    email: string | null | undefined,
+    password: string,
+    fullName: string,
+    phone: string | null | undefined,
+  ) => {
+    clearImpersonationSession();
+    clearPortalSession();
+    setUser(null);
     return authApi.registerCustomer(email, password, fullName, phone);
   };
 

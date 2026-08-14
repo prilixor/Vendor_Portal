@@ -14,7 +14,7 @@ const AdminLogin = () => {
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({});
 
   const validate = () => {
     const e: typeof errors = {};
@@ -28,6 +28,7 @@ const AdminLogin = () => {
     ev.preventDefault();
     if (!validate()) return;
     setLoading(true);
+    setErrors((prev) => ({ ...prev, form: undefined }));
     try {
       const response = await apiClient.post<{
         token: string;
@@ -73,7 +74,9 @@ const AdminLogin = () => {
         window.location.href = "/admin";
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Sign in failed. Please try again.";
+      const message =
+        (error instanceof Error ? error.message : "") || "Invalid email or password.";
+      setErrors((prev) => ({ ...prev, form: message }));
       toast.error(message);
     } finally {
       setLoading(false);
@@ -103,7 +106,7 @@ const AdminLogin = () => {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password" required>Password</Label>
-            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
+            <Link to="/forgot-password?portal=admin" className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
           </div>
           <div className="relative">
             <Input
@@ -126,6 +129,12 @@ const AdminLogin = () => {
           </div>
           {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
         </div>
+
+        {errors.form && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {errors.form}
+          </div>
+        )}
 
         <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>
           {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in…</> : "Sign in as Admin"}

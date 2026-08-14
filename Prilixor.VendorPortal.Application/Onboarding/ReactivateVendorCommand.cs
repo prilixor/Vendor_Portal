@@ -26,6 +26,7 @@ internal sealed class ReactivateVendorCommandHandler(
     IVendorOnboardingRepository repository,
     IEmailService emailService,
     IMediator mediator,
+    VendorSmsNotifier vendorSms,
     ILogger<ReactivateVendorCommandHandler> logger)
     : ICommandHandler<ReactivateVendorCommand, VendorDto>
 {
@@ -109,6 +110,12 @@ internal sealed class ReactivateVendorCommandHandler(
                 logger.LogError(notificationEx, "Failed to create notification record for vendor {VendorId}", vendorId);
             }
         }
+
+        await vendorSms.TrySendAsync(
+            vendorId,
+            SmsTemplates.VendorAccountReactivated(),
+            VendorSmsKind.AccountReactivated,
+            cancellationToken);
 
         return Result.Success(new VendorDto(
             vendor.Id.ToString(),

@@ -84,6 +84,7 @@ internal sealed class UpsertVendorProfileCommandHandler(IVendorOnboardingReposit
             }
 
             vendor.SupportPhone = normalizedPhone;
+            vendor.PhoneVerifiedAt = null;
             await repository.UpdateVendorAsync(vendor, cancellationToken);
         }
 
@@ -139,7 +140,7 @@ internal sealed class UpsertVendorProfileCommandHandler(IVendorOnboardingReposit
             profile.VendorId.ToString(),
             profile.BusinessName,
             profile.OwnerName,
-            profile.SupportPhone,
+            vendor.SupportPhone,
             profile.GstNumber,
             profile.AddressLine1,
             profile.AddressLine2,
@@ -148,6 +149,7 @@ internal sealed class UpsertVendorProfileCommandHandler(IVendorOnboardingReposit
             profile.PostalCode,
             profile.Latitude,
             profile.Longitude,
-            profile.OnboardingCompleted));
+            profile.OnboardingCompleted,
+            vendor.PhoneVerifiedAt.HasValue));
     }
 }

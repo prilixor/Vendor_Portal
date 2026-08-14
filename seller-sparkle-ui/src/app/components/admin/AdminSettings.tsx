@@ -11,6 +11,11 @@ import { adminApi } from "@/app/services/adminApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { toast } from "sonner";
 import { Eye, EyeOff, KeyRound, Loader2, Save } from "lucide-react";
+import {
+  applyPasswordPairLiveErrors,
+  passwordsMatch,
+} from "@/app/helpers/passwordValidation";
+import { cn } from "@/app/helpers/utils";
 
 const AdminSettings = () => {
   const { user, setSessionUser } = useAuth();
@@ -26,11 +31,23 @@ const AdminSettings = () => {
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordUpdatedAt, setPasswordUpdatedAt] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [loadingProfile, setLoadingProfile] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     setFullName(user.name || "");
     setEmail(user.email || "");
+    setLoadingProfile(true);
+    void adminApi
+      .getOwnAdminProfile()
+      .then((profile) => {
+        setFullName(profile.fullName || user.name || "");
+        setEmail(profile.email || user.email || "");
+      })
+      .catch(() => {
+        /* keep session name/email */
+      })
+      .finally(() => setLoadingProfile(false));
   }, [user]);
 
   const clearFieldError = (key: string) => {
@@ -189,7 +206,7 @@ const AdminSettings = () => {
                   setEmail(e.target.value);
                   clearFieldError("email");
                 }}
-                disabled={savingProfile}
+                disabled={savingProfile || loadingProfile}
                 className={fieldErrors.email ? "border-destructive" : ""}
               />
               <FieldError message={fieldErrors.email} />
@@ -206,7 +223,7 @@ const AdminSettings = () => {
           <Button
             className="mt-5 bg-gradient-primary shadow-glow"
             onClick={() => void saveProfile()}
-            disabled={savingProfile}
+            disabled={savingProfile || loadingProfile}
           >
             {savingProfile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save profile
@@ -255,8 +272,22 @@ const AdminSettings = () => {
                   type={showNewPassword ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => {
-                    setNewPassword(e.target.value);
-                    clearFieldError("newPassword");
+                    const value = e.target.value;
+                    setNewPassword(value);
+                    setFieldErrors((prev) =>
+                      applyPasswordPairLiveErrors(
+                        prev,
+                        value,
+                        confirmPassword,
+                        { password: "newPassword", confirm: "confirmPassword" },
+                        {
+                          passwordEmptyMessage: "Please enter a new password.",
+                          passwordShortMessage: "New password must be at least 8 characters.",
+                          confirmEmptyMessage: "Please confirm your new password.",
+                          confirmMismatchMessage: "New password and confirm password must match.",
+                        },
+                      ),
+                    );
                   }}
                   disabled={savingPassword}
                   className={fieldErrors.newPassword ? "border-destructive" : ""}
@@ -287,11 +318,30 @@ const AdminSettings = () => {
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => {
-                    setConfirmPassword(e.target.value);
-                    clearFieldError("confirmPassword");
+                    const value = e.target.value;
+                    setConfirmPassword(value);
+                    setFieldErrors((prev) =>
+                      applyPasswordPairLiveErrors(
+                        prev,
+                        newPassword,
+                        value,
+                        { password: "newPassword", confirm: "confirmPassword" },
+                        {
+                          passwordEmptyMessage: "Please enter a new password.",
+                          passwordShortMessage: "New password must be at least 8 characters.",
+                          confirmEmptyMessage: "Please confirm your new password.",
+                          confirmMismatchMessage: "New password and confirm password must match.",
+                        },
+                      ),
+                    );
                   }}
                   disabled={savingPassword}
-                  className={fieldErrors.confirmPassword ? "border-destructive" : ""}
+                  className={cn(
+                    fieldErrors.confirmPassword && "border-destructive",
+                    passwordsMatch(newPassword, confirmPassword) &&
+                      !fieldErrors.confirmPassword &&
+                      "border-emerald-500/60",
+                  )}
                   autoComplete="new-password"
                 />
                 <Button
@@ -306,6 +356,9 @@ const AdminSettings = () => {
                 </Button>
               </div>
               <FieldError message={fieldErrors.confirmPassword} />
+              {!fieldErrors.confirmPassword && passwordsMatch(newPassword, confirmPassword) && (
+                <p className="text-xs text-emerald-600">Passwords match</p>
+              )}
             </div>
             <Button
               variant="outline"
@@ -324,6 +377,7 @@ const AdminSettings = () => {
           </div>
         </Card>
       </div>
+
     </div>
   );
 };
