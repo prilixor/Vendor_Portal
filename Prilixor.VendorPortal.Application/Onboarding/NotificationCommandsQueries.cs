@@ -10,8 +10,7 @@ public sealed record UpsertVendorNotificationPreferenceCommand(
     string VendorId,
     bool EmailNotificationsEnabled,
     bool PushNotificationsEnabled,
-    bool NewOrderNotifications,
-    bool SmsNotificationsEnabled = true) : ICommand<VendorNotificationPreferenceDto>;
+    bool NewOrderNotifications) : ICommand<VendorNotificationPreferenceDto>;
 
 public sealed class UpsertVendorNotificationPreferenceCommandValidator : AbstractValidator<UpsertVendorNotificationPreferenceCommand>
 {
@@ -43,7 +42,6 @@ internal sealed class UpsertVendorNotificationPreferenceCommandHandler(IVendorOn
         entity.EmailNotificationsEnabled = request.EmailNotificationsEnabled;
         entity.PushNotificationsEnabled = request.PushNotificationsEnabled;
         entity.NewOrderNotifications = request.NewOrderNotifications;
-        entity.SmsNotificationsEnabled = request.SmsNotificationsEnabled;
 
         await repository.UpsertVendorNotificationPreferenceAsync(entity, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
@@ -53,8 +51,7 @@ internal sealed class UpsertVendorNotificationPreferenceCommandHandler(IVendorOn
             entity.VendorId.ToString(),
             entity.EmailNotificationsEnabled,
             entity.PushNotificationsEnabled,
-            entity.NewOrderNotifications,
-            entity.SmsNotificationsEnabled));
+            entity.NewOrderNotifications));
     }
 }
 
@@ -80,8 +77,7 @@ internal sealed class GetVendorNotificationPreferenceQueryHandler(IVendorOnboard
                 vendorId.ToString(),
                 true,  // EmailNotificationsEnabled
                 true,  // PushNotificationsEnabled
-                true,  // NewOrderNotifications
-                true)); // SmsNotificationsEnabled
+                true)); // NewOrderNotifications
         }
 
         return Result.Success(new VendorNotificationPreferenceDto(
@@ -89,8 +85,7 @@ internal sealed class GetVendorNotificationPreferenceQueryHandler(IVendorOnboard
             entity.VendorId.ToString(),
             entity.EmailNotificationsEnabled,
             entity.PushNotificationsEnabled,
-            entity.NewOrderNotifications,
-            entity.SmsNotificationsEnabled));
+            entity.NewOrderNotifications));
     }
 }
 

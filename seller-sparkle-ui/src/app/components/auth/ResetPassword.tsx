@@ -7,27 +7,11 @@ import { Label } from "@/app/components/ui/label";
 import { authApi } from "@/app/services/authApi";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import {
-  applyPasswordPairLiveErrors,
-  confirmPasswordError,
-  passwordLengthError,
-  passwordsMatch,
-} from "@/app/helpers/passwordValidation";
-import { cn } from "@/app/helpers/utils";
-import {
-  authPortalLoginPath,
-  authPortalSignInLabel,
-  forgotPasswordPath,
-  resolveAuthPortalType,
-} from "@/app/helpers/portalHost";
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") || "";
-  const portalType = resolveAuthPortalType(searchParams.get("portal"));
-  const loginPath = authPortalLoginPath(portalType);
-  const signInLabel = authPortalSignInLabel(portalType);
-
+  
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -38,44 +22,16 @@ const ResetPassword = () => {
 
   const validate = () => {
     const e: typeof errors = {};
-    const pwdErr = passwordLengthError(newPassword, {
-      shortMessage: "Password must be at least 8 characters",
-    });
-    if (pwdErr) e.newPassword = pwdErr;
-    const confErr = confirmPasswordError(newPassword, confirmPassword);
-    if (confErr) e.confirmPassword = confErr;
+    if (newPassword.length < 8) e.newPassword = "Password must be at least 8 characters";
+    if (newPassword !== confirmPassword) e.confirmPassword = "Passwords do not match";
     setErrors(e);
     return Object.keys(e).length === 0;
-  };
-
-  const onNewPasswordChange = (value: string) => {
-    setNewPassword(value);
-    setErrors((prev) =>
-      applyPasswordPairLiveErrors(prev, value, confirmPassword, {
-        password: "newPassword",
-        confirm: "confirmPassword",
-      }, {
-        passwordShortMessage: "Password must be at least 8 characters",
-      }),
-    );
-  };
-
-  const onConfirmChange = (value: string) => {
-    setConfirmPassword(value);
-    setErrors((prev) =>
-      applyPasswordPairLiveErrors(prev, newPassword, value, {
-        password: "newPassword",
-        confirm: "confirmPassword",
-      }, {
-        passwordShortMessage: "Password must be at least 8 characters",
-      }),
-    );
   };
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!validate()) return;
-
+    
     if (!token) {
       toast.error("Invalid or missing reset token.");
       return;
@@ -96,17 +52,13 @@ const ResetPassword = () => {
 
   if (!token) {
     return (
-      <AuthLayout
-        title="Invalid Token"
-        subtitle="The reset token is missing or invalid."
-        portalType={portalType}
-      >
+      <AuthLayout title="Invalid Token" subtitle="The reset token is missing or invalid.">
         <div className="space-y-6">
           <p className="text-center text-sm text-muted-foreground">
             Please check your email for a valid reset link or request a new one.
           </p>
           <Button asChild className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11">
-            <Link to={forgotPasswordPath(portalType)}>Request New Link</Link>
+            <Link to="/forgot-password">Request New Link</Link>
           </Button>
         </div>
       </AuthLayout>
@@ -115,17 +67,16 @@ const ResetPassword = () => {
 
   if (success) {
     return (
-      <AuthLayout
-        title="Password Reset"
-        subtitle="Your password has been successfully reset."
-        portalType={portalType}
-      >
+      <AuthLayout title="Password Reset" subtitle="Your password has been successfully reset.">
         <div className="space-y-6">
           <p className="text-center text-sm text-muted-foreground">
             You can now sign in with your new password.
           </p>
           <Button asChild className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11">
-            <Link to={loginPath}>{signInLabel}</Link>
+            <Link to="/customer/login">Customer sign in</Link>
+          </Button>
+          <Button variant="outline" asChild className="w-full">
+            <Link to="/login">Vendor sign in</Link>
           </Button>
         </div>
       </AuthLayout>
@@ -133,8 +84,8 @@ const ResetPassword = () => {
   }
 
   return (
-    <AuthLayout title="Reset Password" subtitle="Enter your new password below." portalType={portalType}>
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4" noValidate>
+    <AuthLayout title="Reset Password" subtitle="Enter your new password below.">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-xs text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.
         </p>
@@ -145,13 +96,10 @@ const ResetPassword = () => {
               id="newPassword"
               type={showPwd ? "text" : "password"}
               value={newPassword}
-              onChange={(e) => onNewPasswordChange(e.target.value)}
+              onChange={(e) => setNewPassword(e.target.value)}
               placeholder="••••••••"
               aria-invalid={!!errors.newPassword}
-              className={cn(
-                "pr-10",
-                errors.newPassword && "border-destructive focus-visible:ring-destructive",
-              )}
+              className={errors.newPassword ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
             />
             <button
               type="button"
@@ -162,11 +110,7 @@ const ResetPassword = () => {
               {showPwd ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
             </button>
           </div>
-          {errors.newPassword ? (
-            <p className="text-xs text-destructive">{errors.newPassword}</p>
-          ) : newPassword.length > 0 && newPassword.length < 8 ? (
-            <p className="text-[11px] text-muted-foreground">{newPassword.length}/8 characters</p>
-          ) : null}
+          {errors.newPassword && <p className="text-xs text-destructive">{errors.newPassword}</p>}
         </div>
 
         <div className="space-y-1.5">
@@ -176,14 +120,10 @@ const ResetPassword = () => {
               id="confirmPassword"
               type={showConfirmPwd ? "text" : "password"}
               value={confirmPassword}
-              onChange={(e) => onConfirmChange(e.target.value)}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="••••••••"
               aria-invalid={!!errors.confirmPassword}
-              className={cn(
-                "pr-10",
-                errors.confirmPassword && "border-destructive focus-visible:ring-destructive",
-                passwordsMatch(newPassword, confirmPassword) && !errors.confirmPassword && "border-emerald-500/60",
-              )}
+              className={errors.confirmPassword ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
             />
             <button
               type="button"
@@ -194,11 +134,7 @@ const ResetPassword = () => {
               {showConfirmPwd ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
             </button>
           </div>
-          {errors.confirmPassword ? (
-            <p className="text-xs text-destructive">{errors.confirmPassword}</p>
-          ) : passwordsMatch(newPassword, confirmPassword) ? (
-            <p className="text-xs text-emerald-600">Passwords match</p>
-          ) : null}
+          {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword}</p>}
         </div>
 
         <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>
@@ -208,7 +144,7 @@ const ResetPassword = () => {
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Remember your password?{" "}
-        <Link to={loginPath} className="font-semibold text-primary hover:underline">{signInLabel}</Link>
+        <Link to="/login" className="font-semibold text-primary hover:underline">Sign in</Link>
       </p>
     </AuthLayout>
   );

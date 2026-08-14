@@ -130,11 +130,9 @@ export interface CustomerListingDetailApi {
 
 export interface CustomerProfileApi {
   id: string;
-  email?: string | null;
+  email: string;
   fullName: string;
   phone?: string | null;
-  isPhoneVerified?: boolean;
-  isEmailVerified?: boolean;
 }
 
 export interface CustomerAddressApi {
@@ -371,12 +369,8 @@ export const customerApi = {
     return apiClient.get<CustomerProfileApi>("/customers/me/profile");
   },
 
-  updateProfile(fullName: string, phone?: string, email?: string | null): Promise<CustomerProfileApi> {
-    return apiClient.put<CustomerProfileApi>("/customers/me/profile", {
-      fullName,
-      phone: phone?.trim() || undefined,
-      email: email?.trim() || undefined,
-    });
+  updateProfile(fullName: string, phone?: string): Promise<CustomerProfileApi> {
+    return apiClient.put<CustomerProfileApi>("/customers/me/profile", { fullName, phone: phone?.trim() || undefined });
   },
 
   getAddresses(): Promise<CustomerAddressApi[]> {
@@ -578,7 +572,6 @@ export interface CustomerNotificationPreferenceApi {
   depositRefundsEnabled: boolean;
   directMessagesEnabled: boolean;
   marketingEmailsEnabled: boolean;
-  smsNotificationsEnabled?: boolean;
 }
 
 /** @deprecated Use HospitalApi / DoctorApi */

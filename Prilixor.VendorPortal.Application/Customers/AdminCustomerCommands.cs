@@ -9,7 +9,7 @@ namespace Prilixor.VendorPortal.Application.Customers;
 
 public sealed record AdminCustomerListItemDto(
     string Id,
-    string? Email,
+    string Email,
     string FullName,
     string? Phone,
     bool IsEmailVerified,
@@ -19,7 +19,7 @@ public sealed record AdminCustomerListItemDto(
 
 public sealed record AdminCustomerDetailDto(
     string Id,
-    string? Email,
+    string Email,
     string FullName,
     string? Phone,
     bool IsEmailVerified,

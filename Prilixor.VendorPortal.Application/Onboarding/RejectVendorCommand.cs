@@ -26,7 +26,6 @@ internal sealed class RejectVendorCommandHandler(
     IVendorOnboardingRepository repository,
     IEmailService emailService,
     IMediator mediator,
-    VendorSmsNotifier vendorSms,
     ILogger<RejectVendorCommandHandler> logger)
     : ICommandHandler<RejectVendorCommand, VendorDto>
 {
@@ -116,12 +115,6 @@ internal sealed class RejectVendorCommandHandler(
                 logger.LogError(notificationEx, "Failed to create notification record for vendor {VendorId}", vendorId);
             }
         }
-
-        await vendorSms.TrySendAsync(
-            vendorId,
-            SmsTemplates.VendorAccountRejected(request.Reason),
-            VendorSmsKind.AccountRejected,
-            cancellationToken);
 
         return Result.Success(new VendorDto(
             vendor.Id.ToString(),

@@ -8,8 +8,6 @@ public interface ICustomerRepository
 {
     Task<Customer?> GetCustomerByIdAsync(Guid customerId, CancellationToken cancellationToken);
     Task<Customer?> GetCustomerByEmailAsync(string email, CancellationToken cancellationToken);
-    Task<Customer?> GetCustomerByPhoneAsync(string phoneNationalDigits, CancellationToken cancellationToken);
-    Task<Customer?> GetCustomerByEmailVerificationTokenAsync(string token, CancellationToken cancellationToken);
     Task AddCustomerAsync(Customer customer, CancellationToken cancellationToken);
     Task UpdateCustomerAsync(Customer customer, CancellationToken cancellationToken);
 

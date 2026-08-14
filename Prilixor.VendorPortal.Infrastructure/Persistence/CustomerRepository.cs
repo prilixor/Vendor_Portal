@@ -1,5 +1,4 @@
 using Prilixor.VendorPortal.Application.Abstractions;
-using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Application.Customers;
 using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.Domain.Customers;
@@ -29,39 +28,13 @@ public sealed class CustomerRepository(
 
 
     public Task<Customer?> GetCustomerByEmailAsync(string email, CancellationToken cancellationToken)
+
     {
-        var normalized = CustomerEmail.Normalize(email);
-        if (string.IsNullOrEmpty(normalized))
-            return Task.FromResult<Customer?>(null);
 
-        // Case/trim-insensitive match so legacy mixed-case / padded rows still collide.
-        return customerDb.Customers.FirstOrDefaultAsync(
-            c => c.Email != null
-                 && !c.IsDeleted
-                 && c.Email.Trim().ToLower() == normalized,
-            cancellationToken);
-    }
+        var normalized = email.Trim().ToLowerInvariant();
 
-    public Task<Customer?> GetCustomerByPhoneAsync(string phoneNationalDigits, CancellationToken cancellationToken)
-    {
-        var phone = IndianMobilePhone.NormalizeDigits(phoneNationalDigits);
-        if (string.IsNullOrEmpty(phone))
-            return Task.FromResult<Customer?>(null);
+        return customerDb.Customers.FirstOrDefaultAsync(c => c.Email == normalized && !c.IsDeleted, cancellationToken);
 
-        return customerDb.Customers.FirstOrDefaultAsync(
-            c => c.Phone == phone && !c.IsDeleted,
-            cancellationToken);
-    }
-
-    public Task<Customer?> GetCustomerByEmailVerificationTokenAsync(string token, CancellationToken cancellationToken)
-    {
-        var normalized = (token ?? string.Empty).Trim();
-        if (string.IsNullOrEmpty(normalized))
-            return Task.FromResult<Customer?>(null);
-
-        return customerDb.Customers.FirstOrDefaultAsync(
-            c => c.EmailVerificationToken == normalized && !c.IsDeleted,
-            cancellationToken);
     }
 
 

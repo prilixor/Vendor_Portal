@@ -7,9 +7,6 @@ public class AdminUser : AuditableEntity<Guid>, ISoftDelete
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
-    /// <summary>10-digit Indian mobile (national digits), optional until set.</summary>
-    public string? Phone { get; set; }
-    public DateTimeOffset? PhoneVerifiedAt { get; set; }
     /// <summary>Legacy role code string; kept in sync with <see cref="AdminRole.Code"/>.</summary>
     public string Role { get; set; } = string.Empty;
     public Guid? RoleId { get; set; }

@@ -65,7 +65,6 @@ public class ApplicationDbContext : DbContext
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteContactContent> WebsiteContactContents => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteContactContent>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksHeader> WebsiteHowItWorksHeaders => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksHeader>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksStep> WebsiteHowItWorksSteps => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksStep>();
-    public DbSet<Prilixor.VendorPortal.Domain.Platform.PlatformSmsSettings> PlatformSmsSettings => Set<Prilixor.VendorPortal.Domain.Platform.PlatformSmsSettings>();
     public DbSet<RentalDurationIcon> RentalDurationIcons => Set<RentalDurationIcon>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -79,7 +78,6 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.Id).HasColumnName("id");
             entity.Property(x => x.Email).HasColumnName("email");
             entity.Property(x => x.SupportPhone).HasColumnName("support_phone").IsRequired(false);
-            entity.Property(x => x.PhoneVerifiedAt).HasColumnName("phone_verified_at");
             entity.Property(x => x.PasswordHash).HasColumnName("password_hash");
             entity.Property(x => x.IsEmailVerified).HasColumnName("email_verified");
             entity.Property(x => x.EmailVerificationToken).HasColumnName("email_verification_token");
@@ -632,7 +630,6 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.VendorId).HasColumnName("vendor_id");
             entity.Property(x => x.EmailNotificationsEnabled).HasColumnName("email_notifications_enabled");
             entity.Property(x => x.PushNotificationsEnabled).HasColumnName("push_notifications_enabled");
-            entity.Property(x => x.SmsNotificationsEnabled).HasColumnName("sms_notifications_enabled");
             entity.Property(x => x.NewOrderNotifications).HasColumnName("new_order_notifications");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
@@ -700,8 +697,6 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.Email).HasColumnName("email");
             entity.Property(x => x.PasswordHash).HasColumnName("password_hash");
             entity.Property(x => x.FullName).HasColumnName("full_name");
-            entity.Property(x => x.Phone).HasColumnName("phone");
-            entity.Property(x => x.PhoneVerifiedAt).HasColumnName("phone_verified_at");
             entity.Property(x => x.Role).HasColumnName("role");
             entity.Property(x => x.RoleId).HasColumnName("role_id");
             entity.Property(x => x.IsSystemUser).HasColumnName("is_system_user");

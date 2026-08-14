@@ -8,8 +8,6 @@ CREATE TABLE IF NOT EXISTS public.admin_users (
     email varchar(255) NOT NULL UNIQUE,
     password_hash text NOT NULL,
     full_name varchar(255) NOT NULL,
-    phone varchar(20) NULL,
-    phone_verified_at timestamptz NULL,
     role varchar(40) NOT NULL,
     is_active boolean NOT NULL DEFAULT true,
     last_login_at timestamptz NULL,

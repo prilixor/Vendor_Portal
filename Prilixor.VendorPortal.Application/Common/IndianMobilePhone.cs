@@ -42,19 +42,6 @@ public static partial class IndianMobilePhone
         return IndianMobileRegex().IsMatch(normalized);
     }
 
-    /// <summary>Returns E.164 for a valid Indian mobile (+91XXXXXXXXXX).</summary>
-    public static bool TryToE164(string? value, out string e164)
-    {
-        if (!TryNormalize(value, out var digits))
-        {
-            e164 = string.Empty;
-            return false;
-        }
-
-        e164 = "+91" + digits;
-        return true;
-    }
-
     [GeneratedRegex(Pattern)]
     private static partial Regex IndianMobileRegex();
 }
