@@ -1,9 +1,11 @@
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Admin.Hospitals;
+using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Application.Common.MedicalDirectory;
 using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Common;
@@ -70,6 +72,8 @@ internal static class DoctorHospitalLinkHelper
             {
                 if (string.IsNullOrWhiteSpace(input.Name))
                     return Result.Failure<List<Guid>>(new Error("directory.hospital_name_required", "Hospital name is required.", ErrorCategory.Validation));
+                if (!IndianContactNumber.TryNormalizeOptional(input.ContactNumber, out var hospitalContact))
+                    return Result.Failure<List<Guid>>(new Error("directory.contact_invalid", IndianContactNumber.InvalidMessage, ErrorCategory.Validation));
 
                 var hospital = new Hospital
                 {
@@ -80,7 +84,7 @@ internal static class DoctorHospitalLinkHelper
                     PostalCode = string.IsNullOrWhiteSpace(input.PostalCode) ? null : input.PostalCode.Trim(),
                     Latitude = input.Latitude,
                     Longitude = input.Longitude,
-                    ContactNumber = string.IsNullOrWhiteSpace(input.ContactNumber) ? null : input.ContactNumber.Trim(),
+                    ContactNumber = hospitalContact,
                     IsActive = true,
                 };
                 await repository.AddHospitalAsync(hospital, cancellationToken);
@@ -100,8 +104,7 @@ internal sealed class ListAdminDoctorsQueryHandler(ICustomerRepository repositor
     public async Task<Result<List<DoctorDto>>> Handle(ListAdminDoctorsQuery request, CancellationToken cancellationToken)
     {
         var doctors = await repository.ListDoctorsForAdminAsync(request.Search, request.IsActive, cancellationToken);
-        var baseUrl = (configuration["FrontendUrl"] ?? "https://blinksmed.com").Trim().TrimEnd('/');
-        return Result.Success(doctors.Select(d => DoctorDtoMapper.Map(d, $"{baseUrl}/dr/{d.UniqueCode}")).ToList());
+        return Result.Success(doctors.Select(d => DoctorDtoMapper.Map(d, PublicSiteUrls.DoctorSharePage(configuration, d.UniqueCode))).ToList());
     }
 }
 
@@ -116,8 +119,7 @@ internal sealed class GetAdminDoctorQueryHandler(ICustomerRepository repository,
         if (doctor is null)
             return Result.Failure<DoctorDto>(new Error("directory.doctor_not_found", "Doctor not found.", ErrorCategory.NotFound));
 
-        var baseUrl = (configuration["FrontendUrl"] ?? "https://blinksmed.com").Trim().TrimEnd('/');
-        return Result.Success(DoctorDtoMapper.Map(doctor, $"{baseUrl}/dr/{doctor.UniqueCode}"));
+        return Result.Success(DoctorDtoMapper.Map(doctor, PublicSiteUrls.DoctorSharePage(configuration, doctor.UniqueCode)));
     }
 }
 
@@ -134,7 +136,8 @@ internal sealed class CreateAdminDoctorCommandHandler(
     ICustomerRepository repository,
     IEmailService emailService,
     IQrCodeService qrCodeService,
-    IConfiguration configuration)
+    IConfiguration configuration,
+    ILogger<CreateAdminDoctorCommandHandler> logger)
     : ICommandHandler<CreateAdminDoctorCommand, DoctorDto>
 {
     public async Task<Result<DoctorDto>> Handle(CreateAdminDoctorCommand request, CancellationToken cancellationToken)
@@ -143,6 +146,11 @@ internal sealed class CreateAdminDoctorCommandHandler(
             return Result.Failure<DoctorDto>(new Error("directory.name_required", "Doctor full name is required.", ErrorCategory.Validation));
         if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
             return Result.Failure<DoctorDto>(new Error("directory.email_required", "A valid doctor email is required.", ErrorCategory.Validation));
+        if (!IndianContactNumber.TryNormalizeOptional(request.ContactNumber, out var contactNumber))
+            return Result.Failure<DoctorDto>(new Error("directory.contact_invalid", IndianContactNumber.InvalidMessage, ErrorCategory.Validation));
+        var duplicate = await repository.FindDoctorByEmailAsync(request.Email, excludeDoctorId: null, cancellationToken);
+        if (duplicate is not null)
+            return Result.Failure<DoctorDto>(new Error("directory.email_exists", "A doctor with this email already exists.", ErrorCategory.Validation));
 
         var hospitalIdsResult = await DoctorHospitalLinkHelper.ResolveHospitalIdsAsync(
             repository, request.HospitalIds, request.NewHospitals, cancellationToken);
@@ -151,7 +159,8 @@ internal sealed class CreateAdminDoctorCommandHandler(
 
         var now = DateTimeOffset.UtcNow;
         var prefix = DoctorUniqueCodeGenerator.BuildPrefix(request.FullName, now);
-        var nextSeq = await repository.CountDoctorsWithUniqueCodePrefixAsync(prefix, cancellationToken) + 1;
+        var yearYy = now.ToString("yy");
+        var nextSeq = await repository.CountDoctorsEnrolledInYearAsync(yearYy, cancellationToken) + 1;
         var uniqueCode = DoctorUniqueCodeGenerator.FormatCode(prefix, nextSeq);
 
         for (var i = 0; i < 5; i++)
@@ -167,7 +176,7 @@ internal sealed class CreateAdminDoctorCommandHandler(
             FullName = request.FullName.Trim(),
             Email = request.Email.Trim(),
             Specialization = string.IsNullOrWhiteSpace(request.Specialization) ? null : request.Specialization.Trim(),
-            ContactNumber = string.IsNullOrWhiteSpace(request.ContactNumber) ? null : request.ContactNumber.Trim(),
+            ContactNumber = contactNumber,
             UniqueCode = uniqueCode,
             IsActive = true,
         };
@@ -176,8 +185,7 @@ internal sealed class CreateAdminDoctorCommandHandler(
         await repository.SetDoctorHospitalLinksAsync(doctor.Id, hospitalIdsResult.Value!, cancellationToken);
 
         var saved = await repository.GetDoctorByIdAsync(doctor.Id, cancellationToken);
-        var baseUrl = (configuration["FrontendUrl"] ?? "https://blinksmed.com").Trim().TrimEnd('/');
-        var pageUrl = $"{baseUrl}/dr/{doctor.UniqueCode}";
+        var pageUrl = PublicSiteUrls.DoctorSharePage(configuration, doctor.UniqueCode);
 
         if (request.SendEmail)
         {
@@ -185,8 +193,9 @@ internal sealed class CreateAdminDoctorCommandHandler(
             {
                 await SendDoctorShareEmailAsync(emailService, qrCodeService, doctor, pageUrl, cancellationToken);
             }
-            catch
+            catch (Exception ex)
             {
+                logger.LogError(ex, "Failed to send doctor reference email to {Email} for {UniqueCode}", doctor.Email, doctor.UniqueCode);
             }
         }
 
@@ -201,17 +210,31 @@ internal sealed class CreateAdminDoctorCommandHandler(
         CancellationToken cancellationToken)
     {
         var qrPng = qrCodeService.GeneratePng(pageUrl, pixelsPerModule: 10);
-        var qrDataUri = $"data:image/png;base64,{Convert.ToBase64String(qrPng)}";
+        var qrUsable = qrPng is { Length: > 200 };
 
-        var subject = $"Your BlinksMed Doctor ID: {doctor.UniqueCode}";
-        var body = EmailTemplates.DoctorShareInvite(
+        var subject = $"Your BlinksMed Doctor Reference ID: {doctor.UniqueCode}";
+        var html = EmailTemplates.DoctorShareInvite(
             doctor.FullName,
             doctor.UniqueCode,
             pageUrl,
             doctor.Specialization,
-            qrDataUri);
+            qrUsable ? $"cid:{EmailTemplates.DoctorQrContentId}" : null);
+        var plain = EmailTemplates.DoctorShareInvitePlainText(
+            doctor.FullName,
+            doctor.UniqueCode,
+            pageUrl,
+            doctor.Specialization);
 
-        await emailService.SendEmailAsync(doctor.Email, subject, body, cancellationToken);
+        IReadOnlyList<EmailInlineImage>? inlineImages = null;
+        IReadOnlyList<EmailFileAttachment>? attachments = null;
+        if (qrUsable)
+        {
+            var fileName = $"BlinksMed-{doctor.UniqueCode}-QR.png";
+            inlineImages = [new EmailInlineImage(EmailTemplates.DoctorQrContentId, qrPng, "image/png", fileName)];
+            attachments = [new EmailFileAttachment(fileName, qrPng, "image/png")];
+        }
+
+        await emailService.SendEmailAsync(doctor.Email, subject, html, plain, inlineImages, attachments, cancellationToken);
     }
 }
 public sealed record UpdateAdminDoctorCommand(
@@ -237,11 +260,16 @@ internal sealed class UpdateAdminDoctorCommandHandler(ICustomerRepository reposi
             return Result.Failure<DoctorDto>(new Error("directory.name_required", "Doctor full name is required.", ErrorCategory.Validation));
         if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
             return Result.Failure<DoctorDto>(new Error("directory.email_required", "A valid doctor email is required.", ErrorCategory.Validation));
+        if (!IndianContactNumber.TryNormalizeOptional(request.ContactNumber, out var contactNumber))
+            return Result.Failure<DoctorDto>(new Error("directory.contact_invalid", IndianContactNumber.InvalidMessage, ErrorCategory.Validation));
+        var duplicate = await repository.FindDoctorByEmailAsync(request.Email, request.Id, cancellationToken);
+        if (duplicate is not null)
+            return Result.Failure<DoctorDto>(new Error("directory.email_exists", "A doctor with this email already exists.", ErrorCategory.Validation));
 
         doctor.FullName = request.FullName.Trim();
         doctor.Email = request.Email.Trim();
         doctor.Specialization = string.IsNullOrWhiteSpace(request.Specialization) ? null : request.Specialization.Trim();
-        doctor.ContactNumber = string.IsNullOrWhiteSpace(request.ContactNumber) ? null : request.ContactNumber.Trim();
+        doctor.ContactNumber = contactNumber;
         doctor.IsActive = request.IsActive;
 
         await repository.UpdateDoctorAsync(doctor, cancellationToken);
@@ -257,8 +285,7 @@ internal sealed class UpdateAdminDoctorCommandHandler(ICustomerRepository reposi
         }
 
         var saved = await repository.GetDoctorByIdAsync(doctor.Id, cancellationToken);
-        var baseUrl = (configuration["FrontendUrl"] ?? "https://blinksmed.com").Trim().TrimEnd('/');
-        return Result.Success(DoctorDtoMapper.Map(saved!, $"{baseUrl}/dr/{doctor.UniqueCode}"));
+        return Result.Success(DoctorDtoMapper.Map(saved!, PublicSiteUrls.DoctorSharePage(configuration, doctor.UniqueCode)));
     }
 }
 
@@ -293,8 +320,7 @@ internal sealed class ResendAdminDoctorEmailCommandHandler(
         if (doctor is null)
             return Result.Failure<bool>(new Error("directory.doctor_not_found", "Doctor not found.", ErrorCategory.NotFound));
 
-        var baseUrl = (configuration["FrontendUrl"] ?? "https://blinksmed.com").Trim().TrimEnd('/');
-        var pageUrl = $"{baseUrl}/dr/{doctor.UniqueCode}";
+        var pageUrl = PublicSiteUrls.DoctorSharePage(configuration, doctor.UniqueCode);
         await CreateAdminDoctorCommandHandler.SendDoctorShareEmailAsync(emailService, qrCodeService, doctor, pageUrl, cancellationToken);
         return Result.Success(true);
     }
@@ -314,8 +340,7 @@ internal sealed class GetAdminDoctorQrQueryHandler(
         if (doctor is null)
             return Result.Failure<byte[]>(new Error("directory.doctor_not_found", "Doctor not found.", ErrorCategory.NotFound));
 
-        var baseUrl = (configuration["FrontendUrl"] ?? "https://blinksmed.com").Trim().TrimEnd('/');
-        var pageUrl = $"{baseUrl}/dr/{doctor.UniqueCode}";
+        var pageUrl = PublicSiteUrls.DoctorSharePage(configuration, doctor.UniqueCode);
         var png = qrCodeService.GeneratePng(pageUrl, pixelsPerModule: 12);
         return Result.Success(png);
     }

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Domain.Common;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
@@ -57,9 +58,29 @@ internal sealed class GetDoctorByUniqueCodeQueryHandler(ICustomerRepository repo
         if (doctor is null)
             return Result.Failure<DoctorDto>(new Error("directory.doctor_not_found", "Doctor not found for this Unique ID.", ErrorCategory.NotFound));
 
-        var baseUrl = (configuration["FrontendUrl"] ?? "https://blinksmed.com").Trim().TrimEnd('/');
-        var pageUrl = $"{baseUrl}/dr/{doctor.UniqueCode}";
-        return Result.Success(DoctorDtoMapper.Map(doctor, pageUrl));
+        return Result.Success(DoctorDtoMapper.Map(doctor, PublicSiteUrls.DoctorSharePage(configuration, doctor.UniqueCode)));
+    }
+}
+
+public sealed record GetPublicDoctorQrQuery(string UniqueCode) : IQuery<byte[]>;
+
+internal sealed class GetPublicDoctorQrQueryHandler(
+    ICustomerRepository repository,
+    IQrCodeService qrCodeService,
+    IConfiguration configuration)
+    : IQueryHandler<GetPublicDoctorQrQuery, byte[]>
+{
+    public async Task<Result<byte[]>> Handle(GetPublicDoctorQrQuery request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.UniqueCode))
+            return Result.Failure<byte[]>(new Error("directory.doctor_code_required", "Doctor Unique ID is required.", ErrorCategory.Validation));
+
+        var doctor = await repository.GetDoctorByUniqueCodeAsync(request.UniqueCode, cancellationToken);
+        if (doctor is null)
+            return Result.Failure<byte[]>(new Error("directory.doctor_not_found", "Doctor not found for this Unique ID.", ErrorCategory.NotFound));
+
+        var pageUrl = PublicSiteUrls.DoctorSharePage(configuration, doctor.UniqueCode);
+        return Result.Success(qrCodeService.GeneratePng(pageUrl, pixelsPerModule: 12));
     }
 }
 

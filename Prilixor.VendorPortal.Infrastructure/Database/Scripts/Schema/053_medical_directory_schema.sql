@@ -27,6 +27,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_doctors_unique_code
     ON public.doctors (unique_code)
     WHERE coalesce(is_deleted, false) = false;
 
+CREATE UNIQUE INDEX IF NOT EXISTS ux_doctors_email_active
+    ON public.doctors (lower(btrim(email)))
+    WHERE coalesce(is_deleted, false) = false;
+
 CREATE INDEX IF NOT EXISTS ix_doctors_email
     ON public.doctors (lower(email));
 

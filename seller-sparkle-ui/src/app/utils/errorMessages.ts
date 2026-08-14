@@ -88,6 +88,9 @@ const errorMessages: Record<string, string> = {
   "directory.doctor_not_found":
     "No doctor found for this Unique ID. Please check the ID and try again.",
   "directory.doctor_code_required": "Enter the doctor's Unique ID.",
+  "directory.email_exists": "A doctor with this email already exists.",
+  "directory.contact_invalid":
+    "Enter a valid Indian mobile (10 digits, starts with 6–9) or landline with STD, e.g. 079-2658-1234.",
 
   // General errors
   unauthorized: "You are not authorized to perform this action.",

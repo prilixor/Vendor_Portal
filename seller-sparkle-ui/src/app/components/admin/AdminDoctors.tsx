@@ -27,6 +27,10 @@ import { Copy, Download, ExternalLink, Loader2, Mail, Pencil, Plus, Search, Stet
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { downloadDoctorQrCard } from "@/app/helpers/downloadDoctorQrCard";
+import {
+  normalizeIndianContactDigits,
+  optionalIndianContactError,
+} from "@/app/helpers/indianContactNumber";
 
 type DoctorForm = {
   fullName: string;
@@ -141,8 +145,12 @@ const AdminDoctors = () => {
     const errors: Record<string, string> = {};
     if (!form.fullName.trim()) errors.fullName = "Full name is required";
     if (!form.email.trim() || !form.email.includes("@")) errors.email = "Valid email is required";
+    const contactErr = optionalIndianContactError(form.contactNumber);
+    if (contactErr) errors.contactNumber = contactErr;
     newHospitals.forEach((h, i) => {
       if (!h.name.trim()) errors[`newHospital_${i}`] = "Hospital name is required";
+      const hospitalContactErr = optionalIndianContactError(h.contactNumber || "");
+      if (hospitalContactErr) errors[`newHospitalContact_${i}`] = hospitalContactErr;
     });
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -159,7 +167,9 @@ const AdminDoctors = () => {
         city: rest.city?.trim() || undefined,
         state: rest.state?.trim() || undefined,
         postalCode: rest.postalCode?.trim() || undefined,
-        contactNumber: rest.contactNumber?.trim() || undefined,
+        contactNumber: rest.contactNumber?.trim()
+          ? normalizeIndianContactDigits(rest.contactNumber)
+          : undefined,
       }));
 
       if (editing) {
@@ -168,7 +178,9 @@ const AdminDoctors = () => {
           fullName: form.fullName.trim(),
           email: form.email.trim(),
           specialization: form.specialization.trim() || undefined,
-          contactNumber: form.contactNumber.trim() || undefined,
+          contactNumber: form.contactNumber.trim()
+            ? normalizeIndianContactDigits(form.contactNumber)
+            : undefined,
           isActive: form.isActive,
           hospitalIds: form.hospitalIds,
           newHospitals: newHospitalPayload.length ? newHospitalPayload : undefined,
@@ -180,7 +192,9 @@ const AdminDoctors = () => {
           fullName: form.fullName.trim(),
           email: form.email.trim(),
           specialization: form.specialization.trim() || undefined,
-          contactNumber: form.contactNumber.trim() || undefined,
+          contactNumber: form.contactNumber.trim()
+            ? normalizeIndianContactDigits(form.contactNumber)
+            : undefined,
           sendEmail: form.sendEmail,
           hospitalIds: form.hospitalIds,
           newHospitals: newHospitalPayload.length ? newHospitalPayload : undefined,
@@ -191,7 +205,11 @@ const AdminDoctors = () => {
       setDialogOpen(false);
       await load();
     } catch (e) {
-      toast.error(getUserFriendlyMessage(e, "Failed to save doctor"));
+      const message = getUserFriendlyMessage(e, "Failed to save doctor");
+      if (/email already exists/i.test(message)) {
+        setFieldErrors((prev) => ({ ...prev, email: message }));
+      }
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -393,7 +411,15 @@ const AdminDoctors = () => {
               <Input
                 type="email"
                 value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, email: e.target.value }));
+                  setFieldErrors((prev) => {
+                    if (!prev.email) return prev;
+                    const next = { ...prev };
+                    delete next.email;
+                    return next;
+                  });
+                }}
               />
               <FieldError message={fieldErrors.email} />
             </div>
@@ -407,9 +433,29 @@ const AdminDoctors = () => {
             <div className="space-y-2">
               <Label>Contact number</Label>
               <Input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="Mobile or landline with STD"
                 value={form.contactNumber}
-                onChange={(e) => setForm((f) => ({ ...f, contactNumber: e.target.value }))}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, contactNumber: e.target.value }));
+                  setFieldErrors((prev) => {
+                    if (!prev.contactNumber) return prev;
+                    const next = { ...prev };
+                    delete next.contactNumber;
+                    return next;
+                  });
+                }}
+                aria-invalid={!!fieldErrors.contactNumber}
+                className={fieldErrors.contactNumber ? "border-destructive" : undefined}
               />
+              <FieldError message={fieldErrors.contactNumber} />
+              {!fieldErrors.contactNumber && (
+                <p className="text-xs text-muted-foreground">
+                  Optional. Mobile: 10 digits starting 6–9. Landline: include STD, e.g. 079-2658-1234.
+                </p>
+              )}
             </div>
 
             <div className="sm:col-span-2">
