@@ -31,15 +31,15 @@ class ListingTypePickerScreen extends StatelessWidget {
           Text(
             'What are you listing?',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.7),
+              color: context.appColors.textSecondary,
               fontSize: 14,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Choose listing type',
             style: TextStyle(
-              color: Colors.white,
+              color: context.appColors.textPrimary,
               fontSize: 22,
               fontWeight: FontWeight.w800,
             ),
@@ -48,7 +48,7 @@ class ListingTypePickerScreen extends StatelessWidget {
           Text(
             'Equipment is rented by day/month. Chemicals are sold by packaging size with buy pricing set by Admin.',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.55),
+              color: context.appColors.textMuted,
               fontSize: 13,
               height: 1.4,
             ),
@@ -113,7 +113,7 @@ class _TypeCard extends StatelessWidget {
             border: Border.all(
               color: highlighted
                   ? accent.withValues(alpha: 0.65)
-                  : Colors.white.withValues(alpha: 0.08),
+                  : context.appColors.border,
               width: highlighted ? 1.5 : 1,
             ),
             gradient: highlighted
@@ -148,8 +148,8 @@ class _TypeCard extends StatelessWidget {
                       children: [
                         Text(
                           title,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.appColors.textPrimary,
                             fontSize: 17,
                             fontWeight: FontWeight.w800,
                           ),
@@ -181,7 +181,7 @@ class _TypeCard extends StatelessWidget {
                     Text(
                       subtitle,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.75),
+                        color: context.appColors.textSecondary,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -190,7 +190,7 @@ class _TypeCard extends StatelessWidget {
                     Text(
                       detail,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.48),
+                        color: context.appColors.textMuted,
                         fontSize: 12,
                         height: 1.35,
                       ),
@@ -201,7 +201,7 @@ class _TypeCard extends StatelessWidget {
               Icon(
                 Icons.arrow_forward_ios_rounded,
                 size: 16,
-                color: Colors.white.withValues(alpha: 0.35),
+                color: context.appColors.textMuted,
               ),
             ],
           ),

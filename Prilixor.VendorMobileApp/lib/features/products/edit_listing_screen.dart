@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
+import '../../core/theme.dart';
 
 /// Edit listing status — catalog name is always the Admin product/chemical name.
 class EditListingScreen extends StatefulWidget {
@@ -84,8 +85,8 @@ class _EditListingScreenState extends State<EditListingScreen> {
     if (row == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Edit listing')),
-        body: const Center(
-          child: Text('Listing not found.', style: TextStyle(color: Colors.white54)),
+        body: Center(
+          child: Text('Listing not found.', style: TextStyle(color: context.appColors.textMuted)),
         ),
       );
     }
@@ -105,30 +106,30 @@ class _EditListingScreenState extends State<EditListingScreen> {
                 : row.listing.listingTitle,
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Customers always see this Admin product/chemical name.',
-            style: TextStyle(color: Colors.white38, fontSize: 11),
+            style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Status',
-            style: TextStyle(color: Colors.white54, fontSize: 13),
+            style: TextStyle(color: context.appColors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 8),
           ...ListingUiStatus.values.map(
             (status) => RadioListTile<ListingUiStatus>(
-              tileColor: const Color(0xFF1E293B),
+              tileColor: AppTheme.card(context),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
-                side: const BorderSide(color: Colors.white12),
+                side: BorderSide(color: context.appColors.border),
               ),
               title: Text(
                 _statusLabel(status),
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: context.appColors.textPrimary),
               ),
               value: status,
               groupValue: _status,
-              activeColor: const Color(0xFF6C63FF),
+              activeColor: AppTheme.accent,
               onChanged: provider.saving
                   ? null
                   : (v) => setState(() => _status = v ?? _status),
@@ -139,7 +140,7 @@ class _EditListingScreenState extends State<EditListingScreen> {
             onPressed: provider.saving ? null : () => _save(row),
             style: ElevatedButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
-              backgroundColor: const Color(0xFF6C63FF),
+              backgroundColor: AppTheme.accent,
             ),
             child: provider.saving
                 ? const SizedBox(
@@ -167,18 +168,18 @@ class _ReadOnlyField extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: AppTheme.card(context),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          Text(label, style: TextStyle(color: context.appColors.textSecondary, fontSize: 12)),
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600),
+            style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w600),
           ),
         ],
       ),

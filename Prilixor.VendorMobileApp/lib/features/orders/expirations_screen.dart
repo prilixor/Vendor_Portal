@@ -72,10 +72,10 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child:             Text(
+            child: Text(
               'Track rental end dates for timely returns and follow-up.',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.48),
+                color: context.appColors.textMuted,
                 fontSize: 12,
                 height: 1.35,
               ),
@@ -114,14 +114,14 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
                             Icon(
                               Icons.event_available_outlined,
                               size: 56,
-                              color: Colors.white.withValues(alpha: 0.2),
+                              color: context.appColors.textMuted,
                             ),
                             const SizedBox(height: 14),
                             Center(
                               child: Text(
                                 'No expiring orders in selected window.',
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.55),
+                                  color: context.appColors.textMuted,
                                   fontSize: 14,
                                 ),
                               ),
@@ -167,7 +167,7 @@ class _WindowFilterBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.card(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Row(
         children: [7, 15, 30].map((d) {
@@ -178,7 +178,7 @@ class _WindowFilterBar extends StatelessWidget {
               child: Material(
                 color: selected
                     ? AppTheme.accent
-                    : Colors.white.withValues(alpha: 0.04),
+                    : context.appColors.surface,
                 borderRadius: BorderRadius.circular(10),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(10),
@@ -189,7 +189,7 @@ class _WindowFilterBar extends StatelessWidget {
                       child: Text(
                         '$d days',
                         style: TextStyle(
-                          color: selected ? Colors.white : Colors.white60,
+                          color: selected ? Colors.white : context.appColors.textSecondary,
                           fontWeight: FontWeight.w700,
                           fontSize: 12,
                         ),
@@ -223,7 +223,7 @@ class _OrderGroupCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.card(context),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: context.appColors.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -237,7 +237,7 @@ class _OrderGroupCard extends StatelessWidget {
                 Text(
                   'ORDER GROUP',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: context.appColors.textMuted,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.6,
@@ -246,8 +246,8 @@ class _OrderGroupCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   baseOrderNumber,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.appColors.textPrimary,
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
                   ),
@@ -255,13 +255,13 @@ class _OrderGroupCard extends StatelessWidget {
               ],
             ),
           ),
-          Divider(height: 1, color: Colors.white.withValues(alpha: 0.06)),
+          Divider(height: 1, color: context.appColors.border),
           ...List.generate(items.length, (index) {
             final row = items[index];
             return Column(
               children: [
                 if (index > 0)
-                  Divider(height: 1, color: Colors.white.withValues(alpha: 0.06)),
+                  Divider(height: 1, color: context.appColors.border),
                 _ExpirationTile(
                   row: row,
                   formatEnd: formatEnd,
@@ -312,8 +312,8 @@ class _ExpirationTile extends StatelessWidget {
                   children: [
                     Text(
                       row.listingTitle,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.appColors.textPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
                         height: 1.25,
@@ -329,7 +329,7 @@ class _ExpirationTile extends StatelessWidget {
                         Text(
                           row.orderNumber,
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.45),
+                            color: context.appColors.textMuted,
                             fontSize: 10,
                           ),
                         ),
@@ -339,7 +339,7 @@ class _ExpirationTile extends StatelessWidget {
                     Text(
                       '${row.customerName} · Ends ${formatEnd(row.endDate)}',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.48),
+                        color: context.appColors.textSecondary,
                         fontSize: 11,
                       ),
                     ),
@@ -375,18 +375,18 @@ class _DaysLeftBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: urgent
             ? Colors.redAccent.withValues(alpha: 0.16)
-            : Colors.white.withValues(alpha: 0.08),
+            : context.appColors.surface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: urgent
               ? Colors.redAccent.withValues(alpha: 0.45)
-              : Colors.white.withValues(alpha: 0.1),
+              : context.appColors.border,
         ),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: urgent ? Colors.redAccent : Colors.white.withValues(alpha: 0.72),
+          color: urgent ? Colors.redAccent : context.appColors.textSecondary,
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),

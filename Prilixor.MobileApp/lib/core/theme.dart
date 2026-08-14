@@ -11,6 +11,7 @@ class AppTheme {
   static const Color card = Color(0xFF1E293B);
 
   static final ThemeData darkTheme = _build();
+  static final ThemeData lightTheme = _buildLight();
 
   static ThemeData _build() {
     const palette = AppPalette.dark;
@@ -84,6 +85,83 @@ class AppTheme {
       ),
       dialogTheme: const DialogThemeData(
         backgroundColor: card,
+        surfaceTintColor: Colors.transparent,
+      ),
+    );
+  }
+
+  static ThemeData _buildLight() {
+    const palette = AppPalette.light;
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      primaryColor: accent,
+      scaffoldBackgroundColor: palette.background,
+      cardColor: palette.surface,
+      dividerColor: palette.border,
+      colorScheme: ColorScheme.light(
+        primary: accent,
+        surface: palette.surface,
+        onSurface: palette.textPrimary,
+      ),
+      extensions: const [AppPalette.light],
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        foregroundColor: palette.textPrimary,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: true,
+        systemOverlayStyle: SystemUiOverlayStyle.dark,
+        iconTheme: IconThemeData(color: palette.textPrimary),
+        titleTextStyle: TextStyle(
+          color: palette.textPrimary,
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: palette.surface,
+        elevation: 0,
+        indicatorColor: accent.withValues(alpha: 0.15),
+        surfaceTintColor: Colors.transparent,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: palette.surface,
+        hintStyle: TextStyle(color: palette.textMuted),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: palette.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: palette.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: accent, width: 1.2),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: accent,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: palette.surfaceElevated,
+        contentTextStyle: TextStyle(color: palette.textPrimary),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: palette.surface,
+        modalBackgroundColor: palette.surface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: palette.surface,
         surfaceTintColor: Colors.transparent,
       ),
     );

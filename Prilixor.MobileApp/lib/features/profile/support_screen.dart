@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config/app_urls.dart';
+import '../../core/theme.dart';
 
 class SupportScreen extends StatelessWidget {
   final String? orderRef;
@@ -34,33 +35,35 @@ class SupportScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('Support', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0F172A),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('Support', style: TextStyle(color: colors.textPrimary)),
+        backgroundColor: colors.background,
+        iconTheme: IconThemeData(color: colors.textPrimary),
         elevation: 0,
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text(
+          Text(
             'Get help with rentals, orders, or your account.',
-            style: TextStyle(color: Colors.white54, fontSize: 14),
+            style: TextStyle(color: colors.textSecondary, fontSize: 14),
           ),
           if (orderRef != null && orderRef!.trim().isNotEmpty) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white10,
+                color: colors.surfaceElevated,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white12),
+                border: Border.all(color: colors.border),
               ),
               child: Text(
                 'You opened this from order $orderRef. Mention this ID when you contact us.',
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                style: TextStyle(color: colors.textSecondary, fontSize: 13),
               ),
             ),
           ],
@@ -68,39 +71,39 @@ class SupportScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
+              color: colors.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(color: colors.border),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.support_agent, color: Color(0xFF6C63FF)),
-                    SizedBox(width: 8),
-                    Text('Contact us', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    const Icon(Icons.support_agent, color: Color(0xFF6C63FF)),
+                    const SizedBox(width: 8),
+                    Text('Contact us', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
                   ],
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Email or call our support team for account help and general inquiries.',
-                  style: TextStyle(color: Colors.white54, fontSize: 13),
+                  style: TextStyle(color: colors.textSecondary, fontSize: 13),
                 ),
                 const SizedBox(height: 12),
                 SelectableText(
                   _supportEmail,
-                  style: const TextStyle(color: Color(0xFFA5B4FC), fontWeight: FontWeight.w600),
+                  style: TextStyle(color: context.isDarkMode ? const Color(0xFFA5B4FC) : colors.accent, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 6),
                 SelectableText(
                   _supportPhone,
-                  style: const TextStyle(color: Color(0xFFA5B4FC), fontWeight: FontWeight.w600),
+                  style: TextStyle(color: context.isDarkMode ? const Color(0xFFA5B4FC) : colors.accent, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 6),
-                const Text(
+                Text(
                   'Hours: Mon–Sat, 9:00 AM – 6:00 PM IST',
-                  style: TextStyle(color: Colors.white38, fontSize: 12),
+                  style: TextStyle(color: colors.textMuted, fontSize: 12),
                 ),
                 const SizedBox(height: 14),
                 SizedBox(
@@ -117,8 +120,8 @@ class SupportScreen extends StatelessWidget {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white70,
-                      side: const BorderSide(color: Colors.white24),
+                      foregroundColor: colors.textPrimary,
+                      side: BorderSide(color: colors.border),
                     ),
                     onPressed: _callSupport,
                     icon: const Icon(Icons.phone_outlined),
@@ -130,8 +133,8 @@ class SupportScreen extends StatelessWidget {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white70,
-                      side: const BorderSide(color: Colors.white24),
+                      foregroundColor: colors.textPrimary,
+                      side: BorderSide(color: colors.border),
                     ),
                     onPressed: _openContactPage,
                     icon: const Icon(Icons.open_in_new),
@@ -145,19 +148,19 @@ class SupportScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
+              color: colors.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(color: colors.border),
             ),
-            child: const Row(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline, color: Colors.white38, size: 18),
-                SizedBox(width: 10),
+                Icon(Icons.info_outline, color: colors.textMuted, size: 18),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Order-specific chat is available from Order details. Platform support handles account and billing questions.',
-                    style: TextStyle(color: Colors.white54, fontSize: 13),
+                    style: TextStyle(color: colors.textSecondary, fontSize: 13),
                   ),
                 ),
               ],

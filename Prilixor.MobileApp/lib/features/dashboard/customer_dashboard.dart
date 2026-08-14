@@ -8,6 +8,7 @@ import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
 import '../cart/cart_screen.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/theme.dart';
 import '../../core/providers/cart_provider.dart';
 import '../../core/providers/notification_provider.dart';
 import '../../core/providers/order_provider.dart';
@@ -104,8 +105,10 @@ class _CustomerDashboardState extends State<CustomerDashboard> with WidgetsBindi
       const ProfileScreen(),
     ];
 
+    final colors = context.appColors;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       body: IndexedStack(
         index: _currentIndex,
         children: screens,
@@ -113,9 +116,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> with WidgetsBindi
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onTabTapped,
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: colors.surface,
         selectedItemColor: const Color(0xFF6C63FF),
-        unselectedItemColor: Colors.white54,
+        unselectedItemColor: colors.textMuted,
         type: BottomNavigationBarType.fixed,
         items: [
           const BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Discover'),

@@ -10,6 +10,7 @@ import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/utils/media_url.dart';
 import '../../core/utils/multipart_file_util.dart';
+import '../../core/theme.dart';
 
 const _docTypes = [
   ('spec_sheet', 'Spec sheet'),
@@ -279,11 +280,11 @@ class _ListingMediaScreenState extends State<ListingMediaScreen>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Remove document?', style: TextStyle(color: Colors.white)),
+        backgroundColor: AppTheme.card(context),
+        title: Text('Remove document?', style: TextStyle(color: context.appColors.textPrimary)),
         content: Text(
           'Remove ${_labelForType(doc.documentType)}?',
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: context.appColors.textSecondary),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -342,9 +343,9 @@ class _ListingMediaScreenState extends State<ListingMediaScreen>
         title: Text(widget.listingTitle),
         bottom: TabBar(
           controller: _tabs,
-          indicatorColor: const Color(0xFF6C63FF),
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white54,
+          indicatorColor: AppTheme.accent,
+          labelColor: context.appColors.textPrimary,
+          unselectedLabelColor: context.appColors.textMuted,
           tabs: const [
             Tab(text: 'Images'),
             Tab(text: 'Documents'),
@@ -363,7 +364,7 @@ class _ListingMediaScreenState extends State<ListingMediaScreen>
                         _uploadDocument();
                       }
                     },
-              backgroundColor: const Color(0xFF6C63FF),
+              backgroundColor: AppTheme.accent,
               icon: Icon(_tabs.index == 0
                   ? Icons.add_photo_alternate_outlined
                   : Icons.upload_file_outlined),
@@ -371,7 +372,7 @@ class _ListingMediaScreenState extends State<ListingMediaScreen>
             ),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
+              child: CircularProgressIndicator(color: AppTheme.accent),
             )
           : TabBarView(
               controller: _tabs,
@@ -385,19 +386,19 @@ class _ListingMediaScreenState extends State<ListingMediaScreen>
 
   Widget _buildImagesTab(VendorCatalogProvider provider, bool pending) {
     return RefreshIndicator(
-      color: const Color(0xFF6C63FF),
+      color: AppTheme.accent,
       onRefresh: _load,
       child: _images.isEmpty
           ? ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              children: const [
-                SizedBox(height: 80),
-                Icon(Icons.image_outlined, size: 48, color: Colors.white24),
-                SizedBox(height: 12),
+              children: [
+                const SizedBox(height: 80),
+                Icon(Icons.image_outlined, size: 48, color: context.appColors.textMuted),
+                const SizedBox(height: 12),
                 Text(
                   'No photos yet. Tap Add photos to upload.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white54),
+                  style: TextStyle(color: context.appColors.textMuted),
                 ),
               ],
             )
@@ -422,8 +423,8 @@ class _ListingMediaScreenState extends State<ListingMediaScreen>
                       child: url != null
                           ? Image.network(url, fit: BoxFit.cover)
                           : Container(
-                              color: const Color(0xFF1E293B),
-                              child: const Icon(Icons.broken_image, color: Colors.white24),
+                              color: AppTheme.card(context),
+                              child: Icon(Icons.broken_image, color: context.appColors.textMuted),
                             ),
                     ),
                     if (image.isPrimary)
@@ -433,7 +434,7 @@ class _ListingMediaScreenState extends State<ListingMediaScreen>
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF6C63FF),
+                            color: AppTheme.accent,
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: const Text(
@@ -484,31 +485,38 @@ class _ListingMediaScreenState extends State<ListingMediaScreen>
 
   Widget _buildDocumentsTab(VendorCatalogProvider provider, bool pending) {
     return RefreshIndicator(
-      color: const Color(0xFF6C63FF),
+      color: AppTheme.accent,
       onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
-          const Text(
+          Text(
             'Document type for next upload',
-            style: TextStyle(color: Colors.white54, fontSize: 12),
+            style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
             value: _docType,
-            dropdownColor: const Color(0xFF1E293B),
-            style: const TextStyle(color: Colors.white),
+            dropdownColor: context.appColors.surface,
+            style: TextStyle(color: context.appColors.textPrimary),
             decoration: InputDecoration(
               filled: true,
-              fillColor: const Color(0xFF1E293B),
+              fillColor: AppTheme.card(context),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
+                borderSide: BorderSide(color: context.appColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: context.appColors.border),
               ),
             ),
             items: _docTypes
-                .map((t) => DropdownMenuItem(value: t.$1, child: Text(t.$2)))
+                .map((t) => DropdownMenuItem(
+                      value: t.$1,
+                      child: Text(t.$2, style: TextStyle(color: context.appColors.textPrimary)),
+                    ))
                 .toList(),
             onChanged: pending
                 ? null
@@ -518,15 +526,15 @@ class _ListingMediaScreenState extends State<ListingMediaScreen>
           ),
           const SizedBox(height: 16),
           if (_documents.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 40),
+            Padding(
+              padding: const EdgeInsets.only(top: 40),
               child: Column(
                 children: [
-                  Icon(Icons.description_outlined, size: 48, color: Colors.white24),
-                  SizedBox(height: 12),
+                  Icon(Icons.description_outlined, size: 48, color: context.appColors.textMuted),
+                  const SizedBox(height: 12),
                   Text(
                     'No documents uploaded yet.',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: context.appColors.textMuted),
                   ),
                 ],
               ),
@@ -537,13 +545,13 @@ class _ListingMediaScreenState extends State<ListingMediaScreen>
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: AppTheme.card(context),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white12),
+                  border: Border.all(color: context.appColors.border),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.insert_drive_file_outlined, color: Color(0xFF6C63FF)),
+                    const Icon(Icons.insert_drive_file_outlined, color: AppTheme.accent),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -551,15 +559,15 @@ class _ListingMediaScreenState extends State<ListingMediaScreen>
                         children: [
                           Text(
                             _labelForType(doc.documentType),
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: context.appColors.textPrimary,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             doc.verificationStatus,
-                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                            style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
                           ),
                         ],
                       ),
@@ -567,7 +575,7 @@ class _ListingMediaScreenState extends State<ListingMediaScreen>
                     IconButton(
                       tooltip: 'Preview',
                       onPressed: () => _previewDocument(doc),
-                      icon: const Icon(Icons.open_in_new, color: Colors.white70),
+                      icon: Icon(Icons.open_in_new, color: context.appColors.textSecondary),
                     ),
                     if (!pending)
                       IconButton(

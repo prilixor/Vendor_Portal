@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 
 /// Temporary screen body used until a phase wires real APIs/UI.
 class PhasePlaceholder extends StatelessWidget {
@@ -36,25 +37,25 @@ class PhasePlaceholder extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: context.appColors.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             description,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 15, color: Colors.white60, height: 1.4),
+            style: TextStyle(fontSize: 15, color: context.appColors.textSecondary, height: 1.4),
           ),
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
+              color: context.appColors.surfaceElevated,
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: Colors.white12),
+              border: Border.all(color: context.appColors.border),
             ),
             child: Text(
               phaseLabel,
@@ -68,10 +69,10 @@ class PhasePlaceholder extends StatelessWidget {
           ),
           if (upcomingItems.isNotEmpty) ...[
             const SizedBox(height: 28),
-            const Text(
+            Text(
               'Coming in next phases',
               style: TextStyle(
-                color: Colors.white70,
+                color: context.appColors.textSecondary,
                 fontWeight: FontWeight.w600,
                 fontSize: 14,
               ),
@@ -95,7 +96,7 @@ class PhasePlaceholder extends StatelessWidget {
                     Expanded(
                       child: Text(
                         item,
-                        style: const TextStyle(color: Colors.white54, fontSize: 14),
+                        style: TextStyle(color: context.appColors.textMuted, fontSize: 14),
                       ),
                     ),
                   ],

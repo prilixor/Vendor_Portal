@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/config/app_urls.dart';
+import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
@@ -135,13 +136,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<AuthProvider>(context);
+    final colors = context.appColors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: colors.textPrimary),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -161,22 +163,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-              const Text(
+              Text(
                 'Create Account',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: colors.textPrimary),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Join BlinksMed to start renting equipment',
-                style: TextStyle(color: Colors.white60, fontSize: 16),
+                style: TextStyle(color: colors.textSecondary, fontSize: 16),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
               const RequiredFieldsNote(),
               TextField(
                 controller: _fullNameController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colors.textPrimary),
                 onChanged: (_) {
                   if (_nameError != null) setState(() => _nameError = null);
                 },
@@ -191,7 +193,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _emailController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colors.textPrimary),
                 keyboardType: TextInputType.emailAddress,
                 onChanged: (_) {
                   if (_emailError != null) setState(() => _emailError = null);
@@ -216,7 +218,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _passwordController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colors.textPrimary),
                 obscureText: _obscurePassword,
                 onChanged: (_) {
                   if (_passwordError != null) setState(() => _passwordError = null);
@@ -230,7 +232,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: Colors.white54,
+                      color: colors.textMuted,
                     ),
                     onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                   ),
@@ -239,7 +241,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _confirmPasswordController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colors.textPrimary),
                 obscureText: _obscureConfirmPassword,
                 onChanged: (_) {
                   if (_confirmPasswordError != null) {
@@ -257,7 +259,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       _obscureConfirmPassword
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
-                      color: Colors.white54,
+                      color: colors.textMuted,
                     ),
                     onPressed: () =>
                         setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
@@ -281,7 +283,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: Text.rich(
                         TextSpan(
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.55),
+                            color: colors.textSecondary,
                             fontSize: 12,
                             height: 1.45,
                           ),
@@ -330,7 +332,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text("Already have an account? ", style: TextStyle(color: Colors.white54)),
+                  Text("Already have an account? ", style: TextStyle(color: colors.textMuted)),
                   GestureDetector(
                     onTap: () {
                       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));

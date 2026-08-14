@@ -129,7 +129,7 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
         if (widget.interactive) ...[
           TextField(
             controller: _searchController,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: context.appColors.textPrimary),
             textInputAction: TextInputAction.search,
             onChanged: _onSearchChanged,
             onSubmitted: (value) {
@@ -141,7 +141,7 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
             },
             decoration: InputDecoration(
               hintText: 'Search area, landmark, shop or address',
-              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.35)),
+              hintStyle: TextStyle(color: context.appColors.textMuted),
               prefixIcon: const Icon(Icons.search, color: AppTheme.accent),
               suffixIcon: _searching
                   ? const Padding(
@@ -160,11 +160,11 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
               fillColor: AppTheme.bg(context),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                borderSide: BorderSide(color: context.appColors.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                borderSide: BorderSide(color: context.appColors.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -179,7 +179,7 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
               decoration: BoxDecoration(
                 color: AppTheme.card(context),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                border: Border.all(color: context.appColors.border),
               ),
               child: _results.isNotEmpty
                   ? ListView.separated(
@@ -187,7 +187,7 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
                       itemCount: _results.length,
                       separatorBuilder: (context, index) => Divider(
                         height: 1,
-                        color: Colors.white.withValues(alpha: 0.06),
+                        color: context.appColors.border,
                       ),
                       itemBuilder: (context, index) {
                         final result = _results[index];
@@ -195,7 +195,7 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
                           dense: true,
                           title: Text(
                             result.label,
-                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            style: TextStyle(color: context.appColors.textPrimary, fontSize: 13),
                           ),
                           onTap: () => _selectResult(result),
                         );
@@ -206,7 +206,7 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
                       child: Text(
                         _searchError!,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.5),
+                          color: context.appColors.textMuted,
                           fontSize: 12,
                         ),
                       ),
@@ -279,10 +279,11 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
                     decoration: BoxDecoration(
                       color: AppTheme.card(context).withValues(alpha: 0.92),
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: context.appColors.border),
                     ),
                     child: Text(
                       '${widget.latitude.toStringAsFixed(4)}, ${widget.longitude.toStringAsFixed(4)}',
-                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                      style: TextStyle(color: context.appColors.textPrimary, fontSize: 11),
                     ),
                   ),
                 ),
@@ -295,11 +296,12 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
                       decoration: BoxDecoration(
                         color: AppTheme.card(context).withValues(alpha: 0.92),
                         borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: context.appColors.border),
                       ),
                       child: Text(
                         'Tap map to move pin',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
+                          color: context.appColors.textSecondary,
                           fontSize: 10,
                         ),
                       ),
