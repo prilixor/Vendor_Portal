@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
@@ -7,7 +7,9 @@ import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
 import { adminApi, AdminCustomerDetailDto, AdminCustomerListItemDto } from "@/app/services/adminApi";
 import { AdminPlaceCustomerOrderDialog } from "@/app/components/admin/AdminPlaceCustomerOrderDialog";
-import { Loader2, LogIn, Mail, MapPin, Phone, Search, ShoppingCart, ChevronRight, UserRound } from "lucide-react";
+import { Loader2, LogIn, Mail, MapPin, Phone, Search, ShoppingCart, ChevronLeft, ChevronRight, UserRound } from "lucide-react";
+
+const PAGE_SIZE = 8;
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { ADMIN_PERMISSIONS } from "@/app/helpers/adminNav";
@@ -63,18 +65,27 @@ export const AdminCustomers = () => {
   const [rows, setRows] = useState<AdminCustomerListItemDto[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
   const { hasPermission } = useAuth();
 
   const load = async (q?: string) => {
     setLoading(true);
     try {
       setRows(await adminApi.getAdminCustomers(q));
+      setPage(1);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load customers");
     } finally {
       setLoading(false);
     }
   };
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = useMemo(
+    () => rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [rows, safePage],
+  );
 
   useEffect(() => {
     load();
@@ -111,7 +122,7 @@ export const AdminCustomers = () => {
         <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : (
         <div className="space-y-2">
-          {rows.map((c) => {
+          {pageRows.map((c) => {
             const initials = c.fullName
               .split(/\s+/)
               .map((n) => n[0])
@@ -163,6 +174,37 @@ export const AdminCustomers = () => {
               <UserRound className="h-8 w-8 mx-auto text-muted-foreground/50" />
               <p className="text-sm font-medium">No customers found</p>
               <p className="text-xs text-muted-foreground">Try a different email, name, or phone.</p>
+            </div>
+          )}
+          {rows.length > 0 && (
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                Page {safePage} of {totalPages} · {rows.length} customer{rows.length !== 1 ? "s" : ""}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  aria-label="Previous page"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  aria-label="Next page"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
         </div>
