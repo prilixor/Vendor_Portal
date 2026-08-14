@@ -56,7 +56,7 @@ class IndianMobileField extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
+                  color: AppTheme.bg(context),
                   borderRadius: const BorderRadius.horizontal(
                     left: Radius.circular(11),
                   ),

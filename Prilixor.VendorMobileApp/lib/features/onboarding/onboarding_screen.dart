@@ -137,8 +137,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         actions: [
           TextButton.icon(
             onPressed: onboarding.saving ? null : _submitVerification,
-            icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
-            label: const Text('Submit', style: TextStyle(color: Colors.white)),
+            icon: Icon(Icons.send_rounded, size: 18, color: context.appColors.accent),
+            label: Text('Submit', style: TextStyle(color: context.appColors.accent, fontWeight: FontWeight.bold)),
           ),
         ],
         bottom: TabBar(
@@ -460,8 +460,8 @@ class _ProfileTabState extends State<_ProfileTab> {
   Widget build(BuildContext context) {
     final saving = Provider.of<VendorOnboardingProvider>(context).saving;
     if (widget.profile == null) {
-      return const Center(
-        child: Text('No profile loaded.', style: TextStyle(color: Colors.white54)),
+      return Center(
+        child: Text('No profile loaded.', style: TextStyle(color: context.appColors.textMuted)),
       );
     }
 
@@ -758,23 +758,30 @@ class _DocumentsTab extends StatelessWidget {
             children: [
               DropdownButtonFormField<String>(
                 initialValue: selectedType,
-                dropdownColor: AppTheme.card(context),
-                style: const TextStyle(color: Colors.white),
+                dropdownColor: context.appColors.surface,
+                style: TextStyle(color: context.appColors.textPrimary),
                 decoration: InputDecoration(
                   labelText: 'Document type',
-                  labelStyle: const TextStyle(color: Colors.white54),
+                  labelStyle: TextStyle(color: context.appColors.textSecondary),
                   filled: true,
                   fillColor: AppTheme.bg(context),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                    borderSide: BorderSide(color: context.appColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: context.appColors.border),
                   ),
                 ),
                 items: vendorDocumentTypes.map((t) {
                   final uploaded = uploadedTypes.contains(t);
                   return DropdownMenuItem(
                     value: t,
-                    child: Text(uploaded ? '$t (uploaded)' : t),
+                    child: Text(
+                      uploaded ? '$t (uploaded)' : t,
+                      style: TextStyle(color: context.appColors.textPrimary),
+                    ),
                   );
                 }).toList(),
                 onChanged: onTypeChanged,
@@ -802,11 +809,11 @@ class _DocumentsTab extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 10),
           child: Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Uploaded documents',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: context.appColors.textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 16,
                   ),
@@ -814,7 +821,7 @@ class _DocumentsTab extends StatelessWidget {
               ),
               Text(
                 '${docs.length}/${vendorDocumentTypes.length}',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13),
+                style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
               ),
             ],
           ),
@@ -826,15 +833,15 @@ class _DocumentsTab extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppTheme.card(context),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              border: Border.all(color: context.appColors.border),
             ),
             child: Column(
               children: [
-                Icon(Icons.folder_off_outlined, size: 40, color: Colors.white.withValues(alpha: 0.25)),
+                Icon(Icons.folder_off_outlined, size: 40, color: context.appColors.textMuted),
                 const SizedBox(height: 10),
                 Text(
                   'No documents uploaded yet',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.55)),
+                  style: TextStyle(color: context.appColors.textMuted),
                 ),
               ],
             ),
@@ -874,7 +881,7 @@ class _DocumentCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.card(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Material(
         color: Colors.transparent,
@@ -909,8 +916,8 @@ class _DocumentCard extends StatelessWidget {
                     children: [
                       Text(
                         document.documentType,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.appColors.textPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                         ),
@@ -921,7 +928,7 @@ class _DocumentCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.48),
+                          color: context.appColors.textMuted,
                           fontSize: 12,
                         ),
                       ),

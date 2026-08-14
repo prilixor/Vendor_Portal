@@ -316,14 +316,14 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                                   enabled: !pending,
                                   keyboardType: TextInputType.number,
                                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                  style: const TextStyle(color: Colors.white),
+                                  style: TextStyle(color: context.appColors.textPrimary),
                                   decoration: _inputDecoration(label: 'Quantity'),
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
                                   'No packaging sizes on this product yet. Ask Admin to add variants (e.g. 1L, 5L).',
                                   style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.5),
+                                    color: context.appColors.textMuted,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -334,7 +334,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                           enabled: !pending,
                           keyboardType: TextInputType.number,
                           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                          style: const TextStyle(color: Colors.white),
+                          style: TextStyle(color: context.appColors.textPrimary),
                           decoration: _inputDecoration(label: 'Quantity'),
                         ),
                 ),
@@ -372,17 +372,17 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       labelText: label,
       hintText: hint,
       errorText: errorText,
-      labelStyle: const TextStyle(color: Colors.white54),
-      hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.28)),
+      labelStyle: TextStyle(color: context.appColors.textSecondary),
+      hintStyle: TextStyle(color: context.appColors.textMuted),
       filled: true,
       fillColor: AppTheme.bg(context),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+        borderSide: BorderSide(color: context.appColors.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+        borderSide: BorderSide(color: context.appColors.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -438,7 +438,7 @@ class _TypeBanner extends StatelessWidget {
                 Text(
                   'LISTING TYPE',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.45),
+                    color: context.appColors.textMuted,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.7,
@@ -447,8 +447,8 @@ class _TypeBanner extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   label,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.appColors.textPrimary,
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
                   ),
@@ -487,10 +487,10 @@ class _FormSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.card(context),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+        border: Border.all(color: context.appColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
+            color: Colors.black.withValues(alpha: context.isDarkMode ? 0.18 : 0.04),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -505,7 +505,7 @@ class _FormSection extends StatelessWidget {
                 child: Text(
                   title.toUpperCase(),
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.55),
+                    color: context.appColors.textSecondary,
                     fontWeight: FontWeight.w800,
                     fontSize: 11,
                     letterSpacing: 0.8,
@@ -520,7 +520,7 @@ class _FormSection extends StatelessWidget {
             Text(
               subtitle!,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.48),
+                color: context.appColors.textMuted,
                 fontSize: 12,
                 height: 1.35,
               ),
@@ -540,19 +540,19 @@ class _ReadOnlyBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
+        color: context.appColors.surface,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        border: Border.all(color: context.appColors.border),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.shield_outlined, size: 12, color: Colors.white54),
-          SizedBox(width: 4),
+          Icon(Icons.shield_outlined, size: 12, color: context.appColors.textMuted),
+          const SizedBox(width: 4),
           Text(
             'Read-only',
             style: TextStyle(
-              color: Colors.white70,
+              color: context.appColors.textSecondary,
               fontSize: 10,
               fontWeight: FontWeight.w700,
             ),
@@ -645,7 +645,7 @@ class _SearchablePickerField extends StatelessWidget {
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.white24,
+                          color: context.appColors.border,
                           borderRadius: BorderRadius.circular(999),
                         ),
                       ),
@@ -656,8 +656,8 @@ class _SearchablePickerField extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 'Select $label',
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: context.appColors.textPrimary,
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -665,7 +665,7 @@ class _SearchablePickerField extends StatelessWidget {
                             ),
                             IconButton(
                               onPressed: () => Navigator.pop(ctx),
-                              icon: const Icon(Icons.close, color: Colors.white54),
+                              icon: Icon(Icons.close, color: context.appColors.textMuted),
                             ),
                           ],
                         ),
@@ -674,20 +674,20 @@ class _SearchablePickerField extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: TextField(
                           autofocus: true,
-                          style: const TextStyle(color: Colors.white),
+                          style: TextStyle(color: context.appColors.textPrimary),
                           decoration: InputDecoration(
                             hintText: searchHint,
-                            hintStyle: const TextStyle(color: Colors.white38),
-                            prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                            hintStyle: TextStyle(color: context.appColors.textMuted),
+                            prefixIcon: Icon(Icons.search, color: context.appColors.textMuted),
                             filled: true,
                             fillColor: AppTheme.bg(context),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                              borderSide: BorderSide(color: context.appColors.border),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                              borderSide: BorderSide(color: context.appColors.border),
                             ),
                           ),
                           onChanged: (v) => setModalState(() => query = v.trim()),
@@ -696,17 +696,17 @@ class _SearchablePickerField extends StatelessWidget {
                       const SizedBox(height: 8),
                       Expanded(
                         child: filtered.isEmpty
-                            ? const Center(
+                            ? Center(
                                 child: Text(
                                   'No results found.',
-                                  style: TextStyle(color: Colors.white54),
+                                  style: TextStyle(color: context.appColors.textMuted),
                                 ),
                               )
                             : ListView.separated(
                                 itemCount: filtered.length,
                                 separatorBuilder: (_, __) => Divider(
                                   height: 1,
-                                  color: Colors.white.withValues(alpha: 0.06),
+                                  color: context.appColors.border,
                                 ),
                                 itemBuilder: (_, i) {
                                   final option = filtered[i];
@@ -715,7 +715,7 @@ class _SearchablePickerField extends StatelessWidget {
                                     title: Text(
                                       option.label,
                                       style: TextStyle(
-                                        color: Colors.white,
+                                        color: context.appColors.textPrimary,
                                         fontWeight:
                                             selected ? FontWeight.w700 : FontWeight.w500,
                                       ),
@@ -757,23 +757,23 @@ class _SearchablePickerField extends StatelessWidget {
         decoration: InputDecoration(
           labelText: label,
           errorText: errorText,
-          labelStyle: const TextStyle(color: Colors.white54),
+          labelStyle: TextStyle(color: context.appColors.textSecondary),
           filled: true,
           fillColor: AppTheme.bg(context),
-          suffixIcon: const Icon(Icons.search, color: Colors.white54),
+          suffixIcon: Icon(Icons.search, color: context.appColors.textMuted),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+            borderSide: BorderSide(color: context.appColors.border),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+            borderSide: BorderSide(color: context.appColors.border),
           ),
         ),
         child: Text(
           selectedLabel ?? 'Select $label',
           style: TextStyle(
-            color: selectedLabel == null ? Colors.white38 : Colors.white,
+            color: selectedLabel == null ? context.appColors.textMuted : context.appColors.textPrimary,
             fontSize: 15,
           ),
         ),
@@ -787,14 +787,12 @@ class _DropdownField extends StatelessWidget {
   final String? value;
   final List<DropdownMenuItem<String>> items;
   final ValueChanged<String?>? onChanged;
-  final String? errorText;
 
   const _DropdownField({
     required this.label,
     required this.value,
     required this.items,
     this.onChanged,
-    this.errorText,
   });
 
   @override
@@ -803,21 +801,20 @@ class _DropdownField extends StatelessWidget {
       initialValue: value,
       items: items,
       onChanged: onChanged,
-      dropdownColor: AppTheme.card(context),
-      style: const TextStyle(color: Colors.white),
+      dropdownColor: context.appColors.surface,
+      style: TextStyle(color: context.appColors.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        errorText: errorText,
-        labelStyle: const TextStyle(color: Colors.white54),
+        labelStyle: TextStyle(color: context.appColors.textSecondary),
         filled: true,
         fillColor: AppTheme.bg(context),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          borderSide: BorderSide(color: context.appColors.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          borderSide: BorderSide(color: context.appColors.border),
         ),
       ),
     );
@@ -840,10 +837,10 @@ class _BottomSaveBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.card(context),
-        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
+        border: Border(top: BorderSide(color: context.appColors.border)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
+            color: Colors.black.withValues(alpha: context.isDarkMode ? 0.35 : 0.05),
             blurRadius: 16,
             offset: const Offset(0, -4),
           ),
@@ -892,15 +889,15 @@ class _ChemicalPricingInfo extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.03),
+          color: context.appColors.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08), style: BorderStyle.solid),
+          border: Border.all(color: context.appColors.border, style: BorderStyle.solid),
         ),
         child: Text(
           product.buyPrice != null && product.buyPrice! > 0
               ? 'Buy price ₹${product.buyPrice!.toStringAsFixed(0)} · no packaging sizes yet'
               : 'No packaging sizes defined. Ask Admin to add variants first.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 13),
+          style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
         ),
       );
     }
@@ -911,9 +908,9 @@ class _ChemicalPricingInfo extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.03),
+            color: context.appColors.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            border: Border.all(color: context.appColors.border),
           ),
           child: Row(
             children: [
@@ -923,12 +920,12 @@ class _ChemicalPricingInfo extends StatelessWidget {
                   children: [
                     Text(
                       v.label,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                      style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       v.sku,
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 11),
+                      style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
                     ),
                   ],
                 ),
@@ -938,7 +935,7 @@ class _ChemicalPricingInfo extends StatelessWidget {
                 children: [
                   Text(
                     'Customer ₹${v.buyPrice.toStringAsFixed(0)}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    style: TextStyle(color: context.appColors.textSecondary, fontSize: 12),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -1022,7 +1019,7 @@ class _EquipmentPricingInfo extends StatelessWidget {
           child: Text(
             'Rental payout = vendor daily rate × plan days (set by Admin)',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.65),
+              color: context.appColors.textSecondary,
               fontSize: 11,
               height: 1.35,
             ),
@@ -1094,7 +1091,7 @@ class _MetricTile extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.45),
+              color: context.appColors.textMuted,
               fontSize: 11,
             ),
           ),
@@ -1102,7 +1099,7 @@ class _MetricTile extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              color: Colors.white,
+              color: context.appColors.textPrimary,
               fontWeight: FontWeight.w800,
               fontSize: compact ? 12 : 15,
               fontFeatures: const [FontFeature.tabularFigures()],
@@ -1127,7 +1124,7 @@ class _ReadOnlyCatalogName extends StatelessWidget {
       children: [
         Text(
           'Catalog name (from Admin)',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12),
+          style: TextStyle(color: context.appColors.textSecondary, fontSize: 12),
         ),
         const SizedBox(height: 6),
         Container(
@@ -1136,21 +1133,21 @@ class _ReadOnlyCatalogName extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppTheme.bg(context),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            border: Border.all(color: context.appColors.border),
           ),
           child: Row(
             children: [
               Icon(
                 Icons.lock_outline,
                 size: 16,
-                color: Colors.white.withValues(alpha: 0.35),
+                color: context.appColors.textMuted,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   empty ? 'Select a product above' : value!,
                   style: TextStyle(
-                    color: empty ? Colors.white38 : Colors.white,
+                    color: empty ? context.appColors.textMuted : context.appColors.textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                   ),
@@ -1162,7 +1159,7 @@ class _ReadOnlyCatalogName extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           'Customers always see this Admin product/chemical name.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11),
+          style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
         ),
       ],
     );

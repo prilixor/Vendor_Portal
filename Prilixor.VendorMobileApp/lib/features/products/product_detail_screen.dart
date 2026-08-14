@@ -7,6 +7,7 @@ import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/utils/media_url.dart';
 import '../inventory/inventory_detail_screen.dart';
+import '../../core/theme.dart';
 import 'edit_listing_screen.dart';
 import 'listing_media_screen.dart';
 
@@ -87,11 +88,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Delete listing?', style: TextStyle(color: Colors.white)),
+        backgroundColor: AppTheme.card(context),
+        title: Text('Delete listing?', style: TextStyle(color: context.appColors.textPrimary)),
         content: Text(
           'Delete "${row.productName.trim().isNotEmpty ? row.productName : row.listing.listingTitle}"? This cannot be undone.',
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: context.appColors.textSecondary),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -160,7 +161,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     if (row == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Product')),
-        body: const Center(child: Text('Listing not found.', style: TextStyle(color: Colors.white54))),
+        body: Center(child: Text('Listing not found.', style: TextStyle(color: context.appColors.textMuted))),
       );
     }
 
@@ -209,7 +210,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
+                child: CircularProgressIndicator(color: AppTheme.accent),
               ),
             )
           else if (imageUrl != null)
@@ -224,12 +225,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             Container(
               height: 140,
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: AppTheme.card(context),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white12),
+                border: Border.all(color: context.appColors.border),
               ),
-              child: const Center(
-                child: Icon(Icons.image_outlined, color: Colors.white24, size: 48),
+              child: Center(
+                child: Icon(Icons.image_outlined, color: context.appColors.textMuted, size: 48),
               ),
             ),
           const SizedBox(height: 16),
@@ -292,24 +293,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             label: Text(_images.isEmpty ? 'Add photos & documents' : 'Photos & documents (${_images.length})'),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Colors.white24),
+              foregroundColor: context.appColors.textPrimary,
+              side: BorderSide(color: context.appColors.border),
             ),
           ),
           const SizedBox(height: 12),
           SwitchListTile(
-            tileColor: const Color(0xFF1E293B),
+            tileColor: AppTheme.card(context),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: Colors.white12),
+              side: BorderSide(color: context.appColors.border),
             ),
-            title: const Text('Listing active', style: TextStyle(color: Colors.white)),
-            subtitle: const Text(
+            title: Text('Listing active', style: TextStyle(color: context.appColors.textPrimary)),
+            subtitle: Text(
               'Inactive listings are hidden from customers.',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
             ),
             value: row.status == ListingUiStatus.active,
-            activeThumbColor: const Color(0xFF6C63FF),
+            activeThumbColor: AppTheme.accent,
             onChanged: provider.saving
                 ? null
                 : (v) => _toggleStatus(row, v),
@@ -329,8 +330,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               label: const Text('Manage inventory'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white24),
+                foregroundColor: context.appColors.textPrimary,
+                side: BorderSide(color: context.appColors.border),
               ),
             ),
         ],
@@ -348,9 +349,9 @@ class _InfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: AppTheme.card(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Column(children: children),
     );
@@ -371,12 +372,12 @@ class _InfoRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 120,
-            child: Text(label, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+            child: Text(label, style: TextStyle(color: context.appColors.textSecondary, fontSize: 13)),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w600),
             ),
           ),
         ],

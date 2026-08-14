@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/api/api_client.dart';
+import '../../core/theme.dart';
 
 const _doctorNotFoundMessage =
     'No doctor found for this Unique ID. Please check the ID and try again.';
@@ -14,7 +15,7 @@ Future<void> showVendorDoctorLookupSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF0F172A),
+    backgroundColor: AppTheme.card(context),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
@@ -186,26 +187,30 @@ class _VendorDoctorLookupSheetState extends State<_VendorDoctorLookupSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: context.appColors.border,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            const Row(
+            Row(
               children: [
-                Icon(Icons.medical_services_outlined, color: Color(0xFF2DD4BF)),
-                SizedBox(width: 8),
+                const Icon(Icons.medical_services_outlined, color: Color(0xFF2DD4BF)),
+                const SizedBox(width: 8),
                 Text(
                   'Find doctor by Unique ID',
-                  style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    color: context.appColors.textPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Enter the Unique ID from an order or QR share page. View only.',
-              style: TextStyle(color: Colors.white60, fontSize: 13),
+              style: TextStyle(color: context.appColors.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 16),
             Row(
@@ -214,20 +219,24 @@ class _VendorDoctorLookupSheetState extends State<_VendorDoctorLookupSheet> {
                   child: TextField(
                     controller: _code,
                     textCapitalization: TextCapitalization.characters,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.appColors.textPrimary,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.1,
                       fontFamily: 'monospace',
                     ),
                     decoration: InputDecoration(
                       hintText: 'e.g. DRKP26001',
-                      hintStyle: const TextStyle(color: Colors.white38),
+                      hintStyle: TextStyle(color: context.appColors.textMuted),
                       filled: true,
-                      fillColor: const Color(0xFF1E293B),
+                      fillColor: AppTheme.bg(context),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+                        borderSide: BorderSide(color: context.appColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: context.appColors.border),
                       ),
                     ),
                     onChanged: (_) {
@@ -262,19 +271,38 @@ class _VendorDoctorLookupSheetState extends State<_VendorDoctorLookupSheet> {
                 width: double.infinity,
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF7F1D1D).withValues(alpha: 0.35),
+                  color: context.isDarkMode
+                      ? const Color(0xFF7F1D1D).withValues(alpha: 0.35)
+                      : const Color(0xFFFEE2E2),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFF87171).withValues(alpha: 0.45)),
+                  border: Border.all(
+                    color: context.isDarkMode
+                        ? const Color(0xFFF87171).withValues(alpha: 0.45)
+                        : const Color(0xFFFCA5A5),
+                  ),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.info_outline, size: 18, color: Color(0xFFFCA5A5)),
+                    Icon(
+                      Icons.info_outline,
+                      size: 18,
+                      color: context.isDarkMode
+                          ? const Color(0xFFFCA5A5)
+                          : const Color(0xFFDC2626),
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         _error!,
-                        style: const TextStyle(color: Color(0xFFFECACA), fontSize: 13, height: 1.35),
+                        style: TextStyle(
+                          color: context.isDarkMode
+                              ? const Color(0xFFFECACA)
+                              : const Color(0xFF991B1B),
+                          fontSize: 13,
+                          height: 1.35,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
@@ -345,20 +373,27 @@ class _VendorDoctorLookupSheetState extends State<_VendorDoctorLookupSheet> {
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: AppTheme.bg(context),
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: context.appColors.border),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           h['name']?.toString() ?? 'Hospital',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: context.appColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         if (addr.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
-                            child: Text(addr, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                            child: Text(
+                              addr,
+                              style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
+                            ),
                           ),
                       ],
                     ),
