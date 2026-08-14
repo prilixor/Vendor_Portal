@@ -337,13 +337,13 @@ Your doctor reference profile is now active on BlinksMed. Patients can name you 
 
 Doctor Reference ID: {uniqueCode}{specialty}
 
-Share this ID, or the QR code attached to this email, with your patients. They enter it at checkout — no hospital form is required.
+Share this ID, or the Doctor Reference Card attached to this email, with your patients. They enter it at checkout — no hospital form is required.
 
 Patient share page:
 {sharePageUrl}
 
 How patients use this
-1. You share your Doctor Reference ID or QR code.
+1. You share your Doctor Reference ID or the attached card.
 2. The patient places an order on BlinksMed.
 3. At checkout they enter your ID (or scan the QR) as their doctor reference.
 
@@ -388,7 +388,7 @@ The BlinksMed Team";
                           </tr>
                           <tr>
                             <td align='center' style='padding: 4px 24px 8px; font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #64748b;'>
-                              A copy of this QR code is also attached if you want to save or print it for your clinic.
+                              A Doctor Reference Card (Unique ID + QR) is attached so you can save or print it for your clinic.
                             </td>
                           </tr>";
 
@@ -482,7 +482,7 @@ The BlinksMed Team";
                   </tr>
                   <tr>
                     <td style='padding: 0 18px 16px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 22px; color: #475569;'>
-                      1. Share your ID <strong>{code}</strong> or show them the QR code.<br>
+                      1. Share your ID <strong>{code}</strong> or show them the attached card.<br>
                       2. They place a medical equipment order on BlinksMed.<br>
                       3. At checkout they enter your ID (or scan the QR) as their doctor reference.
                     </td>
@@ -504,7 +504,7 @@ The BlinksMed Team";
             </tr>
             <tr>
               <td bgcolor='#f8fafc' style='padding: 16px 28px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 17px; color: #94a3b8;'>
-                This message was sent by BlinksMed because an administrator added your doctor reference profile. You can save the attached QR code for clinic display.
+                This message was sent by BlinksMed because an administrator added your doctor reference profile. You can save the attached Doctor Reference Card for clinic display.
               </td>
             </tr>
           </table>

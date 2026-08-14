@@ -1144,6 +1144,10 @@ export const adminApi = {
     return apiClient.downloadBlob(`/admin/doctors/${id}/qr.png`, `doctor-${uniqueCode}-qr.png`);
   },
 
+  async downloadDoctorQrCard(id: string, uniqueCode: string): Promise<void> {
+    return apiClient.downloadBlob(`/admin/doctors/${id}/qr-card.png`, `doctor-${uniqueCode}-card.png`);
+  },
+
   async getDoctorQrObjectUrl(id: string): Promise<string> {
     const blob = await apiClient.fetchBlob(`/admin/doctors/${id}/qr.png`);
     return URL.createObjectURL(blob);

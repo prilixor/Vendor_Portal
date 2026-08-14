@@ -26,7 +26,6 @@ import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
 import { Copy, Download, ExternalLink, Loader2, Mail, Pencil, Plus, Search, Stethoscope, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
-import { downloadDoctorQrCard } from "@/app/helpers/downloadDoctorQrCard";
 import {
   normalizeIndianContactDigits,
   optionalIndianContactError,
@@ -245,21 +244,11 @@ const AdminDoctors = () => {
   };
 
   const downloadQr = async (d: AdminDoctorDto) => {
-    let objectUrl: string | null = null;
     try {
-      objectUrl = qrDoctor?.id === d.id && qrUrl ? qrUrl : await adminApi.getDoctorQrObjectUrl(d.id);
-      await downloadDoctorQrCard({
-        qrImageUrl: objectUrl,
-        fullName: d.fullName,
-        uniqueCode: d.uniqueCode,
-        specialization: d.specialization,
-        fileName: `doctor-${d.uniqueCode}-card.png`,
-      });
+      await adminApi.downloadDoctorQrCard(d.id, d.uniqueCode);
       toast.success("Doctor QR card downloaded");
     } catch (e) {
       toast.error(getUserFriendlyMessage(e) || "Failed to download QR card");
-    } finally {
-      if (objectUrl && objectUrl !== qrUrl) URL.revokeObjectURL(objectUrl);
     }
   };
 

@@ -13,6 +13,23 @@ public sealed class QrCodeService : IQrCodeService
         Timeout = TimeSpan.FromSeconds(15),
     };
 
+    public byte[] GenerateDoctorReferenceCardPng(
+        string fullName,
+        string uniqueCode,
+        string? specialization,
+        string pageUrl)
+    {
+        var qrPng = GeneratePng(pageUrl, pixelsPerModule: 12);
+        try
+        {
+            return DoctorQrCardRenderer.Render(qrPng, fullName, uniqueCode, specialization);
+        }
+        catch
+        {
+            return qrPng;
+        }
+    }
+
     public byte[] GeneratePng(string content, int pixelsPerModule = 8)
     {
         var module = Math.Clamp(pixelsPerModule, 4, 20);

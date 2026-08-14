@@ -210,7 +210,13 @@ internal sealed class CreateAdminDoctorCommandHandler(
         CancellationToken cancellationToken)
     {
         var qrPng = qrCodeService.GeneratePng(pageUrl, pixelsPerModule: 10);
+        var cardPng = qrCodeService.GenerateDoctorReferenceCardPng(
+            doctor.FullName,
+            doctor.UniqueCode,
+            doctor.Specialization,
+            pageUrl);
         var qrUsable = qrPng is { Length: > 200 };
+        var cardUsable = cardPng is { Length: > 200 };
 
         var subject = $"Your BlinksMed Doctor Reference ID: {doctor.UniqueCode}";
         var html = EmailTemplates.DoctorShareInvite(
@@ -229,9 +235,12 @@ internal sealed class CreateAdminDoctorCommandHandler(
         IReadOnlyList<EmailFileAttachment>? attachments = null;
         if (qrUsable)
         {
-            var fileName = $"BlinksMed-{doctor.UniqueCode}-QR.png";
-            inlineImages = [new EmailInlineImage(EmailTemplates.DoctorQrContentId, qrPng, "image/png", fileName)];
-            attachments = [new EmailFileAttachment(fileName, qrPng, "image/png")];
+            inlineImages = [new EmailInlineImage(EmailTemplates.DoctorQrContentId, qrPng, "image/png", $"BlinksMed-{doctor.UniqueCode}-QR.png")];
+        }
+
+        if (cardUsable)
+        {
+            attachments = [new EmailFileAttachment($"BlinksMed-{doctor.UniqueCode}-card.png", cardPng, "image/png")];
         }
 
         await emailService.SendEmailAsync(doctor.Email, subject, html, plain, inlineImages, attachments, cancellationToken);
@@ -342,6 +351,30 @@ internal sealed class GetAdminDoctorQrQueryHandler(
 
         var pageUrl = PublicSiteUrls.DoctorSharePage(configuration, doctor.UniqueCode);
         var png = qrCodeService.GeneratePng(pageUrl, pixelsPerModule: 12);
+        return Result.Success(png);
+    }
+}
+
+public sealed record GetAdminDoctorQrCardQuery(Guid Id) : IQuery<byte[]>;
+
+internal sealed class GetAdminDoctorQrCardQueryHandler(
+    ICustomerRepository repository,
+    IQrCodeService qrCodeService,
+    IConfiguration configuration)
+    : IQueryHandler<GetAdminDoctorQrCardQuery, byte[]>
+{
+    public async Task<Result<byte[]>> Handle(GetAdminDoctorQrCardQuery request, CancellationToken cancellationToken)
+    {
+        var doctor = await repository.GetDoctorByIdAsync(request.Id, cancellationToken);
+        if (doctor is null)
+            return Result.Failure<byte[]>(new Error("directory.doctor_not_found", "Doctor not found.", ErrorCategory.NotFound));
+
+        var pageUrl = PublicSiteUrls.DoctorSharePage(configuration, doctor.UniqueCode);
+        var png = qrCodeService.GenerateDoctorReferenceCardPng(
+            doctor.FullName,
+            doctor.UniqueCode,
+            doctor.Specialization,
+            pageUrl);
         return Result.Success(png);
     }
 }
