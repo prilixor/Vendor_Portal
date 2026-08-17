@@ -235,7 +235,7 @@ function OrderTimeline({ status, orderType }: { status: string; orderType?: stri
         const isCurrent = currentIndex === i;
         const isUpcoming = !isDone && !isCurrent;
         return (
-          <li key={step.key} className="relative flex gap-4 pb-8 last:pb-0">
+          <li key={step.key} className="relative flex gap-3 pb-4 last:pb-0 sm:gap-4 sm:pb-5">
             {i < steps.length - 1 ? (
               <div
                 className={cn(
@@ -707,7 +707,7 @@ const VendorOrderDetail = () => {
   }, [canMarkActive, canMarkReturned, canMarkTransit, hasPendingRequests]);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-6">
       <Button
         variant="ghost"
         className="-ml-2 h-auto px-2 text-sm text-muted-foreground hover:text-foreground"
@@ -718,24 +718,24 @@ const VendorOrderDetail = () => {
 
       <Card className="overflow-hidden border-border/80 shadow-sm">
         {!order ? (
-          <CardContent className="space-y-3 p-6">
+          <CardContent className="space-y-3 p-4 sm:p-6">
             <Skeleton className="h-6 w-52" />
             <Skeleton className="h-4 w-72" />
             <Skeleton className="h-24 w-full" />
           </CardContent>
         ) : (
-          <CardContent className="p-6">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-              <div className="relative min-w-0 flex-1 space-y-2 lg:pr-8">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order Group</p>
-                <h1 className="text-2xl font-bold tracking-tight tabular-nums sm:text-3xl">{baseOrderNumber}</h1>
-                <p className="text-sm text-muted-foreground">Consolidated fulfillment overview</p>
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row lg:items-start lg:justify-between">
+              <div className="relative min-w-0 flex-1 space-y-1.5 lg:pr-8">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Order Group</p>
+                <h1 className="break-all text-xl font-bold tracking-tight tabular-nums sm:text-2xl lg:text-3xl">{baseOrderNumber}</h1>
+                <p className="text-xs text-muted-foreground sm:text-sm">Consolidated fulfillment overview</p>
               </div>
-              <div className="flex shrink-0 flex-col items-start border-t border-border pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
-                <p className="text-3xl font-bold tabular-nums tracking-tight">
+              <div className="flex shrink-0 flex-col items-start border-t border-border pt-4 sm:pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+                <p className="text-2xl font-bold tabular-nums tracking-tight sm:text-3xl">
                   ₹{groupPayoutAmount.toFixed(2)}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground uppercase font-semibold tracking-wider">
+                <p className="mt-1 text-[11px] text-muted-foreground uppercase font-semibold tracking-wider sm:text-xs">
                   Estimated Vendor Payout{orderGroupItems.length > 1 ? " (Combined)" : ""}
                 </p>
               </div>
@@ -746,13 +746,13 @@ const VendorOrderDetail = () => {
 
       {order && (
         <Card className="border-border/80 shadow-sm">
-          <CardHeader className="pb-4">
+          <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
             <p className="text-lg font-semibold">Items in this Order</p>
             <p className="text-xs text-muted-foreground">
               Select an item below to track its individual timeline and fulfill actions.
             </p>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 px-4 pb-4 sm:px-6 sm:pb-6">
             {orderGroupItems.map((item) => {
               const isSelected = item.orderId === currentItemId;
               const imageUrl = resolveItemImageUrl(item);
@@ -785,11 +785,11 @@ const VendorOrderDetail = () => {
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground">{item.listingTitle}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="truncate text-sm font-semibold text-foreground">{item.listingTitle}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
                         Qty: {item.quantity}
                         {item.orderNumber.includes("-") ? (
-                          <span className="ml-2 tabular-nums">· {item.orderNumber}</span>
+                          <span className="ml-2 break-all tabular-nums">· {item.orderNumber}</span>
                         ) : null}
                       </p>
                       {item.assignedAssetTags && item.assignedAssetTags.length > 0 ? (
@@ -835,19 +835,23 @@ const VendorOrderDetail = () => {
 
       {order && (
         <Card className="border-border/80 shadow-sm">
-          <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+            <div className="min-w-0">
               <p className="font-semibold">Next step</p>
               <p className="text-sm text-muted-foreground">
                 Move the selected item forward when you've completed the required operation.
               </p>
             </div>
             {nextAction ? (
-              <Button onClick={() => nextAction.action && void nextAction.action()} disabled={actionsLocked || nextAction.disabled}>
+              <Button
+                className="w-full shrink-0 sm:w-auto"
+                onClick={() => nextAction.action && void nextAction.action()}
+                disabled={actionsLocked || nextAction.disabled}
+              >
                 {nextAction.label}
               </Button>
             ) : (
-              <Button variant="outline" disabled>
+              <Button variant="outline" className="w-full sm:w-auto" disabled>
                 No action pending
               </Button>
             )}
@@ -891,9 +895,9 @@ const VendorOrderDetail = () => {
                         <p className="font-bold text-right text-amber-900 dark:text-amber-400">₹{ext.totalAmount.toFixed(2)}</p>
                       </div>
                     </div>
-                    <div className="flex gap-2 mt-4 sm:mt-0 items-start">
-                      <Button variant="outline" size="sm" onClick={() => handleCancelExtension(ext.extensionId)} disabled={updating}>Reject</Button>
-                      <Button size="sm" onClick={() => handleApproveExtension(ext.extensionId)} disabled={updating}>Approve</Button>
+                    <div className="mt-4 flex w-full gap-2 sm:mt-0 sm:w-auto sm:items-start">
+                      <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => handleCancelExtension(ext.extensionId)} disabled={updating}>Reject</Button>
+                      <Button size="sm" className="flex-1 sm:flex-none" onClick={() => handleApproveExtension(ext.extensionId)} disabled={updating}>Approve</Button>
                     </div>
                   </div>
                 ))}
@@ -923,9 +927,9 @@ const VendorOrderDetail = () => {
                         <p className="font-bold text-right text-amber-900 dark:text-amber-400">₹{buy.totalAmount.toFixed(2)}</p>
                       </div>
                     </div>
-                    <div className="flex gap-2 mt-4 sm:mt-0 items-start">
-                      <Button variant="outline" size="sm" onClick={() => handleCancelBuyout(buy.buyoutId)} disabled={updating}>Reject</Button>
-                      <Button size="sm" onClick={() => handleApproveBuyout(buy.buyoutId)} disabled={updating}>Approve</Button>
+                    <div className="mt-4 flex w-full gap-2 sm:mt-0 sm:w-auto sm:items-start">
+                      <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => handleCancelBuyout(buy.buyoutId)} disabled={updating}>Reject</Button>
+                      <Button size="sm" className="flex-1 sm:flex-none" onClick={() => handleApproveBuyout(buy.buyoutId)} disabled={updating}>Approve</Button>
                     </div>
                   </div>
                 ))}
@@ -933,131 +937,139 @@ const VendorOrderDetail = () => {
             </Card>
           )}
 
-          <Card className="border-border/80 shadow-sm">
-            <CardHeader className="pb-2">
-              <p className="text-lg font-semibold">Order timeline</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Tracking: <span className="font-semibold text-foreground">{order.listingTitle}</span>
-              </p>
-            </CardHeader>
-            <CardContent className="pt-2">
-              <OrderTimeline status={order.status} orderType={order.orderType} />
-            </CardContent>
-          </Card>
+          <div className="grid gap-4 lg:grid-cols-2 lg:items-start sm:gap-6">
+            <Card className="border-border/80 shadow-sm">
+              <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
+                <p className="text-lg font-semibold">Order timeline</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Tracking: <span className="font-semibold text-foreground">{order.listingTitle}</span>
+                </p>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 pt-2 sm:px-6 sm:pb-6">
+                <OrderTimeline status={order.status} orderType={order.orderType} />
+              </CardContent>
+            </Card>
 
-          <Card className="border-border/80 shadow-sm">
-            <CardHeader className="pb-4">
-              <p className="text-lg font-semibold">Customer</p>
-            </CardHeader>
-            <CardContent className="grid gap-6 sm:grid-cols-2">
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Name</p>
-                <p className="text-sm font-medium">{order.customerName}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Delivery location</p>
-                <p className="text-sm font-medium">{order.customerCity ?? "-"}, {order.customerState ?? "-"}</p>
-              </div>
-            </CardContent>
-          </Card>
+            <div className="space-y-4 sm:space-y-6">
+              <Card className="border-border/80 shadow-sm">
+                <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
+                  <p className="text-lg font-semibold">Customer</p>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 gap-4 px-4 pb-4 sm:grid-cols-2 sm:gap-6 sm:px-6 sm:pb-6">
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Name</p>
+                    <p className="text-sm font-medium break-words">{order.customerName}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Delivery location</p>
+                    <p className="text-sm font-medium break-words">{order.customerCity ?? "-"}, {order.customerState ?? "-"}</p>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card className="border-border/80 shadow-sm">
-            <CardHeader className="pb-4">
-              <p className="text-lg font-semibold">{order.orderType?.toLowerCase() === "buy" ? "Purchase details" : "Rental details"}</p>
-            </CardHeader>
-            <CardContent className="grid gap-6 sm:grid-cols-2">
-              {order.orderType?.toLowerCase() === "buy" ? (
-                <>
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Purchase date</p>
-                    <p className="text-sm font-medium tabular-nums">{formatDetailDate(order.startDate)}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order type</p>
-                      {order.status === "bought_out" && (
-                        <span className="rounded bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-bold text-fuchsia-800 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">
-                          BOUGHT OUT
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm font-medium uppercase">{order.orderType}</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Start date</p>
-                    <p className="text-sm font-medium tabular-nums">{formatDetailDate(order.startDate)}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">End date</p>
-                      {order.isExtended && (
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                          EXTENDED
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm font-medium tabular-nums">{formatDetailDate(order.endDate)}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rental period</p>
-                    <p className="text-sm font-medium">
-                      {order.rentalDurationLabel
-                        ? `${order.rentalDurationLabel}${
-                            order.rentalDurationDays
-                              ? ` (${order.rentalDurationDays} day${order.rentalDurationDays === 1 ? "" : "s"})`
-                              : ""
-                          }`
-                        : (
-                          <>
-                            {order.rentalDays}{" "}
-                            {order.rentalPeriodUnit === "week"
-                              ? order.rentalDays === 1
-                                ? "week"
-                                : "weeks"
-                              : order.rentalPeriodUnit === "month"
-                                ? order.rentalDays === 1
-                                  ? "month"
-                                  : "months"
-                                : order.rentalDays === 1
-                                  ? "day"
-                                  : "days"}
-                          </>
-                        )}
-                    </p>
-                    {order.rentalFinalPrice != null ? (
-                      <p className="text-xs text-muted-foreground tabular-nums">
-                        {order.rentalNormalPrice != null &&
-                        Number(order.rentalNormalPrice) > Number(order.rentalFinalPrice) ? (
-                          <>
-                            <span className="strike-diagonal font-semibold text-rose-500 dark:text-rose-400">
-                              ₹{Number(order.rentalNormalPrice).toLocaleString("en-IN", {
+              <Card className="border-border/80 shadow-sm">
+                <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
+                  <p className="text-lg font-semibold">{order.orderType?.toLowerCase() === "buy" ? "Purchase details" : "Rental details"}</p>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 pb-4 sm:gap-6 sm:px-6 sm:pb-6">
+                  {order.orderType?.toLowerCase() === "buy" ? (
+                    <>
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Purchase date</p>
+                        <p className="text-sm font-medium tabular-nums">{formatDetailDate(order.startDate)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Order type</p>
+                          {order.status === "bought_out" && (
+                            <span className="rounded bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-bold text-fuchsia-800 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">
+                              BOUGHT OUT
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-medium uppercase">{order.orderType}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Start date</p>
+                        <p className="text-sm font-medium tabular-nums">{formatDetailDate(order.startDate)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">End date</p>
+                          {order.isExtended && (
+                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                              EXTENDED
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-medium tabular-nums">{formatDetailDate(order.endDate)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Rental period</p>
+                        <p className="text-sm font-medium leading-snug">
+                          {order.rentalDurationLabel?.trim()
+                            ? order.rentalDurationLabel
+                            : (
+                              <>
+                                {order.rentalDays}{" "}
+                                {order.rentalPeriodUnit === "week"
+                                  ? order.rentalDays === 1
+                                    ? "week"
+                                    : "weeks"
+                                  : order.rentalPeriodUnit === "month"
+                                    ? order.rentalDays === 1
+                                      ? "month"
+                                      : "months"
+                                    : order.rentalDays === 1
+                                      ? "day"
+                                      : "days"}
+                              </>
+                            )}
+                        </p>
+                        {order.rentalDurationLabel?.trim() && order.rentalDurationDays ? (
+                          <p className="text-xs text-muted-foreground">
+                            {order.rentalDurationDays} day{order.rentalDurationDays === 1 ? "" : "s"}
+                          </p>
+                        ) : null}
+                        {order.rentalFinalPrice != null ? (
+                          <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground tabular-nums sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2">
+                            {order.rentalNormalPrice != null &&
+                            Number(order.rentalNormalPrice) > Number(order.rentalFinalPrice) ? (
+                              <span className="strike-diagonal w-fit font-semibold text-rose-500 dark:text-rose-400">
+                                ₹{Number(order.rentalNormalPrice).toLocaleString("en-IN", {
+                                  maximumFractionDigits: 0,
+                                })}
+                              </span>
+                            ) : null}
+                            <span>
+                              Plan price ₹
+                              {Number(order.rentalFinalPrice).toLocaleString("en-IN", {
                                 maximumFractionDigits: 0,
                               })}
-                            </span>{" "}
-                          </>
+                            </span>
+                          </div>
                         ) : null}
-                        Plan price ₹{Number(order.rentalFinalPrice).toFixed(0)}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order type</p>
-                      {order.status === "bought_out" && (
-                        <span className="rounded bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-bold text-fuchsia-800 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">
-                          BOUGHT OUT
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm font-medium uppercase">{order.orderType}</p>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Order type</p>
+                          {order.status === "bought_out" && (
+                            <span className="rounded bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-bold text-fuchsia-800 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">
+                              BOUGHT OUT
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-medium uppercase">{order.orderType}</p>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
 
           {order.assignedAssetTags && order.assignedAssetTags.length > 0 && (
             <AssignedSerialNumbersCard tags={order.assignedAssetTags} />
@@ -1210,21 +1222,42 @@ const VendorOrderDetail = () => {
             />
           )}
 
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">{order.orderType.toUpperCase()}</Badge>
-            <Button variant="outline" disabled={!canMarkTransit || actionsLocked} onClick={() => void handleStatusChange("in_transit")}>
-              Mark In Transit
-            </Button>
-            <Button variant="outline" disabled={!canMarkActive || actionsLocked} onClick={() => void handleStatusChange("active")}>
-              Mark Delivered
-            </Button>
-            <Button variant="outline" disabled={!canMarkReturned || actionsLocked} onClick={() => void handleStatusChange("returned")}>
-              Mark Returned
-            </Button>
-            <Button variant="destructive" disabled={!canCancel || actionsLocked} onClick={() => void handleCancel()}>
-              Cancel & Reassign
-            </Button>
-          </div>
+          <Card className="mb-[max(4.5rem,env(safe-area-inset-bottom))] border-border/80 shadow-sm sm:mb-0">
+            <CardContent className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4 sm:p-4">
+              <Button
+                variant="outline"
+                className="h-11 w-full px-2 text-xs sm:h-10 sm:px-3 sm:text-sm disabled:opacity-100 disabled:border-border disabled:bg-muted/60 disabled:text-foreground/70"
+                disabled={!canMarkTransit || actionsLocked}
+                onClick={() => void handleStatusChange("in_transit")}
+              >
+                Mark In Transit
+              </Button>
+              <Button
+                variant="outline"
+                className="h-11 w-full px-2 text-xs sm:h-10 sm:px-3 sm:text-sm disabled:opacity-100 disabled:border-border disabled:bg-muted/60 disabled:text-foreground/70"
+                disabled={!canMarkActive || actionsLocked}
+                onClick={() => void handleStatusChange("active")}
+              >
+                Mark Delivered
+              </Button>
+              <Button
+                variant="outline"
+                className="h-11 w-full px-2 text-xs sm:h-10 sm:px-3 sm:text-sm disabled:opacity-100 disabled:border-border disabled:bg-muted/60 disabled:text-foreground/70"
+                disabled={!canMarkReturned || actionsLocked}
+                onClick={() => void handleStatusChange("returned")}
+              >
+                Mark Returned
+              </Button>
+              <Button
+                variant="destructive"
+                className="h-11 w-full px-2 text-xs sm:h-10 sm:px-3 sm:text-sm disabled:opacity-100 disabled:bg-destructive/40 disabled:text-destructive-foreground"
+                disabled={!canCancel || actionsLocked}
+                onClick={() => void handleCancel()}
+              >
+                Cancel & Reassign
+              </Button>
+            </CardContent>
+          </Card>
         </>
       )}
 
