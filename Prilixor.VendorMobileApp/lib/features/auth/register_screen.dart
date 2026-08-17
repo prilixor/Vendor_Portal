@@ -10,6 +10,7 @@ import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
+import '../../core/theme.dart';
 import 'login_screen.dart';
 import 'verify_email_sent_screen.dart';
 
@@ -146,11 +147,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final provider = Provider.of<AuthProvider>(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: AppTheme.bg(context),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: context.appColors.textPrimary),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -174,20 +175,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Create your vendor account',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: context.appColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Start onboarding in less than 5 minutes.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white60, fontSize: 15),
+                style: TextStyle(color: context.appColors.textSecondary, fontSize: 15),
               ),
               const SizedBox(height: 24),
               const RequiredFieldsNote(),
@@ -274,7 +275,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: Text.rich(
                         TextSpan(
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.55),
+                            color: context.appColors.textMuted,
                             fontSize: 12,
                             height: 1.45,
                           ),
@@ -334,9 +335,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
+                  Text(
                     'Already have an account? ',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: context.appColors.textMuted),
                   ),
                   GestureDetector(
                     onTap: () {

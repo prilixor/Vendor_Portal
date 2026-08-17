@@ -708,6 +708,20 @@ export interface AdminOrderDto {
   doctorContactNumber?: string;
 }
 
+export interface AdminExpiringOrderDto {
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  vendorName: string;
+  listingTitle: string;
+  status: string;
+  orderType: string;
+  endDate: string;
+  daysLeft: number;
+  daysUntilEnd?: number;
+  listingPrimaryImageUrl?: string | null;
+}
+
 export interface UpdateAdminOrderStatusRequest {
   adminUserId: string;
   orderId: string;
@@ -987,6 +1001,10 @@ export const adminApi = {
     return apiClient.get<AdminOrderDto[]>('/admin/orders');
   },
 
+  async getAdminOrderExpirations(withinDays = 7): Promise<AdminExpiringOrderDto[]> {
+    return apiClient.get<AdminExpiringOrderDto[]>(`/admin/orders/expirations?withinDays=${withinDays}`);
+  },
+
   async updateAdminOrderStatus(data: UpdateAdminOrderStatusRequest): Promise<AdminOrderDto> {
     return apiClient.patch<AdminOrderDto>(`/admin/orders/${data.orderId}/status`, data);
   },
@@ -1145,6 +1163,10 @@ export const adminApi = {
 
   async downloadDoctorQr(id: string, uniqueCode: string): Promise<void> {
     return apiClient.downloadBlob(`/admin/doctors/${id}/qr.png`, `doctor-${uniqueCode}-qr.png`);
+  },
+
+  async downloadDoctorQrCard(id: string, uniqueCode: string): Promise<void> {
+    return apiClient.downloadBlob(`/admin/doctors/${id}/qr-card.png`, `doctor-${uniqueCode}-card.png`);
   },
 
   async getDoctorQrObjectUrl(id: string): Promise<string> {

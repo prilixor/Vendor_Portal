@@ -1,9 +1,10 @@
 using Prilixor.VendorPortal.Application.Abstractions;
+using QRCoder;
 
 namespace Prilixor.VendorPortal.Application.Services;
 
 /// <summary>
-/// Generates QR PNGs via a public QR HTTP API (no native QR dependency).
+/// Generates QR PNGs locally. Falls back to a public QR HTTP API if the local encoder fails.
 /// </summary>
 public sealed class QrCodeService : IQrCodeService
 {
@@ -12,11 +13,47 @@ public sealed class QrCodeService : IQrCodeService
         Timeout = TimeSpan.FromSeconds(15),
     };
 
+    public byte[] GenerateDoctorReferenceCardPng(
+        string fullName,
+        string uniqueCode,
+        string? specialization,
+        string pageUrl)
+    {
+        var qrPng = GeneratePng(pageUrl, pixelsPerModule: 12);
+        try
+        {
+            return DoctorQrCardRenderer.Render(qrPng, fullName, uniqueCode, specialization);
+        }
+        catch
+        {
+            return qrPng;
+        }
+    }
+
     public byte[] GeneratePng(string content, int pixelsPerModule = 8)
+    {
+        var module = Math.Clamp(pixelsPerModule, 4, 20);
+        var payload = content ?? string.Empty;
+
+        try
+        {
+            using var generator = new QRCodeGenerator();
+            using var data = generator.CreateQrCode(payload, QRCodeGenerator.ECCLevel.Q);
+            var png = new PngByteQRCode(data);
+            // Teal-on-white scans reliably and is less likely to be inverted by dark-mode mail clients.
+            return png.GetGraphic(module, [15, 118, 110], [255, 255, 255], drawQuietZones: true);
+        }
+        catch
+        {
+            return GenerateViaHttp(payload, module);
+        }
+    }
+
+    private static byte[] GenerateViaHttp(string content, int pixelsPerModule)
     {
         var size = Math.Clamp(pixelsPerModule * 29, 120, 480);
         var url =
-            $"https://api.qrserver.com/v1/create-qr-code/?size={size}x{size}&data={Uri.EscapeDataString(content ?? string.Empty)}";
+            $"https://api.qrserver.com/v1/create-qr-code/?size={size}x{size}&margin=2&data={Uri.EscapeDataString(content)}";
 
         try
         {
@@ -26,7 +63,6 @@ public sealed class QrCodeService : IQrCodeService
         }
         catch
         {
-            // Fallback: 1x1 transparent PNG so callers still succeed offline.
             return Convert.FromBase64String(
                 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5n1bAAAAAASUVORK5CYII=");
         }

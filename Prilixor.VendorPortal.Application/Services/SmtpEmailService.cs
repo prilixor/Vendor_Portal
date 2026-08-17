@@ -28,7 +28,17 @@ public class SmtpEmailService : IEmailService
         _logger = logger;
     }
 
-    public async Task SendEmailAsync(string toEmail, string subject, string body, CancellationToken ct = default)
+    public Task SendEmailAsync(string toEmail, string subject, string body, CancellationToken ct = default) =>
+        SendEmailAsync(toEmail, subject, body, null, null, null, ct);
+
+    public async Task SendEmailAsync(
+        string toEmail,
+        string subject,
+        string htmlBody,
+        string? plainTextBody,
+        IReadOnlyList<EmailInlineImage>? inlineImages,
+        IReadOnlyList<EmailFileAttachment>? attachments,
+        CancellationToken ct = default)
     {
         try
         {
@@ -38,15 +48,15 @@ public class SmtpEmailService : IEmailService
                 Credentials = new NetworkCredential(_options.Username, _options.Password)
             };
 
-            var mailMessage = new MailMessage
-            {
-                From = new MailAddress(_options.FromEmail, _options.FromName),
-                Subject = subject,
-                Body = body,
-                IsBodyHtml = true
-            };
-
-            mailMessage.To.Add(toEmail);
+            using var mailMessage = SmtpMailMessageFactory.Create(
+                _options.FromEmail,
+                _options.FromName,
+                toEmail,
+                subject,
+                htmlBody,
+                plainTextBody,
+                inlineImages,
+                attachments);
 
             await client.SendMailAsync(mailMessage, ct);
             _logger.LogInformation("Email sent successfully to {ToEmail}", toEmail);

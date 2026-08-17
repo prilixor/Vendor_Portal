@@ -6,6 +6,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
+import '../../core/theme.dart';
 
 class EditEquipmentStockScreen extends StatefulWidget {
   final String listingId;
@@ -92,8 +93,8 @@ class _EditEquipmentStockScreenState extends State<EditEquipmentStockScreen> {
     if (record == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Edit stock')),
-        body: const Center(
-          child: Text('Record not found.', style: TextStyle(color: Colors.white54)),
+        body: Center(
+          child: Text('Record not found.', style: TextStyle(color: context.appColors.textMuted)),
         ),
       );
     }
@@ -106,16 +107,16 @@ class _EditEquipmentStockScreenState extends State<EditEquipmentStockScreen> {
         children: [
           Text(
             record.productName,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.appColors.textPrimary,
               fontSize: 16,
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Adjust total, reserved, rented, and blocked counts. Available is calculated automatically.',
-            style: TextStyle(color: Colors.white54, fontSize: 13),
+            style: TextStyle(color: context.appColors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 16),
           _StockField(label: 'Total quantity', controller: _totalController),
@@ -130,7 +131,7 @@ class _EditEquipmentStockScreenState extends State<EditEquipmentStockScreen> {
             onPressed: provider.saving ? null : () => _save(record),
             style: ElevatedButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
-              backgroundColor: const Color(0xFF6C63FF),
+              backgroundColor: AppTheme.accent,
             ),
             child: provider.saving
                 ? const SizedBox(
@@ -158,13 +159,20 @@ class _StockField extends StatelessWidget {
       controller: controller,
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: context.appColors.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.white54),
+        labelStyle: TextStyle(color: context.appColors.textSecondary),
         filled: true,
-        fillColor: const Color(0xFF1E293B),
-        border: const OutlineInputBorder(borderSide: BorderSide.none),
+        fillColor: AppTheme.card(context),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: context.appColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: context.appColors.border),
+        ),
       ),
     );
   }

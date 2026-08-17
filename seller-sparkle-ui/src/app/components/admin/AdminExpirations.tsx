@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
@@ -7,9 +8,7 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Input } from "@/app/components/ui/input";
 import { Skeleton } from "@/app/components/ui/skeleton";
-import { useAuth } from "@/app/guards/AuthContext";
-import { vendorOnboardingApi, type VendorExpiringOrderApiDto } from "@/app/services/vendorOnboardingApi";
-import { toast } from "sonner";
+import { adminApi, type AdminExpiringOrderDto } from "@/app/services/adminApi";
 
 const PAGE_SIZE = 8;
 
@@ -17,7 +16,7 @@ function getBaseOrderNumber(orderNumber: string): string {
   return orderNumber.split("-").slice(0, 3).join("-");
 }
 
-function resolveDaysLeft(row: VendorExpiringOrderApiDto): number {
+function resolveDaysLeft(row: AdminExpiringOrderDto): number {
   if (typeof row.daysLeft === "number" && Number.isFinite(row.daysLeft)) return row.daysLeft;
   if (typeof row.daysUntilEnd === "number" && Number.isFinite(row.daysUntilEnd)) return row.daysUntilEnd;
   return 0;
@@ -29,43 +28,28 @@ function formatEndDate(value: string): string {
   return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-function matchesSearch(row: VendorExpiringOrderApiDto, query: string): boolean {
+function matchesSearch(row: AdminExpiringOrderDto, query: string): boolean {
   const q = query.toLowerCase();
   return (
     row.orderNumber.toLowerCase().includes(q) ||
     getBaseOrderNumber(row.orderNumber).toLowerCase().includes(q) ||
     row.listingTitle.toLowerCase().includes(q) ||
-    row.customerName.toLowerCase().includes(q)
+    row.customerName.toLowerCase().includes(q) ||
+    row.vendorName.toLowerCase().includes(q)
   );
 }
 
-const VendorExpirations = () => {
-  const { user } = useAuth();
+const AdminExpirations = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
   const [withinDays, setWithinDays] = useState(7);
-  const [rows, setRows] = useState<VendorExpiringOrderApiDto[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  const loadExpirations = async () => {
-    if (!user) return;
-    try {
-      setLoading(true);
-      const data = await vendorOnboardingApi.getVendorOrderExpirations(user.id, withinDays);
-      setRows(data);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load expirations.";
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadExpirations();
-  }, [user?.id, withinDays]);
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ["admin-order-expirations", withinDays],
+    queryFn: () => adminApi.getAdminOrderExpirations(withinDays),
+  });
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
@@ -83,7 +67,7 @@ const VendorExpirations = () => {
   }, [rows, debouncedSearch]);
 
   const groups = useMemo(() => {
-    const next: { baseOrderNumber: string; items: VendorExpiringOrderApiDto[] }[] = [];
+    const next: { baseOrderNumber: string; items: AdminExpiringOrderDto[] }[] = [];
     filteredRows.forEach((row) => {
       const baseNum = getBaseOrderNumber(row.orderNumber);
       let group = next.find((g) => g.baseOrderNumber === baseNum);
@@ -111,7 +95,7 @@ const VendorExpirations = () => {
     <div>
       <PageHeader
         title="Expirations"
-        description="Track rental end dates for timely returns and follow-up."
+        description="Delivered rentals due for return across all vendors."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant={withinDays === 7 ? "default" : "outline"} onClick={() => setWithinDays(7)}>7 days</Button>
@@ -128,14 +112,14 @@ const VendorExpirations = () => {
             <Input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search by order ID, item, or customer"
+              placeholder="Search by order ID, item, customer, or vendor"
               className="h-11 rounded-xl pl-9"
               aria-label="Search expirations"
             />
           </div>
         </div>
 
-        {loading ? (
+        {isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, idx) => (
               <div key={idx} className="rounded-lg border border-border p-4">
@@ -166,13 +150,15 @@ const VendorExpirations = () => {
                     <div
                       key={row.orderId}
                       className="rounded-lg border border-border p-4 cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors shadow-sm"
-                      onClick={() => navigate(`/vendor/orders/${row.orderId}`)}
+                      onClick={() => navigate(`/admin/orders/${row.orderId}`)}
                     >
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-sm text-foreground truncate">{row.listingTitle}</p>
                           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground mt-1">
                             <span>Order <strong className="text-foreground font-medium">{row.orderNumber}</strong> ({row.orderType.toUpperCase()})</span>
+                            <span className="text-muted-foreground/30" aria-hidden="true">•</span>
+                            <span>Vendor <strong className="text-foreground font-medium">{row.vendorName}</strong></span>
                             <span className="text-muted-foreground/30" aria-hidden="true">•</span>
                             <span>Customer <strong className="text-foreground font-medium">{row.customerName}</strong></span>
                             <span className="text-muted-foreground/30" aria-hidden="true">•</span>
@@ -231,4 +217,4 @@ const VendorExpirations = () => {
   );
 };
 
-export default VendorExpirations;
+export default AdminExpirations;

@@ -1027,7 +1027,7 @@ public sealed class CustomerRepository(
                 o.EndDate.Value >= fromDate &&
                 o.EndDate.Value <= toDate &&
                 o.OrderType.ToLower() != "buy" &&
-                (o.Status == "confirmed" || o.Status == "active" || o.Status == "in_transit"))
+                o.Status == "active")
             .OrderBy(o => o.EndDate)
             .ToListAsync(cancellationToken);
 
@@ -1061,7 +1061,7 @@ public sealed class CustomerRepository(
                 o.EndDate.Value >= fromDate &&
                 o.EndDate.Value <= toDate &&
                 o.OrderType.ToLower() != "buy" &&
-                (o.Status == "confirmed" || o.Status == "active" || o.Status == "in_transit"))
+                o.Status == "active")
             .OrderBy(o => o.EndDate)
             .ToListAsync(cancellationToken);
 
@@ -1082,7 +1082,7 @@ public sealed class CustomerRepository(
                 o.EndDate.Value >= fromDate &&
                 o.EndDate.Value <= toDate &&
                 o.OrderType.ToLower() != "buy" &&
-                (o.Status == "confirmed" || o.Status == "active" || o.Status == "in_transit"))
+                o.Status == "active")
             .OrderBy(o => o.EndDate)
             .ToListAsync(cancellationToken);
 
@@ -1157,6 +1157,22 @@ public sealed class CustomerRepository(
             .Include(d => d.Hospitals)
             .ThenInclude(hd => hd.Hospital)
             .FirstOrDefaultAsync(x => x.Id == doctorId && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task<Prilixor.VendorPortal.Domain.Common.Doctor?> FindDoctorByEmailAsync(
+        string email,
+        Guid? excludeDoctorId,
+        CancellationToken cancellationToken)
+    {
+        var normalized = (email ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(normalized))
+            return null;
+
+        var query = commonDb.Doctors.Where(x => !x.IsDeleted && x.Email.ToLower() == normalized);
+        if (excludeDoctorId.HasValue)
+            query = query.Where(x => x.Id != excludeDoctorId.Value);
+
+        return await query.FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<Prilixor.VendorPortal.Domain.Common.Doctor?> GetDoctorByUniqueCodeAsync(string uniqueCode, CancellationToken cancellationToken)
@@ -1235,11 +1251,17 @@ public sealed class CustomerRepository(
         await commonDb.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<int> CountDoctorsWithUniqueCodePrefixAsync(string prefix, CancellationToken cancellationToken)
+    public async Task<int> CountDoctorsEnrolledInYearAsync(string yearYy, CancellationToken cancellationToken)
     {
-        var p = prefix.Trim().ToUpperInvariant();
-        return await commonDb.Doctors
-            .CountAsync(x => x.UniqueCode.StartsWith(p), cancellationToken);
+        var year = (yearYy ?? string.Empty).Trim();
+        if (year.Length != 2)
+            return 0;
+
+        // Codes are DRxxYYNNN (e.g. DRPD26001). Sequence is year-wide, not per initials.
+        var pattern = $"____{year}___";
+        return await commonDb.Doctors.CountAsync(
+            x => EF.Functions.Like(x.UniqueCode, pattern),
+            cancellationToken);
     }
 
     public async Task SetDoctorHospitalLinksAsync(Guid doctorId, IReadOnlyList<Guid> hospitalIds, CancellationToken cancellationToken)

@@ -5,6 +5,7 @@ import '../../core/providers/notification_provider.dart';
 import '../../core/models/notification_model.dart';
 import '../../core/models/order_model.dart';
 import '../../core/providers/order_provider.dart';
+import '../../core/theme.dart';
 import '../../shared/widgets/guest_sign_in_prompt.dart';
 import '../orders/orders_screen.dart';
 import '../orders/order_detail_screen.dart';
@@ -21,14 +22,15 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final auth = Provider.of<AuthProvider>(context);
     final provider = Provider.of<NotificationProvider>(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('Alerts', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF0F172A),
+        title: Text('Alerts', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold)),
+        backgroundColor: colors.background,
         elevation: 0,
         actions: [
           if (auth.isAuthenticated && provider.unreadCount > 0)
@@ -49,13 +51,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           : provider.errorMessage != null
               ? Center(child: Text(provider.errorMessage!, style: const TextStyle(color: Colors.redAccent)))
               : provider.notifications.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.notifications_off_outlined, size: 64, color: Colors.white24),
-                          SizedBox(height: 16),
-                          Text('You\'re all caught up!', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                          Icon(Icons.notifications_off_outlined, size: 64, color: colors.border),
+                          const SizedBox(height: 16),
+                          Text('You\'re all caught up!', style: TextStyle(color: colors.textMuted, fontSize: 16)),
                         ],
                       ),
                     )
@@ -75,6 +77,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildNotificationCard(BuildContext context, NotificationModel notification) {
+    final colors = context.appColors;
     final provider = Provider.of<NotificationProvider>(context, listen: false);
     final isUnread = provider.isUnread(notification);
 
@@ -157,8 +160,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 MaterialPageRoute(builder: (_) => const OrdersScreen()),
               );
             }
-          } else if (type.startsWith("order_") || type.contains("order") || 
-              title.contains("order") || title.contains("rental") || 
+          } else if (type.startsWith("order_") || type.contains("order") ||
+              title.contains("order") || title.contains("rental") ||
               title.contains("placed") || title.contains("expired") || title.contains("expiring")) {
             if (context.mounted) {
               Navigator.push(
@@ -187,9 +190,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isUnread ? const Color(0xFF6C63FF).withValues(alpha: 0.1) : const Color(0xFF1E293B),
+          color: isUnread ? const Color(0xFF6C63FF).withValues(alpha: 0.1) : colors.surface,
           borderRadius: BorderRadius.circular(12),
-          border: isUnread ? Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.3)) : null,
+          border: isUnread
+              ? Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.3))
+              : Border.all(color: colors.border),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,12 +202,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: isUnread ? const Color(0xFF6C63FF).withValues(alpha: 0.2) : Colors.white10,
+                color: isUnread ? const Color(0xFF6C63FF).withValues(alpha: 0.2) : colors.surfaceElevated,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 _getIconForType(notification.notificationType),
-                color: isUnread ? const Color(0xFF6C63FF) : Colors.white70,
+                color: isUnread ? const Color(0xFF6C63FF) : colors.textMuted,
                 size: 20,
               ),
             ),
@@ -218,7 +223,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       Text(
                         notification.title,
                         style: TextStyle(
-                          color: Colors.white,
+                          color: colors.textPrimary,
                           fontSize: 16,
                           fontWeight: isUnread ? FontWeight.bold : FontWeight.w500,
                         ),
@@ -227,12 +232,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.white10,
+                            color: colors.surfaceElevated,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             notification.notificationType.toLowerCase().replaceAll('_', ' '),
-                            style: const TextStyle(color: Colors.white54, fontSize: 10),
+                            style: TextStyle(color: colors.textMuted, fontSize: 10),
                           ),
                         ),
                     ],
@@ -240,12 +245,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   const SizedBox(height: 4),
                   Text(
                     notification.body,
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    style: TextStyle(color: colors.textSecondary, fontSize: 14),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     _formatDate(notification.createdAt),
-                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                    style: TextStyle(color: colors.textMuted, fontSize: 12),
                   ),
                 ],
               ),

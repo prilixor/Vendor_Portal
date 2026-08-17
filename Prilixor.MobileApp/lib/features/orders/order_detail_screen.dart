@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/order_detail_provider.dart';
 import '../../core/providers/order_provider.dart';
@@ -18,7 +19,7 @@ class OrderDetailScreen extends StatefulWidget {
   final String orderNumber;
   final List<OrderModel> ordersInGroup;
 
-  const OrderDetailScreen({super.key, required this.orderNumber, required this.ordersInGroup});
+  OrderDetailScreen({super.key, required this.orderNumber, required this.ordersInGroup});
 
   @override
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
@@ -137,15 +138,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   }
 
   void _showExtensionBottomSheet(BuildContext context, OrderDetailProvider provider) {
+    final colors = context.appColors;
     _extensionDays = 1;
     provider.clearQuotes();
     provider.quoteExtension(_ordersInGroup[_selectedOrderIndex].id, _extensionDays);
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: colors.surface,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setStateBottomSheet) {
@@ -157,20 +159,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Extend Rental', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  const Text('Need more time? Extend your rental period below.', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                  const SizedBox(height: 24),
+                  Text('Extend Rental', style: TextStyle(color: colors.textPrimary, fontSize: 22, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text('Need more time? Extend your rental period below.', style: TextStyle(color: colors.textSecondary, fontSize: 14)),
+                  SizedBox(height: 24),
                   
                   // Days Selector
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Additional Days:', style: TextStyle(color: Colors.white, fontSize: 16)),
+                      Text('Additional Days:', style: TextStyle(color: colors.textPrimary, fontSize: 16)),
                       Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.remove_circle_outline, color: Colors.white54),
+                            icon: Icon(Icons.remove_circle_outline, color: colors.textMuted),
                             onPressed: _extensionDays > 1
                                 ? () {
                                     setStateBottomSheet(() => _extensionDays--);
@@ -178,9 +180,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                   }
                                 : null,
                           ),
-                          Text('$_extensionDays', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                          Text('$_extensionDays', style: TextStyle(color: colors.textPrimary, fontSize: 20, fontWeight: FontWeight.bold)),
                           IconButton(
-                            icon: const Icon(Icons.add_circle_outline, color: Color(0xFF6C63FF)),
+                            icon: Icon(Icons.add_circle_outline, color: Color(0xFF6C63FF)),
                             onPressed: () {
                               setStateBottomSheet(() => _extensionDays++);
                               provider.quoteExtension(_ordersInGroup[_selectedOrderIndex].id, _extensionDays);
@@ -190,55 +192,55 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   
                   // Quote details
                   if (provider.isActionLoading)
-                    const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+                    Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
                   else if (provider.extensionQuote != null)
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
                       child: Column(
                         children: [
-                          _buildQuoteRow('Extension Cost', provider.extensionQuote!.extensionAmount),
+                          _buildQuoteRow(context, 'Extension Cost', provider.extensionQuote!.extensionAmount),
                           // Service fee UI hidden — keep for future re-enable
                           if (false) ...[
-                            const SizedBox(height: 8),
-                            _buildQuoteRow('Service Fee', provider.extensionQuote!.serviceFeeAmount),
+                            SizedBox(height: 8),
+                            _buildQuoteRow(context, 'Service Fee', provider.extensionQuote!.serviceFeeAmount),
                           ],
-                          const SizedBox(height: 8),
-                          _buildQuoteRow('GST', provider.extensionQuote!.gstAmount),
-                          const Divider(color: Colors.white24, height: 24),
-                          _buildQuoteRow('Total Due Now', provider.extensionQuote!.totalAmount, isBold: true),
-                          const SizedBox(height: 8),
+                          SizedBox(height: 8),
+                          _buildQuoteRow(context, 'GST', provider.extensionQuote!.gstAmount),
+                          Divider(color: colors.border, height: 24),
+                          _buildQuoteRow(context, 'Total Due Now', provider.extensionQuote!.totalAmount, isBold: true),
+                          SizedBox(height: 8),
                           Text(
                             'New End Date: ${provider.extensionQuote!.newEndDate.split('T')[0]}',
-                            style: const TextStyle(color: Colors.greenAccent, fontSize: 12),
+                            style: TextStyle(color: Colors.greenAccent, fontSize: 12),
                           ),
                         ],
                       ),
                     ),
                   
-                  const SizedBox(height: 32),
+                  SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
+                      style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF6C63FF)),
                       onPressed: provider.isActionLoading || provider.extensionQuote == null
                           ? null
                           : () async {
                               final success = await provider.processExtension(_ordersInGroup[_selectedOrderIndex].id, _extensionDays);
                               if (success && context.mounted) {
                                 Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rental extended successfully!'), backgroundColor: Colors.green));
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Rental extended successfully!'), backgroundColor: Colors.green));
                               }
                             },
-                      child: const Text('Confirm Extension', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: Text('Confirm Extension', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  SizedBox(height: 32),
                 ],
               ),
             );
@@ -251,14 +253,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   }
 
   void _showBuyoutBottomSheet(BuildContext context, OrderDetailProvider provider) {
+    final colors = context.appColors;
     provider.clearQuotes();
     provider.quoteBuyout(_ordersInGroup[_selectedOrderIndex].id);
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: colors.surface,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
         return Consumer<OrderDetailProvider>(
           builder: (context, provider, _) {
@@ -268,54 +271,54 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Buyout Equipment', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  const Text('Love it? Keep it! We will deduct a portion of your rental fees from the purchase price.', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                  const SizedBox(height: 24),
+                  Text('Buyout Equipment', style: TextStyle(color: colors.textPrimary, fontSize: 22, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text('Love it? Keep it! We will deduct a portion of your rental fees from the purchase price.', style: TextStyle(color: colors.textSecondary, fontSize: 14)),
+                  SizedBox(height: 24),
                   
                   if (provider.isActionLoading)
-                    const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+                    Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
                   else if (provider.buyoutQuote != null)
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
                       child: Column(
                         children: [
-                          _buildQuoteRow('Base Price', provider.buyoutQuote!.baseBuyoutAmount),
-                          const SizedBox(height: 8),
-                          _buildQuoteRow('Rental Deduction', -provider.buyoutQuote!.rentDeductionAmount, color: Colors.greenAccent),
+                          _buildQuoteRow(context, 'Base Price', provider.buyoutQuote!.baseBuyoutAmount),
+                          SizedBox(height: 8),
+                          _buildQuoteRow(context, 'Rental Deduction', -provider.buyoutQuote!.rentDeductionAmount, color: Colors.greenAccent),
                           // Service fee UI hidden — keep for future re-enable
                           if (false) ...[
-                            const SizedBox(height: 8),
-                            _buildQuoteRow('Service Fee', provider.buyoutQuote!.serviceFeeAmount),
+                            SizedBox(height: 8),
+                            _buildQuoteRow(context, 'Service Fee', provider.buyoutQuote!.serviceFeeAmount),
                           ],
-                          const SizedBox(height: 8),
-                          _buildQuoteRow('GST', provider.buyoutQuote!.gstAmount),
-                          const Divider(color: Colors.white24, height: 24),
-                          _buildQuoteRow('Total Due Now', provider.buyoutQuote!.totalAmount, isBold: true),
+                          SizedBox(height: 8),
+                          _buildQuoteRow(context, 'GST', provider.buyoutQuote!.gstAmount),
+                          Divider(color: colors.border, height: 24),
+                          _buildQuoteRow(context, 'Total Due Now', provider.buyoutQuote!.totalAmount, isBold: true),
                         ],
                       ),
                     ),
                   
-                  const SizedBox(height: 32),
+                  SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
+                      style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF6C63FF)),
                       onPressed: provider.isActionLoading || provider.buyoutQuote == null
                           ? null
                           : () async {
                               final success = await provider.processBuyout(_ordersInGroup[_selectedOrderIndex].id);
                               if (success && context.mounted) {
                                 Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item purchased successfully!'), backgroundColor: Colors.green));
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Item purchased successfully!'), backgroundColor: Colors.green));
                               }
                             },
-                      child: const Text('Confirm Purchase', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: Text('Confirm Purchase', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  SizedBox(height: 32),
                 ],
               ),
             );
@@ -325,11 +328,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     );
   }
 
-  Widget _buildQuoteRow(String label, double amount, {bool isBold = false, Color? color}) {
+  Widget _buildQuoteRow(BuildContext context, String label, double amount, {bool isBold = false, Color? color}) {
+    final colors = context.appColors;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(color: color ?? Colors.white70, fontSize: isBold ? 16 : 14, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+        Text(label, style: TextStyle(color: color ?? colors.textSecondary, fontSize: isBold ? 16 : 14, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
         Text('₹${amount.toStringAsFixed(2)}', style: TextStyle(color: color ?? Colors.white, fontSize: isBold ? 18 : 14, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
       ],
     );
@@ -337,17 +341,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final provider = Provider.of<OrderDetailProvider>(context);
     final groupTotal = _ordersInGroup.fold<double>(0, (sum, o) => sum + o.totalAmount);
     final groupDeposit = _ordersInGroup.fold<double>(0, (sum, o) => sum + o.depositAmount);
     final cleanOrderGroupNumber = _ordersInGroup.first.orderNumber.replaceAll(RegExp(r'-\d{2}$'), '');
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('Back to orders', style: TextStyle(color: Colors.white70, fontSize: 16)),
-        backgroundColor: const Color(0xFF0F172A),
-        iconTheme: const IconThemeData(color: Colors.white70),
+        title: Text('Back to orders', style: TextStyle(color: colors.textSecondary, fontSize: 16)),
+        backgroundColor: colors.background,
+        iconTheme: IconThemeData(color: colors.textSecondary),
         elevation: 0,
         titleSpacing: 0,
       ),
@@ -355,12 +360,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
         children: [
           // Header Card
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            padding: const EdgeInsets.all(20),
+            margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B), // Match dark mode card
+              color: colors.surface, // Match dark mode card
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(color: colors.border),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,24 +375,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('ORDER GROUP', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                      const SizedBox(height: 8),
+                      Text('ORDER GROUP', style: TextStyle(color: colors.textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                      SizedBox(height: 8),
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
-                        child: Text(cleanOrderGroupNumber, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                        child: Text(cleanOrderGroupNumber, style: TextStyle(color: colors.textPrimary, fontSize: 20, fontWeight: FontWeight.bold)),
                       ),
-                      const SizedBox(height: 4),
-                      const Text('Consolidated purchase overview', style: TextStyle(color: Colors.white54, fontSize: 14)),
+                      SizedBox(height: 4),
+                      Text('Consolidated purchase overview', style: TextStyle(color: colors.textMuted, fontSize: 14)),
                     ],
                   ),
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('₹${groupTotal.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text('+ ₹${groupDeposit.toStringAsFixed(0)} deposit', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    Text('₹${groupTotal.toStringAsFixed(0)}', style: TextStyle(color: colors.textPrimary, fontSize: 24, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 4),
+                    Text('+ ₹${groupDeposit.toStringAsFixed(0)} deposit', style: TextStyle(color: colors.textMuted, fontSize: 12)),
                   ],
                 ),
               ],
@@ -396,28 +401,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
 
           Expanded(
             child: provider.isLoading && provider.currentOrder == null
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+                ? Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
                 : provider.currentOrder == null
-                    ? Center(child: Text(provider.errorMessage ?? 'Order not found', style: const TextStyle(color: Colors.white)))
+                    ? Center(child: Text(provider.errorMessage ?? 'Order not found', style: TextStyle(color: colors.textPrimary)))
                     : SingleChildScrollView(
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // Items in this order
                             Container(
-                              padding: const EdgeInsets.all(16),
+                              padding: EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1E293B),
+                                color: colors.surface,
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.white10),
+                                border: Border.all(color: colors.border),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text('Items in this Order', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                                  Text('Items in this Order', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
                                   const SizedBox(height: 4),
-                                  const Text('Select an item below to track its individual timeline and details.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                                  Text('Select an item below to track its individual timeline and details.', style: TextStyle(color: colors.textMuted, fontSize: 12)),
                                   const SizedBox(height: 16),
                                   ...List.generate(_ordersInGroup.length, (index) {
                                     final order = _ordersInGroup[index];
@@ -435,11 +440,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                         _fetchCurrentSubOrder();
                                       },
                                       child: Container(
-                                        margin: const EdgeInsets.only(bottom: 12),
-                                        padding: const EdgeInsets.all(12),
+                                        margin: EdgeInsets.only(bottom: 12),
+                                        padding: EdgeInsets.all(12),
                                         decoration: BoxDecoration(
                                           color: isSelected ? Colors.white.withValues(alpha: 0.05) : Colors.transparent,
-                                          border: Border.all(color: isSelected ? const Color(0xFF6C63FF) : Colors.white10, width: isSelected ? 2 : 1),
+                                          border: Border.all(color: isSelected ? Color(0xFF6C63FF) : colors.border, width: isSelected ? 2 : 1),
                                           borderRadius: BorderRadius.circular(12),
                                         ),
                                         child: Row(
@@ -457,14 +462,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                 ),
                                               ),
                                             ),
-                                            const SizedBox(width: 12),
+                                            SizedBox(width: 12),
                                             Expanded(
                                               child: Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [
-                                                  Text(order.listingTitle, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                                  Text(order.listingTitle, style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
                                                   const SizedBox(height: 4),
-                                                  Text('Qty: ${order.quantity}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                                                  Text('Qty: ${order.quantity}', style: TextStyle(color: colors.textMuted, fontSize: 12)),
                                                   if (photoLabel != null) ...[
                                                     const SizedBox(height: 4),
                                                     Row(
@@ -496,7 +501,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                   Wrap(
                                                     children: [
                                                       Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                         decoration: BoxDecoration(color: _getStatusColor(order.status).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16)),
                                                         child: Text(order.status.toUpperCase(), style: TextStyle(color: _getStatusColor(order.status), fontSize: 10, fontWeight: FontWeight.bold)),
                                                       ),
@@ -505,11 +510,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                 ],
                                               ),
                                             ),
-                                            const SizedBox(width: 8),
+                                            SizedBox(width: 8),
                                             Column(
                                               crossAxisAlignment: CrossAxisAlignment.end,
                                               children: [
-                                                Text('₹${order.totalAmount.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                                Text('₹${order.totalAmount.toStringAsFixed(0)}', style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                                               ],
                                             ),
                                           ],
@@ -520,15 +525,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 24),
+                            SizedBox(height: 24),
 
                             // Order Timeline
                             Container(
-                              padding: const EdgeInsets.all(16),
+                              padding: EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1E293B),
+                                color: colors.surface,
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.white10),
+                                border: Border.all(color: colors.border),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -536,7 +541,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      const Text('Order timeline', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                                      Text('Order timeline', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
                                       TextButton(
                                         onPressed: () {
                                           if (provider.currentOrder != null) {
@@ -548,32 +553,32 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                             );
                                           }
                                         }, 
-                                        child: const Text('View listing', style: TextStyle(color: Color(0xFF6C63FF)))
+                                        child: Text('View listing', style: TextStyle(color: Color(0xFF6C63FF)))
                                       ),
                                     ],
                                   ),
-                                  Text('Tracking: ${provider.currentOrder!.listingTitle}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                                  const SizedBox(height: 24),
+                                  Text('Tracking: ${provider.currentOrder!.listingTitle}', style: TextStyle(color: colors.textMuted, fontSize: 12)),
+                                  SizedBox(height: 24),
                                   _buildTimeline(provider.currentOrder!.status, provider.currentOrder!.orderType),
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 24),
+                            SizedBox(height: 24),
 
                             // Rental Details Grid
                             if (provider.currentOrder!.startDate != null)
                               Container(
-                                padding: const EdgeInsets.all(16),
+                                padding: EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF1E293B),
+                                  color: colors.surface,
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: Colors.white10),
+                                  border: Border.all(color: colors.border),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(provider.currentOrder!.orderType.toLowerCase() == 'buy' ? 'Purchase details' : 'Rental details', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                                    const SizedBox(height: 16),
+                                    Text(provider.currentOrder!.orderType.toLowerCase() == 'buy' ? 'Purchase details' : 'Rental details', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+                                    SizedBox(height: 16),
                                     if (provider.currentOrder!.orderType.toLowerCase() == 'buy') ...[
                                       Row(
                                         children: [
@@ -581,9 +586,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                const Text('PURCHASE DATE', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                                                const SizedBox(height: 4),
-                                                Text(provider.currentOrder!.startDate!.split('T')[0], style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                                Text('PURCHASE DATE', style: TextStyle(color: colors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                                                SizedBox(height: 4),
+                                                Text(provider.currentOrder!.startDate!.split('T')[0], style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
                                               ],
                                             ),
                                           ),
@@ -591,9 +596,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                const Text('QUANTITY', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                                                const SizedBox(height: 4),
-                                                Text('${provider.currentOrder!.quantity}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                                Text('QUANTITY', style: TextStyle(color: colors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                                                SizedBox(height: 4),
+                                                Text('${provider.currentOrder!.quantity}', style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
                                               ],
                                             ),
                                           ),
@@ -606,9 +611,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                const Text('START DATE', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                                                const SizedBox(height: 4),
-                                                Text(provider.currentOrder!.startDate!.split('T')[0], style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                                Text('START DATE', style: TextStyle(color: colors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                                                SizedBox(height: 4),
+                                                Text(provider.currentOrder!.startDate!.split('T')[0], style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
                                               ],
                                             ),
                                           ),
@@ -616,24 +621,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                const Text('END DATE', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                                                const SizedBox(height: 4),
-                                                Text(provider.currentOrder!.endDate?.split('T')[0] ?? '-', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                                Text('END DATE', style: TextStyle(color: colors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                                                SizedBox(height: 4),
+                                                Text(provider.currentOrder!.endDate?.split('T')[0] ?? '-', style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
                                               ],
                                             ),
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 16),
+                                      SizedBox(height: 16),
                                       Row(
                                         children: [
                                           Expanded(
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                const Text('QUANTITY', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                                                const SizedBox(height: 4),
-                                                Text('${provider.currentOrder!.quantity}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                                Text('QUANTITY', style: TextStyle(color: colors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                                                SizedBox(height: 4),
+                                                Text('${provider.currentOrder!.quantity}', style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
                                               ],
                                             ),
                                           ),
@@ -645,9 +650,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                   provider.currentOrder!.orderType.toLowerCase() == 'rent'
                                                       ? 'RENTAL PERIOD'
                                                       : 'ORDER TYPE',
-                                                  style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                                                  style: TextStyle(color: colors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2),
                                                 ),
-                                                const SizedBox(height: 4),
+                                                SizedBox(height: 4),
                                                 Text(
                                                   provider.currentOrder!.orderType.toLowerCase() == 'rent'
                                                       ? (provider.currentOrder!.rentalDurationLabel?.isNotEmpty == true
@@ -658,7 +663,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                               provider.currentOrder!.rentalPeriodUnit,
                                                             ))
                                                       : 'Buy',
-                                                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                                  style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
                                                 ),
                                                 if (provider.currentOrder!.orderType.toLowerCase() == 'rent' &&
                                                     provider.currentOrder!.rentalFinalPrice != null) ...[
@@ -676,7 +681,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                         ),
                                                       Text(
                                                         'Plan price ₹${provider.currentOrder!.rentalFinalPrice!.toStringAsFixed(0)}',
-                                                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                                        style: TextStyle(color: colors.textMuted, fontSize: 12),
                                                       ),
                                                     ],
                                                   ),
@@ -692,12 +697,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                               ),
 
                             if (provider.currentOrder!.hasMedicalReference) ...[
-                              const SizedBox(height: 24),
+                              SizedBox(height: 24),
                               _MedicalReferenceCard(order: provider.currentOrder!),
                             ],
 
                             if (_shouldShowGroupPhotoSection(provider)) ...[
-                              const SizedBox(height: 24),
+                              SizedBox(height: 24),
                               _GroupVendorPhotoRequestCard(
                                 items: _ordersInGroup,
                                 requestsByOrderId: provider.imageRequestsByOrderId,
@@ -735,7 +740,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                               ),
                             ],
                             
-                            const SizedBox(height: 24),
+                            SizedBox(height: 24),
 
                             // Bottom Action Buttons
                             Builder(
@@ -752,9 +757,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                       children: [
                                         Expanded(
                                           child: OutlinedButton.icon(
-                                            style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white24), padding: const EdgeInsets.symmetric(vertical: 16)),
-                                            icon: const Icon(Icons.support_agent, size: 18),
-                                            label: const Text('BlinksMed support', style: TextStyle(fontSize: 14)),
+                                            style: OutlinedButton.styleFrom(foregroundColor: colors.textPrimary, side: BorderSide(color: colors.border), padding: EdgeInsets.symmetric(vertical: 16)),
+                                            icon: Icon(Icons.support_agent, size: 18),
+                                            label: Text('BlinksMed support', style: TextStyle(fontSize: 14)),
                                             onPressed: () {
                                               Navigator.push(
                                                 context,
@@ -765,12 +770,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                             },
                                           ),
                                         ),
-                                        const SizedBox(width: 12),
+                                        SizedBox(width: 12),
                                         Expanded(
                                           child: OutlinedButton.icon(
-                                            style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white24), padding: const EdgeInsets.symmetric(vertical: 16)),
-                                            icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                                            label: const Text('Chat with BlinksMed', style: TextStyle(fontSize: 14)),
+                                            style: OutlinedButton.styleFrom(foregroundColor: colors.textPrimary, side: BorderSide(color: colors.border), padding: EdgeInsets.symmetric(vertical: 16)),
+                                            icon: Icon(Icons.chat_bubble_outline, size: 18),
+                                            label: Text('Chat with BlinksMed', style: TextStyle(fontSize: 14)),
                                             onPressed: () async {
                                               final chatProvider = Provider.of<ChatProvider>(context, listen: false);
                                               final sessionId = await chatProvider.createSession(
@@ -790,7 +795,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                   ),
                                                 );
                                               } else if (context.mounted) {
-                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not start chat session.')));
+                                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not start chat session.')));
                                               }
                                             },
                                           ),
@@ -798,30 +803,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                       ],
                                     ),
                                     if (canCancel) ...[
-                                      const SizedBox(height: 12),
+                                      SizedBox(height: 12),
                                       OutlinedButton.icon(
                                         style: OutlinedButton.styleFrom(
                                           foregroundColor: Colors.redAccent,
-                                          side: const BorderSide(color: Colors.redAccent),
-                                          padding: const EdgeInsets.symmetric(vertical: 16),
+                                          side: BorderSide(color: Colors.redAccent),
+                                          padding: EdgeInsets.symmetric(vertical: 16),
                                         ),
-                                        icon: const Icon(Icons.cancel_outlined, size: 18),
-                                        label: const Text('Cancel item request', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                                        icon: Icon(Icons.cancel_outlined, size: 18),
+                                        label: Text('Cancel item request', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                                         onPressed: provider.isActionLoading
                                             ? null
                                             : () async {
                                                 final confirm = await showDialog<bool>(
                                                   context: context,
                                                   builder: (ctx) => AlertDialog(
-                                                    backgroundColor: const Color(0xFF1E293B),
-                                                    title: const Text('Cancel request?', style: TextStyle(color: Colors.white)),
-                                                    content: const Text(
+                                                    backgroundColor: colors.surface,
+                                                    title: Text('Cancel request?', style: TextStyle(color: colors.textPrimary)),
+                                                    content: Text(
                                                       'This will cancel this item request. This cannot be undone.',
-                                                      style: TextStyle(color: Colors.white70),
+                                                      style: TextStyle(color: colors.textSecondary),
                                                     ),
                                                     actions: [
-                                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep', style: TextStyle(color: Colors.white54))),
-                                                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Cancel request', style: TextStyle(color: Colors.redAccent))),
+                                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Keep', style: TextStyle(color: colors.textMuted))),
+                                                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Cancel request', style: TextStyle(color: Colors.redAccent))),
                                                     ],
                                                   ),
                                                 );
@@ -830,7 +835,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                 if (!context.mounted) return;
                                                 if (ok) {
                                                   ScaffoldMessenger.of(context).showSnackBar(
-                                                    const SnackBar(content: Text('Order cancelled.'), backgroundColor: Colors.green),
+                                                    SnackBar(content: Text('Order cancelled.'), backgroundColor: Colors.green),
                                                   );
                                                   Provider.of<OrderProvider>(context, listen: false).fetchOrders(silent: true);
                                                 } else {
@@ -842,22 +847,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                       ),
                                     ],
                                     if (canExtendBuyout) ...[
-                                      const SizedBox(height: 12),
+                                      SizedBox(height: 12),
                                       Row(
                                         children: [
                                           Expanded(
                                             child: ElevatedButton(
-                                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), padding: const EdgeInsets.symmetric(vertical: 16)),
+                                              style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF6C63FF), padding: EdgeInsets.symmetric(vertical: 16)),
                                               onPressed: () => _showExtensionBottomSheet(context, provider),
-                                              child: const FittedBox(fit: BoxFit.scaleDown, child: Text('Extend Rental', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                                              child: FittedBox(fit: BoxFit.scaleDown, child: Text('Extend Rental', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold))),
                                             ),
                                           ),
-                                          const SizedBox(width: 12),
+                                          SizedBox(width: 12),
                                           Expanded(
                                             child: ElevatedButton(
-                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.white10, padding: const EdgeInsets.symmetric(vertical: 16)),
+                                              style: ElevatedButton.styleFrom(backgroundColor: colors.border, padding: EdgeInsets.symmetric(vertical: 16)),
                                               onPressed: () => _showBuyoutBottomSheet(context, provider),
-                                              child: const FittedBox(fit: BoxFit.scaleDown, child: Text('Buyout Item', style: TextStyle(color: Colors.white))),
+                                              child: FittedBox(fit: BoxFit.scaleDown, child: Text('Buyout Item', style: TextStyle(color: colors.textPrimary))),
                                             ),
                                           ),
                                         ],
@@ -867,7 +872,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                 );
                               },
                             ),
-                            const SizedBox(height: 32),
+                            SizedBox(height: 32),
                           ],
                         ),
                       ),
@@ -895,7 +900,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   ) async {
     if (orderIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select at least one item.')),
+        SnackBar(content: Text('Select at least one item.')),
       );
       return;
     }
@@ -920,15 +925,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   }
 
   Color _getStatusColor(String status) {
+    final colors = context.appColors;
     final s = status.toLowerCase();
     if (s == 'active') return Colors.greenAccent;
     if (s == 'pending' || s == 'confirmed' || s.contains('transit')) return Colors.orangeAccent;
     if (s == 'cancelled' || s == 'canceled') return Colors.grey;
     if (s == 'bought_out') return Colors.purpleAccent;
-    return Colors.white70;
+    return colors.textSecondary;
   }
 
   Widget _buildTimeline(String status, String orderType) {
+    final colors = context.appColors;
     final s = status.toLowerCase();
     final isBuy = orderType.toLowerCase() == 'buy';
     
@@ -951,11 +958,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
         Widget? icon;
         
         if (isDone && !isCurrent) {
-          dotColor = Colors.white; // Or dark grey in dark mode
-          icon = const Icon(Icons.check, size: 14, color: Colors.black);
+          dotColor = colors.textPrimary;
+          icon = Icon(Icons.check, size: 14, color: colors.surface);
         } else if (isCurrent) {
-          dotColor = const Color(0xFF10B981); // Emerald Green
-          icon = Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle));
+          dotColor = Color(0xFF10B981); // Emerald Green
+          icon = Container(width: 8, height: 8, decoration: BoxDecoration(color: colors.textPrimary, shape: BoxShape.circle));
         } else {
           dotColor = Colors.transparent;
         }
@@ -971,7 +978,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                   decoration: BoxDecoration(
                     color: dotColor,
                     shape: BoxShape.circle,
-                    border: Border.all(color: isDone || isCurrent ? dotColor : Colors.white24, width: 2),
+                    border: Border.all(color: isDone || isCurrent ? dotColor : colors.border, width: 2),
                   ),
                   child: Center(child: icon),
                 ),
@@ -979,26 +986,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                   Container(
                     width: 2,
                     height: 40,
-                    color: Colors.white10,
+                    color: colors.border,
                   ),
               ],
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: 16),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(top: 2),
+                padding: EdgeInsets.only(top: 2),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       steps[index],
                       style: TextStyle(
-                        color: isDone || isCurrent ? Colors.white : Colors.white54,
+                        color: isDone || isCurrent ? colors.textPrimary : colors.textMuted,
                         fontSize: 16,
                       ),
                     ),
                     if (isCurrent && steps[index] == 'Rental Active')
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.only(top: 4.0),
                         child: Text('Rental is currently active', style: TextStyle(color: Color(0xFF10B981), fontSize: 12)),
                       ),
@@ -1047,11 +1054,12 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
   }
 
   void _preview(BuildContext context, OrderImageModel image) {
+    final colors = context.appColors;
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.black,
-        insetPadding: const EdgeInsets.all(16),
+        insetPadding: EdgeInsets.all(16),
         child: Stack(
           children: [
             InteractiveViewer(
@@ -1060,8 +1068,8 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                 child: Image.network(
                   image.fileUrl,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Center(
-                    child: Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
+                  errorBuilder: (_, __, ___) => Center(
+                    child: Icon(Icons.broken_image_outlined, color: colors.textMuted, size: 48),
                   ),
                 ),
               ),
@@ -1090,6 +1098,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final eligible = items
         .where((o) => _canRequest(o.status) && !requestsByOrderId.containsKey(o.id))
         .toList();
@@ -1102,7 +1111,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white12),
@@ -1110,20 +1119,20 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Request photos from your supplier',
-            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           Text(
             multi
                 ? 'Sent to each product’s supplier (vendor) — not BlinksMed support. Choose products or request all. Up to 5 photos per item.'
                 : 'Sent to the supplier for this product — not BlinksMed support chat below. Up to 5 photos.',
-            style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+            style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.35),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           if (loading)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Row(
                 children: [
@@ -1133,7 +1142,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
                   ),
                   SizedBox(width: 10),
-                  Text('Loading photo requests…', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                  Text('Loading photo requests…', style: TextStyle(color: colors.textMuted, fontSize: 13)),
                 ],
               ),
             )
@@ -1144,11 +1153,11 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                   children: [
                     TextButton(
                       onPressed: busy ? null : onSelectAll,
-                      child: const Text('Select all', style: TextStyle(color: Color(0xFF6C63FF), fontSize: 12)),
+                      child: Text('Select all', style: TextStyle(color: Color(0xFF6C63FF), fontSize: 12)),
                     ),
                     TextButton(
                       onPressed: busy ? null : onClear,
-                      child: const Text('Clear', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      child: Text('Clear', style: TextStyle(color: colors.textMuted, fontSize: 12)),
                     ),
                   ],
                 ),
@@ -1158,43 +1167,43 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     value: checked,
-                    activeColor: const Color(0xFF6C63FF),
+                    activeColor: Color(0xFF6C63FF),
                     checkColor: Colors.white,
-                    title: Text(item.listingTitle, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                    title: Text(item.listingTitle, style: TextStyle(color: colors.textPrimary, fontSize: 13)),
                     subtitle: Text(
                       item.status.replaceAll('_', ' '),
-                      style: const TextStyle(color: Colors.white54, fontSize: 11),
+                      style: TextStyle(color: colors.textMuted, fontSize: 11),
                     ),
                     onChanged: busy ? null : (v) => onToggle(item.id, v == true),
                   );
                 }),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
+                        style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF6C63FF)),
                         onPressed: busy ? null : () => onRequestAll(),
                         icon: busy
-                            ? const SizedBox(
+                            ? SizedBox(
                                 width: 14,
                                 height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                child: CircularProgressIndicator(strokeWidth: 2, color: colors.textPrimary),
                               )
-                            : const Icon(Icons.photo_library_outlined, size: 16, color: Colors.white),
-                        label: Text('Request all from suppliers (${eligible.length})', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                            : Icon(Icons.photo_library_outlined, size: 16, color: colors.textPrimary),
+                        label: Text('Request all from suppliers (${eligible.length})', style: TextStyle(color: colors.textPrimary, fontSize: 12)),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: Colors.white24),
+                          foregroundColor: colors.textPrimary,
+                          side: BorderSide(color: colors.border),
                         ),
                         onPressed: busy || selectedIds.isEmpty ? null : () => onRequestSelected(),
-                        icon: const Icon(Icons.check_box_outlined, size: 16),
-                        label: Text('Selected (${selectedIds.length})', style: const TextStyle(fontSize: 12)),
+                        icon: Icon(Icons.check_box_outlined, size: 16),
+                        label: Text('Selected (${selectedIds.length})', style: TextStyle(fontSize: 12)),
                       ),
                     ),
                   ],
@@ -1202,35 +1211,35 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
               ] else
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white24),
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                    foregroundColor: colors.textPrimary,
+                    side: BorderSide(color: colors.border),
+                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 14),
                   ),
                   onPressed: busy ? null : () => onRequestSelected(),
                   icon: busy
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: colors.textSecondary),
                         )
-                      : const Icon(Icons.photo_library_outlined, size: 18),
+                      : Icon(Icons.photo_library_outlined, size: 18),
                   label: Text(busy ? 'Sending…' : 'Request photos from supplier'),
                 ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
             ],
             if (withRequest.isEmpty && eligible.isEmpty)
-              const Text(
+              Text(
                 'You can request supplier photos after a supplier accepts each product.',
-                style: TextStyle(color: Colors.white54, fontSize: 13),
+                style: TextStyle(color: colors.textMuted, fontSize: 13),
               ),
             if (withRequest.isNotEmpty) ...[
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'PHOTO REQUEST STATUS BY PRODUCT',
                       style: TextStyle(
-                        color: Colors.white54,
+                        color: colors.textSecondary,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.4,
@@ -1246,11 +1255,11 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                       return '$totalPhotos photo${totalPhotos == 1 ? '' : 's'} received'
                           '${withRequest.length > 1 ? ' · ${withRequest.length} products requested' : ''}';
                     }(),
-                    style: const TextStyle(color: Colors.white54, fontSize: 11),
+                    style: TextStyle(color: colors.textMuted, fontSize: 11),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               ...withRequest.map((item) {
                 final images = requestsByOrderId[item.id]?.images ?? const <OrderImageModel>[];
                 final waiting = images.isEmpty;
@@ -1262,12 +1271,12 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: waiting
                         ? Colors.amber.withValues(alpha: 0.08)
-                        : Colors.white.withValues(alpha: 0.04),
+                        : colors.surface,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: waiting
                           ? Colors.amber.withValues(alpha: 0.35)
-                          : Colors.white12,
+                          : colors.border,
                     ),
                   ),
                   child: Column(
@@ -1282,8 +1291,8 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                               children: [
                                 Text(
                                   item.listingTitle,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: colors.textPrimary,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -1291,7 +1300,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                                 const SizedBox(height: 2),
                                 Text(
                                   '${item.status.replaceAll('_', ' ')}${viewing ? ' · currently viewing' : ''}',
-                                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                                  style: TextStyle(color: colors.textMuted, fontSize: 11),
                                 ),
                               ],
                             ),
@@ -1319,16 +1328,16 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       if (waiting)
-                        const Text(
+                        Text(
                           'Request already sent for this product \u2014 supplier has not uploaded photos yet.',
-                          style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+                          style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.35),
                         )
                       else
                         GridView.builder(
                           shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
+                          physics: NeverScrollableScrollPhysics(),
                           itemCount: images.length,
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 3,
                             mainAxisSpacing: 8,
                             crossAxisSpacing: 8,
@@ -1344,7 +1353,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                                 child: Image.network(
                                   image.fileUrl,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const Center(
+                                  errorBuilder: (_, __, ___) => Center(
                                     child: Icon(Icons.broken_image_outlined, color: Colors.white38),
                                   ),
                                 ),
@@ -1372,6 +1381,7 @@ class _MedicalReferenceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final doctorName = order.doctorName?.trim();
     final specialization = order.doctorSpecialization?.trim();
     final uniqueCode = order.doctorUniqueCode?.trim();
@@ -1395,27 +1405,28 @@ class _MedicalReferenceCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: colors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Medical reference',
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 16),
-          if (doctorValue != null) _labeledRow('Doctor', doctorValue),
+          SizedBox(height: 16),
+          if (doctorValue != null) _labeledRow(context, 'Doctor', doctorValue),
           if (uniqueCode != null && uniqueCode.isNotEmpty) ...[
-            if (doctorValue != null) const SizedBox(height: 12),
+            if (doctorValue != null) SizedBox(height: 12),
             _labeledRow(
+              context,
               'Unique ID',
               uniqueCode,
-              valueStyle: const TextStyle(
+              valueStyle: TextStyle(
                 color: Color(0xFF2DD4BF),
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -1425,36 +1436,37 @@ class _MedicalReferenceCard extends StatelessWidget {
             ),
           ],
           if (contact != null && contact.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _labeledRow('Contact', contact),
+            SizedBox(height: 12),
+            _labeledRow(context, 'Contact', contact),
           ],
           if (hospitalValue != null) ...[
-            const SizedBox(height: 12),
-            _labeledRow('Hospital', hospitalValue),
+            SizedBox(height: 12),
+            _labeledRow(context, 'Hospital', hospitalValue),
           ],
         ],
       ),
     );
   }
 
-  Widget _labeledRow(String label, String value, {TextStyle? valueStyle}) {
+  Widget _labeledRow(BuildContext context, String label, String value, {TextStyle? valueStyle}) {
+    final colors = context.appColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label.toUpperCase(),
-          style: const TextStyle(
-            color: Colors.white54,
+          style: TextStyle(
+            color: colors.textMuted,
             fontSize: 10,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.2,
           ),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: 4),
         Text(
           value,
           style: valueStyle ??
-              const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+              TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ],
     );

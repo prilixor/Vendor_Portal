@@ -37,7 +37,7 @@ class IndianMobileField extends StatelessWidget {
     final hasError = errorText != null && errorText!.isNotEmpty;
     final borderColor = hasError
         ? kFieldErrorColor
-        : Colors.white.withValues(alpha: 0.14);
+        : colors.border;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -47,7 +47,7 @@ class IndianMobileField extends StatelessWidget {
         AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: colors.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: borderColor, width: hasError ? 1.4 : 1),
           ),
@@ -56,18 +56,18 @@ class IndianMobileField extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
+                  color: colors.surfaceElevated,
                   borderRadius: const BorderRadius.horizontal(
                     left: Radius.circular(11),
                   ),
                   border: Border(
-                    right: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                    right: BorderSide(color: colors.border),
                   ),
                 ),
-                child: const Text(
+                child: Text(
                   '+91',
                   style: TextStyle(
-                    color: Colors.white70,
+                    color: colors.textSecondary,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
@@ -81,7 +81,7 @@ class IndianMobileField extends StatelessWidget {
                   keyboardType: TextInputType.phone,
                   textInputAction: textInputAction,
                   inputFormatters: const [_IndianMobileInputFormatter()],
-                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                  style: TextStyle(color: colors.textPrimary, fontSize: 15),
                   onChanged: onChanged,
                   decoration: InputDecoration(
                     isDense: true,
@@ -92,7 +92,7 @@ class IndianMobileField extends StatelessWidget {
                     disabledBorder: InputBorder.none,
                     hintText: '9876543210',
                     hintStyle: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.28),
+                      color: colors.textMuted,
                       fontSize: 15,
                     ),
                     contentPadding: const EdgeInsets.symmetric(

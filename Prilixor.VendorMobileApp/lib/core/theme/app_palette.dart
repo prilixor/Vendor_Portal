@@ -40,6 +40,19 @@ class AppPalette extends ThemeExtension<AppPalette> {
     primarySoft: Color(0xFF312E81),
   );
 
+  /// Light theme semantic colors (matching Customer App design system).
+  static const light = AppPalette(
+    background: Color(0xFFF8FAFC),
+    surface: Color(0xFFFFFFFF),
+    surfaceElevated: Color(0xFFF1F5F9),
+    border: Color(0xFFE2E8F0),
+    textPrimary: Color(0xFF0F172A),
+    textSecondary: Color(0xFF475569),
+    textMuted: Color(0xFF64748B),
+    accent: accentSeed,
+    primarySoft: Color(0xFFEEF2FF),
+  );
+
   @override
   AppPalette copyWith({
     Color? background,
@@ -85,5 +98,5 @@ class AppPalette extends ThemeExtension<AppPalette> {
 extension AppPaletteContext on BuildContext {
   AppPalette get appColors => Theme.of(this).extension<AppPalette>() ?? AppPalette.dark;
 
-  bool get isDarkMode => true;
+  bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
 }

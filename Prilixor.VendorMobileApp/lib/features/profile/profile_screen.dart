@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/providers/vendor_support_provider.dart';
+import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
 import '../products/products_screen.dart';
 import '../inventory/inventory_screen.dart';
@@ -67,17 +68,17 @@ class ProfileScreen extends StatelessWidget {
           Text(
             name,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: context.appColors.textPrimary,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             email,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white60, fontSize: 14),
+            style: TextStyle(color: context.appColors.textMuted, fontSize: 14),
           ),
           const SizedBox(height: 24),
           _InfoCard(
@@ -85,13 +86,13 @@ class ProfileScreen extends StatelessWidget {
               if (businessName != null && businessName.isNotEmpty)
                 _InfoRow(label: 'Business', value: businessName),
               if (businessName != null && businessName.isNotEmpty)
-                const Divider(color: Colors.white12, height: 24),
+                Divider(color: context.appColors.border, height: 24),
               if (phone != null && phone.isNotEmpty) ...[
                 _InfoRow(
                   label: 'Phone',
                   value: IndianMobilePhone.formatDisplay(phone),
                 ),
-                const Divider(color: Colors.white12, height: 24),
+                Divider(color: context.appColors.border, height: 24),
               ],
               _InfoRow(label: 'Account status', value: accountStatus),
             ],
@@ -214,20 +215,20 @@ class _MenuTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: context.appColors.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: Material(
-        color: const Color(0xFF1E293B),
+        color: context.appColors.surface,
         child: ListTile(
           leading: Badge(
             isLabelVisible: badgeCount > 0,
             label: Text('$badgeCount'),
             child: Icon(icon, color: const Color(0xFF6C63FF)),
           ),
-          title: Text(title, style: const TextStyle(color: Colors.white)),
-          subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54)),
-          trailing: const Icon(Icons.chevron_right, color: Colors.white38),
+          title: Text(title, style: TextStyle(color: context.appColors.textPrimary)),
+          subtitle: Text(subtitle, style: TextStyle(color: context.appColors.textMuted)),
+          trailing: Icon(Icons.chevron_right, color: context.appColors.textMuted),
           onTap: onTap,
         ),
       ),
@@ -245,9 +246,9 @@ class _InfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: context.appColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Column(children: children),
     );
@@ -269,14 +270,14 @@ class _InfoRow extends StatelessWidget {
           width: 100,
           child: Text(
             label,
-            style: const TextStyle(color: Colors.white54, fontSize: 13),
+            style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.appColors.textPrimary,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
