@@ -32,6 +32,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto, VendorWorkingHourDto, VendorProductListingDto, ProductDto } from "@/app/services/adminApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
+import { retryOriginalOnImageError } from "@/app/helpers/utils";
 
 const getApiOrigin = (): string | null => {
   const configured = import.meta.env.VITE_API_BASE_URL as string | undefined;
@@ -1977,6 +1978,7 @@ const VendorDetails = () => {
                   alt="Document preview"
                   className="max-w-full max-h-full object-contain"
                   onLoad={() => setPdfLoading(false)}
+                  onError={retryOriginalOnImageError}
                 />
                   );
                 }

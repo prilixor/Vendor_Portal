@@ -10,7 +10,7 @@ import { Badge } from "@/app/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Switch } from "@/app/components/ui/switch";
 import { Label } from "@/app/components/ui/label";
-import { cn } from "@/app/helpers/utils";
+import { cn, imageSrcCandidates } from "@/app/helpers/utils";
 import { useAuth } from "@/app/guards/AuthContext";
 import {
   ActiveFilterChips,
@@ -77,8 +77,15 @@ export function availabilityBadge(
 
 /** Fits the whole image inside a fixed aspect-ratio frame (letterboxing on sides or top/bottom). */
 export function BrowseCardImage({ src }: { src: string }) {
-  const [failed, setFailed] = useState(false);
-  if (!src.trim() || failed) {
+  const candidates = imageSrcCandidates(src);
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    setIndex(0);
+  }, [src]);
+
+  const activeSrc = candidates[index];
+  if (!src.trim() || !activeSrc) {
     const subtitle = !src.trim() ? "Image will be updated soon" : "Image currently unavailable";
     return (
       <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 text-slate-500 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 dark:text-slate-300">
@@ -94,12 +101,15 @@ export function BrowseCardImage({ src }: { src: string }) {
   }
   return (
     <img
-      src={src}
+      src={activeSrc}
       alt=""
       className="h-full w-full object-contain object-center bg-muted"
       loading="lazy"
       decoding="async"
-      onError={() => setFailed(true)}
+      onError={() => {
+        if (index + 1 < candidates.length) setIndex(index + 1);
+        else setIndex(candidates.length);
+      }}
     />
   );
 }

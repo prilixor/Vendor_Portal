@@ -9,7 +9,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, RefreshCw, Package, User } from "lucide-react";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import {
   ActiveFilterChips,
   FilterPanel,
@@ -379,6 +379,7 @@ const VendorOrders = () => {
                               src={imageUrl}
                               alt={order.listingTitle}
                               className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm"
+                              onError={retryOriginalOnImageError}
                             />
                           ) : (
                             <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">

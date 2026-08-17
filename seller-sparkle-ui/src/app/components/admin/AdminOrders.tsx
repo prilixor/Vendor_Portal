@@ -18,7 +18,7 @@ import {
   ChevronRight,
   Package,
 } from "lucide-react";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import {
   ActiveFilterChips,
   FilterPanel,
@@ -418,7 +418,7 @@ export const AdminOrders = () => {
                     <div key={item.orderId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/10 hover:border-border transition-all duration-300 shadow-sm gap-4">
                       <div className="flex items-center gap-4 flex-1">
                         {imageUrl ? (
-                          <img src={imageUrl} alt={item.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" />
+                          <img src={imageUrl} alt={item.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" onError={retryOriginalOnImageError} />
                         ) : (
                           <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">
                             <Package className="h-5 w-5 opacity-60" />

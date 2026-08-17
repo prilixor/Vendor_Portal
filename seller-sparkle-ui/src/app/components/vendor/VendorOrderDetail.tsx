@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Check, Barcode, CheckCircle2, ImagePlus, Images, Loader2, Stethoscope, X } from "lucide-react";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
@@ -777,6 +777,7 @@ const VendorOrderDetail = () => {
                         src={imageUrl}
                         alt={item.listingTitle}
                         className="h-10 w-10 shrink-0 rounded-md object-cover border border-border/40 bg-muted"
+                        onError={retryOriginalOnImageError}
                       />
                     ) : (
                       <div className="h-10 w-10 shrink-0 rounded-md bg-muted border border-border/40 flex items-center justify-center text-[10px] text-muted-foreground">
@@ -1118,6 +1119,7 @@ const VendorOrderDetail = () => {
                             src={img.fileUrl}
                             alt={img.originalFileName || "Order photo"}
                             className="h-full w-full object-cover"
+                            onError={retryOriginalOnImageError}
                           />
                         </button>
                         {canUploadOrderImages && (
@@ -1171,6 +1173,7 @@ const VendorOrderDetail = () => {
                       src={previewImageUrl}
                       alt="Order photo preview"
                       className="max-h-[80vh] w-full rounded-md object-contain"
+                      onError={retryOriginalOnImageError}
                     />
                   ) : null}
                 </DialogContent>

@@ -27,7 +27,7 @@ import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { apiClient } from "@/app/services/apiClient";
 import { vendorOnboardingApi, VendorFileFolderType, VendorVariantInventoryDto } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, resolveCatalogProductImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
 
 type LocalListing = ProductListing & {
@@ -46,6 +46,7 @@ type LocalListing = ProductListing & {
   isChemical?: boolean;
   variants?: any[];
   rentalPricingPlans?: any[];
+  catalogImage?: string;
 };
 
 type CatalogCategory = {
@@ -73,6 +74,12 @@ type CatalogProduct = {
   chemicalFormula?: string;
   variants?: any[];
   rentalPricingPlans?: any[];
+  images?: Array<{
+    imageUrl?: string | null;
+    thumbnailUrl?: string | null;
+    isPrimary?: boolean;
+    displayOrder?: number;
+  }>;
 };
 
 const normalizeListingStatus = (status: string): ProductListing["status"] => {
@@ -475,6 +482,7 @@ const Products = () => {
       chemicalFormula: p.chemicalFormula,
       variants: p.variants,
       rentalPricingPlans: p.rentalPricingPlans,
+      images: p.images,
     }));
     const byProductId = new Map(mappedProducts.map((p) => [p.id, p]));
     const byCategoryId = new Map(mappedCategories.map((c) => [c.id, c]));
@@ -534,7 +542,10 @@ const Products = () => {
           primaryImage: resolveItemImageUrl({
             primaryImageUrl: l.primaryImageUrl,
             primaryThumbnailUrl: l.primaryThumbnailUrl,
-          }) ?? undefined,
+          })
+            ?? resolveCatalogProductImageUrl(product?.images)
+            ?? undefined,
+          catalogImage: resolveCatalogProductImageUrl(product?.images) ?? undefined,
           images: [],
           favoriteCount: l.favoriteCount ?? 0,
           createdAt: new Date().toISOString(),
@@ -1092,7 +1103,7 @@ const Products = () => {
                 <tr key={p.id} className="hover:bg-muted/20 align-middle">
                   <td className="px-3 py-3 sm:px-4">
                     <div className="flex items-center gap-2 sm:gap-3">
-                      <ListingThumb src={p.primaryImage} alt={p.title} />
+                      <ListingThumb src={p.primaryImage} fallbackSrc={p.catalogImage} alt={p.title} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <p className="font-medium truncate">{p.productName || p.title}</p>
@@ -1214,7 +1225,7 @@ const Products = () => {
               <div key={p.id} className="rounded-lg border border-border p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <ListingThumb src={p.primaryImage} alt={p.title} />
+                    <ListingThumb src={p.primaryImage} fallbackSrc={p.catalogImage} alt={p.title} />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <p className="truncate font-medium">{p.productName || p.title}</p>
@@ -1797,7 +1808,7 @@ const Products = () => {
                       onDrop={(e) => { e.preventDefault(); const from = +e.dataTransfer.getData("text/plain"); reorder(from, idx); }}
                       className={`group relative aspect-square cursor-move overflow-hidden rounded-lg border-2 ${img.primary ? "border-primary ring-2 ring-primary/20" : "border-border"}`}
                     >
-                      <img src={img.url} alt={`Product image ${idx + 1}`} className="h-full w-full object-cover" />
+                      <img src={img.url} alt={`Product image ${idx + 1}`} className="h-full w-full object-cover" onError={retryOriginalOnImageError} />
                       {img.primary && (
                         <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
                           <Star className="h-3 w-3" fill="currentColor" /> Primary
@@ -1952,7 +1963,7 @@ const Products = () => {
           </DialogHeader>
           {previewUrl && (
             <div className="overflow-hidden rounded-lg border border-border">
-              <img src={previewUrl} alt="Preview" className="max-h-[60vh] w-full object-contain bg-muted/20" />
+              <img src={previewUrl} alt="Preview" className="max-h-[60vh] w-full object-contain bg-muted/20" onError={retryOriginalOnImageError} />
             </div>
           )}
           <DialogFooter>
@@ -2104,6 +2115,7 @@ const Products = () => {
                   src={previewDocument.url}
                   alt="Document preview"
                   className="max-w-full max-h-full object-contain"
+                  onError={retryOriginalOnImageError}
                 />
                   );
                 }

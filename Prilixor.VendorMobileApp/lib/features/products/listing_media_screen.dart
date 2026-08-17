@@ -11,6 +11,7 @@ import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/utils/media_url.dart';
 import '../../core/utils/multipart_file_util.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/catalog_image.dart';
 
 const _docTypes = [
   ('spec_sheet', 'Spec sheet'),
@@ -421,7 +422,7 @@ class _ListingMediaScreenState extends State<ListingMediaScreen>
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: url != null
-                          ? Image.network(url, fit: BoxFit.cover)
+                          ? CatalogImage(url: image.displayUrl, fit: BoxFit.cover)
                           : Container(
                               color: AppTheme.card(context),
                               child: Icon(Icons.broken_image, color: context.appColors.textMuted),

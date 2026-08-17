@@ -18,6 +18,7 @@ import { safeFormatDate } from "@/app/utils/dateUtils";
 import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto } from "@/app/services/adminApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { retryOriginalOnImageError } from "@/app/helpers/utils";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 import { AdminServiceAreaRadiusDialog } from "@/app/components/admin/AdminServiceAreaRadiusDialog";
 
@@ -1332,6 +1333,7 @@ const Verification = () => {
                   alt="Document preview"
                   className="max-w-full max-h-full object-contain"
                   onLoad={() => setPdfLoading(false)}
+                  onError={retryOriginalOnImageError}
                 />
                   );
                 }

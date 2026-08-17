@@ -20,7 +20,7 @@ import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea
 import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { toast } from "sonner";
 import { isSameChatDay } from "@/app/helpers/chatDayLabel";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
@@ -574,7 +574,7 @@ const CustomerOrderDetail = () => {
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {imageUrl ? (
-                    <img src={imageUrl} alt={item.listingTitle} className="h-10 w-10 shrink-0 rounded-md object-cover border border-border/40 bg-muted" />
+                    <img src={imageUrl} alt={item.listingTitle} className="h-10 w-10 shrink-0 rounded-md object-cover border border-border/40 bg-muted" onError={retryOriginalOnImageError} />
                   ) : (
                     <div className="h-10 w-10 shrink-0 rounded-md bg-muted border border-border/40 flex items-center justify-center text-[10px] text-muted-foreground">No Img</div>
                   )}
@@ -939,6 +939,7 @@ const CustomerOrderDetail = () => {
                                       src={img.fileUrl}
                                       alt={img.originalFileName || item.listingTitle}
                                       className="h-full w-full object-cover"
+                                      onError={retryOriginalOnImageError}
                                     />
                                   </button>
                                 ))}
@@ -962,7 +963,7 @@ const CustomerOrderDetail = () => {
             <DialogTitle className="sr-only">Photo preview</DialogTitle>
           </DialogHeader>
           {previewImageUrl ? (
-            <img src={previewImageUrl} alt="Order photo preview" className="max-h-[80vh] w-full rounded-md object-contain" />
+            <img src={previewImageUrl} alt="Order photo preview" className="max-h-[80vh] w-full rounded-md object-contain" onError={retryOriginalOnImageError} />
           ) : null}
         </DialogContent>
       </Dialog>

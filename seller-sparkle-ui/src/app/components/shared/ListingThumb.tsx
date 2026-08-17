@@ -1,21 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Image as ImageIcon } from "lucide-react";
-import { cn } from "@/app/helpers/utils";
+import { cn, imageSrcCandidates } from "@/app/helpers/utils";
 
 type ListingThumbProps = {
   src?: string | null;
+  /** Used only if src (and its original file) fail to load — e.g. Admin catalog photo. */
+  fallbackSrc?: string | null;
   alt?: string;
   className?: string;
   size?: "sm" | "md";
 };
 
 /** Compact list-row thumbnail with icon fallback when missing/broken. */
-export function ListingThumb({ src, alt = "", className, size = "md" }: ListingThumbProps) {
-  const [failed, setFailed] = useState(false);
-  const url = src?.trim();
+export function ListingThumb({
+  src,
+  fallbackSrc,
+  alt = "",
+  className,
+  size = "md",
+}: ListingThumbProps) {
+  const candidates = imageSrcCandidates(src, fallbackSrc);
+  const [index, setIndex] = useState(0);
   const box = size === "sm" ? "h-9 w-9" : "h-10 w-10";
 
-  if (!url || failed) {
+  useEffect(() => {
+    setIndex(0);
+  }, [src, fallbackSrc]);
+
+  const url = candidates[index];
+
+  if (!url) {
     return (
       <div
         className={cn(
@@ -37,7 +51,10 @@ export function ListingThumb({ src, alt = "", className, size = "md" }: ListingT
         className="h-full w-full object-cover"
         loading="lazy"
         decoding="async"
-        onError={() => setFailed(true)}
+        onError={() => {
+          if (index + 1 < candidates.length) setIndex(index + 1);
+          else setIndex(candidates.length);
+        }}
       />
     </div>
   );

@@ -27,7 +27,7 @@ import {
 import { ImagePlus, Loader2, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
-import { cn } from "@/app/helpers/utils";
+import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
 import {
   RENTAL_VALUE_TIERS,
   rentalValueTierLabel,
@@ -290,7 +290,7 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
         )}
       >
         {src ? (
-          <img src={src} alt={row.name} className="h-full w-full object-contain p-1.5" />
+          <img src={src} alt={row.name} className="h-full w-full object-contain p-1.5" onError={retryOriginalOnImageError} />
         ) : (
           <ImagePlus className="h-5 w-5 text-muted-foreground" />
         )}
@@ -583,6 +583,7 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
                         )}
                         alt=""
                         className="h-full w-full object-contain p-1.5"
+                        onError={retryOriginalOnImageError}
                       />
                     ) : (
                       <ImagePlus className="h-5 w-5 text-muted-foreground" />
