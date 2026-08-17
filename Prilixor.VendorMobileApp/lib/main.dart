@@ -159,12 +159,18 @@ class WelcomeScreen extends StatelessWidget {
               children: [
                 Center(
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: Image.asset(
-                      'assets/branding/logo.png',
-                      width: 112,
-                      height: 112,
-                      fit: BoxFit.cover,
+                    borderRadius: BorderRadius.circular(12),
+                    child: ColoredBox(
+                      color: Colors.white,
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Image.asset(
+                          'assets/branding/logo.png',
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
                     ),
                   ),
                 ),

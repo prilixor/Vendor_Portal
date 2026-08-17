@@ -57,7 +57,7 @@ export const AuthLayout = ({ children, title, subtitle, portalType = "vendor" }:
         <div className="absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
 
         <div className="relative flex items-center gap-3">
-          <BrandMark size="lg" className="h-16 w-16 ring-white/20" />
+          <BrandMark size="lg" className="ring-white/20" />
           <div>
             <p className="text-sm font-bold leading-tight">{content.brandTitle}</p>
             <p className="text-xs text-white/70">{content.brandSubtitle}</p>
@@ -91,7 +91,7 @@ export const AuthLayout = ({ children, title, subtitle, portalType = "vendor" }:
       <div className="flex w-full items-center justify-center px-6 py-12 lg:w-1/2">
         <div className="w-full max-w-md animate-fade-in">
           <div className="mb-6 flex items-center gap-3 lg:hidden">
-            <BrandMark size="lg" className="h-14 w-14" />
+            <BrandMark size="lg" />
             <div>
               <p className="text-xs text-muted-foreground">{content.brandTitle}</p>
             </div>
