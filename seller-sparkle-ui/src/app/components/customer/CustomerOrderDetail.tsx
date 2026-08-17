@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Headset, Images, Loader2, MessageCircle } from "lucide-react";
+import { Check, CheckSquare, Headset, Images, Loader2, MessageCircle } from "lucide-react";
 import {
   customerApi,
   type CustomerOrderImageApi,
@@ -663,11 +663,15 @@ const CustomerOrderDetail = () => {
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">End date</p>
                 <p className="text-sm font-medium tabular-nums">{formatDetailDate(activeItem.endDate)}</p>
               </div>
-              <div className="col-span-2 space-y-1 sm:col-span-1">
+              <div className="space-y-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Quantity</p>
                 <p className="text-sm font-medium">{activeItem.quantity}</p>
               </div>
-              <div className="col-span-2 space-y-1 sm:col-span-1">
+              <div className="space-y-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Order type</p>
+                <p className="text-sm font-medium uppercase">{activeItem.orderType}</p>
+              </div>
+              <div className="col-span-2 space-y-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Rental period</p>
                 <p className="text-sm font-medium leading-snug">
                   {activeItem.rentalDurationLabel?.trim()
@@ -695,15 +699,18 @@ const CustomerOrderDetail = () => {
                   </p>
                 ) : null}
                 {activeItem.rentalFinalPrice != null ? (
-                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground tabular-nums">
+                  <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground tabular-nums sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2">
                     {activeItem.rentalNormalPrice != null &&
                     Number(activeItem.rentalNormalPrice) > Number(activeItem.rentalFinalPrice) ? (
-                      <span className="strike-diagonal font-semibold text-rose-500 dark:text-rose-400">
+                      <span className="strike-diagonal w-fit font-semibold text-rose-500 dark:text-rose-400">
                         ₹{Number(activeItem.rentalNormalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                       </span>
                     ) : null}
-                    <span>Plan price ₹{Number(activeItem.rentalFinalPrice).toFixed(0)}</span>
-                  </p>
+                    <span>
+                      Plan price ₹
+                      {Number(activeItem.rentalFinalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
                 ) : null}
               </div>
             </>
@@ -808,27 +815,29 @@ const CustomerOrderDetail = () => {
                       </div>
                     )}
 
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
                       {orderGroupItems.length > 1 && (
                         <Button
                           type="button"
                           variant="default"
+                          className="h-12 w-full justify-center sm:h-10 sm:w-auto"
                           disabled={createImageRequestMut.isPending || photoEligibleItems.length === 0}
                           onClick={() =>
                             createImageRequestMut.mutate(photoEligibleItems.map((item) => item.id))
                           }
                         >
                           {createImageRequestMut.isPending ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
                           ) : (
-                            <Images className="mr-2 h-4 w-4" />
+                            <Images className="mr-2 h-4 w-4 shrink-0" />
                           )}
-                          Request all from suppliers ({photoEligibleItems.length})
+                          Request all ({photoEligibleItems.length})
                         </Button>
                       )}
                       <Button
                         type="button"
                         variant="outline"
+                        className="h-12 w-full justify-center sm:h-10 sm:w-auto"
                         disabled={
                           createImageRequestMut.isPending ||
                           (orderGroupItems.length > 1
@@ -844,12 +853,14 @@ const CustomerOrderDetail = () => {
                         }}
                       >
                         {createImageRequestMut.isPending ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
+                        ) : orderGroupItems.length > 1 ? (
+                          <CheckSquare className="mr-2 h-4 w-4 shrink-0" />
                         ) : (
-                          <Images className="mr-2 h-4 w-4" />
+                          <Images className="mr-2 h-4 w-4 shrink-0" />
                         )}
                         {orderGroupItems.length > 1
-                          ? `Request selected from suppliers (${photoRequestSelection.length})`
+                          ? `Request selected (${photoRequestSelection.length})`
                           : "Request photos from supplier"}
                       </Button>
                     </div>

@@ -614,7 +614,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                               children: [
                                                 Text('PURCHASE DATE', style: TextStyle(color: colors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                                                 SizedBox(height: 4),
-                                                Text(provider.currentOrder!.startDate!.split('T')[0], style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+                                                Text(_formatOrderDate(provider.currentOrder!.startDate), style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
                                               ],
                                             ),
                                           ),
@@ -637,7 +637,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                             child: _labeledValue(
                                               colors,
                                               'START DATE',
-                                              provider.currentOrder!.startDate!.split('T')[0],
+                                              _formatOrderDate(provider.currentOrder!.startDate),
                                             ),
                                           ),
                                           const SizedBox(width: 12),
@@ -645,7 +645,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                             child: _labeledValue(
                                               colors,
                                               'END DATE',
-                                              provider.currentOrder!.endDate?.split('T')[0] ?? '-',
+                                              _formatOrderDate(provider.currentOrder!.endDate),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: _labeledValue(
+                                              colors,
+                                              'QUANTITY',
+                                              '${provider.currentOrder!.quantity}',
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: _labeledValue(
+                                              colors,
+                                              'ORDER TYPE',
+                                              provider.currentOrder!.orderType.toUpperCase(),
                                             ),
                                           ),
                                         ],
@@ -653,15 +674,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                       const SizedBox(height: 16),
                                       _labeledValue(
                                         colors,
-                                        'QUANTITY',
-                                        '${provider.currentOrder!.quantity}',
-                                      ),
-                                      const SizedBox(height: 16),
-                                      _labeledValue(
-                                        colors,
-                                        provider.currentOrder!.orderType.toLowerCase() == 'rent'
-                                            ? 'RENTAL PERIOD'
-                                            : 'ORDER TYPE',
+                                        'RENTAL PERIOD',
                                         _rentalPeriodTitle(provider.currentOrder!),
                                         extra: _rentalPeriodExtra(colors, provider.currentOrder!),
                                       ),
@@ -846,6 +859,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
         ],
       ),
     );
+  }
+
+  String _formatOrderDate(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return '-';
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return raw.split('T').first;
+    final local = parsed.isUtc ? parsed.toLocal() : parsed;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${months[local.month - 1]} ${local.day}, ${local.year}';
   }
 
   Widget _labeledValue(
@@ -1124,6 +1146,58 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
     return compact == 'pending' || compact == 'confirmed' || compact == 'in_transit';
   }
 
+  Widget _photoActionButton({
+    required AppPalette colors,
+    required bool filled,
+    required Widget icon,
+    required String label,
+    required VoidCallback? onPressed,
+  }) {
+    final child = Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        icon,
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: colors.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+
+    final style = filled
+        ? ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF6C63FF),
+            foregroundColor: colors.textPrimary,
+            disabledBackgroundColor: const Color(0xFF6C63FF).withValues(alpha: 0.45),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          )
+        : OutlinedButton.styleFrom(
+            foregroundColor: colors.textPrimary,
+            side: BorderSide(color: colors.border),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          );
+
+    return SizedBox(
+      width: double.infinity,
+      child: filled
+          ? ElevatedButton(style: style, onPressed: onPressed, child: child)
+          : OutlinedButton(style: style, onPressed: onPressed, child: child),
+    );
+  }
+
   void _preview(BuildContext context, OrderImageModel image) {
     final colors = context.appColors;
     showDialog<void>(
@@ -1240,7 +1314,12 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                     value: checked,
                     activeColor: Color(0xFF6C63FF),
                     checkColor: Colors.white,
-                    title: Text(item.listingTitle, style: TextStyle(color: colors.textPrimary, fontSize: 13)),
+                    title: Text(
+                      item.listingTitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.textPrimary, fontSize: 13),
+                    ),
                     subtitle: Text(
                       item.status.replaceAll('_', ' '),
                       style: TextStyle(color: colors.textMuted, fontSize: 11),
@@ -1249,52 +1328,40 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                   );
                 }),
                 SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF6C63FF)),
-                        onPressed: busy ? null : () => onRequestAll(),
-                        icon: busy
-                            ? SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: colors.textPrimary),
-                              )
-                            : Icon(Icons.photo_library_outlined, size: 16, color: colors.textPrimary),
-                        label: Text('Request all from suppliers (${eligible.length})', style: TextStyle(color: colors.textPrimary, fontSize: 12)),
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: colors.textPrimary,
-                          side: BorderSide(color: colors.border),
-                        ),
-                        onPressed: busy || selectedIds.isEmpty ? null : () => onRequestSelected(),
-                        icon: Icon(Icons.check_box_outlined, size: 16),
-                        label: Text('Selected (${selectedIds.length})', style: TextStyle(fontSize: 12)),
-                      ),
-                    ),
-                  ],
+                _photoActionButton(
+                  colors: colors,
+                  filled: true,
+                  icon: busy
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: colors.textPrimary),
+                        )
+                      : Icon(Icons.photo_library_outlined, size: 18, color: colors.textPrimary),
+                  label: 'Request all (${eligible.length})',
+                  onPressed: busy ? null : onRequestAll,
+                ),
+                SizedBox(height: 10),
+                _photoActionButton(
+                  colors: colors,
+                  filled: false,
+                  icon: Icon(Icons.check_box_outlined, size: 18, color: colors.textPrimary),
+                  label: 'Request selected (${selectedIds.length})',
+                  onPressed: busy || selectedIds.isEmpty ? null : onRequestSelected,
                 ),
               ] else
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: colors.textPrimary,
-                    side: BorderSide(color: colors.border),
-                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-                  ),
-                  onPressed: busy ? null : () => onRequestSelected(),
+                _photoActionButton(
+                  colors: colors,
+                  filled: false,
                   icon: busy
                       ? SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2, color: colors.textSecondary),
                         )
-                      : Icon(Icons.photo_library_outlined, size: 18),
-                  label: Text(busy ? 'Sending…' : 'Request photos from supplier'),
+                      : Icon(Icons.photo_library_outlined, size: 18, color: colors.textPrimary),
+                  label: busy ? 'Sending…' : 'Request photos from supplier',
+                  onPressed: busy ? null : onRequestSelected,
                 ),
               SizedBox(height: 16),
             ],
@@ -1304,19 +1371,19 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                 style: TextStyle(color: colors.textMuted, fontSize: 13),
               ),
             if (withRequest.isNotEmpty) ...[
-              Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      'PHOTO REQUEST STATUS BY PRODUCT',
-                      style: TextStyle(
-                        color: colors.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
-                      ),
+                  Text(
+                    'PHOTO REQUEST STATUS BY PRODUCT',
+                    style: TextStyle(
+                      color: colors.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.4,
                     ),
                   ),
+                  SizedBox(height: 4),
                   Text(
                     () {
                       final totalPhotos = withRequest.fold<int>(
@@ -1326,7 +1393,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                       return '$totalPhotos photo${totalPhotos == 1 ? '' : 's'} received'
                           '${withRequest.length > 1 ? ' · ${withRequest.length} products requested' : ''}';
                     }(),
-                    style: TextStyle(color: colors.textMuted, fontSize: 11),
+                    style: TextStyle(color: colors.textMuted, fontSize: 11, height: 1.3),
                   ),
                 ],
               ),
