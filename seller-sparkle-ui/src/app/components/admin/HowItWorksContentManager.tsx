@@ -34,11 +34,11 @@ import {
   Building2,
   Upload,
   X,
-  Loader2,
   Eye,
   EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 
 const PRESET_HIW_ICONS = [
   { value: "UserCheck", label: "User Check (Create Account)" },
@@ -276,11 +276,7 @@ export function HowItWorksContentManager() {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-48 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
+    return <PageLoaderSlot />;
   }
 
   return (

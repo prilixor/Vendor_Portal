@@ -16,7 +16,6 @@ import {
   Plus,
   Trash2,
   Sparkles,
-  Loader2,
   ShieldCheck,
   CalendarRange,
   Headphones,
@@ -29,6 +28,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 
 const PRESET_FEATURE_ICONS = [
   { value: "ShieldCheck", label: "Shield Check (Verified)" },
@@ -197,11 +197,7 @@ export function HomeContentManager() {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-48 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
+    return <PageLoaderSlot />;
   }
 
   return (

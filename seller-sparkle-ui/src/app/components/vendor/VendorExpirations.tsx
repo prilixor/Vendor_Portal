@@ -6,7 +6,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Input } from "@/app/components/ui/input";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorExpiringOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
@@ -136,14 +136,7 @@ const VendorExpirations = () => {
         </div>
 
         {loading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, idx) => (
-              <div key={idx} className="rounded-lg border border-border p-4">
-                <Skeleton className="h-5 w-52" />
-                <Skeleton className="mt-2 h-4 w-full" />
-              </div>
-            ))}
-          </div>
+          <PageLoaderSlot />
         ) : rows.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No expiring orders in selected window.</p>
         ) : groups.length === 0 ? (

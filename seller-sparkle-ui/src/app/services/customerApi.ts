@@ -1,4 +1,4 @@
-import { apiClient } from "@/app/services/apiClient";
+import { apiClient, type ApiClientOptions } from "@/app/services/apiClient";
 
 export interface CustomerCatalogListingApi {
   id: string;
@@ -513,8 +513,8 @@ export const customerApi = {
     return apiClient.post<void>(`/customers/me/orders/${encodeURIComponent(orderId)}/buyouts`, {});
   },
 
-  getNotifications(): Promise<CustomerNotificationApi[]> {
-    return apiClient.get<CustomerNotificationApi[]>("/customers/me/notifications");
+  getNotifications(options?: ApiClientOptions): Promise<CustomerNotificationApi[]> {
+    return apiClient.get<CustomerNotificationApi[]>("/customers/me/notifications", options);
   },
 
   getOrderExpirations(withinDays = 7): Promise<ExpiringOrderApi[]> {

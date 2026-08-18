@@ -11,7 +11,7 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import {
   AlertDialog,
@@ -216,7 +216,7 @@ const AdminOrderDetail = () => {
 
   const { data: orders = [], isLoading, error } = useQuery({
     queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders(),
+    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
   });
 
   const selectedOrder = useMemo(() => {
@@ -343,13 +343,7 @@ const AdminOrderDetail = () => {
   }
 
   if (isLoading) {
-    return (
-      <div className="mx-auto max-w-5xl space-y-6">
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-36 w-full rounded-xl" />
-        <Skeleton className="h-48 w-full rounded-xl" />
-      </div>
-    );
+    return <PageLoaderSlot />;
   }
 
   if (!selectedOrder) {

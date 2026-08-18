@@ -3,7 +3,6 @@ import { ImageOff, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Skeleton } from "@/app/components/ui/skeleton";
 import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { ProductImageDto } from "@/app/services/adminApi";
 import { cn } from "@/app/helpers/utils";
@@ -199,11 +198,7 @@ export function AdminProductImagesPanel({
           </details>
 
           {showInitialSkeleton ? (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              <Skeleton className="aspect-square w-full rounded-lg" />
-              <Skeleton className="aspect-square w-full rounded-lg" />
-              <Skeleton className="aspect-square w-full rounded-lg" />
-            </div>
+            <div className="min-h-[8rem]" aria-busy="true" aria-label="Loading images" />
           ) : images.length === 0 ? (
             <p className="rounded-xl border border-dashed border-border px-3 py-8 text-center text-xs text-muted-foreground">
               No images yet. Upload at least one photo for the catalog listing.

@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
-import { Skeleton } from "@/app/components/ui/skeleton";
 import { type TypedUploadOption } from "@/app/components/shared/TypedFileUploadPanel";
 import { adminApi, ProductDocumentDto } from "@/app/services/adminApi";
 import { apiClient } from "@/app/services/apiClient";
@@ -157,10 +156,7 @@ export function AdminProductDocumentsPanel({
           Create the product first, then reopen this step to attach documents.
         </p>
       ) : loading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-20 w-full" />
-        </div>
+        <div className="min-h-[6rem]" aria-busy="true" aria-label="Loading documents" />
       ) : (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">

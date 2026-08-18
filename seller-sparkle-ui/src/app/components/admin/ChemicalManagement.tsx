@@ -14,7 +14,7 @@ import { FieldError } from "@/app/components/shared/FieldError";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { AdminProductMediaStep } from "@/app/components/admin/AdminProductMediaStep";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Textarea } from "@/app/components/ui/textarea";
 import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto } from "@/app/services/adminApi";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
@@ -926,44 +926,8 @@ const ChemicalManagement = () => {
   };
 
   const renderProductGrid = () => (
-    loading ? (
-      <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0 animate-pulse">
-        <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
-          <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-32" /></th>
-              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-24" /></th>
-              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>
-              {activeTab === "equipment" && <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>}
-              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
-              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-12" /></th>
-              <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
-              <th className="px-4 py-3 font-semibold text-center"><Skeleton className="h-3 w-12 mx-auto" /></th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <tr key={i} className="hover:bg-muted/20">
-                <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
-                <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
-
-                <td className="px-4 py-3"><Skeleton className="h-6 w-12 rounded" /></td>
-                <td className="px-4 py-3"><Skeleton className="h-4 w-12" /></td>
-                <td className="px-4 py-3"><Skeleton className="h-6 w-12 rounded" /></td>
-                <td className="px-4 py-3 text-center"><Skeleton className="h-6 w-12 rounded mx-auto" /></td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-1">
-                    <Skeleton className="h-8 w-8 rounded" />
-                    <Skeleton className="h-8 w-8 rounded" />
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    loading && products.length === 0 ? (
+      <PageLoaderSlot />
     ) : (
       <>
       <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
@@ -1149,48 +1113,8 @@ const ChemicalManagement = () => {
           </div>
 
           <TabsContent value="categories" className="mt-4">
-            {loading ? (
-              <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0 animate-pulse">
-                <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
-                  <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-32" /></th>
-                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-24" /></th>
-                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
-                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-20" /></th>
-                      <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
-                      <th className="px-4 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <tr key={i} className="hover:bg-muted/20">
-                        <td className="px-4 py-3">
-                          <Skeleton className="h-4 w-32" />
-                        </td>
-                        <td className="px-4 py-3">
-                          <Skeleton className="h-4 w-8" />
-                        </td>
-                        <td className="px-4 py-3">
-                          <Skeleton className="h-4 w-8" />
-                        </td>
-                        <td className="px-4 py-3">
-                          <Skeleton className="h-4 w-8" />
-                        </td>
-                        <td className="px-4 py-3">
-                          <Skeleton className="h-6 w-12 rounded" />
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-1">
-                            <Skeleton className="h-8 w-8 rounded" />
-                            <Skeleton className="h-8 w-8 rounded" />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            {loading && categories.length === 0 ? (
+              <PageLoaderSlot />
             ) : (
               <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
                 <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">

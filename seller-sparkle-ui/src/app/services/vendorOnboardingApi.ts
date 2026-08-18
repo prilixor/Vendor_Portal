@@ -797,8 +797,8 @@ export const vendorOnboardingApi = {
     return apiClient.get<VendorStatusDto>(`/vendors/${vendorId}`);
   },
 
-  getVendorDispatchOffers(vendorId: string) {
-    return apiClient.get<VendorDispatchOfferApiDto[]>(`/vendors/${vendorId}/dispatch/offers`);
+  getVendorDispatchOffers(vendorId: string, options?: { quiet?: boolean }) {
+    return apiClient.get<VendorDispatchOfferApiDto[]>(`/vendors/${vendorId}/dispatch/offers`, options);
   },
 
   acceptVendorDispatchOrder(vendorId: string, orderId: string) {

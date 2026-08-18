@@ -4,7 +4,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Switch } from "@/app/components/ui/switch";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Notification } from "@/app/models";
 import { CheckCheck, Bell, Info, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
@@ -200,57 +200,7 @@ const Notifications = () => {
         }
       />
 
-      {!hasLoaded && busy && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 animate-pulse">
-          <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
-            {/* Header Skeleton */}
-            <div className="flex items-center justify-between border-b border-border pb-4">
-              <Skeleton className="h-6 w-16" />
-              <div className="flex gap-2">
-                <Skeleton className="h-9 w-12" />
-                <Skeleton className="h-9 w-16" />
-              </div>
-            </div>
-            
-            {/* Notification Items Skeleton */}
-            <ul className="divide-y divide-border">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <li key={i} className="flex items-start gap-3 p-4">
-                  <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-2 w-2 rounded-full" />
-                    </div>
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-3 w-24" />
-                  </div>
-                  <Skeleton className="h-8 w-20 shrink-0 rounded" />
-                </li>
-              ))}
-            </ul>
-          </Card>
-          
-          {/* Sidebar Skeleton */}
-          <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
-            <Skeleton className="h-6 w-24 mb-4" />
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-4 w-4" />
-                <Skeleton className="h-4 w-32" />
-              </div>
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-4 w-4" />
-                <Skeleton className="h-4 w-28" />
-              </div>
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-4 w-4" />
-                <Skeleton className="h-4 w-36" />
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
+      {!hasLoaded && busy && <PageLoaderSlot />}
       {loadError && (
         <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
       )}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/app/components/ui/card";
-import { Skeleton } from "@/app/components/ui/skeleton";
 import { PageHeader } from "@/app/components/shared/PageHeader";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { StatCard } from "@/app/components/shared/StatCard";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { Button } from "@/app/components/ui/button";
@@ -203,117 +203,8 @@ const Dashboard = () => {
 
   const greetingName = useMemo(() => toCamelCase(businessName || user?.name || "Vendor"), [businessName, user?.name]);
 
-  // Show skeleton loading state while data is loading
   if (loading || statusLoading) {
-    return (
-      <div className="min-h-[60vh] p-6">
-        {/* Header Skeleton */}
-        <div className="mb-8 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <Skeleton className="h-8 w-64" />
-              <Skeleton className="h-4 w-80" />
-            </div>
-            <div className="flex gap-2">
-              <Skeleton className="h-10 w-28" />
-              <Skeleton className="h-10 w-32" />
-            </div>
-          </div>
-        </div>
-
-        {/* Verification Banner Skeleton */}
-        <Card className="mb-6 overflow-hidden border-border/60 p-4 sm:p-6">
-          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <Skeleton className="h-10 w-10 rounded-xl" />
-              <div className="space-y-2">
-                <Skeleton className="h-5 w-48" />
-                <Skeleton className="h-4 w-72" />
-              </div>
-            </div>
-            <Skeleton className="h-10 w-32" />
-          </div>
-        </Card>
-
-        {/* Stats Skeleton */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="p-4">
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-lg" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-3 w-24" />
-                  <Skeleton className="h-6 w-12" />
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        {/* Main Content Grid Skeleton */}
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Recent Activity Skeleton */}
-          <Card className="lg:col-span-2 p-4 sm:p-6 lg:p-8">
-            <div className="mb-4 flex items-center justify-between">
-              <Skeleton className="h-5 w-32" />
-              <Skeleton className="h-8 w-20" />
-            </div>
-            <div className="space-y-3">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex items-start gap-3 py-3">
-                  <Skeleton className="mt-1 h-2 w-2 shrink-0 rounded-full" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-3 w-1/2" />
-                  </div>
-                  <Skeleton className="h-3 w-20" />
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* Quick Actions Skeleton */}
-          <Card className="p-4 sm:p-6 lg:p-8">
-            <Skeleton className="mb-4 h-5 w-28" />
-            <div className="space-y-2">
-              {[1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-10 w-full rounded-lg" />
-              ))}
-            </div>
-          </Card>
-        </div>
-
-        {/* Top Listings Table Skeleton */}
-        <Card className="mt-6 p-4 sm:p-6 lg:p-8">
-          <div className="mb-4 flex items-center justify-between">
-            <Skeleton className="h-5 w-28" />
-            <Skeleton className="h-8 w-20" />
-          </div>
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[500px] text-sm">
-              <thead>
-                <tr>
-                  <th className="px-4 py-3"><Skeleton className="h-4 w-20" /></th>
-                  <th className="px-4 py-3"><Skeleton className="h-4 w-24" /></th>
-                  <th className="px-4 py-3 text-right"><Skeleton className="h-4 w-16 ml-auto" /></th>
-                  <th className="px-4 py-3 text-right"><Skeleton className="h-4 w-12 ml-auto" /></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {[1, 2, 3, 4].map((i) => (
-                  <tr key={i}>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                    <td className="px-4 py-3 text-right"><Skeleton className="h-4 w-16 ml-auto" /></td>
-                    <td className="px-4 py-3 text-right"><Skeleton className="h-4 w-12 ml-auto" /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </div>
-    );
+    return <PageLoaderSlot className="min-h-[60vh]" />;
   }
 
   return (

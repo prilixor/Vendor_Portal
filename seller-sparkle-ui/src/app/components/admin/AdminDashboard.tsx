@@ -3,12 +3,10 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { StatCard } from "@/app/components/shared/StatCard";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
-import { Skeleton } from "@/app/components/ui/skeleton";
-import { StatusBadge } from "@/app/components/shared/StatusBadge";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { adminApi, AdminAuditLogDto, VendorDto } from "@/app/services/adminApi";
-import { Building2, Clock, CheckCircle2, ScrollText, ArrowUpRight, Loader2, TimerReset } from "lucide-react";
+import { Building2, Clock, CheckCircle2, ScrollText, ArrowUpRight, TimerReset } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { safeFormatDistance } from "@/app/utils/dateUtils";
 import { toast } from "sonner";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 
@@ -59,20 +57,9 @@ const AdminDashboard = () => {
       <PageHeader title="Admin overview" description="Monitor platform health, vendor verification queue, and recent activity." />
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 animate-pulse">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <Card key={i} className="border-border/60 p-4">
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-8 w-8 rounded-lg" />
-                <div className="flex-1 space-y-1">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-5 w-8" />
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <PageLoaderSlot />
       ) : (
+      <>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard 
             label="Total vendors" 
@@ -110,7 +97,6 @@ const AdminDashboard = () => {
             onClick={() => navigate("/admin/expirations")}
           />
         </div>
-      )}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
@@ -120,24 +106,6 @@ const AdminDashboard = () => {
               Open queue <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
             </Button>
           </div>
-          {loading ? (
-            <div className="space-y-2 animate-pulse">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="p-4 border border-border/60 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="h-8 w-8 rounded" />
-                      <div className="space-y-1">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-3 w-24" />
-                      </div>
-                    </div>
-                    <Skeleton className="h-8 w-16 rounded" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
             <ul className="divide-y divide-border">
               {vendors.filter(v => v.accountStatus === "pending").slice(0, 5).map((vendor) => (
                 <li key={vendor.id} className="p-4 hover:bg-muted/50 transition-colors">
@@ -164,26 +132,12 @@ const AdminDashboard = () => {
                 <li className="p-8 text-center text-muted-foreground text-sm">No pending verifications</li>
               )}
             </ul>
-          )}
         </Card>
 
         <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
           <div className="border-b border-border pb-4">
             <h2 className="font-semibold">Recent audit events (Last 7 days)</h2>
           </div>
-          {loading ? (
-            <div className="space-y-2 animate-pulse">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="p-3 border border-border/60 rounded-lg">
-                  <div className="space-y-2">
-                    <Skeleton className="h-3 w-24" />
-                    <Skeleton className="h-3 w-48" />
-                    <Skeleton className="h-3 w-32" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
             <ul className="divide-y divide-border">
               {recentAuditLogs.slice(0, 5).map((log) => (
                 <li key={log.id} className="p-3">
@@ -197,9 +151,10 @@ const AdminDashboard = () => {
                 <li className="p-8 text-center text-muted-foreground text-sm">No recent audit events</li>
               )}
             </ul>
-          )}
         </Card>
       </div>
+      </>
+      )}
     </div>
   );
 };

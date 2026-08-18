@@ -4,7 +4,7 @@ import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -114,7 +114,9 @@ const VendorOrderRequests = () => {
     if (!user) return;
     try {
       if (!isBackground) setRefreshing(true);
-      const rows = await vendorOnboardingApi.getVendorDispatchOffers(user.id);
+      const rows = await vendorOnboardingApi.getVendorDispatchOffers(user.id, {
+        quiet: isBackground,
+      });
       setOffers(rows);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load order requests.";
@@ -302,21 +304,7 @@ const VendorOrderRequests = () => {
         </div>
 
       {initialLoading ? (
-        <div className="space-y-4">
-          {Array.from({ length: 3 }).map((_, idx) => (
-            <div key={idx} className="rounded-xl border border-border/60 bg-card p-5 sm:p-6">
-              <Skeleton className="h-5 w-48" />
-              <div className="mt-5 flex gap-4">
-                <Skeleton className="h-16 w-16 rounded-lg" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-8 w-40" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <PageLoaderSlot />
       ) : groups.length === 0 ? (
         <div className="rounded-xl border border-border/60 bg-muted/20 px-6 py-16 text-center">
           <ClipboardList className="mx-auto h-16 w-16 text-muted-foreground/30" />

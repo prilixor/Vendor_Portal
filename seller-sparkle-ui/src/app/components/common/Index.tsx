@@ -17,7 +17,7 @@ const Index = () => {
     retry: 1,
   });
 
-    if (isHydrating) return <BrandBootSplash />;
+    if (isHydrating && portal !== "customer") return <BrandBootSplash />;
 
   if (!user) {
     if (portal === "admin") return <Navigate to="/admin/login" replace />;

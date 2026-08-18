@@ -1,4 +1,4 @@
-import { apiClient } from './apiClient';
+import { apiClient, type ApiClientOptions } from './apiClient';
 
 // Request/Response Types
 export interface VendorDto {
@@ -757,8 +757,8 @@ export interface AdminRestartOrderDispatchRequest {
 
 export const adminApi = {
   // Vendors
-  async getVendors(): Promise<VendorDto[]> {
-    return apiClient.get<VendorDto[]>('/admin/vendors');
+  async getVendors(options?: ApiClientOptions): Promise<VendorDto[]> {
+    return apiClient.get<VendorDto[]>('/admin/vendors', options);
   },
 
   async getVendorProfile(vendorId: string): Promise<VendorProfileDto> {
@@ -833,9 +833,9 @@ export const adminApi = {
   },
 
   // Audit Logs
-  async getAuditLogs(adminUserId?: string): Promise<AdminAuditLogDto[]> {
+  async getAuditLogs(adminUserId?: string, options?: ApiClientOptions): Promise<AdminAuditLogDto[]> {
     const url = adminUserId ? `/admin/audit-logs?adminUserId=${adminUserId}` : '/admin/audit-logs';
-    return apiClient.get<AdminAuditLogDto[]>(url);
+    return apiClient.get<AdminAuditLogDto[]>(url, options);
   },
 
   async addAuditLog(data: AddAdminAuditLogRequest): Promise<AdminAuditLogDto> {
@@ -1032,8 +1032,8 @@ export const adminApi = {
     return apiClient.downloadBlob(`/admin/catalog/download-excel?isChemical=${isChemical}`, filename);
   },
 
-  async getAdminOrders(): Promise<AdminOrderDto[]> {
-    return apiClient.get<AdminOrderDto[]>('/admin/orders');
+  async getAdminOrders(options?: ApiClientOptions): Promise<AdminOrderDto[]> {
+    return apiClient.get<AdminOrderDto[]>('/admin/orders', options);
   },
 
   async getAdminOrderExpirations(withinDays = 7): Promise<AdminExpiringOrderDto[]> {

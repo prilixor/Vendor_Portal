@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 
 const CustomerExpirations = () => {
   const { data, isLoading, error } = useQuery({
@@ -11,13 +11,7 @@ const CustomerExpirations = () => {
   });
 
   if (isLoading) {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-8 w-60" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-24 w-full" />
-      </div>
-    );
+    return <PageLoaderSlot />;
   }
 
   if (error) {
