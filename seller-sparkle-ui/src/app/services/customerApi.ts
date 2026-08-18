@@ -122,6 +122,11 @@ export interface CustomerListingDetailApi {
   baseUnit?: string;
   sdsDocumentUrl?: string;
   coaDocumentUrl?: string;
+  documents?: Array<{
+    id: string;
+    documentType: string;
+    fileUrl: string;
+  }>;
   variants?: ProductVariantDto[];
   variantInventory?: { productVariantId: string; availableQuantity: number }[];
   /** Active admin-configured duration plans (prefer over week/month steppers when present). */

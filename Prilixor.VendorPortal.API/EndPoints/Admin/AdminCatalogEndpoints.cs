@@ -121,6 +121,24 @@ public sealed class SetPrimaryProductImageRequest
     public string ImageId { get; set; } = string.Empty;
 }
 
+public sealed class AddProductDocumentRequest
+{
+    public string ProductId { get; set; } = string.Empty;
+    public string DocumentType { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
+}
+
+public sealed class ProductDocumentsRequest
+{
+    public string ProductId { get; set; } = string.Empty;
+}
+
+public sealed class DeleteProductDocumentRequest
+{
+    public string ProductId { get; set; } = string.Empty;
+    public string DocumentId { get; set; } = string.Empty;
+}
+
 // Category Endpoints
 public sealed class GetProductCategoriesEndpoint(IMediator mediator)
     : EndpointWithoutRequest<Results<Ok<List<ProductCategoryDto>>, ProblemHttpResult>>
@@ -429,6 +447,65 @@ public sealed class SetPrimaryProductImageEndpoint(IMediator mediator)
         req.ProductId = Route<string>("productId") ?? req.ProductId;
         req.ImageId = Route<string>("imageId") ?? req.ImageId;
         var result = await mediator.Send(new SetPrimaryProductImageCommand(req.ProductId, req.ImageId), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
+    }
+}
+
+public sealed class AddProductDocumentEndpoint(IMediator mediator)
+    : Endpoint<AddProductDocumentRequest, Results<Ok<ProductDocumentDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("catalog/products/{productId}/documents");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<ProductDocumentDto>, ProblemHttpResult>> ExecuteAsync(AddProductDocumentRequest req, CancellationToken ct)
+    {
+        req.ProductId = Route<string>("productId") ?? req.ProductId;
+        var result = await mediator.Send(new AddProductDocumentCommand(
+            req.ProductId,
+            req.DocumentType,
+            req.FileUrl), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetProductDocumentsEndpoint(IMediator mediator)
+    : Endpoint<ProductDocumentsRequest, Results<Ok<List<ProductDocumentDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/products/{productId}/documents");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<List<ProductDocumentDto>>, ProblemHttpResult>> ExecuteAsync(ProductDocumentsRequest req, CancellationToken ct)
+    {
+        req.ProductId = Route<string>("productId") ?? req.ProductId;
+        var result = await mediator.Send(new GetProductDocumentsQuery(req.ProductId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class DeleteProductDocumentEndpoint(IMediator mediator)
+    : Endpoint<DeleteProductDocumentRequest, Results<NoContent, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Delete("catalog/products/{productId}/documents/{documentId}");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(DeleteProductDocumentRequest req, CancellationToken ct)
+    {
+        req.ProductId = Route<string>("productId") ?? req.ProductId;
+        req.DocumentId = Route<string>("documentId") ?? req.DocumentId;
+        var result = await mediator.Send(new DeleteProductDocumentCommand(req.ProductId, req.DocumentId), ct);
         return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
     }
 }

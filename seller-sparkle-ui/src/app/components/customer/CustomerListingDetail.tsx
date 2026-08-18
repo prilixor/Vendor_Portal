@@ -16,6 +16,7 @@ import {
   sortActiveRentalPlans,
 } from "@/app/components/shared/RentalPeriodPlanDropdown";
 import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
+import { CustomerProductDocumentsInline } from "@/app/components/shared/CatalogProductDocumentsList";
 import { toast } from "sonner";
 import {
   AlertCircle,
@@ -332,6 +333,9 @@ const CustomerListingDetail = () => {
             </h1>
             {data.description ? (
               <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">{data.description}</p>
+            ) : null}
+            {(data.documents?.length ?? 0) > 0 ? (
+              <CustomerProductDocumentsInline documents={data.documents ?? []} />
             ) : null}
             {data.prescriptionRequired ? (
               <p className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">

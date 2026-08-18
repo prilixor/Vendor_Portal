@@ -154,10 +154,16 @@ export interface ProductApiDto {
   variants?: ProductVariantPayload[];
   rentalPricingPlans?: ProductRentalPricingPlanDto[];
   images?: Array<{
+    id?: string;
     imageUrl?: string | null;
     thumbnailUrl?: string | null;
     isPrimary?: boolean;
     displayOrder?: number;
+  }>;
+  documents?: Array<{
+    id: string;
+    documentType: string;
+    fileUrl: string;
   }>;
 }
 

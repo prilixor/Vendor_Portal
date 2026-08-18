@@ -499,6 +499,18 @@ export interface AddProductImageRequest {
   thumbnailUrl?: string | null;
 }
 
+export interface ProductDocumentDto {
+  id: string;
+  productId: string;
+  documentType: string;
+  fileUrl: string;
+}
+
+export interface AddProductDocumentRequest {
+  documentType: string;
+  fileUrl: string;
+}
+
 export interface UploadedFileResponse {
   fileUrl: string;
   storageKey?: string | null;
@@ -984,6 +996,29 @@ export const adminApi = {
       productId,
       imageId,
     });
+  },
+
+  async uploadProductDocumentFile(file: File): Promise<UploadedFileResponse> {
+    const data = new FormData();
+    data.append("vendorId", "common");
+    data.append("file", file);
+    data.append("folderType", "ProductDocuments");
+    return apiClient.postForm<UploadedFileResponse>("/files/upload", data);
+  },
+
+  async getProductDocuments(productId: string): Promise<ProductDocumentDto[]> {
+    return apiClient.get<ProductDocumentDto[]>(`/admin/catalog/products/${productId}/documents`);
+  },
+
+  async addProductDocument(productId: string, data: AddProductDocumentRequest): Promise<ProductDocumentDto> {
+    return apiClient.post<ProductDocumentDto>(`/admin/catalog/products/${productId}/documents`, {
+      productId,
+      ...data,
+    });
+  },
+
+  async deleteProductDocument(productId: string, documentId: string): Promise<void> {
+    return apiClient.delete<void>(`/admin/catalog/products/${productId}/documents/${documentId}`);
   },
 
   async uploadCatalogExcel(file: File, isChemical: boolean = false): Promise<ExcelUploadResponseDto> {

@@ -326,6 +326,7 @@ public sealed class VendorOnboardingRepository(
         var product = await commonDbContext.Products
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
+            .Include(x => x.ProductDocuments)
             .Include(x => x.Variants)
             .Include(x => x.RentalPricingPlans)
             .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
@@ -337,6 +338,7 @@ public sealed class VendorOnboardingRepository(
         return await dbContext.Products
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
+            .Include(x => x.ProductDocuments)
             .Include(x => x.Variants)
             .Include(x => x.RentalPricingPlans)
             .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
@@ -477,6 +479,7 @@ public sealed class VendorOnboardingRepository(
         var query = commonDbContext.Products
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
+            .Include(x => x.ProductDocuments)
             .Include(x => x.Variants)
             .Include(x => x.RentalPricingPlans)
             .Where(x => !x.IsDeleted)
@@ -496,6 +499,7 @@ public sealed class VendorOnboardingRepository(
         var legacyQuery = dbContext.Products
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
+            .Include(x => x.ProductDocuments)
             .Include(x => x.Variants)
             .Include(x => x.RentalPricingPlans)
             .Where(x => !x.IsDeleted)
@@ -541,6 +545,31 @@ public sealed class VendorOnboardingRepository(
             .Where(x => !x.IsDeleted && (x.ThumbnailUrl == null || x.ThumbnailUrl == ""))
             .OrderBy(x => x.CreatedOnUtc)
             .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task AddProductDocumentAsync(ProductDocument document, CancellationToken cancellationToken)
+    {
+        await commonDbContext.ProductDocuments.AddAsync(document, cancellationToken);
+    }
+
+    public Task<ProductDocument?> GetProductDocumentByIdAsync(Guid productId, Guid documentId, CancellationToken cancellationToken)
+    {
+        return commonDbContext.ProductDocuments
+            .FirstOrDefaultAsync(x => x.Id == documentId && x.ProductId == productId && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task UpdateProductDocumentAsync(ProductDocument document, CancellationToken cancellationToken)
+    {
+        commonDbContext.ProductDocuments.Update(document);
+        return Task.CompletedTask;
+    }
+
+    public Task<List<ProductDocument>> GetProductDocumentsAsync(Guid productId, CancellationToken cancellationToken)
+    {
+        return commonDbContext.ProductDocuments
+            .Where(x => x.ProductId == productId && !x.IsDeleted)
+            .OrderByDescending(x => x.CreatedOnUtc)
             .ToListAsync(cancellationToken);
     }
 

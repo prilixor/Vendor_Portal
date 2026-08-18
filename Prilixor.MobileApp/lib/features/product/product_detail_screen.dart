@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/theme.dart';
 import '../../core/providers/checkout_provider.dart';
@@ -757,31 +758,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   ),
                                 ],
 
-                                if (_resolvedDocUrl(detail.sdsDocumentUrl) != null ||
-                                    _resolvedDocUrl(detail.coaDocumentUrl) != null) ...[
-                                  const SizedBox(height: 16),
-                                  _sectionCard(
-                                    title: 'Documents',
-                                    child: Column(
-                                      children: [
-                                        if (_resolvedDocUrl(detail.sdsDocumentUrl) != null)
-                                          _docButton(
-                                            label: 'Safety Data Sheet (SDS)',
-                                            url: _resolvedDocUrl(detail.sdsDocumentUrl)!,
-                                          ),
-                                        if (_resolvedDocUrl(detail.sdsDocumentUrl) != null &&
-                                            _resolvedDocUrl(detail.coaDocumentUrl) != null)
-                                          const SizedBox(height: 8),
-                                        if (_resolvedDocUrl(detail.coaDocumentUrl) != null)
-                                          _docButton(
-                                            label: 'Certificate of Analysis (COA)',
-                                            url: _resolvedDocUrl(detail.coaDocumentUrl)!,
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-
                                 const SizedBox(height: 16),
                                 Text('Description', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colors.textPrimary)),
                                 const SizedBox(height: 8),
@@ -791,6 +767,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       : 'No description provided for this product.',
                                   style: TextStyle(color: colors.textSecondary, fontSize: 15, height: 1.5),
                                 ),
+
+                                if (detail.documents.isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  _documentsInline(detail.documents),
+                                ],
 
                                 const SizedBox(height: 24),
                                 Text('Order Options', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colors.textPrimary)),
@@ -1579,8 +1560,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  String? _resolvedDocUrl(String? raw) => resolveMediaUrl(raw);
-
   Future<void> _openRentalPeriodSheet({
     required ProductDetailModel detail,
     required double unitBuyPrice,
@@ -1848,28 +1827,89 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return true;
   }
 
+  Widget _documentsInline(List<CatalogDocumentModel> documents) {
+    final colors = context.appColors;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(Icons.description_outlined, size: 16, color: colors.textMuted),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Wrap(
+            spacing: 2,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                'Documents',
+                style: TextStyle(
+                  color: colors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              for (var i = 0; i < documents.length; i++) ...[
+                Text(
+                  '·',
+                  style: TextStyle(color: colors.textMuted.withValues(alpha: 0.45), fontSize: 12),
+                ),
+                _docInlineLink(documents[i]),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _docInlineLink(CatalogDocumentModel doc) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: () => _openDoc(doc.fileUrl),
+          borderRadius: BorderRadius.circular(4),
+          child: Text(
+            doc.label,
+            style: const TextStyle(
+              color: Color(0xFF6C63FF),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        IconButton(
+          padding: EdgeInsets.zero,
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          tooltip: 'Download ${doc.label}',
+          icon: Icon(Icons.download_outlined, size: 16, color: context.appColors.textMuted),
+          onPressed: () => _openDoc(doc.fileUrl),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openDoc(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      await _copyDocLink(url);
+      return;
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      await _copyDocLink(url);
+    }
+  }
+
   Future<void> _copyDocLink(String url) async {
     await Clipboard.setData(ClipboardData(text: url));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Document link copied'), backgroundColor: Colors.green),
-    );
-  }
-
-  Widget _docButton({required String label, required String url}) {
-    final colors = context.appColors;
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF6C63FF),
-          side: BorderSide(color: colors.border),
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-        ),
-        onPressed: () => _copyDocLink(url),
-        icon: const Icon(Icons.description_outlined, size: 18),
-        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-      ),
     );
   }
 
