@@ -69,7 +69,7 @@ export function CustomerStoreHeader() {
       <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-3 px-3 sm:h-16 sm:px-6 lg:px-8">
         <Link to="/customer/shop" className="flex shrink-0 items-center" aria-label="BlinksMed shop">
           {/* Full lockup already includes BLINKSMED + Buy | Rent | Care */}
-          <BrandMark size="lg" className="h-12 w-12 sm:h-14 sm:w-14" />
+          <BrandMark size="lg" />
         </Link>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">

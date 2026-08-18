@@ -1753,6 +1753,20 @@ public sealed class CustomerRepository(
 
 
 
+    private string? ResolveStoredImageUrl(string? imageUrl, string? thumbnailUrl)
+    {
+        // Same as production: prefer thumbnail when present, then original.
+        var thumb = thumbnailUrl?.Trim();
+        if (!string.IsNullOrEmpty(thumb))
+            return fileUrlResolver.Resolve(thumb);
+
+        var original = imageUrl?.Trim();
+        if (!string.IsNullOrEmpty(original))
+            return fileUrlResolver.Resolve(original);
+
+        return null;
+    }
+
     private string? ResolvePrimaryListingImageUrl(IEnumerable<VendorProductImage> images)
     {
         var primary = images.Where(i => !i.IsDeleted)
@@ -1760,10 +1774,7 @@ public sealed class CustomerRepository(
             .ThenBy(i => i.DisplayOrder)
             .FirstOrDefault();
         if (primary is null) return null;
-        var thumb = primary.ThumbnailUrl?.Trim();
-        if (!string.IsNullOrEmpty(thumb))
-            return fileUrlResolver.Resolve(thumb);
-        return fileUrlResolver.Resolve(primary.ImageUrl);
+        return ResolveStoredImageUrl(primary.ImageUrl, primary.ThumbnailUrl);
     }
 
     private string? ResolvePrimaryProductImageUrl(IEnumerable<ProductImage> images)
@@ -1773,10 +1784,7 @@ public sealed class CustomerRepository(
             .ThenBy(i => i.DisplayOrder)
             .FirstOrDefault();
         if (primary is null) return null;
-        var thumb = primary.ThumbnailUrl?.Trim();
-        if (!string.IsNullOrEmpty(thumb))
-            return fileUrlResolver.Resolve(thumb);
-        return fileUrlResolver.Resolve(primary.ImageUrl);
+        return ResolveStoredImageUrl(primary.ImageUrl, primary.ThumbnailUrl);
     }
 
     /// <summary>

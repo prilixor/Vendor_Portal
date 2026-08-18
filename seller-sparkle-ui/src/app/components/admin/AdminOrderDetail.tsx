@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Building, Calendar, DollarSign, Package, User } from "lucide-react";
 import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
 import { useAuth } from "@/app/guards/AuthContext";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { toast } from "sonner";
 import { Button } from "@/app/components/ui/button";
@@ -433,6 +433,7 @@ const AdminOrderDetail = () => {
                       src={imageUrl}
                       alt={item.listingTitle}
                       className="h-12 w-12 shrink-0 rounded-lg object-cover border border-border bg-muted"
+                      onError={retryOriginalOnImageError}
                     />
                   ) : (
                     <div className="h-12 w-12 shrink-0 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground">

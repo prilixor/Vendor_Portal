@@ -17,7 +17,7 @@ import { Skeleton } from "@/app/components/ui/skeleton";
 import { Textarea } from "@/app/components/ui/textarea";
 import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto, ProductRentalPricingPlanDto, RentalDurationMasterDto, RentalDurationIconDto } from "@/app/services/adminApi";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
-import { resolveCatalogProductImageUrl } from "@/app/helpers/utils";
+import { resolveCatalogProductImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -1793,7 +1793,11 @@ const ProductManagement = () => {
                               alt=""
                               className="h-12 w-12 rounded object-cover bg-muted"
                               onError={(e) => {
-                                (e.currentTarget as HTMLImageElement).style.display = "none";
+                                const el = e.currentTarget;
+                                const alreadyTried = el.dataset.thumbFallback === "1";
+                                retryOriginalOnImageError(e);
+                                if (!alreadyTried && el.dataset.thumbFallback === "1") return;
+                                el.style.display = "none";
                               }}
                             />
                             <div className="min-w-0 flex-1">

@@ -24,6 +24,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { BankDetails, BusinessProfile, VendorDocument, VerificationStatus } from "@/app/models";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { retryOriginalOnImageError } from "@/app/helpers/utils";
 import { AdminCommentHint } from "@/app/components/shared/AdminCommentHint";
 import { OnboardingRejectedHelpBanner } from "@/app/components/shared/OnboardingRejectedHelpBanner";
 import { RequiredDocumentsChecklist } from "@/app/components/shared/RequiredDocumentsChecklist";
@@ -1679,6 +1680,7 @@ const Onboarding = () => {
                   alt="Document preview"
                   className="max-w-full max-h-full object-contain"
                   onLoad={() => setPdfLoading(false)}
+                  onError={retryOriginalOnImageError}
                 />
                   );
                 }

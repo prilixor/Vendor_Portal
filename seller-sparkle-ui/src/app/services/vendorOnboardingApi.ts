@@ -153,6 +153,12 @@ export interface ProductApiDto {
   coaDocumentUrl?: string;
   variants?: ProductVariantPayload[];
   rentalPricingPlans?: ProductRentalPricingPlanDto[];
+  images?: Array<{
+    imageUrl?: string | null;
+    thumbnailUrl?: string | null;
+    isPrimary?: boolean;
+    displayOrder?: number;
+  }>;
 }
 
 export interface VendorProductListingApiDto {

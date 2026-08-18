@@ -11,7 +11,7 @@ import {
   AdminOrderableListingDto,
 } from "@/app/services/adminApi";
 import { customerApi, CustomerListingDetailApi, ProductVariantDto } from "@/app/services/customerApi";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, imageSrcCandidates } from "@/app/helpers/utils";
 import { FilterCategoryList } from "@/app/components/shared/ProfessionalFilters";
 import {
   AlertCircle,
@@ -162,9 +162,15 @@ function priceHint(listing: AdminOrderableListingDto, mode: BrowseMode) {
 }
 
 function ListingThumb({ src, isChemical }: { src?: string | null; isChemical?: boolean }) {
-  const [broken, setBroken] = useState(false);
-  const url = src?.trim();
-  if (!url || broken) {
+  const candidates = imageSrcCandidates(src);
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    setIndex(0);
+  }, [src]);
+
+  const url = candidates[index];
+  if (!url) {
     return (
       <div className={cn(
         "h-full w-full flex items-center justify-center",
@@ -181,7 +187,10 @@ function ListingThumb({ src, isChemical }: { src?: string | null; isChemical?: b
       src={url}
       alt=""
       className="h-full w-full object-cover"
-      onError={() => setBroken(true)}
+      onError={() => {
+        if (index + 1 < candidates.length) setIndex(index + 1);
+        else setIndex(candidates.length);
+      }}
     />
   );
 }

@@ -65,7 +65,7 @@ export const LandingHeader = ({ activeSection = "home", onSectionClick, settings
     <header className={`site-header ${isScrolled ? "is-scrolled" : ""}`} id="siteHeader">
       <Link to="/" className="logo" id="logoHome" onClick={() => setIsMobileMenuOpen(false)} aria-label="BlinksMed home">
         {/* Full lockup already includes BLINKSMED + Buy | Rent | Care */}
-        <BrandMark size="lg" className="logo-mark shadow-none h-14 w-14 sm:h-16 sm:w-16" />
+        <BrandMark size="lg" className="logo-mark shadow-none" />
       </Link>
 
       <nav className={`main-nav ${isMobileMenuOpen ? "is-open" : ""}`} aria-label="Primary">

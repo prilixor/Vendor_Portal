@@ -416,7 +416,7 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4">
+    <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-4 sm:bottom-6 sm:right-6">
       {/* Chat Window */}
       {isOpen && (
         <Card className="w-[380px] h-[600px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-120px)] flex flex-col overflow-hidden shadow-2xl border-primary/10 animate-in slide-in-from-bottom-4 duration-300">

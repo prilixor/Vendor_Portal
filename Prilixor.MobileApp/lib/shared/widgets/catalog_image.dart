@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import '../../core/utils/media_url.dart';
+
 import '../../core/theme.dart';
+import '../../core/utils/media_url.dart';
 
 /// Catalog product image with React-like empty/error placeholders.
 /// Fixes Flutter web relative `/api/...` URLs and prefers HTML <img> on web
@@ -25,30 +26,18 @@ class CatalogImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolved = resolveMediaUrl(url);
+    final placeholder = _CatalogImagePlaceholder(
+      message: resolved == null ? 'Image will be updated soon' : 'Image currently unavailable',
+      borderRadius: borderRadius,
+    );
     final child = resolved == null
-        ? const _CatalogImagePlaceholder(message: 'Image will be updated soon')
-        : Image.network(
-            resolved,
+        ? placeholder
+        : _catalogNetworkImage(
+            url: resolved,
             width: width,
             height: height,
             fit: fit,
-            // On web, HTML <img> displays cross-origin images without CORS fetch.
-            webHtmlElementStrategy: kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
-            errorBuilder: (_, __, ___) => const _CatalogImagePlaceholder(message: 'Image currently unavailable'),
-            loadingBuilder: (context, child, progress) {
-              if (progress == null) return child;
-              return Container(
-                width: width,
-                height: height,
-                color: const Color(0xFF334155),
-                alignment: Alignment.center,
-                child: const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
-                ),
-              );
-            },
+            errorChild: placeholder,
           );
 
     if (borderRadius != null) {
@@ -58,26 +47,80 @@ class CatalogImage extends StatelessWidget {
   }
 }
 
+Widget _catalogNetworkImage({
+  required String url,
+  required double? width,
+  required double? height,
+  required BoxFit fit,
+  required Widget errorChild,
+  bool allowOriginalFallback = true,
+}) {
+  return Image.network(
+    url,
+    width: width,
+    height: height,
+    fit: fit,
+    webHtmlElementStrategy: kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
+    errorBuilder: (_, _, _) {
+      if (allowOriginalFallback) {
+        final original = originalUrlFromThumb(url);
+        if (original != null && original != url) {
+          return _catalogNetworkImage(
+            url: original,
+            width: width,
+            height: height,
+            fit: fit,
+            errorChild: errorChild,
+            allowOriginalFallback: false,
+          );
+        }
+      }
+      return errorChild;
+    },
+    loadingBuilder: (context, child, progress) {
+      if (progress == null) return child;
+      return Container(
+        width: width,
+        height: height,
+        color: context.appColors.surfaceElevated,
+        alignment: Alignment.center,
+        child: const SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
+        ),
+      );
+    },
+  );
+}
+
 class _CatalogImagePlaceholder extends StatelessWidget {
   final String message;
+  final BorderRadius? borderRadius;
 
-  const _CatalogImagePlaceholder({required this.message});
+  const _CatalogImagePlaceholder({required this.message, this.borderRadius});
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
     return LayoutBuilder(
       builder: (context, constraints) {
         final h = constraints.maxHeight;
         final w = constraints.maxWidth;
-        // Discover cards leave little room after badge padding — avoid Column overflow.
         final iconOnly = !h.isFinite || !w.isFinite || h < 96 || w < 96;
         final tight = h < 130;
 
         return Container(
           width: double.infinity,
           height: double.infinity,
-          color: colors.surfaceElevated,
+          decoration: BoxDecoration(
+            color: context.appColors.surfaceElevated,
+            borderRadius: borderRadius,
+            border: Border.all(
+              color: context.isDarkMode
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : context.appColors.border,
+            ),
+          ),
           alignment: Alignment.center,
           padding: EdgeInsets.symmetric(
             horizontal: tight ? 6 : 10,
@@ -86,7 +129,9 @@ class _CatalogImagePlaceholder extends StatelessWidget {
           child: iconOnly
               ? Icon(
                   Icons.image_not_supported_outlined,
-                  color: colors.textMuted.withValues(alpha: 0.6),
+                  color: context.isDarkMode
+                      ? Colors.white.withValues(alpha: 0.35)
+                      : context.appColors.textMuted,
                   size: h.isFinite ? (h * 0.28).clamp(18.0, 28.0) : 22,
                 )
               : FittedBox(
@@ -99,7 +144,9 @@ class _CatalogImagePlaceholder extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.image_not_supported_outlined,
-                          color: colors.textMuted.withValues(alpha: 0.6),
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.35)
+                              : context.appColors.textMuted,
                           size: tight ? 22 : 28,
                         ),
                         SizedBox(height: tight ? 4 : 8),
@@ -109,7 +156,7 @@ class _CatalogImagePlaceholder extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: colors.textPrimary,
+                            color: context.appColors.textSecondary,
                             fontSize: tight ? 10 : 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -121,7 +168,7 @@ class _CatalogImagePlaceholder extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: colors.textMuted,
+                            color: context.appColors.textMuted,
                             fontSize: tight ? 9 : 10,
                           ),
                         ),

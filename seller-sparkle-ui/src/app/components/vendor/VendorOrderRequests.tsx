@@ -32,7 +32,7 @@ import {
   Stethoscope,
   X,
 } from "lucide-react";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { useNavigate } from "react-router-dom";
 import { VendorDoctorLookupDialog } from "@/app/components/vendor/VendorDoctorLookupDialog";
 
@@ -389,6 +389,7 @@ const VendorOrderRequests = () => {
                               src={imageUrl}
                               alt={offer.listingTitle}
                               className="h-14 w-14 shrink-0 rounded-lg border border-border/60 object-cover bg-muted shadow-sm sm:h-16 sm:w-16"
+                              onError={retryOriginalOnImageError}
                             />
                           ) : (
                             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted text-muted-foreground shadow-sm sm:h-16 sm:w-16">

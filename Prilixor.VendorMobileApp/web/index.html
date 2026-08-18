@@ -29,12 +29,20 @@
       opacity: 0;
       pointer-events: none;
     }
-    #boot-splash img { width: 96px; height: 96px; border-radius: 20px; object-fit: cover; }
+    #boot-splash img {
+      width: 80px;
+      height: auto;
+      padding: 6px;
+      box-sizing: border-box;
+      border-radius: 12px;
+      object-fit: contain;
+      background: #fff;
+    }
   </style>
 </head>
 <body>
   <div id="boot-splash">
-    <img src="favicon.png" alt="BlinksMed Vendor" width="96" height="96" />
+    <img src="splash_logo.png" alt="BlinksMed Vendor" width="80" height="73" />
     <span>Loading BlinksMed Vendor…</span>
   </div>
   <script>

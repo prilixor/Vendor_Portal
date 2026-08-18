@@ -34,8 +34,44 @@ class CatalogImage extends StatelessWidget {
             fit: fit,
             webHtmlElementStrategy:
                 kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
-            errorBuilder: (_, _, _) =>
-                _CatalogImagePlaceholder(message: 'Image currently unavailable', borderRadius: borderRadius),
+            errorBuilder: (_, _, _) {
+              final original = originalUrlFromThumb(resolved);
+              if (original != null && original != resolved) {
+                return Image.network(
+                  original,
+                  width: width,
+                  height: height,
+                  fit: fit,
+                  webHtmlElementStrategy:
+                      kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
+                  errorBuilder: (_, _, _) => _CatalogImagePlaceholder(
+                    message: 'Image currently unavailable',
+                    borderRadius: borderRadius,
+                  ),
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return Container(
+                      width: width,
+                      height: height,
+                      color: context.appColors.surfaceElevated,
+                      alignment: Alignment.center,
+                      child: const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF6C63FF),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              }
+              return _CatalogImagePlaceholder(
+                message: 'Image currently unavailable',
+                borderRadius: borderRadius,
+              );
+            },
             loadingBuilder: (context, child, progress) {
               if (progress == null) return child;
               return Container(

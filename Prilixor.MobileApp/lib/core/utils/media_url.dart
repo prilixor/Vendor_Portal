@@ -27,6 +27,12 @@ String? resolveMediaUrl(String? raw) {
 
 /// Prefer thumbnail, then listing/product primary, then first gallery URL.
 /// Mirrors web `resolveItemImageUrl`.
+String? originalUrlFromThumb(String url) {
+  final match = RegExp(r'_thumb(\.[a-z0-9]+)(?:[?#].*)?$', caseSensitive: false).firstMatch(url);
+  if (match == null) return null;
+  return url.replaceFirst(RegExp(r'_thumb(?=\.[a-z0-9]+)', caseSensitive: false), '');
+}
+
 String? resolveItemImageUrl({
   String? listingPrimaryImageUrl,
   String? primaryImageUrl,
