@@ -72,8 +72,8 @@ const adminNavBase: { title: string; items: AdminNavItem[] }[] = [
     title: "Catalog",
     items: [
       { label: "Products Management", to: "/admin/products", icon: Package, permission: ADMIN_PERMISSIONS.catalogManage },
-      { label: "Rental Setup", to: "/admin/rental-setup", icon: CalendarRange, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Chemicals Management", to: "/admin/chemicals", icon: FlaskConical, permission: ADMIN_PERMISSIONS.catalogManage },
+      { label: "Rental Setup", to: "/admin/rental-setup", icon: CalendarRange, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Doctor References", to: "/admin/doctors", icon: Stethoscope, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Hospitals", to: "/admin/hospitals", icon: Building2, permission: ADMIN_PERMISSIONS.catalogManage },
     ],

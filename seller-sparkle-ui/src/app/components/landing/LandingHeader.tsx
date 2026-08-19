@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { BrandMark } from "@/app/components/shared/BrandMark";
 import { WebsiteSettingsDto } from "@/app/services/websiteContentApi";
+import { MobileNavScrim, useMobileNavLock } from "@/app/components/layout/MobileNavScrim";
 
 interface LandingHeaderProps {
   activeSection?: string;
@@ -15,6 +16,9 @@ export const LandingHeader = ({ activeSection = "home", onSectionClick, settings
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const closeMobileMenu = useCallback(() => setIsMobileMenuOpen(false), []);
+
+  useMobileNavLock(isMobileMenuOpen, closeMobileMenu, "(min-width: 901px)");
 
   useEffect(() => {
     const handleScroll = () => {
@@ -62,6 +66,8 @@ export const LandingHeader = ({ activeSection = "home", onSectionClick, settings
   };
 
   return (
+    <>
+    <MobileNavScrim open={isMobileMenuOpen} onClose={closeMobileMenu} className="z-[900]" />
     <header className={`site-header ${isScrolled ? "is-scrolled" : ""}`} id="siteHeader">
       <Link to="/" className="logo" id="logoHome" onClick={() => setIsMobileMenuOpen(false)} aria-label="BlinksMed home">
         {/* Full lockup already includes BLINKSMED + Buy | Rent | Care */}
@@ -113,5 +119,6 @@ export const LandingHeader = ({ activeSection = "home", onSectionClick, settings
         </button>
       </div>
     </header>
+    </>
   );
 };

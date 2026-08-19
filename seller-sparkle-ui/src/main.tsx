@@ -5,6 +5,9 @@ import "leaflet/dist/leaflet.css";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "./app/utils/errorMessages";
 import { dismissBootSplash } from "./app/helpers/bootSplash";
+import { preloadBrandArt } from "./app/helpers/brandArt";
+
+preloadBrandArt();
 
 // Globally intercept toast.error to ensure no raw backend error codes leak to the UI
 const originalToastError = toast.error;
