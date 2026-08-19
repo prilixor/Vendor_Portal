@@ -169,26 +169,28 @@ export function AdminProductDocumentsPanel({
             const busy = busyType === type.value;
             return (
               <div key={type.value} className="rounded-xl border border-border bg-card p-3">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold">{type.label}</p>
-                      <Badge variant={current ? "secondary" : "outline"} className="font-normal">
-                        {current ? "Uploaded" : "Missing"}
-                      </Badge>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                     </div>
-                    {current ? (
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {catalogDocumentFileName(current.fileUrl)}
-                      </p>
-                    ) : (
-                      <p className="mt-0.5 text-xs text-muted-foreground">PDF or image · shown on the product page</p>
-                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold leading-snug">{type.label}</p>
+                        <Badge variant={current ? "secondary" : "outline"} className="font-normal">
+                          {current ? "Uploaded" : "Missing"}
+                        </Badge>
+                      </div>
+                      {current ? (
+                        <p className="mt-0.5 break-all text-xs text-muted-foreground">
+                          {catalogDocumentFileName(current.fileUrl)}
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 text-xs text-muted-foreground">PDF or image · shown on the product page</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:justify-end">
                     {current ? (
                       <>
                         <Button
@@ -206,12 +208,12 @@ export function AdminProductDocumentsPanel({
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-9"
+                          className="h-9 gap-1 px-2.5"
                           disabled={locked || busy}
                           onClick={() => pickFile(type.value)}
                         >
-                          <Upload className="mr-1 h-3.5 w-3.5" />
-                          Replace
+                          <Upload className="h-3.5 w-3.5" />
+                          <span>Replace</span>
                         </Button>
                         <Button
                           type="button"

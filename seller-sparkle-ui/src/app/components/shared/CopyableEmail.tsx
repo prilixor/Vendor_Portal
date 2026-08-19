@@ -41,7 +41,7 @@ export function CopyableEmail({
 
   return (
     <span className={cn("inline-flex items-center gap-1 min-w-0 max-w-full", className)}>
-      <span className={cn("truncate", textClassName)} title={email}>
+      <span className={cn("truncate text-muted-foreground", textClassName)} title={email}>
         {email}
       </span>
       <button

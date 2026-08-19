@@ -49,7 +49,7 @@ export const AuthLayout = ({ children, title, subtitle, portalType = "vendor" }:
   const content = portalContent[portalType] || portalContent.vendor;
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
+    <div className="flex min-h-screen w-full min-w-0 max-w-full overflow-x-clip bg-background">
       {/* Left — brand panel */}
       <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-primary p-12 text-primary-foreground lg:flex">
         <div className="absolute inset-0 bg-gradient-mesh opacity-30" />

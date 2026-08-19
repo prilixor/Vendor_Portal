@@ -5,12 +5,13 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, RefreshCw, Package, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, User } from "lucide-react";
 import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
-import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import {
   ActiveFilterChips,
   FilterPanel,
@@ -259,6 +260,7 @@ const VendorOrders = () => {
             value={searchInput}
             onChange={setSearchInput}
             placeholder="Search by order ID, item, or customer"
+            mobilePlaceholder="Search orders"
             activeCount={activeStatus === "all" ? 0 : 1}
             onOpenFilters={() => {
               setDraftStatus(activeStatus);
@@ -338,11 +340,11 @@ const VendorOrders = () => {
               });
 
               return groups.map((group) => (
-                <div key={group.baseOrderNumber} className="rounded-xl border border-border/80 bg-card p-6 shadow-sm hover:border-border/100 transition-all">
+                <div key={group.baseOrderNumber} className="min-w-0 overflow-hidden rounded-xl border border-border/80 bg-card p-4 shadow-sm transition-all hover:border-border/100 sm:p-6">
                   {/* Group Header */}
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-3 mb-4">
-                    <div>
-                      <p className="text-sm font-bold text-foreground">{group.baseOrderNumber}</p>
+                  <div className="mb-4 flex flex-col gap-2 border-b border-border/60 pb-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="break-all text-sm font-bold text-foreground">{group.baseOrderNumber}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Consolidated fulfillment · {group.items.length} {group.items.length === 1 ? "item" : "items"}
                       </p>
@@ -361,21 +363,10 @@ const VendorOrders = () => {
                     {group.items.map((order) => {
                       const imageUrl = resolveItemImageUrl(order);
                       return (
-                      <div key={order.orderId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/10 hover:border-border transition-all duration-300 shadow-sm gap-4">
-                        <div className="flex items-center gap-4 flex-1">
-                          {imageUrl ? (
-                            <img
-                              src={imageUrl}
-                              alt={order.listingTitle}
-                              className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm"
-                              onError={retryOriginalOnImageError}
-                            />
-                          ) : (
-                            <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">
-                              <Package className="h-5 w-5 opacity-60" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
+                      <div key={order.orderId} className="flex min-w-0 flex-col gap-4 rounded-xl border border-border/50 bg-card p-3 shadow-sm transition-all duration-300 hover:border-border hover:bg-accent/10 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+                        <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+                          <ListingThumb src={imageUrl} size="lg" className="border border-border shadow-sm" />
+                          <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-foreground truncate">{order.listingTitle}</p>
                             <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                               <span className="flex items-center gap-1">
@@ -388,8 +379,8 @@ const VendorOrders = () => {
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-4 shrink-0 pt-3 sm:pt-0 border-t border-border/20 sm:border-none w-full sm:w-auto">
-                          <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-2 border-t border-border/20 pt-3 sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
+                          <div className="flex items-center gap-1.5">
                             <Badge className={cn("whitespace-nowrap text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(order.orderType))} variant="outline">
                               {order.orderType.toUpperCase()}
                             </Badge>
@@ -404,11 +395,12 @@ const VendorOrders = () => {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-8 text-xs font-semibold px-2 hover:bg-accent text-primary transition-colors flex items-center gap-1 group/btn"
+                            className="h-7 shrink-0 px-1.5 text-xs font-semibold text-primary transition-colors hover:bg-accent sm:h-8 sm:px-2"
                             onClick={() => navigate(`/vendor/orders/${order.orderId}`)}
                           >
-                            View details
-                            <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-0.5" />
+                            <span className="sm:hidden">Details</span>
+                            <span className="hidden sm:inline">View details</span>
+                            <ChevronRight className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </div>

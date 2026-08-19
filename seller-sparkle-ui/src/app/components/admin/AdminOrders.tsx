@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import {
   RefreshCw,
   ShoppingBag,
@@ -16,10 +17,9 @@ import {
   Truck,
   Building,
   ChevronRight,
-  Package,
 } from "lucide-react";
 import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
-import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import {
   ActiveFilterChips,
   FilterPanel,
@@ -343,6 +343,7 @@ export const AdminOrders = () => {
             value={searchInput}
             onChange={setSearchInput}
             placeholder="Search by order prefix, item, customer, or vendor..."
+            mobilePlaceholder="Search orders"
             activeCount={activeTab === "all" ? 0 : 1}
             onOpenFilters={() => {
               setDraftTab(activeTab);
@@ -388,12 +389,12 @@ export const AdminOrders = () => {
         ) : (
           <div className="space-y-4">
             {groupedOrders.map((group) => (
-              <div key={group.baseOrderNumber} className="rounded-xl border border-border/80 bg-card p-6 shadow-sm hover:border-border/100 transition-all">
+              <div key={group.baseOrderNumber} className="min-w-0 overflow-hidden rounded-xl border border-border/80 bg-card p-4 shadow-sm transition-all hover:border-border/100 sm:p-6">
                 {/* Transaction Group Header */}
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b border-border/60 pb-4 mb-4">
-                  <div className="space-y-0.5">
+                <div className="mb-4 flex flex-col gap-3 border-b border-border/60 pb-4 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0 space-y-0.5">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Order Group</span>
-                    <h4 className="text-base font-bold text-foreground">{group.baseOrderNumber}</h4>
+                    <h4 className="break-all text-base font-bold text-foreground">{group.baseOrderNumber}</h4>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs text-muted-foreground md:flex md:gap-6">
                     <p>Customer: <span className="font-semibold text-foreground truncate block sm:inline">{group.customerName}</span></p>
@@ -408,16 +409,10 @@ export const AdminOrders = () => {
                   {group.items.map((item) => {
                     const imageUrl = resolveItemImageUrl(item);
                     return (
-                    <div key={item.orderId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/10 hover:border-border transition-all duration-300 shadow-sm gap-4">
-                      <div className="flex items-center gap-4 flex-1">
-                        {imageUrl ? (
-                          <img src={imageUrl} alt={item.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" onError={retryOriginalOnImageError} />
-                        ) : (
-                          <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">
-                            <Package className="h-5 w-5 opacity-60" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
+                    <div key={item.orderId} className="flex min-w-0 flex-col gap-4 rounded-xl border border-border/50 bg-card p-3 shadow-sm transition-all duration-300 hover:border-border hover:bg-accent/10 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+                      <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+                        <ListingThumb src={imageUrl} size="lg" className="border border-border shadow-sm" />
+                        <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-foreground truncate">{item.listingTitle}</p>
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1">
                             <span className="flex items-center gap-1"><Building className="h-3.5 w-3.5 shrink-0 opacity-60" /> {item.vendorName}</span>
@@ -427,34 +422,36 @@ export const AdminOrders = () => {
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 shrink-0 pt-3 sm:pt-0 border-t border-border/20 sm:border-none w-full sm:w-auto mt-2 sm:mt-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge className={cn("whitespace-nowrap text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(item.orderType))} variant="outline">
+                      <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1 border-t border-border/20 pt-3 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
+                        <div className="flex min-w-0 flex-nowrap items-center gap-1">
+                          <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-semibold leading-none sm:px-2", orderTypeBadgeClass(item.orderType))} variant="outline">
                             {item.orderType.toUpperCase()}
                           </Badge>
                           {item.isExtended && (
-                            <Badge className="whitespace-nowrap text-[10px] font-bold py-0.5 px-2 bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800/50" variant="outline">
-                              EXTENDED
+                            <Badge className="h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-bold leading-none sm:px-2 bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800/50" variant="outline">
+                              <span className="sm:hidden">EXT</span>
+                              <span className="hidden sm:inline">EXTENDED</span>
                             </Badge>
                           )}
                           <Badge
                             title={formatOrderStatusTitle(item.status)}
-                            className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(item.status))}
+                            className={cn("shrink-0", orderStatusBadgeSizeClass, orderStatusBadgeClass(item.status))}
                             variant="outline"
                           >
                             {formatOrderStatusLabel(item.status)}
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="font-semibold tabular-nums text-sm text-foreground sm:w-20 sm:text-right">₹{item.totalAmount.toFixed(0)}</span>
+                        <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-3">
+                          <span className="text-xs font-semibold tabular-nums text-foreground sm:text-sm">₹{item.totalAmount.toFixed(0)}</span>
                           <Button
                           size="sm"
                           variant="ghost"
-                          className="h-8 text-xs font-semibold px-2 hover:bg-accent text-primary transition-colors flex items-center gap-1 group/btn"
+                          className="h-7 shrink-0 px-1.5 text-xs font-semibold text-primary transition-colors hover:bg-accent sm:h-8 sm:px-2"
                           onClick={() => navigate(`/admin/orders/${encodeURIComponent(item.orderId)}`)}
                         >
-                          View details
-                          <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-0.5" />
+                          <span className="sm:hidden">Details</span>
+                          <span className="hidden sm:inline">View details</span>
+                          <ChevronRight className="h-3.5 w-3.5" />
                         </Button>
                         </div>
                       </div>

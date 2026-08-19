@@ -121,7 +121,7 @@ function VendorShellContent({
 
   return (
 
-    <div className="flex min-h-screen w-full bg-background">
+    <div className="flex min-h-screen w-full min-w-0 max-w-full overflow-x-clip bg-background">
 
       {mobileSidebarOpen && (
 
@@ -153,13 +153,13 @@ function VendorShellContent({
 
 
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-clip">
 
         <TopBar variant="vendor" onMenuClick={() => setMobileSidebarOpen(true)} />
 
-        <main className="relative flex-1 px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+        <main className="relative min-w-0 flex-1 overflow-x-clip px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
 
-          <div className="mx-auto max-w-7xl">
+          <div className="mx-auto w-full min-w-0 max-w-7xl">
 
             {user.impersonation && (
 
@@ -385,7 +385,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
         {isCustomerShell ? (
 
-          <div className="flex min-h-screen w-full flex-col bg-gradient-to-b from-muted/40 via-background to-background">
+          <div className="flex min-h-screen w-full min-w-0 max-w-full flex-col overflow-x-clip bg-gradient-to-b from-muted/40 via-background to-background">
 
             <CustomerStoreHeader />
 
@@ -424,9 +424,9 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
             )}
 
-            <main className="flex-1 px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+            <main className="min-w-0 flex-1 overflow-x-clip px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
 
-              <div className="mx-auto w-full max-w-[1400px]">
+              <div className="mx-auto w-full min-w-0 max-w-[1400px]">
 
                 <PortalGlobalLoader placement="chrome" />
 
@@ -454,7 +454,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
         ) : (
 
-          <div className="flex min-h-screen w-full bg-background">
+          <div className="flex min-h-screen w-full min-w-0 max-w-full overflow-x-clip bg-background">
 
             {mobileSidebarOpen && (
 
@@ -488,13 +488,13 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
 
 
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex min-w-0 flex-1 flex-col overflow-x-clip">
 
               <TopBar variant={variant} onMenuClick={() => setMobileSidebarOpen(true)} />
 
-              <main className="relative flex-1 px-4 py-6 sm:px-6 lg:px-8">
+              <main className="relative min-w-0 flex-1 overflow-x-clip px-3 py-4 sm:px-6 lg:px-8">
 
-                <div className="mx-auto max-w-7xl">
+                <div className="mx-auto w-full min-w-0 max-w-7xl">
 
                   <PortalGlobalLoader placement="main" />
 

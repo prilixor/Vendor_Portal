@@ -177,7 +177,7 @@ const CustomerNotifications = () => {
                       role="button"
                       tabIndex={0}
                       className={cn(
-                        "flex w-full gap-4 px-5 py-4 text-left transition-colors hover:bg-muted/40",
+                        "flex w-full min-w-0 flex-col gap-2 px-4 py-4 text-left transition-colors hover:bg-muted/40 sm:flex-row sm:gap-4 sm:px-5",
                         unread && "bg-muted/20",
                       )}
                       onClick={() => handleRowActivate(n)}
@@ -216,7 +216,7 @@ const CustomerNotifications = () => {
                           </Link>
                         ) : null}
                       </div>
-                      <time className="shrink-0 whitespace-nowrap text-xs text-muted-foreground tabular-nums">
+                      <time className="shrink-0 text-xs tabular-nums text-muted-foreground sm:whitespace-nowrap">
                         {label || "—"}
                       </time>
                     </div>

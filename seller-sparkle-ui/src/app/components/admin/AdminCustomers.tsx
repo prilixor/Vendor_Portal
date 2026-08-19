@@ -134,47 +134,54 @@ export const AdminCustomers = () => {
             return (
               <Card
                 key={c.id}
-                className="p-0 overflow-hidden border-border/70 shadow-sm hover:shadow-md hover:border-primary/20 transition-all"
+                className="overflow-hidden border-border/70 p-0 shadow-sm transition-all hover:border-primary/20 hover:shadow-md"
               >
                 <Link
                   to={`/admin/customers/${c.id}`}
-                  className="flex items-center gap-3 sm:gap-4 p-4 text-left"
+                  className="flex items-center gap-3 p-4 text-left text-foreground no-underline sm:gap-4"
                 >
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
                     {initials || <UserRound className="h-5 w-5" />}
                   </div>
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold truncate">{c.fullName}</p>
-                      <Badge variant="outline" className={cn(
-                        "text-[10px]",
-                        c.isEmailVerified
-                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                          : "bg-amber-50 text-amber-800 border-amber-200",
-                      )}>
+                      <p className="truncate font-semibold text-foreground">{c.fullName}</p>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px]",
+                          c.isEmailVerified
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800"
+                            : "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800",
+                        )}
+                      >
                         {c.isEmailVerified ? "Verified" : "Unverified"}
                       </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground truncate flex items-center gap-1 min-w-0">
-                      <CopyableEmail email={c.email} textClassName="text-sm text-muted-foreground" />
-                      {c.phone ? <span className="truncate"> · {c.phone}</span> : null}
+                    <p className="flex min-w-0 items-center gap-1.5 truncate text-sm">
+                      <CopyableEmail email={c.email} textClassName="text-sm font-medium text-sky-600 dark:text-sky-400" />
+                      {c.phone ? (
+                        <span className="truncate font-medium text-violet-600 dark:text-violet-400">
+                          · {c.phone}
+                        </span>
+                      ) : null}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {c.orderCount} {c.orderCount === 1 ? "order" : "orders"} · Joined {formatDate(c.createdAt)}
                     </p>
                   </div>
-                  <span className="hidden sm:inline-flex items-center gap-1 text-sm font-medium text-primary shrink-0">
+                  <span className="hidden shrink-0 items-center gap-1 text-sm font-medium text-primary sm:inline-flex">
                     View <ChevronRight className="h-4 w-4" />
                   </span>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground sm:hidden shrink-0" />
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground sm:hidden" />
                 </Link>
               </Card>
             );
           })}
           {rows.length === 0 && (
-            <div className="rounded-xl border border-dashed py-14 text-center space-y-2">
-              <UserRound className="h-8 w-8 mx-auto text-muted-foreground/50" />
-              <p className="text-sm font-medium">No customers found</p>
+            <div className="space-y-2 rounded-xl border border-dashed py-14 text-center">
+              <UserRound className="mx-auto h-8 w-8 text-muted-foreground/50" />
+              <p className="text-sm font-medium text-foreground">No customers found</p>
               <p className="text-xs text-muted-foreground">Try a different email, name, or phone.</p>
             </div>
           )}
@@ -313,33 +320,33 @@ export const AdminCustomerDetail = () => {
           </div>
           <div className="space-y-3 text-sm">
             <div className="flex items-start gap-2">
-              <Mail className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+              <Mail className="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
               <div>
                 <p className="text-xs text-muted-foreground">Email</p>
-                <p className="font-medium break-all">
+                <p className="break-all font-medium">
                   <CopyableEmail
                     email={detail.email}
                     compact={false}
-                    textClassName="font-medium break-all"
+                    textClassName="break-all font-medium text-sky-600 dark:text-sky-400"
                   />
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <Phone className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+              <Phone className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
               <div>
                 <p className="text-xs text-muted-foreground">Phone</p>
-                <p className="font-medium">{detail.phone || "—"}</p>
+                <p className="font-medium text-violet-600 dark:text-violet-400">{detail.phone || "—"}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 pt-1 border-t">
               <div>
                 <p className="text-xs text-muted-foreground">Joined</p>
-                <p className="font-medium">{formatDate(detail.createdAt)}</p>
+                <p className="font-medium text-foreground">{formatDate(detail.createdAt)}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Last login</p>
-                <p className="font-medium">{formatDate(detail.lastLoginAt)}</p>
+                <p className="font-medium text-foreground">{formatDate(detail.lastLoginAt)}</p>
               </div>
             </div>
           </div>

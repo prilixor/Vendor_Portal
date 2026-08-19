@@ -624,8 +624,8 @@ const AlertCard = ({
   navigate: (path: string) => void;
 }) => {
   return (
-    <div className="rounded-xl border border-border/80 bg-card p-6 shadow-sm hover:border-border/100 hover:shadow-md transition-all flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-      <div className="flex items-start gap-4">
+    <div className="flex min-w-0 flex-col gap-4 rounded-xl border border-border/80 bg-card p-4 shadow-sm transition-all hover:border-border/100 hover:shadow-md sm:p-6 md:flex-row md:items-center md:justify-between">
+      <div className="flex min-w-0 items-start gap-3 sm:gap-4">
         <div className={cn(
           "rounded-lg p-2.5 shrink-0 mt-0.5",
           alert.type === "order" ? "bg-destructive/10 text-destructive" 

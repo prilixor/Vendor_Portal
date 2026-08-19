@@ -1,17 +1,20 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { adminApi, AdminAuditLogDto, AdminUserDto } from "@/app/services/adminApi";
 import { Search, ArrowRight } from "lucide-react";
-import { safeFormatDate, safeFormatDistance } from "@/app/utils/dateUtils";
 import { toast } from "sonner";
+
+const PAGE_SIZE = 8;
 
 const AuditLogs = () => {
   const [search, setSearch] = useState("");
   const [actor, setActor] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [auditLogs, setAuditLogs] = useState<AdminAuditLogDto[]>([]);
   const [adminUsers, setAdminUsers] = useState<AdminUserDto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,6 +32,7 @@ const AuditLogs = () => {
       ]);
       setAuditLogs(logsData);
       setAdminUsers(adminsData);
+      setPage(1);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load audit logs.";
       toast.error(message);
@@ -42,12 +46,29 @@ const AuditLogs = () => {
     ...auditLogs.map((l) => l.adminName || l.adminEmail || l.adminId)
   ]));
 
-  const filtered = auditLogs.filter((l) => {
-    const actorName = l.adminName || l.adminEmail || l.adminId;
-    const m = actor === "all" || actorName === actor;
-    const s = !search || l.actionType.toLowerCase().includes(search.toLowerCase()) || l.entityType.toLowerCase().includes(search.toLowerCase());
-    return m && s;
-  });
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return auditLogs.filter((l) => {
+      const actorName = l.adminName || l.adminEmail || l.adminId;
+      const m = actor === "all" || actorName === actor;
+      const s =
+        !q ||
+        l.actionType.toLowerCase().includes(q) ||
+        l.entityType.toLowerCase().includes(q);
+      return m && s;
+    });
+  }, [auditLogs, search, actor]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const pageRows = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, actor]);
 
   return (
     <div>
@@ -71,30 +92,43 @@ const AuditLogs = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full min-w-[700px] text-sm">
-                <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Action</th>
-                    <th className="px-4 py-3 font-semibold">Entity</th>
-                    <th className="px-4 py-3 font-semibold">Actor</th>
-                    <th className="px-4 py-3 font-semibold">Change</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filtered.map((log) => (
-                    <tr key={log.id} className="hover:bg-muted/20">
-                      <td className="px-4 py-3"><span className="rounded-md bg-primary-soft px-2 py-1 text-xs font-mono font-semibold text-primary">{log.actionType}</span></td>
-                      <td className="px-4 py-3"><p className="font-medium">{log.entityType}</p></td>
-                      <td className="px-4 py-3">{log.adminName || log.adminEmail || log.adminId}</td>
-                      <td className="px-4 py-3">
-                        <ChangeDisplay log={log} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {filtered.length === 0 ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">No audit logs match your filters.</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full min-w-[700px] text-sm">
+                    <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">Action</th>
+                        <th className="px-4 py-3 font-semibold">Entity</th>
+                        <th className="px-4 py-3 font-semibold">Actor</th>
+                        <th className="px-4 py-3 font-semibold">Change</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {pageRows.map((log) => (
+                        <tr key={log.id} className="hover:bg-muted/20">
+                          <td className="px-4 py-3"><span className="rounded-md bg-primary-soft px-2 py-1 text-xs font-mono font-semibold text-primary">{log.actionType}</span></td>
+                          <td className="px-4 py-3"><p className="font-medium">{log.entityType}</p></td>
+                          <td className="px-4 py-3">{log.adminName || log.adminEmail || log.adminId}</td>
+                          <td className="px-4 py-3">
+                            <ChangeDisplay log={log} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <TablePagination
+                  page={safePage}
+                  pageSize={PAGE_SIZE}
+                  total={filtered.length}
+                  onPageChange={setPage}
+                  label="logs"
+                />
+              </>
+            )}
           </>
         )}
       </Card>

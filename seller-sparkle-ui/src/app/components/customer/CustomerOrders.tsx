@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Package } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
 import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
-import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
 import {
   ActiveFilterChips,
@@ -249,6 +250,7 @@ const CustomerOrders = () => {
           value={searchInput}
           onChange={setSearchInput}
           placeholder="Search by order ID, item, or vendor"
+          mobilePlaceholder="Search orders"
           activeCount={appliedFilter === "All" ? 0 : 1}
           onOpenFilters={openFilters}
           aria-label="Search orders"
@@ -347,13 +349,7 @@ const CustomerOrders = () => {
                         return (
                         <div key={o.id} className="flex flex-col gap-3 rounded-xl border border-border/50 bg-card p-3 shadow-sm transition-all duration-300 hover:border-border hover:bg-accent/10 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4">
                           <div className="flex min-w-0 flex-1 items-center gap-3">
-                            {imageUrl ? (
-                              <img src={imageUrl} alt={o.listingTitle} className="h-12 w-12 shrink-0 rounded-lg border border-border bg-muted object-cover shadow-sm" onError={retryOriginalOnImageError} />
-                            ) : (
-                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground shadow-sm">
-                                <Package className="h-5 w-5 opacity-60" />
-                              </div>
-                            )}
+                            <ListingThumb src={imageUrl} size="lg" className="border border-border shadow-sm" />
                             <div className="min-w-0 flex-1">
                               <Link
                                 to={`/customer/orders/${encodeURIComponent(o.id)}`}
@@ -384,7 +380,7 @@ const CustomerOrders = () => {
                             </div>
                           </div>
 
-                          <div className="flex w-full items-center justify-between gap-2 border-t border-border/20 pt-3 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
+                          <div className="flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-2 border-t border-border/20 pt-3 sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
                             <div className="flex items-center gap-1.5">
                               <Badge className={cn("h-5 whitespace-nowrap px-2 py-0 text-[10px] font-semibold leading-none", orderTypeBadgeClass(o.orderType))} variant="outline">
                                 {o.orderType.toUpperCase()}
@@ -397,13 +393,13 @@ const CustomerOrders = () => {
                                 {formatOrderStatusLabel(o.status)}
                               </Badge>
                             </div>
-                            <div className="flex items-center gap-2 sm:gap-3">
-                              <span className="text-sm font-semibold tabular-nums text-foreground sm:w-20 sm:text-right">₹{o.totalAmount.toFixed(0)}</span>
+                            <div className="flex items-center gap-1 sm:gap-3">
+                              <span className="text-sm font-semibold tabular-nums text-foreground">₹{o.totalAmount.toFixed(0)}</span>
                               {isCustomerOrderCancellable(o.status) ? (
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-8 px-2 text-xs font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  className="h-7 px-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:px-2"
                                   disabled={cancelMut.isPending}
                                   onClick={() => cancelMut.mutate(o.id)}
                                 >
@@ -414,7 +410,7 @@ const CustomerOrders = () => {
                                 size="sm"
                                 variant="ghost"
                                 asChild
-                                className="group/btn flex h-8 items-center gap-1 px-2 text-xs font-semibold text-primary transition-colors hover:bg-accent"
+                                className="group/btn flex h-7 items-center gap-0.5 px-1.5 text-xs font-semibold text-primary transition-colors hover:bg-accent sm:h-8 sm:gap-1 sm:px-2"
                               >
                                 <Link to={`/customer/orders/${encodeURIComponent(o.id)}`}>
                                   Details

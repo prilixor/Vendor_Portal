@@ -27,27 +27,33 @@ import { toast } from "sonner";
 
 const ROLE_VISUAL: Record<
   string,
-  { icon: typeof Shield; accent: string; iconBg: string; strip: string; label: string }
+  { icon: typeof Shield; accent: string; iconBg: string; strip: string; bar: string; chip: string; label: string }
 > = {
   super_admin: {
     icon: ShieldCheck,
     accent: "text-primary",
     iconBg: "bg-primary/10 text-primary ring-1 ring-primary/15",
     strip: "bg-primary",
+    bar: "bg-primary",
+    chip: "border-primary/20 bg-primary/5 text-primary",
     label: "Full platform access",
   },
   operations_admin: {
     icon: Settings,
-    accent: "text-muted-foreground",
-    iconBg: "bg-muted text-foreground/70 ring-1 ring-border",
-    strip: "bg-foreground/25",
+    accent: "text-teal-700 dark:text-teal-300",
+    iconBg: "bg-teal-50 text-teal-700 ring-1 ring-teal-200/80 dark:bg-teal-950/40 dark:text-teal-300 dark:ring-teal-800",
+    strip: "bg-teal-500",
+    bar: "bg-teal-500",
+    chip: "border-teal-200/80 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-200",
     label: "Orders & operations",
   },
   verifier: {
     icon: Users,
-    accent: "text-muted-foreground",
-    iconBg: "bg-muted text-foreground/70 ring-1 ring-border",
-    strip: "bg-foreground/25",
+    accent: "text-sky-700 dark:text-sky-300",
+    iconBg: "bg-sky-50 text-sky-700 ring-1 ring-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-800",
+    strip: "bg-sky-500",
+    bar: "bg-sky-500",
+    chip: "border-sky-200/80 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200",
     label: "Vendor verification",
   },
 };
@@ -56,9 +62,11 @@ function roleVisual(code: string) {
   return (
     ROLE_VISUAL[code] ?? {
       icon: Shield,
-      accent: "text-muted-foreground",
-      iconBg: "bg-muted text-muted-foreground ring-1 ring-border",
-      strip: "bg-muted-foreground/25",
+      accent: "text-violet-700 dark:text-violet-300",
+      iconBg: "bg-violet-50 text-violet-700 ring-1 ring-violet-200/80 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-800",
+      strip: "bg-violet-500",
+      bar: "bg-violet-500",
+      chip: "border-violet-200/80 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200",
       label: "Custom role",
     }
   );
@@ -253,10 +261,25 @@ const AdminRoles = () => {
       {/* Summary */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Total roles", value: stats.total, icon: Shield },
-          { label: "System roles", value: stats.system, icon: Lock },
-          { label: "Custom roles", value: stats.custom, icon: Pencil },
-          { label: "Permissions", value: stats.permissions, icon: KeyRound },
+          { label: "Total roles", value: stats.total, icon: Shield, iconCls: "bg-primary/10 text-primary" },
+          {
+            label: "System roles",
+            value: stats.system,
+            icon: Lock,
+            iconCls: "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300",
+          },
+          {
+            label: "Custom roles",
+            value: stats.custom,
+            icon: Pencil,
+            iconCls: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+          },
+          {
+            label: "Permissions",
+            value: stats.permissions,
+            icon: KeyRound,
+            iconCls: "bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
+          },
         ].map((s) => (
           <Card key={s.label} className="border-border/60 p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
@@ -264,8 +287,8 @@ const AdminRoles = () => {
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.label}</p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{loading ? "—" : s.value}</p>
               </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/80 text-muted-foreground">
-                <s.icon className="h-4.5 w-4.5 h-[18px] w-[18px]" />
+              <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", s.iconCls)}>
+                <s.icon className="h-[18px] w-[18px]" />
               </div>
             </div>
           </Card>
@@ -354,7 +377,9 @@ const AdminRoles = () => {
                               </Badge>
                             )}
                           </div>
-                          <p className="mt-0.5 font-mono text-[11px] text-muted-foreground truncate">{role.code}</p>
+                          <p className="mt-0.5 truncate font-mono text-[11px] font-medium text-sky-600 dark:text-sky-400">
+                            {role.code}
+                          </p>
                           <p className={cn("mt-1 text-[11px] font-medium", visual.accent)}>{visual.label}</p>
                         </div>
                       </div>
@@ -367,13 +392,13 @@ const AdminRoles = () => {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-medium text-muted-foreground">Access coverage</span>
-                        <span className="tabular-nums text-muted-foreground">
+                        <span className={cn("tabular-nums font-medium", visual.accent)}>
                           {role.permissionCodes.length}/{permissions.length || "—"} · {permPct}%
                         </span>
                       </div>
                       <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                         <div
-                          className={cn("h-full rounded-full transition-all", locked ? "bg-primary" : "bg-foreground/70")}
+                          className={cn("h-full rounded-full transition-all", visual.bar)}
                           style={{ width: `${Math.min(100, permPct)}%` }}
                         />
                       </div>
@@ -382,7 +407,10 @@ const AdminRoles = () => {
                           {coverage.map((c) => (
                             <span
                               key={c.category}
-                              className="inline-flex items-center rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                              className={cn(
+                                "inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
+                                visual.chip,
+                              )}
                               title={`${c.enabled} of ${c.total} in ${c.category}`}
                             >
                               {c.category}
