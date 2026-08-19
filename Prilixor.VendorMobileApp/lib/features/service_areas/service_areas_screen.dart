@@ -7,6 +7,7 @@ import '../../core/models/vendor_onboarding_model.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/utils/device_location.dart';
 import '../../core/utils/place_search.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/state_city_picker.dart';
 import '../../core/providers/vendor_service_area_provider.dart';
@@ -104,7 +105,7 @@ class _ServiceAreasScreenState extends State<ServiceAreasScreen> {
         color: AppTheme.accent,
         onRefresh: _load,
         child: provider.loading && provider.areas.isEmpty
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.accent))
+            ? const BrandPageLoader()
             : ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),

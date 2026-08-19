@@ -15,6 +15,7 @@ import '../../core/models/rental_pricing_plan_model.dart';
 import '../../core/utils/media_url.dart';
 import '../../core/utils/rental_period.dart';
 import '../../core/utils/rental_plan_display.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/browse_product_card.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/required_field_ux.dart';
@@ -376,7 +377,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ],
       ),
       body: _loadingDetail && detail == null
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : _detailError != null
               ? Center(child: Text(_detailError!, style: const TextStyle(color: Colors.redAccent)))
               : detail == null

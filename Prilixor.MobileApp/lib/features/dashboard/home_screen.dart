@@ -10,6 +10,7 @@ import '../../core/providers/favorite_provider.dart';
 import '../../core/models/product_model.dart';
 import '../../core/models/category_model.dart';
 import '../../shared/utils/require_auth.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/browse_product_card.dart';
 import '../product/product_detail_screen.dart';
 import '../profile/addresses_screen.dart';
@@ -481,7 +482,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             Expanded(
               child: productProvider.isLoading
-                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+                  ? const BrandPageLoader()
                   : productProvider.errorMessage != null
                       ? Center(child: Text(productProvider.errorMessage!, style: const TextStyle(color: Colors.redAccent)))
                       : products.isEmpty

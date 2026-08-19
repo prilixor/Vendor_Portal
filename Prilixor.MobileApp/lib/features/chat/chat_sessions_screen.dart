@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/chat_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import 'chat_detail_screen.dart';
 
 class ChatSessionsScreen extends StatefulWidget {
@@ -34,7 +35,7 @@ class _ChatSessionsScreenState extends State<ChatSessionsScreen> {
         elevation: 0,
       ),
       body: provider.isLoading && provider.sessions.isEmpty
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : provider.sessions.isEmpty
               ? Center(
                   child: Column(

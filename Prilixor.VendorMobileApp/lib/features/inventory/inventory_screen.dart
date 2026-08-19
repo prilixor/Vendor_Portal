@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import 'inventory_detail_screen.dart';
 import 'track_serial_screen.dart';
 
@@ -120,9 +121,7 @@ class _InventoryScreenState extends State<InventoryScreen>
             const SizedBox(height: 8),
             Expanded(
               child: provider.loading && provider.inventoryRecords.isEmpty
-                  ? const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
-                    )
+                  ? const BrandPageLoader()
                   : filtered.isEmpty
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),

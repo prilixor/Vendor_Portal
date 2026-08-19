@@ -9,6 +9,7 @@ import '../../core/utils/admin_comment_util.dart';
 import '../../core/utils/vendor_notification_route.dart';
 import '../../core/utils/vendor_notification_utils.dart';
 import '../../shared/widgets/admin_comment_hint.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 
 /// Vendor Alerts — parity with Vendor Web notifications (latest first, clean inbox).
 class NotificationsScreen extends StatefulWidget {
@@ -92,9 +93,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           if (provider.isLoading && provider.notifications.isEmpty)
             const SliverFillRemaining(
               hasScrollBody: false,
-              child: Center(
-                child: CircularProgressIndicator(color: AppTheme.accent),
-              ),
+              child: BrandPageLoader(),
             )
           else if (provider.error != null && provider.notifications.isEmpty)
             SliverFillRemaining(

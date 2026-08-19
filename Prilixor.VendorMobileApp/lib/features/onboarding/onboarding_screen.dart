@@ -10,6 +10,7 @@ import '../../core/models/vendor_onboarding_model.dart';
 import '../../core/models/vendor_profile_model.dart';
 import '../../core/providers/vendor_location_provider.dart';
 import '../../core/providers/vendor_onboarding_provider.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/state_city_picker.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
@@ -155,9 +156,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         ),
       ),
       body: onboarding.loading && onboarding.documents.isEmpty
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.accent),
-            )
+          ? const BrandPageLoader()
           : Column(
               children: [
                 if (onboarding.hasRejectedVerificationItems)

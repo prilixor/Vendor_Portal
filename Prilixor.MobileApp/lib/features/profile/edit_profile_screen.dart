@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/profile_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
 
@@ -101,7 +102,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         iconTheme: IconThemeData(color: colors.textPrimary),
       ),
       body: profile == null
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : SafeArea(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),

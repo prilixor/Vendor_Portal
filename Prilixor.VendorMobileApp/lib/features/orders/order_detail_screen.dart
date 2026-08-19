@@ -10,6 +10,7 @@ import '../../core/models/order_image_model.dart';
 import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/struck_price.dart';
 import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
 import 'dispatch_details_sheet.dart';
@@ -348,7 +349,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         ],
       ),
       body: provider.detailLoading && order == null
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.accent))
+          ? const BrandPageLoader()
           : order == null
               ? Center(
                   child: Text(
