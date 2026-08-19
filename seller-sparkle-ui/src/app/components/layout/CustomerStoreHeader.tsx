@@ -44,7 +44,7 @@ export function CustomerStoreHeader() {
 
   const { data: customerNotifications = [] } = useQuery({
     queryKey: ["customer-notifications"],
-    queryFn: () => customerApi.getNotifications(),
+    queryFn: () => customerApi.getNotifications({ quiet: true }),
     enabled: !!signedIn,
     refetchInterval: 30000,
   });

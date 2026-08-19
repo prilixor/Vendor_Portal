@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import 'login_screen.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
@@ -97,7 +98,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           if (_verifying)
             const Padding(
               padding: EdgeInsets.only(top: 40),
-              child: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))),
+              child: BrandPageLoader(size: BrandPageLoaderSize.sm),
             )
           else if (_success != null)
             Container(

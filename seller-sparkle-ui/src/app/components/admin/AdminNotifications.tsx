@@ -9,7 +9,7 @@ import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import {
   Bell,
@@ -66,21 +66,21 @@ export const AdminNotifications = () => {
   // Fetch all orders to extract critical notifications
   const { data: orders = [], isLoading: isLoadingOrders, refetch: refetchOrders, isFetching: isFetchingOrders } = useQuery({
     queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders(),
+    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
     refetchInterval: 30000,
   });
 
   // Fetch all vendors to find pending verification approvals
   const { data: vendors = [], isLoading: isLoadingVendors, refetch: refetchVendors, isFetching: isFetchingVendors } = useQuery({
     queryKey: ["admin-vendors"],
-    queryFn: () => adminApi.getVendors(),
+    queryFn: () => adminApi.getVendors({ quiet: true }),
     refetchInterval: 30000,
   });
 
   // Fetch all audit logs to render the Activity Stream
   const { data: logs = [], isLoading: isLoadingLogs, refetch: refetchLogs, isFetching: isFetchingLogs } = useQuery({
     queryKey: ["admin-audit-logs"],
-    queryFn: () => adminApi.getAuditLogs(),
+    queryFn: () => adminApi.getAuditLogs(undefined, { quiet: true }),
     refetchInterval: 30000,
   });
 
@@ -99,7 +99,7 @@ export const AdminNotifications = () => {
 
   const { data: supportTickets = [], isLoading: isLoadingSupport, refetch: refetchSupport, isFetching: isFetchingSupport } = useQuery({
     queryKey: ["admin-vendor-support-tickets"],
-    queryFn: () => supportApi.getAllTickets(),
+    queryFn: () => supportApi.getAllTickets({ quiet: true }),
     refetchInterval: 15000,
   });
 
@@ -401,15 +401,7 @@ export const AdminNotifications = () => {
       </Tabs>
 
       {isLoading ? (
-        <div className="space-y-4">
-          {Array.from({ length: 4 }).map((_, idx) => (
-            <div key={idx} className="rounded-xl border border-border/80 bg-accent/10 p-6 space-y-3">
-              <Skeleton className="h-6 w-1/4" />
-              <Skeleton className="h-4 w-1/2" />
-              <Skeleton className="h-12 w-full rounded-lg" />
-            </div>
-          ))}
-        </div>
+        <PageLoaderSlot />
       ) : (
         <div className="space-y-4">
           {/* TAB: ALL ALERTS */}

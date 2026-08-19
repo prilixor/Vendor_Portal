@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { apiClient } from "@/app/services/apiClient";
 import { setImpersonationSession } from "@/app/helpers/authSession";
-import { Loader2 } from "lucide-react";
+import { PageLoader } from "@/app/components/shared/PageLoader";
 import { toast } from "sonner";
 
 /** Consumes a one-time impersonation exchange code and starts a vendor or customer session. */
@@ -60,10 +60,7 @@ const ImpersonationConsume = () => {
           </button>
         </>
       ) : (
-        <>
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">{status}</p>
-        </>
+        <PageLoader label={status} className="min-h-0 py-0" />
       )}
     </div>
   );

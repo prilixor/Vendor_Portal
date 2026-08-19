@@ -6,6 +6,7 @@ import '../../core/models/notification_model.dart';
 import '../../core/models/order_model.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/guest_sign_in_prompt.dart';
 import '../orders/orders_screen.dart';
 import '../orders/order_detail_screen.dart';
@@ -47,7 +48,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               icon: Icons.notifications_none_rounded,
             )
           : provider.isLoading && provider.notifications.isEmpty
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : provider.errorMessage != null
               ? Center(child: Text(provider.errorMessage!, style: const TextStyle(color: Colors.redAccent)))
               : provider.notifications.isEmpty

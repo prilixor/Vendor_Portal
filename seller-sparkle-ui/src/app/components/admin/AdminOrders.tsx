@@ -6,7 +6,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import {
   RefreshCw,
   ShoppingBag,
@@ -113,7 +113,7 @@ export const AdminOrders = () => {
 
   const { data: orders = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders(),
+    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
   });
 
   useEffect(() => {
@@ -381,15 +381,7 @@ export const AdminOrders = () => {
         </FilterPanel>
 
         {isLoading ? (
-          <div className="space-y-4">
-            {Array.from({ length: 4 }).map((_, idx) => (
-              <div key={idx} className="rounded-xl border border-border/80 bg-accent/10 p-6 space-y-3">
-                <Skeleton className="h-6 w-1/4" />
-                <Skeleton className="h-4 w-1/2" />
-                <Skeleton className="h-12 w-full rounded-lg" />
-              </div>
-            ))}
-          </div>
+          <PageLoaderSlot />
         ) : groupedOrders.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">No customer orders found matching current criteria.</p>
         ) : (

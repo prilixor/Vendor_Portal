@@ -33,9 +33,9 @@ import {
   HeartPulse,
   Upload,
   X,
-  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 
 const PRESET_SERVICE_ICONS = [
   { value: "Stethoscope", label: "Stethoscope (Medical Equipment)" },
@@ -211,11 +211,7 @@ export function ServicesContentManager() {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-48 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
+    return <PageLoaderSlot />;
   }
 
   return (

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/chat_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/chat_day_label.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final String sessionId;
@@ -84,7 +85,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         children: [
           Expanded(
             child: provider.isLoading && provider.messages.isEmpty
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+                ? const BrandPageLoader()
                 : provider.messages.isEmpty
                     ? Center(
                         child: Column(

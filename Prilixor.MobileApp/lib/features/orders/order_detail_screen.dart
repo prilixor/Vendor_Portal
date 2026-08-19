@@ -8,6 +8,7 @@ import '../../core/providers/order_provider.dart';
 import '../../core/models/order_model.dart';
 import '../../core/models/order_image_request_model.dart';
 import '../../core/utils/rental_period.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/struck_price.dart';
 import '../product/product_detail_screen.dart';
@@ -421,7 +422,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
 
           Expanded(
             child: provider.isLoading && provider.currentOrder == null
-                ? Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+                ? const BrandPageLoader()
                 : provider.currentOrder == null
                     ? Center(child: Text(provider.errorMessage ?? 'Order not found', style: TextStyle(color: colors.textPrimary)))
                     : SingleChildScrollView(

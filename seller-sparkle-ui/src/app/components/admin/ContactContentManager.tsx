@@ -7,8 +7,9 @@ import { Button } from "@/app/components/ui/button";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { websiteContentApi } from "@/app/services/websiteContentApi";
 import { useQueryClient } from "@tanstack/react-query";
-import { Mail, Phone, Clock, FileText, Save, RotateCcw, Send, Loader2 } from "lucide-react";
+import { Mail, Phone, Clock, FileText, Save, RotateCcw, Send } from "lucide-react";
 import { toast } from "sonner";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import {
   INDIAN_MOBILE_MESSAGE,
   isValidIndianMobile,
@@ -115,11 +116,7 @@ export function ContactContentManager() {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-48 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
+    return <PageLoaderSlot />;
   }
 
   return (

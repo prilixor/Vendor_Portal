@@ -281,7 +281,8 @@ internal sealed class CreateProductCommandHandler(
             entity.ChemicalProperty?.SdsDocumentUrl,
             entity.ChemicalProperty?.CoaDocumentUrl,
             0,
-            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver, liveIcons)));
+            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver, liveIcons),
+            ProductCatalogDocuments.ToDtos(entity, fileUrlResolver)));
     }
 }
 
@@ -364,7 +365,8 @@ internal sealed class GetProductsQueryHandler(
             x.ChemicalProperty?.SdsDocumentUrl,
             x.ChemicalProperty?.CoaDocumentUrl,
             favoriteCounts.GetValueOrDefault(x.Id, 0),
-            ProductRentalPricingPlanSync.ToDtos(x.RentalPricingPlans, fileUrlResolver, liveIcons))).ToList();
+            ProductRentalPricingPlanSync.ToDtos(x.RentalPricingPlans, fileUrlResolver, liveIcons),
+            ProductCatalogDocuments.ToDtos(x, fileUrlResolver))).ToList();
 
         return Result.Success(result);
     }
@@ -408,10 +410,16 @@ internal sealed class AddProductImageCommandHandler(
         if (request.IsPrimary)
         {
             var existingImages = await repository.GetProductImagesAsync(productId, cancellationToken);
+            var hadPrimary = existingImages.Any(i => i.IsPrimary);
             foreach (var img in existingImages.Where(i => i.IsPrimary))
             {
                 img.IsPrimary = false;
                 await repository.UpdateProductImageAsync(img, cancellationToken);
+            }
+
+            if (hadPrimary)
+            {
+                await repository.SaveChangesAsync(cancellationToken);
             }
         }
 
@@ -519,6 +527,8 @@ internal sealed class DeleteProductImageCommandHandler(
 
         if (wasPrimary)
         {
+            await repository.SaveChangesAsync(cancellationToken);
+
             var remaining = await repository.GetProductImagesAsync(productId, cancellationToken);
             var fallback = remaining
                 .Where(x => x.Id != imageId)
@@ -532,6 +542,147 @@ internal sealed class DeleteProductImageCommandHandler(
             }
         }
 
+        await repository.SaveChangesAsync(cancellationToken);
+        return Result.Success();
+    }
+}
+
+public sealed record AddProductDocumentCommand(
+    string ProductId,
+    string DocumentType,
+    string FileUrl) : ICommand<ProductDocumentDto>;
+
+public sealed class AddProductDocumentCommandValidator : AbstractValidator<AddProductDocumentCommand>
+{
+    public AddProductDocumentCommandValidator()
+    {
+        RuleFor(x => x.ProductId).NotEmpty();
+        RuleFor(x => x.DocumentType).NotEmpty().MaximumLength(50);
+        RuleFor(x => x.FileUrl).NotEmpty();
+    }
+}
+
+internal sealed class AddProductDocumentCommandHandler(
+    IVendorOnboardingRepository repository,
+    IVendorFileUrlResolver fileUrlResolver,
+    IVendorUploadStorageService uploadStorage)
+    : ICommandHandler<AddProductDocumentCommand, ProductDocumentDto>
+{
+    public async Task<Result<ProductDocumentDto>> Handle(AddProductDocumentCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.ProductId, out var productId))
+        {
+            return Result.Failure<ProductDocumentDto>(new Error("products.invalid_id", "Product id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var product = await repository.GetProductByIdAsync(productId, cancellationToken);
+        if (product is null)
+        {
+            return Result.Failure<ProductDocumentDto>(new Error("products.not_found", "Product not found.", ErrorCategory.NotFound));
+        }
+
+        var documentType = request.DocumentType.Trim();
+        var existing = await repository.GetProductDocumentsAsync(productId, cancellationToken);
+        foreach (var old in existing.Where(d =>
+                     string.Equals(d.DocumentType, documentType, StringComparison.OrdinalIgnoreCase)))
+        {
+            await uploadStorage.DeleteStoredFileAsync(old.FileUrl, cancellationToken);
+            old.IsDeleted = true;
+            old.DeletedAt = DateTimeOffset.UtcNow;
+            await repository.UpdateProductDocumentAsync(old, cancellationToken);
+        }
+
+        var entity = new ProductDocument
+        {
+            Id = Guid.CreateVersion7(),
+            ProductId = productId,
+            DocumentType = documentType,
+            FileUrl = request.FileUrl.Trim()
+        };
+
+        await repository.AddProductDocumentAsync(entity, cancellationToken);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return Result.Success(new ProductDocumentDto(
+            entity.Id.ToString(),
+            entity.ProductId.ToString(),
+            entity.DocumentType,
+            fileUrlResolver.Resolve(entity.FileUrl)));
+    }
+}
+
+public sealed record GetProductDocumentsQuery(string ProductId) : IQuery<List<ProductDocumentDto>>;
+
+internal sealed class GetProductDocumentsQueryHandler(
+    IVendorOnboardingRepository repository,
+    IVendorFileUrlResolver fileUrlResolver)
+    : IQueryHandler<GetProductDocumentsQuery, List<ProductDocumentDto>>
+{
+    public async Task<Result<List<ProductDocumentDto>>> Handle(GetProductDocumentsQuery request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.ProductId, out var productId))
+        {
+            return Result.Failure<List<ProductDocumentDto>>(new Error("products.invalid_id", "Product id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var product = await repository.GetProductByIdAsync(productId, cancellationToken);
+        if (product is null)
+        {
+            return Result.Failure<List<ProductDocumentDto>>(new Error("products.not_found", "Product not found.", ErrorCategory.NotFound));
+        }
+
+        var rows = await repository.GetProductDocumentsAsync(productId, cancellationToken);
+        var result = rows.Select(x => new ProductDocumentDto(
+            x.Id.ToString(),
+            x.ProductId.ToString(),
+            x.DocumentType,
+            fileUrlResolver.Resolve(x.FileUrl))).ToList();
+
+        return Result.Success(result);
+    }
+}
+
+public sealed record DeleteProductDocumentCommand(string ProductId, string DocumentId) : ICommand;
+
+public sealed class DeleteProductDocumentCommandValidator : AbstractValidator<DeleteProductDocumentCommand>
+{
+    public DeleteProductDocumentCommandValidator()
+    {
+        RuleFor(x => x.ProductId).NotEmpty();
+        RuleFor(x => x.DocumentId).NotEmpty();
+    }
+}
+
+internal sealed class DeleteProductDocumentCommandHandler(
+    IVendorOnboardingRepository repository,
+    IVendorUploadStorageService uploadStorage)
+    : ICommandHandler<DeleteProductDocumentCommand>
+{
+    public async Task<Result> Handle(DeleteProductDocumentCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.ProductId, out var productId)
+            || !Guid.TryParse(request.DocumentId, out var documentId))
+        {
+            return Result.Failure(new Error("products.document.invalid_id", "Product/document id must be a valid UUID.", ErrorCategory.Validation));
+        }
+
+        var product = await repository.GetProductByIdAsync(productId, cancellationToken);
+        if (product is null)
+        {
+            return Result.Failure(new Error("products.not_found", "Product not found.", ErrorCategory.NotFound));
+        }
+
+        var document = await repository.GetProductDocumentByIdAsync(productId, documentId, cancellationToken);
+        if (document is null)
+        {
+            return Result.Failure(new Error("products.document.not_found", "Product document not found.", ErrorCategory.NotFound));
+        }
+
+        await uploadStorage.DeleteStoredFileAsync(document.FileUrl, cancellationToken);
+
+        document.IsDeleted = true;
+        document.DeletedAt = DateTimeOffset.UtcNow;
+        await repository.UpdateProductDocumentAsync(document, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }
@@ -923,10 +1074,16 @@ internal sealed class AddVendorProductImageCommandHandler(
         if (request.IsPrimary)
         {
             var existingImages = await repository.GetVendorProductImagesAsync(listingId, cancellationToken);
+            var hadPrimary = existingImages.Any(i => i.IsPrimary);
             foreach (var img in existingImages.Where(i => i.IsPrimary))
             {
                 img.IsPrimary = false;
                 await repository.UpdateVendorProductImageAsync(img, cancellationToken);
+            }
+
+            if (hadPrimary)
+            {
+                await repository.SaveChangesAsync(cancellationToken);
             }
         }
 
@@ -1036,6 +1193,8 @@ internal sealed class DeleteVendorProductImageCommandHandler(
 
         if (wasPrimary)
         {
+            await repository.SaveChangesAsync(cancellationToken);
+
             var remaining = await repository.GetVendorProductImagesAsync(listingId, cancellationToken);
             var fallback = remaining
                 .Where(x => x.Id != imageId)
@@ -1089,19 +1248,25 @@ internal sealed class SetPrimaryProductImageCommandHandler(IVendorOnboardingRepo
         }
 
         var existing = await repository.GetProductImagesAsync(productId, cancellationToken);
+        var needsClear = existing.Any(x => x.IsPrimary && x.Id != imageId);
         foreach (var row in existing.Where(x => x.IsPrimary && x.Id != imageId))
         {
             row.IsPrimary = false;
             await repository.UpdateProductImageAsync(row, cancellationToken);
         }
 
+        if (needsClear)
+        {
+            await repository.SaveChangesAsync(cancellationToken);
+        }
+
         if (!image.IsPrimary)
         {
             image.IsPrimary = true;
             await repository.UpdateProductImageAsync(image, cancellationToken);
+            await repository.SaveChangesAsync(cancellationToken);
         }
 
-        await repository.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }
 }
@@ -1564,7 +1729,8 @@ internal sealed class UpdateProductCommandHandler(
             entity.ChemicalProperty?.SdsDocumentUrl,
             entity.ChemicalProperty?.CoaDocumentUrl,
             0,
-            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver, liveIcons)));
+            ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver, liveIcons),
+            ProductCatalogDocuments.ToDtos(entity, fileUrlResolver)));
     }
 }
 

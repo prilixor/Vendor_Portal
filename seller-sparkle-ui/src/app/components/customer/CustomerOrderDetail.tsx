@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
 import { BackLink } from "@/app/components/shared/BackLink";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/app/components/ui/sheet";
 import { Input } from "@/app/components/ui/input";
 import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea";
@@ -507,13 +507,7 @@ const CustomerOrderDetail = () => {
   }
 
   if (isLoading || !data) {
-    return (
-      <div className="mx-auto max-w-3xl space-y-4 sm:space-y-6">
-        <Skeleton className="h-10 w-40" />
-        <Skeleton className="h-48 w-full rounded-xl" />
-        <Skeleton className="h-64 w-full rounded-xl" />
-      </div>
-    );
+    return <PageLoaderSlot />;
   }
 
   const activeItem = data;
@@ -746,10 +740,7 @@ const CustomerOrderDetail = () => {
           </CardHeader>
           <CardContent className="space-y-5">
             {!imageRequestsReady || imageRequestLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading photo requests…
-              </div>
+              <p className="text-sm text-muted-foreground">Loading photo requests…</p>
             ) : (
               <>
                 {photoEligibleItems.length > 0 && (
@@ -1063,10 +1054,7 @@ const CustomerOrderDetail = () => {
             </div>
 
             {quoteExtensionMut.isPending ? (
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-3/4" />
-              </div>
+              <p className="text-sm text-muted-foreground">Calculating quote…</p>
             ) : extensionQuote ? (
               <div className="rounded-lg border bg-muted/50 p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
@@ -1118,10 +1106,7 @@ const CustomerOrderDetail = () => {
             </p>
 
             {quoteBuyoutMut.isPending ? (
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-3/4" />
-              </div>
+              <p className="text-sm text-muted-foreground">Calculating quote…</p>
             ) : buyoutQuote ? (
               <div className="rounded-lg border bg-emerald-50/50 p-4 space-y-2 text-sm dark:bg-emerald-950/20">
                 <div className="flex justify-between text-muted-foreground">

@@ -239,6 +239,7 @@ public sealed class VendorProductListingAggregate
     public string? BaseUnit { get; init; }
     public string? SdsDocumentUrl { get; init; }
     public string? CoaDocumentUrl { get; init; }
+    public List<Prilixor.VendorPortal.Application.Onboarding.ProductDocumentDto> Documents { get; init; } = [];
     public int InventoryBlocked { get; init; }
     /// <summary>Per-variant (SKU-level) available stock for chemical listings.</summary>
     public List<VariantInventoryItem> VariantInventory { get; init; } = [];

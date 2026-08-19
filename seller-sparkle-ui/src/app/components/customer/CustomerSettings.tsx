@@ -12,7 +12,7 @@ import { Label } from "@/app/components/ui/label";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -190,15 +190,7 @@ const CustomerSettings = () => {
           <Card className="max-w-2xl border-border/60">
             <CardContent className="p-5 sm:p-6">
               {isLoading || !data ? (
-                <div className="space-y-4">
-                  <Skeleton className="h-5 w-28" />
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                  </div>
-                  <Skeleton className="h-10 w-28" />
-                </div>
+                <PageLoaderSlot className="min-h-[8rem] py-0" />
               ) : (
                 <form onSubmit={saveProfile}>
                   <h2 className="mb-1 text-sm font-semibold">Account</h2>
@@ -369,13 +361,7 @@ const CustomerSettings = () => {
           <Card className="max-w-2xl border-border/60">
             <CardContent className="space-y-3 p-5 sm:p-6">
               {loadingPrefs || !dbPrefs ? (
-                <div className="space-y-4">
-                  <Skeleton className="h-14 w-full" />
-                  <Skeleton className="h-14 w-full" />
-                  <Skeleton className="h-14 w-full" />
-                  <Skeleton className="h-14 w-full" />
-                  <Skeleton className="h-14 w-full" />
-                </div>
+                <PageLoaderSlot className="min-h-[8rem] py-0" />
               ) : (
                 <>
                   <PrefRow

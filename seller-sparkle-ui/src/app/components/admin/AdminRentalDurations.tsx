@@ -16,7 +16,7 @@ import {
 } from "@/app/components/ui/dialog";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import {
   adminApi,
@@ -268,12 +268,7 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
         </div>
 
         {loading ? (
-          <div className="space-y-3 p-5">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
+          <PageLoaderSlot />
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-300">

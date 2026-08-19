@@ -475,6 +475,7 @@ public sealed class CustomerRepository(
             .AsNoTracking()
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
+            .Include(p => p.ProductDocuments)
             .Include(p => p.ChemicalProperty)
             .Include(p => p.Variants)
             .Include(p => p.RentalPricingPlans)
@@ -500,6 +501,7 @@ public sealed class CustomerRepository(
             .AsNoTracking()
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
+            .Include(p => p.ProductDocuments)
             .Include(p => p.ChemicalProperty)
             .Include(p => p.Variants)
             .Include(p => p.RentalPricingPlans)
@@ -1658,6 +1660,7 @@ public sealed class CustomerRepository(
             BaseUnit = product.ChemicalProperty?.BaseUnit,
             SdsDocumentUrl = product.ChemicalProperty?.SdsDocumentUrl,
             CoaDocumentUrl = product.ChemicalProperty?.CoaDocumentUrl,
+            Documents = ProductCatalogDocuments.ToDtos(product, fileUrlResolver),
             Variants = product.Variants?.Select(v => new Prilixor.VendorPortal.Application.Onboarding.ProductVariantDto(
                 v.Id.ToString(),
                 v.ProductId.ToString(),

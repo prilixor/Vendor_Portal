@@ -95,8 +95,8 @@ export const supportApi = {
   },
 
   // Admin
-  getAllTickets: () => {
-    return apiClient.get<SupportTicketDto[]>("/support/admin/tickets");
+  getAllTickets: (options?: { quiet?: boolean }) => {
+    return apiClient.get<SupportTicketDto[]>("/support/admin/tickets", options);
   },
   getAdminUnreadCount: () => {
     return apiClient.get<{ count: number }>("/support/admin/unread-count");

@@ -126,7 +126,8 @@ public sealed record ProductDto(
     string? SdsDocumentUrl = null,
     string? CoaDocumentUrl = null,
     int FavoriteCount = 0,
-    List<ProductRentalPricingPlanDto>? RentalPricingPlans = null);
+    List<ProductRentalPricingPlanDto>? RentalPricingPlans = null,
+    List<ProductDocumentDto>? Documents = null);
 
 public sealed record ProductVariantDto(
     string Id,
@@ -185,6 +186,12 @@ public sealed record ProductImageDto(
     int DisplayOrder,
     bool IsPrimary,
     string? ThumbnailUrl = null);
+
+public sealed record ProductDocumentDto(
+    string Id,
+    string ProductId,
+    string DocumentType,
+    string FileUrl);
 
 public sealed record VendorProductListingDto(
     string Id,

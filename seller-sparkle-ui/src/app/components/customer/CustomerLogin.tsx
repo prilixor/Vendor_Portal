@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AuthLayout } from "@/app/components/layout/AuthLayout";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -11,6 +11,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 const CustomerLogin = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const from = (location.state as { from?: string } | null)?.from ?? "/customer/shop";
   const { login } = useAuth();
   const vendorLoginHref = getVendorPortalHref("/login");
@@ -36,11 +37,10 @@ const CustomerLogin = () => {
     try {
       await login(email.trim(), password, "customer");
       toast.success("Welcome!");
-      window.location.href = from.startsWith("/customer") ? from : "/customer/shop";
+      navigate(from.startsWith("/customer") ? from : "/customer/shop", { replace: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sign in failed.";
       toast.error(message);
-    } finally {
       setLoading(false);
     }
   };

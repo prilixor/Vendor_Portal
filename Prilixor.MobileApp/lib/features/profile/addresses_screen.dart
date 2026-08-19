@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/address_provider.dart';
 import '../../core/models/address_model.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/state_city_picker.dart';
 import 'mock_map_picker_screen.dart';
@@ -369,7 +370,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
         elevation: 0,
       ),
       body: provider.isLoading && provider.addresses.isEmpty
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : provider.addresses.isEmpty
               ? SafeArea(
                   child: Padding(

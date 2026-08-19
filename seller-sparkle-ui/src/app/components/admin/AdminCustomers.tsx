@@ -7,6 +7,7 @@ import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
 import { adminApi, AdminCustomerDetailDto, AdminCustomerListItemDto } from "@/app/services/adminApi";
 import { AdminPlaceCustomerOrderDialog } from "@/app/components/admin/AdminPlaceCustomerOrderDialog";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Loader2, LogIn, Mail, MapPin, Phone, Search, ShoppingCart, ChevronLeft, ChevronRight, UserRound } from "lucide-react";
 
 const PAGE_SIZE = 8;
@@ -119,7 +120,7 @@ export const AdminCustomers = () => {
         </div>
       </div>
       {loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" /></div>
+        <PageLoaderSlot className="min-h-[8rem] py-0" />
       ) : (
         <div className="space-y-2">
           {pageRows.map((c) => {
@@ -248,7 +249,7 @@ export const AdminCustomerDetail = () => {
   }, [customerId, navigate]);
 
   if (loading || !detail) {
-    return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+    return <PageLoaderSlot />;
   }
 
   return (

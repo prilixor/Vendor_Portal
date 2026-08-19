@@ -3,6 +3,67 @@ import 'rental_pricing_plan_model.dart';
 import '../utils/media_url.dart';
 import '../utils/rental_plan_display.dart';
 
+class CatalogDocumentModel {
+  final String id;
+  final String documentType;
+  final String fileUrl;
+
+  const CatalogDocumentModel({
+    required this.id,
+    required this.documentType,
+    required this.fileUrl,
+  });
+
+  String get label {
+    switch (documentType.trim().toLowerCase()) {
+      case 'spec_sheet':
+        return 'Spec Sheet';
+      case 'sds':
+        return 'Safety Data Sheet (SDS)';
+      case 'coa':
+        return 'Certificate of Analysis (COA)';
+      case 'warranty':
+        return 'Warranty';
+      case 'compliance':
+        return 'Compliance';
+      default:
+        return documentType.replaceAll('_', ' ');
+    }
+  }
+
+  String get hint {
+    switch (documentType.trim().toLowerCase()) {
+      case 'spec_sheet':
+        return 'Product specifications and technical details.';
+      case 'sds':
+        return 'Safety, handling, and storage information.';
+      case 'coa':
+        return 'Quality and purity certificate.';
+      case 'warranty':
+        return 'Manufacturer warranty terms.';
+      case 'compliance':
+        return 'Regulatory and certification documents.';
+      default:
+        return 'Official product document.';
+    }
+  }
+
+  String get formatLabel {
+    final lower = fileUrl.toLowerCase();
+    if (lower.contains('.pdf')) return 'PDF';
+    if (RegExp(r'\.(jpg|jpeg|png|gif|webp)').hasMatch(lower)) return 'Image';
+    return 'File';
+  }
+
+  factory CatalogDocumentModel.fromJson(Map<String, dynamic> json) {
+    return CatalogDocumentModel(
+      id: json['id']?.toString() ?? '',
+      documentType: json['documentType']?.toString() ?? 'document',
+      fileUrl: json['fileUrl']?.toString() ?? '',
+    );
+  }
+}
+
 class ProductDetailModel {
   final String id;
   final String title;
@@ -33,6 +94,7 @@ class ProductDetailModel {
   final String? baseUnit;
   final String? sdsDocumentUrl;
   final String? coaDocumentUrl;
+  final List<CatalogDocumentModel> documents;
   final List<ProductVariantModel> variants;
   final List<VariantInventoryModel> variantInventory;
   final List<RentalPricingPlanModel> rentalPricingPlans;
@@ -67,6 +129,7 @@ class ProductDetailModel {
     this.baseUnit,
     this.sdsDocumentUrl,
     this.coaDocumentUrl,
+    this.documents = const [],
     this.variants = const [],
     this.variantInventory = const [],
     this.rentalPricingPlans = const [],
@@ -161,6 +224,7 @@ class ProductDetailModel {
       baseUnit: json['baseUnit'],
       sdsDocumentUrl: json['sdsDocumentUrl'],
       coaDocumentUrl: json['coaDocumentUrl'],
+      documents: _parseDocuments(json),
       variants: variantsJson
           .map((e) => ProductVariantModel.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -196,4 +260,34 @@ class ProductDetailModel {
     // In-stock / available: no badge per product requirement
     return null;
   }
+}
+
+List<CatalogDocumentModel> _parseDocuments(Map<String, dynamic> json) {
+  final raw = json['documents'];
+  final seen = <String>{};
+  final docs = <CatalogDocumentModel>[];
+
+  void add(String id, String type, String? url) {
+    final resolved = resolveMediaUrl(url);
+    if (resolved == null || resolved.trim().isEmpty) return;
+    final key = resolved.trim().toLowerCase();
+    if (!seen.add(key)) return;
+    docs.add(CatalogDocumentModel(id: id, documentType: type, fileUrl: resolved));
+  }
+
+  if (raw is List) {
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final map = Map<String, dynamic>.from(item);
+      add(
+        map['id']?.toString() ?? '',
+        map['documentType']?.toString() ?? 'document',
+        map['fileUrl']?.toString(),
+      );
+    }
+  }
+
+  add('legacy-sds', 'sds', json['sdsDocumentUrl']?.toString());
+  add('legacy-coa', 'coa', json['coaDocumentUrl']?.toString());
+  return docs;
 }

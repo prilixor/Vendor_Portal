@@ -74,6 +74,75 @@ class ProductVariant {
   String get label => '$sizeValue $sizeUnit'.trim();
 }
 
+class CatalogProductDocument {
+  final String id;
+  final String documentType;
+  final String fileUrl;
+
+  const CatalogProductDocument({
+    required this.id,
+    required this.documentType,
+    required this.fileUrl,
+  });
+
+  String get label {
+    switch (documentType.trim().toLowerCase()) {
+      case 'spec_sheet':
+        return 'Spec Sheet';
+      case 'sds':
+        return 'Safety Data Sheet (SDS)';
+      case 'coa':
+        return 'Certificate of Analysis (COA)';
+      case 'warranty':
+        return 'Warranty';
+      case 'compliance':
+        return 'Compliance';
+      default:
+        return documentType.replaceAll('_', ' ');
+    }
+  }
+
+  factory CatalogProductDocument.fromJson(Map<String, dynamic> json) {
+    return CatalogProductDocument(
+      id: json['id']?.toString() ?? '',
+      documentType: json['documentType']?.toString() ?? 'document',
+      fileUrl: json['fileUrl']?.toString() ?? '',
+    );
+  }
+}
+
+class CatalogProductImage {
+  final String id;
+  final String imageUrl;
+  final String? thumbnailUrl;
+  final bool isPrimary;
+  final int displayOrder;
+
+  const CatalogProductImage({
+    required this.id,
+    required this.imageUrl,
+    this.thumbnailUrl,
+    this.isPrimary = false,
+    this.displayOrder = 0,
+  });
+
+  String get displayUrl {
+    final thumb = thumbnailUrl?.trim();
+    if (thumb != null && thumb.isNotEmpty) return thumb;
+    return imageUrl;
+  }
+
+  factory CatalogProductImage.fromJson(Map<String, dynamic> json) {
+    return CatalogProductImage(
+      id: json['id']?.toString() ?? '',
+      imageUrl: json['imageUrl']?.toString() ?? '',
+      thumbnailUrl: json['thumbnailUrl']?.toString(),
+      isPrimary: json['isPrimary'] == true,
+      displayOrder: _toInt(json['displayOrder']),
+    );
+  }
+}
+
 class CatalogProduct {
   final String id;
   final String categoryId;
@@ -92,6 +161,8 @@ class CatalogProduct {
   final String? casNumber;
   final String? chemicalFormula;
   final List<ProductVariant> variants;
+  final List<CatalogProductImage> images;
+  final List<CatalogProductDocument> documents;
 
   const CatalogProduct({
     required this.id,
@@ -111,6 +182,8 @@ class CatalogProduct {
     this.casNumber,
     this.chemicalFormula,
     this.variants = const [],
+    this.images = const [],
+    this.documents = const [],
   });
 
   factory CatalogProduct.fromJson(Map<String, dynamic> json) {
@@ -121,6 +194,22 @@ class CatalogProduct {
             .map((e) => ProductVariant.fromJson(Map<String, dynamic>.from(e)))
             .toList()
         : <ProductVariant>[];
+    final documentsRaw = json['documents'];
+    final documents = documentsRaw is List
+        ? documentsRaw
+            .whereType<Map>()
+            .map((e) => CatalogProductDocument.fromJson(Map<String, dynamic>.from(e)))
+            .where((d) => d.fileUrl.trim().isNotEmpty)
+            .toList()
+        : <CatalogProductDocument>[];
+    final imagesRaw = json['images'];
+    final images = imagesRaw is List
+        ? imagesRaw
+            .whereType<Map>()
+            .map((e) => CatalogProductImage.fromJson(Map<String, dynamic>.from(e)))
+            .where((img) => img.imageUrl.trim().isNotEmpty || (img.thumbnailUrl?.trim().isNotEmpty ?? false))
+            .toList()
+        : <CatalogProductImage>[];
 
     return CatalogProduct(
       id: json['id']?.toString() ?? '',
@@ -141,6 +230,8 @@ class CatalogProduct {
       casNumber: json['casNumber']?.toString(),
       chemicalFormula: json['chemicalFormula']?.toString(),
       variants: variants,
+      images: images,
+      documents: documents,
     );
   }
 

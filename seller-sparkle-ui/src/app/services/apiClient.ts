@@ -6,6 +6,17 @@ import {
   ADMIN_TOKEN_KEY,
   PORTAL_TOKEN_KEY,
 } from "@/app/helpers/authSession";
+import {
+  beginPortalRequest,
+  endPortalRequest,
+  isQuietPortalGet,
+  UnauthorizedRedirectError,
+} from "@/app/helpers/portalLoader";
+
+export type ApiClientOptions = {
+  /** Background polls — do not drive the branded page overlay. */
+  quiet?: boolean;
+};
 
 function resolveApiBaseUrl(): string {
   const explicit = import.meta.env.VITE_API_BASE_URL?.trim();
@@ -79,11 +90,36 @@ class ApiClient {
     };
   }
 
+  private shouldTrack(method: string, endpoint: string, options?: ApiClientOptions) {
+    if (options?.quiet) return false;
+    if (method === "GET" && isQuietPortalGet(endpoint)) return false;
+    return true;
+  }
+
+  private async track<T>(
+    method: string,
+    endpoint: string,
+    work: () => Promise<T>,
+    options?: ApiClientOptions,
+  ): Promise<T> {
+    const track = this.shouldTrack(method, endpoint, options);
+    if (track) beginPortalRequest();
+    try {
+      return await work();
+    } catch (error) {
+      if (error instanceof UnauthorizedRedirectError) {
+        return new Promise(() => {}) as Promise<T>;
+      }
+      throw error;
+    } finally {
+      if (track) endPortalRequest();
+    }
+  }
+
   private async handleResponse<T>(response: Response): Promise<T> {
     if (response.status === 401) {
       window.dispatchEvent(new Event('unauthorized'));
-      // Return a promise that never resolves so we don't throw an error while redirecting
-      return new Promise(() => {}) as Promise<T>;
+      throw new UnauthorizedRedirectError();
     }
 
     if (!response.ok) {
@@ -152,63 +188,99 @@ class ApiClient {
     return `${this.baseUrl}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
   }
 
-  async get<T>(endpoint: string): Promise<T> {
-    const response = await fetch(this.buildUrl(endpoint), {
-      method: 'GET',
-      headers: this.getHeaders(false),
-    });
-
-    return this.handleResponse<T>(response);
+  async get<T>(endpoint: string, options?: ApiClientOptions): Promise<T> {
+    return this.track(
+      "GET",
+      endpoint,
+      async () => {
+        const response = await fetch(this.buildUrl(endpoint), {
+          method: "GET",
+          headers: this.getHeaders(false),
+        });
+        return this.handleResponse<T>(response);
+      },
+      options,
+    );
   }
 
-  async post<T>(endpoint: string, data?: unknown): Promise<T> {
-    const response = await fetch(this.buildUrl(endpoint), {
-      method: 'POST',
-      headers: this.getHeaders(true),
-      body: data ? JSON.stringify(data) : undefined,
-    });
-
-    return this.handleResponse<T>(response);
+  async post<T>(endpoint: string, data?: unknown, options?: ApiClientOptions): Promise<T> {
+    return this.track(
+      "POST",
+      endpoint,
+      async () => {
+        const response = await fetch(this.buildUrl(endpoint), {
+          method: "POST",
+          headers: this.getHeaders(true),
+          body: data ? JSON.stringify(data) : undefined,
+        });
+        return this.handleResponse<T>(response);
+      },
+      options,
+    );
   }
 
-  async put<T>(endpoint: string, data?: unknown): Promise<T> {
-    const response = await fetch(this.buildUrl(endpoint), {
-      method: 'PUT',
-      headers: this.getHeaders(true),
-      body: data ? JSON.stringify(data) : undefined,
-    });
-
-    return this.handleResponse<T>(response);
+  async put<T>(endpoint: string, data?: unknown, options?: ApiClientOptions): Promise<T> {
+    return this.track(
+      "PUT",
+      endpoint,
+      async () => {
+        const response = await fetch(this.buildUrl(endpoint), {
+          method: "PUT",
+          headers: this.getHeaders(true),
+          body: data ? JSON.stringify(data) : undefined,
+        });
+        return this.handleResponse<T>(response);
+      },
+      options,
+    );
   }
 
-  async patch<T>(endpoint: string, data?: unknown): Promise<T> {
-    const hasBody = data !== undefined;
-    const response = await fetch(this.buildUrl(endpoint), {
-      method: 'PATCH',
-      headers: this.getHeaders(hasBody),
-      body: hasBody ? JSON.stringify(data) : undefined,
-    });
-
-    return this.handleResponse<T>(response);
+  async patch<T>(endpoint: string, data?: unknown, options?: ApiClientOptions): Promise<T> {
+    return this.track(
+      "PATCH",
+      endpoint,
+      async () => {
+        const hasBody = data !== undefined;
+        const response = await fetch(this.buildUrl(endpoint), {
+          method: "PATCH",
+          headers: this.getHeaders(hasBody),
+          body: hasBody ? JSON.stringify(data) : undefined,
+        });
+        return this.handleResponse<T>(response);
+      },
+      options,
+    );
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
-    const response = await fetch(this.buildUrl(endpoint), {
-      method: 'DELETE',
-      headers: this.getHeaders(false),
-    });
-
-    return this.handleResponse<T>(response);
+  async delete<T>(endpoint: string, options?: ApiClientOptions): Promise<T> {
+    return this.track(
+      "DELETE",
+      endpoint,
+      async () => {
+        const response = await fetch(this.buildUrl(endpoint), {
+          method: "DELETE",
+          headers: this.getHeaders(false),
+        });
+        return this.handleResponse<T>(response);
+      },
+      options,
+    );
   }
 
-  async postForm<T>(endpoint: string, data: FormData): Promise<T> {
-    const response = await fetch(this.buildUrl(endpoint), {
-      method: "POST",
-      headers: this.getAuthHeaders(),
-      body: data,
-    });
-
-    return this.handleResponse<T>(response);
+  async postForm<T>(endpoint: string, data: FormData, options?: ApiClientOptions): Promise<T> {
+    return this.track(
+      "POST",
+      endpoint,
+      async () => {
+        const response = await fetch(this.buildUrl(endpoint), {
+          method: "POST",
+          headers: this.getAuthHeaders(),
+          body: data,
+        });
+        return this.handleResponse<T>(response);
+      },
+      options,
+    );
   }
 
   setAuthToken(token: string): void {
@@ -239,23 +311,35 @@ class ApiClient {
     window.URL.revokeObjectURL(url);
   }
 
-  async fetchBlob(endpoint: string): Promise<Blob> {
-    const token = this.getToken();
-    const headers: HeadersInit = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
+  async fetchBlob(endpoint: string, options?: ApiClientOptions): Promise<Blob> {
+    return this.track(
+      "GET",
+      endpoint,
+      async () => {
+        const token = this.getToken();
+        const headers: HeadersInit = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
 
-    const response = await fetch(this.buildUrl(endpoint.startsWith("/") ? endpoint : `/${endpoint}`), {
-      method: "GET",
-      headers,
-    });
+        const response = await fetch(this.buildUrl(endpoint.startsWith("/") ? endpoint : `/${endpoint}`), {
+          method: "GET",
+          headers,
+        });
 
-    if (!response.ok) {
-      throw new Error(`Download failed: ${response.statusText}`);
-    }
+        if (response.status === 401) {
+          window.dispatchEvent(new Event("unauthorized"));
+          throw new UnauthorizedRedirectError();
+        }
 
-    return response.blob();
+        if (!response.ok) {
+          throw new Error(`Download failed: ${response.statusText}`);
+        }
+
+        return response.blob();
+      },
+      options,
+    );
   }
 }
 

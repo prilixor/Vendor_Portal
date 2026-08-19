@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/notification_provider.dart';
 import '../../core/models/notification_preferences_model.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 
 class NotificationPreferencesScreen extends StatefulWidget {
   const NotificationPreferencesScreen({super.key});
@@ -49,7 +50,7 @@ class _NotificationPreferencesScreenState extends State<NotificationPreferencesS
         elevation: 0,
       ),
       body: provider.isLoadingPrefs && prefs == null
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : prefs == null
               ? Center(child: Text('Could not load preferences.', style: TextStyle(color: colors.textSecondary)))
               : ListView(

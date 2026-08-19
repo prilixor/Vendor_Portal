@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
@@ -101,9 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: provider.loading && provider.profile == null
-          ? Center(
-              child: CircularProgressIndicator(color: colors.accent),
-            )
+          ? const BrandPageLoader()
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [

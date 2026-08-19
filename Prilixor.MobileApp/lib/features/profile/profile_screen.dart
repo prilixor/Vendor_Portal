@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/utils/require_auth.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/guest_sign_in_prompt.dart';
 import '../auth/login_screen.dart';
 import 'addresses_screen.dart';
@@ -94,7 +95,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
       body: profileProvider.isLoading && profileProvider.profile == null
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : profileProvider.profile == null
               ? Scaffold(
                   backgroundColor: colors.background,

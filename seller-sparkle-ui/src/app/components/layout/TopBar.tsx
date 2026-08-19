@@ -47,7 +47,7 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
   // 2. Get Unread Customer Notifications (for Customer top bar)
   const { data: customerNotifications = [] } = useQuery({
     queryKey: ["customer-notifications"],
-    queryFn: () => customerApi.getNotifications(),
+    queryFn: () => customerApi.getNotifications({ quiet: true }),
     enabled: variant === "customer" && !!user,
     refetchInterval: 30000, // every 30 seconds
   });
@@ -57,14 +57,14 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
 
   const { data: adminOrders = [] } = useQuery({
     queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders(),
+    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
     enabled: variant === "admin" && !!user,
     refetchInterval: 30000, // every 30 seconds
   });
 
   const { data: adminVendors = [] } = useQuery({
     queryKey: ["admin-vendors"],
-    queryFn: () => adminApi.getVendors(),
+    queryFn: () => adminApi.getVendors({ quiet: true }),
     enabled: variant === "admin" && !!user,
     refetchInterval: 30000, // every 30 seconds
   });

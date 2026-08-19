@@ -5,7 +5,7 @@ import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helper
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import { Input } from "@/app/components/ui/input";
@@ -718,10 +718,8 @@ const VendorOrderDetail = () => {
 
       <Card className="overflow-hidden border-border/80 shadow-sm">
         {!order ? (
-          <CardContent className="space-y-3 p-4 sm:p-6">
-            <Skeleton className="h-6 w-52" />
-            <Skeleton className="h-4 w-72" />
-            <Skeleton className="h-24 w-full" />
+          <CardContent className="p-4 sm:p-6">
+            <PageLoaderSlot className="min-h-[8rem] py-0" />
           </CardContent>
         ) : (
           <CardContent className="p-4 sm:p-6">

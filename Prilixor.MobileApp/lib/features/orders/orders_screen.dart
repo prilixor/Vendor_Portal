@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/providers/order_detail_provider.dart';
 import '../../core/models/order_model.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/guest_sign_in_prompt.dart';
 import 'order_detail_screen.dart';
@@ -177,7 +178,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               icon: Icons.receipt_long_outlined,
             )
           : provider.isLoading && provider.orders.isEmpty
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : provider.errorMessage != null
               ? Center(child: Text(provider.errorMessage!, style: const TextStyle(color: Colors.redAccent)))
               : RefreshIndicator(

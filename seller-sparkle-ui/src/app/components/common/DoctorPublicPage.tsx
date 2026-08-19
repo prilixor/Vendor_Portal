@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Loader2, MapPin, ExternalLink, Copy, Check, ShoppingBag } from "lucide-react";
+import { MapPin, ExternalLink, Copy, Check, ShoppingBag } from "lucide-react";
 import { apiClient } from "@/app/services/apiClient";
 import { toast } from "sonner";
 import { BrandMark } from "@/app/components/shared/BrandMark";
@@ -105,12 +105,7 @@ const DoctorPublicPage = () => {
         </header>
 
         <main className="flex flex-1 flex-col justify-center">
-          {loading && (
-            <div className="flex flex-col items-center justify-center gap-3 py-20 text-teal-100/70">
-              <Loader2 className="h-8 w-8 animate-spin" />
-              <p className="text-sm">Loading doctor profile…</p>
-            </div>
-          )}
+        {loading && <div className="py-20" aria-busy="true" aria-label="Loading" />}
 
           {!loading && error && (
             <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center backdrop-blur">

@@ -6,7 +6,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
 import { Checkbox } from "@/app/components/ui/checkbox";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { adminApi, AdminPermissionDto, AdminRoleDto } from "@/app/services/adminApi";
 import { cn } from "@/app/helpers/utils";
@@ -262,11 +262,7 @@ const AdminRoles = () => {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.label}</p>
-                {loading ? (
-                  <Skeleton className="mt-2 h-7 w-10" />
-                ) : (
-                  <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{s.value}</p>
-                )}
+                <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{loading ? "—" : s.value}</p>
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/80 text-muted-foreground">
                 <s.icon className="h-4.5 w-4.5 h-[18px] w-[18px]" />
@@ -300,21 +296,7 @@ const AdminRoles = () => {
         </div>
 
         {loading ? (
-          <div className="grid gap-4 p-4 sm:p-6 md:grid-cols-2 xl:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-xl border p-5 space-y-4">
-                <div className="flex gap-3">
-                  <Skeleton className="h-11 w-11 rounded-xl" />
-                  <div className="space-y-2 flex-1">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-3 w-24" />
-                  </div>
-                </div>
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-6 w-40" />
-              </div>
-            ))}
-          </div>
+          <PageLoaderSlot />
         ) : filteredRoles.length === 0 ? (
           <div className="py-16 text-center space-y-2">
             <Shield className="mx-auto h-8 w-8 text-muted-foreground/40" />

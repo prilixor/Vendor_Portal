@@ -13,6 +13,7 @@ import '../../core/utils/media_url.dart';
 import '../../core/utils/multipart_file_util.dart';
 import '../../core/utils/support_chat_routing.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 
 enum SupportView { welcome, chat, tickets }
 
@@ -472,9 +473,7 @@ class _ChatViewState extends State<_ChatView> {
     final provider = Provider.of<VendorSupportProvider>(context);
 
     if (provider.messagesLoading && provider.messages.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
-      );
+      return const BrandPageLoader();
     }
 
     return ListView.builder(
@@ -736,7 +735,7 @@ class _TicketsView extends StatelessWidget {
     final provider = Provider.of<VendorSupportProvider>(context);
 
     if (provider.ticketsLoading) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)));
+      return const BrandPageLoader();
     }
 
     if (provider.tickets.isEmpty) {

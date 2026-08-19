@@ -10,6 +10,7 @@ import '../../core/providers/address_provider.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/models/medical_model.dart';
 import '../../shared/utils/require_auth.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
@@ -267,7 +268,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         iconTheme: IconThemeData(color: colors.textPrimary),
       ),
       body: !_authChecked
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : cart.lines.isEmpty
           ? Center(child: Text('Cart is empty', style: TextStyle(color: colors.textPrimary)))
           : SingleChildScrollView(

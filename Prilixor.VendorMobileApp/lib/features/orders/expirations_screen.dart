@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/expiring_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import 'order_detail_screen.dart';
 import 'order_group_utils.dart';
 
@@ -174,9 +175,7 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
                   ? ListView(
                       children: const [
                         SizedBox(height: 120),
-                        Center(
-                          child: CircularProgressIndicator(color: AppTheme.accent),
-                        ),
+                        BrandPageLoader(),
                       ],
                     )
                   : provider.expirations.isEmpty

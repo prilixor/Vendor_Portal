@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/chemical_variant_stock_fields.dart';
 
 /// Edit chemical stock by packaging size — mirrors Vendor Web Inventory dialog.
@@ -117,7 +118,7 @@ class _EditChemicalStockScreenState extends State<EditChemicalStockScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Edit packaging stock')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [

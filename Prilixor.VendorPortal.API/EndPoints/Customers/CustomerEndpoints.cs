@@ -190,11 +190,21 @@ public sealed class CustomerListingDetailResponse
     public string? BaseUnit { get; set; }
     public string? SdsDocumentUrl { get; set; }
     public string? CoaDocumentUrl { get; set; }
+    /// <summary>Admin-uploaded catalog documents (spec sheet, SDS, COA, warranty, compliance) plus legacy SDS/COA URLs.</summary>
+    public List<CustomerListingDocumentResponse> Documents { get; set; } = [];
     /// <summary>Customer-facing packaging sizes (SKUs) with per-size price and live stock.</summary>
     public List<CustomerListingVariantResponse> Variants { get; set; } = [];
     public List<VariantInventoryItemResponse> VariantInventory { get; set; } = [];
     /// <summary>Active day-based rental pricing plans (sorted).</summary>
     public List<ProductRentalPricingPlanDto> RentalPricingPlans { get; set; } = [];
+}
+
+/// <summary>Customer-safe catalog document (spec sheet, SDS, COA, warranty, compliance).</summary>
+public sealed class CustomerListingDocumentResponse
+{
+    public string Id { get; set; } = string.Empty;
+    public string DocumentType { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
 }
 
 /// <summary>Per-variant stock for customer-side availability display.</summary>
@@ -287,6 +297,14 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
             BaseUnit = agg.BaseUnit,
             SdsDocumentUrl = agg.SdsDocumentUrl,
             CoaDocumentUrl = agg.CoaDocumentUrl,
+            Documents = agg.Documents
+                .Select(d => new CustomerListingDocumentResponse
+                {
+                    Id = d.Id,
+                    DocumentType = d.DocumentType,
+                    FileUrl = d.FileUrl,
+                })
+                .ToList(),
             Variants = agg.Variants
                 .Where(v => v.IsActive)
                 .Select(v => new CustomerListingVariantResponse
