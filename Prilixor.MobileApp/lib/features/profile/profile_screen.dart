@@ -42,6 +42,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _openEditProfile() async {
     await _requireAuth(() async {
       await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+      if (!mounted) return;
+      await Provider.of<ProfileProvider>(context, listen: false).fetchProfile();
     });
   }
 
@@ -112,25 +114,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           onSignInAgain: _signInAgain,
                         ),
                 )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF6C63FF).withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFF6C63FF), width: 2),
-                        ),
-                        child: Center(
-                          child: Text(
-                            profileProvider.profile!.name.isNotEmpty ? profileProvider.profile!.name[0].toUpperCase() : '?',
-                            style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 40, fontWeight: FontWeight.bold),
+              : RefreshIndicator(
+                  onRefresh: () => profileProvider.fetchProfile(),
+                  color: const Color(0xFF6C63FF),
+                  backgroundColor: const Color(0xFF1E293B),
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6C63FF).withValues(alpha: 0.2),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFF6C63FF), width: 2),
+                          ),
+                          child: Center(
+                            child: Text(
+                              profileProvider.profile!.name.isNotEmpty ? profileProvider.profile!.name[0].toUpperCase() : '?',
+                              style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 40, fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ),
-                      ),
                       const SizedBox(height: 16),
                       Text(
                         profileProvider.profile!.name,
@@ -211,6 +218,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           icon: const Icon(Icons.logout),
                           label: const Text('Log Out', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                           onPressed: () async {
+                            final profile = Provider.of<ProfileProvider>(context, listen: false);
+                            profile.clearProfile();
                             await authProvider.logout();
                             if (context.mounted) {
                               Navigator.of(context).pushAndRemoveUntil(
@@ -224,6 +233,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
+              ),
     );
   }
 

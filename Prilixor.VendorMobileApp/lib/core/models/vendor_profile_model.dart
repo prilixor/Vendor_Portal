@@ -13,6 +13,7 @@ class VendorProfile {
   final double? latitude;
   final double? longitude;
   final bool onboardingCompleted;
+  final bool isPhoneVerified;
 
   const VendorProfile({
     required this.id,
@@ -29,6 +30,7 @@ class VendorProfile {
     this.latitude,
     this.longitude,
     required this.onboardingCompleted,
+    this.isPhoneVerified = false,
   });
 
   Map<String, dynamic> toUpsertPayload() => {
@@ -58,6 +60,7 @@ class VendorProfile {
     String? postalCode,
     double? latitude,
     double? longitude,
+    bool? isPhoneVerified,
   }) {
     return VendorProfile(
       id: id,
@@ -74,6 +77,7 @@ class VendorProfile {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       onboardingCompleted: onboardingCompleted,
+      isPhoneVerified: isPhoneVerified ?? this.isPhoneVerified,
     );
   }
 
@@ -101,6 +105,7 @@ class VendorProfile {
       latitude: lat,
       longitude: lng,
       onboardingCompleted: json['onboardingCompleted'] == true,
+      isPhoneVerified: json['isPhoneVerified'] == true || json['phoneVerified'] == true,
     );
   }
 }

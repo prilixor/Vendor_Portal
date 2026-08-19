@@ -26,7 +26,7 @@ class ApiClient {
   // [AppUrls.apiBaseUrl] uses local API on Flutter Web localhost (avoids prod CORS).
   final String baseUrl = AppUrls.apiBaseUrl;
 
-  /// Vendor portal web UI (terms, privacy) — vendor subdomain, not api host.
+  /// Vendor portal web UI (terms, privacy) ?" vendor subdomain, not api host.
   String get portalWebBaseUrl => AppUrls.portalWebBaseUrl;
 
   ApiClient._internal() {
@@ -56,6 +56,7 @@ class ApiClient {
               path.contains('/auth/login') ||
               path.contains('/auth/refresh') ||
               path.contains('/auth/forgot-password') ||
+              path.contains('/auth/phone/') ||
               path.contains('/auth/change-password') ||
               path.contains('/auth/resend-verification') ||
               path.contains('/vendors/register');
@@ -186,5 +187,41 @@ class ApiClient {
     for (final w in waiters) {
       if (!w.isCompleted) w.complete(token);
     }
+  }
+
+  /// Twilio Phone OTP Endpoints
+  Future<Response> sendPhoneOtp(String phone, String role) {
+    return dio.post('/auth/phone/send-otp', data: {'phone': phone, 'role': role});
+  }
+
+  Future<Response> verifyPhoneOtp(String phone, String code, String role) {
+    return dio.post('/auth/phone/verify-otp', data: {'phone': phone, 'code': code, 'role': role});
+  }
+
+  Future<Response> sendForgotPasswordSmsOtp(String phone, String role) {
+    return dio.post('/auth/forgot-password/sms/send-otp', data: {'phone': phone, 'role': role});
+  }
+
+  Future<Response> verifyForgotPasswordSmsOtp(String phone, String code, String role) {
+    return dio.post('/auth/forgot-password/sms/verify-otp', data: {'phone': phone, 'code': code, 'role': role});
+  }
+
+  Future<Response> resetPasswordWithSmsOtp({
+    required String phone,
+    required String resetToken,
+    required String newPassword,
+    required String confirmPassword,
+    required String role,
+  }) {
+    return dio.post(
+      '/auth/forgot-password/sms/reset',
+      data: {
+        'phone': phone,
+        'resetToken': resetToken,
+        'newPassword': newPassword,
+        'confirmPassword': confirmPassword,
+        'role': role,
+      },
+    );
   }
 }

@@ -112,10 +112,10 @@ class _AuthGateState extends State<AuthGate> {
     try {
       await auth.tryRestoreSession().timeout(const Duration(seconds: 6));
     } on TimeoutException {
-      await auth.forceEndBootstrap(clearAuth: !auth.isAuthenticated);
+      auth.forceEndBootstrap(clearAuth: !auth.isAuthenticated);
     } catch (e, st) {
       debugPrint('Auth bootstrap failed: $e\n$st');
-      await auth.forceEndBootstrap(clearAuth: !auth.isAuthenticated);
+      auth.forceEndBootstrap(clearAuth: !auth.isAuthenticated);
     }
   }
 

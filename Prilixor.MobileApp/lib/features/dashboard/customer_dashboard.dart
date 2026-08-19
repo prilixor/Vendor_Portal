@@ -11,6 +11,9 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/providers/cart_provider.dart';
 import '../../core/providers/notification_provider.dart';
 import '../../core/providers/order_provider.dart';
+import '../../core/providers/profile_provider.dart';
+import '../../core/utils/indian_mobile_phone.dart';
+import '../../shared/widgets/phone_otp_dialog.dart';
 
 class CustomerDashboard extends StatefulWidget {
   const CustomerDashboard({super.key});
@@ -22,6 +25,7 @@ class CustomerDashboard extends StatefulWidget {
 class _CustomerDashboardState extends State<CustomerDashboard> with WidgetsBindingObserver {
   int _currentIndex = 0;
   Timer? _pollTimer;
+  bool _isCheckingPhone = false;
 
   static const _ordersTab = 2;
   static const _alertsTab = 3;
@@ -32,6 +36,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> with WidgetsBindi
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshLiveData(silent: false);
+      _checkPhoneVerification();
     });
 
     // Match web CustomerStoreHeader: poll alerts ~30s (not every 15s + orders stampede).
@@ -51,6 +56,38 @@ class _CustomerDashboardState extends State<CustomerDashboard> with WidgetsBindi
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
       _refreshLiveData(silent: true);
+      _checkPhoneVerification();
+    }
+  }
+
+  Future<void> _checkPhoneVerification() async {
+    if (!_isLoggedIn || _isCheckingPhone) return;
+    _isCheckingPhone = true;
+    try {
+      final profileProvider = Provider.of<ProfileProvider>(context, listen: false);
+      if (profileProvider.profile == null) {
+        await profileProvider.fetchProfile();
+      }
+      if (!mounted) return;
+      final profile = profileProvider.profile;
+      final rawPhone = profile?.phoneNumber.trim() ?? '';
+      if (rawPhone.isNotEmpty && !(profile?.isPhoneVerified ?? false)) {
+        final normalizedPhone = IndianMobilePhone.normalizeDigits(rawPhone);
+        await PhoneOtpDialog.show(
+          context,
+          phone: normalizedPhone,
+          role: 'customer',
+          required: true,
+          title: 'Verify phone number',
+          description:
+              'Enter the 6-digit code sent to +91 $normalizedPhone. Verification is required to continue.',
+        );
+        if (mounted) {
+          await profileProvider.fetchProfile();
+        }
+      }
+    } finally {
+      _isCheckingPhone = false;
     }
   }
 

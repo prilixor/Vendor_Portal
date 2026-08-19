@@ -4,6 +4,8 @@ class ProfileModel {
   final String email;
   final String phoneNumber;
   final String joinDate;
+  final bool isPhoneVerified;
+  final bool isEmailVerified;
 
   ProfileModel({
     required this.id,
@@ -11,6 +13,8 @@ class ProfileModel {
     required this.email,
     required this.phoneNumber,
     required this.joinDate,
+    this.isPhoneVerified = false,
+    this.isEmailVerified = false,
   });
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
@@ -19,8 +23,10 @@ class ProfileModel {
       // API returns fullName / phone (matches web CustomerProfileDto).
       name: (json['fullName'] ?? json['name'] ?? '').toString(),
       email: json['email']?.toString() ?? '',
-      phoneNumber: (json['phone'] ?? json['phoneNumber'] ?? '').toString(),
+      phoneNumber: (json['phone'] ?? json['phoneNumber'] ?? '').toString().trim(),
       joinDate: (json['createdAt'] ?? json['joinDate'] ?? '').toString(),
+      isPhoneVerified: json['isPhoneVerified'] == true || json['phoneVerified'] == true,
+      isEmailVerified: json['isEmailVerified'] == true || json['emailVerified'] == true,
     );
   }
 }

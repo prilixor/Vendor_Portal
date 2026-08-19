@@ -9,6 +9,7 @@ import '../../core/config/app_urls.dart';
 import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
+import '../../shared/widgets/phone_otp_dialog.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import 'login_screen.dart';
 import 'verify_email_sent_screen.dart';
@@ -117,15 +118,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     final provider = Provider.of<AuthProvider>(context, listen: false);
     final email = _emailController.text.trim();
+    final normalizedPhone = IndianMobilePhone.normalizeDigits(_phoneController.text);
+
     final success = await provider.registerVendor(
       email: email,
       password: _passwordController.text,
-      supportPhone: IndianMobilePhone.normalizeDigits(_phoneController.text),
+      supportPhone: normalizedPhone,
     );
 
     if (!mounted) return;
 
     if (success) {
+      final otpOk = await PhoneOtpDialog.show(
+        context,
+        phone: normalizedPhone,
+        role: 'vendor',
+        required: true,
+        title: 'Verify your phone',
+        description: 'Enter the 6-digit code we sent to +91 $normalizedPhone. After this, we will ask you to verify your email.',
+      );
+
+      if (!mounted || otpOk != true) return;
+
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => VerifyEmailSentScreen(initialEmail: email),
@@ -154,7 +168,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

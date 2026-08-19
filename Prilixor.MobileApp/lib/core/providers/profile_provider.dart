@@ -25,8 +25,8 @@ class ProfileProvider extends ChangeNotifier {
 
     try {
       final response = await _apiClient.dio.get('/customers/me/profile');
-      if (response.statusCode == 200) {
-        _profile = ProfileModel.fromJson(response.data);
+      if (response.statusCode == 200 && response.data is Map) {
+        _profile = ProfileModel.fromJson(Map<String, dynamic>.from(response.data as Map));
       }
     } on DioException catch (e) {
       if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
@@ -49,23 +49,27 @@ class ProfileProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> updateProfile(String name, String phone) async {
+  Future<bool> updateProfile(String name, String phone, {String? email}) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
     bool success = false;
     try {
+      final payload = <String, dynamic>{
+        'fullName': name.trim(),
+        'phone': phone.trim().isEmpty ? null : phone.trim(),
+      };
+      if (email != null && email.trim().isNotEmpty) {
+        payload['email'] = email.trim();
+      }
       final response = await _apiClient.dio.put(
         '/customers/me/profile',
-        data: {
-          'fullName': name.trim(),
-          'phone': phone.trim().isEmpty ? null : phone.trim(),
-        },
+        data: payload,
       );
       if (response.statusCode == 200 || response.statusCode == 204) {
         success = true;
-        if (response.data is Map<String, dynamic>) {
-          _profile = ProfileModel.fromJson(response.data as Map<String, dynamic>);
+        if (response.data is Map) {
+          _profile = ProfileModel.fromJson(Map<String, dynamic>.from(response.data as Map));
         } else {
           await fetchProfile();
         }

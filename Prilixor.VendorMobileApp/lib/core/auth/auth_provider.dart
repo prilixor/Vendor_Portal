@@ -1,5 +1,7 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 
@@ -8,12 +10,12 @@ import '../storage/secure_storage.dart';
 import 'vendor_auth_storage.dart';
 
 class AuthProvider extends ChangeNotifier {
+  static const String _kVendorId = 'vendor_id';
+  static const String _kVendorEmail = 'vendor_email';
+  static const String _kVendorName = 'vendor_name';
+
   final ApiClient _apiClient = ApiClient();
   final FlutterSecureStorage _storage = appSecureStorage;
-
-  static const _kVendorId = 'vendor_id';
-  static const _kVendorEmail = 'vendor_email';
-  static const _kVendorName = 'vendor_name';
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -36,36 +38,26 @@ class AuthProvider extends ChangeNotifier {
   String? _displayName;
   String? get displayName => _displayName;
 
+  void forceEndBootstrap({bool clearAuth = false}) {
+    if (clearAuth) {
+      _isAuthenticated = false;
+    }
+    _isBootstrapping = false;
+    notifyListeners();
+  }
+
   AuthProvider() {
     _apiClient.onSessionExpired = () {
       _isAuthenticated = false;
-      _vendorId = null;
-      _email = null;
-      _displayName = null;
       notifyListeners();
     };
   }
 
-  /// Ends splash/bootstrap even if secure-storage/network hangs.
-  /// Keeps any session already restored; only clears auth when nothing was set.
-  Future<void> forceEndBootstrap({bool clearAuth = true}) async {
-    if (!_isBootstrapping) return;
-    _isBootstrapping = false;
-    if (clearAuth && !_isAuthenticated) {
-      _isAuthenticated = false;
-    }
-    notifyListeners();
-  }
-
-  /// Restore session from stored JWT (same pattern as Customer app).
   Future<bool> tryRestoreSession() async {
     _isBootstrapping = true;
     notifyListeners();
     try {
-      final token = await _storage.read(key: VendorAuthStorage.jwtToken).timeout(
-            const Duration(seconds: 4),
-            onTimeout: () => null,
-          );
+      final token = await _storage.read(key: VendorAuthStorage.jwtToken);
       if (token == null || token.trim().isEmpty) {
         _isAuthenticated = false;
         return false;
@@ -83,10 +75,7 @@ class AuthProvider extends ChangeNotifier {
         return true;
       }
 
-      final refresh = await _storage.read(key: VendorAuthStorage.refreshToken).timeout(
-            const Duration(seconds: 4),
-            onTimeout: () => null,
-          );
+      final refresh = await _storage.read(key: VendorAuthStorage.refreshToken);
       if (refresh == null || refresh.trim().isEmpty) {
         await logout();
         return false;
@@ -96,12 +85,12 @@ class AuthProvider extends ChangeNotifier {
         final refreshDio = Dio(
           BaseOptions(
             baseUrl: _apiClient.baseUrl,
-            connectTimeout: const Duration(seconds: 8),
-            receiveTimeout: const Duration(seconds: 8),
             headers: {
               'Accept': 'application/json',
               'Content-Type': 'application/json',
             },
+            connectTimeout: const Duration(seconds: 6),
+            receiveTimeout: const Duration(seconds: 6),
           ),
         );
         final response = await refreshDio.post(
@@ -115,10 +104,18 @@ class AuthProvider extends ChangeNotifier {
           final data = Map<String, dynamic>.from(response.data as Map);
           final newToken = data['token']?.toString();
           final newRefresh = data['refreshToken']?.toString();
-          if (newToken != null && newToken.isNotEmpty) {
-            await _storage.write(key: VendorAuthStorage.jwtToken, value: newToken);
+          if (newToken != null &&
+              newToken.isNotEmpty &&
+              _tokenIsVendorRole(newToken)) {
+            await _storage.write(
+              key: VendorAuthStorage.jwtToken,
+              value: newToken,
+            );
             if (newRefresh != null && newRefresh.isNotEmpty) {
-              await _storage.write(key: VendorAuthStorage.refreshToken, value: newRefresh);
+              await _storage.write(
+                key: VendorAuthStorage.refreshToken,
+                value: newRefresh,
+              );
             }
             _apiClient.setAccessToken(newToken);
             await _hydrateUserFromStorageOrJwt(newToken);
@@ -172,25 +169,31 @@ class AuthProvider extends ChangeNotifier {
         }
 
         if (!_tokenIsVendorRole(token)) {
-          _errorMessage = 'This account is not a vendor. Use the customer app to sign in.';
+          _errorMessage =
+              'This account is not a vendor. Use the customer app.';
           _isLoading = false;
           notifyListeners();
           return false;
         }
 
-        await _storage.write(key: VendorAuthStorage.jwtToken, value: token);
-        if (refreshToken != null && refreshToken.isNotEmpty) {
-          await _storage.write(key: VendorAuthStorage.refreshToken, value: refreshToken);
-        }
         _apiClient.setAccessToken(token);
 
-        final id = user?['id']?.toString();
-        final userEmail = user?['email']?.toString();
-        final name = user?['name']?.toString();
-        await _persistUser(id: id, email: userEmail, name: name);
-        if (_vendorId == null || _vendorId!.isEmpty) {
-          await _hydrateUserFromStorageOrJwt(token);
+        await _storage.write(key: VendorAuthStorage.jwtToken, value: token);
+        if (refreshToken != null && refreshToken.isNotEmpty) {
+          await _storage.write(
+            key: VendorAuthStorage.refreshToken,
+            value: refreshToken,
+          );
         }
+
+        final uid = user?['id']?.toString() ?? user?['userId']?.toString();
+        final uEmail = user?['email']?.toString() ?? email.trim();
+        final uName = user?['name']?.toString() ??
+            user?['fullName']?.toString() ??
+            user?['businessName']?.toString();
+
+        await _persistUser(id: uid, email: uEmail, name: uName);
+        await _hydrateUserFromStorageOrJwt(token);
 
         _isAuthenticated = true;
         _isLoading = false;
@@ -282,6 +285,105 @@ class AuthProvider extends ChangeNotifier {
       _errorMessage = 'An unexpected error occurred.';
     }
 
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> sendPhoneOtp(String phone, String role) async {
+    _errorMessage = null;
+    try {
+      final response = await _apiClient.sendPhoneOtp(phone, role);
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      _errorMessage = _extractApiMessage(e, fallback: 'Failed to send verification code.');
+      return false;
+    } catch (_) {
+      _errorMessage = 'Failed to send verification code.';
+      return false;
+    }
+  }
+
+  Future<bool> verifyPhoneOtp(String phone, String code, String role) async {
+    _errorMessage = null;
+    try {
+      final response = await _apiClient.verifyPhoneOtp(phone, code, role);
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      _errorMessage = _extractApiMessage(e, fallback: 'Invalid verification code.');
+      return false;
+    } catch (_) {
+      _errorMessage = 'Invalid verification code.';
+      return false;
+    }
+  }
+
+  Future<bool> sendForgotPasswordSmsOtp(String phone, String role) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.sendForgotPasswordSmsOtp(phone, role);
+      _isLoading = false;
+      notifyListeners();
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      _errorMessage = _extractApiMessage(e, fallback: 'Failed to send SMS code.');
+    } catch (_) {
+      _errorMessage = 'Failed to send SMS code.';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<String?> verifyForgotPasswordSmsOtp(String phone, String code, String role) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.verifyForgotPasswordSmsOtp(phone, code, role);
+      _isLoading = false;
+      notifyListeners();
+      if (response.statusCode == 200 && response.data is Map) {
+        return response.data['resetToken']?.toString();
+      }
+    } on DioException catch (e) {
+      _errorMessage = _extractApiMessage(e, fallback: 'Invalid verification code.');
+    } catch (_) {
+      _errorMessage = 'Invalid verification code.';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return null;
+  }
+
+  Future<bool> resetPasswordWithSmsOtp({
+    required String phone,
+    required String resetToken,
+    required String newPassword,
+    required String confirmPassword,
+    required String role,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.resetPasswordWithSmsOtp(
+        phone: phone,
+        resetToken: resetToken,
+        newPassword: newPassword,
+        confirmPassword: confirmPassword,
+        role: role,
+      );
+      _isLoading = false;
+      notifyListeners();
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      _errorMessage = _extractApiMessage(e, fallback: 'Failed to reset password.');
+    } catch (_) {
+      _errorMessage = 'Failed to reset password.';
+    }
     _isLoading = false;
     notifyListeners();
     return false;
@@ -409,7 +511,6 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final decoded = JwtDecoder.decode(token);
-      // ASP.NET ClaimTypes.NameIdentifier / Email / Role claim URIs.
       final id = _firstClaim(decoded, const [
         'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier',
         'nameid',
