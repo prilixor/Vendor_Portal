@@ -21,7 +21,7 @@
     #boot-splash {
       position: fixed; inset: 0; z-index: 9999;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 16px; color: #94A3B8; font-family: system-ui, sans-serif; font-size: 14px;
+      gap: 14px; color: #94A3B8; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 500;
       background: #0F172A;
       transition: opacity 160ms ease-out;
     }
@@ -29,41 +29,95 @@
       opacity: 0;
       pointer-events: none;
     }
-    .boot-mark {
+    .boot-stage {
       position: relative;
-      width: 96px;
-      height: 96px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 136px;
+      height: 136px;
     }
-    .boot-mark::before {
-      content: "";
+    .boot-rings {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 112px;
+      height: 112px;
+      margin: -56px 0 0 -56px;
+      overflow: visible;
+    }
+    .boot-ring,
+    .boot-ring-rev {
+      transform-origin: 56px 56px;
+    }
+    .boot-ring { animation: boot-spin 1.15s linear infinite; }
+    .boot-ring-rev { animation: boot-spin-rev 2.4s linear infinite; }
+    .boot-orbit {
       position: absolute;
       inset: 0;
-      border-radius: 50%;
-      border: 2.5px solid rgba(108, 99, 255, 0.16);
-      border-top-color: #6C63FF;
-      animation: boot-spin 0.8s linear infinite;
+      animation: boot-spin 3.2s linear infinite;
     }
-    .boot-mark img {
-      width: 44px;
-      height: 44px;
-      padding: 5px;
+    .boot-spark {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 6px;
+      height: 6px;
+      margin: -3px 0 0 -3px;
+      border-radius: 50%;
+      background: #6C63FF;
+      animation: boot-spark 1.4s ease-in-out infinite;
+    }
+    .boot-spark:nth-child(1) { transform: rotate(0deg) translateY(-56px); }
+    .boot-spark:nth-child(2) { transform: rotate(120deg) translateY(-56px); animation-delay: 0.22s; }
+    .boot-spark:nth-child(3) { transform: rotate(240deg) translateY(-56px); animation-delay: 0.44s; }
+    .boot-tile {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 54px;
+      height: 54px;
+      padding: 6px;
       box-sizing: border-box;
-      border-radius: 12px;
+      border-radius: 16px;
       object-fit: contain;
       background: #fff;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 6px 16px -6px rgba(108, 99, 255, 0.28);
     }
-    @keyframes boot-spin {
-      to { transform: rotate(360deg); }
+    @keyframes boot-spin { to { transform: rotate(360deg); } }
+    @keyframes boot-spin-rev { to { transform: rotate(-360deg); } }
+    @keyframes boot-spark {
+      0%, 100% { opacity: 0.2; }
+      50% { opacity: 1; }
     }
   </style>
 </head>
 <body>
   <div id="boot-splash">
-    <div class="boot-mark">
-      <img src="loader_mark.png?v=20260819p" alt="BlinksMed Vendor" width="44" height="44" />
+    <div class="boot-stage" role="status" aria-label="Loading BlinksMed Vendor">
+      <svg class="boot-rings" viewBox="0 0 112 112" aria-hidden="true">
+        <defs>
+          <linearGradient id="bootArc" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#6C63FF"/>
+            <stop offset="55%" stop-color="#8B85FF"/>
+            <stop offset="100%" stop-color="#31C473"/>
+          </linearGradient>
+        </defs>
+        <circle cx="56" cy="56" r="48" fill="none" stroke="rgba(108,99,255,0.16)" stroke-width="2.75"/>
+        <g class="boot-ring-rev">
+          <circle cx="56" cy="56" r="38" fill="none" stroke="#8B85FF" stroke-width="2" stroke-linecap="round"
+            stroke-dasharray="34 198" opacity="0.7"/>
+        </g>
+        <g class="boot-ring">
+          <circle cx="56" cy="56" r="48" fill="none" stroke="url(#bootArc)" stroke-width="3.15" stroke-linecap="round"
+            stroke-dasharray="74 226"/>
+          <circle cx="56" cy="8" r="3.35" fill="#8B85FF"/>
+        </g>
+      </svg>
+      <div class="boot-orbit" aria-hidden="true">
+        <span class="boot-spark"></span>
+        <span class="boot-spark"></span>
+        <span class="boot-spark"></span>
+      </div>
+      <img class="boot-tile" src="loader_mark.png?v=20260819s" alt="" width="54" height="54" />
     </div>
     <span>Loading BlinksMed Vendor…</span>
   </div>
@@ -78,7 +132,6 @@
         }, 200);
       }
       window.addEventListener('flutter-first-frame', dismissBootSplash, { once: true });
-      // Fallback if the event was missed (hot restart / delayed listener).
       window.setTimeout(dismissBootSplash, 12000);
     })();
   </script>
