@@ -4,10 +4,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Package } from "lucide-react";
 import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
 import {
   ActiveFilterChips,
@@ -286,11 +286,7 @@ const CustomerOrders = () => {
       </p>
 
       {isLoading ? (
-        <div className="space-y-3 rounded-xl border border-border/80 bg-card p-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
-        </div>
+        <PageLoaderSlot />
       ) : (
         <>
           {filtered.length > 0 ? (
@@ -351,7 +347,7 @@ const CustomerOrders = () => {
                         <div key={o.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/10 hover:border-border transition-all duration-300 shadow-sm gap-4">
                           <div className="flex items-center gap-4 flex-1">
                             {imageUrl ? (
-                              <img src={imageUrl} alt={o.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" />
+                              <img src={imageUrl} alt={o.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" onError={retryOriginalOnImageError} />
                             ) : (
                               <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">
                                 <Package className="h-5 w-5 opacity-60" />

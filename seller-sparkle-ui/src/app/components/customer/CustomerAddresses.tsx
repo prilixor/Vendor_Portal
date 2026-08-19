@@ -6,7 +6,6 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/app/components/ui/c
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Switch } from "@/app/components/ui/switch";
-import { Skeleton } from "@/app/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -16,6 +15,7 @@ import {
 } from "@/app/components/ui/select";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { FieldError } from "@/app/components/shared/FieldError";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
 import { toast } from "sonner";
 import { Trash2, Edit2 } from "lucide-react";
@@ -184,7 +184,7 @@ const CustomerAddresses = () => {
             <p className="font-medium">Saved</p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {isLoading && <Skeleton className="h-24 w-full" />}
+            {isLoading && <PageLoaderSlot className="min-h-[6rem] py-0" />}
             {!isLoading && data?.length === 0 && (
               <p className="text-sm text-muted-foreground">No addresses yet.</p>
             )}

@@ -6,6 +6,7 @@ import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import 'listing_type_picker_screen.dart';
 import 'product_detail_screen.dart';
 
@@ -347,9 +348,7 @@ class _ProductsScreenState extends State<ProductsScreen>
             const SizedBox(height: 8),
             Expanded(
               child: provider.loading && provider.listingRows.isEmpty
-                  ? const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
-                    )
+                  ? const BrandPageLoader()
                   : provider.error != null && provider.listingRows.isEmpty
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),

@@ -30,6 +30,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
+    public DbSet<ProductDocument> ProductDocuments => Set<ProductDocument>();
     public DbSet<VendorProductListing> VendorProductListings => Set<VendorProductListing>();
     public DbSet<VendorProductImage> VendorProductImages => Set<VendorProductImage>();
     public DbSet<VendorProductDocument> VendorProductDocuments => Set<VendorProductDocument>();
@@ -328,6 +329,9 @@ public class ApplicationDbContext : DbContext
             entity.HasMany(x => x.ProductImages)
                 .WithOne(x => x.Product)
                 .HasForeignKey(x => x.ProductId);
+            entity.HasMany(x => x.ProductDocuments)
+                .WithOne(x => x.Product)
+                .HasForeignKey(x => x.ProductId);
             entity.HasOne(x => x.ChemicalProperty)
                 .WithOne(x => x.Product)
                 .HasForeignKey<ChemicalProperty>(x => x.ProductId);
@@ -468,6 +472,26 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
             entity.HasOne(x => x.Product)
                 .WithMany(x => x.ProductImages)
+                .HasForeignKey(x => x.ProductId);
+        });
+
+        modelBuilder.Entity<ProductDocument>(entity =>
+        {
+            entity.ToTable("product_documents");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.ProductId).HasColumnName("product_id");
+            entity.Property(x => x.DocumentType).HasColumnName("document_type");
+            entity.Property(x => x.FileUrl).HasColumnName("file_url");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.HasOne(x => x.Product)
+                .WithMany(x => x.ProductDocuments)
                 .HasForeignKey(x => x.ProductId);
         });
 

@@ -4,7 +4,7 @@ import { ArrowRight, Package, Truck, LifeBuoy, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { useAuth } from "@/app/guards/AuthContext";
 import { customerApi, type CustomerCatalogListingApi, type CustomerOrderApi } from "@/app/services/customerApi";
 
@@ -91,12 +91,9 @@ const CustomerDashboard = () => {
       )}
 
       {isLoading || catalogLoading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-28 rounded-xl" />
-          ))}
-        </div>
+        <PageLoaderSlot />
       ) : (
+        <>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard 
             label="Active rentals" 
@@ -117,7 +114,6 @@ const CustomerDashboard = () => {
             to="/customer/shop"
           />
         </div>
-      )}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -127,13 +123,7 @@ const CustomerDashboard = () => {
           </Link>
         </CardHeader>
         <CardContent className="p-0">
-          {isLoading ? (
-            <div className="space-y-2 px-6 py-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : activityRows.length === 0 ? (
+          {activityRows.length === 0 ? (
             <p className="px-6 py-8 text-center text-sm text-muted-foreground">
               No recent orders yet.{" "}
               <Link to="/customer/shop" className="font-medium text-primary hover:underline">
@@ -158,6 +148,8 @@ const CustomerDashboard = () => {
           )}
         </CardContent>
       </Card>
+        </>
+      )}
     </div>
   );
 };

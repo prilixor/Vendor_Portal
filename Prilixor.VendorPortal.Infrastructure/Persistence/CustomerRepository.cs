@@ -475,6 +475,7 @@ public sealed class CustomerRepository(
             .AsNoTracking()
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
+            .Include(p => p.ProductDocuments)
             .Include(p => p.ChemicalProperty)
             .Include(p => p.Variants)
             .Include(p => p.RentalPricingPlans)
@@ -500,6 +501,7 @@ public sealed class CustomerRepository(
             .AsNoTracking()
             .Include(p => p.Category)
             .Include(p => p.ProductImages)
+            .Include(p => p.ProductDocuments)
             .Include(p => p.ChemicalProperty)
             .Include(p => p.Variants)
             .Include(p => p.RentalPricingPlans)
@@ -1027,7 +1029,7 @@ public sealed class CustomerRepository(
                 o.EndDate.Value >= fromDate &&
                 o.EndDate.Value <= toDate &&
                 o.OrderType.ToLower() != "buy" &&
-                (o.Status == "confirmed" || o.Status == "active" || o.Status == "in_transit"))
+                o.Status == "active")
             .OrderBy(o => o.EndDate)
             .ToListAsync(cancellationToken);
 
@@ -1061,7 +1063,7 @@ public sealed class CustomerRepository(
                 o.EndDate.Value >= fromDate &&
                 o.EndDate.Value <= toDate &&
                 o.OrderType.ToLower() != "buy" &&
-                (o.Status == "confirmed" || o.Status == "active" || o.Status == "in_transit"))
+                o.Status == "active")
             .OrderBy(o => o.EndDate)
             .ToListAsync(cancellationToken);
 
@@ -1082,7 +1084,7 @@ public sealed class CustomerRepository(
                 o.EndDate.Value >= fromDate &&
                 o.EndDate.Value <= toDate &&
                 o.OrderType.ToLower() != "buy" &&
-                (o.Status == "confirmed" || o.Status == "active" || o.Status == "in_transit"))
+                o.Status == "active")
             .OrderBy(o => o.EndDate)
             .ToListAsync(cancellationToken);
 
@@ -1157,6 +1159,22 @@ public sealed class CustomerRepository(
             .Include(d => d.Hospitals)
             .ThenInclude(hd => hd.Hospital)
             .FirstOrDefaultAsync(x => x.Id == doctorId && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task<Prilixor.VendorPortal.Domain.Common.Doctor?> FindDoctorByEmailAsync(
+        string email,
+        Guid? excludeDoctorId,
+        CancellationToken cancellationToken)
+    {
+        var normalized = (email ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(normalized))
+            return null;
+
+        var query = commonDb.Doctors.Where(x => !x.IsDeleted && x.Email.ToLower() == normalized);
+        if (excludeDoctorId.HasValue)
+            query = query.Where(x => x.Id != excludeDoctorId.Value);
+
+        return await query.FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<Prilixor.VendorPortal.Domain.Common.Doctor?> GetDoctorByUniqueCodeAsync(string uniqueCode, CancellationToken cancellationToken)
@@ -1235,11 +1253,17 @@ public sealed class CustomerRepository(
         await commonDb.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<int> CountDoctorsWithUniqueCodePrefixAsync(string prefix, CancellationToken cancellationToken)
+    public async Task<int> CountDoctorsEnrolledInYearAsync(string yearYy, CancellationToken cancellationToken)
     {
-        var p = prefix.Trim().ToUpperInvariant();
-        return await commonDb.Doctors
-            .CountAsync(x => x.UniqueCode.StartsWith(p), cancellationToken);
+        var year = (yearYy ?? string.Empty).Trim();
+        if (year.Length != 2)
+            return 0;
+
+        // Codes are DRxxYYNNN (e.g. DRPD26001). Sequence is year-wide, not per initials.
+        var pattern = $"____{year}___";
+        return await commonDb.Doctors.CountAsync(
+            x => EF.Functions.Like(x.UniqueCode, pattern),
+            cancellationToken);
     }
 
     public async Task SetDoctorHospitalLinksAsync(Guid doctorId, IReadOnlyList<Guid> hospitalIds, CancellationToken cancellationToken)
@@ -1604,6 +1628,7 @@ public sealed class CustomerRepository(
             BaseUnit = product.ChemicalProperty?.BaseUnit,
             SdsDocumentUrl = product.ChemicalProperty?.SdsDocumentUrl,
             CoaDocumentUrl = product.ChemicalProperty?.CoaDocumentUrl,
+            Documents = ProductCatalogDocuments.ToDtos(product, fileUrlResolver),
             Variants = product.Variants?.Select(v => new Prilixor.VendorPortal.Application.Onboarding.ProductVariantDto(
                 v.Id.ToString(),
                 v.ProductId.ToString(),
@@ -1699,6 +1724,20 @@ public sealed class CustomerRepository(
 
 
 
+    private string? ResolveStoredImageUrl(string? imageUrl, string? thumbnailUrl)
+    {
+        // Same as production: prefer thumbnail when present, then original.
+        var thumb = thumbnailUrl?.Trim();
+        if (!string.IsNullOrEmpty(thumb))
+            return fileUrlResolver.Resolve(thumb);
+
+        var original = imageUrl?.Trim();
+        if (!string.IsNullOrEmpty(original))
+            return fileUrlResolver.Resolve(original);
+
+        return null;
+    }
+
     private string? ResolvePrimaryListingImageUrl(IEnumerable<VendorProductImage> images)
     {
         var primary = images.Where(i => !i.IsDeleted)
@@ -1706,10 +1745,7 @@ public sealed class CustomerRepository(
             .ThenBy(i => i.DisplayOrder)
             .FirstOrDefault();
         if (primary is null) return null;
-        var thumb = primary.ThumbnailUrl?.Trim();
-        if (!string.IsNullOrEmpty(thumb))
-            return fileUrlResolver.Resolve(thumb);
-        return fileUrlResolver.Resolve(primary.ImageUrl);
+        return ResolveStoredImageUrl(primary.ImageUrl, primary.ThumbnailUrl);
     }
 
     private string? ResolvePrimaryProductImageUrl(IEnumerable<ProductImage> images)
@@ -1719,10 +1755,7 @@ public sealed class CustomerRepository(
             .ThenBy(i => i.DisplayOrder)
             .FirstOrDefault();
         if (primary is null) return null;
-        var thumb = primary.ThumbnailUrl?.Trim();
-        if (!string.IsNullOrEmpty(thumb))
-            return fileUrlResolver.Resolve(thumb);
-        return fileUrlResolver.Resolve(primary.ImageUrl);
+        return ResolveStoredImageUrl(primary.ImageUrl, primary.ThumbnailUrl);
     }
 
     /// <summary>

@@ -8,7 +8,7 @@ import { Badge } from "@/app/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Switch } from "@/app/components/ui/switch";
 import { adminApi, AdminUserDto } from "@/app/services/adminApi";
 import {
@@ -392,19 +392,7 @@ const Admins = () => {
         </div>
 
         {loading ? (
-          <ul className="divide-y divide-border animate-pulse">
-            {[1, 2, 3].map((i) => (
-              <li key={i} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                  <div className="space-y-1">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-3 w-40" />
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <PageLoaderSlot />
         ) : admins.length === 0 ? (
           <div className="py-14 text-center space-y-2">
             <Users className="h-8 w-8 mx-auto text-muted-foreground/50" />

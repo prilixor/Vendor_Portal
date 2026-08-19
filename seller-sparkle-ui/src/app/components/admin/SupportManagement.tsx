@@ -69,7 +69,7 @@ export default function SupportManagement() {
   const loadTickets = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const data = await supportApi.getAllTickets();
+      const data = await supportApi.getAllTickets({ quiet: silent });
       setTickets(data);
       const activeId = selectedTicketIdRef.current;
       if (activeId) {
@@ -279,10 +279,7 @@ export default function SupportManagement() {
           <ScrollArea className="flex-1">
             <div className="space-y-2 p-3">
               {loading ? (
-                <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
-                  <Loader2 className="mb-4 h-7 w-7 animate-spin text-primary" />
-                  <p className="text-sm font-medium">Loading tickets...</p>
-                </div>
+                <div className="min-h-[8rem]" aria-busy="true" aria-label="Loading tickets" />
               ) : filteredTickets.length === 0 ? (
                 <div className="flex flex-col items-center justify-center px-6 py-14 text-center text-muted-foreground">
                   <Ticket className="mb-3 h-10 w-10 opacity-20" />
@@ -427,9 +424,7 @@ export default function SupportManagement() {
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-6 space-y-6" ref={scrollRef}>
                 {messagesLoading ? (
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary/30" />
-                  </div>
+                  <div className="flex h-full min-h-[8rem] items-center justify-center" aria-busy="true" aria-label="Loading messages" />
                 ) : (
                   messages.map((m, index) => {
                     const prev = index > 0 ? messages[index - 1] : null;

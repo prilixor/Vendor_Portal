@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/models/vendor_onboarding_model.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../core/utils/media_url.dart';
 
 class DocumentPreviewScreen extends StatefulWidget {
@@ -117,9 +118,7 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen> {
         ],
       ),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.accent),
-            )
+          ? const BrandPageLoader()
           : _error != null
               ? _ErrorState(
                   message: _error!,

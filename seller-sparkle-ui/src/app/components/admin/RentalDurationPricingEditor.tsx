@@ -31,7 +31,7 @@ import {
   rentalValueTierLabel,
   resolveRentalIconUrl,
 } from "@/app/helpers/rentalDurationIcons";
-import { cn } from "@/app/helpers/utils";
+import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
 
 function computeFinalPrice(normalPrice: number, discountType: RentalDiscountType, discountValue: number): number {
   const normal = Math.max(0, normalPrice || 0);
@@ -268,7 +268,7 @@ export function RentalDurationPricingEditor({
         )}
       >
         {src ? (
-          <img src={src} alt={alt} className="h-full w-full object-contain p-0.5" />
+          <img src={src} alt={alt} className="h-full w-full object-contain p-0.5" onError={retryOriginalOnImageError} />
         ) : (
           <ImagePlus className="h-3.5 w-3.5 text-muted-foreground" />
         )}

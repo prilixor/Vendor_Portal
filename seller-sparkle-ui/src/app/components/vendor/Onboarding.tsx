@@ -7,6 +7,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Stepper } from "@/app/components/shared/Stepper";
 import { PageHeader } from "@/app/components/shared/PageHeader";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { FormGrid } from "@/app/components/shared/FormGrid";
@@ -17,13 +18,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/app/components/ui/command";
 import { ArrowLeft, ArrowRight, Upload, FileText, Trash2, ShieldCheck, CheckCircle2, Eye, Building2, ChevronLeft, MoreVertical, ChevronDown, Check, Loader2 } from "lucide-react";
-import { Skeleton } from "@/app/components/ui/skeleton";
 import { toast } from "sonner";
 import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
 import { useAuth } from "@/app/guards/AuthContext";
 import { BankDetails, BusinessProfile, VendorDocument, VerificationStatus } from "@/app/models";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { retryOriginalOnImageError } from "@/app/helpers/utils";
 import { AdminCommentHint } from "@/app/components/shared/AdminCommentHint";
 import { OnboardingRejectedHelpBanner } from "@/app/components/shared/OnboardingRejectedHelpBanner";
 import { RequiredDocumentsChecklist } from "@/app/components/shared/RequiredDocumentsChecklist";
@@ -777,118 +778,8 @@ const Onboarding = () => {
     openSupportChat({ message, category });
   }, [rejectedDocuments, bank.status, openSupportChat]);
 
-  // Show loading state until data is fully loaded to prevent UI flicker
   if (!hasLoaded) {
-    return (
-      <div className="min-h-[60vh] p-6">
-        {/* Header Skeleton */}
-        <div className="mb-8 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <Skeleton className="h-8 w-64" />
-              <Skeleton className="h-4 w-48" />
-            </div>
-            <Skeleton className="h-10 w-32" />
-          </div>
-        </div>
-
-        {/* Stepper Skeleton */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between gap-2">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex flex-1 items-center gap-2">
-                <Skeleton className="h-10 w-10 rounded-full" />
-                <div className="hidden flex-1 space-y-1 sm:block">
-                  <Skeleton className="h-3 w-full" />
-                  <Skeleton className="h-2 w-2/3" />
-                </div>
-                {i < 5 && <Skeleton className="hidden h-0.5 flex-1 sm:block" />}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Content Cards Skeleton */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-4">
-            <Card className="p-6">
-              <div className="mb-4 flex items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-lg" />
-                <div className="space-y-2">
-                  <Skeleton className="h-5 w-32" />
-                  <Skeleton className="h-3 w-48" />
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <div key={i} className="space-y-2">
-                      <Skeleton className="h-3 w-20" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2 pt-4">
-                  <Skeleton className="h-10 w-24" />
-                  <Skeleton className="h-10 w-24" />
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <div className="mb-4 flex items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-lg" />
-                <div className="space-y-2">
-                  <Skeleton className="h-5 w-32" />
-                  <Skeleton className="h-3 w-48" />
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="space-y-2">
-                      <Skeleton className="h-3 w-24" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Card>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-4">
-            <Card className="p-6">
-              <Skeleton className="mb-4 h-5 w-24" />
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <Skeleton className="h-8 w-8 rounded" />
-                    <div className="flex-1 space-y-1">
-                      <Skeleton className="h-3 w-full" />
-                      <Skeleton className="h-2 w-2/3" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <Skeleton className="mb-4 h-5 w-32" />
-              <div className="space-y-3">
-                {[1, 2].map((i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <Skeleton className="h-4 w-24" />
-                    <Skeleton className="h-4 w-16" />
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageLoaderSlot className="min-h-[60vh]" />;
   }
 
   return (
@@ -1679,6 +1570,7 @@ const Onboarding = () => {
                   alt="Document preview"
                   className="max-w-full max-h-full object-contain"
                   onLoad={() => setPdfLoading(false)}
+                  onError={retryOriginalOnImageError}
                 />
                   );
                 }

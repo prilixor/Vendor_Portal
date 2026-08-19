@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/medical_provider.dart';
 import '../../core/providers/product_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../dashboard/customer_dashboard.dart';
 
 class DoctorPublicScreen extends StatefulWidget {
@@ -72,7 +73,7 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
         iconTheme: IconThemeData(color: colors.textPrimary),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [

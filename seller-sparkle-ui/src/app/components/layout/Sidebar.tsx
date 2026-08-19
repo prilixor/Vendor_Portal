@@ -37,7 +37,7 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
   // 2. Get Unread Customer Notifications (for Customer variant)
   const { data: customerNotifications = [] } = useQuery({
     queryKey: ["customer-notifications"],
-    queryFn: () => customerApi.getNotifications(),
+    queryFn: () => customerApi.getNotifications({ quiet: true }),
     enabled: variant === "customer" && !!user,
     refetchInterval: 30000, // refresh every 30 seconds
   });

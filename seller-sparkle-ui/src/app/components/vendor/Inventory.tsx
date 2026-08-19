@@ -5,7 +5,7 @@ import { StatCard } from "@/app/components/shared/StatCard";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
@@ -746,83 +746,7 @@ const Inventory = () => {
         }
       />
 
-      {!hasLoaded && busy && (
-        <div className="space-y-6 animate-pulse">
-          {/* Stats Cards Skeleton - Match exact grid structure */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Card key={i} className="border-border/60 p-4">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="h-8 w-8 rounded-lg" />
-                  <div className="flex-1 space-y-1">
-                    <Skeleton className="h-4 w-16" />
-                    <Skeleton className="h-5 w-8" />
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-          
-          {/* Inventory Table Skeleton - Match exact structure */}
-          <Card className="mt-6 border-border/60 p-4 sm:p-6 lg:p-8">
-            <div className="border-b border-border pb-4">
-              <Skeleton className="h-6 w-32" />
-            </div>
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full min-w-[700px] text-sm">
-                <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
-                    <th className="px-4 py-3 font-semibold text-right"><Skeleton className="h-3 w-12" /></th>
-                    <th className="px-4 py-3 font-semibold text-right"><Skeleton className="h-3 w-16" /></th>
-                    <th className="px-4 py-3 font-semibold text-right"><Skeleton className="h-3 w-16" /></th>
-                    <th className="px-4 py-3 font-semibold text-right"><Skeleton className="h-3 w-12" /></th>
-                    <th className="px-4 py-3 font-semibold text-right"><Skeleton className="h-3 w-12" /></th>
-                    <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
-                    <th className="px-4 py-3 font-semibold text-right"><Skeleton className="h-3 w-12" /></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <tr key={i} className="hover:bg-muted/20">
-                      <td className="px-4 py-3 font-medium">
-                        <Skeleton className="h-4 w-32" />
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono">
-                        <Skeleton className="h-4 w-8" />
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono">
-                        <Skeleton className="h-4 w-8" />
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono">
-                        <Skeleton className="h-4 w-8" />
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono">
-                        <Skeleton className="h-4 w-8" />
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono">
-                        <Skeleton className="h-4 w-8" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Skeleton className="h-1.5 flex-1 rounded-full" />
-                          <Skeleton className="h-3 w-8" />
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-1">
-                          <Skeleton className="h-8 w-8 rounded" />
-                          <Skeleton className="h-8 w-8 rounded" />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </div>
-      )}
+      {!hasLoaded && busy && <PageLoaderSlot />}
       {loadError && (
         <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
       )}

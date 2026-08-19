@@ -39,47 +39,43 @@ function mapAdminStorage(adminUser: Record<string, unknown>): User {
   };
 }
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isHydrating, setIsHydrating] = useState(true);
-
-  useEffect(() => {
+/** Sync session read so the shop never waits on a "Loading BlinksMed…" gate. */
+function readInitialUser(): User | null {
+  try {
     const onAdminRoute = isAdminPath();
     ensureAdminTokenMigrated();
     const impersonationUser = readImpersonationUser<User>();
-
     if (impersonationUser && !onAdminRoute) {
-      setUser({
-        ...impersonationUser,
-        impersonation: true,
-      });
-      setIsHydrating(false);
-      return;
+      return { ...impersonationUser, impersonation: true };
     }
 
     const adminRaw = localStorage.getItem(ADMIN_USER_KEY);
     if (adminRaw && (onAdminRoute || !localStorage.getItem(PORTAL_USER_KEY))) {
       try {
-        setUser(mapAdminStorage(JSON.parse(adminRaw)));
+        return mapAdminStorage(JSON.parse(adminRaw));
       } catch {
         localStorage.removeItem(ADMIN_USER_KEY);
       }
-    } else {
-      const raw = localStorage.getItem(PORTAL_USER_KEY);
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          setUser({
-            ...parsed,
-            impersonation: !!parsed.impersonation,
-          });
-        } catch {
-          localStorage.removeItem(PORTAL_USER_KEY);
-        }
-      }
+      return null;
     }
-    setIsHydrating(false);
-  }, []);
+
+    const raw = localStorage.getItem(PORTAL_USER_KEY);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return { ...parsed, impersonation: !!parsed.impersonation };
+    } catch {
+      localStorage.removeItem(PORTAL_USER_KEY);
+      return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User | null>(() => readInitialUser());
+  const [isHydrating] = useState(false);
 
   const logout = () => {
     // Impersonation is tab-scoped — never wipe the admin session in other tabs.

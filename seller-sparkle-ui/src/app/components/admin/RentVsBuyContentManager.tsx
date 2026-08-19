@@ -26,10 +26,10 @@ import {
   Table as TableIcon,
   HelpCircle,
   FileText,
-  Loader2,
   RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 
 export function RentVsBuyContentManager() {
   const queryClient = useQueryClient();
@@ -213,11 +213,7 @@ export function RentVsBuyContentManager() {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-48 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
+    return <PageLoaderSlot />;
   }
 
   return (

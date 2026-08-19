@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useState, useEffect, useMemo } from "react";
 
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -6,7 +6,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 
 import { Card } from "@/app/components/ui/card";
 
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 
 import { Button } from "@/app/components/ui/button";
 
@@ -21,6 +21,7 @@ import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 
 import { Label } from "@/app/components/ui/label";
+import { Input } from "@/app/components/ui/input";
 
 import { Textarea } from "@/app/components/ui/textarea";
 
@@ -31,6 +32,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto, VendorWorkingHourDto, VendorProductListingDto, ProductDto } from "@/app/services/adminApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
+import { retryOriginalOnImageError } from "@/app/helpers/utils";
 
 const getApiOrigin = (): string | null => {
   const configured = import.meta.env.VITE_API_BASE_URL as string | undefined;
@@ -135,7 +137,9 @@ const getAdminUserId = () => {
 import {
   Building2,
   ChevronLeft,
+  ChevronRight,
   ChevronDown,
+  Search,
   CircleOff,
   Clock3,
   FileText,
@@ -184,9 +188,80 @@ const dayLabel: Record<number, string> = {
 };
 
 
+const LISTING_PAGE_SIZE = 8;
+
 const vendorTabs = ["profile", "docs", "bank", "areas", "products", "chemicals"] as const;
 
 type VendorTab = (typeof vendorTabs)[number];
+
+function filterVendorListings(
+  listings: VendorProductListingDto[],
+  isChemical: boolean,
+  favoritesOnly: boolean,
+  search: string,
+): VendorProductListingDto[] {
+  const q = search.trim().toLowerCase();
+  return listings.filter((p) => {
+    if (Boolean(p.isChemical) !== isChemical) return false;
+    if (favoritesOnly && !(p.favoriteCount > 0)) return false;
+    if (!q) return true;
+    return (
+      p.listingTitle.toLowerCase().includes(q) ||
+      (p.listingStatus ?? "").replace(/_/g, " ").toLowerCase().includes(q)
+    );
+  });
+}
+
+function ListingPager({
+  page,
+  totalPages,
+  total,
+  noun,
+  hasSearch,
+  onPrevious,
+  onNext,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  noun: string;
+  hasSearch: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 pt-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-muted-foreground">
+        Page {page} of {totalPages} · {total} {noun}
+        {hasSearch ? " matching search" : ""}
+      </p>
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shrink-0"
+          aria-label="Previous page"
+          disabled={page <= 1}
+          onClick={onPrevious}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shrink-0"
+          aria-label="Next page"
+          disabled={page >= totalPages}
+          onClick={onNext}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 type ChemSize = { sizeValue: number; sizeUnit: string; buyPrice: number };
 
@@ -321,6 +396,10 @@ const VendorDetails = () => {
   const [productListings, setProductListings] = useState<VendorProductListingDto[]>([]);
   const [productMap, setProductMap] = useState<Record<string, ProductDto>>({});
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [equipmentSearch, setEquipmentSearch] = useState("");
+  const [chemicalSearch, setChemicalSearch] = useState("");
+  const [equipmentPage, setEquipmentPage] = useState(1);
+  const [chemicalPage, setChemicalPage] = useState(1);
   const [inventoryMap, setInventoryMap] = useState<Record<string, any>>({});
   const [previewDocument, setPreviewDocument] = useState<{ url: string; type: string } | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -352,6 +431,41 @@ const VendorDetails = () => {
     next.delete("editRadius");
     setSearchParams(next, { replace: true });
   }, [loading, serviceAreas, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    setEquipmentPage(1);
+    setChemicalPage(1);
+  }, [showFavoritesOnly]);
+
+  useEffect(() => {
+    setEquipmentPage(1);
+  }, [equipmentSearch]);
+
+  useEffect(() => {
+    setChemicalPage(1);
+  }, [chemicalSearch]);
+
+  const equipmentListings = useMemo(
+    () => filterVendorListings(productListings, false, showFavoritesOnly, equipmentSearch),
+    [productListings, showFavoritesOnly, equipmentSearch],
+  );
+  const chemicalListings = useMemo(
+    () => filterVendorListings(productListings, true, showFavoritesOnly, chemicalSearch),
+    [productListings, showFavoritesOnly, chemicalSearch],
+  );
+
+  const equipmentTotalPages = Math.max(1, Math.ceil(equipmentListings.length / LISTING_PAGE_SIZE));
+  const chemicalTotalPages = Math.max(1, Math.ceil(chemicalListings.length / LISTING_PAGE_SIZE));
+  const safeEquipmentPage = Math.min(equipmentPage, equipmentTotalPages);
+  const safeChemicalPage = Math.min(chemicalPage, chemicalTotalPages);
+  const equipmentPageItems = useMemo(
+    () => equipmentListings.slice((safeEquipmentPage - 1) * LISTING_PAGE_SIZE, safeEquipmentPage * LISTING_PAGE_SIZE),
+    [equipmentListings, safeEquipmentPage],
+  );
+  const chemicalPageItems = useMemo(
+    () => chemicalListings.slice((safeChemicalPage - 1) * LISTING_PAGE_SIZE, safeChemicalPage * LISTING_PAGE_SIZE),
+    [chemicalListings, safeChemicalPage],
+  );
 
   const loadVendorData = async (id: string) => {
 
@@ -533,91 +647,7 @@ const VendorDetails = () => {
 
 
   if (loading) {
-    return (
-      <div className="space-y-6">
-        {/* Header Skeleton */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-4 w-64" />
-          </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-10 w-24" />
-            <Skeleton className="h-10 w-24" />
-          </div>
-        </div>
-
-        {/* Tabs Skeleton */}
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-10 w-20" />
-            ))}
-          </div>
-
-          {/* Content Skeleton */}
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              {/* Profile Card Skeleton */}
-              <Card className="p-6">
-                <div className="space-y-4">
-                  <Skeleton className="h-6 w-32" />
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                      <div key={i} className="space-y-2">
-                        <Skeleton className="h-3 w-20" />
-                        <Skeleton className="h-10 w-full" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </Card>
-
-              {/* Documents Skeleton */}
-              <Card className="p-6">
-                <div className="space-y-4">
-                  <Skeleton className="h-6 w-24" />
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center justify-between p-3 border border-border/60 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <Skeleton className="h-8 w-8 rounded" />
-                        <div className="space-y-1">
-                          <Skeleton className="h-4 w-32" />
-                          <Skeleton className="h-3 w-24" />
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Skeleton className="h-8 w-8" />
-                        <Skeleton className="h-8 w-8" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
-
-            {/* Sidebar Skeleton */}
-            <div className="space-y-4">
-              <Card className="p-6">
-                <Skeleton className="h-6 w-24 mb-4" />
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <Skeleton className="h-8 w-8 rounded" />
-                      <div className="flex-1 space-y-1">
-                        <Skeleton className="h-3 w-full" />
-                        <Skeleton className="h-2 w-2/3" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-
+    return <PageLoaderSlot />;
   }
 
 
@@ -1505,13 +1535,24 @@ const VendorDetails = () => {
                   <Switch id="vendor-favorites-only" checked={showFavoritesOnly} onCheckedChange={setShowFavoritesOnly} />
                   <Label htmlFor="vendor-favorites-only" className="text-sm cursor-pointer whitespace-nowrap">Favorites Only</Label>
                 </div>
-                <p className="text-xs text-muted-foreground">{productListings.filter(p => !p.isChemical && (!showFavoritesOnly || p.favoriteCount > 0)).length} total</p>
+                <p className="text-xs text-muted-foreground">{equipmentListings.length} total</p>
               </div>
+            </div>
+
+            <div className="relative mb-4 max-w-xl">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={equipmentSearch}
+                onChange={(e) => setEquipmentSearch(e.target.value)}
+                placeholder="Search equipment by name or status"
+                className="h-11 rounded-xl pl-9"
+                aria-label="Search equipment listings"
+              />
             </div>
 
             <div className="space-y-2">
 
-              {productListings.filter(p => !p.isChemical && (!showFavoritesOnly || p.favoriteCount > 0)).map((p) => (
+              {equipmentPageItems.map((p) => (
 
                 <div key={p.id} className="flex items-center justify-between rounded-lg border border-border p-3">
 
@@ -1576,17 +1617,31 @@ const VendorDetails = () => {
 
               ))}
 
-              {productListings.filter(p => !p.isChemical && (!showFavoritesOnly || p.favoriteCount > 0)).length === 0 && (
+              {equipmentListings.length === 0 && (
 
                 <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
 
-                  No equipment listings found.
+                  {equipmentSearch.trim()
+                    ? `No equipment listings match “${equipmentSearch.trim()}”.`
+                    : "No equipment listings found."}
 
                 </div>
 
               )}
 
             </div>
+
+            {equipmentListings.length > 0 && (
+              <ListingPager
+                page={safeEquipmentPage}
+                totalPages={equipmentTotalPages}
+                total={equipmentListings.length}
+                noun={equipmentListings.length === 1 ? "listing" : "listings"}
+                hasSearch={equipmentSearch.trim().length > 0}
+                onPrevious={() => setEquipmentPage((p) => Math.max(1, p - 1))}
+                onNext={() => setEquipmentPage((p) => Math.min(equipmentTotalPages, p + 1))}
+              />
+            )}
 
           </Card>
 
@@ -1608,13 +1663,24 @@ const VendorDetails = () => {
                   <Switch id="vendor-chem-favorites-only" checked={showFavoritesOnly} onCheckedChange={setShowFavoritesOnly} />
                   <Label htmlFor="vendor-chem-favorites-only" className="text-sm cursor-pointer whitespace-nowrap">Favorites Only</Label>
                 </div>
-                <p className="text-xs text-muted-foreground">{productListings.filter(p => p.isChemical && (!showFavoritesOnly || p.favoriteCount > 0)).length} total</p>
+                <p className="text-xs text-muted-foreground">{chemicalListings.length} total</p>
               </div>
+            </div>
+
+            <div className="relative mb-4 max-w-xl">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={chemicalSearch}
+                onChange={(e) => setChemicalSearch(e.target.value)}
+                placeholder="Search chemicals by name or status"
+                className="h-11 rounded-xl pl-9"
+                aria-label="Search chemical listings"
+              />
             </div>
 
             <div className="space-y-2">
 
-              {productListings.filter(p => p.isChemical && (!showFavoritesOnly || p.favoriteCount > 0)).map((p) => (
+              {chemicalPageItems.map((p) => (
 
                 <div key={p.id} className="flex items-center justify-between rounded-lg border border-border p-3">
 
@@ -1689,17 +1755,31 @@ const VendorDetails = () => {
 
               ))}
 
-              {productListings.filter(p => p.isChemical && (!showFavoritesOnly || p.favoriteCount > 0)).length === 0 && (
+              {chemicalListings.length === 0 && (
 
                 <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
 
-                  No chemical listings found.
+                  {chemicalSearch.trim()
+                    ? `No chemical listings match “${chemicalSearch.trim()}”.`
+                    : "No chemical listings found."}
 
                 </div>
 
               )}
 
             </div>
+
+            {chemicalListings.length > 0 && (
+              <ListingPager
+                page={safeChemicalPage}
+                totalPages={chemicalTotalPages}
+                total={chemicalListings.length}
+                noun={chemicalListings.length === 1 ? "listing" : "listings"}
+                hasSearch={chemicalSearch.trim().length > 0}
+                onPrevious={() => setChemicalPage((p) => Math.max(1, p - 1))}
+                onNext={() => setChemicalPage((p) => Math.min(chemicalTotalPages, p + 1))}
+              />
+            )}
 
           </Card>
 
@@ -1814,6 +1894,7 @@ const VendorDetails = () => {
                   alt="Document preview"
                   className="max-w-full max-h-full object-contain"
                   onLoad={() => setPdfLoading(false)}
+                  onError={retryOriginalOnImageError}
                 />
                   );
                 }

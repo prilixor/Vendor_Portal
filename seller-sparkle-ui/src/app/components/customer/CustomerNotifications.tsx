@@ -7,7 +7,7 @@ import { customerApi, type CustomerNotificationApi } from "@/app/services/custom
 import { customerNotificationTypeBadgeLabel } from "@/app/services/customerNotificationTypes";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { cn } from "@/app/helpers/utils";
 import { toast } from "sonner";
 
@@ -53,7 +53,7 @@ const CustomerNotifications = () => {
 
   const { data: notifications = [], isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: customerNotificationsQueryKey,
-    queryFn: () => customerApi.getNotifications(),
+    queryFn: () => customerApi.getNotifications({ quiet: true }),
   });
 
   const [page, setPage] = useState(1);
@@ -161,18 +161,7 @@ const CustomerNotifications = () => {
 
       <Card className="overflow-hidden border-border/80 shadow-sm">
         {isLoading ? (
-          <ul className="divide-y divide-border p-4 space-y-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <li key={i} className="flex gap-4">
-                <Skeleton className="h-2 w-2 shrink-0 rounded-full mt-2" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-3 w-full" />
-                </div>
-                <Skeleton className="h-3 w-16 shrink-0" />
-              </li>
-            ))}
-          </ul>
+          <PageLoaderSlot className="min-h-[8rem] py-0" />
         ) : (
           <ul className="divide-y divide-border">
             {sortedNotifications.length === 0 ? (

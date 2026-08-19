@@ -4,7 +4,6 @@ import { formatDistanceToNow } from "date-fns";
 import {
   ArrowLeft,
   Hash,
-  Loader2,
   MessageSquare,
   RefreshCw,
   Search,
@@ -173,10 +172,7 @@ export default function AdminCustomerChats() {
           <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-2 p-3">
               {loadingSessions ? (
-                <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
-                  <Loader2 className="mb-4 h-7 w-7 animate-spin text-primary" />
-                  <p className="text-sm font-medium">Loading chats...</p>
-                </div>
+                <div className="min-h-[8rem]" aria-busy="true" aria-label="Loading conversations" />
               ) : filteredSessions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center px-6 py-14 text-center text-muted-foreground">
                   <MessageSquare className="mb-3 h-10 w-10 opacity-20" />
@@ -339,9 +335,7 @@ export default function AdminCustomerChats() {
               <ScrollArea className="min-h-0 flex-1">
                 <div className="space-y-3 p-3 sm:p-6">
                   {loadingMessages ? (
-                    <div className="flex justify-center py-12">
-                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    </div>
+                    <div className="min-h-[8rem]" aria-busy="true" aria-label="Loading messages" />
                   ) : messages.length === 0 ? (
                     <p className="py-12 text-center text-sm text-muted-foreground">
                       No messages yet. Reply to start helping this customer.

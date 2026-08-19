@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/expiring_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import 'order_detail_screen.dart';
 import 'order_group_utils.dart';
 
@@ -17,12 +18,20 @@ class ExpirationsScreen extends StatefulWidget {
 }
 
 class _ExpirationsScreenState extends State<ExpirationsScreen> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
   int _withinDays = 7;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _load({bool silent = false}) async {
@@ -37,6 +46,15 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
     final d = DateTime.tryParse(value);
     if (d == null) return value.isEmpty ? '—' : value;
     return formatDetailDate(value);
+  }
+
+  bool _matchesSearch(ExpiringOrder row, String query) {
+    if (query.isEmpty) return true;
+    final q = query.toLowerCase();
+    return row.orderNumber.toLowerCase().contains(q) ||
+        getBaseOrderNumber(row.orderNumber).toLowerCase().contains(q) ||
+        row.listingTitle.toLowerCase().contains(q) ||
+        row.customerName.toLowerCase().contains(q);
   }
 
   Map<String, List<ExpiringOrder>> _group(List<ExpiringOrder> rows) {
@@ -54,8 +72,13 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<VendorOrderProvider>(context);
-    final groups = _group(provider.expirations);
+    final colors = context.appColors;
+    final filtered = provider.expirations
+        .where((row) => _matchesSearch(row, _searchQuery))
+        .toList();
+    final groups = _group(filtered);
     final keys = groups.keys.toList()..sort();
+    final hasSearch = _searchQuery.trim().isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -84,6 +107,45 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
           const SizedBox(height: 10),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _searchController,
+              style: TextStyle(color: colors.textPrimary, fontSize: 14),
+              onChanged: (v) => setState(() => _searchQuery = v),
+              decoration: InputDecoration(
+                hintText: 'Search by order, item, or customer',
+                hintStyle: TextStyle(color: colors.textMuted, fontSize: 13),
+                prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.accent, size: 20),
+                suffixIcon: hasSearch
+                    ? IconButton(
+                        icon: Icon(Icons.close, color: colors.textMuted),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                isDense: true,
+                filled: true,
+                fillColor: AppTheme.card(context),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: colors.border.withValues(alpha: 0.7)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: AppTheme.accent, width: 1.2),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _WindowFilterBar(
               withinDays: _withinDays,
               onChanged: (d) async {
@@ -92,6 +154,18 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
               },
             ),
           ),
+          if (keys.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Text(
+                '${keys.length} ${keys.length == 1 ? 'order' : 'orders'} · ${filtered.length} ${filtered.length == 1 ? 'item' : 'items'}'
+                '${hasSearch ? ' matching search' : ''}',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.45),
+                  fontSize: 12,
+                ),
+              ),
+            ),
           const SizedBox(height: 10),
           Expanded(
             child: RefreshIndicator(
@@ -101,12 +175,10 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
                   ? ListView(
                       children: const [
                         SizedBox(height: 120),
-                        Center(
-                          child: CircularProgressIndicator(color: AppTheme.accent),
-                        ),
+                        BrandPageLoader(),
                       ],
                     )
-                  : keys.isEmpty
+                  : provider.expirations.isEmpty
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
                           children: [
@@ -128,21 +200,44 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
                             ),
                           ],
                         )
-                      : ListView.separated(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                          itemCount: keys.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 10),
-                          itemBuilder: (context, index) {
-                            final base = keys[index];
-                            final items = groups[base]!;
-                            return _OrderGroupCard(
-                              baseOrderNumber: base,
-                              items: items,
-                              formatEnd: _formatEnd,
-                            );
-                          },
-                        ),
+                      : keys.isEmpty
+                          ? ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: [
+                                const SizedBox(height: 72),
+                                Icon(
+                                  Icons.search_off_outlined,
+                                  size: 56,
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                ),
+                                const SizedBox(height: 14),
+                                Center(
+                                  child: Text(
+                                    'No expirations match “${_searchQuery.trim()}”.',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.55),
+                                      fontSize: 14,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : ListView.separated(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                              itemCount: keys.length,
+                              separatorBuilder: (_, _) => const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final base = keys[index];
+                                final items = groups[base]!;
+                                return _OrderGroupCard(
+                                  baseOrderNumber: base,
+                                  items: items,
+                                  formatEnd: _formatEnd,
+                                );
+                              },
+                            ),
             ),
           ),
         ],

@@ -19,7 +19,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogClose } from "@/app/components/ui/dialog";
 import { toast } from "sonner";
 import { Loader2, Plus, FileText, CheckCircle2 } from "lucide-react";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { CustomerMedicalReference, type DoctorRefSelection } from "./CustomerMedicalReference";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
@@ -521,6 +521,7 @@ const CustomerCheckout = () => {
                         src={imageUrl}
                         alt={l.title}
                         className="h-10 w-10 shrink-0 rounded-md object-cover border border-border/40 bg-muted"
+                        onError={retryOriginalOnImageError}
                       />
                     ) : (
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border/40 bg-muted text-[10px] text-muted-foreground">

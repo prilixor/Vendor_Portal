@@ -1,34 +1,31 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Skeleton } from "@/app/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Switch } from "@/app/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { TablePagination } from "@/app/components/shared/TablePagination";
-import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { SearchableSelect } from "@/app/components/shared/SearchableSelect";
 import { ProductListing } from "@/app/models";
-import { Plus, Search, Pencil, Image as ImageIcon, Star, Upload, Trash2, X, Eye, FileText, Loader2, Package, FlaskConical, Shield } from "lucide-react";
+import { Plus, Search, Pencil, Image as ImageIcon, Trash2, Loader2, Package, FlaskConical, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
-import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
-import { TypedFileUploadPanel } from "@/app/components/shared/TypedFileUploadPanel";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
-import { apiClient } from "@/app/services/apiClient";
-import { vendorOnboardingApi, VendorFileFolderType, VendorVariantInventoryDto } from "@/app/services/vendorOnboardingApi";
+import { vendorOnboardingApi, VendorVariantInventoryDto } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, resolveCatalogProductImageUrl } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
+import { CatalogMediaLauncher } from "@/app/components/shared/CatalogProductMediaSection";
 
 type LocalListing = ProductListing & {
   productId: string;
@@ -43,9 +40,12 @@ type LocalListing = ProductListing & {
   baseUnit?: string;
   casNumber?: string;
   chemicalFormula?: string;
+  brandName?: string;
+  modelName?: string;
   isChemical?: boolean;
   variants?: any[];
   rentalPricingPlans?: any[];
+  catalogImage?: string;
 };
 
 type CatalogCategory = {
@@ -71,8 +71,22 @@ type CatalogProduct = {
   baseUnit?: string;
   casNumber?: string;
   chemicalFormula?: string;
+  brandName?: string;
+  modelName?: string;
   variants?: any[];
   rentalPricingPlans?: any[];
+  images?: Array<{
+    id?: string;
+    imageUrl?: string | null;
+    thumbnailUrl?: string | null;
+    isPrimary?: boolean;
+    displayOrder?: number;
+  }>;
+  documents?: Array<{
+    id: string;
+    documentType: string;
+    fileUrl: string;
+  }>;
 };
 
 const normalizeListingStatus = (status: string): ProductListing["status"] => {
@@ -184,25 +198,16 @@ const Products = () => {
   };
 
   const [editing, setEditing] = useState<LocalListing | null>(null);
-  const [mediaFor, setMediaFor] = useState<LocalListing | null>(null);
-  const [tempImages, setTempImages] = useState<MediaImage[]>([]);
-  const [listingDocuments, setListingDocuments] = useState<ListingDocument[]>([]);
-  const [docType, setDocType] = useState("spec_sheet");
-  const [docFile, setDocFile] = useState<File | null>(null);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newProductName, setNewProductName] = useState("");
   const [newProductBrand, setNewProductBrand] = useState("");
   const [newProductModel, setNewProductModel] = useState("");
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [deleteDocConfirmId, setDeleteDocConfirmId] = useState<string | null>(null);
-  const [deleteImageConfirmId, setDeleteImageConfirmId] = useState<string | null>(null);
-  const [previewDocument, setPreviewDocument] = useState<{ id: string; type: string; url: string } | null>(null);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   // Variant-level stock for the chemical listing currently being edited
   const [variantStocks, setVariantStocks] = useState<Record<string, number>>({});
@@ -224,87 +229,10 @@ const Products = () => {
     setCurrentPage(1);
   }, [search, filter, showFavoritesOnly, activeTab]);
 
-  const getFileNameFromUrl = (url?: string) => {
-    if (!url) return "";
-    try {
-      const parsed = new URL(url, window.location.origin);
-      const name = parsed.pathname.split("/").pop() || "";
-      return decodeURIComponent(name);
-    } catch {
-      const raw = (url.split("/").pop() || "").split("?")[0];
-      try { return decodeURIComponent(raw); } catch { return raw; }
-    }
-  };
-
-  const getFileExtensionFromUrl = (url: string): string => {
-    const fromName = (name: string): string => {
-      const match = name.toLowerCase().match(/\.([a-z0-9]+)$/i);
-      return match?.[1] ?? "";
-    };
-
-    try {
-      const parsed = new URL(url, window.location.origin);
-      const directName = decodeURIComponent(parsed.pathname.split("/").pop() ?? "");
-      const nestedUrl = parsed.searchParams.get("url");
-      if (nestedUrl) {
-        const nested = new URL(nestedUrl, window.location.origin);
-        const nestedName = decodeURIComponent(nested.pathname.split("/").pop() ?? "");
-        return fromName(nestedName) || fromName(directName);
-      }
-      return fromName(directName);
-    } catch {
-      const cleaned = url.split("?")[0]?.split("#")[0] ?? "";
-      const name = cleaned.split("/").pop() ?? "";
-      return fromName(name);
-    }
-  };
-
-  const normalizeHostedFileUrl = (fileUrl: string): string => {
-    if (!fileUrl || fileUrl.startsWith("data:")) return fileUrl;
-
-    const apiBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
-    if (!apiBase) return fileUrl;
-
-    try {
-      const apiOrigin = new URL(apiBase).origin;
-
-      // Keep absolute external URLs (like S3 presigned URLs) untouched.
-      const isAbsolute = /^https?:\/\//i.test(fileUrl);
-      if (isAbsolute) {
-        const absolute = new URL(fileUrl);
-        if (absolute.origin !== apiOrigin) {
-          return fileUrl;
-        }
-      }
-
-      const parsed = new URL(fileUrl, apiOrigin);
-      if (parsed.pathname.startsWith("/uploads/")) {
-        return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
-      }
-      return parsed.toString();
-    } catch {
-      return fileUrl;
-    }
-  };
-
-  const downloadUrl = async (url?: string) => {
-    if (!url) return;
-    try {
-      const parsed = new URL(url, window.location.origin);
-      const filename = decodeURIComponent((parsed.pathname.split('/').pop() || 'file'));
-      await apiClient.downloadBlob(`/files/download?url=${encodeURIComponent(url)}`, filename);
-    } catch (err) {
-      console.error(err);
-      toast.error('Download failed.');
-    }
-  };
-
   const { operationsBlocked } = useVendorVerification();
   const isPending = operationsBlocked;
   const [statusConfirmId, setStatusConfirmId] = useState<string | null>(null);
   const [statusConfirmAction, setStatusConfirmAction] = useState<'activate' | 'deactivate' | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const docFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isChemicalCatalogProduct = (p: CatalogProduct, cats: CatalogCategory[] = categories) => {
     const category = cats.find((c) => c.id === p.categoryId);
@@ -313,6 +241,13 @@ const Products = () => {
 
   const isChemicalListing = (p: LocalListing) =>
     !!(p.isChemical || p.baseUnit || p.casNumber || p.chemicalFormula);
+
+  const listingSubtitle = (p: LocalListing) => {
+    if (isChemicalListing(p)) {
+      return [p.casNumber, p.chemicalFormula].filter(Boolean).join(" · ");
+    }
+    return [p.brandName, p.modelName].filter(Boolean).join(" · ");
+  };
 
   const filtered = products.filter((p) => {
     const isChem = isChemicalListing(p);
@@ -473,8 +408,12 @@ const Products = () => {
       baseUnit: p.baseUnit,
       casNumber: p.casNumber,
       chemicalFormula: p.chemicalFormula,
+      brandName: p.brandName,
+      modelName: p.modelName,
       variants: p.variants,
       rentalPricingPlans: p.rentalPricingPlans,
+      images: p.images,
+      documents: p.documents,
     }));
     const byProductId = new Map(mappedProducts.map((p) => [p.id, p]));
     const byCategoryId = new Map(mappedCategories.map((c) => [c.id, c]));
@@ -534,13 +473,18 @@ const Products = () => {
           primaryImage: resolveItemImageUrl({
             primaryImageUrl: l.primaryImageUrl,
             primaryThumbnailUrl: l.primaryThumbnailUrl,
-          }) ?? undefined,
+          })
+            ?? resolveCatalogProductImageUrl(product?.images)
+            ?? undefined,
+          catalogImage: resolveCatalogProductImageUrl(product?.images) ?? undefined,
           images: [],
           favoriteCount: l.favoriteCount ?? 0,
           createdAt: new Date().toISOString(),
           baseUnit: product?.baseUnit,
           casNumber: product?.casNumber,
           chemicalFormula: product?.chemicalFormula,
+          brandName: product?.brandName,
+          modelName: product?.modelName,
           variants: product?.variants || [],
           rentalPricingPlans: product?.rentalPricingPlans || [],
           isChemical,
@@ -755,210 +699,6 @@ const Products = () => {
     }
   };
 
-  const openMedia = async (p: LocalListing) => {
-    if (!user) return;
-    // Open dialog immediately so listing doesn't go blank
-    setMediaFor(p);
-    setTempImages([]);
-    setListingDocuments([]);
-    try {
-      const [imagesRes, docsRes] = await Promise.all([
-        vendorOnboardingApi.getVendorProductImages(user.id, p.id),
-        vendorOnboardingApi.getVendorProductDocuments(user.id, p.id),
-      ]);
-
-      setTempImages(imagesRes
-        .sort((a, b) => a.displayOrder - b.displayOrder)
-        .map((img) => ({
-          id: img.id,
-          primary: img.isPrimary,
-          url: normalizeHostedFileUrl(img.imageUrl),
-          thumbnailUrl: img.thumbnailUrl ? normalizeHostedFileUrl(img.thumbnailUrl) : undefined,
-          persisted: true,
-        })));
-      setListingDocuments(docsRes);
-    } catch (error) {
-      const message = getUserFriendlyMessage(error);
-      toast.error(message);
-    }
-  };
-
-  const setPrimary = (id: string) => setTempImages((imgs) => imgs.map((i) => ({ ...i, primary: i.id === id })));
-  const removeImg = (id: string) => {
-    const img = tempImages.find((i) => i.id === id);
-    if (!img) return;
-
-    if (!img.persisted) {
-      setTempImages((imgs) => imgs.filter((i) => i.id !== id));
-      return;
-    }
-
-    setDeleteImageConfirmId(id);
-  };
-
-  const confirmRemoveImg = async (id: string) => {
-    if (!user || !mediaFor) return;
-
-    try {
-      setBusy(true);
-      await vendorOnboardingApi.deleteVendorProductImage(user.id, mediaFor.id, id);
-      const imagesRes = await vendorOnboardingApi.getVendorProductImages(user.id, mediaFor.id);
-      setTempImages(imagesRes
-        .sort((a, b) => a.displayOrder - b.displayOrder)
-        .map((serverImg) => ({
-          id: serverImg.id,
-          primary: serverImg.isPrimary,
-          url: normalizeHostedFileUrl(serverImg.imageUrl),
-          thumbnailUrl: serverImg.thumbnailUrl ? normalizeHostedFileUrl(serverImg.thumbnailUrl) : undefined,
-          persisted: true,
-        })));
-      toast.success("Image deleted");
-      setDeleteImageConfirmId(null);
-    } catch (error) {
-      const message = getUserFriendlyMessage(error);
-      toast.error(message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const addImg = async (files: FileList | File[] | null) => {
-    if (!user || !mediaFor) return;
-    const fileList = files ? (Array.isArray(files) ? files : Array.from(files)) : [];
-    if (fileList.length === 0) return;
-    try {
-      setBusy(true);
-      const uploaded = await Promise.all(
-        fileList.map(async (file) => {
-          const fileResult = await vendorOnboardingApi.uploadVendorFile(user.id, file, VendorFileFolderType.ProductImages);
-          return {
-            id: `temp-${Date.now()}-${file.name}`,
-            primary: false,
-            url: normalizeHostedFileUrl(fileResult.fileUrl),
-            storageKey: fileResult.storageKey ?? undefined,
-            thumbnailUrl: fileResult.thumbnailUrl ? normalizeHostedFileUrl(fileResult.thumbnailUrl) : undefined,
-            thumbnailStorageKey: fileResult.thumbnailStorageKey ?? undefined,
-            persisted: false,
-          } satisfies MediaImage;
-        })
-      );
-      setTempImages((imgs) => {
-        const merged = [...imgs, ...uploaded];
-        if (merged.length > 0 && !merged.some((img) => img.primary)) {
-          merged[0] = { ...merged[0], primary: true };
-        }
-        return merged;
-      });
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    } catch (error) {
-      const message = getUserFriendlyMessage(error);
-      toast.error(message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const reorder = (from: number, to: number) => setTempImages((imgs) => { const c = [...imgs]; const [m] = c.splice(from, 1); c.splice(to, 0, m); return c; });
-  const previewImage = (url: string) => setPreviewUrl(normalizeHostedFileUrl(url));
-
-  const saveMedia = async () => {
-    if (!mediaFor || !user) return;
-
-    try {
-      setBusy(true);
-      const unsaved = tempImages.filter((i) => !i.persisted);
-      if (unsaved.length > 0) {
-        await Promise.all(
-          unsaved.map((img, idx) =>
-            vendorOnboardingApi.addVendorProductImage(user.id, mediaFor.id, {
-              vendorId: user.id,
-              listingId: mediaFor.id,
-              imageUrl: img.storageKey ?? img.url,
-              displayOrder: tempImages.length + idx + 1,
-              isPrimary: img.primary,
-              thumbnailUrl: img.thumbnailStorageKey ?? img.thumbnailUrl,
-            })
-          )
-        );
-      }
-      const primary = tempImages.find((i) => i.primary) ?? tempImages[0];
-      const thumb =
-        primary?.thumbnailUrl
-          ? normalizeHostedFileUrl(primary.thumbnailUrl)
-          : primary?.url
-            ? normalizeHostedFileUrl(primary.url)
-            : undefined;
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === mediaFor.id
-            ? { ...p, primaryImage: thumb, images: tempImages.map((i) => i.url) }
-            : p,
-        ),
-      );
-      setMediaFor(null);
-      toast.success("Media updated");
-    } catch (error) {
-      const message = getUserFriendlyMessage(error);
-      toast.error(message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const uploadListingDoc = async () => {
-    if (!mediaFor || !user || !docFile) return;
-    try {
-      setBusy(true);
-      const fileResult = await vendorOnboardingApi.uploadVendorFile(user.id, docFile, VendorFileFolderType.ProductDocuments);
-      await vendorOnboardingApi.addVendorProductDocument(user.id, mediaFor.id, {
-        vendorId: user.id,
-        listingId: mediaFor.id,
-        documentType: docType,
-        fileUrl: fileResult.storageKey ?? fileResult.fileUrl,
-      });
-      const docs = await vendorOnboardingApi.getVendorProductDocuments(user.id, mediaFor.id);
-      setListingDocuments(docs);
-      setDocFile(null);
-      if (docFileInputRef.current) {
-        docFileInputRef.current.value = "";
-      }
-      toast.success("Listing document uploaded");
-    } catch (error) {
-      const message = getUserFriendlyMessage(error);
-      toast.error(message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const viewListingDoc = (doc: { id: string; documentType: string; fileUrl: string }) => {
-    setPreviewDocument({ id: doc.id, type: doc.documentType, url: normalizeHostedFileUrl(doc.fileUrl) });
-  };
-
-  const deleteListingDoc = (documentId: string) => {
-    setDeleteDocConfirmId(documentId);
-  };
-
-  const confirmDeleteListingDoc = async (documentId: string) => {
-    if (!user || !mediaFor) return;
-
-    try {
-      setBusy(true);
-      await vendorOnboardingApi.deleteVendorProductDocument(user.id, mediaFor.id, documentId);
-      const docs = await vendorOnboardingApi.getVendorProductDocuments(user.id, mediaFor.id);
-      setListingDocuments(docs);
-      toast.success("Document deleted");
-      setDeleteDocConfirmId(null);
-    } catch (error) {
-      const message = getUserFriendlyMessage(error);
-      toast.error(message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div>
       <PageHeader
@@ -984,50 +724,7 @@ const Products = () => {
         }
       />
 
-      {!hasLoaded && busy && (
-        <div className="space-y-4 animate-pulse">
-          {/* Search and Filter Skeleton */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative flex-1 max-w-sm">
-              <Skeleton className="h-10 w-full pl-9" />
-              <Skeleton className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-            </div>
-            <div className="flex gap-2">
-              <Skeleton className="h-10 w-32" />
-              <Skeleton className="h-10 w-24" />
-            </div>
-          </div>
-          
-          {/* Product Grid Skeleton */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <Card key={i} className="overflow-hidden">
-                <div className="aspect-video bg-muted">
-                  <Skeleton className="h-full w-full" />
-                </div>
-                <div className="p-4 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 space-y-1">
-                      <Skeleton className="h-5 w-3/4" />
-                      <Skeleton className="h-4 w-1/2" />
-                    </div>
-                    <Skeleton className="h-6 w-12" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-4 w-16" />
-                    <Skeleton className="h-4 w-20" />
-                  </div>
-                  <div className="flex gap-2">
-                    <Skeleton className="h-8 w-8" />
-                    <Skeleton className="h-8 w-8" />
-                    <Skeleton className="h-8 w-8" />
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
+      {!hasLoaded && busy && <PageLoaderSlot />}
 
       {hasLoaded && (
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
@@ -1092,10 +789,10 @@ const Products = () => {
                 <tr key={p.id} className="hover:bg-muted/20 align-middle">
                   <td className="px-3 py-3 sm:px-4">
                     <div className="flex items-center gap-2 sm:gap-3">
-                      <ListingThumb src={p.primaryImage} alt={p.title} />
+                      <ListingThumb src={p.primaryImage} fallbackSrc={p.catalogImage} alt={p.title} />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <p className="font-medium truncate">{p.productName || p.title}</p>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="truncate font-medium leading-5">{p.productName || p.title}</p>
                           {(p.favoriteCount ?? 0) > 0 && (
                             <TooltipProvider>
                               <Tooltip>
@@ -1111,7 +808,9 @@ const Products = () => {
                             </TooltipProvider>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">{p.category}</p>
+                        {listingSubtitle(p) ? (
+                          <p className="mt-0.5 truncate text-xs leading-4 text-muted-foreground">{listingSubtitle(p)}</p>
+                        ) : null}
                       </div>
                     </div>
                   </td>
@@ -1180,9 +879,6 @@ const Products = () => {
                   </td>
                   <td className="px-3 py-3 text-right sm:px-4">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => void openMedia(p)} aria-label="Media" disabled={busy}>
-                        <ImageIcon className="h-4 w-4" />
-                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => void openEditListing(p)} aria-label="Edit" disabled={busy}>
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -1214,17 +910,19 @@ const Products = () => {
               <div key={p.id} className="rounded-lg border border-border p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <ListingThumb src={p.primaryImage} alt={p.title} />
+                    <ListingThumb src={p.primaryImage} fallbackSrc={p.catalogImage} alt={p.title} />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <p className="truncate font-medium">{p.productName || p.title}</p>
+                        <p className="truncate font-medium leading-5">{p.productName || p.title}</p>
                         {(p.favoriteCount ?? 0) > 0 && (
                           <span className="inline-flex shrink-0 items-center rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
                             ❤️ {p.favoriteCount}
                           </span>
                         )}
                       </div>
-                      <p className="truncate text-xs text-muted-foreground">{p.category}</p>
+                      {listingSubtitle(p) ? (
+                        <p className="mt-0.5 truncate text-xs leading-4 text-muted-foreground">{listingSubtitle(p)}</p>
+                      ) : null}
                     </div>
                   </div>
                   <Switch
@@ -1270,9 +968,6 @@ const Products = () => {
                 </dl>
 
                 <div className="mt-3 flex justify-end gap-1 border-t border-border pt-2">
-                  <Button variant="ghost" size="icon" onClick={() => void openMedia(p)} aria-label="Media" disabled={busy}>
-                    <ImageIcon className="h-4 w-4" />
-                  </Button>
                   <Button variant="ghost" size="icon" onClick={() => void openEditListing(p)} aria-label="Edit" disabled={busy}>
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -1424,6 +1119,16 @@ const Products = () => {
                 </FormGrid>
               </section>
 
+              {(() => {
+                const catalog = catalogProducts.find((p) => p.id === editing.productId);
+                return (
+                  <CatalogMediaLauncher
+                    images={catalog?.images ?? []}
+                    documents={catalog?.documents ?? []}
+                  />
+                );
+              })()}
+
               {activeTab === "equipment" && (
                 <section className="space-y-3">
                   <div className="flex items-center justify-between gap-2">
@@ -1496,7 +1201,7 @@ const Products = () => {
                         </div>
                       </div>
                       <p className="text-[11px] text-muted-foreground">
-                        Rental payout = vendor daily rate × plan days (set by Admin)
+                        Rental payout = vendor daily rate Ã— plan days (set by Admin)
                       </p>
                     </div>
                   </div>
@@ -1764,204 +1469,6 @@ const Products = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog> */}
-      <Dialog open={!!mediaFor} onOpenChange={(v) => !v && setMediaFor(null)}>
-        <DialogContent className="w-[calc(100vw-1rem)] max-w-4xl max-h-[90vh] overflow-y-auto p-0">
-          <DialogHeader className="px-4 pt-4 sm:px-6 sm:pt-6">
-            <DialogTitle>Manage images</DialogTitle>
-          </DialogHeader>
-          <div className="max-h-[calc(100vh-12rem)] overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
-            <Tabs defaultValue="images" className="space-y-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="images">Images</TabsTrigger>
-                <TabsTrigger value="documents">Documents</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="images" className="space-y-4">
-                <FileUploadZone
-                  multiple
-                  accept="image/*"
-                  label="Product images"
-                  hint="PNG, JPG, JPEG, WEBP · You can select multiple files"
-                  showPreview={false}
-                  disabled={busy}
-                  loading={busy}
-                  onFilesSelected={(files) => void addImg(files)}
-                />
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  {tempImages.map((img, idx) => (
-                    <div
-                      key={img.id}
-                      draggable
-                      onDragStart={(e) => e.dataTransfer.setData("text/plain", String(idx))}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => { e.preventDefault(); const from = +e.dataTransfer.getData("text/plain"); reorder(from, idx); }}
-                      className={`group relative aspect-square cursor-move overflow-hidden rounded-lg border-2 ${img.primary ? "border-primary ring-2 ring-primary/20" : "border-border"}`}
-                    >
-                      <img src={img.url} alt={`Product image ${idx + 1}`} className="h-full w-full object-cover" />
-                      {img.primary && (
-                        <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                          <Star className="h-3 w-3" fill="currentColor" /> Primary
-                        </div>
-                      )}
-                      <div className="absolute right-2 top-2 flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
-                        <button onClick={() => previewImage(img.url)} className="rounded-md bg-background/90 p-1 text-foreground hover:bg-background" aria-label="Preview">
-                          <Eye className="h-3.5 w-3.5" />
-                        </button>
-                        {!img.primary && (
-                          <button onClick={() => setPrimary(img.id)} className="rounded-md bg-background/90 p-1 text-foreground hover:bg-background" aria-label="Set primary">
-                            <Star className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                        <button onClick={() => void removeImg(img.id)} className="rounded-md bg-background/90 p-1 text-destructive hover:bg-background" aria-label="Remove">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {tempImages.length === 0 && (
-                    <div className="col-span-2 rounded-lg border border-dashed border-border p-4 sm:p-6 text-center text-sm text-muted-foreground sm:col-span-4">
-                      No images uploaded yet.
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">Drag to reorder on desktop. The primary image appears first in your listing.</p>
-              </TabsContent>
-
-              <TabsContent value="documents" className="space-y-4">
-                <div className="rounded-lg border border-border p-4">
-                  <h3 className="mb-4 font-medium">Listing documents</h3>
-                  
-                  <TypedFileUploadPanel
-                    title="Add listing document"
-                    description="Choose the document type, then browse or drag a file into the upload area."
-                    typeLabel="Document type"
-                    typeValue={docType}
-                    typeOptions={[
-                      { value: "spec_sheet", label: "Spec Sheet" },
-                      { value: "warranty", label: "Warranty" },
-                      { value: "compliance", label: "Compliance" },
-                    ]}
-                    onTypeChange={setDocType}
-                    selectedFile={docFile}
-                    onFileSelect={setDocFile}
-                    onUpload={() => void uploadListingDoc()}
-                    inputRef={docFileInputRef}
-                    busy={busy}
-                    uploadButtonLabel="Upload document"
-                  />
-
-                  {/* Documents List */}
-                  <div className="mt-6">
-                    <h4 className="text-sm font-medium text-foreground mb-3">Uploaded Documents</h4>
-                    <div className="space-y-2">
-                      {listingDocuments.map((doc) => (
-                        <div key={doc.id} className="rounded-md border border-border p-3">
-                          {/* Desktop: horizontal layout */}
-                          <div className="hidden sm:flex items-center justify-between">
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                                <FileText className="h-4 w-4" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium truncate">{doc.documentType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
-                                <p className="text-xs text-muted-foreground truncate">{getFileNameFromUrl(doc.fileUrl)}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => viewListingDoc(doc)}
-                                className="h-8 px-2 text-muted-foreground hover:text-foreground"
-                              >
-                                <Eye className="h-4 w-4 mr-1" /> Preview
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => deleteListingDoc(doc.id)}
-                                className="h-8 px-2 text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4 mr-1" /> Remove
-                              </Button>
-                            </div>
-                          </div>
-                          {/* Mobile: vertical layout with buttons below */}
-                          <div className="sm:hidden">
-                            <div className="flex items-start gap-3">
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                                <FileText className="h-5 w-5" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium leading-tight">{doc.documentType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5 break-words line-clamp-2">{getFileNameFromUrl(doc.fileUrl)}</p>
-                              </div>
-                            </div>
-                            <div className="mt-3 flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => viewListingDoc(doc)}
-                                className="h-8 text-xs flex-1"
-                              >
-                                <Eye className="h-3.5 w-3.5 mr-1" /> Preview
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => deleteListingDoc(doc.id)}
-                                className="h-8 text-xs flex-1 text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {listingDocuments.length === 0 && (
-                        <div className="text-center py-8 text-sm text-muted-foreground">
-                          <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          No documents uploaded yet.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </div>
-          <DialogFooter className="border-t px-4 py-3 sm:px-6">
-            <Button variant="outline" onClick={() => setMediaFor(null)} disabled={busy}>
-              <X className="mr-2 h-4 w-4" /> Close
-            </Button>
-            <Button onClick={() => void saveMedia()} disabled={busy}>
-              {busy ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
-              ) : (
-                "Save changes"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!previewUrl} onOpenChange={(open) => !open && setPreviewUrl(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Image preview</DialogTitle>
-          </DialogHeader>
-          {previewUrl && (
-            <div className="overflow-hidden rounded-lg border border-border">
-              <img src={previewUrl} alt="Preview" className="max-h-[60vh] w-full object-contain bg-muted/20" />
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPreviewUrl(null)} className="w-full sm:w-auto">
-              <X className="mr-2 h-4 w-4" /> Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Confirmation Card */}
       {deleteConfirmId && (() => {
@@ -2084,151 +1591,9 @@ const Products = () => {
           </div>
         );
       })()}
-
-      {/* Document Preview Dialog */}
-      <Dialog open={previewDocument !== null} onOpenChange={(open) => { if (!open) setPreviewDocument(null); }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Document Preview - {previewDocument?.type}</DialogTitle>
-          </DialogHeader>
-          {previewDocument && (
-            <div className="w-full h-[60vh] flex items-center justify-center bg-muted/30 rounded-lg overflow-hidden relative">
-              {(() => {
-                const extension = getFileExtensionFromUrl(previewDocument.url);
-                const isImage = ["jpg", "jpeg", "png", "gif", "webp"].includes(extension);
-                const isPdf = extension === "pdf";
-
-                if (isImage) {
-                  return (
-                <img
-                  src={previewDocument.url}
-                  alt="Document preview"
-                  className="max-w-full max-h-full object-contain"
-                />
-                  );
-                }
-
-                if (isPdf) {
-                  return (
-                <iframe
-                  src={previewDocument.url}
-                  className="w-full h-full border-0"
-                  title="PDF Preview"
-                />
-                  );
-                }
-
-                return (
-                <div className="text-center p-6">
-                  <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    Preview not available for this file type.
-                    <button
-                      type="button"
-                      onClick={() => void downloadUrl(previewDocument.url)}
-                      className="text-primary hover:underline ml-2"
-                    >
-                      Download file
-                    </button>
-                  </p>
-                </div>
-                );
-              })()}
-            </div>
-          )}
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setPreviewDocument(null)}
-            >
-              Close
-            </Button>
-            {previewDocument && (
-              <Button onClick={() => void downloadUrl(previewDocument.url)}>
-                Download
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Document Delete Confirmation Dialog */}
-      <Dialog open={!!deleteDocConfirmId} onOpenChange={(open) => !open && setDeleteDocConfirmId(null)}>
-        <DialogContent className="max-w-[95vw] sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete Document</DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. Are you sure you want to delete this document?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3">
-            <Button
-              variant="outline"
-              onClick={() => setDeleteDocConfirmId(null)}
-              className="w-full sm:w-auto"
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteDocConfirmId && confirmDeleteListingDoc(deleteDocConfirmId)}
-              className="w-full sm:w-auto"
-              disabled={busy}
-            >
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Image Delete Confirmation Dialog */}
-      <Dialog open={!!deleteImageConfirmId} onOpenChange={(open) => !open && setDeleteImageConfirmId(null)}>
-        <DialogContent className="max-w-[95vw] sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete Image</DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. Are you sure you want to delete this image?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3">
-            <Button
-              variant="outline"
-              onClick={() => setDeleteImageConfirmId(null)}
-              className="w-full sm:w-auto"
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteImageConfirmId && confirmRemoveImg(deleteImageConfirmId)}
-              className="w-full sm:w-auto"
-              disabled={busy}
-            >
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
 
 export default Products;
 
-interface MediaImage {
-  id: string;
-  primary: boolean;
-  url: string;
-  /** DB persistence path when using object storage */
-  storageKey?: string;
-  thumbnailUrl?: string;
-  thumbnailStorageKey?: string;
-  persisted: boolean;
-}
-
-interface ListingDocument {
-  id: string;
-  documentType: string;
-  fileUrl: string;
-  verificationStatus: string;
-}

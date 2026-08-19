@@ -6,6 +6,7 @@ import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 
 class ListingAssetsScreen extends StatefulWidget {
   final String listingId;
@@ -183,9 +184,7 @@ class _ListingAssetsScreenState extends State<ListingAssetsScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.accent),
-            )
+          ? const BrandPageLoader()
           : RefreshIndicator(
               color: AppTheme.accent,
               onRefresh: _load,

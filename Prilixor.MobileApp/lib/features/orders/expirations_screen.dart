@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/models/expiring_order_model.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 
 class ExpirationsScreen extends StatefulWidget {
@@ -48,7 +49,7 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
         elevation: 0,
       ),
       body: provider.isLoadingExpirations && provider.expirations.isEmpty
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : provider.expirationsError != null
               ? Center(child: Text(provider.expirationsError!, style: const TextStyle(color: Colors.redAccent)))
               : RefreshIndicator(

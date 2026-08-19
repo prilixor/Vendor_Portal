@@ -5,12 +5,12 @@ import { Heart, ImageOff, MapPin } from "lucide-react";
 import { customerApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/app/components/ui/card";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { dismissBootSplash } from "@/app/helpers/bootSplash";
 import { Badge } from "@/app/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Switch } from "@/app/components/ui/switch";
 import { Label } from "@/app/components/ui/label";
-import { cn } from "@/app/helpers/utils";
+import { cn, imageSrcCandidates } from "@/app/helpers/utils";
 import { useAuth } from "@/app/guards/AuthContext";
 import {
   ActiveFilterChips,
@@ -77,8 +77,15 @@ export function availabilityBadge(
 
 /** Fits the whole image inside a fixed aspect-ratio frame (letterboxing on sides or top/bottom). */
 export function BrowseCardImage({ src }: { src: string }) {
-  const [failed, setFailed] = useState(false);
-  if (!src.trim() || failed) {
+  const candidates = imageSrcCandidates(src);
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    setIndex(0);
+  }, [src]);
+
+  const activeSrc = candidates[index];
+  if (!src.trim() || !activeSrc) {
     const subtitle = !src.trim() ? "Image will be updated soon" : "Image currently unavailable";
     return (
       <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 text-slate-500 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 dark:text-slate-300">
@@ -94,12 +101,15 @@ export function BrowseCardImage({ src }: { src: string }) {
   }
   return (
     <img
-      src={src}
+      src={activeSrc}
       alt=""
       className="h-full w-full object-contain object-center bg-muted"
       loading="lazy"
       decoding="async"
-      onError={() => setFailed(true)}
+      onError={() => {
+        if (index + 1 < candidates.length) setIndex(index + 1);
+        else setIndex(candidates.length);
+      }}
     />
   );
 }
@@ -119,6 +129,10 @@ const CustomerBrowse = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    dismissBootSplash();
+  }, []);
 
   const { data: favoritesData = [] } = useQuery({
     queryKey: ["customer-favorites"],
@@ -430,21 +444,15 @@ const CustomerBrowse = () => {
         {(activeChips.length > 0 || (!isLoading && filteredData.length > 0)) && (
           <div className="mt-3 flex flex-col gap-2 border-t border-border/60 pt-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              {isLoading ? (
-                "Loading products…"
-              ) : (
+              <span className="font-medium text-foreground">{filteredData.length}</span>
+              {` ${filteredData.length === 1 ? "product" : "products"}`}
+              {browseMode === "chemicals" ? " for purchase" : " for rent"}
+              {appliedCat ? (
                 <>
-                  <span className="font-medium text-foreground">{filteredData.length}</span>
-                  {` ${filteredData.length === 1 ? "product" : "products"}`}
-                  {browseMode === "chemicals" ? " for purchase" : " for rent"}
-                  {appliedCat ? (
-                    <>
-                      {" "}
-                      in <span className="font-medium text-foreground">{appliedCat}</span>
-                    </>
-                  ) : null}
+                  {" "}
+                  in <span className="font-medium text-foreground">{appliedCat}</span>
                 </>
-              )}
+              ) : null}
             </p>
             <ActiveFilterChips chips={activeChips} onClearAll={clearAllFilters} clearLabel="Clear all" />
           </div>
@@ -500,11 +508,7 @@ const CustomerBrowse = () => {
             className="min-h-0"
           >
             {catLoading ? (
-              <div className="space-y-2 p-3">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="h-8 w-full" />
-                ))}
-              </div>
+              <div className="min-h-[8rem]" aria-busy="true" aria-label="Loading categories" />
             ) : (
               <FilterCategoryList
                 options={modeCategoryNames}
@@ -526,23 +530,6 @@ const CustomerBrowse = () => {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {isLoading &&
-          Array.from({ length: 8 }).map((_, i) => (
-            <Card key={i} className="overflow-hidden border-border/70 shadow-sm">
-              <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
-                <Skeleton className="h-full w-full rounded-none" />
-              </div>
-              <CardHeader className="space-y-2 px-4 pb-2 pt-4">
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-5 w-1/3" />
-              </CardHeader>
-              <CardContent className="space-y-2 px-4 pb-4 pt-0">
-                <Skeleton className="h-3 w-1/2" />
-                <Skeleton className="h-9 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-
         {!isLoading &&
           filteredData.map((item) => {
             const ls = item.listingStatus.trim().toLowerCase();

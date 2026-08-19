@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Search, ZoomIn, ZoomOut, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
-import { cn } from "@/app/helpers/utils";
+import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
 
 type ProductImageGalleryProps = {
   images: string[];
@@ -185,6 +185,7 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
             style={{ transformOrigin: origin, maxWidth: "none", maxHeight: "none" }}
             loading="lazy"
             decoding="async"
+            onError={retryOriginalOnImageError}
           />
         </div>
         <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-background/90 px-2.5 py-1 text-xs font-medium text-foreground shadow-sm ring-1 ring-border backdrop-blur-sm">
@@ -214,6 +215,7 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
                 style={{ maxWidth: "none", maxHeight: "none" }}
                 loading="lazy"
                 decoding="async"
+                onError={retryOriginalOnImageError}
               />
             </button>
           ))}
@@ -328,6 +330,7 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
                     transition: dragRef.current || pinchRef.current ? "none" : "transform 120ms ease-out",
                     willChange: "transform",
                   }}
+                  onError={retryOriginalOnImageError}
                 />
               </div>
             </div>
@@ -345,7 +348,7 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
                     i === imgIx ? "border-white" : "border-transparent opacity-70 hover:opacity-100",
                   )}
                 >
-                  <img src={url} alt="" className="h-full w-full object-contain" />
+                  <img src={url} alt="" className="h-full w-full object-contain" onError={retryOriginalOnImageError} />
                 </button>
               ))}
             </div>

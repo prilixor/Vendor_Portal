@@ -4,7 +4,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -182,52 +182,7 @@ const Settings = () => {
     <div>
       <PageHeader title="Settings" description="Manage your account, security, and preferences." />
       {loading ? (
-        <div className="space-y-6">
-          {/* Settings Skeleton */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="p-6">
-                <Skeleton className="h-6 w-24 mb-4" />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="space-y-2">
-                      <Skeleton className="h-3 w-20" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ))}
-                </div>
-                <Skeleton className="h-10 w-32 mt-5" />
-              </Card>
-
-              <Card className="p-6">
-                <Skeleton className="h-6 w-32 mb-4" />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="space-y-2">
-                      <Skeleton className="h-3 w-24" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ))}
-                </div>
-                <Skeleton className="h-10 w-32 mt-5" />
-              </Card>
-            </div>
-
-            <div className="space-y-4">
-              <Card className="p-6">
-                <Skeleton className="h-6 w-32 mb-4" />
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="space-y-2">
-                      <Skeleton className="h-3 w-16" />
-                      <Skeleton className="h-4 w-48" />
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
-          </div>
-        </div>
+        <PageLoaderSlot />
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">

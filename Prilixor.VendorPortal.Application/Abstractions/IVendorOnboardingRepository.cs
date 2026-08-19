@@ -60,6 +60,10 @@ public interface IVendorOnboardingRepository
     Task UpdateProductImageAsync(ProductImage image, CancellationToken cancellationToken);
     Task<List<ProductImage>> GetProductImagesAsync(Guid productId, CancellationToken cancellationToken);
     Task<List<ProductImage>> GetProductImagesMissingThumbnailsAsync(int limit, CancellationToken cancellationToken);
+    Task AddProductDocumentAsync(ProductDocument document, CancellationToken cancellationToken);
+    Task<ProductDocument?> GetProductDocumentByIdAsync(Guid productId, Guid documentId, CancellationToken cancellationToken);
+    Task UpdateProductDocumentAsync(ProductDocument document, CancellationToken cancellationToken);
+    Task<List<ProductDocument>> GetProductDocumentsAsync(Guid productId, CancellationToken cancellationToken);
 
     Task<List<RentalDurationMaster>> GetRentalDurationMastersAsync(bool activeOnly, CancellationToken cancellationToken);
     Task<RentalDurationMaster?> GetRentalDurationMasterByIdAsync(Guid id, CancellationToken cancellationToken);

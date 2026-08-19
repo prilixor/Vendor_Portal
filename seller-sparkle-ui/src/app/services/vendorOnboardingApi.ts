@@ -153,6 +153,18 @@ export interface ProductApiDto {
   coaDocumentUrl?: string;
   variants?: ProductVariantPayload[];
   rentalPricingPlans?: ProductRentalPricingPlanDto[];
+  images?: Array<{
+    id?: string;
+    imageUrl?: string | null;
+    thumbnailUrl?: string | null;
+    isPrimary?: boolean;
+    displayOrder?: number;
+  }>;
+  documents?: Array<{
+    id: string;
+    documentType: string;
+    fileUrl: string;
+  }>;
 }
 
 export interface VendorProductListingApiDto {
@@ -785,8 +797,8 @@ export const vendorOnboardingApi = {
     return apiClient.get<VendorStatusDto>(`/vendors/${vendorId}`);
   },
 
-  getVendorDispatchOffers(vendorId: string) {
-    return apiClient.get<VendorDispatchOfferApiDto[]>(`/vendors/${vendorId}/dispatch/offers`);
+  getVendorDispatchOffers(vendorId: string, options?: { quiet?: boolean }) {
+    return apiClient.get<VendorDispatchOfferApiDto[]>(`/vendors/${vendorId}/dispatch/offers`, options);
   },
 
   acceptVendorDispatchOrder(vendorId: string, orderId: string) {

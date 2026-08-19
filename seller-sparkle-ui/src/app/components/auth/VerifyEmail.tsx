@@ -6,6 +6,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { authApi } from "@/app/services/authApi";
 import { toast } from "sonner";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 
 const VerifyEmail = () => {
@@ -64,12 +65,7 @@ const VerifyEmail = () => {
     <AuthLayout title="Email verification" subtitle="We’re checking your link.">
       <div className="space-y-5">
         {status === "loading" && (
-          <div className="flex items-center justify-center rounded-lg border bg-muted/30 py-10">
-            <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
-              <Loader2 className="h-8 w-8 animate-spin" />
-              <p>{message}</p>
-            </div>
-          </div>
+          <PageLoaderSlot className="min-h-[10rem] py-0" />
         )}
 
         {status === "success" && (

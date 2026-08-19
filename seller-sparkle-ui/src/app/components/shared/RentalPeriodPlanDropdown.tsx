@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Star, Tag } from "lucide-react";
 import type { RentalPricingPlanDto } from "@/app/services/customerApi";
-import { cn } from "@/app/helpers/utils";
+import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { useIsMobile } from "@/app/helpers/use-mobile";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import {
@@ -176,7 +176,7 @@ function PlanOptionRow({
               className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border"
               title={tierLabel}
             >
-              <img src={iconUrl} alt={tierLabel} className="h-7 w-7 object-contain drop-shadow-sm" />
+              <img src={iconUrl} alt={tierLabel} className="h-7 w-7 object-contain drop-shadow-sm" onError={retryOriginalOnImageError} />
             </div>
           ) : null}
         </div>
@@ -203,7 +203,7 @@ function PlanOptionRow({
             className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border"
             title={tierLabel}
           >
-            <img src={iconUrl} alt={tierLabel} className="h-8 w-8 object-contain drop-shadow-sm" />
+            <img src={iconUrl} alt={tierLabel} className="h-8 w-8 object-contain drop-shadow-sm" onError={retryOriginalOnImageError} />
           </div>
         ) : (
           <div className="h-10 w-10 shrink-0" aria-hidden />
@@ -395,6 +395,7 @@ export function RentalPeriodPlanDropdown({
                 src={selectedIconUrl}
                 alt={selectedTierLabel}
                 className="h-9 w-9 object-contain drop-shadow-sm"
+                onError={retryOriginalOnImageError}
               />
             </div>
           ) : null}
@@ -426,7 +427,7 @@ export function RentalPeriodPlanDropdown({
                 className="flex shrink-0 items-center gap-1.5 rounded-full bg-muted/50 px-2 py-1 ring-1 ring-inset ring-border"
                 title={item.label}
               >
-                <img src={item.url} alt="" className="h-5 w-5 object-contain" />
+                <img src={item.url} alt="" className="h-5 w-5 object-contain" onError={retryOriginalOnImageError} />
                 <span className="whitespace-nowrap text-[11px] font-semibold text-muted-foreground">
                   {item.label}
                 </span>

@@ -205,3 +205,27 @@ public sealed class GetAdminDoctorQrEndpoint(IMediator mediator)
         return TypedResults.File(result.Value!, "image/png", fileDownloadName: $"doctor-{doctorId:N}-qr.png");
     }
 }
+
+public sealed class GetAdminDoctorQrCardEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<FileContentHttpResult, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("doctors/{id}/qr-card.png");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<FileContentHttpResult, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        var id = Route<string>("id");
+        if (!Guid.TryParse(id, out var doctorId))
+            return TypedResults.Problem("Doctor ID is required.");
+
+        var result = await mediator.Send(new GetAdminDoctorQrCardQuery(doctorId), ct);
+        if (!result.IsSuccess)
+            return result.ToErrorResponse();
+
+        return TypedResults.File(result.Value!, "image/png", fileDownloadName: $"doctor-{doctorId:N}-card.png");
+    }
+}

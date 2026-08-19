@@ -1,10 +1,10 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, useEffect, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Lock, Minus, Package, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { estimateCartLineRent, useCart } from "@/app/contexts/CartContext";
 import type { CartLine } from "@/app/contexts/CartContext";
 import { Button } from "@/app/components/ui/button";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, imageSrcCandidates } from "@/app/helpers/utils";
 import { useQueries } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
 import type { CustomerListingDetailApi } from "@/app/services/customerApi";
@@ -28,8 +28,15 @@ function formatCartInr(value: number): string {
 }
 
 function CartThumb({ url, title }: { url?: string | null; title: string }) {
-  const [failed, setFailed] = useState(false);
-  if (!url?.trim() || failed) {
+  const candidates = imageSrcCandidates(url);
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    setIndex(0);
+  }, [url]);
+
+  const active = candidates[index];
+  if (!url?.trim() || !active) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-muted to-muted/30">
         <Package className="h-6 w-6 text-muted-foreground/45" aria-hidden />
@@ -39,11 +46,14 @@ function CartThumb({ url, title }: { url?: string | null; title: string }) {
   }
   return (
     <img
-      src={url}
+      src={active}
       alt={title}
       className="h-full w-full object-contain object-center p-1.5"
       loading="lazy"
-      onError={() => setFailed(true)}
+      onError={() => {
+        if (index + 1 < candidates.length) setIndex(index + 1);
+        else setIndex(candidates.length);
+      }}
     />
   );
 }
