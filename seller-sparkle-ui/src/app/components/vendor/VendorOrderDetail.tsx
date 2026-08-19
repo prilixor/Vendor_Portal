@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Check, Barcode, CheckCircle2, ImagePlus, Images, Loader2, Stethoscope, X } from "lucide-react";
+import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -813,12 +814,14 @@ const VendorOrderDetail = () => {
 
                   <div className="flex items-center justify-between sm:justify-end gap-4 mt-3 sm:mt-0">
                     <span
+                      title={formatOrderStatusTitle(item.status)}
                       className={cn(
-                        "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
+                        "inline-flex items-center rounded-full",
+                        orderStatusBadgeSizeClass,
                         orderStatusBadgeClass(item.status),
                       )}
                     >
-                      {item.status.replace(/_/g, " ")}
+                      {formatOrderStatusLabel(item.status)}
                     </span>
                     <span className="font-semibold tabular-nums text-xs sm:w-20 sm:text-right">
                       ₹{itemPayout(item).toFixed(0)}

@@ -524,7 +524,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                       Container(
                                                         padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                         decoration: BoxDecoration(color: _getStatusColor(order.status).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16)),
-                                                        child: Text(order.status.toUpperCase(), style: TextStyle(color: _getStatusColor(order.status), fontSize: 10, fontWeight: FontWeight.bold)),
+                                                        child: Text(
+                                                          _statusBadgeLabel(order.status),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                          style: TextStyle(color: _getStatusColor(order.status), fontSize: 10, fontWeight: FontWeight.bold),
+                                                        ),
                                                       ),
                                                     ],
                                                   ),
@@ -1018,13 +1023,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     );
   }
 
+  String _statusBadgeLabel(String status) {
+    final s = status.trim().toLowerCase().replaceAll('_', ' ');
+    if (s == 'awaiting vendor acceptance' || s == 'pending vendor acceptance') {
+      return 'Awaiting';
+    }
+    if (s == 'dispatch failed') return 'Failed';
+    return status.replaceAll('_', ' ');
+  }
+
   Color _getStatusColor(String status) {
     final colors = context.appColors;
-    final s = status.toLowerCase();
+    final s = status.toLowerCase().replaceAll('_', ' ');
     if (s == 'active') return Colors.greenAccent;
-    if (s == 'pending' || s == 'confirmed' || s.contains('transit')) return Colors.orangeAccent;
+    if (s == 'pending' || s.contains('awaiting') || s == 'confirmed' || s.contains('transit')) return Colors.orangeAccent;
     if (s == 'cancelled' || s == 'canceled') return Colors.grey;
-    if (s == 'bought_out') return Colors.purpleAccent;
+    if (s == 'bought_out' || s == 'bought out') return Colors.purpleAccent;
     return colors.textSecondary;
   }
 

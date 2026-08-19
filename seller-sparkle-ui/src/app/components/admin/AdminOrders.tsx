@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Package,
 } from "lucide-react";
+import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import {
   ActiveFilterChips,
@@ -436,8 +437,12 @@ export const AdminOrders = () => {
                               EXTENDED
                             </Badge>
                           )}
-                          <Badge className={cn("whitespace-nowrap text-[10px] font-semibold py-0.5 px-2 capitalize", orderStatusBadgeClass(item.status))} variant="outline">
-                            {item.status.replace(/_/g, " ")}
+                          <Badge
+                            title={formatOrderStatusTitle(item.status)}
+                            className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(item.status))}
+                            variant="outline"
+                          >
+                            {formatOrderStatusLabel(item.status)}
                           </Badge>
                         </div>
                         <div className="flex items-center gap-3">

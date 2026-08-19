@@ -9,6 +9,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, RefreshCw, Package, User } from "lucide-react";
+import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import {
   ActiveFilterChips,
@@ -392,8 +393,12 @@ const VendorOrders = () => {
                             <Badge className={cn("whitespace-nowrap text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(order.orderType))} variant="outline">
                               {order.orderType.toUpperCase()}
                             </Badge>
-                            <Badge className={cn("whitespace-nowrap text-[10px] font-semibold py-0.5 px-2 capitalize", orderStatusBadgeClass(order.status))} variant="outline">
-                              {order.status.replace(/_/g, " ")}
+                            <Badge
+                              title={formatOrderStatusTitle(order.status)}
+                              className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(order.status))}
+                              variant="outline"
+                            >
+                              {formatOrderStatusLabel(order.status)}
                             </Badge>
                           </div>
                           <Button
