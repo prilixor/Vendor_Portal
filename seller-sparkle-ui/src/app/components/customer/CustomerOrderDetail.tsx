@@ -20,6 +20,7 @@ import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea
 import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { toast } from "sonner";
 import { isSameChatDay } from "@/app/helpers/chatDayLabel";
+import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
@@ -27,7 +28,7 @@ import { Label } from "@/app/components/ui/label";
 
 function orderStatusBadgeClass(status: string): string {
   const s = status.toLowerCase().replace(/_/g, " ");
-  if (s === "pending") {
+  if (s === "pending" || s === "awaiting vendor acceptance" || s === "pending vendor acceptance") {
     return "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200";
   }
   if (s === "confirmed") {
@@ -595,12 +596,14 @@ const CustomerOrderDetail = () => {
 
                 <div className="flex items-center justify-between sm:justify-end gap-4 mt-3 sm:mt-0">
                   <span
+                    title={formatOrderStatusTitle(item.status)}
                     className={cn(
-                      "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
+                      "inline-flex items-center rounded-full",
+                      orderStatusBadgeSizeClass,
                       orderStatusBadgeClass(item.status),
                     )}
                   >
-                    {item.status.replace(/_/g, " ")}
+                    {formatOrderStatusLabel(item.status)}
                   </span>
                   <span className="font-semibold tabular-nums text-xs sm:w-16 sm:text-right">₹{item.totalAmount.toFixed(0)}</span>
                 </div>

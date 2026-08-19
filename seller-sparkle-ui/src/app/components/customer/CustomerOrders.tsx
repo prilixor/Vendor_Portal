@@ -7,6 +7,7 @@ import { Button } from "@/app/components/ui/button";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
+import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
 import {
@@ -52,7 +53,7 @@ function formatDateRange(start?: string | null, end?: string | null): string {
 
 function orderStatusBadgeClass(status: string): string {
   const s = status.toLowerCase().replace(/_/g, " ");
-  if (s === "pending") {
+  if (s === "pending" || s === "awaiting vendor acceptance" || s === "pending vendor acceptance") {
     return "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200";
   }
   if (s === "confirmed") {
@@ -320,14 +321,14 @@ const CustomerOrders = () => {
                 });
 
                 return groups.map((group) => (
-                  <div key={group.baseOrderNumber} className="overflow-hidden rounded-xl border border-border/80 bg-card p-6 shadow-sm transition-all hover:border-border/100">
+                  <div key={group.baseOrderNumber} className="overflow-hidden rounded-xl border border-border/80 bg-card p-4 shadow-sm transition-all hover:border-border/100 sm:p-6">
                     {/* Group Header */}
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-4 mb-4">
-                      <div>
-                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Order Group</div>
-                        <div className="text-base font-bold text-foreground mt-0.5">{group.baseOrderNumber}</div>
+                    <div className="mb-3 border-b border-border/60 pb-3 sm:mb-4 sm:flex sm:items-center sm:justify-between sm:pb-4">
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order Group</div>
+                        <div className="mt-0.5 truncate text-base font-bold text-foreground">{group.baseOrderNumber}</div>
                       </div>
-                      <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
+                      <div className="mt-2 flex items-center justify-between gap-3 text-xs sm:mt-0 sm:justify-end sm:gap-4 sm:text-sm">
                         <div>
                           <span className="text-muted-foreground">Placed On:</span>{" "}
                           <span className="font-semibold text-foreground">{formatOrderDate(group.date)}</span>
@@ -340,65 +341,69 @@ const CustomerOrders = () => {
                     </div>
 
                     {/* Group Items */}
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                       {group.items.map((o) => {
                         const imageUrl = resolveItemImageUrl(o);
                         return (
-                        <div key={o.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/10 hover:border-border transition-all duration-300 shadow-sm gap-4">
-                          <div className="flex items-center gap-4 flex-1">
+                        <div key={o.id} className="flex flex-col gap-3 rounded-xl border border-border/50 bg-card p-3 shadow-sm transition-all duration-300 hover:border-border hover:bg-accent/10 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4">
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
                             {imageUrl ? (
-                              <img src={imageUrl} alt={o.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" onError={retryOriginalOnImageError} />
+                              <img src={imageUrl} alt={o.listingTitle} className="h-12 w-12 shrink-0 rounded-lg border border-border bg-muted object-cover shadow-sm" onError={retryOriginalOnImageError} />
                             ) : (
-                              <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">
+                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground shadow-sm">
                                 <Package className="h-5 w-5 opacity-60" />
                               </div>
                             )}
-                            <div className="flex-1 min-w-0">
+                            <div className="min-w-0 flex-1">
                               <Link
                                 to={`/customer/orders/${encodeURIComponent(o.id)}`}
-                                className="text-sm font-semibold text-foreground hover:underline block truncate"
+                                className="block truncate text-sm font-semibold text-foreground hover:underline"
                               >
                                 {o.listingTitle}
                               </Link>
-                              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground mt-1">
+                              <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
                                 {o.orderType?.toLowerCase() === "buy" ? (
-                                  <span>Purchase Date: <strong className="text-foreground font-medium">{formatOrderDate(o.startDate)}</strong></span>
+                                  <span>Purchase Date: <strong className="font-medium text-foreground">{formatOrderDate(o.startDate)}</strong></span>
                                 ) : (
                                   <>
-                                    <span>Period: <strong className="text-foreground font-medium">{formatDateRange(o.startDate, o.endDate)}</strong></span>
+                                    <span>Period: <strong className="font-medium text-foreground">{formatDateRange(o.startDate, o.endDate)}</strong></span>
                                     {o.rentalDurationLabel ? (
                                       <>
                                         <span className="text-muted-foreground/30" aria-hidden="true">•</span>
                                         <span>
                                           Duration:{" "}
-                                          <strong className="text-foreground font-medium">{o.rentalDurationLabel}</strong>
+                                          <strong className="font-medium text-foreground">{o.rentalDurationLabel}</strong>
                                         </span>
                                       </>
                                     ) : null}
                                   </>
                                 )}
                                 <span className="text-muted-foreground/30" aria-hidden="true">•</span>
-                                <span>Qty: <strong className="text-foreground font-medium">{o.quantity}</strong></span>
+                                <span>Qty: <strong className="font-medium text-foreground">{o.quantity}</strong></span>
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pt-3 sm:pt-0 border-t border-border/20 sm:border-none">
-                            <div className="flex items-center gap-2">
-                              <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(o.orderType))} variant="outline">
+                          <div className="flex w-full items-center justify-between gap-2 border-t border-border/20 pt-3 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
+                            <div className="flex items-center gap-1.5">
+                              <Badge className={cn("h-5 whitespace-nowrap px-2 py-0 text-[10px] font-semibold leading-none", orderTypeBadgeClass(o.orderType))} variant="outline">
                                 {o.orderType.toUpperCase()}
                               </Badge>
-                              <Badge className={cn("text-[10px] font-semibold py-0.5 px-2 capitalize", orderStatusBadgeClass(o.status))} variant="outline">
-                                {o.status.replace(/_/g, " ")}
+                              <Badge
+                                title={formatOrderStatusTitle(o.status)}
+                                className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(o.status))}
+                                variant="outline"
+                              >
+                                {formatOrderStatusLabel(o.status)}
                               </Badge>
                             </div>
-                            <span className="font-semibold tabular-nums text-sm text-foreground sm:w-20 sm:text-right">₹{o.totalAmount.toFixed(0)}</span>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-2 sm:gap-3">
+                              <span className="text-sm font-semibold tabular-nums text-foreground sm:w-20 sm:text-right">₹{o.totalAmount.toFixed(0)}</span>
                               {isCustomerOrderCancellable(o.status) ? (
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive font-semibold px-2"
+                                  className="h-8 px-2 text-xs font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive"
                                   disabled={cancelMut.isPending}
                                   onClick={() => cancelMut.mutate(o.id)}
                                 >
@@ -409,7 +414,7 @@ const CustomerOrders = () => {
                                 size="sm"
                                 variant="ghost"
                                 asChild
-                                className="h-8 text-xs font-semibold px-2 hover:bg-accent text-primary transition-colors flex items-center gap-1 group/btn"
+                                className="group/btn flex h-8 items-center gap-1 px-2 text-xs font-semibold text-primary transition-colors hover:bg-accent"
                               >
                                 <Link to={`/customer/orders/${encodeURIComponent(o.id)}`}>
                                   Details

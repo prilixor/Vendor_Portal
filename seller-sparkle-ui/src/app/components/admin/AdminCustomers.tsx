@@ -16,6 +16,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { ADMIN_PERMISSIONS } from "@/app/helpers/adminNav";
 import { getCustomerPortalHref } from "@/app/helpers/portalHost";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn } from "@/app/helpers/utils";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 
@@ -391,10 +392,11 @@ export const AdminCustomerDetail = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-sm">{o.orderNumber}</span>
                     <Badge
+                      title={formatOrderStatusTitle(o.status)}
                       variant="outline"
-                      className={cn("text-[10px] font-semibold capitalize", orderStatusBadgeClass(o.status))}
+                      className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(o.status))}
                     >
-                      {o.status.replace(/_/g, " ")}
+                      {formatOrderStatusLabel(o.status)}
                     </Badge>
                     {o.placedByAdminId && (
                       <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
