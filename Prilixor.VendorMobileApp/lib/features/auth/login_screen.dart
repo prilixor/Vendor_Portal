@@ -116,134 +116,143 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final authProvider = Provider.of<AuthProvider>(context);
     final isLoading = authProvider.isLoading || _isProcessing;
 
     return Scaffold(
-      backgroundColor: AppTheme.bg(context),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Icon(
-                Icons.storefront_rounded,
-                size: 80,
-                color: Color(0xFF6C63FF),
-              ),
-              const SizedBox(height: 32),
-              Text(
-                'Vendor Sign In',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: context.appColors.textPrimary,
+      backgroundColor: colors.background,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [colors.background, colors.surface],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(
+                  Icons.storefront_rounded,
+                  size: 80,
+                  color: Color(0xFF6C63FF),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Sign in to manage orders, inventory, and your store.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: context.appColors.textSecondary),
-              ),
-              const SizedBox(height: 32),
-              const RequiredFieldsNote(),
-              CustomTextField(
-                label: 'Email or Phone Number',
-                icon: Icons.person_outline,
-                required: true,
-                errorText: _emailError,
-                controller: _emailController,
-                focusNode: _emailFocusNode,
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                onChanged: (_) {
-                  if (_emailError != null) setState(() => _emailError = null);
-                },
-                onSubmitted: (_) {
-                  if (_emailController.text.trim().isEmpty) {
-                    setState(() => _emailError = 'Email or phone number is required');
-                    _emailFocusNode.requestFocus();
-                    showRequiredFieldsBlocked(context);
-                  } else {
-                    _passwordFocusNode.requestFocus();
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              CustomTextField(
-                label: 'Password',
-                icon: Icons.lock_rounded,
-                isPassword: true,
-                required: true,
-                errorText: _passwordError,
-                controller: _passwordController,
-                focusNode: _passwordFocusNode,
-                textInputAction: TextInputAction.done,
-                onChanged: (_) {
-                  if (_passwordError != null) {
-                    setState(() => _passwordError = null);
-                  }
-                },
-                onSubmitted: (_) {
-                  if (!isLoading) _handleLogin();
-                },
-              ),
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerRight,
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ForgotPasswordScreen(role: 'vendor'),
-                      ),
-                    );
+                const SizedBox(height: 32),
+                Text(
+                  'Vendor Sign In',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: colors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Sign in to manage orders, inventory, and your store.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16, color: colors.textSecondary),
+                ),
+                const SizedBox(height: 32),
+                const RequiredFieldsNote(),
+                CustomTextField(
+                  label: 'Email or Phone Number',
+                  icon: Icons.person_outline,
+                  required: true,
+                  errorText: _emailError,
+                  controller: _emailController,
+                  focusNode: _emailFocusNode,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  onChanged: (_) {
+                    if (_emailError != null) setState(() => _emailError = null);
                   },
-                  child: const Text(
-                    'Forgot Password?',
-                    style: TextStyle(
-                      color: Color(0xFF6C63FF),
-                      fontWeight: FontWeight.bold,
+                  onSubmitted: (_) {
+                    if (_emailController.text.trim().isEmpty) {
+                      setState(() => _emailError = 'Email or phone number is required');
+                      _emailFocusNode.requestFocus();
+                      showRequiredFieldsBlocked(context);
+                    } else {
+                      _passwordFocusNode.requestFocus();
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                CustomTextField(
+                  label: 'Password',
+                  icon: Icons.lock_rounded,
+                  isPassword: true,
+                  required: true,
+                  errorText: _passwordError,
+                  controller: _passwordController,
+                  focusNode: _passwordFocusNode,
+                  textInputAction: TextInputAction.done,
+                  onChanged: (_) {
+                    if (_passwordError != null) {
+                      setState(() => _passwordError = null);
+                    }
+                  },
+                  onSubmitted: (_) {
+                    if (!isLoading) _handleLogin();
+                  },
+                ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ForgotPasswordScreen(role: 'vendor'),
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      'Forgot Password?',
+                      style: TextStyle(
+                        color: Color(0xFF6C63FF),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: isLoading ? null : _handleLogin,
-                  child: isLoading
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
+                const SizedBox(height: 24),
+                SizedBox(
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: isLoading ? null : _handleLogin,
+                    child: isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Sign In',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        )
-                      : const Text(
-                          'Sign In',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'New vendor? ',
-                    style: TextStyle(color: context.appColors.textMuted),
                   ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'New vendor? ',
+                      style: TextStyle(color: colors.textSecondary),
+                    ),
                     GestureDetector(
                       onTap: () {
                         Navigator.push(
@@ -267,6 +276,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-      );
+      ),
+    );
   }
 }

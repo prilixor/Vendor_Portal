@@ -158,8 +158,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!_addressesLoaded || _hasGeoAddress(addressProvider)) {
       return const SizedBox.shrink();
     }
+    final colors = context.appColors;
+    final isDark = context.isDarkMode;
     return Material(
-      color: const Color(0xFF1E293B),
+      color: isDark ? const Color(0xFF1E293B) : colors.primarySoft,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -181,14 +183,16 @@ class _HomeScreenState extends State<HomeScreen> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: const Color(0xFF6C63FF).withValues(alpha: 0.45),
+              color: isDark
+                  ? const Color(0xFF6C63FF).withValues(alpha: 0.45)
+                  : const Color(0xFF6C63FF).withValues(alpha: 0.35),
             ),
           ),
-          child: const Row(
+          child: Row(
             children: [
-              Icon(Icons.add_location_alt_outlined,
+              const Icon(Icons.add_location_alt_outlined,
                   color: Color(0xFF6C63FF), size: 22),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,20 +200,23 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text(
                       'Add delivery address',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: colors.textPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
                       ),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
                       'Needed for checkout and delivery charges.',
-                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                      style: TextStyle(
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: Colors.white38),
+              Icon(Icons.chevron_right, color: colors.textMuted),
             ],
           ),
         ),

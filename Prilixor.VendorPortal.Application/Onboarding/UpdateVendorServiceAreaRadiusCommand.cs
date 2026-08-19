@@ -1,5 +1,7 @@
 using FluentValidation;
+using MediatR;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
@@ -30,7 +32,10 @@ public sealed class UpdateVendorServiceAreaRadiusCommandValidator : AbstractVali
     }
 }
 
-internal sealed class UpdateVendorServiceAreaRadiusCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class UpdateVendorServiceAreaRadiusCommandHandler(
+    IVendorOnboardingRepository repository,
+    IMediator mediator,
+    VendorSmsNotifier vendorSms)
     : ICommandHandler<UpdateVendorServiceAreaRadiusCommand, VendorServiceAreaDto>
 {
     public async Task<Result<VendorServiceAreaDto>> Handle(UpdateVendorServiceAreaRadiusCommand request, CancellationToken cancellationToken)
@@ -64,6 +69,7 @@ internal sealed class UpdateVendorServiceAreaRadiusCommandHandler(IVendorOnboard
 
         var oldRadius = entity.ServiceRadiusKm;
         var wasSetByAdmin = entity.IsRadiusSetByAdmin;
+        var radiusChanged = oldRadius != request.ServiceRadiusKm || !wasSetByAdmin;
         entity.ServiceRadiusKm = request.ServiceRadiusKm;
         entity.IsRadiusSetByAdmin = true;
 
@@ -79,7 +85,28 @@ internal sealed class UpdateVendorServiceAreaRadiusCommandHandler(IVendorOnboard
             CreatedOnUtc = DateTime.UtcNow
         };
         await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
+
+        if (radiusChanged)
+        {
+            await mediator.Send(new CreateVendorNotificationCommand(
+                vendorId.ToString(),
+                "service_area_radius_set",
+                "Service area coverage updated",
+                $"Admin set coverage for \"{entity.AreaName}\" to {request.ServiceRadiusKm:0.##} km.",
+                "in_app",
+                "sent"), cancellationToken);
+        }
+
         await repository.SaveChangesAsync(cancellationToken);
+
+        if (radiusChanged)
+        {
+            await vendorSms.TrySendAsync(
+                vendorId,
+                SmsTemplates.VendorServiceAreaRadiusSet(entity.AreaName, request.ServiceRadiusKm),
+                VendorSmsKind.ServiceAreaUpdated,
+                cancellationToken);
+        }
 
         return Result.Success(new VendorServiceAreaDto(
             entity.Id.ToString(),

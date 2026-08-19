@@ -215,13 +215,25 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
+  String _extractErrorMessage(DioException e, String fallback) {
+    if (e.response?.data is Map) {
+      final map = e.response!.data as Map;
+      return map['message']?.toString() ?? fallback;
+    }
+    if (e.response?.data is String && (e.response!.data as String).isNotEmpty) {
+      final str = e.response!.data as String;
+      if (!str.startsWith('<')) return str;
+    }
+    return fallback;
+  }
+
   Future<bool> sendPhoneOtp(String phone, String role) async {
     _errorMessage = null;
     try {
       final response = await _apiClient.sendPhoneOtp(phone, role);
       return response.statusCode == 200;
     } on DioException catch (e) {
-      _errorMessage = e.response?.data?['message']?.toString() ?? 'Failed to send verification code.';
+      _errorMessage = _extractErrorMessage(e, 'Failed to send verification code.');
       return false;
     } catch (_) {
       _errorMessage = 'Failed to send verification code.';
@@ -235,7 +247,7 @@ class AuthProvider extends ChangeNotifier {
       final response = await _apiClient.verifyPhoneOtp(phone, code, role);
       return response.statusCode == 200;
     } on DioException catch (e) {
-      _errorMessage = e.response?.data?['message']?.toString() ?? 'Invalid verification code.';
+      _errorMessage = _extractErrorMessage(e, 'Invalid verification code.');
       return false;
     } catch (_) {
       _errorMessage = 'Invalid verification code.';
@@ -253,7 +265,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return response.statusCode == 200;
     } on DioException catch (e) {
-      _errorMessage = e.response?.data?['message']?.toString() ?? 'Failed to send SMS code.';
+      _errorMessage = _extractErrorMessage(e, 'Failed to send SMS code.');
     } catch (_) {
       _errorMessage = 'Failed to send SMS code.';
     }
@@ -274,7 +286,7 @@ class AuthProvider extends ChangeNotifier {
         return response.data['resetToken']?.toString();
       }
     } on DioException catch (e) {
-      _errorMessage = e.response?.data?['message']?.toString() ?? 'Invalid verification code.';
+      _errorMessage = _extractErrorMessage(e, 'Invalid verification code.');
     } catch (_) {
       _errorMessage = 'Invalid verification code.';
     }
@@ -305,7 +317,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return response.statusCode == 200;
     } on DioException catch (e) {
-      _errorMessage = e.response?.data?['message']?.toString() ?? 'Failed to reset password.';
+      _errorMessage = _extractErrorMessage(e, 'Failed to reset password.');
     } catch (_) {
       _errorMessage = 'Failed to reset password.';
     }

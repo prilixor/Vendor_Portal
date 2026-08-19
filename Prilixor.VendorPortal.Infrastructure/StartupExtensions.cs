@@ -60,6 +60,11 @@ namespace Prilixor.VendorPortal.Infrastructure
 
             services.AddScoped<IEmailService, SmtpEmailService>();
             services.AddScoped<IPushNotificationService, WebPushNotificationService>();
+            services.Configure<TwilioOptions>(configuration.GetSection(TwilioOptions.SectionName));
+            services.AddScoped<ISmsService, TwilioSmsService>();
+            services.AddSingleton<IPhoneVerificationService, TwilioPhoneVerificationService>();
+            services.AddScoped<IPlatformSmsSettingsService, PlatformSmsSettingsService>();
+            services.AddMemoryCache();
             services.AddScoped<IWebsiteContentRepository, WebsiteContentRepository>();
             services.Configure<WebPushOptions>(configuration.GetSection(WebPushOptions.SectionName));
 

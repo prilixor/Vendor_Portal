@@ -21,7 +21,7 @@ public sealed class CustomersRouteGroup : Group
 
 public sealed class RegisterCustomerRequest
 {
-    public string Email { get; set; } = string.Empty;
+    public string? Email { get; set; }
     public string Password { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? Phone { get; set; }
@@ -366,6 +366,8 @@ public sealed class UpdateCustomerProfileRequest
 {
     public string FullName { get; set; } = string.Empty;
     public string? Phone { get; set; }
+    /// <summary>Optional. Phone-only accounts may set email once (verification email is sent).</summary>
+    public string? Email { get; set; }
 }
 
 public sealed class UpdateCustomerProfileEndpoint(IMediator mediator)
@@ -386,7 +388,9 @@ public sealed class UpdateCustomerProfileEndpoint(IMediator mediator)
         if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
 
-        var result = await mediator.Send(new UpdateCustomerProfileCommand(customerId, req.FullName, req.Phone), ct);
+        var result = await mediator.Send(
+            new UpdateCustomerProfileCommand(customerId, req.FullName, req.Phone, req.Email),
+            ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -852,6 +856,7 @@ public sealed class UpdateCustomerNotificationPreferenceRequest
     public bool DepositRefundsEnabled { get; set; }
     public bool DirectMessagesEnabled { get; set; }
     public bool MarketingEmailsEnabled { get; set; }
+    public bool SmsNotificationsEnabled { get; set; } = true;
 }
 
 public sealed class UpdateCustomerNotificationPreferenceEndpoint(IMediator mediator)
@@ -878,7 +883,8 @@ public sealed class UpdateCustomerNotificationPreferenceEndpoint(IMediator media
             req.ExpirationRemindersEnabled,
             req.DepositRefundsEnabled,
             req.DirectMessagesEnabled,
-            req.MarketingEmailsEnabled), ct);
+            req.MarketingEmailsEnabled,
+            req.SmsNotificationsEnabled), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }

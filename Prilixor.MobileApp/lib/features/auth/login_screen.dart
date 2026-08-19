@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/providers/profile_provider.dart';
+import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/phone_otp_dialog.dart';
@@ -9,7 +10,6 @@ import '../../shared/widgets/required_field_ux.dart';
 import '../dashboard/customer_dashboard.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
-import '../../core/theme.dart';
 class LoginScreen extends StatefulWidget {
   /// When true, successful login pops with `true` so the caller can continue
   /// (e.g. guest → checkout). Default replaces the stack with the dashboard.

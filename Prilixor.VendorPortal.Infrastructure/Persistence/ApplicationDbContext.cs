@@ -4,6 +4,7 @@ using Prilixor.VendorPortal.Domain.Support;
 using Prilixor.Shared.Abstractions.DB;
 using Microsoft.EntityFrameworkCore;
 using Prilixor.VendorPortal.Domain.Common;
+using Prilixor.VendorPortal.Domain.Platform;
 
 namespace Prilixor.VendorPortal.Infrastructure.Persistence;
 
@@ -19,6 +20,7 @@ public class ApplicationDbContext : DbContext
     {
     }
 
+    public DbSet<PlatformSmsSettings> PlatformSmsSettings => Set<PlatformSmsSettings>();
     public DbSet<Vendor> Vendors => Set<Vendor>();
     public DbSet<VendorProfile> VendorProfiles => Set<VendorProfile>();
     public DbSet<VendorDocument> VendorDocuments => Set<VendorDocument>();
@@ -79,6 +81,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.Id).HasColumnName("id");
             entity.Property(x => x.Email).HasColumnName("email");
             entity.Property(x => x.SupportPhone).HasColumnName("support_phone").IsRequired(false);
+            entity.Property(x => x.PhoneVerifiedAt).HasColumnName("phone_verified_at").IsRequired(false);
             entity.Property(x => x.PasswordHash).HasColumnName("password_hash");
             entity.Property(x => x.IsEmailVerified).HasColumnName("email_verified");
             entity.Property(x => x.EmailVerificationToken).HasColumnName("email_verification_token");

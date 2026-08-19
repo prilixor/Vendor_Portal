@@ -105,18 +105,25 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
     });
 
     final provider = context.read<AuthProvider>();
-    final success = await provider.sendPhoneOtp(widget.phone, widget.role);
-
-    if (!mounted) return;
-    setState(() => _isSending = false);
-
-    if (success) {
-      _startCooldown();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Verification code sent to +91 ${widget.phone}')),
-      );
-    } else {
-      setState(() => _errorMessage = provider.errorMessage ?? 'Failed to send verification code.');
+    try {
+      final success = await provider.sendPhoneOtp(widget.phone, widget.role);
+      if (!mounted) return;
+      if (success) {
+        _startCooldown();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Verification code sent to +91 ${widget.phone}')),
+        );
+      } else {
+        setState(() => _errorMessage = provider.errorMessage ?? 'Failed to send verification code.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _errorMessage = provider.errorMessage ?? 'Failed to send verification code.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
     }
   }
 
@@ -135,20 +142,27 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
     });
 
     final provider = context.read<AuthProvider>();
-    final success = await provider.verifyPhoneOtp(widget.phone, code, widget.role);
-
-    if (!mounted) return;
-    setState(() => _isVerifying = false);
-
-    if (success) {
-      final msg = widget.successMessage ?? 'Phone number verified successfully.';
-      if (msg.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    try {
+      final success = await provider.verifyPhoneOtp(widget.phone, code, widget.role);
+      if (!mounted) return;
+      if (success) {
+        final msg = widget.successMessage ?? 'Phone number verified successfully.';
+        if (msg.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        }
+        widget.onVerified?.call();
+        Navigator.of(context).pop(true);
+      } else {
+        setState(() => _errorMessage = provider.errorMessage ?? 'Invalid verification code.');
       }
-      widget.onVerified?.call();
-      Navigator.of(context).pop(true);
-    } else {
-      setState(() => _errorMessage = provider.errorMessage ?? 'Invalid verification code.');
+    } catch (_) {
+      if (mounted) {
+        setState(() => _errorMessage = provider.errorMessage ?? 'Invalid verification code.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isVerifying = false);
+      }
     }
   }
 
@@ -160,7 +174,7 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
         'Enter the 6-digit code sent to +91 ${widget.phone}.${widget.required ? ' Verification is required to continue.' : ''}';
 
     return Dialog(
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: colors.surface,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: ConstrainedBox(
@@ -178,16 +192,16 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
                   Expanded(
                     child: Text(
                       titleText,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: colors.textPrimary,
                       ),
                     ),
                   ),
                   if (!widget.required)
                     IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white54),
+                      icon: Icon(Icons.close, color: colors.textMuted),
                       onPressed: () => Navigator.of(context).pop(false),
                       splashRadius: 20,
                       padding: EdgeInsets.zero,
@@ -198,9 +212,9 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
               const SizedBox(height: 8),
               Text(
                 descText,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13.5,
-                  color: Colors.white70,
+                  color: colors.textSecondary,
                   height: 1.4,
                 ),
               ),
@@ -220,23 +234,23 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
                           textAlign: TextAlign.center,
                           maxLength: 1,
                           cursorColor: const Color(0xFF6C63FF),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: colors.textPrimary,
                           ),
                           decoration: InputDecoration(
                             counterText: '',
                             filled: true,
-                            fillColor: const Color(0xFF0F172A),
+                            fillColor: colors.background,
                             contentPadding: EdgeInsets.zero,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Color(0xFF475569), width: 1.2),
+                              borderSide: BorderSide(color: colors.border, width: 1.2),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Color(0xFF475569), width: 1.2),
+                              borderSide: BorderSide(color: colors.border, width: 1.2),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),

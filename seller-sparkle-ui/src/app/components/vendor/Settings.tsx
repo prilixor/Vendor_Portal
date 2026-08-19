@@ -4,7 +4,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -17,12 +17,20 @@ import {
   requiredIndianMobileError,
 } from "@/app/helpers/indianMobilePhone";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
+import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
+import {
+  applyPasswordPairLiveErrors,
+  passwordsMatch,
+} from "@/app/helpers/passwordValidation";
+import { cn } from "@/app/helpers/utils";
 
 const Settings = () => {
   const { user } = useAuth();
   const [profile, setProfile] = useState<VendorProfileApiDto | null>(null);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [otpOpen, setOtpOpen] = useState(false);
   const [timeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -69,9 +77,11 @@ const Settings = () => {
         setProfile(profileRes);
         setFullName(profileRes.ownerName || user.name || "");
         setPhone(profileRes.supportPhone ? normalizeIndianMobileDigits(profileRes.supportPhone) : "");
+        setPhoneVerified(!!profileRes.isPhoneVerified);
       } catch {
         setProfile(null);
         setFullName(user.name || "");
+        setPhoneVerified(false);
       } finally {
         setLoading(false);
       }
@@ -120,7 +130,11 @@ const Settings = () => {
       setProfile(updated);
       setFullName(updated.ownerName || "");
       setPhone(updated.supportPhone ? normalizeIndianMobileDigits(updated.supportPhone) : "");
+      setPhoneVerified(!!updated.isPhoneVerified);
       toast.success("Profile saved.");
+      if (!updated.isPhoneVerified) {
+        toast.message("Verify your phone to receive SMS order alerts.");
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save profile.";
       toast.error(message);
@@ -182,7 +196,52 @@ const Settings = () => {
     <div>
       <PageHeader title="Settings" description="Manage your account, security, and preferences." />
       {loading ? (
-        <PageLoaderSlot />
+        <div className="space-y-6">
+          {/* Settings Skeleton */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-6">
+              <Card className="p-6">
+                <Skeleton className="h-6 w-24 mb-4" />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ))}
+                </div>
+                <Skeleton className="h-10 w-32 mt-5" />
+              </Card>
+
+              <Card className="p-6">
+                <Skeleton className="h-6 w-32 mb-4" />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ))}
+                </div>
+                <Skeleton className="h-10 w-32 mt-5" />
+              </Card>
+            </div>
+
+            <div className="space-y-4">
+              <Card className="p-6">
+                <Skeleton className="h-6 w-32 mb-4" />
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-4 w-48" />
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
@@ -210,26 +269,42 @@ const Settings = () => {
             </div>
             <div className="space-y-1.5">
               <Label required>Phone</Label>
-              <IndianMobileInput
-                value={phone}
-                onChange={(v) => {
-                  setPhone(v);
-                  setFieldErrors((prev) => {
-                    if (!prev.phone) return prev;
-                    const next = { ...prev };
-                    delete next.phone;
-                    return next;
-                  });
-                }}
-                disabled={loading || savingProfile}
-                invalid={!!fieldErrors.phone}
-              />
-              <FieldError message={fieldErrors.phone} />
-              {!fieldErrors.phone && (
-                <p className="text-[11px] text-muted-foreground">
-                  10-digit Indian mobile starting with 6–9.
-                </p>
-              )}
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                <div className="flex-1 space-y-1.5">
+                  <IndianMobileInput
+                    value={phone}
+                    onChange={(v) => {
+                      setPhone(v);
+                      setPhoneVerified(false);
+                      setFieldErrors((prev) => {
+                        if (!prev.phone) return prev;
+                        const next = { ...prev };
+                        delete next.phone;
+                        return next;
+                      });
+                    }}
+                    disabled={loading || savingProfile}
+                    invalid={!!fieldErrors.phone}
+                  />
+                  <FieldError message={fieldErrors.phone} />
+                  {!fieldErrors.phone && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {phoneVerified
+                        ? "Verified — SMS order alerts can be delivered."
+                        : "10-digit Indian mobile starting with 6–9. Verify to enable SMS alerts."}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0"
+                  disabled={loading || savingProfile || !!requiredIndianMobileError(phone) || phoneVerified}
+                  onClick={() => setOtpOpen(true)}
+                >
+                  {phoneVerified ? "Verified" : "Verify SMS"}
+                </Button>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Time zone</Label>
@@ -279,8 +354,22 @@ const Settings = () => {
                   type={showNewPassword ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => {
-                    setNewPassword(e.target.value);
-                    clearFieldError("newPassword");
+                    const value = e.target.value;
+                    setNewPassword(value);
+                    setFieldErrors((prev) =>
+                      applyPasswordPairLiveErrors(
+                        prev,
+                        value,
+                        confirmPassword,
+                        { password: "newPassword", confirm: "confirmPassword" },
+                        {
+                          passwordEmptyMessage: "Please enter a new password.",
+                          passwordShortMessage: "New password must be at least 8 characters.",
+                          confirmEmptyMessage: "Please confirm your new password.",
+                          confirmMismatchMessage: "New password and confirm password must match.",
+                        },
+                      ),
+                    );
                   }}
                   disabled={savingPassword}
                   className={fieldErrors.newPassword ? "border-destructive" : ""}
@@ -310,11 +399,30 @@ const Settings = () => {
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => {
-                    setConfirmPassword(e.target.value);
-                    clearFieldError("confirmPassword");
+                    const value = e.target.value;
+                    setConfirmPassword(value);
+                    setFieldErrors((prev) =>
+                      applyPasswordPairLiveErrors(
+                        prev,
+                        newPassword,
+                        value,
+                        { password: "newPassword", confirm: "confirmPassword" },
+                        {
+                          passwordEmptyMessage: "Please enter a new password.",
+                          passwordShortMessage: "New password must be at least 8 characters.",
+                          confirmEmptyMessage: "Please confirm your new password.",
+                          confirmMismatchMessage: "New password and confirm password must match.",
+                        },
+                      ),
+                    );
                   }}
                   disabled={savingPassword}
-                  className={fieldErrors.confirmPassword ? "border-destructive" : ""}
+                  className={cn(
+                    fieldErrors.confirmPassword && "border-destructive",
+                    passwordsMatch(newPassword, confirmPassword) &&
+                      !fieldErrors.confirmPassword &&
+                      "border-emerald-500/60",
+                  )}
                 />
                 <Button
                   type="button"
@@ -328,6 +436,9 @@ const Settings = () => {
                 </Button>
               </div>
               <FieldError message={fieldErrors.confirmPassword} />
+              {!fieldErrors.confirmPassword && passwordsMatch(newPassword, confirmPassword) && (
+                <p className="text-xs text-emerald-600">Passwords match</p>
+              )}
             </div>
             <Button variant="outline" className="w-full" onClick={() => void updatePassword()} disabled={savingPassword}>
               Update password
@@ -341,6 +452,16 @@ const Settings = () => {
         </Card>
       </div>
       )}
+      <PhoneOtpDialog
+        open={otpOpen}
+        onOpenChange={setOtpOpen}
+        phone={normalizeIndianMobileDigits(phone)}
+        role="vendor"
+        onVerified={() => {
+          setPhoneVerified(true);
+          if (profile) setProfile({ ...profile, isPhoneVerified: true });
+        }}
+      />
     </div>
   );
 };

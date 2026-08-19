@@ -25,7 +25,8 @@ public sealed record VendorProfileDto(
     string PostalCode,
     decimal? Latitude,
     decimal? Longitude,
-    bool OnboardingCompleted);
+    bool OnboardingCompleted,
+    bool IsPhoneVerified = false);
 
 public sealed record VendorDocumentDto(
     string Id,
@@ -187,12 +188,6 @@ public sealed record ProductImageDto(
     bool IsPrimary,
     string? ThumbnailUrl = null);
 
-public sealed record ProductDocumentDto(
-    string Id,
-    string ProductId,
-    string DocumentType,
-    string FileUrl);
-
 public sealed record VendorProductListingDto(
     string Id,
     string VendorId,
@@ -265,7 +260,8 @@ public sealed record VendorNotificationPreferenceDto(
     string VendorId,
     bool EmailNotificationsEnabled,
     bool PushNotificationsEnabled,
-    bool NewOrderNotifications);
+    bool NewOrderNotifications,
+    bool SmsNotificationsEnabled = true);
 
 public sealed record VendorNotificationDto(
     string Id,
@@ -287,7 +283,9 @@ public sealed record AdminUserDto(
     DateTimeOffset? LastLoginAt,
     string? RoleId = null,
     bool IsSystemUser = false,
-    bool MustChangePassword = false);
+    bool MustChangePassword = false,
+    string? Phone = null,
+    bool IsPhoneVerified = false);
 
 public sealed record AdminAuditLogDto(
     string Id,
@@ -333,3 +331,9 @@ public sealed record VendorPushSubscriptionDto(
     string Endpoint,
     string P256DH,
     string Auth);
+
+public sealed record ProductDocumentDto(
+    string Id,
+    string ProductId,
+    string DocumentType,
+    string FileUrl);

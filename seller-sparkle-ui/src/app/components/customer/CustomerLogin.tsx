@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { AuthLayout } from "@/app/components/layout/AuthLayout";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -8,10 +8,13 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { getVendorPortalHref } from "@/app/helpers/portalHost";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { customerApi } from "@/app/services/customerApi";
+import { authApi } from "@/app/services/authApi";
+import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
+import { isValidIndianMobile, normalizeIndianMobileDigits } from "@/app/helpers/indianMobilePhone";
 
 const CustomerLogin = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const from = (location.state as { from?: string } | null)?.from ?? "/customer/shop";
   const { login } = useAuth();
   const vendorLoginHref = getVendorPortalHref("/login");
@@ -19,12 +22,21 @@ const CustomerLogin = () => {
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [resendLoading, setResendLoading] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({});
+  const [otpOpen, setOtpOpen] = useState(false);
+  const [pendingPhone, setPendingPhone] = useState("");
+
+  const goAfterAuth = () => {
+    window.location.href = from.startsWith("/customer") ? from : "/customer/shop";
+  };
 
   const validate = () => {
     const e: typeof errors = {};
-    const isEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
-    if (!isEmail) e.email = "Enter a valid email address";
+    const isEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
+    const isPhone = isValidIndianMobile(email);
+    if (!isEmail && !isPhone) e.email = "Enter a valid email or 10-digit Indian mobile number";
     if (password.length < 8) e.password = "Password must be at least 8 characters";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -34,14 +46,61 @@ const CustomerLogin = () => {
     ev.preventDefault();
     if (!validate()) return;
     setLoading(true);
+    setErrors((prev) => ({ ...prev, form: undefined }));
     try {
-      await login(email.trim(), password, "customer");
+      const identifier = email.trim();
+      await login(identifier, password, "customer");
+      setNeedsVerification(false);
+      const profile = await customerApi.getProfile();
+      const rawPhone = profile.phone?.trim() ?? "";
+      if (rawPhone && !profile.isPhoneVerified) {
+        setPendingPhone(normalizeIndianMobileDigits(rawPhone));
+        setOtpOpen(true);
+        toast.message("Verify your phone to continue.");
+        return;
+      }
       toast.success("Welcome!");
-      navigate(from.startsWith("/customer") ? from : "/customer/shop", { replace: true });
+      goAfterAuth();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Sign in failed.";
-      toast.error(message);
+      let message = error instanceof Error ? error.message : "Sign in failed.";
+      const code =
+        error && typeof error === "object" && "code" in error
+          ? String((error as { code?: string }).code ?? "")
+          : "";
+      const rawMessage = `${message} ${code}`;
+      message = message.replace(/\n?\[.*?\]/g, "").trim() || "Invalid email/phone or password.";
+
+      if (rawMessage.includes("EMAIL_NOT_VERIFIED")) {
+        setNeedsVerification(true);
+        setErrors((prev) => ({ ...prev, form: undefined }));
+        toast.error("Please verify your email before logging in.");
+      } else {
+        setNeedsVerification(false);
+        setErrors((prev) => ({ ...prev, form: message }));
+        toast.error(message);
+      }
+    } finally {
       setLoading(false);
+    }
+  };
+
+  const resendVerification = async () => {
+    const candidateEmail = email.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(candidateEmail)) {
+      toast.error("Enter your email address to resend the verification link.");
+      return;
+    }
+
+    setResendLoading(true);
+    try {
+      await authApi.resendVerification(candidateEmail, "customer");
+      toast.success("Verification link has been resent.");
+    } catch (error) {
+      let message = error instanceof Error ? error.message : "Failed to resend verification link.";
+      message = message.replace(/\n?\[.*?\]/g, "").trim();
+      toast.error(message);
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -52,13 +111,13 @@ const CustomerLogin = () => {
           Fields marked <span className="text-destructive">*</span> are required.
         </p>
         <div className="space-y-1.5">
-          <Label htmlFor="email" required>Email</Label>
+          <Label htmlFor="email" required>Email or Phone Number</Label>
           <Input
             id="email"
-            type="email"
+            type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@email.com"
+            placeholder="you@email.com or 9876543210"
             aria-invalid={!!errors.email}
             className={errors.email ? "border-destructive focus-visible:ring-destructive" : ""}
           />
@@ -68,7 +127,7 @@ const CustomerLogin = () => {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password" required>Password</Label>
-            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+            <Link to="/forgot-password?portal=customer" className="text-xs font-medium text-primary hover:underline">
               Forgot?
             </Link>
           </div>
@@ -91,6 +150,33 @@ const CustomerLogin = () => {
           </div>
           {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
         </div>
+
+        {errors.form && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {errors.form}
+          </div>
+        )}
+
+        {needsVerification && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 space-y-2">
+            <p>Your email is not verified yet. Resend the link, then try signing in again.</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-10"
+              disabled={resendLoading}
+              onClick={() => void resendVerification()}
+            >
+              {resendLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resending…
+                </>
+              ) : (
+                "Resend verification email"
+              )}
+            </Button>
+          </div>
+        )}
 
         <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>
           {loading ? (
@@ -115,6 +201,18 @@ const CustomerLogin = () => {
           Vendor sign in
         </a>
       </p>
+
+      <PhoneOtpDialog
+        open={otpOpen}
+        onOpenChange={setOtpOpen}
+        phone={pendingPhone}
+        role="customer"
+        required
+        onVerified={() => {
+          toast.success("Welcome!");
+          goAfterAuth();
+        }}
+      />
     </AuthLayout>
   );
 };

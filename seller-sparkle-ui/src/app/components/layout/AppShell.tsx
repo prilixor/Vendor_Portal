@@ -9,6 +9,8 @@ import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 
 import { CustomerStoreHeader } from "./CustomerStoreHeader";
+import { CustomerPhoneVerificationGate } from "@/app/components/customer/CustomerPhoneVerificationGate";
+import { VendorPhoneVerificationGate } from "@/app/components/vendor/VendorPhoneVerificationGate";
 
 import { vendorNav, customerNav, guestCustomerNav } from "@/app/helpers/navigation";
 
@@ -198,7 +200,9 @@ function VendorShellContent({
 
             )}
 
-            <PortalGlobalLoader placement="main" />
+            <VendorPhoneVerificationGate>
+              <PortalGlobalLoader placement="main" />
+            </VendorPhoneVerificationGate>
 
           </div>
 
@@ -428,7 +432,9 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
               <div className="mx-auto w-full max-w-[1400px]">
 
-                <PortalGlobalLoader placement="chrome" />
+                <CustomerPhoneVerificationGate>
+                  <PortalGlobalLoader placement="chrome" />
+                </CustomerPhoneVerificationGate>
 
               </div>
 

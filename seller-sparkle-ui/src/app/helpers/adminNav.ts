@@ -21,6 +21,7 @@ import {
   HelpCircle,
   PhoneCall,
   Wrench,
+  MessageSquareText,
 } from "lucide-react";
 import type { NavSection } from "@/app/helpers/navigation";
 
@@ -99,6 +100,7 @@ const adminNavBase: { title: string; items: AdminNavItem[] }[] = [
       { label: "Audit Logs", to: "/admin/audit-logs", icon: ScrollText, permission: ADMIN_PERMISSIONS.auditView },
       { label: "Support", to: "/admin/support", icon: MessageSquare, permission: ADMIN_PERMISSIONS.supportManage },
       { label: "Customer Chats", to: "/admin/customer-chats", icon: MessageSquare, permission: ADMIN_PERMISSIONS.supportManage },
+      { label: "SMS / Twilio", to: "/admin/sms-settings", icon: MessageSquareText, permission: ADMIN_PERMISSIONS.adminsManage },
       // Available to every signed-in admin (no extra permission)
       { label: "Settings", to: "/admin/settings", icon: Settings },
     ],

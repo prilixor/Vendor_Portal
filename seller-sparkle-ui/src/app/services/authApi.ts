@@ -28,6 +28,14 @@ export interface RegisterVendorResponse {
   email: string;
 }
 
+export interface RegisterCustomerResponse {
+  id: string;
+  email?: string | null;
+  fullName: string;
+  requiresPhoneOtp: boolean;
+  requiresEmailVerification: boolean;
+}
+
 export interface ChangePasswordPayload {
   email: string;
   currentPassword: string;
@@ -42,6 +50,8 @@ export interface ChangePasswordResponse {
 
 export interface ForgotPasswordRequest {
   email: string;
+  /** customer | vendor | admin — preserved on the email reset link */
+  portal?: "customer" | "vendor" | "admin";
 }
 
 export interface ForgotPasswordResponse {
@@ -68,6 +78,20 @@ export interface VerifyEmailResponse {
 export interface ResendVerificationResponse {
   success: boolean;
   message: string;
+}
+
+export interface PhoneOtpActionResponse {
+  success: boolean;
+  message: string;
+  isPhoneVerified: boolean;
+  phone?: string | null;
+}
+
+export interface ForgotPasswordSmsVerifiedResponse {
+  success: boolean;
+  message: string;
+  resetToken: string;
+  phone?: string | null;
 }
 
 export const authApi = {
@@ -99,12 +123,17 @@ export const authApi = {
     });
   },
 
-  async registerCustomer(email: string, password: string, fullName: string, phone?: string): Promise<RegisterCustomerResponse> {
+  async registerCustomer(
+    email: string | null | undefined,
+    password: string,
+    fullName: string,
+    phone: string | null | undefined,
+  ): Promise<RegisterCustomerResponse> {
     return apiClient.post<RegisterCustomerResponse>('/customers/register', {
-      email,
+      email: email?.trim() || null,
       password,
       fullName,
-      phone: phone?.trim() || undefined,
+      phone: phone?.trim() || null,
     });
   },
 
@@ -112,16 +141,57 @@ export const authApi = {
     return apiClient.get<VerifyEmailResponse>(`/auth/verify-email?token=${encodeURIComponent(token)}`);
   },
 
-  async resendVerification(email: string): Promise<ResendVerificationResponse> {
-    return apiClient.post<ResendVerificationResponse>('/auth/resend-verification', { email });
+  async resendVerification(
+    email: string,
+    role?: "customer" | "vendor",
+  ): Promise<ResendVerificationResponse> {
+    return apiClient.post<ResendVerificationResponse>('/auth/resend-verification', { email, role });
   },
 
   async changePassword(payload: ChangePasswordPayload): Promise<ChangePasswordResponse> {
     return apiClient.post<ChangePasswordResponse>('/auth/change-password', payload);
   },
 
-  async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
-    return apiClient.post<ForgotPasswordResponse>('/auth/forgot-password', { email });
+  async forgotPassword(
+    email: string,
+    portal?: "customer" | "vendor" | "admin",
+  ): Promise<ForgotPasswordResponse> {
+    return apiClient.post<ForgotPasswordResponse>('/auth/forgot-password', { email, portal });
+  },
+
+  async sendForgotPasswordSmsOtp(
+    phone: string,
+    role: 'customer' | 'vendor' = 'customer',
+  ): Promise<PhoneOtpActionResponse> {
+    return apiClient.post<PhoneOtpActionResponse>('/auth/forgot-password/sms/send-otp', { phone, role });
+  },
+
+  async verifyForgotPasswordSmsOtp(
+    phone: string,
+    code: string,
+    role: 'customer' | 'vendor' = 'customer',
+  ): Promise<ForgotPasswordSmsVerifiedResponse> {
+    return apiClient.post<ForgotPasswordSmsVerifiedResponse>('/auth/forgot-password/sms/verify-otp', {
+      phone,
+      code,
+      role,
+    });
+  },
+
+  async resetPasswordWithSmsOtp(
+    phone: string,
+    resetToken: string,
+    newPassword: string,
+    confirmPassword: string,
+    role: 'customer' | 'vendor' = 'customer',
+  ): Promise<PhoneOtpActionResponse> {
+    return apiClient.post<PhoneOtpActionResponse>('/auth/forgot-password/sms/reset', {
+      phone,
+      resetToken,
+      newPassword,
+      confirmPassword,
+      role,
+    });
   },
 
   async resetPassword(token: string, newPassword: string, confirmPassword: string): Promise<ResetPasswordResponse> {
@@ -130,6 +200,14 @@ export const authApi = {
       newPassword,
       confirmPassword,
     });
+  },
+
+  async sendPhoneOtp(phone: string, role: 'vendor' | 'customer'): Promise<PhoneOtpActionResponse> {
+    return apiClient.post<PhoneOtpActionResponse>('/auth/phone/send-otp', { phone, role });
+  },
+
+  async verifyPhoneOtp(phone: string, code: string, role: 'vendor' | 'customer'): Promise<PhoneOtpActionResponse> {
+    return apiClient.post<PhoneOtpActionResponse>('/auth/phone/verify-otp', { phone, code, role });
   },
 
   logout(): void {

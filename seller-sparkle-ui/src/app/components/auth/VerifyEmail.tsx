@@ -6,13 +6,18 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { authApi } from "@/app/services/authApi";
 import { toast } from "sonner";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  authPortalLoginPath,
+  resolveAuthPortalType,
+} from "@/app/helpers/portalHost";
 
 const VerifyEmail = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") || "";
+  const portalType = resolveAuthPortalType(searchParams.get("portal"));
+  const loginPath = authPortalLoginPath(portalType);
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState("Verifying your email...");
   const [email, setEmail] = useState(sessionStorage.getItem("pending_verification_email") || "");
@@ -50,7 +55,10 @@ const VerifyEmail = () => {
 
     setResendLoading(true);
     try {
-      await authApi.resendVerification(value);
+      await authApi.resendVerification(
+        value,
+        portalType === "customer" ? "customer" : portalType === "vendor" ? "vendor" : undefined,
+      );
       sessionStorage.setItem("pending_verification_email", value.toLowerCase());
       toast.success("Verification link has been resent.");
     } catch (error) {
@@ -62,17 +70,29 @@ const VerifyEmail = () => {
   };
 
   return (
-    <AuthLayout title="Email verification" subtitle="We’re checking your link.">
+    <AuthLayout title="Email verification" subtitle="We’re checking your link." portalType={portalType}>
       <div className="space-y-5">
         {status === "loading" && (
-          <PageLoaderSlot className="min-h-[10rem] py-0" />
+          <div className="flex items-center justify-center rounded-lg border bg-muted/30 py-10">
+            <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <p>{message}</p>
+            </div>
+          </div>
         )}
 
         {status === "success" && (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-5 text-center space-y-3 text-emerald-950">
             <CheckCircle2 className="mx-auto h-10 w-10" />
             <p className="text-sm">{message}</p>
-            <Button className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" onClick={() => navigate("/login")}>Go To Login</Button>
+            {portalType === "vendor" && (
+              <p className="text-xs text-emerald-900/80">
+                Phone and email are verified. You can sign in to continue onboarding.
+              </p>
+            )}
+            <Button className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" onClick={() => navigate(loginPath)}>
+              Go to sign in
+            </Button>
           </div>
         )}
 
@@ -93,7 +113,7 @@ const VerifyEmail = () => {
             </Button>
 
             <Button variant="outline" className="w-full h-11" asChild>
-              <Link to="/login">Go To Login</Link>
+              <Link to={loginPath}>Go To Login</Link>
             </Button>
           </div>
         )}
