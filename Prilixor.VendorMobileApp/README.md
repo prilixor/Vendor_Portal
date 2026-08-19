@@ -42,7 +42,7 @@ Defined in `lib/core/config/app_urls.dart` and wired through `ApiClient`.
 | Auth (login / register / forgot / verify) | Auth screens | Done |
 | Order Requests | Requests tab | Done — refine grouping like web |
 | Orders + Detail | Orders tab + detail | Done — search/filter; photo-request upload (max 5) when customer asks |
-| Expirations | From Orders (timer icon) | Done |
+| Expirations | Home “Due in 7 days” + Orders timer | Done — 7/15/30 + search |
 | Notifications | Alerts tab | Done — unread badge, mark read, web deep links |
 | Chats (legacy customer↔vendor) | — | Removed — customers chat with Admin; vendors use BlinksMed Support |
 | BlinksMed Support | Home FAB (scroll-aware) + Profile badge + onboarding help | Done — Vendor ↔ Admin (AI + tickets) |
@@ -63,7 +63,7 @@ Defined in `lib/core/config/app_urls.dart` and wired through `ApiClient`.
 | **1 – Tab shell** | Done | Requests / Orders / Alerts / Profile |
 | **2 – Orders ops** | Done | Live requests + orders + detail/status |
 | **2b – Filter parity** | Done | Customer search + filter sheet; web status tabs; request grouping |
-| **3 – Alerts + Expirations** | Done | Notifications inbox + expirations (7/15/30) |
+| **3 – Alerts + Expirations** | Done | Notifications inbox + expirations (7/15/30 + search) |
 | **4 – Chat / Settings** | Done | BlinksMed Support (Vendor↔Admin), settings/password, pending banner |
 | **5 – Catalog** | Done | Products + inventory (web parity) |
 | **6 – Onboarding / areas / dashboard** | Done | Dashboard home + onboarding + service areas |

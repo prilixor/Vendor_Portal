@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/providers/vendor_onboarding_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
+import '../../core/theme.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 
 const _requiredDocTypes = [
@@ -155,8 +156,8 @@ class _PendingApprovalBannerState extends State<PendingApprovalBanner> {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.appColors.textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                   ),
@@ -164,8 +165,8 @@ class _PendingApprovalBannerState extends State<PendingApprovalBanner> {
                 const SizedBox(height: 4),
                 Text(
                   body,
-                  style: const TextStyle(
-                    color: Colors.white70,
+                  style: TextStyle(
+                    color: context.appColors.textSecondary,
                     fontSize: 11,
                     height: 1.35,
                   ),
@@ -194,7 +195,7 @@ class _PendingApprovalBannerState extends State<PendingApprovalBanner> {
             IconButton(
               visualDensity: VisualDensity.compact,
               onPressed: () => setState(() => _dismissedPending = true),
-              icon: const Icon(Icons.close, color: Colors.white54, size: 18),
+              icon: Icon(Icons.close, color: context.appColors.textMuted, size: 18),
             ),
         ],
       ),

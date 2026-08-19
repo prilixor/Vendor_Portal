@@ -18,8 +18,9 @@ import {
 } from "@/app/components/ui/dialog";
 import { websiteContentApi, FaqCategoryDto, FaqItemDto } from "@/app/services/websiteContentApi";
 import { useQueryClient } from "@tanstack/react-query";
-import { HelpCircle, Plus, Pencil, Trash2, Search, CheckCircle, XCircle, FolderPlus, Loader2 } from "lucide-react";
+import { HelpCircle, Plus, Pencil, Trash2, Search, CheckCircle, XCircle, FolderPlus } from "lucide-react";
 import { toast } from "sonner";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 
 export function FAQContentManager() {
   const queryClient = useQueryClient();
@@ -154,11 +155,7 @@ export function FAQContentManager() {
   });
 
   if (loading) {
-    return (
-      <div className="flex h-48 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
+    return <PageLoaderSlot />;
   }
 
   return (

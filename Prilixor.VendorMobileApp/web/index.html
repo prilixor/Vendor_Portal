@@ -29,12 +29,42 @@
       opacity: 0;
       pointer-events: none;
     }
-    #boot-splash img { width: 96px; height: 96px; border-radius: 20px; object-fit: cover; }
+    .boot-mark {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .boot-mark::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 2.5px solid rgba(108, 99, 255, 0.16);
+      border-top-color: #6C63FF;
+      animation: boot-spin 0.8s linear infinite;
+    }
+    .boot-mark img {
+      width: 44px;
+      height: 44px;
+      padding: 5px;
+      box-sizing: border-box;
+      border-radius: 12px;
+      object-fit: contain;
+      background: #fff;
+    }
+    @keyframes boot-spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
   <div id="boot-splash">
-    <img src="favicon.png" alt="BlinksMed Vendor" width="96" height="96" />
+    <div class="boot-mark">
+      <img src="loader_mark.png?v=20260819p" alt="BlinksMed Vendor" width="44" height="44" />
+    </div>
     <span>Loading BlinksMed Vendor…</span>
   </div>
   <script>
@@ -48,8 +78,8 @@
         }, 200);
       }
       window.addEventListener('flutter-first-frame', dismissBootSplash, { once: true });
-      // Keep splash until Flutter paints. Only fall back after a long debug cold-start.
-      window.setTimeout(dismissBootSplash, 120000);
+      // Fallback if the event was missed (hot restart / delayed listener).
+      window.setTimeout(dismissBootSplash, 12000);
     })();
   </script>
   <script src="flutter_bootstrap.js" async></script>

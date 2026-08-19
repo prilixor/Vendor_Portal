@@ -30,6 +30,7 @@ public class Product : AuditableEntity<Guid>, ISoftDelete
 
     public ProductCategory Category { get; set; } = null!;
     public ICollection<ProductImage> ProductImages { get; set; } = [];
+    public ICollection<ProductDocument> ProductDocuments { get; set; } = [];
     public ICollection<VendorProductListing> VendorProductListings { get; set; } = [];
     public ChemicalProperty? ChemicalProperty { get; set; }
     public ICollection<ProductVariant> Variants { get; set; } = [];

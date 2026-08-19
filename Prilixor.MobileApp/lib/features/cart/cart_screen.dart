@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/providers/cart_provider.dart';
+import '../../core/theme.dart';
 import '../../core/utils/rental_period.dart';
 import '../../core/utils/rental_plan_display.dart';
 import '../../shared/utils/require_auth.dart';
@@ -31,6 +32,7 @@ class _CartScreenState extends State<CartScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final cart = Provider.of<CartProvider>(context);
     final auth = Provider.of<AuthProvider>(context);
     final checkoutLabel = auth.isAuthenticated ? 'Proceed to Checkout' : 'Sign in to Checkout';
@@ -38,15 +40,15 @@ class _CartScreenState extends State<CartScreen> {
     final itemCount = cart.itemCount;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
         centerTitle: true,
         title: Text(
           itemCount > 0 ? 'My Cart ($itemCount)' : 'My Cart',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+          style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold, fontSize: 20),
         ),
-        backgroundColor: const Color(0xFF0F172A),
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: colors.background,
+        iconTheme: IconThemeData(color: colors.textPrimary),
         elevation: 0,
       ),
       body: cart.lines.isEmpty
@@ -56,16 +58,16 @@ class _CartScreenState extends State<CartScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(24),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF1E293B),
+                    decoration: BoxDecoration(
+                      color: colors.surface,
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.shopping_cart_outlined, size: 80, color: Color(0xFF6C63FF)),
                   ),
                   const SizedBox(height: 24),
-                  const Text('Your cart is empty', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                  Text('Your cart is empty', style: TextStyle(color: colors.textPrimary, fontSize: 22, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  const Text('Looks like you haven\'t added\nanything to your cart yet.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 16)),
+                  Text('Looks like you haven\'t added\nanything to your cart yet.', textAlign: TextAlign.center, style: TextStyle(color: colors.textMuted, fontSize: 16)),
                   const SizedBox(height: 32),
                   ElevatedButton(
                     onPressed: () {
@@ -171,18 +173,19 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _sectionHeader(String title, String meta) {
+    final colors = context.appColors;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
           Text(
             title,
-            style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w700),
+            style: TextStyle(color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w700),
           ),
           const Spacer(),
           Text(
             meta,
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 11, fontWeight: FontWeight.w600),
+            style: TextStyle(color: colors.textMuted, fontSize: 11, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -206,9 +209,10 @@ class _StickyCheckoutBar extends StatelessWidget {
   });
 
   void _showSummary(BuildContext context) {
+    final colors = context.appColors;
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -225,33 +229,33 @@ class _StickyCheckoutBar extends StatelessWidget {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: colors.border,
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Order summary',
-                  style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800),
+                  style: TextStyle(color: colors.textPrimary, fontSize: 17, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 14),
-                _sheetRow('Subtotal', formatPlanInr(total)),
+                _sheetRow(context, 'Subtotal', formatPlanInr(total)),
                 const SizedBox(height: 8),
-                _sheetRow('Refundable deposit', formatPlanInr(deposit)),
+                _sheetRow(context, 'Refundable deposit', formatPlanInr(deposit)),
                 const SizedBox(height: 4),
                 Text(
                   'Deposit collected at delivery',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 11),
+                  style: TextStyle(color: colors.textMuted, fontSize: 11),
                 ),
-                const Divider(color: Colors.white12, height: 24),
+                Divider(color: colors.border, height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Estimated total', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                    Text('Estimated total', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
                     Text(
                       formatPlanInr(total),
-                      style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800),
+                      style: TextStyle(color: colors.textPrimary, fontSize: 22, fontWeight: FontWeight.w800),
                     ),
                   ],
                 ),
@@ -263,20 +267,22 @@ class _StickyCheckoutBar extends StatelessWidget {
     );
   }
 
-  Widget _sheetRow(String label, String value) {
+  Widget _sheetRow(BuildContext context, String label, String value) {
+    final colors = context.appColors;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 14)),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+        Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 14)),
+        Text(value, style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
       ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return Material(
-      color: const Color(0xFF1E293B),
+      color: colors.surfaceElevated,
       elevation: 12,
       shadowColor: Colors.black54,
       child: SafeArea(
@@ -310,21 +316,21 @@ class _StickyCheckoutBar extends StatelessWidget {
                                 Text(
                                   'ESTIMATED TOTAL',
                                   style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.5),
+                                    color: colors.textMuted,
                                     fontSize: 10,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 0.6,
                                   ),
                                 ),
                                 const SizedBox(width: 4),
-                                Icon(Icons.info_outline, size: 14, color: Colors.white.withValues(alpha: 0.45)),
+                                Icon(Icons.info_outline, size: 14, color: colors.textMuted),
                               ],
                             ),
                             const SizedBox(height: 2),
                             Text(
                               formatPlanInr(total),
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: colors.textPrimary,
                                 fontSize: 20,
                                 fontWeight: FontWeight.w800,
                                 height: 1.1,
@@ -334,7 +340,7 @@ class _StickyCheckoutBar extends StatelessWidget {
                               Text(
                                 'Deposit ${formatPlanInr(deposit)}',
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.45),
+                                  color: colors.textMuted,
                                   fontSize: 11,
                                 ),
                               ),
@@ -350,7 +356,7 @@ class _StickyCheckoutBar extends StatelessWidget {
                       onPressed: hasStockIssues ? null : onCheckout,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF6C63FF),
-                        disabledBackgroundColor: Colors.white12,
+                        disabledBackgroundColor: colors.border.withValues(alpha: 0.5),
                         padding: const EdgeInsets.symmetric(horizontal: 18),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         elevation: 0,
@@ -542,6 +548,7 @@ class _CartLineCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final avail = cart.availableQuantityFor(line);
     final overStock = avail != null && line.quantity > avail;
     final canRent = line.canRent;
@@ -568,9 +575,9 @@ class _CartLineCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: overStock ? Colors.redAccent.withValues(alpha: 0.5) : Colors.white10),
+        border: Border.all(color: overStock ? Colors.redAccent.withValues(alpha: 0.5) : colors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -585,8 +592,8 @@ class _CartLineCard extends StatelessWidget {
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  color: const Color(0xFF0F172A),
-                  border: Border.all(color: Colors.white10),
+                  color: colors.background,
+                  border: Border.all(color: colors.border),
                 ),
                 child: CatalogImage(
                   url: line.primaryImageUrl,
@@ -602,8 +609,8 @@ class _CartLineCard extends StatelessWidget {
                   children: [
                     Text(
                       line.title,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: colors.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                         height: 1.25,
@@ -703,7 +710,25 @@ class _CartLineCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
+          Divider(color: colors.border, height: 1),
+          const SizedBox(height: 12),
+          if (line.orderType == 'rent' && line.usesPricingPlan) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: colors.background,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: colors.border),
+              ),
+              child: Text(
+                'Rental period: ${line.rentalDurationLabel ?? '${line.rentalDurationDays ?? line.rentalDays} days'} (set by catalog)',
+                style: TextStyle(color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           // Web: Rent/Buy + Quantity on one controls row
           Wrap(
             spacing: 10,
@@ -792,6 +817,7 @@ class _SegmentedToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final vPad = dense ? 7.0 : 10.0;
     final fontSize = dense ? 12.0 : 13.0;
     final gap = dense ? 6.0 : 8.0;
@@ -812,17 +838,17 @@ class _SegmentedToggle extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: selected == options[i].value
                         ? const Color(0xFF6C63FF).withValues(alpha: 0.22)
-                        : const Color(0xFF0F172A),
+                        : colors.background,
                     borderRadius: BorderRadius.circular(radius),
                     border: Border.all(
-                      color: selected == options[i].value ? const Color(0xFF6C63FF) : Colors.white12,
+                      color: selected == options[i].value ? const Color(0xFF6C63FF) : colors.border,
                     ),
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     options[i].label,
                     style: TextStyle(
-                      color: selected == options[i].value ? const Color(0xFFA5B4FC) : Colors.white70,
+                      color: selected == options[i].value ? const Color(0xFF6C63FF) : colors.textSecondary,
                       fontWeight: FontWeight.w700,
                       fontSize: fontSize,
                     ),
@@ -852,11 +878,12 @@ class _CompactQtyStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: colors.background,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: colors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -865,7 +892,7 @@ class _CompactQtyStepper extends StatelessWidget {
             icon: Icon(
               Icons.remove,
               size: 18,
-              color: value > min ? Colors.white70 : Colors.white24,
+              color: value > min ? colors.textSecondary : colors.textMuted,
             ),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
@@ -876,14 +903,14 @@ class _CompactQtyStepper extends StatelessWidget {
             child: Text(
               '$value',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+              style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
             ),
           ),
           IconButton(
             icon: Icon(
               Icons.add,
               size: 18,
-              color: value < max ? Colors.white70 : Colors.white24,
+              color: value < max ? colors.textSecondary : colors.textMuted,
             ),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
@@ -911,12 +938,13 @@ class _LabeledQtyStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: colors.surfaceElevated,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: colors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -924,7 +952,7 @@ class _LabeledQtyStepper extends StatelessWidget {
           Text(
             'Quantity',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.55),
+              color: colors.textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),

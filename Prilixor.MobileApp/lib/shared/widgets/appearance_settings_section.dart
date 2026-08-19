@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme.dart';
+import '../../core/theme/theme_provider.dart';
 
 class AppearanceSettingsSection extends StatelessWidget {
   const AppearanceSettingsSection({super.key});

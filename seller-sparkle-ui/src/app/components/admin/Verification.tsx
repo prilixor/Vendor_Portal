@@ -5,7 +5,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw, FileText, Eye, Building, AlertCircle, Calendar, MapPin, ExternalLink } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
@@ -18,6 +18,7 @@ import { safeFormatDate } from "@/app/utils/dateUtils";
 import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto } from "@/app/services/adminApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { retryOriginalOnImageError } from "@/app/helpers/utils";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 import { AdminServiceAreaRadiusDialog } from "@/app/components/admin/AdminServiceAreaRadiusDialog";
 
@@ -646,42 +647,7 @@ const Verification = () => {
           </Tabs>
         </div>
         {loading ? (
-          <div className="overflow-x-auto rounded-lg border border-border animate-pulse">
-            <table className="w-full min-w-[700px] text-sm">
-              <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-24" /></th>
-                  <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-32" /></th>
-                  <th className="px-4 py-3 font-semibold"><Skeleton className="h-3 w-16" /></th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <tr key={i} className="hover:bg-muted/20">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <Skeleton className="h-9 w-9 rounded-lg" />
-                        <div className="min-w-0 space-y-1">
-                          <Skeleton className="h-4 w-32" />
-                          <Skeleton className="h-3 w-24" />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Skeleton className="h-4 w-24" />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Skeleton className="h-6 w-16 rounded" />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Skeleton className="h-8 w-16 rounded" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <PageLoaderSlot />
         ) : (
           <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full min-w-[700px] text-sm">
@@ -764,24 +730,7 @@ const Verification = () => {
                   <span className="text-xs text-muted-foreground">{documents.length} uploaded</span>
                 </div>
                 {loadingDocs ? (
-                  <div className="space-y-2 animate-pulse">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="flex items-center justify-between p-3 border border-border/60 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <Skeleton className="h-8 w-8 rounded" />
-                          <div className="space-y-1">
-                            <Skeleton className="h-4 w-32" />
-                            <Skeleton className="h-3 w-24" />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Skeleton className="h-6 w-16" />
-                          <Skeleton className="h-8 w-8" />
-                          <Skeleton className="h-8 w-8" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <PageLoaderSlot className="min-h-[6rem]" />
                 ) : documents.length > 0 ? (
                   <div className="space-y-2">
                     {documents.map((d) => (
@@ -920,24 +869,7 @@ const Verification = () => {
                   <span className="text-xs text-muted-foreground">{bankAccounts.length} added</span>
                 </div>
                 {loadingBanks ? (
-                  <div className="space-y-2 animate-pulse">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="flex items-center justify-between p-3 border border-border/60 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <Skeleton className="h-8 w-8 rounded" />
-                          <div className="space-y-1">
-                            <Skeleton className="h-4 w-40" />
-                            <Skeleton className="h-3 w-32" />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Skeleton className="h-6 w-16" />
-                          <Skeleton className="h-8 w-8" />
-                          <Skeleton className="h-8 w-8" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <PageLoaderSlot className="min-h-[6rem]" />
                 ) : bankAccounts.length > 0 ? (
                   <div className="space-y-2">
                     {bankAccounts.map((b) => (
@@ -1095,15 +1027,7 @@ const Verification = () => {
                   )}
                 </div>
                 {loadingAreas ? (
-                  <div className="space-y-2 animate-pulse">
-                    <div className="flex items-center justify-between p-3 border border-border/60 rounded-lg">
-                      <div className="space-y-1">
-                        <Skeleton className="h-4 w-36" />
-                        <Skeleton className="h-3 w-48" />
-                      </div>
-                      <Skeleton className="h-8 w-24" />
-                    </div>
-                  </div>
+                  <PageLoaderSlot className="min-h-[6rem]" />
                 ) : serviceAreas.length > 0 ? (
                   <div className="space-y-2">
                     {serviceAreas.map((area) => (
@@ -1332,6 +1256,7 @@ const Verification = () => {
                   alt="Document preview"
                   className="max-w-full max-h-full object-contain"
                   onLoad={() => setPdfLoading(false)}
+                  onError={retryOriginalOnImageError}
                 />
                   );
                 }

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/providers/profile_provider.dart';
+import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
 import '../../shared/widgets/phone_otp_dialog.dart';
 import '../../shared/widgets/required_field_ux.dart';
@@ -176,17 +178,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final profile = provider.profile;
     final normalizedPhone = IndianMobilePhone.normalizeDigits(_phoneController.text);
     final isValidPhone = IndianMobilePhone.isValid(normalizedPhone);
+    final colors = context.appColors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('Edit Profile', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0F172A),
+        title: Text('Edit Profile', style: TextStyle(color: colors.textPrimary)),
+        backgroundColor: colors.background,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: colors.textPrimary),
       ),
       body: profile == null
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : SafeArea(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
@@ -196,7 +199,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     const RequiredFieldsNote(),
                     TextField(
                       controller: _nameController,
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(color: colors.textPrimary),
                       textCapitalization: TextCapitalization.words,
                       onChanged: (_) {
                         if (_nameError != null) setState(() => _nameError = null);
@@ -223,7 +226,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               TextField(
                                 controller: _emailController,
                                 keyboardType: TextInputType.emailAddress,
-                                style: const TextStyle(color: Colors.white),
+                                style: TextStyle(color: colors.textPrimary),
                                 onChanged: (_) {
                                   if (_emailError != null) setState(() => _emailError = null);
                                 },
@@ -243,12 +246,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     child: TextFormField(
                                       initialValue: profile.email,
                                       readOnly: true,
-                                      style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                                      style: TextStyle(color: colors.textSecondary),
                                       decoration: requiredInputDecoration(
                                         context,
                                         label: 'Email',
                                         prefixIcon: Icons.email_outlined,
-                                        fillColor: const Color(0xFF0F172A),
+                                        fillColor: colors.background,
                                       ),
                                     ),
                                   ),
@@ -300,7 +303,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   style: TextStyle(
                                     color: emailVerified
                                         ? const Color(0xFF10B981)
-                                        : Colors.white54,
+                                        : colors.textMuted,
                                     fontSize: 11,
                                     height: 1.35,
                                   ),

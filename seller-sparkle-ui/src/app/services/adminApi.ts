@@ -1,4 +1,4 @@
-import { apiClient } from './apiClient';
+import { apiClient, type ApiClientOptions } from './apiClient';
 
 // Request/Response Types
 export interface VendorDto {
@@ -499,6 +499,18 @@ export interface AddProductImageRequest {
   thumbnailUrl?: string | null;
 }
 
+export interface ProductDocumentDto {
+  id: string;
+  productId: string;
+  documentType: string;
+  fileUrl: string;
+}
+
+export interface AddProductDocumentRequest {
+  documentType: string;
+  fileUrl: string;
+}
+
 export interface UploadedFileResponse {
   fileUrl: string;
   storageKey?: string | null;
@@ -708,6 +720,20 @@ export interface AdminOrderDto {
   doctorContactNumber?: string;
 }
 
+export interface AdminExpiringOrderDto {
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  vendorName: string;
+  listingTitle: string;
+  status: string;
+  orderType: string;
+  endDate: string;
+  daysLeft: number;
+  daysUntilEnd?: number;
+  listingPrimaryImageUrl?: string | null;
+}
+
 export interface UpdateAdminOrderStatusRequest {
   adminUserId: string;
   orderId: string;
@@ -731,8 +757,8 @@ export interface AdminRestartOrderDispatchRequest {
 
 export const adminApi = {
   // Vendors
-  async getVendors(): Promise<VendorDto[]> {
-    return apiClient.get<VendorDto[]>('/admin/vendors');
+  async getVendors(options?: ApiClientOptions): Promise<VendorDto[]> {
+    return apiClient.get<VendorDto[]>('/admin/vendors', options);
   },
 
   async getVendorProfile(vendorId: string): Promise<VendorProfileDto> {
@@ -777,10 +803,6 @@ export const adminApi = {
     return apiClient.post<AdminUserDto>('/admin/users', data);
   },
 
-  async getOwnAdminProfile(): Promise<AdminUserDto> {
-    return apiClient.get<AdminUserDto>('/admin/me');
-  },
-
   async updateAdminUser(adminId: string, data: {
     fullName?: string;
     email?: string;
@@ -811,9 +833,9 @@ export const adminApi = {
   },
 
   // Audit Logs
-  async getAuditLogs(adminUserId?: string): Promise<AdminAuditLogDto[]> {
+  async getAuditLogs(adminUserId?: string, options?: ApiClientOptions): Promise<AdminAuditLogDto[]> {
     const url = adminUserId ? `/admin/audit-logs?adminUserId=${adminUserId}` : '/admin/audit-logs';
-    return apiClient.get<AdminAuditLogDto[]>(url);
+    return apiClient.get<AdminAuditLogDto[]>(url, options);
   },
 
   async addAuditLog(data: AddAdminAuditLogRequest): Promise<AdminAuditLogDto> {
@@ -976,6 +998,29 @@ export const adminApi = {
     });
   },
 
+  async uploadProductDocumentFile(file: File): Promise<UploadedFileResponse> {
+    const data = new FormData();
+    data.append("vendorId", "common");
+    data.append("file", file);
+    data.append("folderType", "ProductDocuments");
+    return apiClient.postForm<UploadedFileResponse>("/files/upload", data);
+  },
+
+  async getProductDocuments(productId: string): Promise<ProductDocumentDto[]> {
+    return apiClient.get<ProductDocumentDto[]>(`/admin/catalog/products/${productId}/documents`);
+  },
+
+  async addProductDocument(productId: string, data: AddProductDocumentRequest): Promise<ProductDocumentDto> {
+    return apiClient.post<ProductDocumentDto>(`/admin/catalog/products/${productId}/documents`, {
+      productId,
+      ...data,
+    });
+  },
+
+  async deleteProductDocument(productId: string, documentId: string): Promise<void> {
+    return apiClient.delete<void>(`/admin/catalog/products/${productId}/documents/${documentId}`);
+  },
+
   async uploadCatalogExcel(file: File, isChemical: boolean = false): Promise<ExcelUploadResponseDto> {
     const formData = new FormData();
     formData.append('file', file);
@@ -987,8 +1032,12 @@ export const adminApi = {
     return apiClient.downloadBlob(`/admin/catalog/download-excel?isChemical=${isChemical}`, filename);
   },
 
-  async getAdminOrders(): Promise<AdminOrderDto[]> {
-    return apiClient.get<AdminOrderDto[]>('/admin/orders');
+  async getAdminOrders(options?: ApiClientOptions): Promise<AdminOrderDto[]> {
+    return apiClient.get<AdminOrderDto[]>('/admin/orders', options);
+  },
+
+  async getAdminOrderExpirations(withinDays = 7): Promise<AdminExpiringOrderDto[]> {
+    return apiClient.get<AdminExpiringOrderDto[]>(`/admin/orders/expirations?withinDays=${withinDays}`);
   },
 
   async updateAdminOrderStatus(data: UpdateAdminOrderStatusRequest): Promise<AdminOrderDto> {
@@ -1130,6 +1179,10 @@ export const adminApi = {
     return apiClient.downloadBlob(`/admin/doctors/${id}/qr.png`, `doctor-${uniqueCode}-qr.png`);
   },
 
+  async downloadDoctorQrCard(id: string, uniqueCode: string): Promise<void> {
+    return apiClient.downloadBlob(`/admin/doctors/${id}/qr-card.png`, `doctor-${uniqueCode}-card.png`);
+  },
+
   async getDoctorQrObjectUrl(id: string): Promise<string> {
     const blob = await apiClient.fetchBlob(`/admin/doctors/${id}/qr.png`);
     return URL.createObjectURL(blob);
@@ -1154,34 +1207,4 @@ export const adminApi = {
   async deleteHospital(id: string): Promise<void> {
     return apiClient.delete<void>(`/admin/hospitals/${id}`);
   },
-
-  async getPlatformSmsSettings(): Promise<PlatformSmsSettingsDto> {
-    return apiClient.get<PlatformSmsSettingsDto>("/admin/sms-settings");
-  },
-
-  async updatePlatformSmsSettings(
-    data: Omit<PlatformSmsSettingsDto, "twilioConfigured">,
-  ): Promise<PlatformSmsSettingsDto> {
-    return apiClient.put<PlatformSmsSettingsDto>("/admin/sms-settings", data);
-  },
 };
-
-export interface PlatformSmsSettingsDto {
-  transactionalSmsEnabled: boolean;
-  customerOrderPlaced: boolean;
-  customerOrderConfirmed: boolean;
-  customerOrderCancelled: boolean;
-  customerOrderStatusUpdated: boolean;
-  customerOrderDispatchFailed: boolean;
-  customerOrderExpiring: boolean;
-  vendorNewOrder: boolean;
-  vendorAccountApproved: boolean;
-  vendorAccountRejected: boolean;
-  vendorAccountSuspended: boolean;
-  vendorAccountBanned: boolean;
-  vendorAccountReactivated: boolean;
-  vendorBankVerified: boolean;
-  vendorDocumentVerified: boolean;
-  vendorServiceAreaUpdated: boolean;
-  twilioConfigured: boolean;
-}

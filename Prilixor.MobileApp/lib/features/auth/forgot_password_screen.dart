@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
@@ -217,13 +218,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<AuthProvider>(context);
+    final colors = context.appColors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: colors.textPrimary),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -243,9 +245,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Forgot Password?',
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: colors.textPrimary),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
@@ -253,7 +255,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 _tabIndex == 0
                     ? 'Enter your email to receive a password reset link.'
                     : 'Enter your registered mobile number to reset via SMS OTP.',
-                style: const TextStyle(color: Colors.white60, fontSize: 14),
+                style: TextStyle(color: colors.textSecondary, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),

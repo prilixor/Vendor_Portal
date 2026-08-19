@@ -1,4 +1,7 @@
+import { useEffect } from "react";
 import { cn } from "@/app/helpers/utils";
+import { PageLoader } from "@/app/components/shared/PageLoader";
+import { dismissBootSplash } from "@/app/helpers/bootSplash";
 
 type BrandMarkProps = {
   className?: string;
@@ -34,7 +37,7 @@ export function BrandMark({
       width={size === "lg" ? 56 : size === "sm" ? 36 : 44}
       height={size === "lg" ? 56 : size === "sm" ? 36 : 44}
       className={cn(
-        "shrink-0 object-contain bg-white shadow-sm ring-1 ring-black/5 dark:ring-white/10",
+        "shrink-0 object-contain object-center bg-white p-0.5 shadow-sm ring-1 ring-black/5 dark:ring-white/10",
         sizeClass[size],
         roundClass[rounded],
         className,
@@ -46,17 +49,13 @@ export function BrandMark({
 
 /** Full-screen branded loader while auth/session hydrates. */
 export function BrandBootSplash({ label = "Loading BlinksMed…" }: { label?: string }) {
+  useEffect(() => {
+    dismissBootSplash();
+  }, []);
+
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-center gap-4 bg-background px-6">
-      <img
-        src="/branding/blinksmed-logo.png"
-        alt="BlinksMed"
-        width={144}
-        height={144}
-        className="h-36 w-36 rounded-2xl object-contain bg-white p-2 shadow-md ring-1 ring-border dark:ring-white/10"
-        decoding="async"
-      />
-      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+    <div className="flex min-h-screen w-full items-center justify-center bg-background px-6">
+      <PageLoader label={label} size="lg" artwork="logo" className="min-h-0 py-0" />
     </div>
   );
 }

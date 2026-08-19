@@ -36,6 +36,12 @@ String? resolveMediaUrl(String? raw) {
   return normalizeHostedFileUrl(resolved);
 }
 
+String? originalUrlFromThumb(String url) {
+  final match = RegExp(r'_thumb(\.[a-z0-9]+)(?:[?#].*)?$', caseSensitive: false).firstMatch(url);
+  if (match == null) return null;
+  return url.replaceFirst(RegExp(r'_thumb(?=\.[a-z0-9]+)', caseSensitive: false), '');
+}
+
 /// Normalizes vendor-hosted file URLs (mirrors Vendor Web `normalizeHostedFileUrl`).
 String? normalizeHostedFileUrl(String? fileUrl) {
   if (fileUrl == null) return null;

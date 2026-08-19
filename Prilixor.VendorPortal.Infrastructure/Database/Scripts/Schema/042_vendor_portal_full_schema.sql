@@ -308,6 +308,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_product_images_primary_per_product
     ON public.product_images(product_id)
     WHERE is_primary = true AND is_deleted = false;
 
+CREATE TABLE IF NOT EXISTS public.product_documents (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id uuid NOT NULL,
+    document_type varchar(50) NOT NULL,
+    file_url text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    created_by uuid NULL,
+    updated_by uuid NULL,
+    is_deleted boolean NOT NULL DEFAULT false,
+    deleted_at timestamptz NULL,
+    deleted_by uuid NULL,
+    CONSTRAINT fk_product_documents_product
+        FOREIGN KEY (product_id) REFERENCES public.products(id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_product_documents_product_id
+    ON public.product_documents(product_id)
+    WHERE is_deleted = false;
+
 CREATE TABLE IF NOT EXISTS public.vendor_product_listings (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     vendor_id uuid NOT NULL,

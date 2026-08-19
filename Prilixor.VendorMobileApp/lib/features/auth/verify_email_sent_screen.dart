@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/theme.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import 'login_screen.dart';
 
@@ -73,11 +74,11 @@ class _VerifyEmailSentScreenState extends State<VerifyEmailSentScreen> {
     final provider = Provider.of<AuthProvider>(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: AppTheme.bg(context),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: context.appColors.textPrimary),
         automaticallyImplyLeading: false,
       ),
       body: SafeArea(
@@ -102,26 +103,26 @@ class _VerifyEmailSentScreenState extends State<VerifyEmailSentScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Verify your email',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: context.appColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Check your inbox to continue.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white60, fontSize: 15),
+                style: TextStyle(color: context.appColors.textSecondary, fontSize: 15),
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Verification link has been sent to your email.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white54, fontSize: 14),
+                style: TextStyle(color: context.appColors.textMuted, fontSize: 14),
               ),
               const SizedBox(height: 24),
               CustomTextField(
@@ -166,8 +167,8 @@ class _VerifyEmailSentScreenState extends State<VerifyEmailSentScreen> {
                           );
                         },
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white.withValues(alpha: 0.24)),
+                    foregroundColor: context.appColors.textPrimary,
+                    side: BorderSide(color: context.appColors.border),
                   ),
                   child: const Text(
                     'Go to login',
@@ -176,10 +177,10 @@ class _VerifyEmailSentScreenState extends State<VerifyEmailSentScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              const Text(
+              Text(
                 'Didn’t receive it? Check spam or use the resend button.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4),
+                style: TextStyle(color: context.appColors.textMuted, fontSize: 12, height: 1.4),
               ),
             ],
           ),

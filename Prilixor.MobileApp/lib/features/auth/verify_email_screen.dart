@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import 'login_screen.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
@@ -80,14 +82,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final colors = context.appColors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('Verify Email', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF0F172A),
+        title: Text('Verify Email', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold)),
+        backgroundColor: colors.background,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: colors.textPrimary),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -97,12 +100,12 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
             children: [
               if (_verifying) ...[
                 const SizedBox(height: 60),
-                const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))),
+                const Center(child: BrandPageLoader(size: BrandPageLoaderSize.sm)),
                 const SizedBox(height: 20),
-                const Text(
+                Text(
                   'Verifying your email token...',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                  style: TextStyle(color: colors.textSecondary, fontSize: 16),
                 ),
               ] else if (_success != null) ...[
                 const SizedBox(height: 20),
@@ -176,13 +179,13 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text(
+                Text(
                   'Check your email',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: colors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -191,8 +194,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                       ? 'A verification link has been sent to ${_emailController.text.trim()}. Please verify your email before logging in.'
                       : 'A verification link has been sent to your email. You must verify it before signing in.',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white70,
+                  style: TextStyle(
+                    color: colors.textSecondary,
                     fontSize: 14,
                     height: 1.4,
                   ),
@@ -215,30 +218,30 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                const Divider(color: Colors.white12),
+                Divider(color: colors.border),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Didn’t get the email? Enter your address to resend.',
-                  style: TextStyle(color: Colors.white54, fontSize: 13),
+                  style: TextStyle(color: colors.textSecondary, fontSize: 13),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: colors.textPrimary),
                   decoration: InputDecoration(
                     labelText: 'Email',
-                    labelStyle: const TextStyle(color: Colors.white54),
-                    prefixIcon: const Icon(Icons.email_outlined, color: Colors.white54),
+                    labelStyle: TextStyle(color: colors.textSecondary),
+                    prefixIcon: Icon(Icons.email_outlined, color: colors.textSecondary),
                     filled: true,
-                    fillColor: const Color(0xFF1E293B),
+                    fillColor: colors.surface,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Colors.white12),
+                      borderSide: BorderSide(color: colors.border),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Colors.white12),
+                      borderSide: BorderSide(color: colors.border),
                     ),
                   ),
                 ),

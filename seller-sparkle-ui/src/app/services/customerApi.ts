@@ -1,4 +1,4 @@
-import { apiClient } from "@/app/services/apiClient";
+import { apiClient, type ApiClientOptions } from "@/app/services/apiClient";
 
 export interface CustomerCatalogListingApi {
   id: string;
@@ -122,6 +122,11 @@ export interface CustomerListingDetailApi {
   baseUnit?: string;
   sdsDocumentUrl?: string;
   coaDocumentUrl?: string;
+  documents?: Array<{
+    id: string;
+    documentType: string;
+    fileUrl: string;
+  }>;
   variants?: ProductVariantDto[];
   variantInventory?: { productVariantId: string; availableQuantity: number }[];
   /** Active admin-configured duration plans (prefer over week/month steppers when present). */
@@ -130,11 +135,9 @@ export interface CustomerListingDetailApi {
 
 export interface CustomerProfileApi {
   id: string;
-  email?: string | null;
+  email: string;
   fullName: string;
   phone?: string | null;
-  isPhoneVerified?: boolean;
-  isEmailVerified?: boolean;
 }
 
 export interface CustomerAddressApi {
@@ -371,12 +374,8 @@ export const customerApi = {
     return apiClient.get<CustomerProfileApi>("/customers/me/profile");
   },
 
-  updateProfile(fullName: string, phone?: string, email?: string | null): Promise<CustomerProfileApi> {
-    return apiClient.put<CustomerProfileApi>("/customers/me/profile", {
-      fullName,
-      phone: phone?.trim() || undefined,
-      email: email?.trim() || undefined,
-    });
+  updateProfile(fullName: string, phone?: string): Promise<CustomerProfileApi> {
+    return apiClient.put<CustomerProfileApi>("/customers/me/profile", { fullName, phone: phone?.trim() || undefined });
   },
 
   getAddresses(): Promise<CustomerAddressApi[]> {
@@ -514,8 +513,8 @@ export const customerApi = {
     return apiClient.post<void>(`/customers/me/orders/${encodeURIComponent(orderId)}/buyouts`, {});
   },
 
-  getNotifications(): Promise<CustomerNotificationApi[]> {
-    return apiClient.get<CustomerNotificationApi[]>("/customers/me/notifications");
+  getNotifications(options?: ApiClientOptions): Promise<CustomerNotificationApi[]> {
+    return apiClient.get<CustomerNotificationApi[]>("/customers/me/notifications", options);
   },
 
   getOrderExpirations(withinDays = 7): Promise<ExpiringOrderApi[]> {
@@ -578,7 +577,6 @@ export interface CustomerNotificationPreferenceApi {
   depositRefundsEnabled: boolean;
   directMessagesEnabled: boolean;
   marketingEmailsEnabled: boolean;
-  smsNotificationsEnabled?: boolean;
 }
 
 /** @deprecated Use HospitalApi / DoctorApi */

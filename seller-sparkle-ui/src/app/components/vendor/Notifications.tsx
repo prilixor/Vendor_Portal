@@ -4,7 +4,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Switch } from "@/app/components/ui/switch";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Notification } from "@/app/models";
 import { CheckCheck, Bell, Info, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
@@ -37,7 +37,7 @@ const Notifications = () => {
   const { openSupportPanel } = useSupportChat();
   const [items, setItems] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
-  const [prefs, setPrefs] = useState({ email: true, push: false, orders: true, sms: true });
+  const [prefs, setPrefs] = useState({ email: true, push: false, orders: true });
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -88,7 +88,6 @@ const Notifications = () => {
           email: prefRes.value.emailNotificationsEnabled,
           push: prefRes.value.pushNotificationsEnabled,
           orders: prefRes.value.newOrderNotifications,
-          sms: prefRes.value.smsNotificationsEnabled !== false,
         });
       }
 
@@ -134,7 +133,6 @@ const Notifications = () => {
         emailNotificationsEnabled: next.email,
         pushNotificationsEnabled: next.push,
         newOrderNotifications: next.orders,
-        smsNotificationsEnabled: next.sms,
       });
 
       // Handle push subscription when toggle changes
@@ -202,57 +200,7 @@ const Notifications = () => {
         }
       />
 
-      {!hasLoaded && busy && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 animate-pulse">
-          <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
-            {/* Header Skeleton */}
-            <div className="flex items-center justify-between border-b border-border pb-4">
-              <Skeleton className="h-6 w-16" />
-              <div className="flex gap-2">
-                <Skeleton className="h-9 w-12" />
-                <Skeleton className="h-9 w-16" />
-              </div>
-            </div>
-            
-            {/* Notification Items Skeleton */}
-            <ul className="divide-y divide-border">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <li key={i} className="flex items-start gap-3 p-4">
-                  <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-2 w-2 rounded-full" />
-                    </div>
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-3 w-24" />
-                  </div>
-                  <Skeleton className="h-8 w-20 shrink-0 rounded" />
-                </li>
-              ))}
-            </ul>
-          </Card>
-          
-          {/* Sidebar Skeleton */}
-          <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
-            <Skeleton className="h-6 w-24 mb-4" />
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-4 w-4" />
-                <Skeleton className="h-4 w-32" />
-              </div>
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-4 w-4" />
-                <Skeleton className="h-4 w-28" />
-              </div>
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-4 w-4" />
-                <Skeleton className="h-4 w-36" />
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
+      {!hasLoaded && busy && <PageLoaderSlot />}
       {loadError && (
         <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
       )}
@@ -377,7 +325,6 @@ const Notifications = () => {
             {[
               { key: "email" as const, label: "Email notifications", desc: "Receive updates in your inbox" },
               { key: "push" as const, label: "Push notifications", desc: "Browser push alerts" },
-              { key: "sms" as const, label: "SMS notifications", desc: "Text alerts for new order requests (verified phone)" },
               { key: "orders" as const, label: "Order alerts", desc: "Real-time rental requests" },
             ].map((p) => (
               <div key={p.key} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">

@@ -4,12 +4,12 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, RefreshCw, Package, User } from "lucide-react";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import {
   ActiveFilterChips,
   FilterPanel,
@@ -312,19 +312,7 @@ const VendorOrders = () => {
         ) : null}
 
         {loading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 6 }).map((_, idx) => (
-              <div key={idx} className="rounded-lg border border-border p-4">
-                <Skeleton className="h-5 w-44" />
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-full" />
-                </div>
-              </div>
-            ))}
-          </div>
+          <PageLoaderSlot />
         ) : sortedOrders.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No orders found for this status.</p>
         ) : (
@@ -379,6 +367,7 @@ const VendorOrders = () => {
                               src={imageUrl}
                               alt={order.listingTitle}
                               className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm"
+                              onError={retryOriginalOnImageError}
                             />
                           ) : (
                             <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">

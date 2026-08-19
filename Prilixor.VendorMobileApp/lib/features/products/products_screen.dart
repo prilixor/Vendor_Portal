@@ -5,6 +5,8 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
+import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import 'listing_type_picker_screen.dart';
 import 'product_detail_screen.dart';
 
@@ -116,7 +118,7 @@ class _ProductsScreenState extends State<ProductsScreen>
     var draft = _statusFilter;
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: AppTheme.card(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -135,16 +137,16 @@ class _ProductsScreenState extends State<ProductsScreen>
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.white24,
+                          color: context.appColors.border,
                           borderRadius: BorderRadius.circular(99),
                         ),
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       'Listing status',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: context.appColors.textPrimary,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
@@ -152,27 +154,39 @@ class _ProductsScreenState extends State<ProductsScreen>
                     const SizedBox(height: 12),
                     ..._statusFilters.map((entry) {
                       final selected = draft == entry.$1;
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(entry.$2, style: const TextStyle(color: Colors.white)),
-                        trailing: Text(
-                          '${counts[entry.$1] ?? 0}',
-                          style: const TextStyle(color: Colors.white54),
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        decoration: BoxDecoration(
+                          color: selected ? AppTheme.accent.withValues(alpha: 0.1) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        leading: Icon(
-                          selected ? Icons.radio_button_checked : Icons.radio_button_off,
-                          color: selected ? const Color(0xFF6C63FF) : Colors.white38,
+                        child: ListTile(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                          title: Text(entry.$2, style: TextStyle(color: context.appColors.textPrimary, fontWeight: selected ? FontWeight.w600 : FontWeight.normal)),
+                          trailing: Text(
+                            '${counts[entry.$1] ?? 0}',
+                            style: TextStyle(color: context.appColors.textMuted),
+                          ),
+                          leading: Icon(
+                            selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                            color: selected ? AppTheme.accent : context.appColors.textMuted,
+                          ),
+                          onTap: () => setSheetState(() => draft = entry.$1),
                         ),
-                        onTap: () => setSheetState(() => draft = entry.$1),
                       );
                     }),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     ElevatedButton(
                       onPressed: () {
                         setState(() => _statusFilter = draft);
                         Navigator.pop(ctx);
                       },
-                      child: const Text('Apply'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accent,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Apply', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -187,11 +201,11 @@ class _ProductsScreenState extends State<ProductsScreen>
   Color _statusColor(ListingUiStatus status) {
     switch (status) {
       case ListingUiStatus.active:
-        return Colors.greenAccent;
+        return Colors.green;
       case ListingUiStatus.inactive:
-        return Colors.orangeAccent;
+        return Colors.orange;
       case ListingUiStatus.draft:
-        return Colors.white54;
+        return Colors.grey;
     }
   }
 
@@ -259,9 +273,6 @@ class _ProductsScreenState extends State<ProductsScreen>
         bottom: TabBar(
           controller: _tabController,
           onTap: (_) => setState(() {}),
-          indicatorColor: const Color(0xFF6C63FF),
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white54,
           tabs: [
             Tab(
               text:
@@ -289,13 +300,13 @@ class _ProductsScreenState extends State<ProductsScreen>
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: TextField(
                 controller: _searchController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: context.appColors.textPrimary),
                 decoration: InputDecoration(
                   hintText: 'Search title or category…',
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white38),
+                  hintStyle: TextStyle(color: context.appColors.textMuted),
+                  prefixIcon: Icon(Icons.search, color: context.appColors.textMuted),
                   filled: true,
-                  fillColor: const Color(0xFF1E293B),
+                  fillColor: context.appColors.surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -312,11 +323,11 @@ class _ProductsScreenState extends State<ProductsScreen>
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => _openStatusFilter(counts),
-                      icon: const Icon(Icons.filter_list, size: 18),
+                      icon: Icon(Icons.filter_list, size: 18, color: context.appColors.textSecondary),
                       label: Text('Status: $statusLabel'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white70,
-                        side: const BorderSide(color: Colors.white24),
+                        foregroundColor: context.appColors.textSecondary,
+                        side: BorderSide(color: context.appColors.border),
                       ),
                     ),
                   ),
@@ -326,9 +337,9 @@ class _ProductsScreenState extends State<ProductsScreen>
                     selected: _favoritesOnly,
                     onSelected: (v) => setState(() => _favoritesOnly = v),
                     selectedColor: const Color(0xFF6C63FF).withValues(alpha: 0.35),
-                    checkmarkColor: Colors.white,
+                    checkmarkColor: _favoritesOnly ? Colors.white : context.appColors.textSecondary,
                     labelStyle: TextStyle(
-                      color: _favoritesOnly ? Colors.white : Colors.white70,
+                      color: _favoritesOnly ? Colors.white : context.appColors.textSecondary,
                     ),
                   ),
                 ],
@@ -337,9 +348,7 @@ class _ProductsScreenState extends State<ProductsScreen>
             const SizedBox(height: 8),
             Expanded(
               child: provider.loading && provider.listingRows.isEmpty
-                  ? const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
-                    )
+                  ? const BrandPageLoader()
                   : provider.error != null && provider.listingRows.isEmpty
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
@@ -358,15 +367,15 @@ class _ProductsScreenState extends State<ProductsScreen>
                       : filtered.isEmpty
                           ? ListView(
                               physics: const AlwaysScrollableScrollPhysics(),
-                              children: const [
-                                SizedBox(height: 80),
+                              children: [
+                                const SizedBox(height: 80),
                                 Icon(Icons.inventory_2_outlined,
-                                    size: 48, color: Colors.white24),
-                                SizedBox(height: 12),
+                                    size: 48, color: context.appColors.textMuted),
+                                const SizedBox(height: 12),
                                 Text(
                                   'No listings match your filters.',
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.white54),
+                                  style: TextStyle(color: context.appColors.textMuted),
                                 ),
                               ],
                             )
@@ -422,7 +431,7 @@ class _ProductCard extends StatelessWidget {
         : '₹${listing.dailyRent.toStringAsFixed(0)}/day · Qty ${row.quantity}';
 
     return Material(
-      color: const Color(0xFF1E293B),
+      color: context.appColors.surface,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -431,7 +440,7 @@ class _ProductCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white12),
+            border: Border.all(color: context.appColors.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -444,8 +453,8 @@ class _ProductCard extends StatelessWidget {
                       row.productName.trim().isNotEmpty
                           ? row.productName
                           : listing.listingTitle,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.appColors.textPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 16,
                       ),
@@ -472,7 +481,7 @@ class _ProductCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 row.categoryName,
-                style: const TextStyle(color: Colors.white54, fontSize: 13),
+                style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
               ),
               const SizedBox(height: 8),
               Text(

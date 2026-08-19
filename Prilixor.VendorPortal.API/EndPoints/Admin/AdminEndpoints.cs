@@ -186,26 +186,6 @@ public sealed class ForceResetAdminPasswordRequest
     public string? Notes { get; set; }
 }
 
-public sealed class GetOwnAdminProfileEndpoint(IMediator mediator)
-    : EndpointWithoutRequest<Results<Ok<AdminUserDto>, ProblemHttpResult>>
-{
-    public override void Configure()
-    {
-        Get("me");
-        Group<AdminApiGroup>();
-    }
-
-    public override async Task<Results<Ok<AdminUserDto>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
-    {
-        var actorIdStr = HttpContext.ResolveAdminUserId();
-        if (!Guid.TryParse(actorIdStr, out var actorId))
-            return TypedResults.Problem(title: "auth.forbidden", detail: "Admin identity required.", statusCode: 401);
-
-        var result = await mediator.Send(new GetOwnAdminProfileQuery(actorId), ct);
-        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
-    }
-}
-
 public sealed class UpdateOwnAdminProfileEndpoint(IMediator mediator)
     : Endpoint<UpdateOwnAdminProfileRequest, Results<Ok<AdminUserDto>, ProblemHttpResult>>
 {

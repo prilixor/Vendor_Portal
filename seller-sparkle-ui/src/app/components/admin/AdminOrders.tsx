@@ -6,7 +6,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import {
   RefreshCw,
   ShoppingBag,
@@ -18,7 +18,7 @@ import {
   ChevronRight,
   Package,
 } from "lucide-react";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import {
   ActiveFilterChips,
   FilterPanel,
@@ -113,7 +113,7 @@ export const AdminOrders = () => {
 
   const { data: orders = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders(),
+    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
   });
 
   useEffect(() => {
@@ -381,15 +381,7 @@ export const AdminOrders = () => {
         </FilterPanel>
 
         {isLoading ? (
-          <div className="space-y-4">
-            {Array.from({ length: 4 }).map((_, idx) => (
-              <div key={idx} className="rounded-xl border border-border/80 bg-accent/10 p-6 space-y-3">
-                <Skeleton className="h-6 w-1/4" />
-                <Skeleton className="h-4 w-1/2" />
-                <Skeleton className="h-12 w-full rounded-lg" />
-              </div>
-            ))}
-          </div>
+          <PageLoaderSlot />
         ) : groupedOrders.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">No customer orders found matching current criteria.</p>
         ) : (
@@ -418,7 +410,7 @@ export const AdminOrders = () => {
                     <div key={item.orderId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/10 hover:border-border transition-all duration-300 shadow-sm gap-4">
                       <div className="flex items-center gap-4 flex-1">
                         {imageUrl ? (
-                          <img src={imageUrl} alt={item.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" />
+                          <img src={imageUrl} alt={item.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" onError={retryOriginalOnImageError} />
                         ) : (
                           <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">
                             <Package className="h-5 w-5 opacity-60" />

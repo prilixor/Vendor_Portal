@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
+import '../../core/theme.dart';
 import 'edit_chemical_stock_screen.dart';
 import 'edit_equipment_stock_screen.dart';
 import 'listing_assets_screen.dart';
@@ -65,18 +66,18 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: AppTheme.card(context),
         title: Text(
           stockIn ? 'Stock in' : 'Stock out',
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: context.appColors.textPrimary),
         ),
         content: TextField(
           controller: qtyController,
           keyboardType: TextInputType.number,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
+          style: TextStyle(color: context.appColors.textPrimary),
+          decoration: InputDecoration(
             labelText: 'Quantity',
-            labelStyle: TextStyle(color: Colors.white54),
+            labelStyle: TextStyle(color: context.appColors.textMuted),
           ),
         ),
         actions: [
@@ -131,8 +132,8 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     if (record == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Inventory')),
-        body: const Center(
-          child: Text('Record not found.', style: TextStyle(color: Colors.white54)),
+        body: Center(
+          child: Text('Record not found.', style: TextStyle(color: context.appColors.textMuted)),
         ),
       );
     }
@@ -144,8 +145,8 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
         children: [
           Text(
             record.productName,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.appColors.textPrimary,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -173,20 +174,20 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
               label: const Text('Edit packaging stock'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
-                foregroundColor: const Color(0xFF6C63FF),
-                side: const BorderSide(color: Colors.white24),
+                foregroundColor: AppTheme.accent,
+                side: BorderSide(color: context.appColors.border),
               ),
             ),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'Variant stock',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             if (variants.isEmpty)
-              const Text(
+              Text(
                 'No packaging stock yet. Tap Edit packaging stock to add units per size.',
-                style: TextStyle(color: Colors.white54, fontSize: 13),
+                style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
               )
             else
               ...variants.map(
@@ -194,21 +195,21 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: AppTheme.card(context),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white12),
+                    border: Border.all(color: context.appColors.border),
                   ),
                   child: Row(
                     children: [
                       Expanded(
                         child: Text(
                           '${v.label} · ${v.sku}',
-                          style: const TextStyle(color: Colors.white),
+                          style: TextStyle(color: context.appColors.textPrimary),
                         ),
                       ),
                       Text(
                         'Total ${v.totalQuantity}',
-                        style: const TextStyle(color: Color(0xFF6C63FF)),
+                        style: const TextStyle(color: AppTheme.accent),
                       ),
                     ],
                   ),
@@ -234,8 +235,8 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
               label: const Text('Edit stock levels'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
-                foregroundColor: const Color(0xFF6C63FF),
-                side: const BorderSide(color: Colors.white24),
+                foregroundColor: AppTheme.accent,
+                side: BorderSide(color: context.appColors.border),
               ),
             ),
             const SizedBox(height: 12),
@@ -249,8 +250,8 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                     icon: const Icon(Icons.add),
                     label: const Text('Stock in'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.greenAccent,
-                      side: const BorderSide(color: Colors.white24),
+                      foregroundColor: Colors.green,
+                      side: BorderSide(color: context.appColors.border),
                     ),
                   ),
                 ),
@@ -263,8 +264,8 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                     icon: const Icon(Icons.remove),
                     label: const Text('Stock out'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.orangeAccent,
-                      side: const BorderSide(color: Colors.white24),
+                      foregroundColor: Colors.orange,
+                      side: BorderSide(color: context.appColors.border),
                     ),
                   ),
                 ),
@@ -290,18 +291,18 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                 : 'Manage serial numbers'),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Colors.white24),
+              foregroundColor: context.appColors.textPrimary,
+              side: BorderSide(color: context.appColors.border),
             ),
           ),
           const SizedBox(height: 20),
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Recent movements',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: context.appColors.textPrimary,
                     fontWeight: FontWeight.w600,
                     fontSize: 16,
                   ),
@@ -317,9 +318,9 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
           ),
           const SizedBox(height: 8),
           if (_movements.isEmpty && !_movementsLoading)
-            const Text(
+            Text(
               'No movement history yet.',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: context.appColors.textMuted),
             )
           else
             ..._movements.take(25).map(
@@ -327,9 +328,9 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: AppTheme.card(context),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white12),
+                      border: Border.all(color: context.appColors.border),
                     ),
                     child: Row(
                       children: [
@@ -339,15 +340,15 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                             children: [
                               Text(
                                 m.typeLabel,
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: context.appColors.textPrimary,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               Text(
                                 m.reference,
-                                style: const TextStyle(
-                                  color: Colors.white54,
+                                style: TextStyle(
+                                  color: context.appColors.textMuted,
                                   fontSize: 12,
                                 ),
                               ),
@@ -357,7 +358,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                         Text(
                           '${m.quantity > 0 ? '+' : ''}${m.quantity}',
                           style: const TextStyle(
-                            color: Color(0xFF6C63FF),
+                            color: AppTheme.accent,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -394,18 +395,18 @@ class _StatsGrid extends StatelessWidget {
               width: (MediaQuery.of(context).size.width - 48) / 2,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: AppTheme.card(context),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white12),
+                border: Border.all(color: context.appColors.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(e.$1, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  Text(e.$1, style: TextStyle(color: context.appColors.textSecondary, fontSize: 12)),
                   Text(
                     '${e.$2}',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.appColors.textPrimary,
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),

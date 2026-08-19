@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Role, User } from "@/app/models";
 import { authApi } from "@/app/services/authApi";
+import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import {
   ADMIN_USER_KEY,
   PORTAL_USER_KEY,
@@ -18,18 +19,7 @@ interface AuthContextValue {
   isHydrating: boolean;
   login: (email: string, password: string, role: Role) => Promise<void>;
   register: (email: string, password: string, phone: string) => Promise<{ id: string; email: string }>;
-  registerCustomer: (
-    email: string | null | undefined,
-    password: string,
-    fullName: string,
-    phone: string | null | undefined,
-  ) => Promise<{
-    id: string;
-    email?: string | null;
-    fullName: string;
-    requiresPhoneOtp: boolean;
-    requiresEmailVerification: boolean;
-  }>;
+  registerCustomer: (email: string, password: string, fullName: string, phone?: string) => Promise<{ id: string; email: string; fullName: string }>;
   logout: () => void;
   switchRole: (role: Role) => void;
   hasPermission: (permission: string) => boolean;
@@ -49,47 +39,43 @@ function mapAdminStorage(adminUser: Record<string, unknown>): User {
   };
 }
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isHydrating, setIsHydrating] = useState(true);
-
-  useEffect(() => {
+/** Sync session read so the shop never waits on a "Loading BlinksMed…" gate. */
+function readInitialUser(): User | null {
+  try {
     const onAdminRoute = isAdminPath();
     ensureAdminTokenMigrated();
     const impersonationUser = readImpersonationUser<User>();
-
     if (impersonationUser && !onAdminRoute) {
-      setUser({
-        ...impersonationUser,
-        impersonation: true,
-      });
-      setIsHydrating(false);
-      return;
+      return { ...impersonationUser, impersonation: true };
     }
 
     const adminRaw = localStorage.getItem(ADMIN_USER_KEY);
     if (adminRaw && (onAdminRoute || !localStorage.getItem(PORTAL_USER_KEY))) {
       try {
-        setUser(mapAdminStorage(JSON.parse(adminRaw)));
+        return mapAdminStorage(JSON.parse(adminRaw));
       } catch {
         localStorage.removeItem(ADMIN_USER_KEY);
       }
-    } else {
-      const raw = localStorage.getItem(PORTAL_USER_KEY);
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          setUser({
-            ...parsed,
-            impersonation: !!parsed.impersonation,
-          });
-        } catch {
-          localStorage.removeItem(PORTAL_USER_KEY);
-        }
-      }
+      return null;
     }
-    setIsHydrating(false);
-  }, []);
+
+    const raw = localStorage.getItem(PORTAL_USER_KEY);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return { ...parsed, impersonation: !!parsed.impersonation };
+    } catch {
+      localStorage.removeItem(PORTAL_USER_KEY);
+      return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User | null>(() => readInitialUser());
+  const [isHydrating] = useState(false);
 
   const logout = () => {
     // Impersonation is tab-scoped — never wipe the admin session in other tabs.
@@ -173,26 +159,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const register = async (email: string, password: string, phone: string) => {
-    // Register + phone OTP are anonymous. A leftover portal JWT makes send/verify-otp
-    // treat the new phone as a conflict with the previous vendor session.
-    clearImpersonationSession();
-    clearPortalSession();
-    setUser(null);
-
     const result = await authApi.registerVendor(email, password, phone);
-    // Prefs require auth; set them after the vendor logs in / verifies email.
+    try {
+      await vendorOnboardingApi.upsertVendorNotificationPreference(result.id, {
+        vendorId: result.id,
+        emailNotificationsEnabled: true,
+        pushNotificationsEnabled: false,
+        newOrderNotifications: true,
+      });
+    } catch (error) {
+      console.error("Failed to set notification preferences:", error);
+    }
     return result;
   };
 
-  const registerCustomer = async (
-    email: string | null | undefined,
-    password: string,
-    fullName: string,
-    phone: string | null | undefined,
-  ) => {
-    clearImpersonationSession();
-    clearPortalSession();
-    setUser(null);
+  const registerCustomer = async (email: string, password: string, fullName: string, phone?: string) => {
     return authApi.registerCustomer(email, password, fullName, phone);
   };
 

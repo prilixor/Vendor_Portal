@@ -1,4 +1,4 @@
-import { Outlet, Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 
 import { useState, useEffect, useMemo } from "react";
 
@@ -9,8 +9,6 @@ import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 
 import { CustomerStoreHeader } from "./CustomerStoreHeader";
-import { CustomerPhoneVerificationGate } from "@/app/components/customer/CustomerPhoneVerificationGate";
-import { VendorPhoneVerificationGate } from "@/app/components/vendor/VendorPhoneVerificationGate";
 
 import { vendorNav, customerNav, guestCustomerNav } from "@/app/helpers/navigation";
 
@@ -43,6 +41,7 @@ import { VendorVerificationBanner } from "@/app/components/vendor/VendorVerifica
 
 import { SupportChat } from "@/app/components/support/SupportChat";
 import { BrandBootSplash } from "@/app/components/shared/BrandMark";
+import { PortalGlobalLoader } from "@/app/components/shared/PortalGlobalLoader";
 
 
 
@@ -158,7 +157,7 @@ function VendorShellContent({
 
         <TopBar variant="vendor" onMenuClick={() => setMobileSidebarOpen(true)} />
 
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main className="relative flex-1 px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
 
           <div className="mx-auto max-w-7xl">
 
@@ -199,9 +198,7 @@ function VendorShellContent({
 
             )}
 
-            <VendorPhoneVerificationGate>
-              <Outlet />
-            </VendorPhoneVerificationGate>
+            <PortalGlobalLoader placement="main" />
 
           </div>
 
@@ -253,21 +250,21 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
   const { data: adminOrders = [] } = useQuery({
     queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders(),
+    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
     enabled: variant === "admin" && !!user,
     refetchInterval: 30000,
   });
 
   const { data: adminVendors = [] } = useQuery({
     queryKey: ["admin-vendors"],
-    queryFn: () => adminApi.getVendors(),
+    queryFn: () => adminApi.getVendors({ quiet: true }),
     enabled: variant === "admin" && !!user,
     refetchInterval: 30000,
   });
 
   const { data: adminAuditLogs = [] } = useQuery({
     queryKey: ["admin-audit-logs"],
-    queryFn: () => adminApi.getAuditLogs(),
+    queryFn: () => adminApi.getAuditLogs(undefined, { quiet: true }),
     enabled: variant === "admin" && !!user,
     refetchInterval: 30000,
   });
@@ -309,7 +306,10 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
 
 
-  if (isHydrating) return <BrandBootSplash />;
+  // Never cover the customer shop with the boot splash. Browse has its own loader.
+  if (isHydrating && variant !== "customer") {
+    return <BrandBootSplash />;
+  }
 
 
 
@@ -428,9 +428,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
               <div className="mx-auto w-full max-w-[1400px]">
 
-                <CustomerPhoneVerificationGate>
-                  <Outlet />
-                </CustomerPhoneVerificationGate>
+                <PortalGlobalLoader placement="chrome" />
 
               </div>
 
@@ -494,11 +492,11 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
               <TopBar variant={variant} onMenuClick={() => setMobileSidebarOpen(true)} />
 
-              <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+              <main className="relative flex-1 px-4 py-6 sm:px-6 lg:px-8">
 
                 <div className="mx-auto max-w-7xl">
 
-                  <Outlet />
+                  <PortalGlobalLoader placement="main" />
 
                 </div>
 

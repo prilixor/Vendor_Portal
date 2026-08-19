@@ -23,7 +23,6 @@ builder.Services.ConfigureServices(builder.Configuration, builder.Environment);
 builder.Services.Configure<Prilixor.VendorPortal.Domain.Options.BootstrapSuperAdminOptions>(
     builder.Configuration.GetSection(Prilixor.VendorPortal.Domain.Options.BootstrapSuperAdminOptions.SectionName));
 builder.Services.AddHostedService<Prilixor.VendorPortal.API.Services.BootstrapSuperAdminHostedService>();
-builder.Services.AddHostedService<Prilixor.VendorPortal.API.Services.CustomerExpirationReminderHostedService>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpClient();
@@ -124,6 +123,38 @@ if (!app.Environment.IsDevelopment())
 
 app.UseCors();
 
+// Public catalog/media (same files live serves from S3). Serve from the project
+// wwwroot so local uploads work even when WebRoot is bin/Debug.
+{
+    var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "uploads");
+    try
+    {
+        Directory.CreateDirectory(uploadsPath);
+        Directory.CreateDirectory(Path.Combine(uploadsPath, "vendors"));
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex,
+            "Could not create local upload directories under {ContentRoot}. Local static file serving for uploads will be skipped.",
+            builder.Environment.ContentRootPath);
+    }
+
+    if (Directory.Exists(uploadsPath))
+    {
+        var uploadsProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath);
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = uploadsProvider,
+            RequestPath = "/uploads"
+        });
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = uploadsProvider,
+            RequestPath = "/api/uploads"
+        });
+    }
+}
+
 app.UseAuthentication()
     .UseAuthorization();
 
@@ -133,39 +164,13 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/api"
 });
 
-var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "uploads");
-var uploadsVendorsPath = Path.Combine(uploadsPath, "vendors");
-
-// Best-effort creation of local upload folders. Under IIS the app pool identity may not
-// have write access to the content root; if so we log and continue instead of crashing the
-// whole app at startup (uploads still work through the configured storage provider, e.g. S3).
-try
-{
-    Directory.CreateDirectory(uploadsPath);
-    Directory.CreateDirectory(uploadsVendorsPath);
-}
-catch (Exception ex)
-{
-    Log.Warning(ex,
-        "Could not create local upload directories under {ContentRoot}. Local static file serving for uploads will be skipped; ensure the app pool identity has write access or rely on the configured storage provider.",
-        builder.Environment.ContentRootPath);
-}
-
+var uploadsVendorsPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "uploads", "vendors");
 if (Directory.Exists(uploadsVendorsPath))
 {
     app.UseStaticFiles(new StaticFileOptions
     {
         FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsVendorsPath),
         RequestPath = "/api/vendors"
-    });
-}
-
-if (Directory.Exists(uploadsPath))
-{
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
-        RequestPath = "/api/uploads"
     });
 }
 
@@ -236,6 +241,36 @@ app.MapGet("/api/files/download", async (
 
     if (!Uri.TryCreate(url, UriKind.RelativeOrAbsolute, out var parsed))
         return Results.BadRequest(new { detail = "Invalid file url." });
+
+    static string? ResolveLocalUploadPath(IWebHostEnvironment environment, string rawUrl)
+    {
+        string relative;
+        if (Uri.TryCreate(rawUrl, UriKind.Absolute, out var abs))
+            relative = abs.AbsolutePath.TrimStart('/');
+        else
+            relative = rawUrl.TrimStart('/', '\\').Replace('\\', '/');
+
+        if (relative.StartsWith("api/", StringComparison.OrdinalIgnoreCase))
+            relative = relative["api/".Length..];
+
+        if (!relative.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var wwwroot = Path.GetFullPath(Path.Combine(environment.ContentRootPath, "wwwroot"));
+        var combined = Path.Combine(wwwroot, relative.Replace('/', Path.DirectorySeparatorChar));
+        var fullPath = Path.GetFullPath(combined);
+        if (!fullPath.StartsWith(wwwroot, StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(fullPath))
+            return null;
+        return fullPath;
+    }
+
+    var localUploadPath = ResolveLocalUploadPath(environment, url);
+    if (localUploadPath is not null)
+    {
+        var localFileName = Path.GetFileName(localUploadPath);
+        request.HttpContext.Response.Headers["Content-Disposition"] = $"inline; filename=\"{localFileName}\"";
+        return Results.File(localUploadPath, "application/octet-stream", enableRangeProcessing: true);
+    }
 
     if (!parsed.IsAbsoluteUri)
     {

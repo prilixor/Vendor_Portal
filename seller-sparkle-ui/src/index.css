@@ -184,6 +184,86 @@
   }
 }
 
+/* Branded page loader — mark stays still; rings and sparks orbit. */
+@keyframes bm-loader-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes bm-loader-spin-rev {
+  to { transform: rotate(-360deg); }
+}
+@keyframes bm-loader-aurora {
+  0%, 100% { opacity: 0.45; transform: scale(0.92) rotate(0deg); }
+  50% { opacity: 0.9; transform: scale(1.08) rotate(18deg); }
+}
+@keyframes bm-loader-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.045); }
+}
+@keyframes bm-loader-sheen {
+  0% { transform: translateX(-140%) rotate(18deg); }
+  100% { transform: translateX(220%) rotate(18deg); }
+}
+@keyframes bm-loader-spark {
+  0%, 100% { opacity: 0.15; transform: scale(0.55); }
+  50% { opacity: 1; transform: scale(1); }
+}
+@keyframes bm-loader-dot {
+  0%, 80%, 100% { opacity: 0.28; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+
+.bm-loader-ring {
+  animation: bm-loader-spin 1.15s linear infinite;
+  transform-origin: center;
+}
+.bm-loader-ring-rev {
+  animation: bm-loader-spin-rev 2.4s linear infinite;
+  transform-origin: center;
+}
+.bm-loader-aurora {
+  animation: bm-loader-aurora 3.4s ease-in-out infinite;
+}
+.bm-loader-breathe {
+  animation: bm-loader-breathe 2.6s ease-in-out infinite;
+}
+.bm-loader-sheen {
+  animation: bm-loader-sheen 2.1s ease-in-out infinite;
+}
+.bm-loader-orbit {
+  animation: bm-loader-spin 3.2s linear infinite;
+  transform-origin: center;
+}
+.bm-loader-spark {
+  animation: bm-loader-spark 1.4s ease-in-out infinite;
+}
+.bm-loader-dot {
+  animation: bm-loader-dot 1.15s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bm-loader-ring,
+  .bm-loader-ring-rev,
+  .bm-loader-aurora,
+  .bm-loader-breathe,
+  .bm-loader-sheen,
+  .bm-loader-orbit,
+  .bm-loader-spark,
+  .bm-loader-dot {
+    animation: none;
+  }
+}
+
+/* One loader at a time: hide in-page Lucide/CSS spinners under the branded overlay.
+   Overlay internals stay visible. Do not hide animate-pulse (unread badges, etc.). */
+body:has([data-portal-loader="true"]) .animate-spin,
+body:has([data-portal-loader="true"]) .lucide-loader-circle {
+  visibility: hidden !important;
+}
+body:has([data-portal-loader="true"]) [data-portal-loader] .animate-spin,
+body:has([data-portal-loader="true"]) [data-portal-loader] .lucide-loader-circle {
+  visibility: visible !important;
+}
+
 /*
   Listing detail gallery: show full image inside frame (may letterbox).
   Unlayered CSS wins over Tailwind Preflight img { height: auto; max-width: 100% }.

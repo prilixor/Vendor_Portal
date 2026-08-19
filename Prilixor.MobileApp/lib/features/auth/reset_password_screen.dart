@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/theme.dart';
 import 'login_screen.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
@@ -72,11 +73,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final colors = context.appColors;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('Reset password'),
-        backgroundColor: const Color(0xFF0F172A),
+        title: Text('Reset password', style: TextStyle(color: colors.textPrimary)),
+        backgroundColor: colors.background,
+        iconTheme: IconThemeData(color: colors.textPrimary),
+        elevation: 0,
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -109,20 +114,20 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               child: const Text('Go to sign in'),
             ),
           ] else ...[
-            const Text(
+            Text(
               'Choose a new password for your BlinksMed account.',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: colors.textSecondary),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _passwordController,
               obscureText: _obscurePassword,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: colors.textPrimary),
               decoration: InputDecoration(
                 labelText: 'New password',
-                labelStyle: const TextStyle(color: Colors.white54),
+                labelStyle: TextStyle(color: colors.textSecondary),
                 filled: true,
-                fillColor: const Color(0xFF1E293B),
+                fillColor: colors.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -132,7 +137,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                   icon: Icon(
                     _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: Colors.white54,
+                    color: colors.textMuted,
                   ),
                 ),
               ),
@@ -141,12 +146,12 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             TextField(
               controller: _confirmController,
               obscureText: _obscureConfirm,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: colors.textPrimary),
               decoration: InputDecoration(
                 labelText: 'Confirm password',
-                labelStyle: const TextStyle(color: Colors.white54),
+                labelStyle: TextStyle(color: colors.textSecondary),
                 filled: true,
-                fillColor: const Color(0xFF1E293B),
+                fillColor: colors.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -156,7 +161,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                   icon: Icon(
                     _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: Colors.white54,
+                    color: colors.textMuted,
                   ),
                 ),
               ),

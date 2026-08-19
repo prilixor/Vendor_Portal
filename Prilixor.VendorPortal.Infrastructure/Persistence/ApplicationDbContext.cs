@@ -30,6 +30,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
+    public DbSet<ProductDocument> ProductDocuments => Set<ProductDocument>();
     public DbSet<VendorProductListing> VendorProductListings => Set<VendorProductListing>();
     public DbSet<VendorProductImage> VendorProductImages => Set<VendorProductImage>();
     public DbSet<VendorProductDocument> VendorProductDocuments => Set<VendorProductDocument>();
@@ -65,7 +66,6 @@ public class ApplicationDbContext : DbContext
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteContactContent> WebsiteContactContents => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteContactContent>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksHeader> WebsiteHowItWorksHeaders => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksHeader>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksStep> WebsiteHowItWorksSteps => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksStep>();
-    public DbSet<Prilixor.VendorPortal.Domain.Platform.PlatformSmsSettings> PlatformSmsSettings => Set<Prilixor.VendorPortal.Domain.Platform.PlatformSmsSettings>();
     public DbSet<RentalDurationIcon> RentalDurationIcons => Set<RentalDurationIcon>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -79,7 +79,6 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.Id).HasColumnName("id");
             entity.Property(x => x.Email).HasColumnName("email");
             entity.Property(x => x.SupportPhone).HasColumnName("support_phone").IsRequired(false);
-            entity.Property(x => x.PhoneVerifiedAt).HasColumnName("phone_verified_at");
             entity.Property(x => x.PasswordHash).HasColumnName("password_hash");
             entity.Property(x => x.IsEmailVerified).HasColumnName("email_verified");
             entity.Property(x => x.EmailVerificationToken).HasColumnName("email_verification_token");
@@ -330,6 +329,9 @@ public class ApplicationDbContext : DbContext
             entity.HasMany(x => x.ProductImages)
                 .WithOne(x => x.Product)
                 .HasForeignKey(x => x.ProductId);
+            entity.HasMany(x => x.ProductDocuments)
+                .WithOne(x => x.Product)
+                .HasForeignKey(x => x.ProductId);
             entity.HasOne(x => x.ChemicalProperty)
                 .WithOne(x => x.Product)
                 .HasForeignKey<ChemicalProperty>(x => x.ProductId);
@@ -470,6 +472,26 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
             entity.HasOne(x => x.Product)
                 .WithMany(x => x.ProductImages)
+                .HasForeignKey(x => x.ProductId);
+        });
+
+        modelBuilder.Entity<ProductDocument>(entity =>
+        {
+            entity.ToTable("product_documents");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.ProductId).HasColumnName("product_id");
+            entity.Property(x => x.DocumentType).HasColumnName("document_type");
+            entity.Property(x => x.FileUrl).HasColumnName("file_url");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.HasOne(x => x.Product)
+                .WithMany(x => x.ProductDocuments)
                 .HasForeignKey(x => x.ProductId);
         });
 
@@ -632,7 +654,6 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.VendorId).HasColumnName("vendor_id");
             entity.Property(x => x.EmailNotificationsEnabled).HasColumnName("email_notifications_enabled");
             entity.Property(x => x.PushNotificationsEnabled).HasColumnName("push_notifications_enabled");
-            entity.Property(x => x.SmsNotificationsEnabled).HasColumnName("sms_notifications_enabled");
             entity.Property(x => x.NewOrderNotifications).HasColumnName("new_order_notifications");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
@@ -700,8 +721,6 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.Email).HasColumnName("email");
             entity.Property(x => x.PasswordHash).HasColumnName("password_hash");
             entity.Property(x => x.FullName).HasColumnName("full_name");
-            entity.Property(x => x.Phone).HasColumnName("phone");
-            entity.Property(x => x.PhoneVerifiedAt).HasColumnName("phone_verified_at");
             entity.Property(x => x.Role).HasColumnName("role");
             entity.Property(x => x.RoleId).HasColumnName("role_id");
             entity.Property(x => x.IsSystemUser).HasColumnName("is_system_user");

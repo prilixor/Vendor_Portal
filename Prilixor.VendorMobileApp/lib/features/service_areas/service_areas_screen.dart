@@ -7,6 +7,7 @@ import '../../core/models/vendor_onboarding_model.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/utils/device_location.dart';
 import '../../core/utils/place_search.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/state_city_picker.dart';
 import '../../core/providers/vendor_service_area_provider.dart';
@@ -57,10 +58,10 @@ class _ServiceAreasScreenState extends State<ServiceAreasScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.card(context),
-        title: const Text('Delete area?', style: TextStyle(color: Colors.white)),
+        title: Text('Delete area?', style: TextStyle(color: context.appColors.textPrimary)),
         content: Text(
           'Remove ${area.areaName} (${area.city})?',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
+          style: TextStyle(color: context.appColors.textSecondary),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -104,7 +105,7 @@ class _ServiceAreasScreenState extends State<ServiceAreasScreen> {
         color: AppTheme.accent,
         onRefresh: _load,
         child: provider.loading && provider.areas.isEmpty
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.accent))
+            ? const BrandPageLoader()
             : ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
@@ -119,13 +120,13 @@ class _ServiceAreasScreenState extends State<ServiceAreasScreen> {
                   ],
                   if (provider.areas.isEmpty) ...[
                     const SizedBox(height: 32),
-                    Icon(Icons.map_outlined, size: 48, color: Colors.white.withValues(alpha: 0.2)),
+                    Icon(Icons.map_outlined, size: 48, color: context.appColors.textMuted),
                     const SizedBox(height: 12),
                     Text(
                       'No service areas yet',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.55),
+                        color: context.appColors.textSecondary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -133,7 +134,7 @@ class _ServiceAreasScreenState extends State<ServiceAreasScreen> {
                     Text(
                       'Add a zone on the map where you fulfill rentals.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 13),
+                      style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
                     ),
                   ] else ...[
                     const SizedBox(height: 16),
@@ -198,10 +199,10 @@ class _ServiceAreasHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Delivery zones',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: context.appColors.textPrimary,
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
                   ),
@@ -212,7 +213,7 @@ class _ServiceAreasHeader extends StatelessWidget {
                       ? 'Place pins for your zones. Coverage radius is set by Admin.'
                       : '$count active ${count == 1 ? 'area' : 'areas'} · radius set by Admin',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.58),
+                    color: context.appColors.textMuted,
                     fontSize: 12,
                   ),
                 ),
@@ -247,7 +248,7 @@ class _ServiceAreaCard extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            border: Border.all(color: context.appColors.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -274,8 +275,8 @@ class _ServiceAreaCard extends StatelessWidget {
                         children: [
                           Text(
                             area.areaName,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: context.appColors.textPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 16,
                             ),
@@ -286,14 +287,14 @@ class _ServiceAreaCard extends StatelessWidget {
                               Icon(
                                 Icons.place_outlined,
                                 size: 14,
-                                color: Colors.white.withValues(alpha: 0.45),
+                                color: context.appColors.textMuted,
                               ),
                               const SizedBox(width: 4),
                               Expanded(
                                 child: Text(
                                   area.city,
                                   style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.55),
+                                    color: context.appColors.textSecondary,
                                     fontSize: 13,
                                   ),
                                 ),
@@ -356,16 +357,16 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
+        color: context.appColors.surface,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: Colors.white54),
+          Icon(icon, size: 12, color: context.appColors.textMuted),
           const SizedBox(width: 4),
-          Text(label, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+          Text(label, style: TextStyle(color: context.appColors.textSecondary, fontSize: 11)),
         ],
       ),
     );

@@ -33,14 +33,26 @@ internal static class ChatSessionMapping
 {
     public const string AdminDisplayName = "BlinksMed Support";
 
+    public static bool IsVendorUnassigned(string? orderStatus) =>
+        orderStatus is not null
+        && (orderStatus.Equals("dispatch_failed", StringComparison.OrdinalIgnoreCase)
+            || orderStatus.Equals("awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase));
+
     public static async Task<(string VendorName, string CounterpartyName)> ResolveNamesAsync(
         ICustomerRepository customers,
         ChatSession session,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? orderStatus = null)
     {
-        string vendorName = "Store";
-        if (session.VendorId.HasValue)
-            vendorName = await customers.GetVendorBusinessNameAsync(session.VendorId.Value, cancellationToken) ?? "Store";
+        string vendorName;
+        if (IsVendorUnassigned(orderStatus) || !session.VendorId.HasValue)
+        {
+            vendorName = "Unassigned";
+        }
+        else
+        {
+            vendorName = await customers.GetVendorBusinessNameAsync(session.VendorId.Value, cancellationToken) ?? "Unassigned";
+        }
 
         var counterpartyName = string.Equals(session.CounterpartyType, ChatCounterpartyTypes.Admin, StringComparison.OrdinalIgnoreCase)
             ? AdminDisplayName
@@ -95,14 +107,17 @@ internal sealed class GetCustomerChatSessionsQueryHandler(ICustomerRepository cu
 
         foreach (var s in sessions)
         {
-            var (vendorName, counterpartyName) = await ChatSessionMapping.ResolveNamesAsync(customers, s, cancellationToken);
             string? orderNumber = null;
+            string? orderStatus = null;
 
             if (s.OrderId.HasValue)
             {
                 var order = await customers.GetCustomerOrderAsync(request.CustomerId, s.OrderId.Value, cancellationToken);
                 orderNumber = order?.Order.OrderNumber;
+                orderStatus = order?.Order.Status;
             }
+
+            var (vendorName, counterpartyName) = await ChatSessionMapping.ResolveNamesAsync(customers, s, cancellationToken, orderStatus);
 
             unreadBySession.TryGetValue(s.Id, out var unread);
             dtos.Add(ChatSessionMapping.ToDto(s, customer.FullName, vendorName, counterpartyName, orderNumber, unread));
@@ -133,14 +148,17 @@ internal sealed class GetVendorChatSessionsQueryHandler(ICustomerRepository cust
         {
             var customer = await customers.GetCustomerByIdAsync(s.CustomerId, cancellationToken);
             var customerName = customer?.FullName ?? "Customer";
-            var (vendorName, counterpartyName) = await ChatSessionMapping.ResolveNamesAsync(customers, s, cancellationToken);
             string? orderNumber = null;
+            string? orderStatus = null;
 
             if (s.OrderId.HasValue)
             {
                 var order = await customers.GetCustomerOrderAsync(s.CustomerId, s.OrderId.Value, cancellationToken);
                 orderNumber = order?.Order.OrderNumber;
+                orderStatus = order?.Order.Status;
             }
+
+            var (vendorName, counterpartyName) = await ChatSessionMapping.ResolveNamesAsync(customers, s, cancellationToken, orderStatus);
 
             unreadBySession.TryGetValue(s.Id, out var unread);
             dtos.Add(ChatSessionMapping.ToDto(s, customerName, vendorName, counterpartyName, orderNumber, unread));
@@ -171,14 +189,17 @@ internal sealed class GetAdminChatSessionsQueryHandler(ICustomerRepository custo
         {
             var customer = await customers.GetCustomerByIdAsync(s.CustomerId, cancellationToken);
             var customerName = customer?.FullName ?? "Customer";
-            var (vendorName, counterpartyName) = await ChatSessionMapping.ResolveNamesAsync(customers, s, cancellationToken);
             string? orderNumber = null;
+            string? orderStatus = null;
 
             if (s.OrderId.HasValue)
             {
                 var order = await customers.GetCustomerOrderByIdAsync(s.OrderId.Value, cancellationToken);
                 orderNumber = order?.Order.OrderNumber;
+                orderStatus = order?.Order.Status;
             }
+
+            var (vendorName, counterpartyName) = await ChatSessionMapping.ResolveNamesAsync(customers, s, cancellationToken, orderStatus);
 
             unreadBySession.TryGetValue(s.Id, out var unread);
             dtos.Add(ChatSessionMapping.ToDto(s, customerName, vendorName, counterpartyName, orderNumber, unread));
@@ -256,7 +277,8 @@ internal sealed class CreateChatSessionCommandHandler(ICustomerRepository custom
             await customers.SaveChangesAsync(cancellationToken);
         }
 
-        var (vendorName, counterpartyName) = await ChatSessionMapping.ResolveNamesAsync(customers, s, cancellationToken);
+        var (vendorName, counterpartyName) = await ChatSessionMapping.ResolveNamesAsync(
+            customers, s, cancellationToken, orderRow.Order.Status);
 
         return Result.Success(ChatSessionMapping.ToDto(
             s,

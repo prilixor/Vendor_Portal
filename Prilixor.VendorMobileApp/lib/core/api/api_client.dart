@@ -100,8 +100,7 @@ class ApiClient {
   /// Call after login / session restore so the next request stampede skips storage I/O.
   void setAccessToken(String? token) {
     final trimmed = token?.trim();
-    _cachedAccessToken =
-        (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+    _cachedAccessToken = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
   }
 
   void clearAccessToken() {

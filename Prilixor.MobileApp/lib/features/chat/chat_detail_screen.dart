@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/chat_provider.dart';
+import '../../core/theme.dart';
 import '../../core/utils/chat_day_label.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final String sessionId;
@@ -52,46 +54,49 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<ChatProvider>(context);
+    final colors = context.appColors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
         toolbarHeight: 72,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Chat with BlinksMed support',
-              style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+              style: TextStyle(color: colors.textPrimary, fontSize: 17, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 2),
             Text(
               'Message BlinksMed about this order — not your product supplier. '
               'Order: ${widget.orderNumber} • ${widget.listingTitle}',
-              style: const TextStyle(color: Colors.white70, fontSize: 11),
+              style: TextStyle(color: colors.textSecondary, fontSize: 11),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
-        backgroundColor: const Color(0xFF1E293B),
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: colors.surface,
+        iconTheme: IconThemeData(color: colors.textPrimary),
         elevation: 0,
       ),
       body: Column(
         children: [
           Expanded(
             child: provider.isLoading && provider.messages.isEmpty
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+                ? const BrandPageLoader()
                 : provider.messages.isEmpty
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 24),
-                          child: Text(
-                            'Send a message to start the conversation.',
-                            style: TextStyle(color: Colors.white54, fontSize: 14),
-                            textAlign: TextAlign.center,
-                          ),
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.chat_bubble_outline, size: 48, color: colors.textMuted),
+                            const SizedBox(height: 16),
+                            Text('No active conversation', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 8),
+                            Text('Start a chat with BlinksMed support about this order.', style: TextStyle(color: colors.textSecondary, fontSize: 14), textAlign: TextAlign.center),
+                          ],
                         ),
                       )
                     : ListView.builder(
@@ -121,14 +126,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: Colors.white10,
+                                        color: colors.surfaceElevated,
                                         borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(color: Colors.white12),
+                                        border: Border.all(color: colors.border),
                                       ),
                                       child: Text(
                                         formatChatDayLabel(message.sentAt),
-                                        style: const TextStyle(
-                                          color: Colors.white70,
+                                        style: TextStyle(
+                                          color: colors.textMuted,
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -149,7 +154,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                   decoration: BoxDecoration(
                                     color: isMe
                                         ? const Color(0xFF6C63FF)
-                                        : const Color(0xFF1E293B),
+                                        : colors.surface,
                                     borderRadius: BorderRadius.only(
                                       topLeft: const Radius.circular(16),
                                       topRight: const Radius.circular(16),
@@ -168,8 +173,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                     children: [
                                       Text(
                                         message.text,
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                        style: TextStyle(
+                                          color: isMe ? Colors.white : colors.textPrimary,
                                           fontSize: 16,
                                         ),
                                       ),
@@ -177,7 +182,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                       Text(
                                         formatChatTime(message.sentAt),
                                         style: TextStyle(
-                                          color: Colors.white.withValues(alpha: 0.5),
+                                          color: isMe ? Colors.white70 : colors.textMuted,
                                           fontSize: 10,
                                         ),
                                       ),
@@ -194,9 +199,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           // Input Bar
           Container(
             padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 8, left: 16, right: 16, top: 8),
-            decoration: const BoxDecoration(
-              color: Color(0xFF1E293B),
-              border: Border(top: BorderSide(color: Colors.white10)),
+            decoration: BoxDecoration(
+              color: colors.surface,
+              border: Border(top: BorderSide(color: colors.border)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -204,16 +209,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: colors.textPrimary),
                     keyboardType: TextInputType.multiline,
                     textInputAction: TextInputAction.newline,
                     minLines: 1,
                     maxLines: 5,
                     decoration: InputDecoration(
                       hintText: 'Type a message...',
-                      hintStyle: const TextStyle(color: Colors.white38),
+                      hintStyle: TextStyle(color: colors.textMuted),
                       filled: true,
-                      fillColor: Colors.white10,
+                      fillColor: colors.background,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
                     ),

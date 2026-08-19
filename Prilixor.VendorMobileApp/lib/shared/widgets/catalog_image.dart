@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
+import '../../core/theme.dart';
 import '../../core/utils/media_url.dart';
 
 /// Catalog product image with empty/error placeholders.
-/// On web, prefers HTML &lt;img&gt; so cross-origin images render without CORS decode failures.
+/// On web, prefers HTML <img> so cross-origin images render without CORS decode failures.
 class CatalogImage extends StatelessWidget {
   final String? url;
   final BoxFit fit;
@@ -25,7 +26,7 @@ class CatalogImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final resolved = resolveMediaUrl(url);
     final child = resolved == null
-        ? const _CatalogImagePlaceholder(message: 'Image will be updated soon')
+        ? _CatalogImagePlaceholder(message: 'Image will be updated soon', borderRadius: borderRadius)
         : Image.network(
             resolved,
             width: width,
@@ -33,14 +34,50 @@ class CatalogImage extends StatelessWidget {
             fit: fit,
             webHtmlElementStrategy:
                 kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
-            errorBuilder: (_, _, _) =>
-                const _CatalogImagePlaceholder(message: 'Image currently unavailable'),
+            errorBuilder: (_, _, _) {
+              final original = originalUrlFromThumb(resolved);
+              if (original != null && original != resolved) {
+                return Image.network(
+                  original,
+                  width: width,
+                  height: height,
+                  fit: fit,
+                  webHtmlElementStrategy:
+                      kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
+                  errorBuilder: (_, _, _) => _CatalogImagePlaceholder(
+                    message: 'Image currently unavailable',
+                    borderRadius: borderRadius,
+                  ),
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return Container(
+                      width: width,
+                      height: height,
+                      color: context.appColors.surfaceElevated,
+                      alignment: Alignment.center,
+                      child: const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF6C63FF),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              }
+              return _CatalogImagePlaceholder(
+                message: 'Image currently unavailable',
+                borderRadius: borderRadius,
+              );
+            },
             loadingBuilder: (context, child, progress) {
               if (progress == null) return child;
               return Container(
                 width: width,
                 height: height,
-                color: const Color(0xFF334155),
+                color: context.appColors.surfaceElevated,
                 alignment: Alignment.center,
                 child: const SizedBox(
                   width: 22,
@@ -63,8 +100,9 @@ class CatalogImage extends StatelessWidget {
 
 class _CatalogImagePlaceholder extends StatelessWidget {
   final String message;
+  final BorderRadius? borderRadius;
 
-  const _CatalogImagePlaceholder({required this.message});
+  const _CatalogImagePlaceholder({required this.message, this.borderRadius});
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +116,15 @@ class _CatalogImagePlaceholder extends StatelessWidget {
         return Container(
           width: double.infinity,
           height: double.infinity,
-          color: const Color(0xFF334155),
+          decoration: BoxDecoration(
+            color: context.appColors.surfaceElevated,
+            borderRadius: borderRadius,
+            border: Border.all(
+              color: context.isDarkMode
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : context.appColors.border,
+            ),
+          ),
           alignment: Alignment.center,
           padding: EdgeInsets.symmetric(
             horizontal: tight ? 6 : 10,
@@ -87,7 +133,9 @@ class _CatalogImagePlaceholder extends StatelessWidget {
           child: iconOnly
               ? Icon(
                   Icons.image_not_supported_outlined,
-                  color: Colors.white.withValues(alpha: 0.35),
+                  color: context.isDarkMode
+                      ? Colors.white.withValues(alpha: 0.35)
+                      : context.appColors.textMuted,
                   size: h.isFinite ? (h * 0.28).clamp(18.0, 28.0) : 22,
                 )
               : FittedBox(
@@ -100,7 +148,9 @@ class _CatalogImagePlaceholder extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.image_not_supported_outlined,
-                          color: Colors.white.withValues(alpha: 0.35),
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.35)
+                              : context.appColors.textMuted,
                           size: tight ? 22 : 28,
                         ),
                         SizedBox(height: tight ? 4 : 8),
@@ -110,7 +160,7 @@ class _CatalogImagePlaceholder extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.7),
+                            color: context.appColors.textSecondary,
                             fontSize: tight ? 10 : 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -122,7 +172,7 @@ class _CatalogImagePlaceholder extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.45),
+                            color: context.appColors.textMuted,
                             fontSize: tight ? 9 : 10,
                           ),
                         ),

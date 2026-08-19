@@ -1,5 +1,4 @@
 using Prilixor.VendorPortal.Application.Abstractions;
-using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Customers;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Domain.Vendors;
@@ -159,8 +158,7 @@ public sealed record UpdateVendorOrderStatusCommand(string VendorId, Guid OrderI
 internal sealed class UpdateVendorOrderStatusCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
-    IVendorUploadStorageService uploadStorage,
-    CustomerSmsNotifier customerSms)
+    IVendorUploadStorageService uploadStorage)
     : ICommandHandler<UpdateVendorOrderStatusCommand, CustomerOrderDto>
 {
     public async Task<Result<CustomerOrderDto>> Handle(UpdateVendorOrderStatusCommand request, CancellationToken cancellationToken)
@@ -465,14 +463,6 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
         }
 
         await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
-        var statusBody = target switch
-        {
-            "in_transit" => "Your order is now out for delivery.",
-            "active" => order.OrderType == "buy" ? "Your purchase is delivered." : "Your rental order has been delivered and is now active.",
-            "returned" => "Return completed for your rental order.",
-            "bought_out" => "Buyout completed for your rental order.",
-            _ => "Order status has been updated."
-        };
         await customers.AddCustomerNotificationAsync(
             new CustomerNotification
             {
@@ -481,15 +471,14 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
                 RelatedOrderId = order.Id,
                 NotificationType = "order_status_updated",
                 Title = $"Order {order.OrderNumber} updated",
-                Body = statusBody,
+                Body = target switch
+                {
+                    "in_transit" => "Your order is now out for delivery.",
+                    "active" => order.OrderType == "buy" ? "Your purchase is delivered." : "Your rental order has been delivered and is now active.",
+                    "returned" => "Return completed for your rental order.",
+                    _ => "Order status has been updated."
+                },
             },
-            cancellationToken);
-        await customerSms.TrySendAsync(
-            order.CustomerId,
-            SmsTemplates.CustomerOrderStatus(
-                order.OrderNumber,
-                SmsTemplates.CustomerStatusSmsLabel(target, order.OrderType)),
-            CustomerSmsKind.OrderStatusUpdated,
             cancellationToken);
 
         await customers.SaveChangesAsync(cancellationToken);
@@ -698,8 +687,7 @@ public sealed record VendorRespondDispatchOfferCommand(string VendorId, Guid Ord
 internal sealed class VendorRespondDispatchOfferCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
-    IVendorUploadStorageService uploadStorage,
-    CustomerSmsNotifier customerSms)
+    IVendorUploadStorageService uploadStorage)
     : ICommandHandler<VendorRespondDispatchOfferCommand, CustomerOrderDto>
 {
     public async Task<Result<CustomerOrderDto>> Handle(VendorRespondDispatchOfferCommand request, CancellationToken cancellationToken)
@@ -758,11 +746,6 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
                         NotificationType = "order_dispatch_failed",
                         RelatedOrderId = order.Id,
                     },
-                    cancellationToken);
-                await customerSms.TrySendAsync(
-                    order.CustomerId,
-                    SmsTemplates.CustomerOrderDispatchFailed(order.OrderNumber),
-                    CustomerSmsKind.OrderDispatchFailed,
                     cancellationToken);
             }
 
@@ -874,11 +857,6 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
                 RelatedOrderId = order.Id,
             },
             cancellationToken);
-        await customerSms.TrySendAsync(
-            order.CustomerId,
-            SmsTemplates.CustomerOrderConfirmed(order.OrderNumber),
-            CustomerSmsKind.OrderConfirmed,
-            cancellationToken);
 
         await customers.SaveChangesAsync(cancellationToken);
         await vendors.SaveChangesAsync(cancellationToken);
@@ -940,9 +918,7 @@ internal sealed class VendorCancelAssignedOrderCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
     IVendorUploadStorageService uploadStorage,
-    IOptions<CustomerPricingOptions> pricingOptions,
-    VendorSmsNotifier vendorSms,
-    CustomerSmsNotifier customerSms)
+    IOptions<CustomerPricingOptions> pricingOptions)
     : ICommandHandler<VendorCancelAssignedOrderCommand, CustomerOrderDto>
 {
     private readonly CustomerPricingOptions options = pricingOptions.Value;
@@ -1026,11 +1002,6 @@ internal sealed class VendorCancelAssignedOrderCommandHandler(
                     RelatedOrderId = order.Id,
                 },
                 cancellationToken);
-            await customerSms.TrySendAsync(
-                order.CustomerId,
-                SmsTemplates.CustomerOrderDispatchFailed(order.OrderNumber),
-                CustomerSmsKind.OrderDispatchFailed,
-                cancellationToken);
         }
         else
         {
@@ -1052,10 +1023,6 @@ internal sealed class VendorCancelAssignedOrderCommandHandler(
                         SentAt = DateTimeOffset.UtcNow,
                     },
                     cancellationToken);
-                await vendorSms.TrySendAsync(
-                    next.VendorId,
-                    SmsTemplates.VendorDispatchOffer(order.OrderNumber),
-                    cancellationToken);
             }
             await customers.AddCustomerNotificationAsync(
                 new CustomerNotification
@@ -1067,11 +1034,6 @@ internal sealed class VendorCancelAssignedOrderCommandHandler(
                     NotificationType = "order_pending",
                     RelatedOrderId = order.Id,
                 },
-                cancellationToken);
-            await customerSms.TrySendAsync(
-                order.CustomerId,
-                SmsTemplates.CustomerOrderStatus(order.OrderNumber, "Being reassigned to another vendor"),
-                CustomerSmsKind.OrderStatusUpdated,
                 cancellationToken);
         }
 

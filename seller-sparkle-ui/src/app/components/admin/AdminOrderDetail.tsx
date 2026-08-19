@@ -4,14 +4,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Building, Calendar, DollarSign, Package, User } from "lucide-react";
 import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
 import { useAuth } from "@/app/guards/AuthContext";
-import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { toast } from "sonner";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import {
   AlertDialog,
@@ -216,7 +216,7 @@ const AdminOrderDetail = () => {
 
   const { data: orders = [], isLoading, error } = useQuery({
     queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders(),
+    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
   });
 
   const selectedOrder = useMemo(() => {
@@ -343,13 +343,7 @@ const AdminOrderDetail = () => {
   }
 
   if (isLoading) {
-    return (
-      <div className="mx-auto max-w-5xl space-y-6">
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-36 w-full rounded-xl" />
-        <Skeleton className="h-48 w-full rounded-xl" />
-      </div>
-    );
+    return <PageLoaderSlot />;
   }
 
   if (!selectedOrder) {
@@ -433,6 +427,7 @@ const AdminOrderDetail = () => {
                       src={imageUrl}
                       alt={item.listingTitle}
                       className="h-12 w-12 shrink-0 rounded-lg object-cover border border-border bg-muted"
+                      onError={retryOriginalOnImageError}
                     />
                   ) : (
                     <div className="h-12 w-12 shrink-0 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground">

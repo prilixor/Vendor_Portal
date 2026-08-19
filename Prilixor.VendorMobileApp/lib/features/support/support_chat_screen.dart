@@ -12,6 +12,8 @@ import '../../core/utils/chat_day_label.dart';
 import '../../core/utils/media_url.dart';
 import '../../core/utils/multipart_file_util.dart';
 import '../../core/utils/support_chat_routing.dart';
+import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 
 enum SupportView { welcome, chat, tickets }
 
@@ -246,7 +248,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     };
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: AppTheme.bg(context),
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -384,10 +386,10 @@ class _WelcomeView extends StatelessWidget {
                   size: 18, color: Color(0xFF6C63FF)),
             ),
             const SizedBox(width: 8),
-            const Text(
+            Text(
               'BLINKSMED ASSISTANT',
               style: TextStyle(
-                color: Colors.white54,
+                color: context.appColors.textMuted,
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.2,
@@ -399,25 +401,28 @@ class _WelcomeView extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: AppTheme.card(context),
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(16),
               topRight: Radius.circular(16),
               bottomRight: Radius.circular(16),
             ),
-            border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.2)),
+            border: Border.all(color: context.appColors.border),
           ),
-          child: const Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 '👋 Hi! I\'m BlinksMed Support Assistant.',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: context.appColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              SizedBox(height: 6),
+              const SizedBox(height: 6),
               Text(
                 'How can I help you today? Choose a topic below or type your question.',
-                style: TextStyle(color: Colors.white54, height: 1.4),
+                style: TextStyle(color: context.appColors.textSecondary, height: 1.4),
               ),
             ],
           ),
@@ -430,9 +435,9 @@ class _WelcomeView extends StatelessWidget {
               .map(
                 (qr) => ActionChip(
                   label: Text('${qr.icon} ${qr.label}'),
-                  backgroundColor: const Color(0xFF1E293B),
-                  labelStyle: const TextStyle(color: Colors.white, fontSize: 12),
-                  side: const BorderSide(color: Colors.white12),
+                  backgroundColor: AppTheme.card(context),
+                  labelStyle: TextStyle(color: context.appColors.textPrimary, fontSize: 12),
+                  side: BorderSide(color: context.appColors.border),
                   onPressed: () => onQuickReply(qr),
                 ),
               )
@@ -468,9 +473,7 @@ class _ChatViewState extends State<_ChatView> {
     final provider = Provider.of<VendorSupportProvider>(context);
 
     if (provider.messagesLoading && provider.messages.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
-      );
+      return const BrandPageLoader();
     }
 
     return ListView.builder(
@@ -500,36 +503,36 @@ class _ChatViewState extends State<_ChatView> {
             child: Center(
               child: Text(
                 'Ticket status: ${provider.activeTicketStatus}',
-                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
               ),
             ),
           );
         }
 
         if (waiting && index == provider.messages.length + (provider.awaitingAi ? 1 : 0)) {
-          return const Padding(
-            padding: EdgeInsets.only(top: 8, bottom: 4),
+          return Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
             child: Center(
               child: Text(
                 'Message received · waiting for support team',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
               ),
             ),
           );
         }
 
         if (provider.awaitingAi && index == provider.messages.length) {
-          return const Padding(
-            padding: EdgeInsets.only(top: 8),
+          return Padding(
+            padding: const EdgeInsets.only(top: 8),
             child: Row(
               children: [
-                SizedBox(
+                const SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                SizedBox(width: 8),
-                Text('Assistant is thinking…', style: TextStyle(color: Colors.white54)),
+                const SizedBox(width: 8),
+                Text('Assistant is thinking…', style: TextStyle(color: context.appColors.textMuted)),
               ],
             ),
           );
@@ -551,14 +554,14 @@ class _ChatViewState extends State<_ChatView> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white10,
+                      color: AppTheme.card(context),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white12),
+                      border: Border.all(color: context.appColors.border),
                     ),
                     child: Text(
                       formatChatDayLabel(msg.createdAt),
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: context.appColors.textSecondary,
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
@@ -598,8 +601,8 @@ class _MessageBubble extends StatelessWidget {
               children: [
                 Text(
                   message.senderLabel.toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white38,
+                  style: TextStyle(
+                    color: context.appColors.textMuted,
                     fontSize: 9,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 0.8,
@@ -608,7 +611,7 @@ class _MessageBubble extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text(
                   formatChatTime(message.createdAt),
-                  style: const TextStyle(color: Colors.white38, fontSize: 9),
+                  style: TextStyle(color: context.appColors.textMuted, fontSize: 9),
                 ),
               ],
             ),
@@ -617,10 +620,8 @@ class _MessageBubble extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: isMe
-                    ? const Color(0xFF6C63FF)
-                    : message.isAdmin
-                        ? const Color(0xFF1E293B)
-                        : const Color(0xFF1E293B),
+                    ? AppTheme.accent
+                    : AppTheme.card(context),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(14),
                   topRight: const Radius.circular(14),
@@ -631,8 +632,8 @@ class _MessageBubble extends StatelessWidget {
                     ? null
                     : Border.all(
                         color: message.isAdmin
-                            ? Colors.amber.withValues(alpha: 0.3)
-                            : const Color(0xFF6C63FF).withValues(alpha: 0.2),
+                            ? Colors.amber.withValues(alpha: 0.4)
+                            : context.appColors.border,
                       ),
               ),
               child: Column(
@@ -640,7 +641,10 @@ class _MessageBubble extends StatelessWidget {
                 children: [
                   Text(
                     message.message,
-                    style: const TextStyle(color: Colors.white, height: 1.35),
+                    style: TextStyle(
+                      color: isMe ? Colors.white : context.appColors.textPrimary,
+                      height: 1.35,
+                    ),
                   ),
                   ...message.attachmentUrls.map(_AttachmentPreview.new),
                 ],
@@ -681,9 +685,9 @@ class _AttachmentPreview extends StatelessWidget {
               resolved,
               height: 120,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => const Text(
+              errorBuilder: (context, error, stackTrace) => Text(
                 'Image attachment',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
               ),
             ),
           ),
@@ -695,15 +699,15 @@ class _AttachmentPreview extends StatelessWidget {
       padding: const EdgeInsets.only(top: 8),
       child: GestureDetector(
         onTap: openAttachment,
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.attach_file, size: 14, color: Colors.white70),
-            SizedBox(width: 4),
+            Icon(Icons.attach_file, size: 14, color: context.appColors.textSecondary),
+            const SizedBox(width: 4),
             Text(
               'Download attachment',
               style: TextStyle(
-                color: Colors.white70,
+                color: context.appColors.textSecondary,
                 fontSize: 12,
                 decoration: TextDecoration.underline,
               ),
@@ -731,7 +735,7 @@ class _TicketsView extends StatelessWidget {
     final provider = Provider.of<VendorSupportProvider>(context);
 
     if (provider.ticketsLoading) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)));
+      return const BrandPageLoader();
     }
 
     if (provider.tickets.isEmpty) {
@@ -741,14 +745,14 @@ class _TicketsView extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.confirmation_number_outlined,
-                  size: 48, color: Colors.white24),
+              Icon(Icons.confirmation_number_outlined,
+                  size: 48, color: context.appColors.textMuted),
               const SizedBox(height: 12),
-              const Text('No tickets yet.', style: TextStyle(color: Colors.white)),
+              Text('No tickets yet.', style: TextStyle(color: context.appColors.textPrimary)),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Start a conversation to create one.',
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(color: context.appColors.textMuted),
               ),
               const SizedBox(height: 16),
               OutlinedButton.icon(
@@ -769,7 +773,7 @@ class _TicketsView extends StatelessWidget {
       itemBuilder: (context, index) {
         final ticket = provider.tickets[index];
         return Material(
-          color: const Color(0xFF1E293B),
+          color: AppTheme.card(context),
           borderRadius: BorderRadius.circular(12),
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
@@ -778,7 +782,7 @@ class _TicketsView extends StatelessWidget {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white12),
+                border: Border.all(color: context.appColors.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -787,8 +791,8 @@ class _TicketsView extends StatelessWidget {
                     children: [
                       Text(
                         ticket.ticketNumber,
-                        style: const TextStyle(
-                          color: Colors.white54,
+                        style: TextStyle(
+                          color: context.appColors.textMuted,
                           fontFamily: 'monospace',
                           fontSize: 11,
                         ),
@@ -800,15 +804,15 @@ class _TicketsView extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     ticket.subject,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.appColors.textPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     ticket.category,
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: context.appColors.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
@@ -827,15 +831,15 @@ class _StatusChip extends StatelessWidget {
   Color get _color {
     switch (status.toLowerCase()) {
       case 'open':
-        return Colors.greenAccent;
+        return Colors.green;
       case 'in progress':
-        return Colors.amberAccent;
+        return Colors.orange;
       case 'resolved':
-        return Colors.lightBlueAccent;
+        return Colors.blue;
       case 'closed':
-        return Colors.white54;
+        return Colors.grey;
       default:
-        return Colors.white54;
+        return Colors.grey;
     }
   }
 
@@ -881,9 +885,9 @@ class _InputBar extends StatelessWidget {
         12,
         MediaQuery.of(context).padding.bottom + 8,
       ),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1E293B),
-        border: Border(top: BorderSide(color: Colors.white12)),
+      decoration: BoxDecoration(
+        color: AppTheme.card(context),
+        border: Border(top: BorderSide(color: context.appColors.border)),
       ),
       child: Column(
         children: [
@@ -892,14 +896,14 @@ class _InputBar extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white10,
+                color: AppTheme.bg(context),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white12, style: BorderStyle.solid),
+                border: Border.all(color: context.appColors.border, style: BorderStyle.solid),
               ),
               child: Text(
                 'This ticket is ${ticketStatus?.toLowerCase() ?? 'closed'}. Start a new conversation for further help.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
               ),
             )
           else
@@ -908,7 +912,7 @@ class _InputBar extends StatelessWidget {
               children: [
                 IconButton(
                   onPressed: sending ? null : onAttach,
-                  icon: const Icon(Icons.attach_file, color: Colors.white54),
+                  icon: Icon(Icons.attach_file, color: context.appColors.textMuted),
                 ),
                 Expanded(
                   child: TextField(
@@ -918,15 +922,19 @@ class _InputBar extends StatelessWidget {
                     textInputAction: TextInputAction.newline,
                     minLines: 1,
                     maxLines: 4,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: context.appColors.textPrimary),
                     decoration: InputDecoration(
                       hintText: 'Type your question…',
-                      hintStyle: const TextStyle(color: Colors.white38),
+                      hintStyle: TextStyle(color: context.appColors.textMuted),
                       filled: true,
-                      fillColor: const Color(0xFF0F172A),
+                      fillColor: AppTheme.bg(context),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+                        borderSide: BorderSide(color: context.appColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: context.appColors.border),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -939,7 +947,7 @@ class _InputBar extends StatelessWidget {
                 IconButton.filled(
                   onPressed: sending ? null : onSend,
                   style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
+                    backgroundColor: AppTheme.accent,
                   ),
                   icon: sending
                       ? const SizedBox(
@@ -955,9 +963,9 @@ class _InputBar extends StatelessWidget {
               ],
             ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Powered by AI · For urgent issues, admin will respond',
-            style: TextStyle(color: Colors.white38, fontSize: 10),
+            style: TextStyle(color: context.appColors.textMuted, fontSize: 10),
             textAlign: TextAlign.center,
           ),
         ],

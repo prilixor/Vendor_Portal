@@ -15,7 +15,6 @@ export interface VendorProfileApiDto {
   latitude?: number;
   longitude?: number;
   onboardingCompleted: boolean;
-  isPhoneVerified?: boolean;
 }
 
 export interface VendorStatusDto {
@@ -154,6 +153,18 @@ export interface ProductApiDto {
   coaDocumentUrl?: string;
   variants?: ProductVariantPayload[];
   rentalPricingPlans?: ProductRentalPricingPlanDto[];
+  images?: Array<{
+    id?: string;
+    imageUrl?: string | null;
+    thumbnailUrl?: string | null;
+    isPrimary?: boolean;
+    displayOrder?: number;
+  }>;
+  documents?: Array<{
+    id: string;
+    documentType: string;
+    fileUrl: string;
+  }>;
 }
 
 export interface VendorProductListingApiDto {
@@ -425,7 +436,6 @@ export interface UpsertVendorNotificationPreferencePayload {
   emailNotificationsEnabled: boolean;
   pushNotificationsEnabled: boolean;
   newOrderNotifications: boolean;
-  smsNotificationsEnabled?: boolean;
 }
 
 export interface VendorNotificationPreferenceDto {
@@ -434,7 +444,6 @@ export interface VendorNotificationPreferenceDto {
   emailNotificationsEnabled: boolean;
   pushNotificationsEnabled: boolean;
   newOrderNotifications: boolean;
-  smsNotificationsEnabled?: boolean;
 }
 
 export interface VendorNotificationDto {
@@ -788,8 +797,8 @@ export const vendorOnboardingApi = {
     return apiClient.get<VendorStatusDto>(`/vendors/${vendorId}`);
   },
 
-  getVendorDispatchOffers(vendorId: string) {
-    return apiClient.get<VendorDispatchOfferApiDto[]>(`/vendors/${vendorId}/dispatch/offers`);
+  getVendorDispatchOffers(vendorId: string, options?: { quiet?: boolean }) {
+    return apiClient.get<VendorDispatchOfferApiDto[]>(`/vendors/${vendorId}/dispatch/offers`, options);
   },
 
   acceptVendorDispatchOrder(vendorId: string, orderId: string) {

@@ -10,6 +10,7 @@ import '../../core/models/order_image_model.dart';
 import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/struck_price.dart';
 import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
 import 'dispatch_details_sheet.dart';
@@ -348,7 +349,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         ],
       ),
       body: provider.detailLoading && order == null
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.accent))
+          ? const BrandPageLoader()
           : order == null
               ? Center(
                   child: Text(
@@ -385,7 +386,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                   child: Material(
                                     color: selected
                                         ? AppTheme.accent.withValues(alpha: 0.12)
-                                        : Colors.white.withValues(alpha: 0.04),
+                                        : context.appColors.surface,
                                     borderRadius: BorderRadius.circular(12),
                                     child: InkWell(
                                       borderRadius: BorderRadius.circular(12),
@@ -397,7 +398,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                           border: Border.all(
                                             color: selected
                                                 ? AppTheme.accent.withValues(alpha: 0.55)
-                                                : Colors.white.withValues(alpha: 0.06),
+                                                : context.appColors.border,
                                           ),
                                         ),
                                         child: Row(
@@ -412,8 +413,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                     item.listingTitle,
                                                     maxLines: 2,
                                                     overflow: TextOverflow.ellipsis,
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
+                                                    style: TextStyle(
+                                                      color: context.appColors.textPrimary,
                                                       fontWeight: FontWeight.w700,
                                                       fontSize: 12,
                                                     ),
@@ -489,8 +490,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                 const SizedBox(height: 4),
                                                 Text(
                                                   '₹${item.payoutAmount.toStringAsFixed(0)}',
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
+                                                  style: TextStyle(
+                                                    color: context.appColors.textPrimary,
                                                     fontWeight: FontWeight.w700,
                                                     fontSize: 11,
                                                   ),
@@ -614,7 +615,7 @@ class _GroupHeroCard extends StatelessWidget {
                 Text(
                   'ORDER GROUP · $itemCount ${itemCount == 1 ? 'item' : 'items'}',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.45),
+                    color: context.appColors.textMuted,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.5,
@@ -623,8 +624,8 @@ class _GroupHeroCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   baseOrderNumber,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.appColors.textPrimary,
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
                   ),
@@ -637,8 +638,8 @@ class _GroupHeroCard extends StatelessWidget {
             children: [
               Text(
                 '₹${groupPayout.toStringAsFixed(0)}',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.appColors.textPrimary,
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
                 ),
@@ -646,7 +647,7 @@ class _GroupHeroCard extends StatelessWidget {
               Text(
                 itemCount > 1 ? 'Combined' : 'Payout',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.45),
+                  color: context.appColors.textMuted,
                   fontSize: 10,
                 ),
               ),
@@ -704,10 +705,10 @@ class _OrderActionBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.card(context),
-        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
+        border: Border(top: BorderSide(color: context.appColors.border)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
+            color: Colors.black.withValues(alpha: context.isDarkMode ? 0.35 : 0.05),
             blurRadius: 12,
             offset: const Offset(0, -4),
           ),
@@ -726,7 +727,7 @@ class _OrderActionBar extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.55),
+                  color: context.appColors.textSecondary,
                   fontSize: 11,
                 ),
               ),
@@ -860,16 +861,16 @@ class _RequestBox extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.25),
+        color: context.appColors.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.amber.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          Text(title, style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
+          Text(subtitle, style: TextStyle(color: context.appColors.textSecondary, fontSize: 13)),
           const SizedBox(height: 10),
           ...rows.map(
             (r) => Padding(
@@ -879,12 +880,12 @@ class _RequestBox extends StatelessWidget {
                   Expanded(
                     child: Text(
                       r.$1,
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12),
+                      style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
                     ),
                   ),
                   Text(
                     r.$2,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+                    style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 12),
                   ),
                 ],
               ),
@@ -897,8 +898,8 @@ class _RequestBox extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: busy ? null : onReject,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white70,
-                    side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                    foregroundColor: context.appColors.textSecondary,
+                    side: BorderSide(color: context.appColors.border),
                   ),
                   child: const Text('Reject'),
                 ),
@@ -960,7 +961,6 @@ class _PhotoRequestCard extends StatelessWidget {
                 ),
               ),
             ),
-            // Dark chip so the close control stays visible on light images too.
             Positioned(
               top: 8,
               right: 8,
@@ -982,7 +982,7 @@ class _PhotoRequestCard extends StatelessWidget {
     );
   }
 
-  Widget _addTile({required bool large}) {
+  Widget _addTile({required bool large, required BuildContext context}) {
     final radius = BorderRadius.circular(large ? 14 : 10);
     return Material(
       color: Colors.transparent,
@@ -1016,7 +1016,7 @@ class _PhotoRequestCard extends StatelessWidget {
                       busy ? 'Uploading\u2026' : (large ? 'Tap to add photos' : 'Add photo'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.88),
+                        color: context.appColors.textPrimary,
                         fontSize: large ? 13 : 11,
                         fontWeight: FontWeight.w700,
                       ),
@@ -1026,7 +1026,7 @@ class _PhotoRequestCard extends StatelessWidget {
                       Text(
                         'Up to $maxImages photos',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.45),
+                          color: context.appColors.textMuted,
                           fontSize: 11,
                         ),
                       ),
@@ -1054,7 +1054,7 @@ class _PhotoRequestCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.card(context),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1069,7 +1069,7 @@ class _PhotoRequestCard extends StatelessWidget {
                   color: AppTheme.accent.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.photo_library_outlined, color: AppTheme.accent, size: 20),
+                child: const Icon(Icons.photo_library_outlined, color: AppTheme.accent, size: 20),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1078,11 +1078,11 @@ class _PhotoRequestCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        const Expanded(
+                        Expanded(
                           child: Text(
                             'Customer photo request',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: context.appColors.textPrimary,
                               fontWeight: FontWeight.w800,
                               fontSize: 15,
                               height: 1.2,
@@ -1092,13 +1092,13 @@ class _PhotoRequestCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
+                            color: context.appColors.surface,
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
                             '${images.length}/$maxImages',
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.75),
+                              color: context.appColors.textSecondary,
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                             ),
@@ -1128,8 +1128,8 @@ class _PhotoRequestCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         listingTitle,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.appColors.textPrimary,
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
@@ -1139,7 +1139,7 @@ class _PhotoRequestCard extends StatelessWidget {
                     Text(
                       'From the customer for this product only \u2014 upload here (not Admin chat).',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.48),
+                        color: context.appColors.textMuted,
                         fontSize: 11.5,
                         height: 1.35,
                       ),
@@ -1154,14 +1154,14 @@ class _PhotoRequestCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.04),
+              color: context.appColors.surface,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              border: Border.all(color: context.appColors.border),
             ),
             child: Text(
               message,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.72),
+                color: context.appColors.textSecondary,
                 fontSize: 12.5,
                 height: 1.4,
                 fontWeight: FontWeight.w500,
@@ -1173,21 +1173,21 @@ class _PhotoRequestCard extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               height: 132,
-              child: _addTile(large: true),
+              child: _addTile(large: true, context: context),
             )
           else if (images.isEmpty)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.04),
+                color: context.appColors.surface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                border: Border.all(color: context.appColors.border),
               ),
               child: Text(
                 'No photos uploaded yet.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 13),
+                style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
               ),
             )
           else
@@ -1202,7 +1202,7 @@ class _PhotoRequestCard extends StatelessWidget {
               ),
               itemBuilder: (context, index) {
                 if (showAdd && index == images.length) {
-                  return _addTile(large: false);
+                  return _addTile(large: false, context: context);
                 }
 
                 final image = images[index];
@@ -1210,7 +1210,7 @@ class _PhotoRequestCard extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     Material(
-                      color: Colors.white.withValues(alpha: 0.06),
+                      color: context.appColors.surface,
                       borderRadius: BorderRadius.circular(10),
                       clipBehavior: Clip.antiAlias,
                       child: InkWell(
@@ -1218,8 +1218,8 @@ class _PhotoRequestCard extends StatelessWidget {
                         child: Image.network(
                           image.fileUrl,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Center(
-                            child: Icon(Icons.broken_image_outlined, color: Colors.white38),
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Icon(Icons.broken_image_outlined, color: context.appColors.textMuted),
                           ),
                         ),
                       ),
@@ -1249,7 +1249,7 @@ class _PhotoRequestCard extends StatelessWidget {
           Text(
             'JPEG, PNG, or WebP \u00b7 max 5 MB each \u00b7 cleared after delivery, cancel, or dispatch failure',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.4),
+              color: context.appColors.textMuted,
               fontSize: 10.5,
               height: 1.35,
             ),
@@ -1260,7 +1260,6 @@ class _PhotoRequestCard extends StatelessWidget {
   }
 }
 
-/// Light dashed outline for the upload tile (web dashed border parity).
 class _DashedBorderPainter extends CustomPainter {
   final Color color;
   final double radius;
@@ -1323,8 +1322,8 @@ class _ItemDetailsPanel extends StatelessWidget {
                   children: [
                     Text(
                       order.listingTitle,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.appColors.textPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
                         height: 1.25,
@@ -1357,7 +1356,7 @@ class _ItemDetailsPanel extends StatelessWidget {
                   ? '${order.rentalDurationLabel}'
                       '${order.rentalDurationDays != null ? ' (${order.rentalDurationDays} day${order.rentalDurationDays == 1 ? '' : 's'})' : ''}'
                   : '${order.rentalDays} day${order.rentalDays == 1 ? '' : 's'}',
-              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+              style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
             if (order.rentalFinalPrice != null) ...[
               const SizedBox(height: 4),
@@ -1369,11 +1368,11 @@ class _ItemDetailsPanel extends StatelessWidget {
                       order.rentalNormalPrice! > order.rentalFinalPrice!)
                     StruckPrice(
                       '₹${order.rentalNormalPrice!.toStringAsFixed(0)}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.appColors.textMuted),
                     ),
                   Text(
                     'Plan price ₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
                   ),
                 ],
               ),
@@ -1434,7 +1433,7 @@ class _SubsectionLabel extends StatelessWidget {
     return Text(
       text,
       style: TextStyle(
-        color: Colors.white.withValues(alpha: 0.42),
+        color: context.appColors.textMuted,
         fontSize: 10,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.5,
@@ -1458,7 +1457,7 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.bg(context),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1483,10 +1482,10 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Assigned serial numbers',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: context.appColors.textPrimary,
                         fontWeight: FontWeight.w800,
                         fontSize: 13,
                       ),
@@ -1495,7 +1494,7 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
                     Text(
                       'Linked for dispatch and inventory tracking',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.45),
+                        color: context.appColors.textMuted,
                         fontSize: 11,
                       ),
                     ),
@@ -1505,13 +1504,13 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
+                  color: context.appColors.surface,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   '${assigned.length} ${assigned.length == 1 ? 'unit' : 'units'}',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.7),
+                    color: context.appColors.textSecondary,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1529,7 +1528,7 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppTheme.card(context),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                  border: Border.all(color: context.appColors.border),
                 ),
                 child: Row(
                   children: [
@@ -1540,12 +1539,12 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: AppTheme.bg(context),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                        border: Border.all(color: context.appColors.border),
                       ),
                       child: Text(
                         '${index + 1}',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.55),
+                          color: context.appColors.textMuted,
                           fontWeight: FontWeight.w800,
                           fontSize: 12,
                         ),
@@ -1559,7 +1558,7 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
                           Text(
                             'SERIAL',
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.38),
+                              color: context.appColors.textMuted,
                               fontSize: 9,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.6,
@@ -1570,8 +1569,8 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
                             tag,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: context.appColors.textPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 13,
                               fontFamily: 'monospace',
@@ -1679,12 +1678,12 @@ class _MetricTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: highlight
             ? AppTheme.accent.withValues(alpha: 0.1)
-            : Colors.white.withValues(alpha: 0.04),
+            : context.appColors.surface,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: highlight
               ? AppTheme.accent.withValues(alpha: 0.22)
-              : Colors.white.withValues(alpha: 0.06),
+              : context.appColors.border,
         ),
       ),
       child: Column(
@@ -1693,7 +1692,7 @@ class _MetricTile extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.38),
+              color: context.appColors.textMuted,
               fontSize: 9,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.3,
@@ -1705,7 +1704,7 @@ class _MetricTile extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: highlight ? AppTheme.accent : Colors.white,
+              color: highlight ? AppTheme.accent : context.appColors.textPrimary,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
@@ -1736,7 +1735,7 @@ class _SectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.card(context),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1744,7 +1743,7 @@ class _SectionCard extends StatelessWidget {
           Text(
             title,
             style: TextStyle(
-              color: Colors.white,
+              color: context.appColors.textPrimary,
               fontWeight: FontWeight.w700,
               fontSize: compact ? 14 : 15,
             ),
@@ -1754,7 +1753,7 @@ class _SectionCard extends StatelessWidget {
             Text(
               subtitle!,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.45),
+                color: context.appColors.textMuted,
                 fontSize: 11,
               ),
             ),
@@ -1778,9 +1777,9 @@ class _CompactDetailList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.03),
+        color: context.appColors.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Column(
         children: [
@@ -1789,7 +1788,7 @@ class _CompactDetailList extends StatelessWidget {
               Divider(
                 height: 1,
                 thickness: 1,
-                color: Colors.white.withValues(alpha: 0.05),
+                color: context.appColors.border,
               ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1801,7 +1800,7 @@ class _CompactDetailList extends StatelessWidget {
                     child: Text(
                       rows[i].$1,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.45),
+                        color: context.appColors.textSecondary,
                         fontSize: 12,
                       ),
                     ),
@@ -1812,8 +1811,8 @@ class _CompactDetailList extends StatelessWidget {
                     child: Text(
                       rows[i].$2,
                       textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.appColors.textPrimary,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),

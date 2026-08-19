@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/chat_provider.dart';
+import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import 'chat_detail_screen.dart';
 
 class ChatSessionsScreen extends StatefulWidget {
@@ -22,32 +24,33 @@ class _ChatSessionsScreenState extends State<ChatSessionsScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<ChatProvider>(context);
+    final colors = context.appColors;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('Messages', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0F172A),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('Messages', style: TextStyle(color: colors.textPrimary)),
+        backgroundColor: colors.background,
+        iconTheme: IconThemeData(color: colors.textPrimary),
         elevation: 0,
       ),
       body: provider.isLoading && provider.sessions.isEmpty
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          ? const BrandPageLoader()
           : provider.sessions.isEmpty
-              ? const Center(
+              ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.chat_bubble_outline, size: 64, color: Colors.white24),
-                      SizedBox(height: 16),
-                      Text('No active messages.', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                      Icon(Icons.chat_bubble_outline, size: 64, color: colors.textMuted),
+                      const SizedBox(height: 16),
+                      Text('No active messages.', style: TextStyle(color: colors.textSecondary, fontSize: 16)),
                     ],
                   ),
                 )
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: provider.sessions.length,
-                  separatorBuilder: (context, index) => const Divider(color: Colors.white10, height: 1),
+                  separatorBuilder: (context, index) => Divider(color: colors.border, height: 1),
                   itemBuilder: (context, index) {
                     final session = provider.sessions[index];
                     // Customer UI must not reveal vendor/store names — title by order only.
@@ -76,7 +79,7 @@ class _ChatSessionsScreenState extends State<ChatSessionsScreen> {
                           Expanded(
                             child: Text(
                               orderLabel,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -84,7 +87,7 @@ class _ChatSessionsScreenState extends State<ChatSessionsScreen> {
                           const SizedBox(width: 8),
                           Text(
                             _formatDate(session.lastMessageAt),
-                            style: const TextStyle(color: Colors.white38, fontSize: 12),
+                            style: TextStyle(color: colors.textMuted, fontSize: 12),
                           ),
                         ],
                       ),
@@ -94,7 +97,7 @@ class _ChatSessionsScreenState extends State<ChatSessionsScreen> {
                           preview,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white70),
+                          style: TextStyle(color: colors.textSecondary),
                         ),
                       ),
                       onTap: () {

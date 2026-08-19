@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/product_model.dart';
 import '../../core/providers/favorite_provider.dart';
+import '../../core/theme.dart';
 import '../../core/utils/rental_period.dart';
 import '../../core/utils/rental_plan_display.dart';
 import '../utils/require_auth.dart';
@@ -25,9 +26,11 @@ class BrowseProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final ls = product.listingStatus.trim().toLowerCase();
     final isBrowsable = ls == 'active' || ls == 'approved';
-    final interactive = isBrowsable && onTap != null;
+    final isOutOfStock = product.availableQuantity <= 0 || product.availabilityStatus.trim().toLowerCase() == 'out_of_stock';
+    final interactive = isBrowsable && !isOutOfStock && onTap != null;
     final badge = product.getAvailabilityBadge();
     final showBadge = badge != null && badge['label'] != 'Available';
     final showRent = product.canRent;
@@ -77,7 +80,7 @@ class BrowseProductCard extends StatelessWidget {
     }
 
     final card = Material(
-      color: const Color(0xFF1E293B),
+      color: colors.surface,
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -89,7 +92,7 @@ class BrowseProductCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  const ColoredBox(color: Color(0xFF273449)),
+                  ColoredBox(color: colors.surfaceElevated),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(10, 34, 10, 6),
                     child: CatalogImage(url: product.primaryImageUrl, fit: BoxFit.contain),
@@ -157,7 +160,7 @@ class BrowseProductCard extends StatelessWidget {
             Container(
               decoration: BoxDecoration(
                 border: Border(
-                  top: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+                  top: BorderSide(color: colors.border),
                 ),
               ),
               padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
@@ -172,11 +175,11 @@ class BrowseProductCard extends StatelessWidget {
                         product.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                           height: 1.25,
-                          color: Colors.white,
+                          color: colors.textPrimary,
                         ),
                       ),
                     ),
@@ -188,11 +191,11 @@ class BrowseProductCard extends StatelessWidget {
                         children: [
                           TextSpan(
                             text: primaryValue,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
                               letterSpacing: -0.2,
-                              color: Colors.white,
+                              color: colors.textPrimary,
                               height: 1.05,
                             ),
                           ),
@@ -202,7 +205,7 @@ class BrowseProductCard extends StatelessWidget {
                               style: TextStyle(
                                 fontWeight: FontWeight.w500,
                                 fontSize: 11,
-                                color: Colors.white.withValues(alpha: 0.5),
+                                color: colors.textMuted,
                                 height: 1.05,
                               ),
                             ),
@@ -222,7 +225,7 @@ class BrowseProductCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         height: 1.2,
-                        color: Colors.white.withValues(alpha: 0.52),
+                        color: colors.textMuted,
                       ),
                     )
                   else
@@ -250,7 +253,7 @@ class BrowseProductCard extends StatelessWidget {
       ),
     );
 
-    if (dimWhenInactive && !isBrowsable) {
+    if (!isBrowsable || isOutOfStock) {
       return Opacity(opacity: 0.55, child: card);
     }
     return card;

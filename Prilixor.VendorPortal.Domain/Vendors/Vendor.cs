@@ -7,7 +7,6 @@ public class Vendor : AuditableEntity<Guid>, ISoftDelete
 {
     public string Email { get; set; } = string.Empty;
     public string? SupportPhone { get; set; }
-    public DateTimeOffset? PhoneVerifiedAt { get; set; }
     public string PasswordHash { get; set; } = string.Empty;
     public bool IsEmailVerified { get; set; }
     [NotMapped]

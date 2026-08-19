@@ -5,6 +5,8 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
+import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 
 class ListingAssetsScreen extends StatefulWidget {
   final String listingId;
@@ -131,11 +133,11 @@ class _ListingAssetsScreenState extends State<ListingAssetsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Remove serial?', style: TextStyle(color: Colors.white)),
+        backgroundColor: AppTheme.card(context),
+        title: Text('Remove serial?', style: TextStyle(color: context.appColors.textPrimary)),
         content: Text(
           'Remove ${asset.assetTag}?',
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: context.appColors.textSecondary),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -182,11 +184,9 @@ class _ListingAssetsScreenState extends State<ListingAssetsScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
-            )
+          ? const BrandPageLoader()
           : RefreshIndicator(
-              color: const Color(0xFF6C63FF),
+              color: AppTheme.accent,
               onRefresh: _load,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -194,8 +194,8 @@ class _ListingAssetsScreenState extends State<ListingAssetsScreen> {
                 children: [
                   Text(
                     widget.productName,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.appColors.textPrimary,
                       fontWeight: FontWeight.w600,
                       fontSize: 16,
                     ),
@@ -204,34 +204,49 @@ class _ListingAssetsScreenState extends State<ListingAssetsScreen> {
                   if (!pending) ...[
                     TextField(
                       controller: _tagController,
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(color: context.appColors.textPrimary),
                       decoration: InputDecoration(
                         labelText: widget.isChemical
                             ? 'Batch / serial number'
                             : 'Serial number',
-                        labelStyle: const TextStyle(color: Colors.white54),
+                        labelStyle: TextStyle(color: context.appColors.textMuted),
                         filled: true,
-                        fillColor: const Color(0xFF1E293B),
-                        border: const OutlineInputBorder(borderSide: BorderSide.none),
+                        fillColor: AppTheme.card(context),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: context.appColors.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: context.appColors.border),
+                        ),
                       ),
                     ),
                     if (widget.isChemical) ...[
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
                         initialValue: _variantId,
-                        dropdownColor: const Color(0xFF1E293B),
-                        decoration: const InputDecoration(
+                        dropdownColor: context.appColors.surface,
+                        style: TextStyle(color: context.appColors.textPrimary),
+                        decoration: InputDecoration(
                           labelText: 'Packaging size',
-                          labelStyle: TextStyle(color: Colors.white54),
+                          labelStyle: TextStyle(color: context.appColors.textSecondary),
                           filled: true,
-                          fillColor: Color(0xFF1E293B),
-                          border: OutlineInputBorder(borderSide: BorderSide.none),
+                          fillColor: AppTheme.card(context),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: context.appColors.border),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: context.appColors.border),
+                          ),
                         ),
                         items: variants
                             .map(
                               (v) => DropdownMenuItem(
                                 value: v.productVariantId,
-                                child: Text(v.label, style: const TextStyle(color: Colors.white)),
+                                child: Text(v.label, style: TextStyle(color: context.appColors.textPrimary)),
                               ),
                             )
                             .toList(),
@@ -241,13 +256,20 @@ class _ListingAssetsScreenState extends State<ListingAssetsScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _conditionController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: context.appColors.textPrimary),
+                      decoration: InputDecoration(
                         labelText: 'Condition (optional)',
-                        labelStyle: TextStyle(color: Colors.white54),
+                        labelStyle: TextStyle(color: context.appColors.textMuted),
                         filled: true,
-                        fillColor: Color(0xFF1E293B),
-                        border: OutlineInputBorder(borderSide: BorderSide.none),
+                        fillColor: AppTheme.card(context),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: context.appColors.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: context.appColors.border),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -257,23 +279,23 @@ class _ListingAssetsScreenState extends State<ListingAssetsScreen> {
                       label: const Text('Add'),
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(44),
-                        backgroundColor: const Color(0xFF6C63FF),
+                        backgroundColor: AppTheme.accent,
                       ),
                     ),
                     const SizedBox(height: 20),
                   ],
                   Text(
                     'Registered (${_assets.length})',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.appColors.textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 8),
                   if (_assets.isEmpty)
-                    const Text(
+                    Text(
                       'No serial numbers registered yet.',
-                      style: TextStyle(color: Colors.white54),
+                      style: TextStyle(color: context.appColors.textMuted),
                     )
                   else
                     ..._assets.map(
@@ -281,9 +303,9 @@ class _ListingAssetsScreenState extends State<ListingAssetsScreen> {
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B),
+                          color: AppTheme.card(context),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white12),
+                          border: Border.all(color: context.appColors.border),
                         ),
                         child: Row(
                           children: [
@@ -293,8 +315,8 @@ class _ListingAssetsScreenState extends State<ListingAssetsScreen> {
                                 children: [
                                   Text(
                                     asset.assetTag,
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                    style: TextStyle(
+                                      color: context.appColors.textPrimary,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -308,8 +330,8 @@ class _ListingAssetsScreenState extends State<ListingAssetsScreen> {
                                           asset.condition!.isNotEmpty)
                                         asset.condition,
                                     ].join(' · '),
-                                    style: const TextStyle(
-                                      color: Colors.white54,
+                                    style: TextStyle(
+                                      color: context.appColors.textMuted,
                                       fontSize: 12,
                                     ),
                                   ),

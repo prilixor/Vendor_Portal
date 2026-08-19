@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
+import '../../core/theme.dart';
+import '../../shared/widgets/brand_page_loader.dart';
 import 'inventory_detail_screen.dart';
 import 'track_serial_screen.dart';
 
@@ -76,8 +78,6 @@ class _InventoryScreenState extends State<InventoryScreen>
           controller: _tabController,
           onTap: (_) => setState(() {}),
           indicatorColor: const Color(0xFF6C63FF),
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white54,
           tabs: [
             Tab(
               text:
@@ -103,13 +103,13 @@ class _InventoryScreenState extends State<InventoryScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: TextField(
                 controller: _searchController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: context.appColors.textPrimary),
                 decoration: InputDecoration(
                   hintText: 'Search product…',
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white38),
+                  hintStyle: TextStyle(color: context.appColors.textMuted),
+                  prefixIcon: Icon(Icons.search, color: context.appColors.textMuted),
                   filled: true,
-                  fillColor: const Color(0xFF1E293B),
+                  fillColor: context.appColors.surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -121,21 +121,21 @@ class _InventoryScreenState extends State<InventoryScreen>
             const SizedBox(height: 8),
             Expanded(
               child: provider.loading && provider.inventoryRecords.isEmpty
-                  ? const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
-                    )
+                  ? const BrandPageLoader()
                   : filtered.isEmpty
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          children: const [
-                            SizedBox(height: 80),
-                            Icon(Icons.inventory_outlined,
-                                size: 48, color: Colors.white24),
-                            SizedBox(height: 12),
-                            Text(
-                              'No inventory records found.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.white54),
+                          children: [
+                            SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.4,
+                              child: Center(
+                                child: Text(
+                                  _searchQuery.isNotEmpty
+                                      ? 'No matching inventory records found.'
+                                      : 'No inventory records found.',
+                                  style: TextStyle(color: context.appColors.textMuted),
+                                ),
+                              ),
                             ),
                           ],
                         )
@@ -178,19 +178,19 @@ class _KpiStrip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: context.appColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
-          _KpiChip(label: 'Total', value: totals.total, color: Colors.white),
-          _KpiChip(label: 'Available', value: totals.available, color: Colors.greenAccent),
-          _KpiChip(label: 'Reserved', value: totals.reserved, color: Colors.amberAccent),
-          _KpiChip(label: 'Rented', value: totals.rented, color: Colors.lightBlueAccent),
-          _KpiChip(label: 'Blocked', value: totals.blocked, color: Colors.orangeAccent),
+          _KpiChip(label: 'Total', value: totals.total, color: context.appColors.textPrimary),
+          _KpiChip(label: 'Available', value: totals.available, color: const Color(0xFF10B981)),
+          _KpiChip(label: 'Reserved', value: totals.reserved, color: const Color(0xFFF59E0B)),
+          _KpiChip(label: 'Rented', value: totals.rented, color: const Color(0xFF3B82F6)),
+          _KpiChip(label: 'Blocked', value: totals.blocked, color: const Color(0xFFEF4444)),
         ],
       ),
     );
@@ -245,7 +245,7 @@ class _InventoryCard extends StatelessWidget {
     final util = record.utilization.clamp(0, 100).toStringAsFixed(0);
 
     return Material(
-      color: const Color(0xFF1E293B),
+      color: context.appColors.surface,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -254,15 +254,15 @@ class _InventoryCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white12),
+            border: Border.all(color: context.appColors.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 record.productName,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.appColors.textPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 15,
                 ),
@@ -284,7 +284,7 @@ class _InventoryCard extends StatelessWidget {
                 record.isChemical
                     ? 'Chemical · variant stock'
                     : 'Utilization $util%',
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
               ),
             ],
           ),

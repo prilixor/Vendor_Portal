@@ -41,8 +41,7 @@ internal sealed class GetVendorProfileQueryHandler(IVendorOnboardingRepository r
                 string.Empty,
                 null,
                 null,
-                false,
-                vendor.PhoneVerifiedAt.HasValue));
+                false));
         }
 
         return Result.Success(new VendorProfileDto(
@@ -59,7 +58,6 @@ internal sealed class GetVendorProfileQueryHandler(IVendorOnboardingRepository r
             profile.PostalCode,
             profile.Latitude,
             profile.Longitude,
-            profile.OnboardingCompleted,
-            vendor.PhoneVerifiedAt.HasValue));
+            profile.OnboardingCompleted));
     }
 }

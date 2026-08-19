@@ -25,8 +25,7 @@ public sealed record VendorProfileDto(
     string PostalCode,
     decimal? Latitude,
     decimal? Longitude,
-    bool OnboardingCompleted,
-    bool IsPhoneVerified = false);
+    bool OnboardingCompleted);
 
 public sealed record VendorDocumentDto(
     string Id,
@@ -127,7 +126,8 @@ public sealed record ProductDto(
     string? SdsDocumentUrl = null,
     string? CoaDocumentUrl = null,
     int FavoriteCount = 0,
-    List<ProductRentalPricingPlanDto>? RentalPricingPlans = null);
+    List<ProductRentalPricingPlanDto>? RentalPricingPlans = null,
+    List<ProductDocumentDto>? Documents = null);
 
 public sealed record ProductVariantDto(
     string Id,
@@ -186,6 +186,12 @@ public sealed record ProductImageDto(
     int DisplayOrder,
     bool IsPrimary,
     string? ThumbnailUrl = null);
+
+public sealed record ProductDocumentDto(
+    string Id,
+    string ProductId,
+    string DocumentType,
+    string FileUrl);
 
 public sealed record VendorProductListingDto(
     string Id,
@@ -259,8 +265,7 @@ public sealed record VendorNotificationPreferenceDto(
     string VendorId,
     bool EmailNotificationsEnabled,
     bool PushNotificationsEnabled,
-    bool NewOrderNotifications,
-    bool SmsNotificationsEnabled = true);
+    bool NewOrderNotifications);
 
 public sealed record VendorNotificationDto(
     string Id,

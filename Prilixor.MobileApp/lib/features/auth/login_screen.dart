@@ -9,7 +9,7 @@ import '../../shared/widgets/required_field_ux.dart';
 import '../dashboard/customer_dashboard.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
-
+import '../../core/theme.dart';
 class LoginScreen extends StatefulWidget {
   /// When true, successful login pops with `true` so the caller can continue
   /// (e.g. guest → checkout). Default replaces the stack with the dashboard.
@@ -166,12 +166,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final isLoading = authProvider.isLoading || _isProcessing;
+    final colors = context.appColors;
 
     return Scaffold(
+      backgroundColor: colors.background,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+            colors: [colors.background, colors.surface],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -189,22 +191,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: Color(0xFF6C63FF),
                 ),
                 const SizedBox(height: 32),
-                const Text(
+                Text(
                   'Welcome Back',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: colors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Sign in to access your customer portal.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.grey,
+                    color: colors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -333,7 +335,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('New customer? ', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                    Text('New customer? ', style: TextStyle(color: colors.textSecondary, fontSize: 14)),
                     GestureDetector(
                       onTap: () {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterScreen()));
