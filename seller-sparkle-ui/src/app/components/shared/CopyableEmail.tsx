@@ -42,34 +42,43 @@ export function CopyableEmail({
     }
   };
 
+  const button = (
+    <button
+      type="button"
+      onClick={copy}
+      className={cn(
+        "shrink-0 rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+        compact ? "p-0.5" : "p-1",
+        truncate ? "" : "ml-0.5 inline-flex align-text-bottom",
+      )}
+      aria-label={`Copy ${email}`}
+      title="Copy email"
+    >
+      {copied ? (
+        <Check className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "text-success")} />
+      ) : (
+        <Copy className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
+      )}
+    </button>
+  );
+
+  if (truncate) {
+    return (
+      <span className={cn("inline-flex min-w-0 max-w-full items-center gap-0.5", className)}>
+        <span className={cn("min-w-0 truncate text-muted-foreground", textClassName)} title={email}>
+          {email}
+        </span>
+        {button}
+      </span>
+    );
+  }
+
   return (
-    <span className={cn("inline-flex max-w-full items-start gap-1", className)}>
-      <span
-        className={cn(
-          "min-w-0 text-muted-foreground",
-          truncate ? "truncate" : "flex-1 leading-snug [overflow-wrap:anywhere]",
-          textClassName,
-        )}
-        title={email}
-      >
+    <span className={cn("inline max-w-full", className)}>
+      <span className={cn("text-muted-foreground leading-snug [overflow-wrap:anywhere]", textClassName)} title={email}>
         {email}
       </span>
-      <button
-        type="button"
-        onClick={copy}
-        className={cn(
-          "shrink-0 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
-          compact ? "p-0.5" : "p-1",
-        )}
-        aria-label={`Copy ${email}`}
-        title="Copy email"
-      >
-        {copied ? (
-          <Check className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "text-success")} />
-        ) : (
-          <Copy className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
-        )}
-      </button>
+      {button}
     </span>
   );
 }
