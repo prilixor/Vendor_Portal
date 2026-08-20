@@ -8,6 +8,7 @@ import { type TypedUploadOption } from "@/app/components/shared/TypedFileUploadP
 import { adminApi, ProductDocumentDto } from "@/app/services/adminApi";
 import { apiClient } from "@/app/services/apiClient";
 import {
+  catalogDocumentDownloadFileName,
   catalogDocumentExtension,
   catalogDocumentFileName,
   catalogDocumentTypeLabel,
@@ -123,12 +124,11 @@ export function AdminProductDocumentsPanel({
     }
   };
 
-  const downloadUrl = async (url?: string) => {
-    if (!url) return;
+  const downloadUrl = async (doc: ProductDocumentDto) => {
+    if (!doc.fileUrl) return;
     try {
-      const parsed = new URL(url, window.location.origin);
-      const filename = decodeURIComponent(parsed.pathname.split("/").pop() || "file");
-      await apiClient.downloadBlob(`/files/download?url=${encodeURIComponent(url)}`, filename);
+      const filename = catalogDocumentDownloadFileName(doc);
+      await apiClient.downloadBlob(`/files/download?url=${encodeURIComponent(doc.fileUrl)}`, filename);
     } catch {
       toast.error("Download failed.");
     }
@@ -182,7 +182,7 @@ export function AdminProductDocumentsPanel({
                         </Badge>
                       </div>
                       {current ? (
-                        <p className="mt-0.5 break-all text-xs text-muted-foreground">
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           {catalogDocumentFileName(current.fileUrl)}
                         </p>
                       ) : (
@@ -310,7 +310,7 @@ export function AdminProductDocumentsPanel({
               Close
             </Button>
             {preview ? (
-              <Button type="button" className="w-full sm:w-auto" onClick={() => void downloadUrl(preview.fileUrl)}>
+              <Button type="button" className="w-full sm:w-auto" onClick={() => void downloadUrl(preview)}>
                 <Download className="mr-1.5 h-4 w-4" />
                 Download
               </Button>

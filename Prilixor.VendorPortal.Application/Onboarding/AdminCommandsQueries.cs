@@ -832,7 +832,8 @@ internal sealed class VerifyVendorDocumentCommandHandler(
             document.DocumentNumber,
             document.VerificationStatus,
             document.RejectionReason,
-            document.VerifiedAt));
+            document.VerifiedAt,
+            document.OriginalFileName));
     }
 }
 

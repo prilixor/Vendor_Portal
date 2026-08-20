@@ -8,6 +8,7 @@ import { Label } from "@/app/components/ui/label";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw, FileText, Eye, Building, AlertCircle, Calendar, MapPin, ExternalLink } from "lucide-react";
+import { IconTooltip } from "@/app/components/ui/tooltip";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { Badge } from "@/app/components/ui/badge";
@@ -749,6 +750,7 @@ const Verification = () => {
                           <div className="flex items-center gap-1 shrink-0">
                             <StatusBadge status={d.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} />
                             {selected && d.verificationStatus !== "approved" && (
+                              <IconTooltip label="Approve document">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -763,8 +765,10 @@ const Verification = () => {
                                   <CheckCircle2 className="h-4 w-4 text-success" />
                                 )}
                               </Button>
+                              </IconTooltip>
                             )}
                             {selected && d.verificationStatus !== "rejected" && (
+                              <IconTooltip label="Reject document">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -779,7 +783,9 @@ const Verification = () => {
                                   <XCircle className="h-4 w-4 text-destructive" />
                                 )}
                               </Button>
+                              </IconTooltip>
                             )}
+                            <IconTooltip label="Preview document">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -789,6 +795,7 @@ const Verification = () => {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
+                            </IconTooltip>
                           </div>
                         </div>
                         {/* Mobile: vertical layout with actions below */}
@@ -891,6 +898,7 @@ const Verification = () => {
                           <div className="flex items-center gap-1 shrink-0">
                             <StatusBadge status={b.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} />
                             {selected && b.verificationStatus !== "approved" && (
+                              <IconTooltip label="Approve bank account">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -905,8 +913,10 @@ const Verification = () => {
                                   <CheckCircle2 className="h-4 w-4 text-success" />
                                 )}
                               </Button>
+                              </IconTooltip>
                             )}
                             {selected && b.verificationStatus !== "rejected" && (
+                              <IconTooltip label="Reject bank account">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -921,7 +931,9 @@ const Verification = () => {
                                   <XCircle className="h-4 w-4 text-destructive" />
                                 )}
                               </Button>
+                              </IconTooltip>
                             )}
+                            <IconTooltip label="View bank details">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -931,6 +943,7 @@ const Verification = () => {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
+                            </IconTooltip>
                           </div>
                         </div>
                         {/* Mobile: vertical layout with actions below */}

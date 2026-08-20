@@ -159,6 +159,7 @@ class VendorOnboardingProvider extends ChangeNotifier {
           'vendorId': vendorId,
           'documentType': documentType,
           'fileUrl': fileUrl,
+          'originalFileName': file.name,
         },
       );
       await loadAll(vendorId);

@@ -1,3 +1,5 @@
+import { fileExtension, fileNameFromUrl, isStoredBlobFileName, vendorDocumentFileLabel } from "@/app/helpers/vendorDocumentDisplay";
+
 export type CatalogDocumentItem = {
   id: string;
   documentType: string;
@@ -51,26 +53,32 @@ export function sortCatalogDocuments<T extends { documentType: string }>(docs: T
   });
 }
 
+/** Raw storage filename from the URL — used for extension / preview, never shown as-is when it is a blob key. */
+export function catalogDocumentStoredFileName(url?: string): string {
+  return fileNameFromUrl(url);
+}
+
+/**
+ * Vendor/customer subtitle. Human names stay (`acetone_sds.pdf`); timestamp+GUID blob keys become "PDF document".
+ */
 export function catalogDocumentFileName(url?: string): string {
-  if (!url) return "Document";
-  try {
-    const parsed = new URL(url, window.location.origin);
-    const name = decodeURIComponent(parsed.pathname.split("/").pop() || "");
-    return name || "Document";
-  } catch {
-    const raw = (url.split("/").pop() || "").split("?")[0];
-    try {
-      return decodeURIComponent(raw) || "Document";
-    } catch {
-      return raw || "Document";
-    }
-  }
+  return vendorDocumentFileLabel({
+    documentType: "Document",
+    fileUrl: url,
+  });
+}
+
+/** Saved download name: original when readable, otherwise `spec_sheet.pdf`. */
+export function catalogDocumentDownloadFileName(doc: { documentType?: string; fileUrl?: string }): string {
+  const stored = catalogDocumentStoredFileName(doc.fileUrl);
+  if (stored && !isStoredBlobFileName(stored)) return stored;
+  const ext = catalogDocumentExtension(doc.fileUrl || "") || "pdf";
+  const slug = (doc.documentType || "document").trim().toLowerCase().replace(/[^\w]+/g, "-") || "document";
+  return `${slug}.${ext}`;
 }
 
 export function catalogDocumentExtension(url: string): string {
-  const name = catalogDocumentFileName(url).toLowerCase();
-  const match = name.match(/\.([a-z0-9]+)$/i);
-  return match?.[1] ?? "";
+  return fileExtension(catalogDocumentStoredFileName(url) || url);
 }
 
 export function isPreviewableCatalogDocument(url: string): boolean {

@@ -12,7 +12,7 @@ import { Button } from "@/app/components/ui/button";
 
 import { Switch } from "@/app/components/ui/switch";
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, IconTooltip } from "@/app/components/ui/tooltip";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 
@@ -1156,6 +1156,7 @@ const VendorDetails = () => {
                     <div className="flex items-center gap-1 shrink-0">
                       <StatusBadge status={d.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} />
                       {d.verificationStatus !== "approved" && (
+                        <IconTooltip label="Approve document">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1170,8 +1171,10 @@ const VendorDetails = () => {
                             <CheckCircle2 className="h-4 w-4 text-success" />
                           )}
                         </Button>
+                        </IconTooltip>
                       )}
                       {d.verificationStatus !== "rejected" && (
+                        <IconTooltip label="Reject document">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1186,7 +1189,9 @@ const VendorDetails = () => {
                             <XCircle className="h-4 w-4 text-destructive" />
                           )}
                         </Button>
+                        </IconTooltip>
                       )}
+                      <IconTooltip label="Preview document">
                       <Button
                         variant="ghost"
                         size="icon"
@@ -1196,6 +1201,7 @@ const VendorDetails = () => {
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
+                      </IconTooltip>
                     </div>
                   </div>
                   {/* Mobile: vertical layout with actions below */}
@@ -1307,6 +1313,7 @@ const VendorDetails = () => {
                           </div>
                           <div className="flex items-center gap-1">
                             {bank.verificationStatus !== "approved" && (
+                              <IconTooltip label="Approve bank account">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1321,8 +1328,10 @@ const VendorDetails = () => {
                                   <CheckCircle2 className="h-4 w-4 text-success" />
                                 )}
                               </Button>
+                              </IconTooltip>
                             )}
                             {bank.verificationStatus !== "rejected" && (
+                              <IconTooltip label="Reject bank account">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1337,6 +1346,7 @@ const VendorDetails = () => {
                                   <XCircle className="h-4 w-4 text-destructive" />
                                 )}
                               </Button>
+                              </IconTooltip>
                             )}
                           </div>
                         </div>
