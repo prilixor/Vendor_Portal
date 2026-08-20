@@ -8,6 +8,8 @@ type CopyableEmailProps = {
   className?: string;
   /** Extra classes for the email text */
   textClassName?: string;
+  /** Truncate long emails with an ellipsis (default true). */
+  truncate?: boolean;
   /** Show toast on successful copy (default true) */
   toastOnCopy?: boolean;
   /** Compact icon-only button (default true) */
@@ -21,6 +23,7 @@ export function CopyableEmail({
   textClassName,
   toastOnCopy = true,
   compact = true,
+  truncate = true,
 }: CopyableEmailProps) {
   const [copied, setCopied] = useState(false);
 
@@ -40,8 +43,15 @@ export function CopyableEmail({
   };
 
   return (
-    <span className={cn("inline-flex items-center gap-1 min-w-0 max-w-full", className)}>
-      <span className={cn("truncate text-muted-foreground", textClassName)} title={email}>
+    <span className={cn("inline-flex max-w-full items-start gap-1", className)}>
+      <span
+        className={cn(
+          "min-w-0 text-muted-foreground",
+          truncate ? "truncate" : "flex-1 leading-snug [overflow-wrap:anywhere]",
+          textClassName,
+        )}
+        title={email}
+      >
         {email}
       </span>
       <button
