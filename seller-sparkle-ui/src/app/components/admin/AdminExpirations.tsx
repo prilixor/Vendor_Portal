@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Input } from "@/app/components/ui/input";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListPager } from "@/app/components/shared/ListPager";
 import { adminApi, type AdminExpiringOrderDto } from "@/app/services/adminApi";
 
 const PAGE_SIZE = 8;
@@ -130,11 +131,11 @@ const AdminExpirations = () => {
         ) : (
           <div className="space-y-6">
             {pageGroups.map((group) => (
-              <div key={group.baseOrderNumber} className="overflow-hidden rounded-xl border border-border/80 bg-card p-6 shadow-sm transition-all hover:border-border/100">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-4 mb-4">
-                  <div>
-                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Order Group</div>
-                    <div className="text-base font-bold text-foreground mt-0.5">{group.baseOrderNumber}</div>
+              <div key={group.baseOrderNumber} className="min-w-0 overflow-hidden rounded-xl border border-border/80 bg-card p-4 shadow-sm transition-all hover:border-border/100 sm:p-6">
+                <div className="mb-4 flex flex-col gap-3 border-b border-border/60 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order Group</div>
+                    <div className="mt-0.5 break-all text-base font-bold text-foreground">{group.baseOrderNumber}</div>
                   </div>
                 </div>
 
@@ -142,23 +143,23 @@ const AdminExpirations = () => {
                   {group.items.map((row) => (
                     <div
                       key={row.orderId}
-                      className="rounded-lg border border-border p-4 cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors shadow-sm"
+                      className="cursor-pointer rounded-lg border border-border p-3 shadow-sm transition-colors hover:border-primary/50 hover:bg-muted/50 sm:p-4"
                       onClick={() => navigate(`/admin/orders/${row.orderId}`)}
                     >
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm text-foreground truncate">{row.listingTitle}</p>
-                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground mt-1">
-                            <span>Order <strong className="text-foreground font-medium">{row.orderNumber}</strong> ({row.orderType.toUpperCase()})</span>
-                            <span className="text-muted-foreground/30" aria-hidden="true">•</span>
-                            <span>Vendor <strong className="text-foreground font-medium">{row.vendorName}</strong></span>
-                            <span className="text-muted-foreground/30" aria-hidden="true">•</span>
-                            <span>Customer <strong className="text-foreground font-medium">{row.customerName}</strong></span>
-                            <span className="text-muted-foreground/30" aria-hidden="true">•</span>
-                            <span>Ends on <strong className="text-foreground font-medium">{formatEndDate(row.endDate)}</strong></span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-foreground break-words">{row.listingTitle}</p>
+                          <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2.5 sm:gap-y-1">
+                            <span>Order <strong className="font-medium text-foreground">{row.orderNumber}</strong> ({row.orderType.toUpperCase()})</span>
+                            <span className="hidden text-muted-foreground/30 sm:inline" aria-hidden="true">•</span>
+                            <span>Vendor <strong className="font-medium text-foreground">{row.vendorName}</strong></span>
+                            <span className="hidden text-muted-foreground/30 sm:inline" aria-hidden="true">•</span>
+                            <span>Customer <strong className="font-medium text-foreground">{row.customerName}</strong></span>
+                            <span className="hidden text-muted-foreground/30 sm:inline" aria-hidden="true">•</span>
+                            <span>Ends on <strong className="font-medium text-foreground">{formatEndDate(row.endDate)}</strong></span>
                           </div>
                         </div>
-                        <Badge className="w-fit mt-1 sm:mt-0" variant={resolveDaysLeft(row) <= 1 ? "destructive" : "secondary"}>
+                        <Badge className="mt-1 w-fit shrink-0 sm:mt-0" variant={resolveDaysLeft(row) <= 1 ? "destructive" : "secondary"}>
                           {(() => {
                             const days = resolveDaysLeft(row);
                             if (days <= 0) return "Due Today";
@@ -173,36 +174,13 @@ const AdminExpirations = () => {
               </div>
             ))}
 
-            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-muted-foreground">
-                Page {safePage} of {totalPages} · {groupCount} order{groupCount !== 1 ? "s" : ""} · {itemCount} item{itemCount !== 1 ? "s" : ""}
-                {hasSearch ? " matching search" : ""}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  aria-label="Previous page"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  aria-label="Next page"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <ListPager
+              className="pt-2"
+              page={safePage}
+              totalPages={totalPages}
+              summary={`Page ${safePage} of ${totalPages} · ${groupCount} order${groupCount !== 1 ? "s" : ""} · ${itemCount} item${itemCount !== 1 ? "s" : ""}${hasSearch ? " matching search" : ""}`}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </Card>

@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
+import { vendorDocumentFileLabel } from "@/app/helpers/vendorDocumentDisplay";
 import type { VendorDocument, VerificationStatus } from "@/app/models";
 import {
   computeVendorVerificationSnapshot,
@@ -24,7 +25,11 @@ function mapDocuments(
     id: doc.id,
     vendorId: doc.vendorId,
     type: doc.documentType,
-    fileName: doc.fileName,
+    fileName: vendorDocumentFileLabel({
+      documentType: doc.documentType,
+      fileUrl: doc.fileUrl,
+      originalFileName: doc.originalFileName,
+    }),
     fileUrl: doc.fileUrl,
     fileType: doc.fileType,
     fileSize: doc.fileSize,

@@ -134,6 +134,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.VendorId).HasColumnName("vendor_id");
             entity.Property(x => x.DocumentType).HasColumnName("document_type");
             entity.Property(x => x.FileUrl).HasColumnName("file_url");
+            entity.Property(x => x.OriginalFileName).HasColumnName("original_file_name");
             entity.Property(x => x.DocumentNumber).HasColumnName("document_number");
             entity.Property(x => x.VerificationStatus).HasColumnName("verification_status");
             entity.Property(x => x.RejectionReason).HasColumnName("rejection_reason");

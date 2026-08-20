@@ -1,12 +1,16 @@
 import { Navigate, useLocation } from "react-router-dom";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
 import { Sidebar } from "./Sidebar";
 
 import { TopBar } from "./TopBar";
+
+import { MobileNavScrim, useMobileNavLock } from "./MobileNavScrim";
+
+import { cn } from "@/app/helpers/utils";
 
 import { CustomerStoreHeader } from "./CustomerStoreHeader";
 
@@ -89,6 +93,10 @@ function VendorShellContent({
 
   const verification = useVendorVerification();
 
+  const closeMobileSidebar = useCallback(() => setMobileSidebarOpen(false), [setMobileSidebarOpen]);
+
+  useMobileNavLock(mobileSidebarOpen, closeMobileSidebar);
+
 
 
   const sections = useMemo(
@@ -121,19 +129,9 @@ function VendorShellContent({
 
   return (
 
-    <div className="flex min-h-screen w-full bg-background">
+    <div className="flex min-h-screen w-full min-w-0 max-w-full overflow-x-clip bg-background">
 
-      {mobileSidebarOpen && (
-
-        <div
-
-          className="fixed inset-0 z-50 bg-black/50 lg:hidden"
-
-          onClick={() => setMobileSidebarOpen(false)}
-
-        />
-
-      )}
+      <MobileNavScrim open={mobileSidebarOpen} onClose={closeMobileSidebar} className="lg:hidden" />
 
 
 
@@ -147,19 +145,25 @@ function VendorShellContent({
 
         isOpen={mobileSidebarOpen}
 
-        onClose={() => setMobileSidebarOpen(false)}
+        onClose={closeMobileSidebar}
 
       />
 
 
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div
+        className={cn(
+          "relative z-0 flex min-w-0 flex-1 flex-col overflow-x-clip",
+          mobileSidebarOpen && "max-lg:pointer-events-none max-lg:select-none",
+        )}
+        aria-hidden={mobileSidebarOpen || undefined}
+      >
 
         <TopBar variant="vendor" onMenuClick={() => setMobileSidebarOpen(true)} />
 
-        <main className="relative flex-1 px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+        <main className="relative min-w-0 flex-1 overflow-x-clip px-3 py-4 pb-24 sm:px-6 sm:py-6 lg:px-8">
 
-          <div className="mx-auto max-w-7xl">
+          <div className="mx-auto w-full min-w-0 max-w-7xl">
 
             {user.impersonation && (
 
@@ -224,9 +228,17 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+  const closeMobileSidebar = useCallback(() => setMobileSidebarOpen(false), []);
+
   const isCustomerShell = variant === "customer";
 
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [location.pathname]);
 
+
+
+  useMobileNavLock(variant === "admin" && mobileSidebarOpen, closeMobileSidebar);
 
   useEffect(() => {
 
@@ -385,7 +397,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
         {isCustomerShell ? (
 
-          <div className="flex min-h-screen w-full flex-col bg-gradient-to-b from-muted/40 via-background to-background">
+          <div className="flex min-h-screen w-full min-w-0 max-w-full flex-col bg-gradient-to-b from-muted/40 via-background to-background">
 
             <CustomerStoreHeader />
 
@@ -424,9 +436,9 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
             )}
 
-            <main className="flex-1 px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+            <main className="min-w-0 flex-1 overflow-x-clip px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
 
-              <div className="mx-auto w-full max-w-[1400px]">
+              <div className="mx-auto w-full min-w-0 max-w-[1400px]">
 
                 <PortalGlobalLoader placement="chrome" />
 
@@ -454,19 +466,9 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
         ) : (
 
-          <div className="flex min-h-screen w-full bg-background">
+          <div className="flex min-h-screen w-full min-w-0 max-w-full overflow-x-clip bg-background">
 
-            {mobileSidebarOpen && (
-
-              <div
-
-                className="fixed inset-0 z-50 bg-black/50 lg:hidden"
-
-                onClick={() => setMobileSidebarOpen(false)}
-
-              />
-
-            )}
+            <MobileNavScrim open={mobileSidebarOpen} onClose={closeMobileSidebar} className="lg:hidden" />
 
 
 
@@ -482,19 +484,25 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
               isOpen={mobileSidebarOpen}
 
-              onClose={() => setMobileSidebarOpen(false)}
+              onClose={closeMobileSidebar}
 
             />
 
 
 
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div
+              className={cn(
+                "relative z-0 flex min-w-0 flex-1 flex-col overflow-x-clip",
+                mobileSidebarOpen && "max-lg:pointer-events-none max-lg:select-none",
+              )}
+              aria-hidden={mobileSidebarOpen || undefined}
+            >
 
               <TopBar variant={variant} onMenuClick={() => setMobileSidebarOpen(true)} />
 
-              <main className="relative flex-1 px-4 py-6 sm:px-6 lg:px-8">
+              <main className="relative min-w-0 flex-1 overflow-x-clip px-3 py-4 sm:px-6 lg:px-8">
 
-                <div className="mx-auto max-w-7xl">
+                <div className="mx-auto w-full min-w-0 max-w-7xl">
 
                   <PortalGlobalLoader placement="main" />
 

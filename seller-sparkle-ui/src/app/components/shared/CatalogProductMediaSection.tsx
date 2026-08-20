@@ -221,6 +221,53 @@ export function CatalogProductImagesGrid({
   );
 }
 
+function CatalogThumbPreview({
+  images,
+  limit,
+  overlap,
+  sizeClass,
+}: {
+  images: CatalogImageItem[];
+  limit: number;
+  overlap?: boolean;
+  sizeClass: string;
+}) {
+  const shown = images.slice(0, limit);
+  const extra = Math.max(0, images.length - shown.length);
+
+  return (
+    <div className={cn("flex items-center", overlap ? "-space-x-2" : "gap-1.5")}>
+      {shown.map((img, index) => {
+        const url = catalogImageDisplayUrl(img);
+        const isLast = index === shown.length - 1;
+        return (
+          <div
+            key={img.id ?? `${img.imageUrl}-${index}`}
+            className={cn(
+              "relative overflow-hidden rounded-lg border-2 border-background bg-muted shadow-sm",
+              sizeClass,
+            )}
+            style={overlap ? { zIndex: shown.length - index } : undefined}
+          >
+            {url ? (
+              <img src={url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+              </div>
+            )}
+            {isLast && extra > 0 ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-[11px] font-semibold text-white">
+                +{extra}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Compact row — opens photos & documents in a separate dialog (keeps edit forms short). */
 export function CatalogMediaLauncher({
   images = [],
@@ -237,7 +284,6 @@ export function CatalogMediaLauncher({
   const hasImages = sortedImages.length > 0;
   const hasDocs = docItems.length > 0;
   const hasMedia = hasImages || hasDocs;
-  const previewThumbs = sortedImages.slice(0, 4);
 
   const summaryParts = [
     hasImages ? `${sortedImages.length} photo${sortedImages.length === 1 ? "" : "s"}` : null,
@@ -253,55 +299,49 @@ export function CatalogMediaLauncher({
   }
 
   const defaultTab = hasImages ? "photos" : "documents";
+  const fileIcon = (
+    <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary sm:h-10 sm:w-10">
+      <FileText className="h-5 w-5" />
+    </div>
+  );
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group flex w-full items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5 text-left shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/[0.03] sm:px-3.5 sm:py-3"
+        className="group flex w-full flex-col gap-2.5 rounded-xl border border-border/70 bg-card p-3 text-left shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/[0.03] sm:flex-row sm:items-center sm:gap-3 sm:px-3.5 sm:py-3"
       >
-        <div className="flex shrink-0 items-center">
-          {previewThumbs.length > 0 ? (
-            <div className="flex -space-x-2">
-              {previewThumbs.map((img, index) => {
-                const url = catalogImageDisplayUrl(img);
-                return (
-                  <div
-                    key={img.id ?? `${img.imageUrl}-${index}`}
-                    className="relative h-10 w-10 overflow-hidden rounded-lg border-2 border-background bg-muted shadow-sm"
-                    style={{ zIndex: previewThumbs.length - index }}
-                  >
-                    {url ? (
-                      <img src={url} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center">
-                        <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <FileText className="h-5 w-5" />
-            </div>
-          )}
+        <div className="flex items-center justify-between gap-3 sm:contents">
+          <div className="min-w-0 sm:shrink-0">
+            {hasImages ? (
+              <>
+                <div className="sm:hidden">
+                  <CatalogThumbPreview images={sortedImages} limit={4} sizeClass="h-11 w-11" />
+                </div>
+                <div className="hidden sm:block">
+                  <CatalogThumbPreview images={sortedImages} limit={4} overlap sizeClass="h-10 w-10" />
+                </div>
+              </>
+            ) : (
+              fileIcon
+            )}
+          </div>
+          <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary sm:hidden" />
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">{title}</span>
-            <Badge variant="secondary" className="font-normal">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-semibold text-foreground">{title}</span>
+            <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">
               <Shield className="mr-1 h-3 w-3" />
               Read-only
             </Badge>
           </div>
-          <p className="truncate text-xs text-muted-foreground">{summaryParts.join(" · ")}</p>
+          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{summaryParts.join(" · ")}</p>
         </div>
 
-        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+        <ChevronRight className="hidden h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary sm:block" />
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>

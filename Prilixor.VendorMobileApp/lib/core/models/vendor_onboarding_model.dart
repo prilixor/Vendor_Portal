@@ -6,6 +6,7 @@ class VendorDocument {
   final String fileUrl;
   final String verificationStatus;
   final String? rejectionReason;
+  final String? originalFileName;
 
   const VendorDocument({
     required this.id,
@@ -13,6 +14,7 @@ class VendorDocument {
     required this.fileUrl,
     required this.verificationStatus,
     this.rejectionReason,
+    this.originalFileName,
   });
 
   factory VendorDocument.fromJson(Map<String, dynamic> json) {
@@ -22,10 +24,15 @@ class VendorDocument {
       fileUrl: json['fileUrl']?.toString() ?? '',
       verificationStatus: json['verificationStatus']?.toString() ?? 'pending',
       rejectionReason: json['rejectionReason']?.toString(),
+      originalFileName: json['originalFileName']?.toString(),
     );
   }
 
   String get displayFileName {
+    final original = originalFileName?.trim() ?? '';
+    if (original.isNotEmpty && !_isServerGeneratedFileName(original)) {
+      return original.split(RegExp(r'[/\\]')).last;
+    }
     if (fileUrl.isEmpty) return documentType;
     final parts = fileUrl.split('/').where((s) => s.isNotEmpty).toList();
     if (parts.isEmpty) return documentType;
@@ -36,14 +43,12 @@ class VendorDocument {
   String get displayFileLabel {
     final name = displayFileName;
     if (_isServerGeneratedFileName(name)) {
-      if (isPdfFile) return 'PDF uploaded';
+      if (isPdfFile) return 'PDF document';
       if (isImageFile) return 'Image uploaded';
-      return 'File uploaded';
+      return 'Uploaded file';
     }
     if (name.length > 42) {
-      if (isPdfFile) return 'PDF uploaded';
-      if (isImageFile) return 'Image uploaded';
-      return 'File uploaded';
+      return '${name.substring(0, 39)}…';
     }
     return name;
   }

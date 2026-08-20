@@ -577,6 +577,34 @@ class VendorOrderProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> assignOrderAssets(
+    String vendorId,
+    String orderId,
+    List<String> assetTags,
+  ) async {
+    _actionLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      await _api.dio.patch(
+        '/vendors/$vendorId/orders/$orderId/assets',
+        data: {'assetTags': assetTags},
+      );
+      await fetchOrderDetail(vendorId, orderId);
+      await fetchOrders(vendorId, silent: true);
+      return true;
+    } on DioException catch (e) {
+      _error = _dioMessage(e, 'Failed to save serial number.');
+      return false;
+    } catch (_) {
+      _error = 'Failed to save serial number.';
+      return false;
+    } finally {
+      _actionLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> cancelAssignedOrder(String vendorId, String orderId) async {
     _actionLoading = true;
     _error = null;

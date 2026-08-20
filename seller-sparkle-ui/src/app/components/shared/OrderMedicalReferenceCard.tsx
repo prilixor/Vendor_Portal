@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
+import { cn } from "@/app/helpers/utils";
 
 export type OrderMedicalReferenceProps = {
   doctorName?: string | null;
@@ -11,6 +12,38 @@ export type OrderMedicalReferenceProps = {
   /** Optional action (e.g. vendor “View doctor”). */
   action?: ReactNode;
 };
+
+function MedicalRow({
+  label,
+  children,
+  className,
+  stacked,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+  stacked?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-start justify-between gap-3 py-2 sm:block sm:space-y-0.5 sm:py-0",
+        stacked && "flex-col items-stretch gap-0.5",
+        className,
+      )}
+    >
+      <p className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div
+        className={cn(
+          "min-w-0 text-sm font-medium leading-snug",
+          stacked ? "text-left" : "text-right sm:text-left",
+        )}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Shared order medical reference block — clear labels, no internal/explanatory copy.
@@ -30,54 +63,44 @@ export function OrderMedicalReferenceCard({
 
   return (
     <Card className="border-border/80 shadow-sm">
-      <CardHeader className="pb-4">
-        <p className="text-lg font-semibold">Medical reference</p>
+      <CardHeader className="p-3 pb-1 sm:p-4 sm:pb-2">
+        <p className="text-[13px] font-semibold sm:text-base">Medical reference</p>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="divide-y divide-border/60 px-3 pb-2 sm:grid sm:grid-cols-3 sm:gap-x-4 sm:gap-y-3 sm:divide-y-0 sm:px-4 sm:pb-4">
         {hasDoctor && (
-          <div className="space-y-3">
+          <>
             {doctorName && (
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Doctor</p>
-                <p className="text-sm font-medium">
-                  {doctorName}
-                  {doctorSpecialization ? (
-                    <span className="font-normal text-muted-foreground"> — {doctorSpecialization}</span>
-                  ) : null}
-                </p>
-              </div>
+              <MedicalRow label="Doctor" stacked>
+                {doctorName}
+                {doctorSpecialization ? (
+                  <span className="font-normal text-muted-foreground"> — {doctorSpecialization}</span>
+                ) : null}
+              </MedicalRow>
             )}
 
             {doctorUniqueCode && (
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Unique ID</p>
-                <p className="font-mono text-sm font-bold tracking-wider text-teal-700 dark:text-teal-300">
+              <MedicalRow label="Unique ID">
+                <span className="font-mono text-[13px] font-bold tracking-wider text-teal-700 dark:text-teal-300">
                   {doctorUniqueCode}
-                </p>
-              </div>
+                </span>
+              </MedicalRow>
             )}
 
             {doctorContactNumber && (
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contact</p>
-                <p className="text-sm text-foreground">{doctorContactNumber}</p>
-              </div>
+              <MedicalRow label="Contact">{doctorContactNumber}</MedicalRow>
             )}
 
-            {action}
-          </div>
+            {action ? <div className="py-2 sm:col-span-3 sm:py-0">{action}</div> : null}
+          </>
         )}
 
         {hasHospital && (
-          <div className="space-y-1 border-t border-border/50 pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hospital</p>
-            <p className="text-sm font-medium">
-              {hospitalName}
-              {hospitalCity ? (
-                <span className="font-normal text-muted-foreground"> ({hospitalCity})</span>
-              ) : null}
-            </p>
-          </div>
+          <MedicalRow label="Hospital" className={cn(hasDoctor && "sm:col-span-3")}>
+            {hospitalName}
+            {hospitalCity ? (
+              <span className="font-normal text-muted-foreground"> ({hospitalCity})</span>
+            ) : null}
+          </MedicalRow>
         )}
       </CardContent>
     </Card>

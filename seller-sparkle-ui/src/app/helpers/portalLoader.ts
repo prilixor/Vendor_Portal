@@ -50,6 +50,7 @@ export function isQuietPortalGet(endpoint: string): boolean {
   const path = (endpoint.split("?")[0] ?? "").replace(/\/+$/, "").toLowerCase() || "/";
 
   if (path.includes("unread-count")) return true;
+  if (path.includes("/customers/me/notifications")) return true;
   if (path === "/admin/orders/continuations/pending") return true;
   if (path === "/admin/chats/sessions") return true;
   if (path === "/customers/me/chats/sessions") return true;

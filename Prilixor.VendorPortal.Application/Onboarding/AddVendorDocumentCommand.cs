@@ -1,3 +1,4 @@
+using System.IO;
 using FluentValidation;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Vendors;
@@ -10,7 +11,8 @@ public sealed record AddVendorDocumentCommand(
     string VendorId,
     string DocumentType,
     string FileUrl,
-    string? DocumentNumber) : ICommand<VendorDocumentDto>;
+    string? DocumentNumber,
+    string? OriginalFileName = null) : ICommand<VendorDocumentDto>;
 
 public sealed class AddVendorDocumentCommandValidator : AbstractValidator<AddVendorDocumentCommand>
 {
@@ -19,6 +21,7 @@ public sealed class AddVendorDocumentCommandValidator : AbstractValidator<AddVen
         RuleFor(x => x.VendorId).NotEmpty();
         RuleFor(x => x.DocumentType).NotEmpty().MaximumLength(50);
         RuleFor(x => x.FileUrl).NotEmpty().MaximumLength(2000);
+        RuleFor(x => x.OriginalFileName).MaximumLength(255);
     }
 }
 
@@ -54,6 +57,7 @@ internal sealed class AddVendorDocumentCommandHandler(
             DocumentType = request.DocumentType,
             FileUrl = request.FileUrl,
             DocumentNumber = request.DocumentNumber,
+            OriginalFileName = SanitizeOriginalFileName(request.OriginalFileName),
             VerificationStatus = "pending"
         };
 
@@ -75,6 +79,15 @@ internal sealed class AddVendorDocumentCommandHandler(
             doc.DocumentNumber,
             doc.VerificationStatus,
             doc.RejectionReason,
-            doc.VerifiedAt));
+            doc.VerifiedAt,
+            doc.OriginalFileName));
+    }
+
+    private static string? SanitizeOriginalFileName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        var fileName = Path.GetFileName(name.Trim());
+        if (string.IsNullOrWhiteSpace(fileName)) return null;
+        return fileName.Length > 255 ? fileName[..255] : fileName;
     }
 }

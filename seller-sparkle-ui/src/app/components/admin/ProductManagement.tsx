@@ -816,7 +816,7 @@ const ProductManagement = () => {
       <PageLoaderSlot />
     ) : (
       <>
-      <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
+      <div className="max-w-full overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
           <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
@@ -1010,7 +1010,7 @@ const ProductManagement = () => {
             {loading && categories.length === 0 ? (
               <PageLoaderSlot />
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
+              <div className="max-w-full overflow-x-auto rounded-lg border border-border">
                 <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
                   <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
                     <tr>
@@ -1662,15 +1662,21 @@ const ProductManagement = () => {
               />
             )}
           </div>
-          <DialogFooter className="shrink-0 mt-0 border-t border-border bg-background px-4 py-3 sm:px-6 sm:justify-between">
-            <Button variant="outline" onClick={() => setProductDialogOpen(false)} disabled={loading}>
+          <DialogFooter className="mt-0 shrink-0 flex-row flex-wrap items-center gap-2 border-t border-border bg-background px-4 py-3 sm:px-6 sm:justify-between">
+            <Button
+              variant="outline"
+              className="min-w-0 flex-1 sm:flex-none"
+              onClick={() => setProductDialogOpen(false)}
+              disabled={loading}
+            >
               Cancel
             </Button>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex min-w-0 flex-[2] gap-2 sm:flex-none">
               {productFormStep > 0 && (
                 <Button
                   type="button"
                   variant="outline"
+                  className="min-w-0 flex-1 sm:flex-none"
                   disabled={loading}
                   onClick={() => setProductFormStep((s) => Math.max(0, s - 1))}
                 >
@@ -1680,6 +1686,7 @@ const ProductManagement = () => {
               {productFormStep < PRODUCT_FORM_STEPS.length - 1 ? (
                 <Button
                   type="button"
+                  className="min-w-0 flex-1 sm:flex-none"
                   disabled={loading}
                   onClick={() => {
                     if (!validateProductStep(productFormStep)) return;
@@ -1689,8 +1696,8 @@ const ProductManagement = () => {
                   Next
                 </Button>
               ) : (
-                <Button onClick={saveProduct} disabled={loading}>
-                  {editingProduct ? "Update" : "Create"} Product
+                <Button className="min-w-0 flex-1 sm:flex-none" onClick={saveProduct} disabled={loading}>
+                  {editingProduct ? "Update" : "Create"}
                 </Button>
               )}
             </div>

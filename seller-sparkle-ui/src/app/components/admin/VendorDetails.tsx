@@ -7,12 +7,13 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListPager } from "@/app/components/shared/ListPager";
 
 import { Button } from "@/app/components/ui/button";
 
 import { Switch } from "@/app/components/ui/switch";
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, IconTooltip } from "@/app/components/ui/tooltip";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 
@@ -32,7 +33,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto, VendorWorkingHourDto, VendorProductListingDto, ProductDto } from "@/app/services/adminApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
-import { retryOriginalOnImageError } from "@/app/helpers/utils";
+import { ListingThumb } from "@/app/components/shared/ListingThumb";
+import { retryOriginalOnImageError, resolveCatalogProductImageUrl, resolveItemImageUrl } from "@/app/helpers/utils";
 
 const getApiOrigin = (): string | null => {
   const configured = import.meta.env.VITE_API_BASE_URL as string | undefined;
@@ -137,15 +139,14 @@ const getAdminUserId = () => {
 import {
   Building2,
   ChevronLeft,
-  ChevronRight,
   ChevronDown,
   Search,
   CircleOff,
   Clock3,
   FileText,
   FlaskConical,
+  Heart,
   MapPin,
-  Package,
   Phone,
   ShieldCheck,
   Loader2,
@@ -210,57 +211,6 @@ function filterVendorListings(
       (p.listingStatus ?? "").replace(/_/g, " ").toLowerCase().includes(q)
     );
   });
-}
-
-function ListingPager({
-  page,
-  totalPages,
-  total,
-  noun,
-  hasSearch,
-  onPrevious,
-  onNext,
-}: {
-  page: number;
-  totalPages: number;
-  total: number;
-  noun: string;
-  hasSearch: boolean;
-  onPrevious: () => void;
-  onNext: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-3 pt-3 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-sm text-muted-foreground">
-        Page {page} of {totalPages} · {total} {noun}
-        {hasSearch ? " matching search" : ""}
-      </p>
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 shrink-0"
-          aria-label="Previous page"
-          disabled={page <= 1}
-          onClick={onPrevious}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 shrink-0"
-          aria-label="Next page"
-          disabled={page >= totalPages}
-          onClick={onNext}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 type ChemSize = { sizeValue: number; sizeUnit: string; buyPrice: number };
@@ -350,6 +300,84 @@ const ChemStockDisclosure = ({
           )}
         </div>
       )}
+    </div>
+  );
+};
+
+const listingStatusLabel = (status?: string) =>
+  status ? status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, " ") : "Inactive";
+
+const ListingQty = ({ total, available }: { total: number; available?: number }) => (
+  <>
+    <p className="text-sm font-mono font-semibold tabular-nums">Qty {total}</p>
+    {available !== undefined && (
+      <p className="text-[10px] leading-4 text-muted-foreground">{available} available</p>
+    )}
+  </>
+);
+
+const VendorListingCard = ({
+  listing,
+  catalogImages,
+  price,
+  qty,
+}: {
+  listing: VendorProductListingDto;
+  catalogImages?: ProductDto["images"];
+  price: ReactNode;
+  qty: ReactNode;
+}) => {
+  const src = resolveItemImageUrl({
+    primaryImageUrl: listing.primaryImageUrl,
+    primaryThumbnailUrl: listing.primaryThumbnailUrl,
+  });
+  const catalogSrc = resolveCatalogProductImageUrl(catalogImages);
+  const isActive = listing.listingStatus === "active" || listing.listingStatus === "approved";
+
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-card p-3">
+      <ListingThumb
+        src={src}
+        fallbackSrc={catalogSrc}
+        alt={listing.listingTitle}
+        size="md"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold leading-5 [overflow-wrap:anywhere]">
+          {listing.listingTitle}
+        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          {isActive ? (
+            <Badge variant="outline" className="h-4 border-success bg-success/10 px-1.5 py-0 text-[10px] font-medium leading-none text-success">
+              Active
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="h-4 border-muted-foreground/30 bg-muted/50 px-1.5 py-0 text-[10px] font-medium leading-none text-muted-foreground">
+              {listingStatusLabel(listing.listingStatus)}
+            </Badge>
+          )}
+          {listing.favoriteCount > 0 && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex cursor-default items-center gap-0.5 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0 text-[10px] font-medium leading-4 text-rose-600 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400">
+                    <Heart className="h-2.5 w-2.5 fill-current" />
+                    {listing.favoriteCount}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>
+                    Favorited by {listing.favoriteCount}{" "}
+                    {listing.favoriteCount === 1 ? "customer" : "customers"}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
+        <div className="mt-1 min-w-0">{price}</div>
+      </div>
+      <div className="shrink-0 text-right">{qty}</div>
     </div>
   );
 };
@@ -618,6 +646,17 @@ const VendorDetails = () => {
         : `₹${min.toLocaleString("en-IN")} – ₹${max.toLocaleString("en-IN")}`;
     const sizes = active.slice().sort((a, b) => (a.sizeValue ?? 0) - (b.sizeValue ?? 0));
     return { label, sizes, count: active.length };
+  };
+
+  const renderListingPrice = (listing: VendorProductListingDto) => {
+    if (listing.isChemical) {
+      const pricing = getChemPricing(listing.productId);
+      if (!pricing) {
+        return <p className="text-xs text-muted-foreground">Price not set</p>;
+      }
+      return <ChemPriceDisclosure label={pricing.label} count={pricing.count} sizes={pricing.sizes} />;
+    }
+    return <p className="text-xs text-muted-foreground">Daily rate: ₹{listing.dailyRent ?? 0}</p>;
   };
 
   if (!vendorId) return <Navigate to="/admin/vendors" replace />;
@@ -940,19 +979,20 @@ const VendorDetails = () => {
 
         actions={
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full min-w-0 flex-col gap-2 [text-size-adjust:100%]">
 
             {vendor?.accountStatus === "pending" && (
-              <div className="flex flex-col items-end gap-1">
+              <div className="flex flex-col items-stretch gap-1 sm:items-end">
                 <Button
                   onClick={approve}
                   disabled={!canApprove || approving}
-                  className="bg-success hover:bg-success/90 text-success-foreground"
+                  size="sm"
+                  className="h-9 bg-success hover:bg-success/90 text-success-foreground"
                 >
                   {approving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />} Approve
                 </Button>
                 {serviceAreasNeedRadiusReview && (
-                  <p className="max-w-xs text-right text-[11px] text-amber-700 dark:text-amber-300">
+                  <p className="max-w-xs text-[11px] text-amber-700 dark:text-amber-300 sm:text-right">
                     {serviceAreas.length === 0
                       ? "Add/set service area radius on the Areas tab before approval."
                       : "Set coverage radius for all service areas (Areas tab) before approval."}
@@ -960,9 +1000,11 @@ const VendorDetails = () => {
                 )}
               </div>
             )}
+            <div className="flex w-full min-w-0 flex-nowrap items-center gap-1.5 sm:w-auto sm:gap-2">
             {hasPermission(ADMIN_PERMISSIONS.vendorsImpersonate) && vendorId && (
               <Button
                 variant="secondary"
+                className="h-9 w-auto shrink-0 whitespace-nowrap px-2.5 text-xs sm:h-10 sm:px-4 sm:text-sm"
                 disabled={impersonating}
                 onClick={async () => {
                   setImpersonating(true);
@@ -978,13 +1020,14 @@ const VendorDetails = () => {
                   }
                 }}
               >
-                {impersonating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
+                {impersonating ? <Loader2 className="mr-1.5 h-4 w-4 shrink-0 animate-spin sm:mr-2" /> : <LogIn className="mr-1.5 h-4 w-4 shrink-0 sm:mr-2" />}
                 Open as Vendor
               </Button>
             )}
+            <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:ml-0 sm:gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" disabled={rejecting}>
+                <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 sm:h-10 sm:w-10" disabled={rejecting} aria-label="More actions">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -1006,11 +1049,11 @@ const VendorDetails = () => {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button variant="outline" onClick={() => navigate("/admin/vendors")}>
-
-              <ChevronLeft className="mr-2 h-4 w-4" /> Back
-
+            <Button variant="outline" className="h-9 shrink-0 whitespace-nowrap px-2.5 text-xs sm:h-10 sm:px-4 sm:text-sm" onClick={() => navigate("/admin/vendors")}>
+              <ChevronLeft className="mr-1 h-4 w-4 sm:mr-2" /> Back
             </Button>
+            </div>
+            </div>
 
           </div>
 
@@ -1020,34 +1063,40 @@ const VendorDetails = () => {
 
 
 
-      <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
+      <Card className="border-border/60 p-3 sm:p-5 lg:p-6">
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
 
-          <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-soft text-primary sm:h-12 sm:w-12">
 
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-soft text-primary">
-
-              <Building2 className="h-5 w-5" />
-
-            </div>
-
-            <div>
-
-              <p className="text-lg font-semibold">{profile?.businessName || vendor?.email}</p>
-
-              <p className="text-sm text-muted-foreground flex flex-wrap items-center gap-1">
-                {profile?.ownerName ? <span>{profile.ownerName} · </span> : null}
-                {vendor?.email ? (
-                  <CopyableEmail email={vendor.email} textClassName="text-sm text-muted-foreground" />
-                ) : null}
-              </p>
-
-            </div>
+            <Building2 className="h-5 w-5" />
 
           </div>
 
-          <StatusBadge status={vendor?.accountStatus as "pending" | "approved" | "rejected" | "under_review"} />
+          <div className="min-w-0 flex-1">
+
+            <div className="flex items-start justify-between gap-2">
+
+              <p className="min-w-0 text-base font-semibold leading-snug sm:text-lg">{profile?.businessName || vendor?.email}</p>
+
+              <StatusBadge status={vendor?.accountStatus as "pending" | "approved" | "rejected" | "under_review"} className="shrink-0" />
+
+            </div>
+
+            {profile?.ownerName ? (
+              <p className="mt-0.5 text-sm leading-snug text-muted-foreground">{profile.ownerName}</p>
+            ) : null}
+
+            {vendor?.email ? (
+              <CopyableEmail
+                email={vendor.email}
+                truncate={false}
+                className="mt-0.5 w-full"
+                textClassName="text-xs sm:text-sm"
+              />
+            ) : null}
+
+          </div>
 
         </div>
 
@@ -1055,17 +1104,17 @@ const VendorDetails = () => {
 
 
 
-      <Tabs value={activeTab} onValueChange={onTabChange} className="mt-4">
+      <Tabs value={activeTab} onValueChange={onTabChange} className="mt-3">
 
         <TabsList className="h-auto w-full flex-nowrap justify-start overflow-x-auto rounded-lg p-1">
 
-          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="profile" className="shrink-0">Profile</TabsTrigger>
 
-          <TabsTrigger value="docs">Docs</TabsTrigger>
+          <TabsTrigger value="docs" className="shrink-0">Docs</TabsTrigger>
 
-          <TabsTrigger value="bank">Bank</TabsTrigger>
+          <TabsTrigger value="bank" className="shrink-0">Bank</TabsTrigger>
 
-          <TabsTrigger value="areas" className="gap-1.5">
+          <TabsTrigger value="areas" className="shrink-0 gap-1.5">
             Areas
             {serviceAreas.some((a) => !a.isRadiusSetByAdmin) && (
               <Badge
@@ -1077,9 +1126,9 @@ const VendorDetails = () => {
             )}
           </TabsTrigger>
 
-          <TabsTrigger value="products">Equipment</TabsTrigger>
+          <TabsTrigger value="products" className="shrink-0">Equipment</TabsTrigger>
 
-          <TabsTrigger value="chemicals">Chemicals</TabsTrigger>
+          <TabsTrigger value="chemicals" className="shrink-0">Chemicals</TabsTrigger>
 
         </TabsList>
 
@@ -1087,11 +1136,11 @@ const VendorDetails = () => {
 
         <TabsContent value="profile">
 
-          <Card className="border-border/60 p-4 sm:p-5 lg:p-6">
+          <Card className="border-border/60 p-3 sm:p-5 lg:p-6">
 
             {profile ? (
 
-              <div className="grid grid-cols-1 gap-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:gap-5 lg:grid-cols-3">
 
                 <Detail label="Business" value={profile.businessName} />
 
@@ -1105,7 +1154,7 @@ const VendorDetails = () => {
 
                 <Detail label="Pincode" value={profile.postalCode} />
 
-                <Detail label="Address" value={profile.addressLine1} />
+                <Detail label="Address" value={profile.addressLine1} className="col-span-2 lg:col-span-1" />
 
                 <Detail label="State" value={profile.state} />
 
@@ -1156,6 +1205,7 @@ const VendorDetails = () => {
                     <div className="flex items-center gap-1 shrink-0">
                       <StatusBadge status={d.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} />
                       {d.verificationStatus !== "approved" && (
+                        <IconTooltip label="Approve document">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1170,8 +1220,10 @@ const VendorDetails = () => {
                             <CheckCircle2 className="h-4 w-4 text-success" />
                           )}
                         </Button>
+                        </IconTooltip>
                       )}
                       {d.verificationStatus !== "rejected" && (
+                        <IconTooltip label="Reject document">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1186,7 +1238,9 @@ const VendorDetails = () => {
                             <XCircle className="h-4 w-4 text-destructive" />
                           )}
                         </Button>
+                        </IconTooltip>
                       )}
+                      <IconTooltip label="Preview document">
                       <Button
                         variant="ghost"
                         size="icon"
@@ -1196,6 +1250,7 @@ const VendorDetails = () => {
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
+                      </IconTooltip>
                     </div>
                   </div>
                   {/* Mobile: vertical layout with actions below */}
@@ -1212,13 +1267,13 @@ const VendorDetails = () => {
                         {d.documentNumber && <p className="text-xs text-muted-foreground mt-0.5 break-all line-clamp-1">{d.documentNumber}</p>}
                       </div>
                     </div>
-                    <div className="mt-3 grid grid-cols-3 gap-2">
+                    <div className="mt-2 flex flex-wrap justify-end gap-2">
                       {d.verificationStatus !== "approved" ? (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => void verifyDocumentItem(d.id, "approved")}
-                          className="h-8 px-1 text-[10px]"
+                          className="h-8 px-2 text-xs"
                           disabled={itemActionLoadingKey !== null}
                         >
                           {itemActionLoadingKey === `doc-${d.id}-approved` ? (
@@ -1228,15 +1283,13 @@ const VendorDetails = () => {
                           )}
                           <span className="ml-1">Approve</span>
                         </Button>
-                      ) : (
-                        <div />
-                      )}
+                      ) : null}
                       {d.verificationStatus !== "rejected" ? (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => openItemRejectDialog("doc", d.id)}
-                          className="h-8 px-1 text-[10px]"
+                          className="h-8 px-2 text-xs"
                           disabled={itemActionLoadingKey !== null}
                         >
                           {itemActionLoadingKey === `doc-${d.id}-rejected` ? (
@@ -1246,14 +1299,12 @@ const VendorDetails = () => {
                           )}
                           <span className="ml-1">Reject</span>
                         </Button>
-                      ) : (
-                        <div />
-                      )}
+                      ) : null}
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => previewDoc(d.fileUrl, d.documentType)}
-                        className="h-8 px-1 text-[10px]"
+                        className="h-8 px-2 text-xs"
                       >
                         <Eye className="h-3 w-3" />
                         <span className="ml-1">Preview</span>
@@ -1293,101 +1344,53 @@ const VendorDetails = () => {
                 <div className="space-y-2">
                   {bankAccounts.map((bank) => (
                     <div key={bank.id} className="rounded-lg border border-border p-3">
-                      {/* Desktop: full details with icon buttons */}
-                      <div className="hidden sm:block">
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <Detail label="Account holder" value={bank.accountHolderName} />
-                          <Detail label="Bank" value={bank.bankName} />
-                          <Detail label="Account number" value={bank.accountNumber} />
-                          <Detail label="IFSC" value={bank.ifscCode} />
-                        </div>
-                        <div className="mt-3 flex items-center justify-between">
-                          <div className="inline-flex items-center gap-2 rounded-md bg-success-soft px-3 py-2 text-xs font-medium text-success">
-                            <ShieldCheck className="h-4 w-4" /> Bank verification {bank.verificationStatus.replace("_", " ")}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {bank.verificationStatus !== "approved" && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => void verifyBankItem(bank.id, "approved")}
-                                className="h-8 w-8"
-                                aria-label="Approve bank account"
-                                disabled={itemActionLoadingKey !== null}
-                              >
-                                {itemActionLoadingKey === `bank-${bank.id}-approved` ? (
-                                  <Loader2 className="h-4 w-4 animate-spin text-success" />
-                                ) : (
-                                  <CheckCircle2 className="h-4 w-4 text-success" />
-                                )}
-                              </Button>
-                            )}
-                            {bank.verificationStatus !== "rejected" && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openItemRejectDialog("bank", bank.id)}
-                                className="h-8 w-8"
-                                aria-label="Reject bank account"
-                                disabled={itemActionLoadingKey !== null}
-                              >
-                                {itemActionLoadingKey === `bank-${bank.id}-rejected` ? (
-                                  <Loader2 className="h-4 w-4 animate-spin text-destructive" />
-                                ) : (
-                                  <XCircle className="h-4 w-4 text-destructive" />
-                                )}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
+                      <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 sm:gap-4">
+                        <Detail label="Account holder" value={bank.accountHolderName} />
+                        <Detail label="Bank" value={bank.bankName} />
+                        <Detail label="Account number" value={bank.accountNumber} />
+                        <Detail label="IFSC" value={bank.ifscCode} />
                       </div>
-                      {/* Mobile: compact layout with labeled buttons */}
-                      <div className="sm:hidden">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                            <ShieldCheck className="h-4 w-4" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start gap-2">
-                              <p className="text-sm font-medium leading-tight flex-1">{bank.bankName}</p>
-                              <StatusBadge status={bank.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} className="text-[10px] px-2 py-0.5 shrink-0" />
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">{bank.accountHolderName}</p>
-                            <p className="text-xs text-muted-foreground">···{bank.accountNumber.slice(-4)}</p>
-                          </div>
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        <div className="inline-flex min-w-0 items-center gap-2 rounded-md bg-success-soft px-2.5 py-1.5 text-xs font-medium text-success sm:px-3 sm:py-2">
+                          <ShieldCheck className="h-4 w-4 shrink-0" />
+                          <span className="truncate">Bank verification {bank.verificationStatus.replace("_", " ")}</span>
                         </div>
-                        <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div className="flex shrink-0 items-center gap-1">
                           {bank.verificationStatus !== "approved" && (
+                            <IconTooltip label="Approve bank account">
                             <Button
-                              variant="outline"
-                              size="sm"
+                              variant="ghost"
+                              size="icon"
                               onClick={() => void verifyBankItem(bank.id, "approved")}
-                              className="h-8 px-1 text-[10px]"
+                              className="h-8 w-8"
+                              aria-label="Approve bank account"
                               disabled={itemActionLoadingKey !== null}
                             >
                               {itemActionLoadingKey === `bank-${bank.id}-approved` ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin text-success" />
                               ) : (
-                                <CheckCircle2 className="h-3 w-3 text-success" />
+                                <CheckCircle2 className="h-4 w-4 text-success" />
                               )}
-                              <span className="ml-1">Approve</span>
                             </Button>
+                            </IconTooltip>
                           )}
                           {bank.verificationStatus !== "rejected" && (
+                            <IconTooltip label="Reject bank account">
                             <Button
-                              variant="outline"
-                              size="sm"
+                              variant="ghost"
+                              size="icon"
                               onClick={() => openItemRejectDialog("bank", bank.id)}
-                              className="h-8 px-1 text-[10px]"
+                              className="h-8 w-8"
+                              aria-label="Reject bank account"
                               disabled={itemActionLoadingKey !== null}
                             >
                               {itemActionLoadingKey === `bank-${bank.id}-rejected` ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin text-destructive" />
                               ) : (
-                                <XCircle className="h-3 w-3 text-destructive" />
+                                <XCircle className="h-4 w-4 text-destructive" />
                               )}
-                              <span className="ml-1">Reject</span>
                             </Button>
+                            </IconTooltip>
                           )}
                         </div>
                       </div>
@@ -1544,77 +1547,26 @@ const VendorDetails = () => {
               <Input
                 value={equipmentSearch}
                 onChange={(e) => setEquipmentSearch(e.target.value)}
-                placeholder="Search equipment by name or status"
+                placeholder="Search equipment"
                 className="h-11 rounded-xl pl-9"
                 aria-label="Search equipment listings"
               />
             </div>
 
-            <div className="space-y-2">
-
+            <div className="space-y-2.5">
               {equipmentPageItems.map((p) => (
-
-                <div key={p.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-
-                  <div className="flex items-center gap-2">
-
-                    <Package className="h-4 w-4 text-primary" />
-
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium">{p.listingTitle}</p>
-                        {p.listingStatus === "active" || p.listingStatus === "approved" ? (
-                          <Badge variant="outline" className="border-success text-success bg-success/10 text-[10px] h-4 px-1.5 py-0 font-medium leading-none">Active</Badge>
-                        ) : (
-                          <Badge variant="outline" className="border-muted-foreground/30 text-muted-foreground bg-muted/50 text-[10px] h-4 px-1.5 py-0 font-medium leading-none">
-                            {p.listingStatus ? p.listingStatus.charAt(0).toUpperCase() + p.listingStatus.slice(1).replace('_', ' ') : "Inactive"}
-                          </Badge>
-                        )}
-                        {p.favoriteCount > 0 && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="inline-block cursor-default">
-                                  <Badge variant="outline" className="border-rose-200 text-rose-600 bg-rose-50 text-[10px] h-4 px-1.5 py-0 font-medium leading-none dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400">
-                                    ❤️ {p.favoriteCount}
-                                  </Badge>
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="top">
-                                <p>Favorited by {p.favoriteCount} {p.favoriteCount === 1 ? 'customer' : 'customers'}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                      </div>
-                      {p.isChemical ? (
-                        (() => {
-                          const pricing = getChemPricing(p.productId);
-                          if (!pricing) {
-                            return <p className="text-xs text-muted-foreground mt-0.5">Price not set</p>;
-                          }
-                          return (
-                            <ChemPriceDisclosure label={pricing.label} count={pricing.count} sizes={pricing.sizes} />
-                          );
-                        })()
-                      ) : (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Daily rate: ₹{p.dailyRent ?? 0}
-                        </p>
-                      )}
-                    </div>
-
-                  </div>
-
-                  <div className="text-right">
-                    <p className="text-sm font-mono font-medium">Qty {inventoryMap[p.id]?.totalQuantity ?? p.availableQuantity}</p>
-                    {inventoryMap[p.id] && (
-                      <p className="text-[10px] text-muted-foreground">{inventoryMap[p.id].availableQuantity} available</p>
-                    )}
-                  </div>
-
-                </div>
-
+                <VendorListingCard
+                  key={p.id}
+                  listing={p}
+                  catalogImages={productMap[p.productId]?.images}
+                  price={renderListingPrice(p)}
+                  qty={
+                    <ListingQty
+                      total={inventoryMap[p.id]?.totalQuantity ?? p.availableQuantity}
+                      available={inventoryMap[p.id] ? inventoryMap[p.id].availableQuantity : undefined}
+                    />
+                  }
+                />
               ))}
 
               {equipmentListings.length === 0 && (
@@ -1632,14 +1584,12 @@ const VendorDetails = () => {
             </div>
 
             {equipmentListings.length > 0 && (
-              <ListingPager
+              <ListPager
+                className="pt-3"
                 page={safeEquipmentPage}
                 totalPages={equipmentTotalPages}
-                total={equipmentListings.length}
-                noun={equipmentListings.length === 1 ? "listing" : "listings"}
-                hasSearch={equipmentSearch.trim().length > 0}
-                onPrevious={() => setEquipmentPage((p) => Math.max(1, p - 1))}
-                onNext={() => setEquipmentPage((p) => Math.min(equipmentTotalPages, p + 1))}
+                summary={`Page ${safeEquipmentPage} of ${equipmentTotalPages} · ${equipmentListings.length} ${equipmentListings.length === 1 ? "listing" : "listings"}${equipmentSearch.trim().length > 0 ? " matching search" : ""}`}
+                onPageChange={setEquipmentPage}
               />
             )}
 
@@ -1672,87 +1622,34 @@ const VendorDetails = () => {
               <Input
                 value={chemicalSearch}
                 onChange={(e) => setChemicalSearch(e.target.value)}
-                placeholder="Search chemicals by name or status"
+                placeholder="Search chemicals"
                 className="h-11 rounded-xl pl-9"
                 aria-label="Search chemical listings"
               />
             </div>
 
-            <div className="space-y-2">
-
+            <div className="space-y-2.5">
               {chemicalPageItems.map((p) => (
-
-                <div key={p.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-
-                  <div className="flex items-center gap-2">
-
-                    <FlaskConical className="h-4 w-4 text-primary" />
-
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium">{p.listingTitle}</p>
-                        {p.listingStatus === "active" || p.listingStatus === "approved" ? (
-                          <Badge variant="outline" className="border-success text-success bg-success/10 text-[10px] h-4 px-1.5 py-0 font-medium leading-none">Active</Badge>
-                        ) : (
-                          <Badge variant="outline" className="border-muted-foreground/30 text-muted-foreground bg-muted/50 text-[10px] h-4 px-1.5 py-0 font-medium leading-none">
-                            {p.listingStatus ? p.listingStatus.charAt(0).toUpperCase() + p.listingStatus.slice(1).replace('_', ' ') : "Inactive"}
-                          </Badge>
-                        )}
-                        {p.favoriteCount > 0 && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="inline-block cursor-default">
-                                  <Badge variant="outline" className="border-rose-200 text-rose-600 bg-rose-50 text-[10px] h-4 px-1.5 py-0 font-medium leading-none dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400">
-                                    ❤️ {p.favoriteCount}
-                                  </Badge>
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="top">
-                                <p>Favorited by {p.favoriteCount} {p.favoriteCount === 1 ? 'customer' : 'customers'}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                      </div>
-                      {p.isChemical ? (
-                        (() => {
-                          const pricing = getChemPricing(p.productId);
-                          if (!pricing) {
-                            return <p className="text-xs text-muted-foreground mt-0.5">Price not set</p>;
-                          }
-                          return (
-                            <ChemPriceDisclosure label={pricing.label} count={pricing.count} sizes={pricing.sizes} />
-                          );
-                        })()
-                      ) : (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Daily rate: ₹{p.dailyRent ?? 0}
-                        </p>
-                      )}
-                    </div>
-
-                  </div>
-
-                  <div className="text-right shrink-0">
-                    {inventoryMap[p.id]?.source === "variant" && inventoryMap[p.id]?.sizes && inventoryMap[p.id].sizes!.length > 0 ? (
+                <VendorListingCard
+                  key={p.id}
+                  listing={p}
+                  catalogImages={productMap[p.productId]?.images}
+                  price={renderListingPrice(p)}
+                  qty={
+                    inventoryMap[p.id]?.source === "variant" && inventoryMap[p.id]?.sizes && inventoryMap[p.id].sizes!.length > 0 ? (
                       <ChemStockDisclosure
                         total={inventoryMap[p.id].totalQuantity}
                         available={inventoryMap[p.id].availableQuantity}
                         sizes={inventoryMap[p.id].sizes!}
                       />
                     ) : (
-                      <>
-                        <p className="text-sm font-mono font-medium">Qty {inventoryMap[p.id]?.totalQuantity ?? p.availableQuantity}</p>
-                        {inventoryMap[p.id] && (
-                          <p className="text-[10px] text-muted-foreground">{inventoryMap[p.id].availableQuantity} available</p>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                </div>
-
+                      <ListingQty
+                        total={inventoryMap[p.id]?.totalQuantity ?? p.availableQuantity}
+                        available={inventoryMap[p.id] ? inventoryMap[p.id].availableQuantity : undefined}
+                      />
+                    )
+                  }
+                />
               ))}
 
               {chemicalListings.length === 0 && (
@@ -1770,14 +1667,12 @@ const VendorDetails = () => {
             </div>
 
             {chemicalListings.length > 0 && (
-              <ListingPager
+              <ListPager
+                className="pt-3"
                 page={safeChemicalPage}
                 totalPages={chemicalTotalPages}
-                total={chemicalListings.length}
-                noun={chemicalListings.length === 1 ? "listing" : "listings"}
-                hasSearch={chemicalSearch.trim().length > 0}
-                onPrevious={() => setChemicalPage((p) => Math.max(1, p - 1))}
-                onNext={() => setChemicalPage((p) => Math.min(chemicalTotalPages, p + 1))}
+                summary={`Page ${safeChemicalPage} of ${chemicalTotalPages} · ${chemicalListings.length} ${chemicalListings.length === 1 ? "listing" : "listings"}${chemicalSearch.trim().length > 0 ? " matching search" : ""}`}
+                onPageChange={setChemicalPage}
               />
             )}
 
@@ -1969,13 +1864,13 @@ const VendorDetails = () => {
 
 
 
-const Detail = ({ label, value, icon }: { label: string; value: string; icon?: ReactNode }) => (
+const Detail = ({ label, value, icon, className }: { label: string; value: string; icon?: ReactNode; className?: string }) => (
 
-  <div>
+  <div className={["min-w-0", className].filter(Boolean).join(" ")}>
 
-    <p className="mb-1 text-xs text-muted-foreground">{label}</p>
+    <p className="mb-0.5 text-[11px] leading-none text-muted-foreground sm:mb-1 sm:text-xs">{label}</p>
 
-    <p className="inline-flex items-center gap-1.5 font-medium">
+    <p className="inline-flex max-w-full items-center gap-1.5 break-all text-sm font-medium leading-snug">
 
       {icon}
 

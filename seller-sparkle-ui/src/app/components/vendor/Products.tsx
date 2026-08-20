@@ -1001,15 +1001,15 @@ const Products = () => {
       </Card>
       )}
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
-        <DialogContent className="flex max-h-[min(92dvh,900px)] w-[calc(100vw-1.5rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
-          <DialogHeader className="shrink-0 space-y-1 border-b border-border px-5 py-4 pr-12 text-left sm:px-6">
+        <DialogContent className="flex max-h-[min(92dvh,900px)] w-[calc(100vw-1rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:w-[calc(100vw-1.5rem)] sm:max-w-2xl">
+          <DialogHeader className="shrink-0 space-y-1 border-b border-border px-4 py-3.5 pr-12 text-left sm:px-6 sm:py-4">
             <DialogTitle>{products.some((p) => p.id === editing?.id) ? "Edit listing" : "New listing"}</DialogTitle>
             <DialogDescription>
               Pricing and catalog name are set by Admin. Update quantity and status for your listing.
             </DialogDescription>
           </DialogHeader>
           {editing && (
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:space-y-5 sm:px-6 sm:py-5">
               <section className="space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Catalog</p>
                 <FormGrid cols={2}>
@@ -1131,11 +1131,11 @@ const Products = () => {
 
               {activeTab === "equipment" && (
                 <section className="space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                    <p className="min-w-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Admin pricing
                     </p>
-                    <Badge variant="secondary" className="font-normal">
+                    <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">
                       <Shield className="mr-1 h-3 w-3" />
                       Read-only
                     </Badge>
@@ -1210,11 +1210,11 @@ const Products = () => {
 
               {activeTab === "chemical" && (
                 <section className="space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                    <p className="min-w-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Admin sizing & pricing
                     </p>
-                    <Badge variant="secondary" className="font-normal">
+                    <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">
                       <Shield className="mr-1 h-3 w-3" />
                       Read-only
                     </Badge>
@@ -1381,11 +1381,11 @@ const Products = () => {
               </section>
             </div>
           )}
-          <DialogFooter className="shrink-0 border-t border-border bg-background px-5 py-3 sm:px-6">
-            <Button variant="outline" onClick={() => setEditing(null)} disabled={busy}>
+          <DialogFooter className="mt-0 shrink-0 border-t border-border bg-background px-4 py-3 sm:px-6">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setEditing(null)} disabled={busy}>
               Cancel
             </Button>
-            <Button onClick={() => void save()} disabled={busy}>
+            <Button className="w-full sm:w-auto" onClick={() => void save()} disabled={busy}>
               {busy ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...

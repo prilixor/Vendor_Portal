@@ -35,7 +35,8 @@ public sealed record VendorDocumentDto(
     string? DocumentNumber,
     string VerificationStatus,
     string? RejectionReason,
-    DateTimeOffset? VerifiedAt);
+    DateTimeOffset? VerifiedAt,
+    string? OriginalFileName = null);
 
 public sealed record VendorVerificationRequestDto(
     string Id,

@@ -1,4 +1,5 @@
-import { useId } from "react";
+import { useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { brandArtSrc, isBrandArtReady, subscribeBrandArt } from "@/app/helpers/brandArt";
 import { cn } from "@/app/helpers/utils";
 
 type PageLoaderSize = "sm" | "md" | "lg";
@@ -146,20 +147,7 @@ export function PageLoader({
         </svg>
 
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="bm-loader-breathe relative overflow-hidden rounded-2xl bg-white p-1.5 shadow-[0_10px_28px_-12px_hsl(var(--primary)/0.55)] ring-1 ring-black/5 dark:ring-white/15">
-            <img
-              src={artwork === "logo" ? "/branding/blinksmed-logo.png" : "/branding/blinksmed-mark.png"}
-              alt=""
-              width={logo}
-              height={logo}
-              className="block object-contain object-center"
-              decoding="async"
-            />
-            <span
-              className="bm-loader-sheen pointer-events-none absolute inset-y-[-20%] left-0 w-1/3 bg-gradient-to-r from-transparent via-white/55 to-transparent"
-              aria-hidden
-            />
-          </div>
+          <LoaderBrandPlate artwork={artwork} size={logo} />
         </div>
       </div>
 
@@ -176,6 +164,49 @@ export function PageLoader({
             ))}
           </div>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LoaderBrandPlate({ artwork, size }: { artwork: "mark" | "logo"; size: number }) {
+  const src = brandArtSrc(artwork);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const preloaded = useSyncExternalStore(subscribeBrandArt, () => isBrandArtReady(artwork), () => false);
+  const [painted, setPainted] = useState(preloaded);
+  const ready = preloaded || painted;
+
+  useLayoutEffect(() => {
+    const el = imgRef.current;
+    if (el?.complete && el.naturalWidth > 0) setPainted(true);
+  }, [src, preloaded]);
+
+  return (
+    <div
+      className={cn(
+        "bm-loader-breathe relative overflow-hidden rounded-2xl p-1.5",
+        ready
+          ? "bg-white shadow-[0_10px_28px_-12px_hsl(var(--primary)/0.55)] ring-1 ring-black/5 dark:ring-white/15"
+          : "bg-transparent shadow-none ring-0",
+      )}
+    >
+      <img
+        ref={imgRef}
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        className={cn("block object-contain object-center", ready ? "opacity-100" : "opacity-0")}
+        decoding="sync"
+        loading="eager"
+        fetchPriority="high"
+        onLoad={() => setPainted(true)}
+      />
+      {ready ? (
+        <span
+          className="bm-loader-sheen pointer-events-none absolute inset-y-[-20%] left-0 w-1/3 bg-gradient-to-r from-transparent via-white/55 to-transparent"
+          aria-hidden
+        />
       ) : null}
     </div>
   );

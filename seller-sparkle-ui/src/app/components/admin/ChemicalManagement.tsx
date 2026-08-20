@@ -34,6 +34,64 @@ const CHEMICAL_FORM_STEPS = ["Basic", "Specs", "Packaging", "Media"] as const;
 
 type ChemSize = { sizeValue: number; sizeUnit: string; buyPrice: number };
 
+function readVariantSku(v: { sku?: string; Sku?: string }) {
+  return String(v.sku ?? v.Sku ?? "").trim();
+}
+
+function buildChemicalSku(
+  productName: string,
+  sizeValue: number,
+  sizeUnit: string,
+  used: Set<string>,
+) {
+  const prefix = (productName.replace(/[^a-zA-Z0-9]+/g, "").slice(0, 6) || "CHEM").toUpperCase();
+  const size = String(sizeValue ?? "").replace(".", "P");
+  const unit = (sizeUnit || "U").replace(/[^a-zA-Z0-9]+/g, "").toUpperCase() || "U";
+  const base = `${prefix}-${size}${unit}`;
+  if (!used.has(base)) return base;
+  let n = 2;
+  while (used.has(`${base}-${n}`)) n += 1;
+  return `${base}-${n}`;
+}
+
+function readNum(...vals: unknown[]) {
+  for (const val of vals) {
+    if (val === "" || val == null) continue;
+    const n = typeof val === "number" ? val : Number(val);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+}
+
+function bindChemicalVariants(
+  variants: Array<Record<string, unknown>> | undefined,
+  productName: string,
+) {
+  const used = new Set<string>();
+  return (variants || []).map((v) => {
+    const sizeValue = readNum(v.sizeValue, v.SizeValue);
+    const sizeUnit = String(v.sizeUnit ?? v.SizeUnit ?? "Ltr");
+    const vendorPrice = readNum(v.vendorPrice, v.VendorPrice);
+    const buyPrice = readNum(v.buyPrice, v.BuyPrice);
+    let sku = readVariantSku(v);
+    if (!sku) sku = buildChemicalSku(productName, sizeValue, sizeUnit, used);
+    used.add(sku);
+    return {
+      id: typeof v.id === "string" ? v.id : typeof v.Id === "string" ? v.Id : undefined,
+      productId: typeof v.productId === "string" ? v.productId : undefined,
+      sku,
+      sizeValue,
+      sizeUnit,
+      vendorPrice,
+      buyPrice,
+      isActive: (v.isActive ?? v.IsActive ?? true) as boolean,
+    };
+  });
+}
+
+const packNumClass =
+  "h-9 w-full min-w-0 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
 /**
  * Chemical buy price shown as a tap/click disclosure. Chemicals price per packaging size
  * (variant), so the product-level buy_price is 0 — instead we show the range across the
@@ -508,7 +566,7 @@ const ChemicalManagement = () => {
         baseUnit: product.baseUnit || "Kg",
         sdsDocumentUrl: product.sdsDocumentUrl || "",
         coaDocumentUrl: product.coaDocumentUrl || "",
-        variants: product.variants || [],
+        variants: bindChemicalVariants(product.variants, product.productName),
       });
       setProductImages(product.images || []);
       setNewImageUrl("");
@@ -724,7 +782,7 @@ const ChemicalManagement = () => {
         baseUnit: productForm.baseUnit?.trim() || "Kg",
         sdsDocumentUrl: productForm.sdsDocumentUrl?.trim() || undefined,
         coaDocumentUrl: productForm.coaDocumentUrl?.trim() || undefined,
-        variants: productForm.variants || [],
+        variants: bindChemicalVariants(productForm.variants, productForm.productName),
         vendorDailyRent: productForm.vendorDailyRent || 0,
         vendorMonthlyRent: productForm.vendorMonthlyRent || 0,
         vendorSecurityDeposit: productForm.vendorSecurityDeposit || 0,
@@ -746,7 +804,7 @@ const ChemicalManagement = () => {
           baseUnit: updated.baseUnit || "Kg",
           sdsDocumentUrl: updated.sdsDocumentUrl || "",
           coaDocumentUrl: updated.coaDocumentUrl || "",
-          variants: updated.variants || productForm.variants || [],
+          variants: bindChemicalVariants(updated.variants || productForm.variants, updated.productName || productForm.productName),
         });
         await loadData();
       } else {
@@ -780,7 +838,7 @@ const ChemicalManagement = () => {
           baseUnit: created.baseUnit || payload.baseUnit || "Kg",
           sdsDocumentUrl: created.sdsDocumentUrl || payload.sdsDocumentUrl || "",
           coaDocumentUrl: created.coaDocumentUrl || payload.coaDocumentUrl || "",
-          variants: created.variants || payload.variants || [],
+          variants: bindChemicalVariants(created.variants || payload.variants, created.productName || payload.productName),
         });
         setProductImages(created.images || []);
         setProductFormStep(3);
@@ -930,7 +988,7 @@ const ChemicalManagement = () => {
       <PageLoaderSlot />
     ) : (
       <>
-      <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
+      <div className="max-w-full overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
           <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
@@ -1116,7 +1174,7 @@ const ChemicalManagement = () => {
             {loading && categories.length === 0 ? (
               <PageLoaderSlot />
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border -mx-4 sm:mx-0">
+              <div className="max-w-full overflow-x-auto rounded-lg border border-border">
                 <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
                   <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
                     <tr>
@@ -1712,33 +1770,38 @@ const ChemicalManagement = () => {
             )}
 
             {productFormStep === 2 && (
-                <div className={`space-y-3 rounded-lg border p-4 bg-indigo-50/30 dark:bg-indigo-950/10 ${fieldErrors.variants ? "border-destructive" : "border-indigo-100 dark:border-indigo-950"}`}>
-                  <div className="flex items-center justify-between border-b pb-2 mb-3 gap-3">
-                    <div>
+                <div className={`space-y-3 rounded-lg border p-3 sm:p-4 bg-indigo-50/30 dark:bg-indigo-950/10 ${fieldErrors.variants ? "border-destructive" : "border-indigo-100 dark:border-indigo-950"}`}>
+                  <div className="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
                       <h4 className="font-semibold text-sm text-indigo-700 dark:text-indigo-400">
                         Packaging sizes & pricing <span className="text-destructive">*</span>
                       </h4>
-                      <p className="text-xs text-muted-foreground">Add at least one size (e.g. 500 ml, 1 L) with buy price. Same UI for create and edit.</p>
+                      <p className="text-xs text-muted-foreground">
+                        Size value is the pack amount (e.g. <span className="font-medium text-foreground">0.5</span> + Ltr = 0.5 litre). Add buy price for each size.
+                      </p>
                       <FieldError message={fieldErrors.variants} />
                     </div>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400"
+                      className="w-full shrink-0 border-indigo-300 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400 sm:w-auto"
                       onClick={() => {
-                        const nextIndex = (productForm.variants?.length || 0) + 1;
+                        const existing = productForm.variants || [];
+                        const used = new Set(existing.map((x) => readVariantSku(x)).filter(Boolean));
+                        const sizeValue = 1;
+                        const sizeUnit = productForm.baseUnit || "Ltr";
                         const newVar = {
-                          sku: `${productForm.productName.substring(0, 3).toUpperCase()}-VAR-${nextIndex}-${Date.now().toString().slice(-4)}`,
-                          sizeValue: 1,
-                          sizeUnit: productForm.baseUnit || "kg",
+                          sku: buildChemicalSku(productForm.productName || "CHEM", sizeValue, sizeUnit, used),
+                          sizeValue,
+                          sizeUnit,
                           vendorPrice: 0,
                           buyPrice: 0,
                           isActive: true
                         };
                         setProductForm({
                           ...productForm,
-                          variants: [...(productForm.variants || []), newVar]
+                          variants: [...existing, newVar]
                         });
                         clearFieldError("variants");
                       }}
@@ -1752,124 +1815,133 @@ const ChemicalManagement = () => {
                       No sizing variants configured yet. Click "Add Size Row" to start.
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-border bg-indigo-100/50 dark:bg-indigo-950/20 text-muted-foreground">
-                            <th className="p-2 font-semibold">SKU</th>
-                            <th className="p-2 font-semibold w-24">Size Value</th>
-                            <th className="p-2 font-semibold w-24">Size Unit</th>
-                            <th className="p-2 font-semibold w-28">Vendor Price (Payout)</th>
-                            <th className="p-2 font-semibold w-28">Customer Price (Buy)</th>
-                            <th className="p-2 font-semibold w-20 text-center">Active</th>
-                            <th className="p-2 font-semibold w-12"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {productForm.variants.map((v, idx) => (
-                            <tr key={idx} className="border-b border-border hover:bg-indigo-50/20 dark:hover:bg-indigo-950/5">
-                              <td className="p-2">
-                                <Input
-                                  value={v.sku}
-                                  onChange={(e) => {
-                                    const updated = [...(productForm.variants || [])];
-                                    updated[idx] = { ...updated[idx], sku: e.target.value };
-                                    setProductForm({ ...productForm, variants: updated });
-                                  }}
-                                  className="h-8 py-1 text-xs"
-                                  placeholder="SKU"
-                                />
-                              </td>
-                              <td className="p-2">
-                                <Input
-                                  type="number"
-                                  value={v.sizeValue}
-                                  onChange={(e) => {
-                                    const updated = [...(productForm.variants || [])];
-                                    updated[idx] = { ...updated[idx], sizeValue: Number(e.target.value) || 0 };
-                                    setProductForm({ ...productForm, variants: updated });
-                                  }}
-                                  className="h-8 py-1 text-xs"
-                                />
-                              </td>
-                              <td className="p-2">
-                                <Select
-                                  value={v.sizeUnit}
-                                  onValueChange={(val) => {
-                                    const updated = [...(productForm.variants || [])];
-                                    updated[idx] = { ...updated[idx], sizeUnit: val };
-                                    setProductForm({ ...productForm, variants: updated });
-                                  }}
-                                >
-                                  <SelectTrigger className="h-8 text-xs py-1">
-                                    <SelectValue placeholder="Unit" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="kg">kg</SelectItem>
-                                    <SelectItem value="g">g</SelectItem>
-                                    <SelectItem value="Ltr">Ltr</SelectItem>
-                                    <SelectItem value="ml">ml</SelectItem>
-                                    <SelectItem value="mg">mg</SelectItem>
-                                    <SelectItem value="Pack">Pack</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </td>
-                              <td className="p-2">
-                                <Input
-                                  type="number"
-                                  value={v.vendorPrice}
-                                  onChange={(e) => {
-                                    const updated = [...(productForm.variants || [])];
-                                    updated[idx] = { ...updated[idx], vendorPrice: Number(e.target.value) || 0 };
-                                    setProductForm({ ...productForm, variants: updated });
-                                  }}
-                                  className="h-8 py-1 text-xs"
-                                  placeholder="Payout"
-                                />
-                              </td>
-                              <td className="p-2">
-                                <Input
-                                  type="number"
-                                  value={v.buyPrice}
-                                  onChange={(e) => {
-                                    const updated = [...(productForm.variants || [])];
-                                    updated[idx] = { ...updated[idx], buyPrice: Number(e.target.value) || 0 };
-                                    setProductForm({ ...productForm, variants: updated });
-                                  }}
-                                  className="h-8 py-1 text-xs"
-                                  placeholder="Customer Price"
-                                />
-                              </td>
-                              <td className="p-2 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={v.isActive}
-                                  onChange={(e) => {
-                                    const updated = [...(productForm.variants || [])];
-                                    updated[idx] = { ...updated[idx], isActive: e.target.checked };
-                                    setProductForm({ ...productForm, variants: updated });
-                                  }}
-                                  className="h-4 w-4 accent-indigo-600"
-                                />
-                              </td>
-                              <td className="p-2 text-center">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive"
-                                  onClick={() => {
-                                    const updated = (productForm.variants || []).filter((_, i) => i !== idx);
-                                    setProductForm({ ...productForm, variants: updated });
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="space-y-3">
+                      {productForm.variants.map((v, idx) => (
+                        <div
+                          key={v.id || idx}
+                          className="space-y-3 rounded-xl border border-border bg-card p-3"
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <Label className="text-[11px] text-muted-foreground">SKU</Label>
+                              <Input
+                                value={v.sku ?? ""}
+                                onChange={(e) => {
+                                  const updated = [...(productForm.variants || [])];
+                                  updated[idx] = { ...updated[idx], sku: e.target.value };
+                                  setProductForm({ ...productForm, variants: updated });
+                                }}
+                                className="h-9 font-mono text-xs text-sky-700 dark:text-sky-300"
+                                placeholder="ACE-0P5LTR"
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="mt-5 h-9 w-9 shrink-0 text-destructive"
+                              onClick={() => {
+                                const updated = (productForm.variants || []).filter((_, i) => i !== idx);
+                                setProductForm({ ...productForm, variants: updated });
+                              }}
+                              aria-label="Remove size"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <Label className="text-[11px] text-muted-foreground">Size value</Label>
+                              <Input
+                                type="number"
+                                inputMode="decimal"
+                                step="any"
+                                min={0}
+                                value={v.sizeValue ?? ""}
+                                onChange={(e) => {
+                                  const updated = [...(productForm.variants || [])];
+                                  updated[idx] = { ...updated[idx], sizeValue: e.target.value === "" ? 0 : Number(e.target.value) };
+                                  setProductForm({ ...productForm, variants: updated });
+                                }}
+                                className={packNumClass}
+                                placeholder="0.5"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[11px] text-muted-foreground">Unit</Label>
+                              <Select
+                                value={v.sizeUnit}
+                                onValueChange={(val) => {
+                                  const updated = [...(productForm.variants || [])];
+                                  updated[idx] = { ...updated[idx], sizeUnit: val };
+                                  setProductForm({ ...productForm, variants: updated });
+                                }}
+                              >
+                                <SelectTrigger className="h-9 text-xs">
+                                  <SelectValue placeholder="Unit" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="kg">kg</SelectItem>
+                                  <SelectItem value="g">g</SelectItem>
+                                  <SelectItem value="Ltr">Ltr</SelectItem>
+                                  <SelectItem value="ml">ml</SelectItem>
+                                  <SelectItem value="mg">mg</SelectItem>
+                                  <SelectItem value="Pack">Pack</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[11px] text-muted-foreground">Vendor payout ₹</Label>
+                              <Input
+                                type="number"
+                                inputMode="decimal"
+                                step="any"
+                                min={0}
+                                value={v.vendorPrice ?? ""}
+                                onChange={(e) => {
+                                  const updated = [...(productForm.variants || [])];
+                                  updated[idx] = { ...updated[idx], vendorPrice: e.target.value === "" ? 0 : Number(e.target.value) };
+                                  setProductForm({ ...productForm, variants: updated });
+                                }}
+                                className={packNumClass}
+                                placeholder="60"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[11px] text-muted-foreground">Customer buy ₹</Label>
+                              <Input
+                                type="number"
+                                inputMode="decimal"
+                                step="any"
+                                min={0}
+                                value={v.buyPrice ?? ""}
+                                onChange={(e) => {
+                                  const updated = [...(productForm.variants || [])];
+                                  updated[idx] = { ...updated[idx], buyPrice: e.target.value === "" ? 0 : Number(e.target.value) };
+                                  setProductForm({ ...productForm, variants: updated });
+                                }}
+                                className={packNumClass}
+                                placeholder="75"
+                              />
+                            </div>
+                          </div>
+
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={v.isActive}
+                              onChange={(e) => {
+                                const updated = [...(productForm.variants || [])];
+                                updated[idx] = { ...updated[idx], isActive: e.target.checked };
+                                setProductForm({ ...productForm, variants: updated });
+                              }}
+                              className="h-4 w-4 accent-indigo-600"
+                            />
+                            Active
+                          </label>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -1895,15 +1967,21 @@ const ChemicalManagement = () => {
               />
             )}
           </div>
-          <DialogFooter className="shrink-0 mt-0 border-t border-border bg-background px-4 py-3 sm:px-6 sm:justify-between">
-            <Button variant="outline" onClick={() => setProductDialogOpen(false)} disabled={loading}>
+          <DialogFooter className="mt-0 shrink-0 flex-row flex-wrap items-center gap-2 border-t border-border bg-background px-4 py-3 sm:px-6 sm:justify-between">
+            <Button
+              variant="outline"
+              className="min-w-0 flex-1 sm:flex-none"
+              onClick={() => setProductDialogOpen(false)}
+              disabled={loading}
+            >
               {editingProduct ? "Close" : "Cancel"}
             </Button>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex min-w-0 flex-[2] gap-2 sm:flex-none">
               {productFormStep > 0 && (
                 <Button
                   type="button"
                   variant="outline"
+                  className="min-w-0 flex-1 sm:flex-none"
                   disabled={loading}
                   onClick={() => setProductFormStep((s) => Math.max(0, s - 1))}
                 >
@@ -1914,6 +1992,7 @@ const ChemicalManagement = () => {
                 <Button
                   type="button"
                   variant="outline"
+                  className="min-w-0 flex-1 sm:flex-none"
                   disabled={loading}
                   onClick={() => {
                     if (!validateChemicalStep(productFormStep)) return;
@@ -1924,8 +2003,8 @@ const ChemicalManagement = () => {
                 </Button>
               )}
               {(productFormStep === 2 || (productFormStep === 3 && editingProduct)) && (
-                <Button onClick={saveProduct} disabled={loading}>
-                  {editingProduct ? "Update" : "Create"} Chemical
+                <Button className="min-w-0 flex-1 sm:flex-none" onClick={saveProduct} disabled={loading}>
+                  {editingProduct ? "Update" : "Create"}
                 </Button>
               )}
             </div>

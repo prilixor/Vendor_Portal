@@ -14,6 +14,7 @@ type TablePaginationProps = {
   total: number;
   onPageChange: (page: number) => void;
   label?: string;
+  ariaLabel?: string;
 };
 
 export type PaginationItemValue = number | "ellipsis";
@@ -58,7 +59,14 @@ export function getPaginationItems(
 }
 
 /** Client-side list pagination footer (matches Vendor Inventory / Products). */
-export function TablePagination({ page, pageSize, total, onPageChange, label = "items" }: TablePaginationProps) {
+export function TablePagination({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  label = "items",
+  ariaLabel,
+}: TablePaginationProps) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   if (total === 0) return null;
@@ -67,55 +75,75 @@ export function TablePagination({ page, pageSize, total, onPageChange, label = "
   const to = Math.min(safePage * pageSize, total);
   const items = getPaginationItems(safePage, totalPages);
 
+  const goPrev = () => {
+    if (safePage > 1) onPageChange(safePage - 1);
+  };
+  const goNext = () => {
+    if (safePage < totalPages) onPageChange(safePage + 1);
+  };
+
   return (
-    <div className="mt-4 flex flex-col sm:flex-row items-center justify-between border-t border-border pt-4 gap-4">
-      <p className="text-sm text-muted-foreground whitespace-nowrap">
-        Showing {from} to {to} of {total} {label}
-      </p>
-      <Pagination className="w-auto mx-0">
-        <PaginationContent className="flex-wrap justify-center">
-          <PaginationItem>
-            <PaginationPrevious
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                if (safePage > 1) onPageChange(safePage - 1);
-              }}
-              className={safePage === 1 ? "pointer-events-none opacity-50" : ""}
-            />
-          </PaginationItem>
-          {items.map((item, idx) =>
-            item === "ellipsis" ? (
-              <PaginationItem key={`e-${idx}`} className="hidden sm:flex">
-                <PaginationEllipsis />
-              </PaginationItem>
-            ) : (
-              <PaginationItem key={item} className="hidden sm:block">
-                <PaginationLink
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onPageChange(item);
-                  }}
-                  isActive={safePage === item}
-                >
-                  {item}
-                </PaginationLink>
-              </PaginationItem>
-            ),
-          )}
-          <PaginationItem>
-            <PaginationNext
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                if (safePage < totalPages) onPageChange(safePage + 1);
-              }}
-              className={safePage === totalPages ? "pointer-events-none opacity-50" : ""}
-            />
-          </PaginationItem>
-        </PaginationContent>
-      </Pagination>
+    <div className="mt-4 border-t border-border pt-4 [overflow-anchor:none]">
+      <div className="flex items-center justify-between gap-3 sm:hidden">
+        <PaginationPrevious
+          onClick={goPrev}
+          disabled={safePage === 1}
+          className={safePage === 1 ? "opacity-50" : ""}
+        />
+        <div className="min-w-0 text-center">
+          <p className="text-sm font-medium tabular-nums">
+            Page {safePage} of {totalPages}
+          </p>
+          <p className="text-[11px] text-muted-foreground tabular-nums">
+            {from}–{to} of {total}
+          </p>
+        </div>
+        <PaginationNext
+          onClick={goNext}
+          disabled={safePage === totalPages}
+          className={safePage === totalPages ? "opacity-50" : ""}
+        />
+      </div>
+
+      <div className="hidden sm:flex sm:items-center sm:justify-between sm:gap-4">
+        <p className="text-sm text-muted-foreground whitespace-nowrap">
+          Showing {from} to {to} of {total} {label}
+        </p>
+        <Pagination className="mx-0 w-auto" aria-label={ariaLabel ?? `${label} pagination`}>
+          <PaginationContent className="flex-nowrap">
+            <PaginationItem>
+              <PaginationPrevious
+                onClick={goPrev}
+                disabled={safePage === 1}
+                className={safePage === 1 ? "opacity-50" : ""}
+              />
+            </PaginationItem>
+            {items.map((item, idx) =>
+              item === "ellipsis" ? (
+                <PaginationItem key={`e-${idx}`}>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              ) : (
+                <PaginationItem key={item}>
+                  <PaginationLink
+                    onClick={() => onPageChange(item)}
+                    isActive={safePage === item}
+                  >
+                    {item}
+                  </PaginationLink>
+                </PaginationItem>
+              ),
+            )}
+            <PaginationItem>
+              <PaginationNext
+                onClick={goNext}
+                disabled={safePage === totalPages}
+                className={safePage === totalPages ? "opacity-50" : ""}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      </div>
     </div>
   );
 }

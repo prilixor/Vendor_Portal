@@ -34,6 +34,7 @@ public sealed class AddVendorDocumentRequest : VendorIdRequest
     public string DocumentType { get; set; } = string.Empty;
     public string FileUrl { get; set; } = string.Empty;
     public string? DocumentNumber { get; set; }
+    public string? OriginalFileName { get; set; }
 }
 
 public sealed class DeleteVendorDocumentRequest : VendorIdRequest
@@ -130,7 +131,7 @@ public sealed class AddVendorDocumentEndpoint(IMediator mediator)
 
     public override async Task<Results<Ok<VendorDocumentDto>, ProblemHttpResult>> ExecuteAsync(AddVendorDocumentRequest req, CancellationToken ct)
     {
-        var command = new AddVendorDocumentCommand(req.VendorId, req.DocumentType, req.FileUrl, req.DocumentNumber);
+        var command = new AddVendorDocumentCommand(req.VendorId, req.DocumentType, req.FileUrl, req.DocumentNumber, req.OriginalFileName);
         var result = await mediator.Send(command, ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
