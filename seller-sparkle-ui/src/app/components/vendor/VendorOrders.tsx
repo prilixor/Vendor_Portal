@@ -5,11 +5,12 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListPager } from "@/app/components/shared/ListPager";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, RefreshCw, User } from "lucide-react";
+import { ChevronRight, RefreshCw, User } from "lucide-react";
 import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import {
@@ -410,35 +411,13 @@ const VendorOrders = () => {
                 </div>
               ));
             })()}
-            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-muted-foreground">
-                Page {safePage} of {totalPages} · {formatOrderItemSummary(orderGroupCount, itemCount)}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  aria-label="Previous page"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  aria-label="Next page"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <ListPager
+              className="pt-2"
+              page={safePage}
+              totalPages={totalPages}
+              summary={`Page ${safePage} of ${totalPages} · ${formatOrderItemSummary(orderGroupCount, itemCount)}`}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </Card>

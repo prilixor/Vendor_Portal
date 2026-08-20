@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListPager } from "@/app/components/shared/ListPager";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
@@ -41,6 +42,14 @@ function formatOrderDate(value?: string | null): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value.trim();
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function compactDurationLabel(label?: string | null): string {
+  if (!label?.trim()) return "";
+  return label
+    .replace(/\s*Billing Cycles?/gi, " cycles")
+    .replace(/\s*Billing Cycle/gi, " cycle")
+    .trim();
 }
 
 function formatDateRange(start?: string | null, end?: string | null): string {
@@ -249,7 +258,7 @@ const CustomerOrders = () => {
         <FilterSearchBar
           value={searchInput}
           onChange={setSearchInput}
-          placeholder="Search by order ID, item, or vendor"
+          placeholder="Search by order ID, item, or supplier"
           mobilePlaceholder="Search orders"
           activeCount={appliedFilter === "All" ? 0 : 1}
           onOpenFilters={openFilters}
@@ -285,7 +294,7 @@ const CustomerOrders = () => {
       <p className="text-xs text-muted-foreground">
         Status note: <span className="font-medium">Cancelled</span> means customer cancelled the request.
         {" "}
-        <span className="font-medium">Dispatch failed</span> means no replacement vendor was available.
+        <span className="font-medium">Dispatch failed</span> means no replacement supplier was available.
       </p>
 
       {isLoading ? (
@@ -346,6 +355,7 @@ const CustomerOrders = () => {
                     <div className="space-y-3 sm:space-y-4">
                       {group.items.map((o) => {
                         const imageUrl = resolveItemImageUrl(o);
+                        const durationText = compactDurationLabel(o.rentalDurationLabel);
                         return (
                         <div key={o.id} className="flex flex-col gap-3 rounded-xl border border-border/50 bg-card p-3 shadow-sm transition-all duration-300 hover:border-border hover:bg-accent/10 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4">
                           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -357,49 +367,46 @@ const CustomerOrders = () => {
                               >
                                 {o.listingTitle}
                               </Link>
-                              <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
-                                {o.orderType?.toLowerCase() === "buy" ? (
-                                  <span>Purchase Date: <strong className="font-medium text-foreground">{formatOrderDate(o.startDate)}</strong></span>
-                                ) : (
-                                  <>
-                                    <span>Period: <strong className="font-medium text-foreground">{formatDateRange(o.startDate, o.endDate)}</strong></span>
-                                    {o.rentalDurationLabel ? (
-                                      <>
-                                        <span className="text-muted-foreground/30" aria-hidden="true">•</span>
-                                        <span>
-                                          Duration:{" "}
-                                          <strong className="font-medium text-foreground">{o.rentalDurationLabel}</strong>
-                                        </span>
-                                      </>
-                                    ) : null}
-                                  </>
-                                )}
-                                <span className="text-muted-foreground/30" aria-hidden="true">•</span>
-                                <span>Qty: <strong className="font-medium text-foreground">{o.quantity}</strong></span>
-                              </div>
+                              {o.orderType?.toLowerCase() === "buy" ? (
+                                <p className="mt-1 truncate text-xs text-muted-foreground">
+                                  {formatOrderDate(o.startDate)}
+                                  <span className="text-muted-foreground/40"> · </span>
+                                  Qty {o.quantity}
+                                </p>
+                              ) : (
+                                <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                                  <p className="truncate">
+                                    {formatDateRange(o.startDate, o.endDate)}
+                                  </p>
+                                  <p className="truncate">
+                                    {durationText ? `${durationText} · ` : null}
+                                    Qty {o.quantity}
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           </div>
 
-                          <div className="flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-2 border-t border-border/20 pt-3 sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
-                            <div className="flex items-center gap-1.5">
-                              <Badge className={cn("h-5 whitespace-nowrap px-2 py-0 text-[10px] font-semibold leading-none", orderTypeBadgeClass(o.orderType))} variant="outline">
+                          <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1 border-t border-border/20 pt-3 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
+                            <div className="flex min-w-0 flex-nowrap items-center gap-1">
+                              <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-semibold leading-none sm:px-2", orderTypeBadgeClass(o.orderType))} variant="outline">
                                 {o.orderType.toUpperCase()}
                               </Badge>
                               <Badge
                                 title={formatOrderStatusTitle(o.status)}
-                                className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(o.status))}
+                                className={cn("shrink-0", orderStatusBadgeSizeClass, "px-1.5 sm:px-2", orderStatusBadgeClass(o.status))}
                                 variant="outline"
                               >
                                 {formatOrderStatusLabel(o.status)}
                               </Badge>
                             </div>
-                            <div className="flex items-center gap-1 sm:gap-3">
-                              <span className="text-sm font-semibold tabular-nums text-foreground">₹{o.totalAmount.toFixed(0)}</span>
+                            <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-3">
+                              <span className="text-xs font-semibold tabular-nums text-foreground sm:text-sm">₹{o.totalAmount.toFixed(0)}</span>
                               {isCustomerOrderCancellable(o.status) ? (
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-7 px-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:px-2"
+                                  className="h-7 shrink-0 px-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:px-2"
                                   disabled={cancelMut.isPending}
                                   onClick={() => cancelMut.mutate(o.id)}
                                 >
@@ -410,7 +417,7 @@ const CustomerOrders = () => {
                                 size="sm"
                                 variant="ghost"
                                 asChild
-                                className="group/btn flex h-7 items-center gap-0.5 px-1.5 text-xs font-semibold text-primary transition-colors hover:bg-accent sm:h-8 sm:gap-1 sm:px-2"
+                                className="group/btn flex h-7 shrink-0 items-center gap-0.5 px-1.5 text-xs font-semibold text-primary transition-colors hover:bg-accent sm:h-8 sm:gap-1 sm:px-2"
                               >
                                 <Link to={`/customer/orders/${encodeURIComponent(o.id)}`}>
                                   Details
@@ -445,35 +452,12 @@ const CustomerOrders = () => {
           )}
 
           {filtered.length > 0 && (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-muted-foreground">
-                Page {safePage} of {totalPages} · {filtered.length} order{filtered.length !== 1 ? "s" : ""}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  aria-label="Previous page"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  aria-label="Next page"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <ListPager
+              page={safePage}
+              totalPages={totalPages}
+              summary={`Page ${safePage} of ${totalPages} · ${filtered.length} order${filtered.length !== 1 ? "s" : ""}`}
+              onPageChange={setPage}
+            />
           )}
         </>
       )}

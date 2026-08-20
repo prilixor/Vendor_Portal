@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Star, Tag } from "lucide-react";
 import type { RentalPricingPlanDto } from "@/app/services/customerApi";
 import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { useIsMobile } from "@/app/helpers/use-mobile";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import {
   Sheet,
@@ -257,6 +258,7 @@ export function RentalPeriodPlanDropdown({
   selectedPlanId: string;
   onSelect: (plan: RentalPricingPlanDto) => void;
 }) {
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const selected = plans.find((p) => p.id === selectedPlanId) ?? plans[0] ?? null;
 
@@ -439,35 +441,35 @@ export function RentalPeriodPlanDropdown({
         ) : null}
       </div>
 
-      <div className="sm:hidden">
-        {triggerButton({ onClick: () => setOpen(true), "aria-haspopup": "dialog" })}
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent
-            side="bottom"
-            className="flex max-h-[min(85dvh,40rem)] w-full max-w-full flex-col gap-0 overflow-hidden rounded-t-2xl border-border bg-card p-0"
-          >
-            <SheetHeader className="shrink-0 space-y-0 border-b border-border bg-card px-4 py-3 text-left">
-              <SheetTitle className="pr-8 text-base font-bold text-foreground">
-                Choose a rental plan
-              </SheetTitle>
-              <SheetDescription className="text-xs text-muted-foreground">
-                More days, more savings
-              </SheetDescription>
-            </SheetHeader>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-card pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              <PlanList
-                plans={plans}
-                selectedId={selected.id}
-                bestSavingsPlanId={bestSavingsPlanId}
-                onPick={handlePick}
-                className="p-3"
-              />
-            </div>
-          </SheetContent>
-        </Sheet>
-      </div>
-
-      <div className="hidden min-w-0 sm:block">
+      {isMobile ? (
+        <>
+          {triggerButton({ onClick: () => setOpen(true), "aria-haspopup": "dialog" })}
+          <Sheet open={open} onOpenChange={setOpen}>
+            <SheetContent
+              side="bottom"
+              className="flex max-h-[min(85dvh,40rem)] w-full max-w-full flex-col gap-0 overflow-hidden rounded-t-2xl border-border bg-card p-0"
+            >
+              <SheetHeader className="shrink-0 space-y-0 border-b border-border bg-card px-4 py-3 text-left">
+                <SheetTitle className="pr-8 text-base font-bold text-foreground">
+                  Choose a rental plan
+                </SheetTitle>
+                <SheetDescription className="text-xs text-muted-foreground">
+                  More days, more savings
+                </SheetDescription>
+              </SheetHeader>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-card pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                <PlanList
+                  plans={plans}
+                  selectedId={selected.id}
+                  bestSavingsPlanId={bestSavingsPlanId}
+                  onPick={handlePick}
+                  className="p-3"
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
+        </>
+      ) : (
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>{triggerButton({ "aria-haspopup": "listbox" })}</PopoverTrigger>
           <PopoverContent
@@ -489,7 +491,7 @@ export function RentalPeriodPlanDropdown({
             />
           </PopoverContent>
         </Popover>
-      </div>
+      )}
     </div>
   );
 }

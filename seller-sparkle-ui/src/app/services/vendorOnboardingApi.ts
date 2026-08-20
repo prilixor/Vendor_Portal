@@ -850,6 +850,10 @@ export const vendorOnboardingApi = {
     return apiClient.patch(`/vendors/${vendorId}/orders/${orderId}/status`, { status, assetTags });
   },
 
+  assignVendorOrderAssets(vendorId: string, orderId: string, assetTags: string[]) {
+    return apiClient.patch(`/vendors/${vendorId}/orders/${orderId}/assets`, { assetTags });
+  },
+
   getVendorOrderExpirations(vendorId: string, withinDays = 7) {
     return apiClient.get<VendorExpiringOrderApiDto[]>(`/vendors/${vendorId}/orders/expirations?withinDays=${withinDays}`);
   },

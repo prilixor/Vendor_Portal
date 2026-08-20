@@ -122,7 +122,7 @@ export function CustomerStoreHeader() {
           </Button>
 
           {signedIn ? (
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-muted transition-colors">
                   <Avatar className="h-8 w-8">
@@ -139,7 +139,12 @@ export function CustomerStoreHeader() {
                   <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground md:block" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuContent
+                align="end"
+                sideOffset={8}
+                collisionPadding={12}
+                className="z-[80] max-h-[min(24rem,calc(100dvh-5rem))] w-60 overflow-y-auto"
+              >
                 <DropdownMenuLabel>
                   <div>
                     <p className="text-sm font-semibold">{user?.name}</p>

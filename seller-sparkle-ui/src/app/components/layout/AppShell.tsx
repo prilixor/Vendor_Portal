@@ -397,7 +397,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
         {isCustomerShell ? (
 
-          <div className="flex min-h-screen w-full min-w-0 max-w-full flex-col overflow-x-clip bg-gradient-to-b from-muted/40 via-background to-background">
+          <div className="flex min-h-screen w-full min-w-0 max-w-full flex-col bg-gradient-to-b from-muted/40 via-background to-background">
 
             <CustomerStoreHeader />
 

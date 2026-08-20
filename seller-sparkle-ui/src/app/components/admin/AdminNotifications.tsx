@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListPager } from "@/app/components/shared/ListPager";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import {
   Bell,
@@ -349,15 +350,13 @@ export const AdminNotifications = () => {
     const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
     if (totalItems <= PAGE_SIZE) return null;
     return (
-      <div className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between border-t border-border/40 mt-6">
-        <p className="text-sm text-muted-foreground">
-          Page {page} of {totalPages} &middot; {totalItems} items
-        </p>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
-        </div>
-      </div>
+      <ListPager
+        className="border-t border-border/40 pt-6 mt-6"
+        page={page}
+        totalPages={totalPages}
+        summary={`Page ${page} of ${totalPages} · ${totalItems} items`}
+        onPageChange={setPage}
+      />
     );
   };
 

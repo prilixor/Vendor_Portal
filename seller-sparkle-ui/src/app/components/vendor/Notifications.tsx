@@ -5,6 +5,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Switch } from "@/app/components/ui/switch";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListPager } from "@/app/components/shared/ListPager";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Notification } from "@/app/models";
 import { CheckCheck, Bell, Info, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
@@ -311,15 +312,13 @@ const Notifications = () => {
           </ul>
 
           {filtered.length > PAGE_SIZE && (
-            <div className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between border-t border-border/40 mt-6">
-              <p className="text-sm text-muted-foreground">
-                Page {page} of {Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))} &middot; {filtered.length} items
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-                <Button variant="outline" size="sm" disabled={page >= Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))} onClick={() => setPage(p => p + 1)}>Next</Button>
-              </div>
-            </div>
+            <ListPager
+              className="border-t border-border/40 pt-6 mt-6"
+              page={page}
+              totalPages={Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))}
+              summary={`Page ${page} of ${Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))} · ${filtered.length} items`}
+              onPageChange={setPage}
+            />
           )}
         </Card>
 

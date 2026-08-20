@@ -8,7 +8,8 @@ import { Badge } from "@/app/components/ui/badge";
 import { adminApi, AdminCustomerDetailDto, AdminCustomerListItemDto } from "@/app/services/adminApi";
 import { AdminPlaceCustomerOrderDialog } from "@/app/components/admin/AdminPlaceCustomerOrderDialog";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { Loader2, LogIn, Mail, MapPin, Phone, Search, ShoppingCart, ChevronLeft, ChevronRight, UserRound } from "lucide-react";
+import { ListPager } from "@/app/components/shared/ListPager";
+import { Loader2, LogIn, Mail, MapPin, Phone, Search, ShoppingCart, ChevronRight, UserRound } from "lucide-react";
 
 const PAGE_SIZE = 8;
 import { toast } from "sonner";
@@ -186,35 +187,13 @@ export const AdminCustomers = () => {
             </div>
           )}
           {rows.length > 0 && (
-            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-muted-foreground">
-                Page {safePage} of {totalPages} · {rows.length} customer{rows.length !== 1 ? "s" : ""}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  aria-label="Previous page"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  aria-label="Next page"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <ListPager
+              className="pt-2"
+              page={safePage}
+              totalPages={totalPages}
+              summary={`Page ${safePage} of ${totalPages} · ${rows.length} customer${rows.length !== 1 ? "s" : ""}`}
+              onPageChange={setPage}
+            />
           )}
         </div>
       )}

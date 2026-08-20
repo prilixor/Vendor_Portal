@@ -7,6 +7,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListPager } from "@/app/components/shared/ListPager";
 
 import { Button } from "@/app/components/ui/button";
 
@@ -137,7 +138,6 @@ const getAdminUserId = () => {
 import {
   Building2,
   ChevronLeft,
-  ChevronRight,
   ChevronDown,
   Search,
   CircleOff,
@@ -210,57 +210,6 @@ function filterVendorListings(
       (p.listingStatus ?? "").replace(/_/g, " ").toLowerCase().includes(q)
     );
   });
-}
-
-function ListingPager({
-  page,
-  totalPages,
-  total,
-  noun,
-  hasSearch,
-  onPrevious,
-  onNext,
-}: {
-  page: number;
-  totalPages: number;
-  total: number;
-  noun: string;
-  hasSearch: boolean;
-  onPrevious: () => void;
-  onNext: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-3 pt-3 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-sm text-muted-foreground">
-        Page {page} of {totalPages} · {total} {noun}
-        {hasSearch ? " matching search" : ""}
-      </p>
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 shrink-0"
-          aria-label="Previous page"
-          disabled={page <= 1}
-          onClick={onPrevious}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 shrink-0"
-          aria-label="Next page"
-          disabled={page >= totalPages}
-          onClick={onNext}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 type ChemSize = { sizeValue: number; sizeUnit: string; buyPrice: number };
@@ -1642,14 +1591,12 @@ const VendorDetails = () => {
             </div>
 
             {equipmentListings.length > 0 && (
-              <ListingPager
+              <ListPager
+                className="pt-3"
                 page={safeEquipmentPage}
                 totalPages={equipmentTotalPages}
-                total={equipmentListings.length}
-                noun={equipmentListings.length === 1 ? "listing" : "listings"}
-                hasSearch={equipmentSearch.trim().length > 0}
-                onPrevious={() => setEquipmentPage((p) => Math.max(1, p - 1))}
-                onNext={() => setEquipmentPage((p) => Math.min(equipmentTotalPages, p + 1))}
+                summary={`Page ${safeEquipmentPage} of ${equipmentTotalPages} · ${equipmentListings.length} ${equipmentListings.length === 1 ? "listing" : "listings"}${equipmentSearch.trim().length > 0 ? " matching search" : ""}`}
+                onPageChange={setEquipmentPage}
               />
             )}
 
@@ -1780,14 +1727,12 @@ const VendorDetails = () => {
             </div>
 
             {chemicalListings.length > 0 && (
-              <ListingPager
+              <ListPager
+                className="pt-3"
                 page={safeChemicalPage}
                 totalPages={chemicalTotalPages}
-                total={chemicalListings.length}
-                noun={chemicalListings.length === 1 ? "listing" : "listings"}
-                hasSearch={chemicalSearch.trim().length > 0}
-                onPrevious={() => setChemicalPage((p) => Math.max(1, p - 1))}
-                onNext={() => setChemicalPage((p) => Math.min(chemicalTotalPages, p + 1))}
+                summary={`Page ${safeChemicalPage} of ${chemicalTotalPages} · ${chemicalListings.length} ${chemicalListings.length === 1 ? "listing" : "listings"}${chemicalSearch.trim().length > 0 ? " matching search" : ""}`}
+                onPageChange={setChemicalPage}
               />
             )}
 

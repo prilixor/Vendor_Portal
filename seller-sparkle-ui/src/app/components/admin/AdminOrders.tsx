@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListPager } from "@/app/components/shared/ListPager";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import {
   RefreshCw,
@@ -464,31 +465,13 @@ export const AdminOrders = () => {
 
             {/* Pagination Controls */}
             {filtered.length > 0 && (
-              <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-muted-foreground">
-                  Page {safePage} of {totalPages} · {filtered.length} order item{filtered.length !== 1 ? "s" : ""}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-9 px-3 text-xs"
-                    disabled={safePage <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-9 px-3 text-xs"
-                    disabled={safePage >= totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
+              <ListPager
+                className="pt-4"
+                page={safePage}
+                totalPages={totalPages}
+                summary={`Page ${safePage} of ${totalPages} · ${filtered.length} order item${filtered.length !== 1 ? "s" : ""}`}
+                onPageChange={setPage}
+              />
             )}
           </div>
         )}
