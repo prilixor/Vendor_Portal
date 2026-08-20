@@ -820,13 +820,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                             selectedPct > 0;
                                         final legend = _tierLegend(plans);
 
+                                        final isDark = context.isDarkMode;
                                         final recommended = selectedPlan?.isRecommended == true;
                                         final borderColor = recommended
                                             ? const Color(0xFF3B82F6)
-                                            : const Color(0xFF8B5CF6);
+                                            : (isDark ? colors.border : const Color(0xFFE5E7EB));
                                         final priceColor = recommended
-                                            ? const Color(0xFF60A5FA)
+                                            ? (isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
                                             : colors.textPrimary;
+                                        final cardBg = recommended
+                                            ? (isDark ? const Color(0xFF1E3A5F).withValues(alpha: 0.35) : const Color(0xFFEFF6FF))
+                                            : colors.surface;
 
                                         return Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -904,11 +908,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                 width: double.infinity,
                                                 padding: const EdgeInsets.all(14),
                                                 decoration: BoxDecoration(
-                                                  color: recommended
-                                                      ? const Color(0xFF1E3A5F).withValues(alpha: 0.55)
-                                                      : colors.surface,
+                                                  color: cardBg,
                                                   borderRadius: BorderRadius.circular(16),
-                                                  border: Border.all(color: borderColor, width: 2),
+                                                  border: Border.all(color: borderColor, width: 1.5),
                                                 ),
                                                 child: Row(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1635,12 +1637,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       final savings = planSavings(plan);
                       final pct = planDiscountPercent(plan);
                       final isBestDeal = bestId == plan.id && pct > 0;
-                      // Web: recommended -> blue, otherwise violet when selected.
+                      final isDark = context.isDarkMode;
                       final accent = plan.isRecommended
                           ? const Color(0xFF3B82F6)
                           : const Color(0xFF8B5CF6);
                       final priceColor = plan.isRecommended
-                          ? const Color(0xFF60A5FA)
+                          ? (isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
                           : context.appColors.textPrimary;
 
                       return InkWell(
@@ -1661,16 +1663,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             color: selected
                                 ? accent.withValues(alpha: plan.isRecommended ? 0.18 : 0.14)
                                 : (plan.isRecommended
-                                    ? const Color(0xFF1E3A5F).withValues(alpha: 0.35)
+                                    ? (isDark ? const Color(0xFF1E3A5F).withValues(alpha: 0.35) : const Color(0xFFEFF6FF))
                                     : context.appColors.surfaceElevated),
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
                               color: selected
                                   ? accent
                                   : (plan.isRecommended
-                                      ? const Color(0xFF3B82F6).withValues(alpha: 0.45)
+                                      ? (isDark ? const Color(0xFF3B82F6).withValues(alpha: 0.5) : const Color(0xFF93C5FD))
                                       : context.appColors.border),
-                              width: selected ? 1.5 : 1,
+                              width: selected ? 1.5 : (plan.isRecommended ? 1.2 : 1),
                             ),
                           ),
                           child: Row(

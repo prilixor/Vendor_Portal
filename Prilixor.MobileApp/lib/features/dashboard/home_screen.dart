@@ -585,6 +585,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
             final colors = ctx.appColors;
+            final isDark = ctx.isDarkMode;
             final maxH = MediaQuery.of(ctx).size.height * 0.82;
             final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
             final count = draftCount();
@@ -741,19 +742,40 @@ class _HomeScreenState extends State<HomeScreen> {
                                           style: TextStyle(color: colors.textPrimary, fontSize: 14),
                                           decoration: InputDecoration(
                                             hintText: 'Search categories…',
-                                            hintStyle: TextStyle(color: colors.textMuted, fontSize: 13),
-                                            prefixIcon: Icon(Icons.search, color: colors.textMuted, size: 20),
+                                            hintStyle: TextStyle(
+                                              color: isDark ? const Color(0xFF94A3B8) : colors.textMuted,
+                                              fontSize: 13,
+                                            ),
+                                            prefixIcon: Icon(
+                                              Icons.search_rounded,
+                                              color: isDark ? const Color(0xFF94A3B8) : colors.textMuted,
+                                              size: 18,
+                                            ),
                                             filled: true,
-                                            fillColor: colors.background,
+                                            fillColor: isDark
+                                                ? const Color(0xFF334155).withValues(alpha: 0.45)
+                                                : const Color(0xFFF1F5F9),
                                             isDense: true,
-                                            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                             border: OutlineInputBorder(
                                               borderRadius: BorderRadius.circular(10),
-                                              borderSide: BorderSide(color: colors.border),
+                                              borderSide: BorderSide(
+                                                color: isDark
+                                                    ? const Color(0xFF475569).withValues(alpha: 0.5)
+                                                    : colors.border,
+                                              ),
                                             ),
                                             enabledBorder: OutlineInputBorder(
                                               borderRadius: BorderRadius.circular(10),
-                                              borderSide: BorderSide(color: colors.border),
+                                              borderSide: BorderSide(
+                                                color: isDark
+                                                    ? const Color(0xFF475569).withValues(alpha: 0.5)
+                                                    : colors.border,
+                                              ),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(10),
+                                              borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 1.2),
                                             ),
                                           ),
                                         ),
@@ -1094,24 +1116,33 @@ class _FavoritesFilterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
+    final isDark = context.isDarkMode;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () => onChanged(!value),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 12, 14),
+          padding: const EdgeInsets.fromLTRB(16, 12, 14, 14),
           child: Row(
             children: [
               Container(
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: colors.background,
+                  color: value
+                      ? const Color(0xFFEF4444).withValues(alpha: isDark ? 0.2 : 0.12)
+                      : (isDark ? const Color(0xFF334155).withValues(alpha: 0.5) : const Color(0xFFF1F5F9)),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: value
+                        ? const Color(0xFFEF4444).withValues(alpha: isDark ? 0.35 : 0.2)
+                        : (isDark ? const Color(0xFF475569).withValues(alpha: 0.4) : const Color(0xFFE2E8F0)),
+                  ),
                 ),
                 child: Icon(
                   value ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                  color: value ? const Color(0xFFEF4444) : colors.textMuted,
+                  color: value ? const Color(0xFFEF4444) : (isDark ? const Color(0xFF94A3B8) : colors.textMuted),
                   size: 20,
                 ),
               ),
@@ -1122,21 +1153,35 @@ class _FavoritesFilterRow extends StatelessWidget {
                   children: [
                     Text(
                       'Favorites only',
-                      style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Show items you have saved',
-                      style: TextStyle(color: colors.textMuted, fontSize: 12),
+                      style: TextStyle(
+                        color: colors.textMuted,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
               ),
-              Switch.adaptive(
+              Switch(
                 value: value,
-                activeColor: colors.surface,
-                activeTrackColor: colors.accent,
                 onChanged: onChanged,
+                activeTrackColor: const Color(0xFF6C63FF),
+                activeThumbColor: Colors.white,
+                inactiveThumbColor: Colors.white,
+                inactiveTrackColor: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+                trackOutlineColor: WidgetStateProperty.resolveWith<Color?>(
+                  (_) => Colors.transparent,
+                ),
+                trackOutlineWidth: WidgetStateProperty.all(0),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ],
           ),
