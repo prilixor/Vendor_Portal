@@ -202,6 +202,24 @@ export const authApi = {
     });
   },
 
+  async loginWithCustomerPhoneOtp(phone: string, code: string): Promise<{ token: string; user: User }> {
+    const response = await apiClient.post<LoginResponse>('/auth/login/sms/verify-otp', { phone, code });
+    apiClient.setAuthToken(response.token);
+    return {
+      token: response.token,
+      user: {
+        id: response.user.id,
+        email: response.user.email,
+        name: response.user.name,
+        role: response.user.role as Role,
+      },
+    };
+  },
+
+  async sendCustomerLoginOtp(phone: string): Promise<PhoneOtpActionResponse> {
+    return apiClient.post<PhoneOtpActionResponse>('/auth/login/sms/send-otp', { phone });
+  },
+
   async sendPhoneOtp(phone: string, role: 'vendor' | 'customer'): Promise<PhoneOtpActionResponse> {
     return apiClient.post<PhoneOtpActionResponse>('/auth/phone/send-otp', { phone, role });
   },

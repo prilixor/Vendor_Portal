@@ -30,25 +30,20 @@ public sealed class RegisterCustomerCommandValidator : AbstractValidator<Registe
     {
         RuleFor(x => x.Password).NotEmpty().MinimumLength(8);
         RuleFor(x => x.FullName).NotEmpty().MinimumLength(2).MaximumLength(200);
-        RuleFor(x => x)
-            .Must(x => !string.IsNullOrWhiteSpace(x.Email) || !string.IsNullOrWhiteSpace(x.Phone))
-            .WithMessage("Provide an email address or a phone number (or both).");
+        RuleFor(x => x.Phone)
+            .NotEmpty()
+            .WithMessage("Phone number is required.")
+            .Must(p => IndianMobilePhone.IsValid(p))
+            .WithMessage(IndianMobilePhone.InvalidMessage);
         RuleFor(x => x.Email)
             .EmailAddress()
             .When(x => !string.IsNullOrWhiteSpace(x.Email));
-        RuleFor(x => x.Phone)
-            .Must(p => IndianMobilePhone.IsValid(p))
-            .WithMessage(IndianMobilePhone.InvalidMessage)
-            .When(x => !string.IsNullOrWhiteSpace(x.Phone));
     }
 }
 
 internal sealed class RegisterCustomerCommandHandler(
     ICustomerRepository customers,
-    IPasswordHasherService passwordHasher,
-    IEmailService emailService,
-    IConfiguration configuration,
-    ILogger<RegisterCustomerCommandHandler> logger)
+    IPasswordHasherService passwordHasher)
     : ICommandHandler<RegisterCustomerCommand, CustomerRegisteredDto>
 {
     public async Task<Result<CustomerRegisteredDto>> Handle(RegisterCustomerCommand request, CancellationToken cancellationToken)
@@ -59,11 +54,11 @@ internal sealed class RegisterCustomerCommandHandler(
 
         var hasEmail = !string.IsNullOrWhiteSpace(request.Email);
         var hasPhone = !string.IsNullOrWhiteSpace(request.Phone);
-        if (!hasEmail && !hasPhone)
+        if (!hasPhone)
         {
             return Result.Failure<CustomerRegisteredDto>(new Error(
-                "customers.identifier_required",
-                "Provide an email address or a phone number (or both).",
+                "customers.phone_required",
+                "Phone number is required.",
                 ErrorCategory.Validation));
         }
 
@@ -110,11 +105,10 @@ internal sealed class RegisterCustomerCommandHandler(
             }
         }
 
-        // Phone present -> SMS OTP required; email auto-ok (including when both provided).
-        // Email only -> verify-email link required before login/app access.
-        var emailOnly = hasEmail && !hasPhone;
-        var requiresPhoneOtp = hasPhone;
-        var requiresEmailVerification = emailOnly;
+        // Phone is required for new customers. SMS OTP is always required.
+        // Email remains optional (column stays nullable — no DB schema change).
+        var requiresPhoneOtp = true;
+        var requiresEmailVerification = false;
 
         var entity = new Customer
         {
@@ -123,16 +117,10 @@ internal sealed class RegisterCustomerCommandHandler(
             FullName = request.FullName.Trim(),
             Phone = phone,
             PhoneVerifiedAt = null,
-            IsEmailVerified = !emailOnly,
+            IsEmailVerified = true,
             EmailVerificationToken = null,
             EmailVerificationTokenExpiresAt = null,
         };
-
-        if (emailOnly)
-        {
-            entity.EmailVerificationToken = VerificationTokenGenerator.GenerateSecureToken();
-            entity.EmailVerificationTokenExpiresAt = DateTimeOffset.UtcNow.AddHours(24);
-        }
 
         await customers.AddCustomerAsync(entity, cancellationToken);
         try
@@ -158,25 +146,6 @@ internal sealed class RegisterCustomerCommandHandler(
             },
             cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
-
-        if (emailOnly && !string.IsNullOrWhiteSpace(entity.Email) && !string.IsNullOrWhiteSpace(entity.EmailVerificationToken))
-        {
-            try
-            {
-                var frontendUrl = configuration["FrontendUrl"] ?? "https://blinksmed.com";
-                var verificationLink =
-                    $"{frontendUrl}/verify-email?token={Uri.EscapeDataString(entity.EmailVerificationToken)}&portal=customer";
-                var body = EmailTemplates.VendorEmailVerificationRequested(
-                    entity.Email,
-                    verificationLink,
-                    entity.FullName);
-                await emailService.SendEmailAsync(entity.Email, "Verify Your Email Address", body, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to send customer verification email to {Email}", entity.Email);
-            }
-        }
 
         return Result.Success(new CustomerRegisteredDto(
             entity.Id,

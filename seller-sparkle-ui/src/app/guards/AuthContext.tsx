@@ -18,6 +18,7 @@ interface AuthContextValue {
   user: User | null;
   isHydrating: boolean;
   login: (email: string, password: string, role: Role) => Promise<void>;
+  loginWithCustomerPhoneOtp: (phone: string, code: string) => Promise<void>;
   register: (email: string, password: string, phone: string) => Promise<{ id: string; email: string }>;
   registerCustomer: (email: string, password: string, fullName: string, phone?: string) => Promise<{ id: string; email: string; fullName: string }>;
   logout: () => void;
@@ -158,6 +159,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     persist(result.user);
   };
 
+  const loginWithCustomerPhoneOtp = async (phone: string, code: string) => {
+    const result = await authApi.loginWithCustomerPhoneOtp(phone, code);
+    clearImpersonationSession();
+    persist(result.user);
+  };
+
   const register = async (email: string, password: string, phone: string) => {
     const result = await authApi.registerVendor(email, password, phone);
     try {
@@ -196,7 +203,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isHydrating, login, register, registerCustomer, logout, switchRole, hasPermission, setSessionUser }}>
+    <AuthContext.Provider value={{ user, isHydrating, login, loginWithCustomerPhoneOtp, register, registerCustomer, logout, switchRole, hasPermission, setSessionUser }}>
       {children}
     </AuthContext.Provider>
   );

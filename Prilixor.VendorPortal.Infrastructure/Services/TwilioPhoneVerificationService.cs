@@ -29,10 +29,10 @@ public sealed class TwilioPhoneVerificationService(
     {
         if (!TryAcquireSendSlot(e164Phone, out var waitSeconds))
         {
-            return new PhoneOtpSendResult(
-                false,
-                $"Please wait {waitSeconds} seconds before requesting another code.",
-                "phone.otp_rate_limited");
+            var message = waitSeconds == 1
+                ? "You can request a new code in 1 second."
+                : $"You can request a new code in {waitSeconds} seconds.";
+            return new PhoneOtpSendResult(false, message, "phone.otp_rate_limited");
         }
 
         if (!IsEnabled)

@@ -13,6 +13,10 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/app/components/ui/input
 import { authApi } from "@/app/services/authApi";
 import { toast } from "sonner";
 import { INDIAN_MOBILE_MESSAGE, isValidIndianMobile } from "@/app/helpers/indianMobilePhone";
+import {
+  OTP_RESEND_COOLDOWN_SECONDS,
+  parseOtpSendCooldown,
+} from "@/app/helpers/otpSendCooldown";
 
 type Role = "vendor" | "customer";
 
@@ -28,6 +32,12 @@ type Props = {
   description?: string;
   /** Override success toast after OTP verify. Pass empty string to skip toast. */
   successMessage?: string;
+  /** Override default send. Used for login OTP. */
+  sendOtp?: (phone: string) => Promise<{ message?: string }>;
+  /** Override default verify. Used for login OTP (issues session). */
+  verifyOtp?: (phone: string, code: string) => Promise<void>;
+  /** When true, do not auto-send on open (caller already sent). */
+  skipAutoSend?: boolean;
 };
 
 export function PhoneOtpDialog({
@@ -40,6 +50,9 @@ export function PhoneOtpDialog({
   title = "Verify phone number",
   description,
   successMessage,
+  sendOtp,
+  verifyOtp,
+  skipAutoSend = false,
 }: Props) {
   const [code, setCode] = useState("");
   const [sending, setSending] = useState(false);
@@ -73,9 +86,14 @@ export function PhoneOtpDialog({
     const key = `${role}:${phone.trim()}`;
     if (!phone.trim() || autoSendKeyRef.current === key) return;
     autoSendKeyRef.current = key;
+    if (skipAutoSend) {
+      setDialogInfo("Verification code sent.");
+      setCooldown(OTP_RESEND_COOLDOWN_SECONDS);
+      return;
+    }
     void sendCode();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- send once per open+phone+role
-  }, [open, phone, role, phoneValid]);
+  }, [open, phone, role, phoneValid, skipAutoSend]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -101,10 +119,17 @@ export function PhoneOtpDialog({
     setSending(true);
     setDialogError(null);
     try {
-      const res = await authApi.sendPhoneOtp(phone, role);
+      const res = sendOtp
+        ? await sendOtp(phone)
+        : await authApi.sendPhoneOtp(phone, role);
       setDialogInfo(res.message || "Verification code sent.");
-      setCooldown(45);
+      setCooldown(OTP_RESEND_COOLDOWN_SECONDS);
     } catch (error) {
+      const wait = parseOtpSendCooldown(error);
+      if (wait) {
+        setCooldown(wait);
+        return;
+      }
       const message = error instanceof Error ? error.message : "Failed to send code.";
       setDialogInfo(null);
       setDialogError(message);
@@ -122,12 +147,17 @@ export function PhoneOtpDialog({
     setVerifying(true);
     setDialogError(null);
     try {
-      const res = await authApi.verifyPhoneOtp(phone, code, role);
-      const nextMessage =
-        successMessage === undefined
-          ? (res.message || "Phone verified.")
-          : successMessage;
-      if (nextMessage) toast.success(nextMessage);
+      if (verifyOtp) {
+        await verifyOtp(phone, code);
+        if (successMessage) toast.success(successMessage);
+      } else {
+        const res = await authApi.verifyPhoneOtp(phone, code, role);
+        const nextMessage =
+          successMessage === undefined
+            ? (res.message || "Phone verified.")
+            : successMessage;
+        if (nextMessage) toast.success(nextMessage);
+      }
       verifiedRef.current = true;
       onOpenChange(false);
       onVerified?.();

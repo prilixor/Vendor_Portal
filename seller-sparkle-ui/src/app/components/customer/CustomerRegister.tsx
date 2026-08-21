@@ -7,11 +7,7 @@ import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import {
-  isValidIndianMobile,
-  normalizeIndianMobileDigits,
-  optionalIndianMobileError,
-} from "@/app/helpers/indianMobilePhone";
+import { normalizeIndianMobileDigits, requiredIndianMobileError } from "@/app/helpers/indianMobilePhone";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
 import { cn } from "@/app/helpers/utils";
@@ -88,21 +84,15 @@ const CustomerRegister = () => {
     const mobile = values?.phone ?? phone;
     const pwd = values?.password ?? password;
     const confirm = values?.confirmPassword ?? confirmPassword;
-    const hasEmail = mail.length > 0;
-    const hasPhone = mobile.replace(/\D/g, "").length > 0;
 
     switch (key) {
       case "fullName":
         return name.trim().length < 2 ? "Enter your full name" : undefined;
       case "email":
-        if (!hasEmail && !hasPhone) return "Enter email or phone (at least one)";
-        if (hasEmail && !isValidEmail(mail)) return "Valid email required";
+        if (mail.length > 0 && !isValidEmail(mail)) return "Valid email required";
         return undefined;
-      case "phone": {
-        if (!hasEmail && !hasPhone) return "Enter email or phone (at least one)";
-        if (!hasPhone) return undefined;
-        return optionalIndianMobileError(mobile) ?? undefined;
-      }
+      case "phone":
+        return requiredIndianMobileError(mobile) ?? undefined;
       case "password":
         return passwordError(pwd);
       case "confirmPassword":
@@ -155,14 +145,6 @@ const CustomerRegister = () => {
       if (err) next[key] = err;
       else delete next[key];
 
-      // Cross-field: clearing email/phone may clear the other identifier error.
-      if (key === "email" || key === "phone") {
-        const other = key === "email" ? "phone" : "email";
-        const otherErr = fieldError(other, values);
-        if (otherErr) next[other] = otherErr;
-        else delete next[other];
-      }
-
       if (key === "password" && (touched.confirmPassword || prev.confirmPassword || confirmPassword)) {
         const confirmErr = confirmPasswordError(value, confirmPassword);
         if (confirmErr) next.confirmPassword = confirmErr;
@@ -179,30 +161,21 @@ const CustomerRegister = () => {
     setLoading(true);
     try {
       const emailTrimmed = email.trim();
-      const phoneNormalized = phone.trim() ? normalizeIndianMobileDigits(phone) : "";
-      const hasPhone = isValidIndianMobile(phoneNormalized);
+      const phoneNormalized = normalizeIndianMobileDigits(phone);
       const hasEmail = isValidEmail(emailTrimmed);
 
       const result = await registerCustomer(
         hasEmail ? emailTrimmed : null,
         password,
         fullName.trim(),
-        hasPhone ? phoneNormalized : null,
+        phoneNormalized,
       );
 
-      if (result.requiresEmailVerification && hasEmail) {
-        sessionStorage.setItem("pending_verification_email", emailTrimmed.toLowerCase());
-        toast.success("Account created. Check your email to verify before signing in.");
-        navigate(`/verify-email-sent?email=${encodeURIComponent(emailTrimmed)}&portal=customer`);
-        return;
-      }
-
-      // Phone present → verify SMS while still anonymous (no JWT), then sign in.
-      if (result.requiresPhoneOtp && hasPhone) {
+      // Phone is required → verify SMS while still anonymous (no JWT), then sign in.
+      if (result.requiresPhoneOtp) {
         setPendingPhone(phoneNormalized);
         setPendingLoginId(hasEmail ? emailTrimmed : phoneNormalized);
         setOtpOpen(true);
-        // OTP dialog shows the single "code sent" toast — avoid a second success toast here.
         return;
       }
 
@@ -233,7 +206,7 @@ const CustomerRegister = () => {
     <AuthLayout title="Create customer account" subtitle="Rent equipment from verified vendors in one place." portalType="customer">
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4" noValidate>
         <p className="text-xs text-muted-foreground -mt-1">
-          Provide <span className="font-medium text-foreground">email or phone</span> (or both).{" "}
+          Phone is required for sign in. Email is optional.{" "}
           Fields marked <span className="text-destructive">*</span> are always required.
         </p>
         <div className="space-y-1.5">
@@ -262,12 +235,12 @@ const CustomerRegister = () => {
             <p className="text-xs text-destructive">{errors.email}</p>
           ) : (
             <p className="text-[11px] text-muted-foreground">
-              Email-only signup sends a verification link before you can sign in.
+              Optional. Used for receipts and account recovery.
             </p>
           )}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="phone">Phone</Label>
+          <Label htmlFor="phone" required>Phone</Label>
           <IndianMobileInput
             id="phone"
             value={phone}
@@ -278,7 +251,7 @@ const CustomerRegister = () => {
             <p className="text-xs text-destructive">{errors.phone}</p>
           ) : (
             <p className="text-[11px] text-muted-foreground">
-              Optional if you use email. When provided, SMS OTP is required before shopping.
+              Required. You will sign in with this number and an OTP.
             </p>
           )}
         </div>
