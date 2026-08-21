@@ -16,6 +16,11 @@ import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
 import 'dispatch_details_sheet.dart';
 import 'order_group_utils.dart';
 
+bool _canAssignOrderSerials(VendorOrder order) {
+  final s = order.normalizedStatus.replaceAll(' ', '_');
+  return s == 'confirmed' || s == 'in_transit' || s == 'active';
+}
+
 class OrderDetailScreen extends StatefulWidget {
   final String orderId;
 
@@ -146,6 +151,44 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     await _updateStatus(
       'in_transit',
       assetTags: nonEmpty.isEmpty ? null : nonEmpty,
+    );
+  }
+
+  Future<void> _openAssignSerials(VendorOrder order) async {
+    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null) return;
+
+    final tags = await DispatchDetailsSheet.show(
+      context,
+      vendorId: vendorId,
+      listingId: order.listingId,
+      listingTitle: order.listingTitle,
+      quantity: order.quantity,
+      existingAssetTags: const [],
+      productVariantId: order.productVariantId,
+    );
+    if (!mounted || tags == null) return;
+    final nonEmpty = tags.where((t) => t.trim().isNotEmpty).toList();
+    if (nonEmpty.length != order.quantity) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            order.quantity == 1
+                ? 'Enter a serial number for this item.'
+                : 'Enter ${order.quantity} unique serial numbers.',
+          ),
+        ),
+      );
+      return;
+    }
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    final ok = await provider.assignOrderAssets(vendorId, _selectedOrderId, nonEmpty);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Serial number saved.' : (provider.error ?? 'Save failed')),
+        backgroundColor: ok ? null : Colors.redAccent,
+      ),
     );
   }
 
@@ -508,7 +551,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                             ),
                           ),
                           const SizedBox(height: 10),
-                          _ItemDetailsPanel(order: activeItem ?? order),
+                          _ItemDetailsPanel(
+                            order: activeItem ?? order,
+                            onAddSerials: () => _openAssignSerials(activeItem ?? order),
+                          ),
                           if (!provider.orderImagesLoading &&
                               provider.imageRequest != null) ...[
                             const SizedBox(height: 10),
@@ -1296,8 +1342,9 @@ class _DashedBorderPainter extends CustomPainter {
 
 class _ItemDetailsPanel extends StatelessWidget {
   final VendorOrder order;
+  final VoidCallback? onAddSerials;
 
-  const _ItemDetailsPanel({required this.order});
+  const _ItemDetailsPanel({required this.order, this.onAddSerials});
 
   @override
   Widget build(BuildContext context) {
@@ -1384,9 +1431,12 @@ class _ItemDetailsPanel extends StatelessWidget {
             ('Location', order.customerLocation),
             ('Order #', order.orderNumber),
           ]),
-          if (order.assignedAssetTags.isNotEmpty) ...[
+          if (order.assignedAssetTags.isNotEmpty || _canAssignOrderSerials(order)) ...[
             const SizedBox(height: 8),
-            _AssignedSerialNumbersBlock(tags: order.assignedAssetTags),
+            _AssignedSerialNumbersBlock(
+              tags: order.assignedAssetTags,
+              onAdd: order.assignedAssetTags.isEmpty ? onAddSerials : null,
+            ),
           ],
           if (hasMedical) ...[
             const SizedBox(height: 8),
@@ -1444,13 +1494,14 @@ class _SubsectionLabel extends StatelessWidget {
 
 class _AssignedSerialNumbersBlock extends StatelessWidget {
   final List<String> tags;
+  final VoidCallback? onAdd;
 
-  const _AssignedSerialNumbersBlock({required this.tags});
+  const _AssignedSerialNumbersBlock({required this.tags, this.onAdd});
 
   @override
   Widget build(BuildContext context) {
     final assigned = tags.map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
-    if (assigned.isEmpty) return const SizedBox.shrink();
+    if (assigned.isEmpty && onAdd == null) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -1501,7 +1552,8 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(
+              if (assigned.isNotEmpty)
+                Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: context.appColors.surface,
@@ -1519,6 +1571,12 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+          if (assigned.isEmpty)
+            OutlinedButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add serial numbers'),
+            ),
           ...List.generate(assigned.length, (index) {
             final tag = assigned[index];
             return Padding(

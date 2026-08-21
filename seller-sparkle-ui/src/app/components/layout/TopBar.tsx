@@ -113,7 +113,7 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
 
   return (
     <>
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border bg-background/80 px-4 backdrop-blur-xl sm:px-6">
+    <header className="sticky top-0 z-30 flex h-14 min-w-0 items-center gap-2 overflow-x-clip border-b border-border bg-background/80 px-3 backdrop-blur-xl sm:h-16 sm:gap-4 sm:px-6">
       {onMenuClick && (
         <Button variant="ghost" size="icon" onClick={onMenuClick} className="lg:hidden" aria-label="Menu">
           <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -121,7 +121,7 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
           </svg>
         </Button>
       )}
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1 sm:gap-2">
         <Button variant="ghost" size="icon" onClick={() => setDark((v) => !v)} aria-label="Toggle theme">
           {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>

@@ -69,6 +69,15 @@ List<VendorOrder> orderGroupItems({
   return items;
 }
 
+String formatOrderStatusLabel(String status) {
+  final s = status.trim().toLowerCase().replaceAll('_', ' ');
+  if (s == 'awaiting vendor acceptance' || s == 'pending vendor acceptance') {
+    return 'Awaiting';
+  }
+  if (s == 'dispatch failed') return 'Failed';
+  return status.replaceAll('_', ' ');
+}
+
 Color orderStatusColor(String status) {
   final s = status.toLowerCase().replaceAll('_', ' ');
   if (s.contains('awaiting') || s == 'pending') return Colors.amber;
@@ -143,18 +152,24 @@ class OrderStatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = orderStatusColor(status);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      height: 20,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Text(
-        status.replaceAll('_', ' '),
+        formatOrderStatusLabel(status),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: color,
           fontSize: 10,
           fontWeight: FontWeight.w700,
+          height: 1.1,
         ),
       ),
     );

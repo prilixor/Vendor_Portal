@@ -301,14 +301,18 @@ const CustomerListingDetail = () => {
   };
 
   return (
-    <div className="relative space-y-5">
-      <div className="pointer-events-none absolute -right-6 top-8 h-36 w-36 rounded-full bg-primary/10 blur-3xl" />
+    <div className="relative min-w-0 max-w-full overflow-x-clip space-y-5">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <div className="absolute -right-6 top-8 h-36 w-36 rounded-full bg-primary/10 blur-3xl" />
+      </div>
       <BackLink to="/customer/shop" label="Back to shop" />
 
-      <div className="relative grid gap-8 lg:grid-cols-2 lg:gap-10">
-        <ProductImageGallery images={images} alt={data.title} />
+      <div className="relative grid min-w-0 gap-8 lg:grid-cols-2 lg:gap-10">
+        <div className="min-w-0">
+          <ProductImageGallery images={images} alt={data.title} />
+        </div>
 
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           <header className="space-y-2.5">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
@@ -474,7 +478,7 @@ const CustomerListingDetail = () => {
           )}
 
           {/* Configure + add */}
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+          <div className="min-w-0 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
             <div className="space-y-5">
               {canRent && canBuy ? (
                 <div className="grid grid-cols-2 gap-2.5">
@@ -574,7 +578,7 @@ const CustomerListingDetail = () => {
                         </span>
                       </div>
 
-                      <div className="flex items-end justify-between gap-3">
+                      <div className="flex flex-wrap items-end justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-[14px] font-bold tracking-tight text-foreground">
                             You pay for rent
@@ -587,7 +591,7 @@ const CustomerListingDetail = () => {
                         </div>
                         <p
                           className={cn(
-                            "text-[24px] font-extrabold leading-none tabular-nums tracking-tight",
+                            "shrink-0 text-[22px] font-extrabold leading-none tabular-nums tracking-tight sm:text-[24px]",
                             selectedPlan.isRecommended
                               ? "text-blue-600 dark:text-blue-400"
                               : "text-violet-600 dark:text-violet-400",

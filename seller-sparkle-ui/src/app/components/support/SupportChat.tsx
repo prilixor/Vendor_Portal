@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { MessageCircle, X, Send, Loader2, Paperclip, Bot, User, FileText, Plus, Ticket, ChevronLeft, AlertCircle, CheckCircle2, RefreshCw, XCircle } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
@@ -80,6 +81,190 @@ const getStatusIcon = (status: string) => {
   }
 };
 
+const FAB_SIZE = 56;
+const FAB_PAD = 16;
+const FAB_POS_KEY = "vendor-support-fab-pos";
+const FAB_DRAG_THRESHOLD = 8;
+
+type FabPos = { x: number; y: number };
+
+function viewportBox() {
+  const vv = typeof window === "undefined" ? null : window.visualViewport;
+  return {
+    left: vv?.offsetLeft ?? 0,
+    top: vv?.offsetTop ?? 0,
+    width: vv?.width ?? (typeof window === "undefined" ? 375 : window.innerWidth),
+    height: vv?.height ?? (typeof window === "undefined" ? 667 : window.innerHeight),
+  };
+}
+
+function defaultFabPos(): FabPos {
+  const view = viewportBox();
+  return {
+    x: view.left + view.width - FAB_PAD - FAB_SIZE,
+    y: view.top + view.height - FAB_PAD - FAB_SIZE,
+  };
+}
+
+function clampFabPos(pos: FabPos): FabPos {
+  const view = viewportBox();
+  const minX = view.left + FAB_PAD;
+  const minY = view.top + FAB_PAD;
+  const maxX = view.left + view.width - FAB_PAD - FAB_SIZE;
+  const maxY = view.top + view.height - FAB_PAD - FAB_SIZE;
+  return {
+    x: Math.min(Math.max(pos.x, minX), Math.max(minX, maxX)),
+    y: Math.min(Math.max(pos.y, minY), Math.max(minY, maxY)),
+  };
+}
+
+function loadFabPos(): FabPos {
+  try {
+    const raw = localStorage.getItem(FAB_POS_KEY);
+    if (!raw) return defaultFabPos();
+    const parsed = JSON.parse(raw) as FabPos;
+    if (typeof parsed?.x !== "number" || typeof parsed?.y !== "number" || Number.isNaN(parsed.x) || Number.isNaN(parsed.y)) {
+      return defaultFabPos();
+    }
+    return clampFabPos(parsed);
+  } catch {
+    return defaultFabPos();
+  }
+}
+
+function saveFabPos(pos: FabPos) {
+  try {
+    localStorage.setItem(FAB_POS_KEY, JSON.stringify(pos));
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+function supportPanelStyle(fab: FabPos): CSSProperties {
+  const view = viewportBox();
+  const panelW = Math.min(380, Math.max(240, view.width - 32));
+  const panelH = Math.min(600, Math.max(280, view.height - 136));
+  const gap = 12;
+  const inset = 16;
+
+  let left = fab.x + FAB_SIZE - panelW;
+  left = Math.min(Math.max(left, view.left + inset), view.left + view.width - inset - panelW);
+
+  const spaceAbove = fab.y - view.top;
+  const spaceBelow = view.top + view.height - (fab.y + FAB_SIZE);
+  let top: number;
+  if (spaceAbove >= panelH + gap + inset) {
+    top = fab.y - gap - panelH;
+  } else if (spaceBelow >= panelH + gap + inset) {
+    top = fab.y + FAB_SIZE + gap;
+  } else {
+    top = Math.min(Math.max(view.top + inset, fab.y - panelH - gap), view.top + view.height - inset - panelH);
+  }
+
+  return {
+    position: "fixed",
+    left,
+    top,
+    width: panelW,
+    height: panelH,
+    zIndex: 60,
+  };
+}
+
+function useDraggableSupportFab() {
+  const [pos, setPos] = useState<FabPos>(() => (typeof window === "undefined" ? { x: 0, y: 0 } : loadFabPos()));
+  const [dragging, setDragging] = useState(false);
+  const [viewportTick, setViewportTick] = useState(0);
+  const posRef = useRef(pos);
+  posRef.current = pos;
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+    moved: boolean;
+  } | null>(null);
+  const skipClickRef = useRef(false);
+
+  useEffect(() => {
+    const onViewport = () => {
+      setPos((current) => {
+        const next = clampFabPos(current);
+        if (next.x !== current.x || next.y !== current.y) saveFabPos(next);
+        return next;
+      });
+      setViewportTick((n) => n + 1);
+    };
+    window.addEventListener("resize", onViewport);
+    window.visualViewport?.addEventListener("resize", onViewport);
+    window.visualViewport?.addEventListener("scroll", onViewport);
+    return () => {
+      window.removeEventListener("resize", onViewport);
+      window.visualViewport?.removeEventListener("resize", onViewport);
+      window.visualViewport?.removeEventListener("scroll", onViewport);
+    };
+  }, []);
+
+  const onPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      origX: posRef.current.x,
+      origY: posRef.current.y,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, []);
+
+  const onPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.moved && dx * dx + dy * dy < FAB_DRAG_THRESHOLD * FAB_DRAG_THRESHOLD) return;
+    drag.moved = true;
+    skipClickRef.current = true;
+    setDragging(true);
+    setPos(clampFabPos({ x: drag.origX + dx, y: drag.origY + dy }));
+  }, []);
+
+  const endDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    dragRef.current = null;
+    setDragging(false);
+    if (drag.moved) {
+      setPos((current) => {
+        const next = clampFabPos(current);
+        saveFabPos(next);
+        return next;
+      });
+    }
+  }, []);
+
+  const consumeDragClick = useCallback(() => {
+    if (!skipClickRef.current) return false;
+    skipClickRef.current = false;
+    return true;
+  }, []);
+
+  return {
+    pos,
+    dragging,
+    viewportTick,
+    consumeDragClick,
+    fabProps: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp: endDrag,
+      onPointerCancel: endDrag,
+    },
+  };
+}
+
 export const SupportChat = ({ vendorId }: SupportChatProps) => {
   const {
     pendingRequest,
@@ -101,6 +286,8 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
   const [forceNextAsNewTicket, setForceNextAsNewTicket] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { pos, dragging, viewportTick, consumeDragClick, fabProps } = useDraggableSupportFab();
+  const panelStyle = useMemo(() => supportPanelStyle(pos), [pos, viewportTick]);
 
   const refreshUnreadBadge = useCallback(async () => {
     if (!vendorId || vendorId === "undefined") return;
@@ -415,11 +602,14 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
     });
   };
 
-  return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-4 sm:bottom-6 sm:right-6">
-      {/* Chat Window */}
+  const chatUi = (
+    <>
+      {/* Chat Window — own fixed box, sitting just above the FAB. */}
       {isOpen && (
-        <Card className="w-[380px] h-[600px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-120px)] flex flex-col overflow-hidden shadow-2xl border-primary/10 animate-in slide-in-from-bottom-4 duration-300">
+        <div style={panelStyle}>
+        <Card
+          className="flex h-full w-full flex-col overflow-hidden border-primary/10 shadow-2xl animate-in slide-in-from-bottom-4 duration-300"
+        >
           {/* Header */}
           <div className="bg-gradient-to-r from-primary to-primary/80 p-4 pb-3 text-white flex items-center justify-between shadow-lg">
             <div className="flex items-center gap-3">
@@ -754,18 +944,29 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
             </>
           )}
         </Card>
+        </div>
       )}
 
-      {/* Floating Button — Icon only */}
+      {/* Floating Button — drag to reposition; tap to open. Position is remembered. */}
+      <div
+        className="fixed z-[60] touch-none"
+        style={{ left: pos.x, top: pos.y, width: FAB_SIZE, height: FAB_SIZE }}
+        {...fabProps}
+      >
       <Button
         onClick={() => {
+          if (consumeDragClick()) return;
           const next = !isOpen;
           setIsOpen(next);
           if (next) void refreshUnreadBadge();
         }}
         size="icon"
+        aria-label="BlinksMed Support. Drag to move."
+        title="Drag to move · tap to open"
         className={cn(
-          "h-14 w-14 rounded-full shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 group relative",
+          "relative h-14 w-14 cursor-grab touch-none rounded-full shadow-2xl transition-colors duration-300 active:cursor-grabbing group select-none",
+          dragging && "cursor-grabbing",
+          !dragging && "hover:scale-105 active:scale-95 transition-transform",
           isOpen ? "bg-white text-primary border border-primary/20 shadow-xl" : "bg-gradient-to-r from-primary to-primary/80 text-white shadow-xl"
         )}
       >
@@ -786,7 +987,7 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
             )}
           </div>
         )}
-        {!isOpen && (
+        {!isOpen && !dragging && (
           <div className="absolute -top-12 right-0 bg-card text-foreground text-[11px] font-bold py-1.5 px-3 rounded-full shadow-lg border border-border whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
             {unreadAdminReplyCount > 0
               ? `${unreadAdminReplyCount} support ${unreadAdminReplyCount === 1 ? "reply" : "replies"}`
@@ -795,6 +996,10 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
           </div>
         )}
       </Button>
-    </div>
+      </div>
+    </>
   );
+
+  if (typeof document === "undefined") return chatUi;
+  return createPortal(chatUi, document.body);
 };

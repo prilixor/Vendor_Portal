@@ -10,6 +10,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/app/components/ui/sheet";
+import { useIsMobile } from "@/app/helpers/use-mobile";
 import { cn } from "@/app/helpers/utils";
 
 export type ActiveFilterChip = {
@@ -22,23 +23,37 @@ type FilterSearchBarProps = {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  /** Short hint for narrow screens. Input placeholders cannot wrap, so long desktop copy is clipped. */
+  mobilePlaceholder?: string;
   activeCount?: number;
   onOpenFilters: () => void;
   className?: string;
   "aria-label"?: string;
 };
 
+const NARROW_PLACEHOLDER_LIMIT = 22;
+
+function compactSearchPlaceholder(placeholder: string): string {
+  if (placeholder.length <= NARROW_PLACEHOLDER_LIMIT) return placeholder;
+  return "Search…";
+}
+
 /** Search field + filter button with optional active-count badge. */
 export function FilterSearchBar({
   value,
   onChange,
   placeholder = "Search…",
+  mobilePlaceholder,
   activeCount = 0,
   onOpenFilters,
   className,
   "aria-label": ariaLabel = "Search",
 }: FilterSearchBarProps) {
+  const isMobile = useIsMobile();
   const hasFilters = activeCount > 0;
+  const shownPlaceholder = isMobile
+    ? (mobilePlaceholder ?? compactSearchPlaceholder(placeholder))
+    : placeholder;
 
   return (
     <div className={cn("flex gap-2", className)}>
@@ -47,7 +62,8 @@ export function FilterSearchBar({
         <Input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
+          placeholder={shownPlaceholder}
+          title={placeholder}
           className="h-11 rounded-xl pl-9"
           aria-label={ariaLabel}
         />

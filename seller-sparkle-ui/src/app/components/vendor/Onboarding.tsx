@@ -34,7 +34,7 @@ import {
   getMissingDocumentTypes,
   REQUIRED_DOCUMENT_TYPES,
 } from "@/app/helpers/vendorVerification";
-import { sanitizeAdminComment, buildVerificationSupportMessage } from "@/app/helpers/adminComment";
+import { vendorDocumentFileLabel } from "@/app/helpers/vendorDocumentDisplay";
 import { useSupportChat } from "@/app/contexts/SupportChatContext";
 import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
 import { cn, toCamelCase } from "@/app/helpers/utils";
@@ -323,25 +323,16 @@ const Onboarding = () => {
     fetchCities();
   }, [selectedStateIso2]);
 
-  const getFileNameFromUrl = (url?: string) => {
-    if (!url) return "";
-    try {
-      // Use URL to parse path, fallback to simple split
-      const parsed = new URL(url, window.location.origin);
-      const name = parsed.pathname.split("/").pop() || "";
-      return decodeURIComponent(name);
-    } catch {
-      const raw = (url.split("/").pop() || "").split("?")[0];
-      try { return decodeURIComponent(raw); } catch { return raw; }
-    }
-  };
-
   const mapDocuments = (docsDto: Awaited<ReturnType<typeof vendorOnboardingApi.getVendorDocuments>>) =>
     docsDto.map((doc) => ({
       id: doc.id,
       vendorId: doc.vendorId,
       type: doc.documentType,
-      fileName: getFileNameFromUrl(doc.fileUrl) || doc.documentType,
+      fileName: vendorDocumentFileLabel({
+        documentType: doc.documentType,
+        fileUrl: doc.fileUrl,
+        originalFileName: doc.originalFileName,
+      }),
       fileUrl: doc.fileUrl,
       status: mapStatus(doc.verificationStatus),
       rejectionReason: doc.rejectionReason,
@@ -501,6 +492,7 @@ const Onboarding = () => {
         vendorId: user.id,
         documentType,
         fileUrl: uploaded.storageKey ?? uploaded.fileUrl,
+        originalFileName: selectedFile.name,
       });
 
       const latestDocs = await vendorOnboardingApi.getVendorDocuments(user.id);

@@ -36,6 +36,7 @@ export interface VendorDocumentApiDto {
   verificationStatus: string;
   rejectionReason?: string;
   verifiedAt?: string;
+  originalFileName?: string | null;
 }
 
 export interface VendorVerificationRequestApiDto {
@@ -288,6 +289,7 @@ export interface AddVendorDocumentPayload {
   documentType: string;
   fileUrl: string;
   documentNumber?: string;
+  originalFileName?: string;
 }
 
 export interface CreateVendorBankAccountPayload {
@@ -846,6 +848,10 @@ export const vendorOnboardingApi = {
 
   updateVendorOrderStatus(vendorId: string, orderId: string, status: string, assetTags?: string[]) {
     return apiClient.patch(`/vendors/${vendorId}/orders/${orderId}/status`, { status, assetTags });
+  },
+
+  assignVendorOrderAssets(vendorId: string, orderId: string, assetTags: string[]) {
+    return apiClient.patch(`/vendors/${vendorId}/orders/${orderId}/assets`, { assetTags });
   },
 
   getVendorOrderExpirations(vendorId: string, withinDays = 7) {

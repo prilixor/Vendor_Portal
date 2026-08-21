@@ -8,9 +8,10 @@ import { Label } from "@/app/components/ui/label";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { InventoryMovement, InventoryRecord } from "@/app/models";
 import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2, Barcode, Trash2, Search, FlaskConical } from "lucide-react";
 import { format } from "date-fns";
@@ -20,7 +21,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
 import { vendorOnboardingApi, type VendorProductAssetApiDto, type TrackedAssetDto, type VendorVariantInventoryDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
-import { resolveItemImageUrl } from "@/app/helpers/utils";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 
 type ChemicalStockEditRow = {
   productVariantId: string;
@@ -44,6 +45,23 @@ const movementMeta: Record<string, { label: string; icon: any; cls: string }> = 
   in: { label: "Stock In", icon: ArrowDownRight, cls: "bg-success-soft text-success" },
   out: { label: "Stock Out", icon: ArrowUpRight, cls: "bg-info-soft text-info" },
   released: { label: "Released", icon: Play, cls: "bg-primary-soft text-primary" },
+};
+
+const assetStatusClass = (status: string) => {
+  switch (status.trim().toLowerCase()) {
+    case "available":
+      return "bg-success-soft text-success";
+    case "rented":
+      return "bg-info-soft text-info";
+    case "reserved":
+      return "bg-warning-soft text-warning";
+    case "sold":
+    case "bought":
+    case "bought_out":
+      return "bg-muted text-muted-foreground";
+    default:
+      return "bg-muted-soft text-muted-foreground";
+  }
 };
 
 const Inventory = () => {
@@ -94,7 +112,9 @@ const Inventory = () => {
   const [searchQuery, setSearchQuery] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [movementPage, setMovementPage] = useState(1);
+  const itemsPerPage = 5;
+  const movementsPerPage = 8;
 
   const filteredInventory = useMemo(() => {
     let result = inventory;
@@ -117,7 +137,27 @@ const Inventory = () => {
     setCurrentPage(1);
   }, [searchQuery, activeTab]);
 
-  const paginatedInventory = filteredInventory.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalInventoryPages = Math.max(1, Math.ceil(filteredInventory.length / itemsPerPage));
+  const safeInventoryPage = Math.min(currentPage, totalInventoryPages);
+  const paginatedInventory = useMemo(
+    () =>
+      filteredInventory.slice(
+        (safeInventoryPage - 1) * itemsPerPage,
+        safeInventoryPage * itemsPerPage,
+      ),
+    [filteredInventory, safeInventoryPage],
+  );
+
+  const totalMovementPages = Math.max(1, Math.ceil(movements.length / movementsPerPage));
+  const safeMovementPage = Math.min(movementPage, totalMovementPages);
+  const paginatedMovements = useMemo(
+    () =>
+      movements.slice(
+        (safeMovementPage - 1) * movementsPerPage,
+        safeMovementPage * movementsPerPage,
+      ),
+    [movements, safeMovementPage],
+  );
 
 
   const loadInventory = async () => {
@@ -280,6 +320,27 @@ const Inventory = () => {
         { total: 0, available: 0, reserved: 0, rented: 0, blocked: 0 }
       ),
     [inventory]
+  );
+
+  const tabCounts = useMemo(
+    () => ({
+      equipment: inventory.filter((r) => !listingIsChemical[r.productId]).length,
+      chemical: inventory.filter((r) => !!listingIsChemical[r.productId]).length,
+    }),
+    [inventory, listingIsChemical],
+  );
+
+  const summaryStats = [
+    { label: "Total", short: "Total", value: totals.total, cls: "text-foreground" },
+    { label: "Available", short: "Avail", value: totals.available, cls: "text-success" },
+    { label: "Reserved", short: "Rsvd", value: totals.reserved, cls: "text-warning" },
+    { label: "Rented", short: "Rent", value: totals.rented, cls: "text-info" },
+    { label: "Blocked", short: "Block", value: totals.blocked, cls: "text-destructive" },
+  ];
+
+  const filteredAssets = useMemo(
+    () => assets.filter((a) => a.assetTag.toLowerCase().includes(assetSearchQuery.trim().toLowerCase())),
+    [assets, assetSearchQuery],
   );
 
   const openEdit = async (row: InventoryRecord) => {
@@ -728,20 +789,86 @@ const Inventory = () => {
     }
   };
 
+  const stockRowActions = (row: InventoryRecord) => (
+    <TooltipProvider>
+      <div className="flex w-full justify-between gap-1 sm:w-auto sm:justify-end">
+        {activeTab === "equipment" && (
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-block">
+                  <Button variant="ghost" size="icon" onClick={() => openMovement(row, "in")} aria-label={`Add stock for ${row.productName}`} disabled={busy || isPending}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {isPending && (
+                <TooltipContent side="top">
+                  <p>Available once your account is approved</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-block">
+                  <Button variant="ghost" size="icon" onClick={() => openMovement(row, "out")} aria-label={`Remove stock for ${row.productName}`} disabled={busy || isPending}>
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {isPending && (
+                <TooltipContent side="top">
+                  <p>Available once your account is approved</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </>
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-block">
+              <Button variant="ghost" size="icon" onClick={() => openAssets(row)} aria-label={`Manage serial numbers for ${row.productName}`} disabled={busy || isPending}>
+                <Barcode className="h-4 w-4" />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p>{isPending ? "Available once your account is approved" : activeTab === "chemical" ? "Batch / serial by packaging size" : "Serial numbers"}</p>
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-block">
+              <Button variant="ghost" size="icon" onClick={() => void openEdit(row)} aria-label={`Edit ${row.productName} stock`} disabled={busy || isPending}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p>{isPending ? "Available once your account is approved" : activeTab === "chemical" ? "Edit stock by packaging size" : "Edit stock"}</p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    </TooltipProvider>
+  );
+
   return (
-    <div>
+    <div className="min-w-0 max-w-full">
       <PageHeader 
         title="Inventory" 
         description="Track stock levels and movements across all your products."
         actions={
-          <Button onClick={() => {
+          <Button
+            className="w-full sm:w-auto"
+            onClick={() => {
             setTrackAssetDialogOpen(true);
             setTrackAssetTag("");
             setTrackedAssetResult(null);
             setTrackAssetError(null);
           }}>
             <Search className="mr-2 h-4 w-4" />
-            Track Serial Number
+            <span className="sm:hidden">Track serial</span>
+            <span className="hidden sm:inline">Track Serial Number</span>
           </Button>
         }
       />
@@ -753,48 +880,98 @@ const Inventory = () => {
 
       {hasLoaded && (
         <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <StatCard label="Total" value={totals.total} icon={Boxes} accent="primary" />
-        <StatCard label="Available" value={totals.available} icon={CheckCircle2} accent="success" />
-        <StatCard label="Reserved" value={totals.reserved} icon={Clock} accent="warning" />
-        <StatCard label="Rented" value={totals.rented} icon={Package} accent="info" />
-        <StatCard label="Blocked" value={totals.blocked} icon={Lock} accent="primary" />
-      </div>
-
-      <Card className="mt-6 border-border/60 p-4 sm:p-6 lg:p-8">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-border pb-4 gap-4">
-          <div className="flex items-center gap-4">
-            <h2 className="font-semibold">Stock by product</h2>
-            <div className="flex bg-muted p-1 rounded-lg w-fit ml-4">
-              <button
-                onClick={() => setActiveTab("equipment")}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center ${activeTab === "equipment" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50"}`}
-              >
-                <Package className="w-4 h-4 mr-2" />
-                Equipment
-              </button>
-              <button
-                onClick={() => setActiveTab("chemical")}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center ${activeTab === "chemical" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50"}`}
-              >
-                <FlaskConical className="w-4 h-4 mr-2" />
-                Chemicals
-              </button>
+          <div className="overflow-hidden rounded-xl border border-border/60 bg-card sm:hidden">
+            <div className="grid grid-cols-5 divide-x divide-border">
+              {summaryStats.map((stat) => (
+                <div key={stat.label} className="px-1 py-3 text-center">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{stat.short}</p>
+                  <p className={cn("mt-1 font-mono text-base font-bold tabular-nums", stat.cls)}>{stat.value}</p>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <div className="hidden gap-4 sm:grid sm:grid-cols-3 lg:grid-cols-5">
+            <StatCard label="Total" value={totals.total} icon={Boxes} accent="primary" />
+            <StatCard label="Available" value={totals.available} icon={CheckCircle2} accent="success" />
+            <StatCard label="Reserved" value={totals.reserved} icon={Clock} accent="warning" />
+            <StatCard label="Rented" value={totals.rented} icon={Package} accent="info" />
+            <StatCard label="Blocked" value={totals.blocked} icon={Lock} accent="primary" />
+          </div>
+
+      <Card className="mt-4 min-w-0 overflow-hidden border-border/60 p-4 [overflow-anchor:none] sm:mt-6 sm:p-6 lg:p-8">
+        <div className="space-y-3 border-b border-border pb-4">
+          <h2 className="font-semibold">Stock by product</h2>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "equipment" | "chemical")}>
+            <TabsList className="grid h-auto w-full grid-cols-2 sm:inline-flex sm:w-auto">
+              <TabsTrigger value="equipment" className="min-w-0 gap-1.5 px-2 py-2 text-xs sm:px-3 sm:text-sm">
+                <Package className="h-4 w-4 shrink-0" />
+                <span className="truncate">Equipment</span>
+                <span className="hidden text-muted-foreground sm:inline">({tabCounts.equipment})</span>
+              </TabsTrigger>
+              <TabsTrigger value="chemical" className="min-w-0 gap-1.5 px-2 py-2 text-xs sm:px-3 sm:text-sm">
+                <FlaskConical className="h-4 w-4 shrink-0" />
+                <span className="truncate">Chemicals</span>
+                <span className="hidden text-muted-foreground sm:inline">({tabCounts.chemical})</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="relative w-full sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
               placeholder="Search products..."
-              className="pl-8"
+              className="pl-9"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
         </div>
         
-        <div className="overflow-x-auto rounded-lg border border-border mt-4">
+        <div className="mt-4 space-y-3 md:hidden" style={filteredInventory.length > 0 ? { minHeight: itemsPerPage * 168 } : undefined}>
+          {paginatedInventory.map((row) => {
+            const utilization = row.total === 0 ? 0 : ((row.rented + row.reserved) / row.total) * 100;
+            const stockCells = [
+              { label: "Total", value: row.total, cls: "text-foreground" },
+              { label: "Avail", value: row.available, cls: "text-success" },
+              ...(activeTab === "equipment" ? [{ label: "Rented", value: row.rented, cls: "text-info" }] : []),
+              { label: "Rsvd", value: row.reserved, cls: "text-warning" },
+              { label: "Block", value: row.blocked, cls: "text-destructive" },
+            ];
+            return (
+              <div key={row.productId} className="min-w-0 rounded-xl border border-border bg-card p-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <ListingThumb src={row.primaryImage} alt={row.productName} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-2 text-sm font-medium leading-snug">{row.productName}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full bg-gradient-primary" style={{ width: `${utilization}%` }} />
+                      </div>
+                      <span className="w-8 shrink-0 text-right text-[11px] font-semibold tabular-nums">{utilization.toFixed(0)}%</span>
+                    </div>
+                  </div>
+                </div>
+                <div className={cn("mt-3 grid overflow-hidden rounded-lg border border-border bg-border", activeTab === "equipment" ? "grid-cols-5" : "grid-cols-4")}>
+                  {stockCells.map((cell) => (
+                    <div key={cell.label} className="bg-card px-1 py-2 text-center">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{cell.label}</p>
+                      <p className={cn("font-mono text-sm font-semibold tabular-nums", cell.cls)}>{cell.value}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 border-t border-border/60 pt-1">{stockRowActions(row)}</div>
+              </div>
+            );
+          })}
+          {hasLoaded && inventory.length === 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground">No listings found to track inventory yet.</p>
+          )}
+          {hasLoaded && inventory.length > 0 && filteredInventory.length === 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground">No products match your search.</p>
+          )}
+        </div>
+
+        <div className="mt-4 hidden overflow-x-auto rounded-lg border border-border md:block">
           <table className="w-full min-w-[700px] text-sm">
             <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -812,11 +989,11 @@ const Inventory = () => {
               {paginatedInventory.map((row) => {
                 const utilization = row.total === 0 ? 0 : ((row.rented + row.reserved) / row.total) * 100;
                 return (
-                  <tr key={row.productId} className="hover:bg-muted/20">
+                  <tr key={row.productId} className="h-[72px] hover:bg-muted/20">
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
                         <ListingThumb src={row.primaryImage} alt={row.productName} />
-                        <span className="font-medium">{row.productName}</span>
+                        <span className="min-w-0 truncate font-medium">{row.productName}</span>
                       </div>
                     </td>
                     <td className="px-4 py-4 text-right font-mono">{row.total}</td>
@@ -839,70 +1016,17 @@ const Inventory = () => {
                       </div>
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <TooltipProvider>
-                        <div className="flex justify-end gap-1">
-                          {activeTab === "equipment" && (
-                            <>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="inline-block">
-                                    <Button variant="ghost" size="icon" onClick={() => openMovement(row, "in")} aria-label={`Add stock for ${row.productName}`} disabled={busy || isPending}>
-                                      <Plus className="h-4 w-4" />
-                                    </Button>
-                                  </span>
-                                </TooltipTrigger>
-                                {isPending && (
-                                  <TooltipContent side="top">
-                                    <p>Available once your account is approved</p>
-                                  </TooltipContent>
-                                )}
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="inline-block">
-                                    <Button variant="ghost" size="icon" onClick={() => openMovement(row, "out")} aria-label={`Remove stock for ${row.productName}`} disabled={busy || isPending}>
-                                      <Minus className="h-4 w-4" />
-                                    </Button>
-                                  </span>
-                                </TooltipTrigger>
-                                {isPending && (
-                                  <TooltipContent side="top">
-                                    <p>Available once your account is approved</p>
-                                  </TooltipContent>
-                                )}
-                              </Tooltip>
-                            </>
-                          )}
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-block">
-                                <Button variant="ghost" size="icon" onClick={() => openAssets(row)} aria-label={`Manage serial numbers for ${row.productName}`} disabled={busy || isPending}>
-                                  <Barcode className="h-4 w-4" />
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <p>{isPending ? "Available once your account is approved" : activeTab === "chemical" ? "Batch / serial by packaging size" : "Serial numbers"}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-block">
-                                <Button variant="ghost" size="icon" onClick={() => void openEdit(row)} aria-label={`Edit ${row.productName} stock`} disabled={busy || isPending}>
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <p>{isPending ? "Available once your account is approved" : activeTab === "chemical" ? "Edit stock by packaging size" : "Edit stock"}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </TooltipProvider>
+                      {stockRowActions(row)}
                     </td>
                   </tr>
                 );
               })}
+              {filteredInventory.length > 0 &&
+                Array.from({ length: Math.max(0, itemsPerPage - paginatedInventory.length) }).map((_, i) => (
+                  <tr key={`stock-pad-${i}`} className="h-[72px]">
+                    <td colSpan={activeTab === "equipment" ? 8 : 7} />
+                  </tr>
+                ))}
               {hasLoaded && inventory.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
@@ -921,40 +1045,42 @@ const Inventory = () => {
           </table>
         </div>
         {filteredInventory.length > 0 && (
-          <div className="px-4 pb-4">
-            <TablePagination
-              page={currentPage}
-              pageSize={itemsPerPage}
-              total={filteredInventory.length}
-              onPageChange={setCurrentPage}
-              label="products"
-            />
-          </div>
+          <TablePagination
+            page={safeInventoryPage}
+            pageSize={itemsPerPage}
+            total={filteredInventory.length}
+            onPageChange={setCurrentPage}
+            label="products"
+            ariaLabel="Product stock pagination"
+          />
         )}
       </Card>
-      <Card className="mt-6 border-border/60">
-        <div className="border-b border-border p-4">
+      <Card className="mt-8 min-w-0 overflow-hidden border-border/60 [overflow-anchor:none]">
+        <div className="border-b border-border px-4 py-3 sm:p-4">
           <h2 className="font-semibold">Movement history</h2>
         </div>
-        <ul className="divide-y divide-border">
-          {movements.map((m) => {
+        <ul
+          className="divide-y divide-border"
+          style={movements.length > 0 ? { minHeight: movementsPerPage * 72 } : undefined}
+        >
+          {paginatedMovements.map((m) => {
             const meta = movementMeta[m.type];
             const Icon = meta.icon;
             const isPositive = ["stock_added", "returned", "in", "released", "unblocked", "corrected"].includes(m.type);
             return (
-              <li key={m.id} className="flex items-center justify-between gap-4 p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${meta.cls}`}>
-                    <Icon className="h-5 w-5 shrink-0" strokeWidth={2.5} />
+              <li key={m.id} className="flex min-w-0 items-start gap-3 p-3 sm:items-center sm:justify-between sm:gap-4 sm:p-4">
+                <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10 ${meta.cls}`}>
+                    <Icon className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" strokeWidth={2.5} />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">{meta.label} · {m.productName}</p>
-                    <p className="text-xs text-muted-foreground">Ref: {m.reference}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{meta.label} · {m.productName}</p>
+                    <p className="truncate text-xs text-muted-foreground">Ref: {m.reference}</p>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="shrink-0 text-right">
                   <p className="font-mono text-sm font-semibold">{isPositive ? "+" : "-"}{m.quantity}</p>
-                  <p className="text-xs text-muted-foreground">{format(new Date(m.timestamp), "MMM d, HH:mm")}</p>
+                  <p className="whitespace-nowrap text-xs text-muted-foreground">{format(new Date(m.timestamp), "MMM d, HH:mm")}</p>
                 </div>
               </li>
             );
@@ -963,6 +1089,18 @@ const Inventory = () => {
             <li className="p-6 text-center text-sm text-muted-foreground">No movement history yet.</li>
           )}
         </ul>
+        {movements.length > 0 && (
+          <div className="px-4 pb-4">
+            <TablePagination
+              page={safeMovementPage}
+              pageSize={movementsPerPage}
+              total={movements.length}
+              onPageChange={setMovementPage}
+              label="movements"
+              ariaLabel="Movement history pagination"
+            />
+          </div>
+        )}
       </Card>
 
       <Dialog open={!!editingRow} onOpenChange={(open) => !open && (setEditingRow(null), setChemicalEditRows([]))}>
@@ -985,8 +1123,8 @@ const Inventory = () => {
                     No packaging sizes defined for this chemical yet. Ask Admin to add variants first.
                   </div>
                 ) : (
-                  <div className="overflow-hidden rounded-md border border-border">
-                    <table className="w-full text-sm">
+                  <div className="overflow-x-auto rounded-md border border-border">
+                    <table className="w-full min-w-[28rem] text-sm">
                       <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
                         <tr>
                           <th className="px-3 py-2 text-left font-semibold">Size</th>
@@ -1114,75 +1252,96 @@ const Inventory = () => {
       </Dialog>
 
       <Dialog open={!!assetRow} onOpenChange={(open) => !open && setAssetRow(null)}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-hidden flex flex-col sm:max-w-xl p-0 gap-0">
-          <DialogHeader className="p-6 pb-4 border-b border-border bg-muted/30">
-            <DialogTitle>
-              {isAssetRowChemical ? "Batch / Serial Numbers" : "Serial Numbers"} - {assetRow?.productName}
+        <DialogContent className="flex h-[min(92dvh,640px)] max-h-[92dvh] w-[calc(100vw-1rem)] max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="shrink-0 space-y-1 border-b border-border px-4 py-3 pr-12 sm:px-5">
+            <DialogTitle className="flex items-center gap-2.5 text-base">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                <Barcode className="h-4 w-4" />
+              </span>
+              {isAssetRowChemical ? "Batch / serial numbers" : "Serial numbers"}
             </DialogTitle>
+            <DialogDescription className="truncate pl-10">
+              {assetRow?.productName}
+            </DialogDescription>
           </DialogHeader>
-          
-          <div className="p-4 border-b border-border bg-background sticky top-0 z-10 space-y-3">
+
+          <div className="shrink-0 border-b border-border px-4 py-3 sm:px-5">
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder={isAssetRowChemical ? "Search batch / serial numbers..." : "Search serial numbers..."} 
-                className="pl-9" 
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder={isAssetRowChemical ? "Search batch / serial..." : "Search serial numbers..."}
+                className="h-9 pl-9"
                 value={assetSearchQuery}
                 onChange={(e) => setAssetSearchQuery(e.target.value)}
               />
             </div>
             {isAssetRowChemical && assetVariantOptions.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                Register one tag per physical container/bottle, tied to its packaging size. You cannot exceed that size&apos;s stock.
+              <p className="mt-2 text-xs text-muted-foreground">
+                One tag per container, tied to packaging size. You cannot exceed that size&apos;s stock.
               </p>
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-muted/10">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 px-4 py-3 sm:px-5">
             {assetsLoading && assets.length === 0 ? (
-              <div className="flex justify-center p-8"><Loader2 className="animate-spin text-muted-foreground h-6 w-6" /></div>
-            ) : (
+              <div className="flex h-full items-center justify-center py-10">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : filteredAssets.length > 0 ? (
               <div className="space-y-2">
-                {assets.filter(a => a.assetTag.toLowerCase().includes(assetSearchQuery.toLowerCase())).map(asset => (
-                  <div key={asset.id} className="flex items-center justify-between p-3 border border-border bg-card rounded-md text-sm shadow-sm transition-all hover:shadow-md">
-                    <div>
-                      <p className="font-semibold">{asset.assetTag}</p>
-                      <p className="text-xs text-muted-foreground">
+                {filteredAssets.map((asset) => (
+                  <div
+                    key={asset.id}
+                    className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <Barcode className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-mono text-sm font-semibold tracking-wide">{asset.assetTag}</p>
+                      <p className="truncate text-xs text-muted-foreground">
                         {isAssetRowChemical && asset.variantLabel ? (
-                          <span className="mr-2 font-medium text-foreground">{asset.variantLabel}</span>
+                          <span className="mr-1.5 font-medium text-foreground">{asset.variantLabel}</span>
                         ) : null}
                         {asset.condition || "No condition specified"}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider ${asset.status === 'Available' ? 'bg-success-soft text-success' : 'bg-muted text-muted-foreground'}`}>
-                        {asset.status}
-                      </span>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive-soft hover:text-destructive transition-colors" onClick={() => void handleDeleteAsset(asset.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                        assetStatusClass(asset.status),
+                      )}
+                    >
+                      {asset.status}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive-soft hover:text-destructive"
+                      onClick={() => void handleDeleteAsset(asset.id)}
+                      aria-label={`Remove ${asset.assetTag}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 ))}
-                {assets.length > 0 && assets.filter(a => a.assetTag.toLowerCase().includes(assetSearchQuery.toLowerCase())).length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground text-sm bg-card rounded-md border border-dashed border-border">
-                    No serial numbers match your search.
-                  </div>
-                )}
-                {assets.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground text-sm bg-card rounded-md border border-dashed border-border">
-                    {isAssetRowChemical ? "No batch/serial numbers registered yet." : "No serial numbers registered yet."}
-                  </div>
-                )}
+              </div>
+            ) : (
+              <div className="flex h-full min-h-[8rem] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-4 text-center text-sm text-muted-foreground">
+                {assets.length === 0
+                  ? isAssetRowChemical
+                    ? "No batch/serial numbers registered yet."
+                    : "No serial numbers registered yet."
+                  : "No serial numbers match your search."}
               </div>
             )}
           </div>
-            
-          <div className="p-4 border-t border-border bg-card shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] z-10">
-            <p className="font-medium text-sm mb-3">
-              {isAssetRowChemical ? "Register new batch / serial number" : "Register new serial number"}
+
+          <div className="shrink-0 border-t border-border bg-background px-4 py-3 sm:px-5">
+            <p className="mb-2 text-sm font-medium">
+              {isAssetRowChemical ? "Register new batch / serial" : "Register new serial"}
             </p>
-            <div className="flex flex-col gap-2">
+            <div className="space-y-2">
               {isAssetRowChemical && (
                 <div className="space-y-1.5">
                   <Label required className="text-xs">Packaging size</Label>
@@ -1193,7 +1352,7 @@ const Inventory = () => {
                       clearFieldError("assetVariantId");
                     }}
                   >
-                    <SelectTrigger className={fieldErrors.assetVariantId ? "border-destructive" : ""}>
+                    <SelectTrigger className={cn("h-9", fieldErrors.assetVariantId ? "border-destructive" : "")}>
                       <SelectValue placeholder={assetVariantOptions.length === 0 ? "No packaging sizes / stock yet" : "Select packaging size"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -1217,41 +1376,67 @@ const Inventory = () => {
                   )}
                 </div>
               )}
-              <div className="space-y-1.5">
-                <Label required className="text-xs">{isAssetRowChemical ? "Batch / Serial / Tag" : "Serial Number / Tag"}</Label>
-                <div className="flex flex-col sm:flex-row gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <div className="space-y-1.5">
+                  <Label required className="text-xs">{isAssetRowChemical ? "Batch / serial / tag" : "Serial number / tag"}</Label>
                   <Input
-                    placeholder={isAssetRowChemical ? "Batch / Serial / Tag" : "Serial Number / Tag"}
+                    placeholder={isAssetRowChemical ? "Batch / serial / tag" : "Serial number / tag"}
                     value={newAssetTag}
                     onChange={(e) => {
                       setNewAssetTag(e.target.value);
                       clearFieldError("assetTag");
                     }}
-                    className={fieldErrors.assetTag ? "border-destructive" : ""}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void handleAddAsset();
+                      }
+                    }}
+                    className={cn("h-9", fieldErrors.assetTag ? "border-destructive" : "")}
                   />
-                  <Input placeholder="Condition (Optional)" value={newAssetCondition} onChange={(e) => setNewAssetCondition(e.target.value)} />
-                  <Button
-                    onClick={() => void handleAddAsset()}
-                    disabled={
-                      assetsLoading ||
-                      !newAssetTag.trim() ||
-                      (isAssetRowChemical && (!newAssetVariantId || selectedAssetVariantRemaining <= 0))
-                    }
-                  >
-                    Add
-                  </Button>
                 </div>
-                <FieldError message={fieldErrors.assetTag} />
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Condition</Label>
+                  <Input
+                    placeholder="Optional"
+                    value={newAssetCondition}
+                    onChange={(e) => setNewAssetCondition(e.target.value)}
+                    className="h-9"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void handleAddAsset();
+                      }
+                    }}
+                  />
+                </div>
+                <Button
+                  className="h-9 sm:w-24"
+                  onClick={() => void handleAddAsset()}
+                  disabled={
+                    assetsLoading ||
+                    !newAssetTag.trim() ||
+                    (isAssetRowChemical && (!newAssetVariantId || selectedAssetVariantRemaining <= 0))
+                  }
+                >
+                  {assetsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+                </Button>
               </div>
+              <FieldError message={fieldErrors.assetTag} />
             </div>
           </div>
 
-          <DialogFooter className="p-4 border-t border-border bg-muted/30 sm:justify-between">
-            <p className="text-xs text-muted-foreground self-center hidden sm:block">
-              {assets.length} total items
+          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border px-4 py-2.5 sm:px-5">
+            <p className="text-xs text-muted-foreground">
+              {assets.length} {assets.length === 1 ? "item" : "items"}
+              {assetSearchQuery.trim() && filteredAssets.length !== assets.length
+                ? ` · ${filteredAssets.length} shown`
+                : ""}
             </p>
-            <Button variant="outline" onClick={() => setAssetRow(null)}>Close</Button>
-          </DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setAssetRow(null)}>
+              Done
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

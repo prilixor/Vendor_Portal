@@ -41,7 +41,7 @@ const MAX_SUPER_ADMINS = 2;
 const roleConfig: Record<string, { label: string; icon: typeof Shield; cls: string }> = {
   super_admin: { label: "Super admin", icon: Shield, cls: "bg-primary-soft text-primary" },
   verifier: { label: "Verifier", icon: Users, cls: "bg-info-soft text-info" },
-  operations_admin: { label: "Operations admin", icon: Settings, cls: "bg-success-soft text-success" },
+  operations_admin: { label: "Operations admin", icon: Settings, cls: "bg-teal-50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-200" },
 };
 
 type DialogMode = "create" | "view" | "edit" | "resetPassword" | null;
@@ -451,32 +451,37 @@ const Admins = () => {
                           </Badge>
                         )}
                       </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        <CopyableEmail email={a.email} textClassName="text-xs text-muted-foreground" />
+                      <p className="truncate text-sm">
+                        <CopyableEmail
+                          email={a.email}
+                          textClassName="text-sm font-medium text-sky-600 dark:text-sky-400"
+                        />
                       </p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 sm:flex-nowrap pl-13 sm:pl-0">
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${cfg.cls}`}>
-                      <Icon className="h-3.5 w-3.5" /> {cfg.label}
+                  <div className="flex min-w-0 w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
+                    <span className={`inline-flex w-fit max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${cfg.cls}`}>
+                      <Icon className="h-3.5 w-3.5 shrink-0" /> {cfg.label}
                     </span>
                     {a.lastLoginAt && (
                       <span className="hidden text-xs text-muted-foreground lg:inline">
                         Last login {safeFormatDistance(a.lastLoginAt)}
                       </span>
                     )}
-                    <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
-                      <Button type="button" variant="outline" size="sm" onClick={() => openView(a)}>
+                    <div className="flex min-w-0 flex-wrap gap-1.5">
+                      <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => openView(a)}>
                         <Eye className="h-3.5 w-3.5 mr-1.5" /> View
                       </Button>
                       {canEditRow(a) && (
-                        <Button type="button" variant="secondary" size="sm" onClick={() => openEdit(a)}>
+                        <Button type="button" variant="secondary" size="sm" className="shrink-0" onClick={() => openEdit(a)}>
                           <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
                         </Button>
                       )}
                       {canResetPassword(a) && (
-                        <Button type="button" variant="outline" size="sm" onClick={() => openResetPassword(a)}>
-                          <KeyRound className="h-3.5 w-3.5 mr-1.5" /> Reset password
+                        <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => openResetPassword(a)}>
+                          <KeyRound className="h-3.5 w-3.5 mr-1.5" />
+                          <span className="sm:hidden">Reset</span>
+                          <span className="hidden sm:inline">Reset password</span>
                         </Button>
                       )}
                     </div>
@@ -597,7 +602,7 @@ const Admins = () => {
                         "text-[10px]",
                         selected.isActive === false
                           ? "text-muted-foreground"
-                          : "bg-emerald-50 text-emerald-800 border-emerald-200",
+                          : "border-teal-200 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-200",
                       )}
                     >
                       {selected.isActive === false ? "Inactive" : "Active"}
@@ -607,14 +612,14 @@ const Admins = () => {
               </div>
               <div className="rounded-xl border divide-y text-sm">
                 <div className="flex items-start gap-2.5 px-3.5 py-3">
-                  <Mail className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <Mail className="h-4 w-4 mt-0.5 shrink-0 text-sky-600 dark:text-sky-400" />
                   <div>
                     <p className="text-xs text-muted-foreground">Email</p>
                     <p className="font-medium break-all">
                       <CopyableEmail
                         email={selected.email}
                         compact={false}
-                        textClassName="font-medium break-all"
+                        textClassName="break-all font-medium text-sky-600 dark:text-sky-400"
                       />
                     </p>
                   </div>

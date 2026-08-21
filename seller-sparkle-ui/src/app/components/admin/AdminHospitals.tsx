@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { StateCityFields } from "@/app/components/shared/StateCityFields";
@@ -22,7 +23,8 @@ import {
   UpdateAdminHospitalRequest,
 } from "@/app/services/adminApi";
 import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
-import { Building2, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { cn } from "@/app/helpers/utils";
+import { Building2, Loader2, MapPin, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
@@ -52,6 +54,8 @@ const emptyForm = (): HospitalForm => ({
   doctorIds: [],
 });
 
+const PAGE_SIZE = 8;
+
 const AdminHospitals = () => {
   const [hospitals, setHospitals] = useState<AdminHospitalDto[]>([]);
   const [doctors, setDoctors] = useState<AdminDoctorDto[]>([]);
@@ -59,6 +63,7 @@ const AdminHospitals = () => {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AdminHospitalDto | null>(null);
   const [form, setForm] = useState<HospitalForm>(emptyForm());
@@ -74,6 +79,7 @@ const AdminHospitals = () => {
       ]);
       setHospitals(h);
       setDoctors(d);
+      setPage(1);
     } catch (e) {
       toast.error(getUserFriendlyMessage(e, "Failed to load hospitals"));
     } finally {
@@ -87,6 +93,12 @@ const AdminHospitals = () => {
   }, [statusFilter]);
 
   const filtered = useMemo(() => hospitals, [hospitals]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const pageRows = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage],
+  );
 
   const openCreate = () => {
     setEditing(null);
@@ -241,19 +253,41 @@ const AdminHospitals = () => {
             <p>No hospitals yet. Add one with address and map pin.</p>
           </div>
         ) : (
-          <div className="divide-y">
-            {filtered.map((h) => (
+          <div>
+            <div className="divide-y">
+            {pageRows.map((h) => {
+              const address =
+                [h.addressLine1, h.city, h.state, h.postalCode].filter(Boolean).join(", ") || "No address";
+              return (
               <div key={h.id} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium">{h.name}</p>
-                    <Badge variant={h.isActive ? "default" : "secondary"}>{h.isActive ? "Active" : "Inactive"}</Badge>
+                    <p className="font-semibold text-foreground">{h.name}</p>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px]",
+                        h.isActive
+                          ? "border-teal-200 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-200"
+                          : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300",
+                      )}
+                    >
+                      {h.isActive ? "Active" : "Inactive"}
+                    </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {[h.addressLine1, h.city, h.state, h.postalCode].filter(Boolean).join(", ") || "No address"}
+                  {h.contactNumber ? (
+                    <p className="truncate text-sm font-medium text-violet-600 dark:text-violet-400">
+                      {h.contactNumber}
+                    </p>
+                  ) : null}
+                  <p className="flex min-w-0 items-start gap-1.5 text-sm font-medium text-sky-600 dark:text-sky-400">
+                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-80" />
+                    <span className="min-w-0 break-words">{address}</span>
                   </p>
                   {h.doctorNames && h.doctorNames.length > 0 && (
-                    <p className="text-xs text-muted-foreground">Doctors: {h.doctorNames.join(", ")}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {h.doctorNames.length} {h.doctorNames.length === 1 ? "doctor" : "doctors"} · {h.doctorNames.join(", ")}
+                    </p>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -267,7 +301,18 @@ const AdminHospitals = () => {
                   </Button>
                 </div>
               </div>
-            ))}
+              );
+            })}
+            </div>
+            <div className="px-4 pb-4 sm:px-6">
+              <TablePagination
+                page={safePage}
+                pageSize={PAGE_SIZE}
+                total={filtered.length}
+                onPageChange={setPage}
+                label="hospitals"
+              />
+            </div>
           </div>
         )}
       </Card>

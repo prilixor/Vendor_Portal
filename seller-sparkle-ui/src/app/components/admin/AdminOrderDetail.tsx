@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Building, Calendar, DollarSign, Package, User } from "lucide-react";
 import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
 import { useAuth } from "@/app/guards/AuthContext";
+import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { toast } from "sonner";
@@ -445,10 +446,11 @@ const AdminOrderDetail = () => {
                 </div>
                 <div className="flex items-center justify-between sm:justify-end gap-3 mt-3 sm:mt-0 pl-[3.75rem] sm:pl-0">
                   <Badge
-                    className={cn("text-[10px] font-medium capitalize", orderStatusBadgeClass(item.status))}
+                    title={formatOrderStatusTitle(item.status)}
+                    className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(item.status))}
                     variant="outline"
                   >
-                    {item.status.replace(/_/g, " ")}
+                    {formatOrderStatusLabel(item.status)}
                   </Badge>
                   <span className="font-semibold tabular-nums text-xs sm:w-16 sm:text-right">
                     ₹{item.totalAmount.toFixed(0)}
@@ -735,8 +737,12 @@ const AdminOrderDetail = () => {
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</p>
-                <Badge className={cn("capitalize text-[10px]", orderStatusBadgeClass(selectedOrder.status))} variant="outline">
-                  {selectedOrder.status.replace(/_/g, " ")}
+                <Badge
+                  title={formatOrderStatusTitle(selectedOrder.status)}
+                  className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(selectedOrder.status))}
+                  variant="outline"
+                >
+                  {formatOrderStatusLabel(selectedOrder.status)}
                 </Badge>
               </div>
             </CardContent>

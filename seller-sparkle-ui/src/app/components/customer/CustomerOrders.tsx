@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Package } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListPager } from "@/app/components/shared/ListPager";
+import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
-import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
 import {
   ActiveFilterChips,
@@ -41,6 +44,14 @@ function formatOrderDate(value?: string | null): string {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+function compactDurationLabel(label?: string | null): string {
+  if (!label?.trim()) return "";
+  return label
+    .replace(/\s*Billing Cycles?/gi, " cycles")
+    .replace(/\s*Billing Cycle/gi, " cycle")
+    .trim();
+}
+
 function formatDateRange(start?: string | null, end?: string | null): string {
   const a = formatOrderDate(start);
   const b = formatOrderDate(end);
@@ -52,7 +63,7 @@ function formatDateRange(start?: string | null, end?: string | null): string {
 
 function orderStatusBadgeClass(status: string): string {
   const s = status.toLowerCase().replace(/_/g, " ");
-  if (s === "pending") {
+  if (s === "pending" || s === "awaiting vendor acceptance" || s === "pending vendor acceptance") {
     return "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200";
   }
   if (s === "confirmed") {
@@ -247,7 +258,8 @@ const CustomerOrders = () => {
         <FilterSearchBar
           value={searchInput}
           onChange={setSearchInput}
-          placeholder="Search by order ID, item, or vendor"
+          placeholder="Search by order ID, item, or supplier"
+          mobilePlaceholder="Search orders"
           activeCount={appliedFilter === "All" ? 0 : 1}
           onOpenFilters={openFilters}
           aria-label="Search orders"
@@ -282,7 +294,7 @@ const CustomerOrders = () => {
       <p className="text-xs text-muted-foreground">
         Status note: <span className="font-medium">Cancelled</span> means customer cancelled the request.
         {" "}
-        <span className="font-medium">Dispatch failed</span> means no replacement vendor was available.
+        <span className="font-medium">Dispatch failed</span> means no replacement supplier was available.
       </p>
 
       {isLoading ? (
@@ -320,14 +332,14 @@ const CustomerOrders = () => {
                 });
 
                 return groups.map((group) => (
-                  <div key={group.baseOrderNumber} className="overflow-hidden rounded-xl border border-border/80 bg-card p-6 shadow-sm transition-all hover:border-border/100">
+                  <div key={group.baseOrderNumber} className="overflow-hidden rounded-xl border border-border/80 bg-card p-4 shadow-sm transition-all hover:border-border/100 sm:p-6">
                     {/* Group Header */}
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-4 mb-4">
-                      <div>
-                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Order Group</div>
-                        <div className="text-base font-bold text-foreground mt-0.5">{group.baseOrderNumber}</div>
+                    <div className="mb-3 border-b border-border/60 pb-3 sm:mb-4 sm:flex sm:items-center sm:justify-between sm:pb-4">
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order Group</div>
+                        <div className="mt-0.5 truncate text-base font-bold text-foreground">{group.baseOrderNumber}</div>
                       </div>
-                      <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
+                      <div className="mt-2 flex items-center justify-between gap-3 text-xs sm:mt-0 sm:justify-end sm:gap-4 sm:text-sm">
                         <div>
                           <span className="text-muted-foreground">Placed On:</span>{" "}
                           <span className="font-semibold text-foreground">{formatOrderDate(group.date)}</span>
@@ -340,65 +352,61 @@ const CustomerOrders = () => {
                     </div>
 
                     {/* Group Items */}
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                       {group.items.map((o) => {
                         const imageUrl = resolveItemImageUrl(o);
+                        const durationText = compactDurationLabel(o.rentalDurationLabel);
                         return (
-                        <div key={o.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl bg-card border border-border/50 hover:bg-accent/10 hover:border-border transition-all duration-300 shadow-sm gap-4">
-                          <div className="flex items-center gap-4 flex-1">
-                            {imageUrl ? (
-                              <img src={imageUrl} alt={o.listingTitle} className="h-12 w-12 rounded-lg object-cover border border-border bg-muted shadow-sm" onError={retryOriginalOnImageError} />
-                            ) : (
-                              <div className="h-12 w-12 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground shadow-sm">
-                                <Package className="h-5 w-5 opacity-60" />
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
+                        <div key={o.id} className="flex flex-col gap-3 rounded-xl border border-border/50 bg-card p-3 shadow-sm transition-all duration-300 hover:border-border hover:bg-accent/10 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4">
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
+                            <ListingThumb src={imageUrl} size="lg" className="border border-border shadow-sm" />
+                            <div className="min-w-0 flex-1">
                               <Link
                                 to={`/customer/orders/${encodeURIComponent(o.id)}`}
-                                className="text-sm font-semibold text-foreground hover:underline block truncate"
+                                className="block truncate text-sm font-semibold text-foreground hover:underline"
                               >
                                 {o.listingTitle}
                               </Link>
-                              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground mt-1">
-                                {o.orderType?.toLowerCase() === "buy" ? (
-                                  <span>Purchase Date: <strong className="text-foreground font-medium">{formatOrderDate(o.startDate)}</strong></span>
-                                ) : (
-                                  <>
-                                    <span>Period: <strong className="text-foreground font-medium">{formatDateRange(o.startDate, o.endDate)}</strong></span>
-                                    {o.rentalDurationLabel ? (
-                                      <>
-                                        <span className="text-muted-foreground/30" aria-hidden="true">•</span>
-                                        <span>
-                                          Duration:{" "}
-                                          <strong className="text-foreground font-medium">{o.rentalDurationLabel}</strong>
-                                        </span>
-                                      </>
-                                    ) : null}
-                                  </>
-                                )}
-                                <span className="text-muted-foreground/30" aria-hidden="true">•</span>
-                                <span>Qty: <strong className="text-foreground font-medium">{o.quantity}</strong></span>
-                              </div>
+                              {o.orderType?.toLowerCase() === "buy" ? (
+                                <p className="mt-1 truncate text-xs text-muted-foreground">
+                                  {formatOrderDate(o.startDate)}
+                                  <span className="text-muted-foreground/40"> · </span>
+                                  Qty {o.quantity}
+                                </p>
+                              ) : (
+                                <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                                  <p className="truncate">
+                                    {formatDateRange(o.startDate, o.endDate)}
+                                  </p>
+                                  <p className="truncate">
+                                    {durationText ? `${durationText} · ` : null}
+                                    Qty {o.quantity}
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pt-3 sm:pt-0 border-t border-border/20 sm:border-none">
-                            <div className="flex items-center gap-2">
-                              <Badge className={cn("text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(o.orderType))} variant="outline">
+                          <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1 border-t border-border/20 pt-3 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
+                            <div className="flex min-w-0 flex-nowrap items-center gap-1">
+                              <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-semibold leading-none sm:px-2", orderTypeBadgeClass(o.orderType))} variant="outline">
                                 {o.orderType.toUpperCase()}
                               </Badge>
-                              <Badge className={cn("text-[10px] font-semibold py-0.5 px-2 capitalize", orderStatusBadgeClass(o.status))} variant="outline">
-                                {o.status.replace(/_/g, " ")}
+                              <Badge
+                                title={formatOrderStatusTitle(o.status)}
+                                className={cn("shrink-0", orderStatusBadgeSizeClass, "px-1.5 sm:px-2", orderStatusBadgeClass(o.status))}
+                                variant="outline"
+                              >
+                                {formatOrderStatusLabel(o.status)}
                               </Badge>
                             </div>
-                            <span className="font-semibold tabular-nums text-sm text-foreground sm:w-20 sm:text-right">₹{o.totalAmount.toFixed(0)}</span>
-                            <div className="flex items-center gap-1">
+                            <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-3">
+                              <span className="text-xs font-semibold tabular-nums text-foreground sm:text-sm">₹{o.totalAmount.toFixed(0)}</span>
                               {isCustomerOrderCancellable(o.status) ? (
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive font-semibold px-2"
+                                  className="h-7 shrink-0 px-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:px-2"
                                   disabled={cancelMut.isPending}
                                   onClick={() => cancelMut.mutate(o.id)}
                                 >
@@ -409,7 +417,7 @@ const CustomerOrders = () => {
                                 size="sm"
                                 variant="ghost"
                                 asChild
-                                className="h-8 text-xs font-semibold px-2 hover:bg-accent text-primary transition-colors flex items-center gap-1 group/btn"
+                                className="group/btn flex h-7 shrink-0 items-center gap-0.5 px-1.5 text-xs font-semibold text-primary transition-colors hover:bg-accent sm:h-8 sm:gap-1 sm:px-2"
                               >
                                 <Link to={`/customer/orders/${encodeURIComponent(o.id)}`}>
                                   Details
@@ -444,35 +452,12 @@ const CustomerOrders = () => {
           )}
 
           {filtered.length > 0 && (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-muted-foreground">
-                Page {safePage} of {totalPages} · {filtered.length} order{filtered.length !== 1 ? "s" : ""}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  aria-label="Previous page"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  aria-label="Next page"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <ListPager
+              page={safePage}
+              totalPages={totalPages}
+              summary={`Page ${safePage} of ${totalPages} · ${filtered.length} order${filtered.length !== 1 ? "s" : ""}`}
+              onPageChange={setPage}
+            />
           )}
         </>
       )}

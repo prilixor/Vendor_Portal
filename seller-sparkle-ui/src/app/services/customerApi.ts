@@ -531,11 +531,16 @@ export const customerApi = {
     return apiClient.patch<CustomerNotificationApi>(
       `/customers/me/notifications/${encodeURIComponent(notificationId)}/read`,
       {},
+      { quiet: true },
     );
   },
 
   markAllNotificationsRead(): Promise<CustomerNotificationsMarkAllReadApi> {
-    return apiClient.patch<CustomerNotificationsMarkAllReadApi>("/customers/me/notifications/read-all");
+    return apiClient.patch<CustomerNotificationsMarkAllReadApi>(
+      "/customers/me/notifications/read-all",
+      {},
+      { quiet: true },
+    );
   },
 
   getIndianStates(): Promise<IndianStateLookupApi[]> {

@@ -7,6 +7,7 @@ create table if not exists public.vendor_documents (
     document_type varchar(50) not null,
     file_url text not null,
     document_number varchar(100) null,
+    original_file_name varchar(255) null,
     verification_status varchar(30) not null default 'pending',
     rejection_reason text null,
     verified_at timestamptz null,

@@ -16,6 +16,7 @@ const BACKGROUND_QUERY_HEADS = new Set([
   "admin-vendor-support-unread",
   "admin-customer-chat-messages",
   "chat-messages",
+  "customer-notifications",
 ]);
 
 function isPortalPageLoad(query: {

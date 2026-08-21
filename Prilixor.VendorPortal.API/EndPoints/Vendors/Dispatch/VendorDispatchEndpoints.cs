@@ -92,6 +92,28 @@ public sealed class VendorUpdateOrderStatusEndpoint(IMediator mediator)
     }
 }
 
+public sealed class VendorAssignOrderAssetsRequest : VendorIdRequest
+{
+    public Guid OrderId { get; set; }
+    public List<string> AssetTags { get; set; } = [];
+}
+
+public sealed class VendorAssignOrderAssetsEndpoint(IMediator mediator)
+    : Endpoint<VendorAssignOrderAssetsRequest, Results<Ok<VendorOrderDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("{vendorId}/orders/{orderId}/assets");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorOrderDto>, ProblemHttpResult>> ExecuteAsync(VendorAssignOrderAssetsRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new AssignVendorOrderAssetsCommand(req.VendorId, req.OrderId, req.AssetTags), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class VendorAcceptDispatchOfferEndpoint(IMediator mediator)
     : Endpoint<VendorDispatchOrderRequest, Results<Ok<CustomerOrderDto>, ProblemHttpResult>>
 {

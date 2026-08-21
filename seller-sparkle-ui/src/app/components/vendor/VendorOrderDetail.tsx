@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Barcode, CheckCircle2, ImagePlus, Images, Loader2, Stethoscope, X } from "lucide-react";
-import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { Check, Barcode, CheckCircle2, ImagePlus, Images, Loader2, Plus, Stethoscope, X } from "lucide-react";
+import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ZoomableImageStage } from "@/app/components/shared/ZoomableImageStage";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import { Input } from "@/app/components/ui/input";
@@ -75,9 +77,21 @@ const hasDuplicateAssetTags = (tags: string[]) => {
   return false;
 };
 
-const AssignedSerialNumbersCard = ({ tags }: { tags: string[] }) => {
+const canAssignOrderSerials = (status?: string) => {
+  const compact = (status ?? "").trim().toLowerCase().replace(/\s+/g, "_");
+  return compact === "confirmed" || compact === "in_transit" || compact === "active";
+};
+
+const AssignedSerialNumbersCard = ({
+  tags,
+  onAdd,
+  adding,
+}: {
+  tags: string[];
+  onAdd?: () => void;
+  adding?: boolean;
+}) => {
   const assigned = tags.map((tag) => tag.trim()).filter(Boolean);
-  if (assigned.length === 0) return null;
 
   return (
     <Card className="border-border/80 shadow-sm overflow-hidden">
@@ -94,31 +108,47 @@ const AssignedSerialNumbersCard = ({ tags }: { tags: string[] }) => {
               </p>
             </div>
           </div>
-          <Badge variant="secondary" className="shrink-0 font-normal tabular-nums">
-            {assigned.length} {assigned.length === 1 ? "unit" : "units"}
-          </Badge>
+          {assigned.length > 0 ? (
+            <Badge variant="secondary" className="shrink-0 font-normal tabular-nums">
+              {assigned.length} {assigned.length === 1 ? "unit" : "units"}
+            </Badge>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="grid gap-2 sm:grid-cols-2">
-          {assigned.map((tag, idx) => (
-            <div
-              key={`${tag}-${idx}`}
-              className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5 transition-colors hover:bg-muted/50"
-            >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background text-xs font-semibold text-muted-foreground">
-                {idx + 1}
+        {assigned.length > 0 ? (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {assigned.map((tag, idx) => (
+              <div
+                key={`${tag}-${idx}`}
+                className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5 transition-colors hover:bg-muted/50"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background text-xs font-semibold text-muted-foreground">
+                  {idx + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Serial</p>
+                  <p className="font-mono text-sm font-semibold truncate" title={tag}>
+                    {tag}
+                  </p>
+                </div>
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Serial</p>
-                <p className="font-mono text-sm font-semibold truncate" title={tag}>
-                  {tag}
-                </p>
-              </div>
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border/80 bg-muted/20 px-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              No serial number on this item yet. Add it here if it was skipped at dispatch.
+            </p>
+            {onAdd ? (
+              <Button type="button" variant="outline" className="shrink-0" disabled={adding} onClick={onAdd}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add serial numbers
+              </Button>
+            ) : null}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -300,6 +330,7 @@ const VendorOrderDetail = () => {
   const [continuations, setContinuations] = useState<OrderContinuationsDto | null>(null);
 
   const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
+  const [serialDialogMode, setSerialDialogMode] = useState<"dispatch" | "assign">("dispatch");
   const [dispatchAssetTags, setDispatchAssetTags] = useState<string[]>([]);
   const [availableAssets, setAvailableAssets] = useState<VendorProductAssetApiDto[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
@@ -511,7 +542,15 @@ const VendorOrderDetail = () => {
 
   const handleDispatchDialogChange = (open: boolean) => {
     setDispatchDialogOpen(open);
-    if (!open) resetDispatchState();
+    if (!open) {
+      resetDispatchState();
+      setSerialDialogMode("dispatch");
+    }
+  };
+
+  const openAssignSerialsDialog = () => {
+    setSerialDialogMode("assign");
+    setDispatchDialogOpen(true);
   };
 
   const handleSelectItem = (itemId: string) => {
@@ -532,6 +571,7 @@ const VendorOrderDetail = () => {
     const existingTags = (dispatchOrder.assignedAssetTags ?? []).filter((t) => t.trim() !== "");
 
     if (status === "in_transit" && !dispatchDialogOpen) {
+      setSerialDialogMode("dispatch");
       setDispatchDialogOpen(true);
       return;
     }
@@ -564,6 +604,38 @@ const VendorOrderDetail = () => {
       await Promise.all([loadOrder(currentItemId), loadAllOrders(), loadImageRequest(currentItemId)]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update status.";
+      toast.error(message);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleAssignSerials = async () => {
+    const dispatchOrder = activeOrder ?? order;
+    if (!dispatchOrder || !user || !currentItemId) return;
+
+    const tagsToAssign = dispatchAssetTags.map((t) => t.trim()).filter(Boolean);
+    if (tagsToAssign.length !== dispatchOrder.quantity) {
+      toast.error(
+        dispatchOrder.quantity === 1
+          ? "Enter a serial number for this item."
+          : `Enter ${dispatchOrder.quantity} unique serial numbers.`,
+      );
+      return;
+    }
+    if (hasDuplicateAssetTags(tagsToAssign)) {
+      toast.error("Each item needs a unique serial number. Remove duplicates and try again.");
+      return;
+    }
+
+    try {
+      setUpdating(true);
+      await vendorOnboardingApi.assignVendorOrderAssets(user.id, currentItemId, tagsToAssign);
+      toast.success("Serial number saved.");
+      handleDispatchDialogChange(false);
+      await Promise.all([loadOrder(currentItemId), loadAllOrders(), loadImageRequest(currentItemId)]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save serial number.";
       toast.error(message);
     } finally {
       setUpdating(false);
@@ -795,6 +867,8 @@ const VendorOrderDetail = () => {
                           {item.assignedAssetTags.length} serial number
                           {item.assignedAssetTags.length === 1 ? "" : "s"} assigned
                         </p>
+                      ) : canAssignOrderSerials(item.status) ? (
+                        <p className="mt-1.5 text-[10px] font-medium text-muted-foreground">No serial number yet</p>
                       ) : null}
                       {photoWaiting ? (
                         <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
@@ -813,12 +887,14 @@ const VendorOrderDetail = () => {
 
                   <div className="flex items-center justify-between sm:justify-end gap-4 mt-3 sm:mt-0">
                     <span
+                      title={formatOrderStatusTitle(item.status)}
                       className={cn(
-                        "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
+                        "inline-flex items-center rounded-full",
+                        orderStatusBadgeSizeClass,
                         orderStatusBadgeClass(item.status),
                       )}
                     >
-                      {item.status.replace(/_/g, " ")}
+                      {formatOrderStatusLabel(item.status)}
                     </span>
                     <span className="font-semibold tabular-nums text-xs sm:w-20 sm:text-right">
                       ₹{itemPayout(item).toFixed(0)}
@@ -1069,9 +1145,17 @@ const VendorOrderDetail = () => {
             </div>
           </div>
 
-          {order.assignedAssetTags && order.assignedAssetTags.length > 0 && (
-            <AssignedSerialNumbersCard tags={order.assignedAssetTags} />
-          )}
+          {(order.assignedAssetTags && order.assignedAssetTags.length > 0) || canAssignOrderSerials(order.status) ? (
+            <AssignedSerialNumbersCard
+              tags={order.assignedAssetTags ?? []}
+              onAdd={
+                !(order.assignedAssetTags ?? []).some((t) => t.trim()) && canAssignOrderSerials(order.status)
+                  ? openAssignSerialsDialog
+                  : undefined
+              }
+              adding={updating}
+            />
+          ) : null}
 
           {/* Customer photo request — vendor uploads (hidden when no open request) */}
           {!imageRequestLoading && imageRequest && (
@@ -1174,16 +1258,15 @@ const VendorOrderDetail = () => {
               </Card>
 
               <Dialog open={!!previewImageUrl} onOpenChange={(open) => !open && setPreviewImageUrl(null)}>
-                <DialogContent className="max-w-3xl p-2 sm:p-4">
-                  <DialogHeader>
-                    <DialogTitle className="sr-only">Order photo preview</DialogTitle>
+                <DialogContent className="flex max-h-[min(92dvh,880px)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl lg:max-w-4xl">
+                  <DialogHeader className="border-b border-border px-4 py-3 pr-12">
+                    <DialogTitle className="text-sm font-semibold">Photo preview</DialogTitle>
                   </DialogHeader>
                   {previewImageUrl ? (
-                    <img
-                      src={previewImageUrl}
+                    <ZoomableImageStage
+                      src={originalUrlFromThumb(previewImageUrl) ?? previewImageUrl}
                       alt="Order photo preview"
-                      className="max-h-[80vh] w-full rounded-md object-contain"
-                      onError={retryOriginalOnImageError}
+                      resetKey={previewImageUrl}
                     />
                   ) : null}
                 </DialogContent>
@@ -1262,7 +1345,7 @@ const VendorOrderDetail = () => {
       <Dialog open={dispatchDialogOpen} onOpenChange={handleDispatchDialogChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Dispatch Details</DialogTitle>
+            <DialogTitle>{serialDialogMode === "assign" ? "Add serial numbers" : "Dispatch Details"}</DialogTitle>
             {activeOrder ? (
               <p className="text-xs text-muted-foreground pt-1">{activeOrder.listingTitle}</p>
             ) : null}
@@ -1278,9 +1361,9 @@ const VendorOrderDetail = () => {
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">
-                  Enter serial numbers or asset tags for {activeOrder?.quantity ?? 1}{" "}
-                  {(activeOrder?.quantity ?? 1) === 1 ? "item" : "items"} being dispatched. Optional —
-                  pick from this product&apos;s registered stock or type new ones.
+                  {serialDialogMode === "assign"
+                    ? `Enter serial numbers for ${activeOrder?.quantity ?? 1} ${(activeOrder?.quantity ?? 1) === 1 ? "item" : "items"}. Pick from registered stock or type a new one.`
+                    : `Enter serial numbers or asset tags for ${activeOrder?.quantity ?? 1} ${(activeOrder?.quantity ?? 1) === 1 ? "item" : "items"} being dispatched. Optional — pick from this product's registered stock or type new ones.`}
                 </p>
                 {loadingAssets ? (
                   <p className="text-sm">Loading available stock for this product...</p>
@@ -1293,7 +1376,8 @@ const VendorOrderDetail = () => {
                       </p>
                     ) : (
                       <p className="text-xs text-muted-foreground">
-                        No pre-registered stock for this product. You can type a serial or batch number, or leave blank.
+                        No pre-registered stock for this product. You can type a serial or batch number
+                        {serialDialogMode === "assign" ? "." : ", or leave blank."}
                       </p>
                     )}
                     {dispatchAssetTags.map((tag, idx) => {
@@ -1304,12 +1388,16 @@ const VendorOrderDetail = () => {
 
                       return (
                         <div key={`${activeOrder?.orderId ?? "dispatch"}-${idx}`} className="space-y-1.5 relative">
-                          <Label>Item {idx + 1} Serial Number (Optional)</Label>
+                          <Label>
+                            Item {idx + 1} Serial Number{serialDialogMode === "assign" ? "" : " (Optional)"}
+                          </Label>
                           <Input
                             placeholder={
                               availableAssets.length > 0
                                 ? "Enter or select serial number..."
-                                : "Enter serial or batch number (optional)..."
+                                : serialDialogMode === "assign"
+                                  ? "Enter serial or batch number..."
+                                  : "Enter serial or batch number (optional)..."
                             }
                             value={tag}
                             onChange={(e) => {
@@ -1361,8 +1449,13 @@ const VendorOrderDetail = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDispatchDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => void handleStatusChange("in_transit")} disabled={updating || loadingAssets}>
-              Confirm Dispatch
+            <Button
+              onClick={() =>
+                serialDialogMode === "assign" ? void handleAssignSerials() : void handleStatusChange("in_transit")
+              }
+              disabled={updating || loadingAssets}
+            >
+              {serialDialogMode === "assign" ? "Save serial numbers" : "Confirm Dispatch"}
             </Button>
           </DialogFooter>
         </DialogContent>

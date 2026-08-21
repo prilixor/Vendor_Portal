@@ -7,6 +7,7 @@ public class VendorDocument : AuditableEntity<Guid>, ISoftDelete
     public Guid VendorId { get; set; }
     public string DocumentType { get; set; } = string.Empty;
     public string FileUrl { get; set; } = string.Empty;
+    public string? OriginalFileName { get; set; }
     public string? DocumentNumber { get; set; }
     public string VerificationStatus { get; set; } = "pending";
     public string? RejectionReason { get; set; }
