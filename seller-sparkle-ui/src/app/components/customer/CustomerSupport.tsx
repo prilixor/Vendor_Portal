@@ -9,13 +9,13 @@ const CustomerSupport = () => {
   const orderRef = searchParams.get("order")?.trim();
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4">
+    <div className="space-y-6">
       <div>
         {orderRef ? <BackLink to="/customer/orders" label="Back to orders" /> : null}
-        <h1 className={orderRef ? "mt-1 text-xl font-bold tracking-tight sm:text-2xl" : "text-xl font-bold tracking-tight sm:text-2xl"}>
+        <h1 className={orderRef ? "mt-1 text-2xl font-semibold tracking-tight" : "text-2xl font-semibold tracking-tight"}>
           Support
         </h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">Get help with rentals, orders, or your account.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Get help with rentals, orders, or your account.</p>
         {orderRef ? (
           <p className="mt-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground">
             You opened this page from order{" "}
