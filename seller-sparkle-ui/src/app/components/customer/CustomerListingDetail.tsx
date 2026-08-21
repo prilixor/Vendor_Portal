@@ -1,5 +1,5 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import { customerApi, type RentalPricingPlanDto } from "@/app/services/customerApi";
 import { useCart } from "@/app/contexts/CartContext";
@@ -21,6 +21,8 @@ import { toast } from "sonner";
 import {
   AlertCircle,
   Check,
+  Heart,
+  LayoutGrid,
   ShoppingBag,
   ShoppingCart,
   CalendarDays,
@@ -81,11 +83,18 @@ const CustomerListingDetail = () => {
     durationLabel: string;
   } | null>(null);
 
+  const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["customer-listing", listingId],
     queryFn: () => customerApi.getListingDetail(listingId!),
     enabled: !!listingId,
   });
+  const { data: favorites = [] } = useQuery({
+    queryKey: ["customer-favorites"],
+    queryFn: () => customerApi.getFavorites(),
+    enabled: user?.role === "customer",
+  });
+  const isFavorite = !!listingId && favorites.some((f) => f.vendorProductListingId === listingId);
 
   const activeVariants = data?.variants?.filter((v) => v.isActive) || [];
   const activePlans = useMemo(
@@ -301,14 +310,18 @@ const CustomerListingDetail = () => {
   };
 
   return (
-    <div className="relative space-y-5">
-      <div className="pointer-events-none absolute -right-6 top-8 h-36 w-36 rounded-full bg-primary/10 blur-3xl" />
+    <div className="relative min-w-0 max-w-full overflow-x-clip space-y-5">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <div className="absolute -right-6 top-8 h-36 w-36 rounded-full bg-primary/10 blur-3xl" />
+      </div>
       <BackLink to="/customer/shop" label="Back to shop" />
 
-      <div className="relative grid gap-8 lg:grid-cols-2 lg:gap-10">
-        <ProductImageGallery images={images} alt={data.title} />
+      <div className="relative grid min-w-0 gap-8 lg:grid-cols-2 lg:gap-10">
+        <div className="min-w-0">
+          <ProductImageGallery images={images} alt={data.title} />
+        </div>
 
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           <header className="space-y-2.5">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
@@ -474,7 +487,7 @@ const CustomerListingDetail = () => {
           )}
 
           {/* Configure + add */}
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+          <div className="min-w-0 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
             <div className="space-y-5">
               {canRent && canBuy ? (
                 <div className="grid grid-cols-2 gap-2.5">
@@ -574,7 +587,7 @@ const CustomerListingDetail = () => {
                         </span>
                       </div>
 
-                      <div className="flex items-end justify-between gap-3">
+                      <div className="flex flex-wrap items-end justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-[14px] font-bold tracking-tight text-foreground">
                             You pay for rent
@@ -587,7 +600,7 @@ const CustomerListingDetail = () => {
                         </div>
                         <p
                           className={cn(
-                            "text-[24px] font-extrabold leading-none tabular-nums tracking-tight",
+                            "shrink-0 text-[22px] font-extrabold leading-none tabular-nums tracking-tight sm:text-[24px]",
                             selectedPlan.isRecommended
                               ? "text-blue-600 dark:text-blue-400"
                               : "text-violet-600 dark:text-violet-400",
@@ -665,12 +678,12 @@ const CustomerListingDetail = () => {
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3.5">
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-2">
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     type="button"
-                    className="h-9 px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+                    className="h-9 rounded-lg px-3 font-medium"
                     onClick={() => {
                       if (user?.role !== "customer") {
                         toast.message("Sign in to save favorites");
@@ -679,21 +692,27 @@ const CustomerListingDetail = () => {
                         });
                         return;
                       }
-                      customerApi
-                        .addFavorite(data.id)
-                        .then(() => toast.success("Added to favorites"))
-                        .catch(() => toast.error("Failed to add favorite"));
+                      const action = isFavorite
+                        ? customerApi.removeFavorite(data.id).then(() => toast.success("Removed from favorites"))
+                        : customerApi.addFavorite(data.id).then(() => toast.success("Added to favorites"));
+                      action
+                        .then(() => queryClient.invalidateQueries({ queryKey: ["customer-favorites"] }))
+                        .catch(() => toast.error(isFavorite ? "Failed to remove favorite" : "Failed to add favorite"));
                     }}
                   >
-                    Favorite
+                    <Heart className={cn("h-4 w-4", isFavorite && "fill-destructive text-destructive")} />
+                    {isFavorite ? "Saved" : "Favorite"}
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className="h-9 px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+                    className="h-9 rounded-lg px-3 font-medium"
                     asChild
                   >
-                    <Link to="/customer/shop">More listings</Link>
+                    <Link to="/customer/shop">
+                      <LayoutGrid className="h-4 w-4" />
+                      More listings
+                    </Link>
                   </Button>
                 </div>
                 <p className="text-[12px] font-medium text-muted-foreground">

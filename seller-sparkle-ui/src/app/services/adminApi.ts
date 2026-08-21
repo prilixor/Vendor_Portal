@@ -38,6 +38,7 @@ export interface VendorDocumentDto {
   verificationStatus: string;
   rejectionReason?: string;
   verifiedAt?: string;
+  originalFileName?: string | null;
 }
 
 export interface VendorBankAccountDto {
@@ -260,6 +261,7 @@ export interface VendorDocumentDto {
   verificationStatus: string;
   rejectionReason?: string;
   verifiedAt?: string;
+  originalFileName?: string | null;
 }
 
 export interface VerifyVendorDocumentRequest {

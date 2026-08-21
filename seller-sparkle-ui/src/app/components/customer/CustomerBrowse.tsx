@@ -401,13 +401,14 @@ const CustomerBrowse = () => {
               aria-selected={browseMode === "equipment"}
               onClick={() => setBrowseMode("equipment")}
               className={cn(
-                "flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all lg:flex-none",
+                "flex-1 rounded-lg px-2.5 py-2.5 text-xs font-semibold transition-all sm:px-4 sm:text-sm lg:flex-none",
                 browseMode === "equipment"
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              Equipment Rentals
+              <span className="sm:hidden">Equipment</span>
+              <span className="hidden sm:inline">Equipment Rentals</span>
             </button>
             <button
               type="button"
@@ -415,13 +416,14 @@ const CustomerBrowse = () => {
               aria-selected={browseMode === "chemicals"}
               onClick={() => setBrowseMode("chemicals")}
               className={cn(
-                "flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all lg:flex-none",
+                "flex-1 rounded-lg px-2.5 py-2.5 text-xs font-semibold transition-all sm:px-4 sm:text-sm lg:flex-none",
                 browseMode === "chemicals"
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              Chemicals (Buy)
+              <span className="sm:hidden">Chemicals</span>
+              <span className="hidden sm:inline">Chemicals (Buy)</span>
             </button>
           </div>
 
@@ -433,6 +435,9 @@ const CustomerBrowse = () => {
                 browseMode === "chemicals"
                   ? "Search acids, reagents, solvents..."
                   : "Search beds, oxygen, wheelchairs..."
+              }
+              mobilePlaceholder={
+                browseMode === "chemicals" ? "Search chemicals" : "Search equipment"
               }
               activeCount={activeFilterCount}
               onOpenFilters={openFilters}

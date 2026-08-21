@@ -187,55 +187,15 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
 
         if (target == "in_transit" || target == "active")
         {
-            var assignedAssets = await customers.GetCustomerRentalOrderAssetsAsync(order.Id, cancellationToken);
-            if (request.AssetTags is { Count: > 0 } && !assignedAssets.Any())
+            if (request.AssetTags is { Count: > 0 })
             {
-                if (request.AssetTags.Count != order.Quantity)
+                var assignedAssets = await customers.GetCustomerRentalOrderAssetsAsync(order.Id, cancellationToken);
+                if (assignedAssets.Count == 0)
                 {
-                    return Result.Failure<CustomerOrderDto>(new Error("vendors.order.asset_count_mismatch", $"Expected {order.Quantity} asset tags, got {request.AssetTags.Count}.", ErrorCategory.Validation));
-                }
-
-                if (request.AssetTags.Distinct().Count() != request.AssetTags.Count)
-                {
-                    return Result.Failure<CustomerOrderDto>(new Error("vendors.order.asset_duplicate", "Duplicate asset tags provided in the request.", ErrorCategory.Validation));
-                }
-
-                foreach (var tag in request.AssetTags)
-                {
-                    var asset = await vendors.GetVendorProductAssetByTagGlobalAsync(vendorId, tag, cancellationToken);
-                    if (asset is not null && asset.VendorProductListingId != listing.Id)
-                    {
-                        return Result.Failure<CustomerOrderDto>(new Error("vendors.order.asset_duplicate_global", $"Asset tag {tag} already belongs to another product ({asset.VendorProductListing?.ListingTitle ?? "Unknown"}).", ErrorCategory.Validation));
-                    }
-
-                    if (asset is null)
-                    {
-                        asset = new VendorProductAsset
-                        {
-                            VendorProductListingId = listing.Id,
-                            AssetTag = tag,
-                            Status = "available",
-                            Condition = "Good",
-                            CreatedBy = vendorId
-                        };
-                        await vendors.AddVendorProductAssetAsync(asset, cancellationToken);
-                        await vendors.SaveChangesAsync(cancellationToken);
-                    }
-
-                    if (asset.Status == "rented" || asset.Status == "sold")
-                    {
-                        return Result.Failure<CustomerOrderDto>(new Error("vendors.order.asset_unavailable", $"Asset {tag} is currently {asset.Status}.", ErrorCategory.Validation));
-                    }
-
-                    asset.Status = order.OrderType == "buy" ? "sold" : "rented";
-                    await vendors.UpdateVendorProductAssetAsync(asset, cancellationToken);
-
-                    var orderAsset = new CustomerRentalOrderAsset
-                    {
-                        CustomerRentalOrderId = order.Id,
-                        VendorProductAssetId = asset.Id
-                    };
-                    await customers.AddCustomerRentalOrderAssetAsync(orderAsset, cancellationToken);
+                    var assignResult = await VendorOrderAssetLinker.AssignAsync(
+                        customers, vendors, order, listing, vendorId, request.AssetTags, cancellationToken);
+                    if (assignResult.IsFailure)
+                        return Result.Failure<CustomerOrderDto>(assignResult.Errors);
                 }
             }
         }
@@ -495,6 +455,122 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
             ("active", "bought_out") => string.Equals(order.OrderType, "rent", StringComparison.OrdinalIgnoreCase),
             _ => false,
         };
+}
+
+/// Links serial / asset tags to an order when none are assigned yet.
+internal static class VendorOrderAssetLinker
+{
+    public static bool CanAssign(string status)
+    {
+        var compact = status.Trim().ToLowerInvariant().Replace(" ", "_");
+        return compact is "confirmed" or "in_transit" or "active";
+    }
+
+    public static async Task<Result> AssignAsync(
+        ICustomerRepository customers,
+        IVendorOnboardingRepository vendors,
+        CustomerRentalOrder order,
+        VendorProductListing listing,
+        Guid vendorId,
+        IReadOnlyList<string> assetTags,
+        CancellationToken cancellationToken)
+    {
+        var assignedAssets = await customers.GetCustomerRentalOrderAssetsAsync(order.Id, cancellationToken);
+        if (assignedAssets.Count > 0)
+            return Result.Failure(new Error("vendors.order.assets_already_assigned", "Serial numbers are already assigned to this item.", ErrorCategory.Validation));
+
+        var tags = assetTags.Select(t => t.Trim()).Where(t => t.Length > 0).ToList();
+        if (tags.Count != order.Quantity)
+            return Result.Failure(new Error("vendors.order.asset_count_mismatch", $"Expected {order.Quantity} serial number(s), got {tags.Count}.", ErrorCategory.Validation));
+
+        if (tags.Distinct(StringComparer.OrdinalIgnoreCase).Count() != tags.Count)
+            return Result.Failure(new Error("vendors.order.asset_duplicate", "Duplicate serial numbers provided in the request.", ErrorCategory.Validation));
+
+        foreach (var tag in tags)
+        {
+            var asset = await vendors.GetVendorProductAssetByTagGlobalAsync(vendorId, tag, cancellationToken);
+            if (asset is not null && asset.VendorProductListingId != listing.Id)
+            {
+                return Result.Failure(new Error(
+                    "vendors.order.asset_duplicate_global",
+                    $"Serial number {tag} already belongs to another product ({asset.VendorProductListing?.ListingTitle ?? "Unknown"}).",
+                    ErrorCategory.Validation));
+            }
+
+            if (asset is null)
+            {
+                asset = new VendorProductAsset
+                {
+                    VendorProductListingId = listing.Id,
+                    AssetTag = tag,
+                    Status = "available",
+                    Condition = "Good",
+                    CreatedBy = vendorId
+                };
+                await vendors.AddVendorProductAssetAsync(asset, cancellationToken);
+                await vendors.SaveChangesAsync(cancellationToken);
+            }
+
+            if (asset.Status == "rented" || asset.Status == "sold")
+            {
+                return Result.Failure(new Error("vendors.order.asset_unavailable", $"Serial number {tag} is currently {asset.Status}.", ErrorCategory.Validation));
+            }
+
+            asset.Status = order.OrderType == "buy" ? "sold" : "rented";
+            await vendors.UpdateVendorProductAssetAsync(asset, cancellationToken);
+
+            await customers.AddCustomerRentalOrderAssetAsync(
+                new CustomerRentalOrderAsset
+                {
+                    CustomerRentalOrderId = order.Id,
+                    VendorProductAssetId = asset.Id
+                },
+                cancellationToken);
+        }
+
+        return Result.Success();
+    }
+}
+
+public sealed record AssignVendorOrderAssetsCommand(string VendorId, Guid OrderId, List<string> AssetTags) : ICommand<VendorOrderDto>;
+
+internal sealed class AssignVendorOrderAssetsCommandHandler(
+    ICustomerRepository customers,
+    IVendorOnboardingRepository vendors)
+    : ICommandHandler<AssignVendorOrderAssetsCommand, VendorOrderDto>
+{
+    public async Task<Result<VendorOrderDto>> Handle(AssignVendorOrderAssetsCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.VendorId, out var vendorId))
+            return Result.Failure<VendorOrderDto>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
+
+        var order = await customers.GetCustomerOrderEntityByIdAsync(request.OrderId, cancellationToken);
+        if (order is null || order.IsDeleted)
+            return Result.Failure<VendorOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
+
+        var listing = await vendors.GetVendorProductListingByIdAsync(vendorId, order.VendorProductListingId, cancellationToken);
+        if (listing is null)
+            return Result.Failure<VendorOrderDto>(new Error("vendors.order_not_owned", "This order is not assigned to the vendor.", ErrorCategory.Validation));
+
+        if (!VendorOrderAssetLinker.CanAssign(order.Status))
+            return Result.Failure<VendorOrderDto>(new Error("vendors.order.assets_locked", "Serial numbers can be added while the item is confirmed, in transit, or delivered.", ErrorCategory.Validation));
+
+        var assignResult = await VendorOrderAssetLinker.AssignAsync(
+            customers, vendors, order, listing, vendorId, request.AssetTags ?? [], cancellationToken);
+        if (assignResult.IsFailure)
+            return Result.Failure<VendorOrderDto>(assignResult.Errors);
+
+        await customers.SaveChangesAsync(cancellationToken);
+        await vendors.SaveChangesAsync(cancellationToken);
+
+        var row = await customers.GetVendorOrderAsync(vendorId, order.Id, cancellationToken);
+        if (row is null)
+            return Result.Failure<VendorOrderDto>(new Error("vendors.order_not_found", "Order not found for vendor.", ErrorCategory.NotFound));
+
+        var assetTagsMap = await customers.GetCustomerOrderAssetTagsByOrderIdsAsync([row.Order.Id], cancellationToken);
+        assetTagsMap.TryGetValue(row.Order.Id, out var assignedTags);
+        return Result.Success(VendorOrderMapper.ToVendorOrderDto(row, assignedTags));
+    }
 }
 
 internal static class VendorOrderMapper

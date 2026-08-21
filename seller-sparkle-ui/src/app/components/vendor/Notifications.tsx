@@ -5,6 +5,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Switch } from "@/app/components/ui/switch";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListPager } from "@/app/components/shared/ListPager";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Notification } from "@/app/models";
 import { CheckCheck, Bell, Info, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
@@ -234,7 +235,7 @@ const Notifications = () => {
               return (
                 <li
                   key={n.id}
-                  className={`flex cursor-pointer items-start gap-3 p-4 transition-colors hover:bg-muted/30 ${!n.read ? "bg-primary-soft/30" : ""}`}
+                  className={`flex cursor-pointer flex-col items-stretch gap-3 p-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-start ${!n.read ? "bg-primary-soft/30" : ""}`}
                   onClick={() => {
                     if (!n.read) {
                       void toggleRead(n.id);
@@ -259,31 +260,35 @@ const Notifications = () => {
                     }
                   }}
                 >
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${cls}`}>
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-sm">{n.title}</p>
-                      {!n.read && <span className="h-2 w-2 rounded-full bg-primary" />}
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${cls}`}>
+                      <Icon className="h-4 w-4" />
                     </div>
-                    {body && (
-                      <p className="mt-0.5 text-sm text-muted-foreground">{body}</p>
-                    )}
-                    {adminComment && (
-                      <AdminCommentHint
-                        className="mt-2"
-                        comment={adminComment}
-                      />
-                    )}
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start gap-2">
+                        <p className="min-w-0 flex-1 text-sm font-semibold break-words">{n.title}</p>
+                        {!n.read && (
+                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden />
+                        )}
+                      </div>
+                      {body && (
+                        <p className="mt-0.5 text-sm text-muted-foreground break-words">{body}</p>
+                      )}
+                      {adminComment && (
+                        <AdminCommentHint
+                          className="mt-2"
+                          comment={adminComment}
+                        />
+                      )}
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
+                      </p>
+                    </div>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="shrink-0"
+                    className="h-8 shrink-0 self-start px-2 text-xs sm:self-auto sm:text-sm"
                     onClick={(e) => {
                       e.stopPropagation();
                       void toggleRead(n.id);
@@ -307,15 +312,13 @@ const Notifications = () => {
           </ul>
 
           {filtered.length > PAGE_SIZE && (
-            <div className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between border-t border-border/40 mt-6">
-              <p className="text-sm text-muted-foreground">
-                Page {page} of {Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))} &middot; {filtered.length} items
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-                <Button variant="outline" size="sm" disabled={page >= Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))} onClick={() => setPage(p => p + 1)}>Next</Button>
-              </div>
-            </div>
+            <ListPager
+              className="border-t border-border/40 pt-6 mt-6"
+              page={page}
+              totalPages={Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))}
+              summary={`Page ${page} of ${Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))} · ${filtered.length} items`}
+              onPageChange={setPage}
+            />
           )}
         </Card>
 

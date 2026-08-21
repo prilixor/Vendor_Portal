@@ -8,7 +8,7 @@ type ListingThumbProps = {
   fallbackSrc?: string | null;
   alt?: string;
   className?: string;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
 };
 
 /** Compact list-row thumbnail with icon fallback when missing/broken. */
@@ -21,7 +21,7 @@ export function ListingThumb({
 }: ListingThumbProps) {
   const candidates = imageSrcCandidates(src, fallbackSrc);
   const [index, setIndex] = useState(0);
-  const box = size === "sm" ? "h-9 w-9" : "h-10 w-10";
+  const box = size === "sm" ? "h-9 w-9" : size === "lg" ? "h-12 w-12" : "h-10 w-10";
 
   useEffect(() => {
     setIndex(0);

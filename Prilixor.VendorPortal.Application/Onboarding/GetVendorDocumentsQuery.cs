@@ -29,7 +29,8 @@ internal sealed class GetVendorDocumentsQueryHandler(
                 doc.DocumentNumber,
                 doc.VerificationStatus,
                 doc.RejectionReason,
-                doc.VerifiedAt))
+                doc.VerifiedAt,
+                doc.OriginalFileName))
             .ToList();
 
         return Result.Success(result);

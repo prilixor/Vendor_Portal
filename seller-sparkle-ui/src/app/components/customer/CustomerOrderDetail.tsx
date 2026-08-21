@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, type ReactNode } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckSquare, Headset, Images, Loader2, MessageCircle } from "lucide-react";
+import { Check, CheckSquare, Headset, Images, Loader2, MessageCircle, Package } from "lucide-react";
 import {
   customerApi,
   type CustomerOrderImageApi,
@@ -14,6 +14,7 @@ import { Checkbox } from "@/app/components/ui/checkbox";
 import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ZoomableImageStage } from "@/app/components/shared/ZoomableImageStage";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/app/components/ui/sheet";
 import { Input } from "@/app/components/ui/input";
 import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea";
@@ -21,7 +22,7 @@ import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { toast } from "sonner";
 import { isSameChatDay } from "@/app/helpers/chatDayLabel";
 import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
-import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
@@ -53,6 +54,10 @@ function orderStatusBadgeClass(status: string): string {
     return "bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white font-medium shadow-sm border-0 dark:from-fuchsia-600 dark:to-purple-700";
   }
   return "bg-muted text-foreground";
+}
+
+function customerFacingStatus(status: string): string {
+  return formatOrderStatusTitle(status).replace(/\bvendor\b/gi, "supplier");
 }
 
 function formatDetailDate(value?: string | null): string {
@@ -92,14 +97,14 @@ const getTimelineSteps = (orderType?: string) => {
   if (isBuy) {
     return [
       { key: "placed", label: "Order Placed" },
-      { key: "confirmed", label: "Vendor Confirmed" },
+      { key: "confirmed", label: "Supplier Confirmed" },
       { key: "out", label: "Out for Delivery" },
       { key: "active", label: "Delivered & Purchased" },
     ];
   }
   return [
     { key: "placed", label: "Order Placed" },
-    { key: "confirmed", label: "Vendor Confirmed" },
+      { key: "confirmed", label: "Supplier Confirmed" },
     { key: "out", label: "Out for Delivery" },
     { key: "delivered", label: "Delivered" },
     { key: "active", label: "Rental Active" },
@@ -143,6 +148,108 @@ function getTimelineProgress(status: string, orderType?: string): {
   return { cancelled: false, completedThrough: 0, currentIndex: 1 };
 }
 
+function TimelineDot({
+  isDone,
+  isCurrent,
+  isUpcoming,
+  isRentalActiveCurrentStep,
+  size,
+}: {
+  isDone: boolean;
+  isCurrent: boolean;
+  isUpcoming: boolean;
+  isRentalActiveCurrentStep: boolean;
+  size: "sm" | "md";
+}) {
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-full border-2",
+        size === "sm" ? "h-[18px] w-[18px]" : "h-7 w-7",
+        isDone && "border-foreground bg-foreground text-background",
+        isCurrent && "border-foreground bg-background text-foreground shadow-sm",
+        isRentalActiveCurrentStep && "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-500 dark:bg-emerald-500",
+        isUpcoming && "border-border bg-muted text-muted-foreground",
+      )}
+    >
+      {isDone ? <Check className={size === "sm" ? "h-2.5 w-2.5" : "h-3.5 w-3.5"} strokeWidth={2.5} /> : null}
+      {isCurrent ? (
+        <span
+          className={cn("rounded-full bg-foreground", size === "sm" ? "h-1.5 w-1.5" : "h-1.5 w-1.5", isRentalActiveCurrentStep && "bg-white")}
+          aria-hidden
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function OrderItemThumb({ src, alt }: { src?: string | null; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!src?.trim() || failed) {
+    return (
+      <div
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-muted/70"
+        aria-hidden
+      >
+        <Package className="h-4 w-4 text-muted-foreground" />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="h-11 w-11 shrink-0 rounded-lg border border-border/40 bg-muted object-cover"
+      onError={(event) => {
+        const el = event.currentTarget;
+        if (el.dataset.thumbFallback === "1") {
+          setFailed(true);
+          return;
+        }
+        retryOriginalOnImageError(event);
+        if (el.dataset.thumbFallback !== "1") {
+          setFailed(true);
+        }
+      }}
+    />
+  );
+}
+
+function compactDurationLabel(label?: string | null): string {
+  if (!label?.trim()) return "";
+  return label
+    .replace(/\s*Billing Cycles?/gi, " cycles")
+    .replace(/\s*Billing Cycle/gi, " cycle")
+    .trim();
+}
+
+function DetailRow({
+  label,
+  children,
+  span,
+  rowStart,
+}: {
+  label: string;
+  children: ReactNode;
+  span?: 2 | 3 | 4;
+  rowStart?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-start justify-between gap-3 py-2 sm:block sm:space-y-1 sm:py-0",
+        span === 2 && "sm:col-span-2",
+        span === 3 && "sm:col-span-3",
+        span === 4 && "sm:col-span-4",
+        rowStart && "sm:border-t sm:border-border/60 sm:pt-4",
+      )}
+    >
+      <p className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div className="min-w-0 text-right text-sm font-medium leading-snug sm:text-left">{children}</div>
+    </div>
+  );
+}
+
 function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
   const { cancelled, completedThrough, currentIndex } = getTimelineProgress(status, orderType);
 
@@ -158,59 +265,100 @@ function OrderTimeline({ status, orderType }: { status: string; orderType?: stri
   const isRentalActiveCurrent = currentIndex !== null && steps[currentIndex]?.key === "active" && orderType?.toLowerCase() !== "buy";
 
   return (
-    <ol className="relative space-y-0">
-      {steps.map((step, i) => {
-        const isDone = i <= completedThrough;
-        const isCurrent = currentIndex === i;
-        const isUpcoming = !isDone && !isCurrent;
-        const isRentalActiveCurrentStep = isRentalActiveCurrent && step.key === "active";
-
-        return (
-          <li key={step.key} className="relative flex gap-3 pb-5 last:pb-0 sm:gap-4 sm:pb-8">
-            {i < steps.length - 1 ? (
-              <div
-                className={cn(
-                  "absolute left-[17px] top-9 h-[calc(100%-0.5rem)] w-px",
-                  isDone ? "bg-foreground/25" : "bg-border",
-                )}
-                aria-hidden
-              />
-            ) : null}
-            <div className="relative z-10 flex shrink-0 flex-col items-center">
-              <div
-                className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-medium transition-colors",
-                  isDone && "border-foreground bg-foreground text-background",
-                  isCurrent && "border-foreground bg-background text-foreground shadow-sm",
-                  isRentalActiveCurrentStep && "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-500 dark:bg-emerald-500",
-                  isUpcoming && "border-border bg-muted text-muted-foreground",
-                )}
-              >
-                {isDone ? <Check className="h-4 w-4" strokeWidth={2.5} /> : null}
-                {isCurrent ? <span className="h-2 w-2 rounded-full bg-foreground" aria-hidden /> : null}
+    <>
+      {/* Mobile: sequential tracker (readable, compact). Desktop: horizontal stepper. */}
+      <ol className="sm:hidden">
+        {steps.map((step, i) => {
+          const isDone = i <= completedThrough;
+          const isCurrent = currentIndex === i;
+          const isUpcoming = !isDone && !isCurrent;
+          const isRentalActiveCurrentStep = isRentalActiveCurrent && step.key === "active";
+          return (
+            <li key={step.key} className="relative flex gap-3 pb-2.5 last:pb-0">
+              {i < steps.length - 1 ? (
+                <div
+                  className={cn(
+                    "absolute left-[8px] top-[18px] h-[calc(100%-10px)] w-px",
+                    isDone ? "bg-foreground/30" : "bg-border",
+                  )}
+                  aria-hidden
+                />
+              ) : null}
+              <div className="relative z-10 mt-0.5">
+                <TimelineDot
+                  size="sm"
+                  isDone={isDone}
+                  isCurrent={isCurrent}
+                  isUpcoming={isUpcoming}
+                  isRentalActiveCurrentStep={isRentalActiveCurrentStep}
+                />
               </div>
-            </div>
-            <div className="min-w-0 pt-1">
+              <div className="min-w-0 flex-1 leading-tight">
+                <p
+                  className={cn(
+                    "text-[13px] font-medium",
+                    isRentalActiveCurrentStep && "text-emerald-700 dark:text-emerald-300",
+                    isUpcoming ? "text-muted-foreground" : "text-foreground",
+                  )}
+                >
+                  {step.label}
+                </p>
+                {isCurrent ? (
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">In progress</p>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+
+      <ol className="hidden sm:flex sm:items-start">
+        {steps.map((step, i) => {
+          const isDone = i <= completedThrough;
+          const isCurrent = currentIndex === i;
+          const isUpcoming = !isDone && !isCurrent;
+          const isRentalActiveCurrentStep = isRentalActiveCurrent && step.key === "active";
+          const filledLine = isDone || isCurrent;
+
+          return (
+            <li key={step.key} className="flex min-w-0 flex-1 flex-col items-center text-center">
+              <div className="flex w-full items-center">
+                <div
+                  className={cn(
+                    "h-px min-w-[6px] flex-1",
+                    i === 0 ? "bg-transparent" : filledLine ? "bg-foreground/30" : "bg-border",
+                  )}
+                  aria-hidden
+                />
+                <TimelineDot
+                  size="md"
+                  isDone={isDone}
+                  isCurrent={isCurrent}
+                  isUpcoming={isUpcoming}
+                  isRentalActiveCurrentStep={isRentalActiveCurrentStep}
+                />
+                <div
+                  className={cn(
+                    "h-px min-w-[6px] flex-1",
+                    i === steps.length - 1 ? "bg-transparent" : filledLine && i < completedThrough ? "bg-foreground/30" : "bg-border",
+                  )}
+                  aria-hidden
+                />
+              </div>
               <p
                 className={cn(
-                  "font-medium leading-tight",
+                  "mt-1.5 text-[11px] font-medium leading-tight",
                   isRentalActiveCurrentStep && "text-emerald-700 dark:text-emerald-300",
                   isUpcoming ? "text-muted-foreground" : "text-foreground",
                 )}
               >
                 {step.label}
               </p>
-              {isCurrent && step.key === "active" && orderType?.toLowerCase() !== "buy" ? (
-                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Rental is currently active</p>
-              ) : null}
-              {isCurrent && step.key !== "active" ? (
-                <p className="mt-1 text-xs text-muted-foreground">In progress</p>
-              ) : null}
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+            </li>
+          );
+        })}
+      </ol>
+    </>
   );
 }
 
@@ -514,202 +662,159 @@ const CustomerOrderDetail = () => {
   const activeItem = data;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 sm:space-y-6">
+    <div className="mx-auto max-w-3xl space-y-2.5 sm:space-y-4">
       <BackLink to="/customer/orders" label="Back to orders" />
 
-      {/* Group Master Card */}
       <Card className="overflow-hidden border-border/80 shadow-sm">
-        <CardContent className="p-4 sm:p-6">
-          <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row lg:items-start lg:justify-between">
-            <div className="relative min-w-0 flex-1 space-y-1.5 lg:pr-8">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Order Group</p>
-              <h1 className="break-all text-xl font-bold tracking-tight tabular-nums sm:text-2xl lg:text-3xl">{baseOrderNumber}</h1>
-              <p className="text-xs text-muted-foreground sm:text-sm">
-                Consolidated purchase overview
-              </p>
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Order group</p>
+              <h1 className="mt-0.5 break-all text-[15px] font-semibold tracking-tight tabular-nums sm:text-xl sm:font-bold">
+                {baseOrderNumber}
+              </h1>
             </div>
-            <div className="flex shrink-0 flex-col items-start border-t border-border pt-4 sm:pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
-              <p className="text-2xl font-bold tabular-nums tracking-tight sm:text-3xl">₹{groupTotalAmount.toFixed(0)}</p>
-              <p className="mt-1 text-xs text-muted-foreground tabular-nums sm:text-sm">
-                + ₹{groupDepositAmount.toFixed(0)} deposit (Combined)
+            <div className="shrink-0 text-right">
+              <p className="text-lg font-semibold tabular-nums tracking-tight sm:text-2xl sm:font-bold">
+                ₹{groupTotalAmount.toFixed(0)}
+              </p>
+              <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
+                + ₹{groupDepositAmount.toFixed(0)} deposit
               </p>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Items in this Order list */}
-      <Card className="border-border/80 shadow-sm">
-        <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
-          <p className="text-lg font-semibold">Items in this Order</p>
-          <p className="text-xs text-muted-foreground">Select an item below to track its individual timeline and details.</p>
-        </CardHeader>
-        <CardContent className="space-y-3 px-4 pb-4 sm:px-6 sm:pb-6">
-          {orderGroupItems.map((item) => {
-            const isSelected = item.id === activeItem.id;
-            const imageUrl = resolveItemImageUrl(item);
-            const openRequest = imageRequestsByItemId.get(item.id);
-            const photoCount = openRequest?.images?.length ?? 0;
-            const photoLabel = openRequest
-              ? photoCount === 0
-                ? "Photos requested · waiting"
-                : `${photoCount} photo${photoCount === 1 ? "" : "s"} received`
-              : null;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setSelectedItemId(item.id)}
-                className={cn(
-                  "w-full text-left flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border transition-all",
-                  isSelected
-                    ? "bg-accent/40 border-foreground/60 shadow-sm"
-                    : "bg-transparent border-border/60 hover:bg-accent/20"
-                )}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  {imageUrl ? (
-                    <img src={imageUrl} alt={item.listingTitle} className="h-10 w-10 shrink-0 rounded-md object-cover border border-border/40 bg-muted" onError={retryOriginalOnImageError} />
-                  ) : (
-                    <div className="h-10 w-10 shrink-0 rounded-md bg-muted border border-border/40 flex items-center justify-center text-[10px] text-muted-foreground">No Img</div>
+          <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
+            <p className="text-[13px] font-semibold sm:text-base">Items in this order</p>
+            {orderGroupItems.map((item) => {
+              const isSelected = item.id === activeItem.id;
+              const imageUrl = resolveItemImageUrl(item);
+              const openRequest = imageRequestsByItemId.get(item.id);
+              const photoCount = openRequest?.images?.length ?? 0;
+              const photoLabel = openRequest
+                ? photoCount === 0
+                  ? "Photos requested · waiting"
+                  : `${photoCount} photo${photoCount === 1 ? "" : "s"} received`
+                : null;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelectedItemId(item.id)}
+                  className={cn(
+                    "flex w-full gap-2.5 rounded-lg border p-2.5 text-left transition-colors",
+                    isSelected
+                      ? "border-foreground/50 bg-accent/40 shadow-sm"
+                      : "border-border/70 bg-background hover:bg-accent/20",
                   )}
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground">{item.listingTitle}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Qty: {item.quantity}
-                    </p>
-                    {photoLabel ? (
-                      <p
+                >
+                  <OrderItemThumb src={imageUrl} alt={item.listingTitle} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="truncate text-sm font-semibold leading-snug">{item.listingTitle}</p>
+                      <span className="shrink-0 text-sm font-semibold tabular-nums">₹{item.totalAmount.toFixed(0)}</span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] text-muted-foreground">Qty {item.quantity}</span>
+                      <span
+                        title={customerFacingStatus(item.status)}
                         className={cn(
-                          "mt-1 inline-flex items-center gap-1 text-[11px] font-semibold",
-                          photoCount === 0
-                            ? "text-amber-700 dark:text-amber-300"
-                            : "text-emerald-700 dark:text-emerald-300",
+                          "inline-flex items-center rounded-full",
+                          orderStatusBadgeSizeClass,
+                          orderStatusBadgeClass(item.status),
                         )}
                       >
-                        <Images className="h-3 w-3 shrink-0" />
-                        {photoLabel}
-                      </p>
-                    ) : null}
+                        {formatOrderStatusLabel(item.status)}
+                      </span>
+                      {photoLabel ? (
+                        <span className="text-[11px] text-muted-foreground">· {photoLabel}</span>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-
-                <div className="flex items-center justify-between sm:justify-end gap-4 mt-3 sm:mt-0">
-                  <span
-                    title={formatOrderStatusTitle(item.status)}
-                    className={cn(
-                      "inline-flex items-center rounded-full",
-                      orderStatusBadgeSizeClass,
-                      orderStatusBadgeClass(item.status),
-                    )}
-                  >
-                    {formatOrderStatusLabel(item.status)}
-                  </span>
-                  <span className="font-semibold tabular-nums text-xs sm:w-16 sm:text-right">₹{item.totalAmount.toFixed(0)}</span>
-                </div>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
 
-      {/* Selected Item Timeline */}
       <Card className="border-border/80 shadow-sm">
-        <CardHeader className="flex flex-col items-start gap-2 p-4 pb-2 sm:flex-row sm:items-center sm:justify-between sm:p-6 sm:pb-2">
-          <div className="min-w-0">
-            <p className="text-lg font-semibold">Order timeline</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Tracking: <span className="font-semibold text-foreground">{activeItem.listingTitle}</span>
-            </p>
-          </div>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3 pb-2 sm:p-4 sm:pb-2">
+          <p className="min-w-0 truncate text-[13px] font-semibold sm:text-base">
+            Timeline
+            <span className="ml-1.5 font-normal text-muted-foreground">· {activeItem.listingTitle}</span>
+          </p>
           <Button variant="link" className="h-auto shrink-0 p-0 text-xs font-semibold text-primary" asChild>
             <Link to={`/customer/shop/${encodeURIComponent(activeItem.listingId)}`}>
               View listing
             </Link>
           </Button>
         </CardHeader>
-        <CardContent className="px-4 pb-4 pt-2 sm:px-6 sm:pb-6">
+        <CardContent className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
           <OrderTimeline status={activeItem.status} orderType={activeItem.orderType} />
         </CardContent>
       </Card>
 
-      {/* Selected Item Details */}
       <Card className="border-border/80 shadow-sm">
-        <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
-          <p className="text-lg font-semibold">{activeItem.orderType?.toLowerCase() === "buy" ? "Purchase details" : "Rental details"}</p>
+        <CardHeader className="p-3 pb-1 sm:p-4 sm:pb-2">
+          <p className="text-[13px] font-semibold sm:text-base">
+            {activeItem.orderType?.toLowerCase() === "buy" ? "Purchase details" : "Rental details"}
+          </p>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 pb-4 sm:gap-6 sm:px-6 sm:pb-6">
+        <CardContent className="divide-y divide-border/60 px-3 pb-2 sm:grid sm:grid-cols-4 sm:gap-x-4 sm:gap-y-4 sm:divide-y-0 sm:px-4 sm:pb-4">
           {activeItem.orderType?.toLowerCase() === "buy" ? (
             <>
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Purchase date</p>
-                <p className="text-sm font-medium tabular-nums">{formatDetailDate(activeItem.startDate)}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Quantity</p>
-                <p className="text-sm font-medium">{activeItem.quantity}</p>
-              </div>
+              <DetailRow label="Purchase date">{formatDetailDate(activeItem.startDate)}</DetailRow>
+              <DetailRow label="Quantity">{activeItem.quantity}</DetailRow>
             </>
           ) : (
             <>
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Start date</p>
-                <p className="text-sm font-medium tabular-nums">{formatDetailDate(activeItem.startDate)}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">End date</p>
-                <p className="text-sm font-medium tabular-nums">{formatDetailDate(activeItem.endDate)}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Quantity</p>
-                <p className="text-sm font-medium">{activeItem.quantity}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Order type</p>
-                <p className="text-sm font-medium uppercase">{activeItem.orderType}</p>
-              </div>
-              <div className="col-span-2 space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Rental period</p>
-                <p className="text-sm font-medium leading-snug">
-                  {activeItem.rentalDurationLabel?.trim()
-                    ? activeItem.rentalDurationLabel
-                    : (
-                      <>
-                        {activeItem.rentalDays}{" "}
-                        {activeItem.rentalPeriodUnit === "week"
-                          ? activeItem.rentalDays === 1
-                            ? "week"
-                            : "weeks"
-                          : activeItem.rentalPeriodUnit === "month"
-                            ? activeItem.rentalDays === 1
-                              ? "month"
-                              : "months"
-                            : activeItem.rentalDays === 1
-                              ? "day"
-                              : "days"}
-                      </>
-                    )}
-                </p>
-                {activeItem.rentalDurationLabel?.trim() && activeItem.rentalDurationDays ? (
-                  <p className="text-xs text-muted-foreground">
-                    {activeItem.rentalDurationDays} day{activeItem.rentalDurationDays === 1 ? "" : "s"}
-                  </p>
-                ) : null}
+              <DetailRow label="Start date">{formatDetailDate(activeItem.startDate)}</DetailRow>
+              <DetailRow label="End date">{formatDetailDate(activeItem.endDate)}</DetailRow>
+              <DetailRow label="Quantity">{activeItem.quantity}</DetailRow>
+              <DetailRow label="Order type">
+                <span className="uppercase">{activeItem.orderType}</span>
+              </DetailRow>
+              <DetailRow label="Rental period" rowStart>
+                {compactDurationLabel(activeItem.rentalDurationLabel) || (
+                  <>
+                    {activeItem.rentalDays}{" "}
+                    {activeItem.rentalPeriodUnit === "week"
+                      ? activeItem.rentalDays === 1
+                        ? "week"
+                        : "weeks"
+                      : activeItem.rentalPeriodUnit === "month"
+                        ? activeItem.rentalDays === 1
+                          ? "month"
+                          : "months"
+                        : activeItem.rentalDays === 1
+                          ? "day"
+                          : "days"}
+                  </>
+                )}
+              </DetailRow>
+              <DetailRow label="Duration" rowStart>
+                {activeItem.rentalDurationDays
+                  ? `${activeItem.rentalDurationDays} day${activeItem.rentalDurationDays === 1 ? "" : "s"}`
+                  : "—"}
+              </DetailRow>
+              <DetailRow label="Plan price" span={2} rowStart>
                 {activeItem.rentalFinalPrice != null ? (
-                  <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground tabular-nums sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2">
+                  <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 sm:justify-start">
                     {activeItem.rentalNormalPrice != null &&
                     Number(activeItem.rentalNormalPrice) > Number(activeItem.rentalFinalPrice) ? (
-                      <span className="strike-diagonal w-fit font-semibold text-rose-500 dark:text-rose-400">
+                      <span className="strike-diagonal w-fit text-xs font-semibold tabular-nums text-rose-500 dark:text-rose-400">
                         ₹{Number(activeItem.rentalNormalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                       </span>
                     ) : null}
-                    <span>
-                      Plan price ₹
-                      {Number(activeItem.rentalFinalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                    <span className="tabular-nums">
+                      ₹{Number(activeItem.rentalFinalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                     </span>
                   </div>
-                ) : null}
-              </div>
+                ) : (
+                  "—"
+                )}
+              </DetailRow>
             </>
           )}
         </CardContent>
@@ -733,12 +838,12 @@ const CustomerOrderDetail = () => {
       {/* Request vendor photos — order-group aware (all items / selected items) */}
       {showPhotosCard && (
         <Card className="border-border/80 shadow-sm">
-          <CardHeader className="pb-3">
-            <p className="text-lg font-semibold">Request photos from your supplier</p>
+          <CardHeader className="space-y-1 p-3 pb-2 sm:p-4 sm:pb-2">
+            <p className="text-[13px] font-semibold sm:text-base">Request photos from your supplier</p>
             <p className="text-xs text-muted-foreground">
               {orderGroupItems.length > 1
-                ? `This asks the supplier (vendor) fulfilling each product — not BlinksMed support. Choose items or request all. Up to ${MAX_ORDER_IMAGES} photos per item. Cleared after delivery, cancel, or dispatch failure.`
-                : `This asks the supplier (vendor) for this product — not BlinksMed support chat below. Up to ${MAX_ORDER_IMAGES} photos. Cleared after delivery, cancel, or dispatch failure.`}
+                ? `Photos come from each product’s supplier. Up to ${MAX_ORDER_IMAGES} per item.`
+                : `Photos come from this product’s supplier. Up to ${MAX_ORDER_IMAGES} photos.`}
             </p>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -752,7 +857,7 @@ const CustomerOrderDetail = () => {
                       <div className="space-y-2 rounded-lg border border-border/70 bg-muted/30 p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Select products (sent to each product’s supplier)
+                            Select products
                           </p>
                           <div className="flex gap-2">
                             <Button
@@ -800,7 +905,7 @@ const CustomerOrderDetail = () => {
                                   {item.listingTitle}
                                 </span>
                                 <span className="text-[11px] capitalize text-muted-foreground">
-                                  {item.status.replace(/_/g, " ")}
+                                  {customerFacingStatus(item.status)}
                                 </span>
                               </label>
                             );
@@ -909,7 +1014,7 @@ const CustomerOrderDetail = () => {
                                   {item.listingTitle}
                                 </p>
                                 <p className="text-[11px] capitalize text-muted-foreground mt-0.5">
-                                  {item.status.replace(/_/g, " ")}
+                                  {customerFacingStatus(item.status)}
                                   {isActiveItem ? " · currently viewing" : ""}
                                 </p>
                               </div>
@@ -964,37 +1069,43 @@ const CustomerOrderDetail = () => {
       )}
 
       <Dialog open={!!previewImageUrl} onOpenChange={(open) => !open && setPreviewImageUrl(null)}>
-        <DialogContent className="max-w-3xl p-2 sm:p-4">
-          <DialogHeader>
-            <DialogTitle className="sr-only">Photo preview</DialogTitle>
+        <DialogContent className="flex max-h-[min(92dvh,880px)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl lg:max-w-4xl">
+          <DialogHeader className="border-b border-border px-4 py-3 pr-12">
+            <DialogTitle className="text-sm font-semibold">Photo preview</DialogTitle>
           </DialogHeader>
           {previewImageUrl ? (
-            <img src={previewImageUrl} alt="Order photo preview" className="max-h-[80vh] w-full rounded-md object-contain" onError={retryOriginalOnImageError} />
+            <ZoomableImageStage
+              src={originalUrlFromThumb(previewImageUrl) ?? previewImageUrl}
+              alt="Order photo preview"
+              resetKey={previewImageUrl}
+            />
           ) : null}
         </DialogContent>
       </Dialog>
 
       {/* Support and Cancellation Actions for Selected Item */}
-      <div className="flex flex-col gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:flex-row sm:flex-wrap sm:gap-3">
+      <div className="grid grid-cols-2 gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:flex sm:flex-wrap sm:gap-3">
         <Button variant="outline" className="w-full justify-center sm:w-auto" asChild>
           <Link
             className="inline-flex items-center justify-center"
             to={`/customer/support?order=${encodeURIComponent(activeItem.orderNumber)}`}
           >
-            <Headset className="mr-2 h-4 w-4 shrink-0" />
-            BlinksMed support
+            <Headset className="mr-1.5 h-4 w-4 shrink-0 sm:mr-2" />
+            <span className="sm:hidden">Support</span>
+            <span className="hidden sm:inline">BlinksMed support</span>
           </Link>
         </Button>
 
         <Button variant="outline" className="w-full justify-center sm:w-auto" onClick={() => setIsChatOpen(true)}>
-          <MessageCircle className="mr-2 h-4 w-4 shrink-0" />
-          Chat with BlinksMed
+          <MessageCircle className="mr-1.5 h-4 w-4 shrink-0 sm:mr-2" />
+          <span className="sm:hidden">Chat</span>
+          <span className="hidden sm:inline">Chat with BlinksMed</span>
         </Button>
 
         {isCustomerOrderCancellable(activeItem.status) && (
           <Button
             variant="destructive"
-            className="w-full sm:w-auto"
+            className="col-span-2 w-full sm:col-auto sm:w-auto"
             disabled={cancelMut.isPending}
             onClick={() => cancelMut.mutate(activeItem.id)}
           >
@@ -1003,7 +1114,7 @@ const CustomerOrderDetail = () => {
         )}
 
         {activeItem.status.trim().toLowerCase() === "active" && activeItem.orderType.toLowerCase() === "rent" && (
-          <div className="grid grid-cols-2 gap-2 sm:contents">
+          <div className="col-span-2 grid grid-cols-2 gap-2 sm:contents">
             <Button
               variant="default"
               className="w-full sm:w-auto"
@@ -1154,9 +1265,15 @@ const CustomerOrderDetail = () => {
         <SheetContent className="flex h-full w-full max-w-full flex-col gap-0 p-0 sm:max-w-md">
           <SheetHeader className="space-y-1 border-b p-4 pr-12 text-left sm:p-6">
             <SheetTitle>Chat with BlinksMed support</SheetTitle>
-            <SheetDescription className="text-xs break-words">
-              Message BlinksMed about this order — not your product supplier.{" "}
-              Order: {activeItem.orderNumber} • {activeItem.listingTitle}
+            <SheetDescription asChild>
+              <div className="space-y-1 text-xs leading-snug">
+                <p className="text-muted-foreground">
+                  Message support about this order.
+                </p>
+                <p className="font-medium text-violet-600 dark:text-violet-400">
+                  Order: {activeItem.orderNumber} • {activeItem.listingTitle}
+                </p>
+              </div>
             </SheetDescription>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
@@ -1166,7 +1283,7 @@ const CustomerOrderDetail = () => {
                 <div>
                   <p className="text-sm font-semibold">No active conversation</p>
                   <p className="text-xs text-muted-foreground">
-                    Start a chat with BlinksMed support about this order (not the supplier).
+                    Start a chat with support about this order.
                   </p>
                 </div>
                 <Button
@@ -1177,32 +1294,39 @@ const CustomerOrderDetail = () => {
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col space-y-3">
+              <div className="flex flex-col space-y-6">
                 {messages && messages.length > 0 ? (
                   messages.map((msg, index) => {
                     const isMe = msg.senderType === "Customer";
                     const prev = index > 0 ? messages[index - 1] : null;
                     const showDay = !prev || !isSameChatDay(prev.sentAt, msg.sentAt);
                     return (
-                      <div key={msg.id} className="flex flex-col space-y-3">
+                      <div key={msg.id} className="flex flex-col gap-2">
                         {showDay && <ChatDaySeparator date={msg.sentAt} />}
                         <div
                           className={cn(
-                            "flex w-fit max-w-[85%] flex-col rounded-lg p-3 text-sm shadow-sm",
-                            isMe
-                              ? "ml-auto self-end rounded-tr-none bg-primary text-primary-foreground"
-                              : "mr-auto self-start rounded-tl-none border bg-muted text-muted-foreground"
+                            "flex max-w-[88%] flex-col sm:max-w-[75%]",
+                            isMe ? "ml-auto items-end" : "mr-auto items-start",
                           )}
                         >
-                          {!isMe && (
-                            <span className="mb-1 text-[10px] font-bold uppercase tracking-wide opacity-80">
-                              {msg.senderType === "Admin" ? "Admin" : msg.senderType}
+                          <div className="mb-1 flex items-center gap-2 px-1">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                              {isMe ? "You" : msg.senderType === "Admin" ? "Support Team" : msg.senderType}
                             </span>
-                          )}
-                          <p className="break-words whitespace-pre-wrap font-medium leading-relaxed">{msg.messageText}</p>
-                          <span className="mt-1.5 self-end text-[10px] font-semibold opacity-75">
-                            {new Date(msg.sentAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </span>
+                            <span className="text-[9px] font-medium text-slate-400">
+                              {new Date(msg.sentAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </div>
+                          <div
+                            className={cn(
+                              "whitespace-pre-wrap rounded-2xl px-5 py-3 text-[14px] leading-relaxed shadow-sm",
+                              isMe
+                                ? "rounded-tr-none bg-primary text-primary-foreground shadow-primary/10"
+                                : "rounded-tl-none border bg-card text-foreground",
+                            )}
+                          >
+                            {msg.messageText}
+                          </div>
                         </div>
                       </div>
                     );

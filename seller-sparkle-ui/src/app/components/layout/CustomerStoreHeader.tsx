@@ -66,13 +66,13 @@ export function CustomerStoreHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 shadow-sm backdrop-blur-xl">
-      <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-3 px-3 sm:h-16 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-14 min-w-0 max-w-[1400px] items-center gap-2 px-3 sm:h-16 sm:gap-3 sm:px-6 lg:px-8">
         <Link to="/customer/shop" className="flex shrink-0 items-center" aria-label="BlinksMed shop">
           {/* Full lockup already includes BLINKSMED + Buy | Rent | Care */}
-          <BrandMark size="lg" />
+          <BrandMark size="lg" className="h-10 w-10 sm:h-14 sm:w-14" />
         </Link>
 
-        <div className="ml-auto flex items-center gap-1 sm:gap-2">
+        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-0.5 sm:gap-2">
           <Button
             variant="ghost"
             size="icon"
@@ -122,7 +122,7 @@ export function CustomerStoreHeader() {
           </Button>
 
           {signedIn ? (
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-muted transition-colors">
                   <Avatar className="h-8 w-8">
@@ -139,7 +139,12 @@ export function CustomerStoreHeader() {
                   <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground md:block" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuContent
+                align="end"
+                sideOffset={8}
+                collisionPadding={12}
+                className="z-[80] max-h-[min(24rem,calc(100dvh-5rem))] w-60 overflow-y-auto"
+              >
                 <DropdownMenuLabel>
                   <div>
                     <p className="text-sm font-semibold">{user?.name}</p>

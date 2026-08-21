@@ -4,10 +4,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { CheckCheck } from "lucide-react";
 import { customerApi, type CustomerNotificationApi } from "@/app/services/customerApi";
-import { customerNotificationTypeBadgeLabel } from "@/app/services/customerNotificationTypes";
+import {
+  customerNotificationTypeBadgeClass,
+  customerNotificationTypeBadgeLabel,
+} from "@/app/services/customerNotificationTypes";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { ListPager } from "@/app/components/shared/ListPager";
 import { cn } from "@/app/helpers/utils";
 import { toast } from "sonner";
 
@@ -51,7 +55,7 @@ const CustomerNotifications = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: notifications = [], isLoading, isError, error, refetch, isFetching } = useQuery({
+  const { data: notifications = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: customerNotificationsQueryKey,
     queryFn: () => customerApi.getNotifications({ quiet: true }),
   });
@@ -67,26 +71,52 @@ const CustomerNotifications = () => {
 
   const markReadMutation = useMutation({
     mutationFn: (notificationId: string) => customerApi.markNotificationRead(notificationId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: customerNotificationsQueryKey });
+    onMutate: async (notificationId) => {
+      await queryClient.cancelQueries({ queryKey: customerNotificationsQueryKey });
+      const previous = queryClient.getQueryData<CustomerNotificationApi[]>(customerNotificationsQueryKey);
+      const readAt = new Date().toISOString();
+      queryClient.setQueryData<CustomerNotificationApi[]>(customerNotificationsQueryKey, (current) =>
+        (current ?? []).map((n) => (n.id === notificationId && !n.readAt ? { ...n, readAt } : n)),
+      );
+      return { previous };
     },
-    onError: (err) => {
+    onError: (err, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(customerNotificationsQueryKey, context.previous);
+      }
       const message = err instanceof Error ? err.message : "Could not update notification.";
       toast.error(message);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: customerNotificationsQueryKey });
     },
   });
 
   const markAllMutation = useMutation({
     mutationFn: () => customerApi.markAllNotificationsRead(),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: customerNotificationsQueryKey });
+      const previous = queryClient.getQueryData<CustomerNotificationApi[]>(customerNotificationsQueryKey);
+      const readAt = new Date().toISOString();
+      queryClient.setQueryData<CustomerNotificationApi[]>(customerNotificationsQueryKey, (current) =>
+        (current ?? []).map((n) => (n.readAt ? n : { ...n, readAt })),
+      );
+      return { previous };
+    },
     onSuccess: (res) => {
-      void queryClient.invalidateQueries({ queryKey: customerNotificationsQueryKey });
       if (res.updatedCount > 0) {
         toast.success(`Marked ${res.updatedCount} notification${res.updatedCount === 1 ? "" : "s"} as read.`);
       }
     },
-    onError: (err) => {
+    onError: (err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(customerNotificationsQueryKey, context.previous);
+      }
       const message = err instanceof Error ? err.message : "Could not mark all as read.";
       toast.error(message);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: customerNotificationsQueryKey });
     },
   });
 
@@ -127,10 +157,10 @@ const CustomerNotifications = () => {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {isLoading ? "Loading…" : unreadCount === 0 ? "All caught up" : `${unreadCount} unread`}
           </p>
@@ -139,11 +169,11 @@ const CustomerNotifications = () => {
           type="button"
           variant="outline"
           size="sm"
-          className="shrink-0 gap-2"
+          className="h-8 shrink-0 gap-1.5 px-2.5 text-xs sm:h-9 sm:gap-2 sm:px-3 sm:text-sm"
           disabled={unreadCount === 0 || markAllMutation.isPending || isLoading}
           onClick={() => markAllMutation.mutate()}
         >
-          <CheckCheck className="h-4 w-4" />
+          <CheckCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           Mark all read
         </Button>
       </div>
@@ -159,13 +189,13 @@ const CustomerNotifications = () => {
         </Card>
       ) : null}
 
-      <Card className="overflow-hidden border-border/80 shadow-sm">
+      <Card className="-mx-3 overflow-hidden rounded-none border-x-0 border-border/80 shadow-sm sm:mx-0 sm:rounded-lg sm:border">
         {isLoading ? (
           <PageLoaderSlot className="min-h-[8rem] py-0" />
         ) : (
           <ul className="divide-y divide-border">
             {sortedNotifications.length === 0 ? (
-              <li className="px-5 py-12 text-center text-sm text-muted-foreground">No notifications yet.</li>
+              <li className="px-4 py-8 text-center text-sm text-muted-foreground sm:px-5 sm:py-12">No notifications yet.</li>
             ) : (
               sortedNotifications.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((n) => {
                 const unread = !n.readAt;
@@ -177,7 +207,7 @@ const CustomerNotifications = () => {
                       role="button"
                       tabIndex={0}
                       className={cn(
-                        "flex w-full gap-4 px-5 py-4 text-left transition-colors hover:bg-muted/40",
+                        "flex w-full min-w-0 gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/40 sm:gap-4 sm:px-5 sm:py-3.5",
                         unread && "bg-muted/20",
                       )}
                       onClick={() => handleRowActivate(n)}
@@ -188,37 +218,59 @@ const CustomerNotifications = () => {
                         }
                       }}
                     >
-                      <div className="flex w-5 shrink-0 justify-center pt-1">
-                        {unread ? (
-                          <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-foreground" aria-hidden />
-                        ) : (
-                          <span className="block w-2" aria-hidden />
+                      <span
+                        className={cn(
+                          "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+                          unread ? "bg-primary" : "bg-transparent",
                         )}
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-semibold leading-snug">{n.title}</p>
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1 space-y-0.5 sm:space-y-1">
+                        <div className="flex items-start gap-2">
+                          <p className="min-w-0 flex-1 text-sm font-semibold leading-snug sm:text-base">{n.title}</p>
                           {typeBadge ? (
-                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            <span
+                              className={cn(
+                                "mt-0.5 shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold leading-4 sm:hidden",
+                                customerNotificationTypeBadgeClass(n.notificationType),
+                              )}
+                            >
                               {typeBadge}
                             </span>
                           ) : null}
                         </div>
-                        <p className="text-sm text-muted-foreground">{n.body}</p>
-                        {n.relatedOrderId ? (
-                          <Link
-                            to={`/customer/orders/${encodeURIComponent(n.relatedOrderId)}`}
-                            className="inline-block text-xs font-medium text-primary underline-offset-4 hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => e.stopPropagation()}
-                          >
-                            View order
-                          </Link>
-                        ) : null}
+                        <p className="text-xs leading-snug text-muted-foreground sm:text-sm sm:leading-normal">{n.body}</p>
+                        <div className="flex items-center justify-between gap-2 sm:justify-start">
+                          {n.relatedOrderId ? (
+                            <Link
+                              to={`/customer/orders/${encodeURIComponent(n.relatedOrderId)}`}
+                              className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            >
+                              View order
+                            </Link>
+                          ) : null}
+                          <time className="shrink-0 text-[11px] tabular-nums text-muted-foreground sm:hidden">
+                            {label || "—"}
+                          </time>
+                        </div>
                       </div>
-                      <time className="shrink-0 whitespace-nowrap text-xs text-muted-foreground tabular-nums">
-                        {label || "—"}
-                      </time>
+                      <div className="hidden shrink-0 flex-col items-end gap-1 sm:flex">
+                        {typeBadge ? (
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4",
+                              customerNotificationTypeBadgeClass(n.notificationType),
+                            )}
+                          >
+                            {typeBadge}
+                          </span>
+                        ) : null}
+                        <time className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                          {label || "—"}
+                        </time>
+                      </div>
                     </div>
                   </li>
                 );
@@ -229,20 +281,13 @@ const CustomerNotifications = () => {
       </Card>
 
       {sortedNotifications.length > PAGE_SIZE && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-4">
-          <p className="text-sm text-muted-foreground">
-            Page {page} of {Math.max(1, Math.ceil(sortedNotifications.length / PAGE_SIZE))} &middot; {sortedNotifications.length} items
-          </p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-            <Button variant="outline" size="sm" disabled={page >= Math.max(1, Math.ceil(sortedNotifications.length / PAGE_SIZE))} onClick={() => setPage(p => p + 1)}>Next</Button>
-          </div>
-        </div>
+        <ListPager
+          page={page}
+          totalPages={Math.max(1, Math.ceil(sortedNotifications.length / PAGE_SIZE))}
+          summary={`Page ${page} of ${Math.max(1, Math.ceil(sortedNotifications.length / PAGE_SIZE))} · ${sortedNotifications.length} items`}
+          onPageChange={setPage}
+        />
       )}
-
-      {isFetching && !isLoading ? (
-        <p className="text-center text-xs text-muted-foreground">Updating…</p>
-      ) : null}
     </div>
   );
 };

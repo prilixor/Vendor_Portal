@@ -29,7 +29,7 @@ export const ContactPage = () => {
 
       <LandingHeader activeSection="contact" settings={data?.settings} />
 
-      <main style={{ paddingTop: "20px" }}>
+      <main className="contact-page-main">
         <ContactSection data={data?.contact} />
       </main>
 

@@ -15,6 +15,7 @@ import {
   Mail,
   MoreVertical,
   FileText,
+  ChevronLeft,
   ChevronRight,
   Clock,
 } from "lucide-react";
@@ -212,6 +213,13 @@ export default function SupportManagement() {
     setSearchParams(next, { replace: true });
   };
 
+  const closeTicket = () => {
+    setSelectedTicket(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("ticketId");
+    setSearchParams(next, { replace: true });
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
       case "open": return <AlertCircle className="h-4 w-4 text-success" />;
@@ -233,25 +241,44 @@ export default function SupportManagement() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground flex items-center gap-3">
-            <MessageSquare className="h-8 w-8 text-primary" />
+    <div className="space-y-4 sm:space-y-6">
+      <div
+        className={cn(
+          "flex items-center justify-between gap-3",
+          selectedTicket && "max-lg:hidden",
+        )}
+      >
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-foreground sm:gap-3 sm:text-3xl">
+            <MessageSquare className="h-6 w-6 shrink-0 text-primary sm:h-8 sm:w-8" />
             Support Center
           </h1>
-          <p className="text-muted-foreground mt-1 font-medium">Manage vendor support tickets and communications.</p>
+          <p className="mt-1 hidden font-medium text-muted-foreground sm:block">
+            Manage vendor support tickets and communications.
+          </p>
         </div>
-        <Button onClick={loadTickets} variant="outline" className="gap-2 font-bold shadow-sm" disabled={loading}>
+        <Button
+          onClick={() => void loadTickets()}
+          variant="outline"
+          size="sm"
+          className="shrink-0 gap-2 font-bold shadow-sm sm:h-10 sm:px-4"
+          disabled={loading}
+        >
           <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-          Refresh
+          <span className="hidden sm:inline">Refresh</span>
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[calc(100vh-220px)] min-h-[560px]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:h-[calc(100vh-220px)] lg:min-h-[560px]">
         {/* Ticket List */}
-        <Card className="lg:col-span-5 xl:col-span-4 flex flex-col overflow-hidden border-border/70 shadow-sm">
-          <CardHeader className="shrink-0 space-y-3 border-b border-border/70 px-4 py-4">
+        <Card
+          className={cn(
+            "flex min-h-0 flex-col overflow-hidden border-border/70 shadow-sm lg:col-span-5 xl:col-span-4",
+            selectedTicket ? "hidden lg:flex" : "flex",
+            "h-[calc(100dvh-8.75rem)] lg:h-full",
+          )}
+        >
+          <CardHeader className="shrink-0 space-y-3 border-b border-border/70 px-3 py-3 sm:px-4 sm:py-4">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold text-foreground">Tickets</p>
               <span className="text-xs text-muted-foreground tabular-nums">
@@ -261,7 +288,7 @@ export default function SupportManagement() {
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search ticket, vendor, email..."
+                placeholder="Search tickets…"
                 className="h-10 border-border/60 bg-background pl-9 shadow-none"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -362,37 +389,51 @@ export default function SupportManagement() {
 
         {/* Chat Area */}
         <Card className={cn(
-            "lg:col-span-7 xl:col-span-8 flex flex-col overflow-hidden border-border/70 bg-secondary/15 shadow-sm",
-          !selectedTicket && "items-center justify-center text-center p-12"
+            "min-h-0 flex-col overflow-hidden border-border/70 bg-secondary/15 shadow-sm lg:col-span-7 xl:col-span-8",
+            selectedTicket ? "flex h-[calc(100dvh-5rem)] lg:h-full" : "hidden lg:flex lg:h-full lg:items-center lg:justify-center lg:p-12",
+            !selectedTicket && "items-center justify-center text-center p-12"
         )}>
           {selectedTicket ? (
             <>
               {/* Header */}
-              <div className="px-6 py-5 border-b border-border bg-card flex items-center justify-between shadow-sm relative z-10">
-                <div className="flex items-center gap-4">
-                  <div className={cn("h-12 w-12 rounded-2xl flex items-center justify-center shadow-inner", getStatusBadge(selectedTicket.status))}>
+              <div className="relative z-10 flex items-start gap-2 border-b border-border bg-card px-3 py-3 shadow-sm sm:items-center sm:px-6 sm:py-5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="mt-0.5 h-9 w-9 shrink-0 lg:hidden"
+                  onClick={closeTicket}
+                  aria-label="Back to tickets"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+                <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center sm:gap-4">
+                  <div className={cn("hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-inner sm:flex", getStatusBadge(selectedTicket.status))}>
                     {getStatusIcon(selectedTicket.status)}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h2 className="text-lg font-extrabold tracking-tight">{selectedTicket.ticketNumber}</h2>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-0.5 flex flex-wrap items-center gap-2">
+                      <h2 className="truncate text-base font-extrabold tracking-tight sm:text-lg">{selectedTicket.ticketNumber}</h2>
                       <Badge variant="outline" className={cn("text-[10px] px-2 py-0.5 border-none font-bold uppercase", getStatusBadge(selectedTicket.status))}>
                         {selectedTicket.status}
                       </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground font-medium flex items-center gap-2">
-                      <span className="text-primary font-bold">{selectedTicket.category}</span>
-                      <span className="text-slate-300">•</span>
-                      <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {selectedTicket.vendorEmail}</span>
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-muted-foreground sm:text-sm">
+                      <span className="font-bold text-primary">{selectedTicket.category}</span>
+                      <span className="hidden text-slate-300 sm:inline">•</span>
+                      <span className="flex min-w-0 items-center gap-1">
+                        <Mail className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{selectedTicket.vendorEmail}</span>
+                      </span>
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <DropdownMenu>
+                <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="font-bold gap-2 shadow-sm border-slate-200">
-                        Update Status
-                        <ChevronRight className="h-4 w-4 rotate-90" />
+                      <Button variant="outline" size="sm" className="shrink-0 gap-2 font-bold shadow-sm sm:h-10">
+                        <span className="hidden sm:inline">Update Status</span>
+                        <MoreVertical className="h-4 w-4 sm:hidden" />
+                        <ChevronRight className="hidden h-4 w-4 rotate-90 sm:inline" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48 p-1">
@@ -412,17 +453,21 @@ export default function SupportManagement() {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                </div>
               </div>
 
               {/* Subject Banner */}
-              <div className="bg-primary/5 px-6 py-2.5 border-b flex items-center justify-between text-xs font-bold text-primary">
-                 <span className="flex items-center gap-2"><Ticket className="h-3.5 w-3.5" /> SUBJECT: {selectedTicket.subject}</span>
-                 <span className="flex items-center gap-1.5 opacity-60"><Clock className="h-3.5 w-3.5" /> CREATED {new Date(selectedTicket.createdAt).toLocaleDateString()}</span>
+              <div className="flex flex-col gap-1 border-b bg-primary/5 px-3 py-2 text-xs font-bold text-primary sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-2.5">
+                 <span className="flex min-w-0 items-start gap-2">
+                   <Ticket className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                   <span className="min-w-0 break-words">SUBJECT: {selectedTicket.subject}</span>
+                 </span>
+                 <span className="flex shrink-0 items-center gap-1.5 opacity-60">
+                   <Clock className="h-3.5 w-3.5" /> CREATED {new Date(selectedTicket.createdAt).toLocaleDateString()}
+                 </span>
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6" ref={scrollRef}>
+              <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-3 sm:p-6" ref={scrollRef}>
                 {messagesLoading ? (
                   <div className="flex h-full min-h-[8rem] items-center justify-center" aria-busy="true" aria-label="Loading messages" />
                 ) : (
@@ -434,7 +479,7 @@ export default function SupportManagement() {
                       {showDay && <ChatDaySeparator date={m.createdAt} />}
                     <div 
                       className={cn(
-                        "flex flex-col max-w-[75%]",
+                        "flex max-w-[88%] flex-col sm:max-w-[75%]",
                         m.senderType === "Admin" ? "ml-auto items-end" : "mr-auto items-start"
                       )}
                     >
@@ -485,18 +530,18 @@ export default function SupportManagement() {
                 </div>
 
               {/* Input */}
-              <div className="p-4 bg-card border-t border-border shadow-[0_-8px_30px_rgb(0,0,0,0.04)] relative z-10">
+              <div className="relative z-10 border-t border-border bg-card p-3 shadow-[0_-8px_30px_rgb(0,0,0,0.04)] sm:p-4">
                 {selectedTicket.status === "Closed" ? (
-                  <div className="flex items-center justify-center p-4 bg-muted/30 rounded-2xl border border-dashed border-border">
-                    <p className="text-sm font-bold text-muted-foreground flex items-center gap-2 italic">
-                      <XCircle className="h-4 w-4" /> This ticket is closed. Reopen to send messages.
+                  <div className="flex items-center justify-center rounded-2xl border border-dashed border-border bg-muted/30 p-3 sm:p-4">
+                    <p className="flex items-center gap-2 text-center text-xs font-bold italic text-muted-foreground sm:text-sm">
+                      <XCircle className="h-4 w-4 shrink-0" /> This ticket is closed. Reopen to send messages.
                     </p>
                   </div>
                 ) : (
-                  <div className="flex gap-3 items-end bg-muted/30 p-2 rounded-[2rem] border border-border focus-within:border-primary/30 focus-within:ring-4 focus-within:ring-primary/5 transition-all">
+                  <div className="flex items-end gap-2 rounded-[2rem] border border-border bg-muted/30 p-1.5 transition-all focus-within:border-primary/30 focus-within:ring-4 focus-within:ring-primary/5 sm:gap-3 sm:p-2">
                     <ChatMessageTextarea
-                      placeholder="Type your reply... (Shift+Enter for new line)"
-                      className="flex-1 border-none bg-transparent shadow-none focus-visible:ring-0 min-h-[48px] px-4 font-medium"
+                      placeholder="Type a reply…"
+                      className="min-h-[44px] flex-1 border-none bg-transparent px-3 font-medium shadow-none focus-visible:ring-0 sm:min-h-[48px] sm:px-4"
                       value={newMessage}
                       onChange={setNewMessage}
                       onSubmit={handleSendMessage}
@@ -507,10 +552,11 @@ export default function SupportManagement() {
                     <Button 
                       onClick={handleSendMessage}
                       disabled={sending || !newMessage.trim()}
-                      className="rounded-full h-12 px-6 bg-gradient-primary shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all font-bold gap-2"
+                      className="h-11 shrink-0 gap-2 rounded-full bg-gradient-primary px-4 font-bold shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98] sm:h-12 sm:px-6"
                     >
                       {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      Send Reply
+                      <span className="hidden sm:inline">Send Reply</span>
+                      <span className="sm:hidden">Send</span>
                     </Button>
                   </div>
                 )}

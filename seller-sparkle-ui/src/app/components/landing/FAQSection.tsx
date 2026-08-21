@@ -219,8 +219,8 @@ export const FAQSection = ({ faqs, categoriesData, contactData }: FAQSectionProp
         <div className="eyebrow" style={{ justifyContent: "center" }}>
           FREQUENTLY ASKED QUESTIONS
         </div>
-        <h2 className="display" style={{ fontSize: "clamp(32px,4vw,44px)", fontWeight: 400, textAlign: "center" }}>
-          Answers when you need <span style={{ color: "var(--teal-mid)", fontStyle: "italic" }}>clarity.</span>
+        <h2 className="display" style={{ textAlign: "center" }}>
+          Answers when you need <span className="accent">clarity.</span>
         </h2>
         <p className="sub" style={{ textAlign: "center", marginLeft: "auto", marginRight: "auto", maxWidth: "720px", textWrap: "balance" }}>
           Rentals, purchases, chemicals, delivery, and support: everything in one place.

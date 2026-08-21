@@ -311,27 +311,29 @@ export function RentalPeriodPlanDropdown({
   };
 
   const triggerButton = (
+    extra: { onClick?: () => void; "aria-haspopup"?: "dialog" | "listbox" } = {},
+  ) => (
     <button
       type="button"
       aria-expanded={open}
-      aria-haspopup={isMobile ? "dialog" : "listbox"}
-      onClick={isMobile ? () => setOpen(true) : undefined}
+      aria-haspopup={extra["aria-haspopup"]}
+      onClick={extra.onClick}
       className={cn(
-        "group relative w-full overflow-hidden rounded-2xl border-2 bg-card p-3.5 text-left shadow-sm transition-all",
+        "group relative w-full min-w-0 max-w-full overflow-hidden rounded-2xl border-2 bg-card p-3 text-left shadow-sm transition-all sm:p-3.5",
         "hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/15",
         open
           ? selected.isRecommended
-            ? "border-blue-500 ring-4 ring-blue-500/10 dark:ring-blue-500/20"
-            : "border-violet-500 ring-4 ring-violet-500/10 dark:ring-violet-500/20"
+            ? "border-blue-500 ring-2 ring-blue-500/10 dark:ring-blue-500/20 sm:ring-4"
+            : "border-violet-500 ring-2 ring-violet-500/10 dark:ring-violet-500/20 sm:ring-4"
           : selected.isRecommended
             ? "border-blue-400 dark:border-blue-500"
             : "border-border hover:border-violet-300 dark:hover:border-violet-500",
       )}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <p className="truncate text-[15px] font-bold tracking-tight text-foreground">
+            <p className="min-w-0 break-words text-[15px] font-bold tracking-tight text-foreground">
               {selectedTitle}
             </p>
             {selected.isRecommended ? (
@@ -346,7 +348,7 @@ export function RentalPeriodPlanDropdown({
               </span>
             ) : null}
           </div>
-          <p className="mt-1 truncate text-[12px] font-medium text-muted-foreground">
+          <p className="mt-1 text-[12px] font-medium leading-snug text-muted-foreground">
             {selected.durationDays} days
             {selectedCycles ? ` · ${selectedCycles}` : ""}
             {selectedPerDay != null ? ` · ${formatPlanInr(selectedPerDay)}/day` : ""}
@@ -368,8 +370,8 @@ export function RentalPeriodPlanDropdown({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <div className="text-right">
+        <div className="flex min-w-0 shrink-0 items-center justify-between gap-2 sm:justify-end">
+          <div className="text-left sm:text-right">
             <p
               className={cn(
                 "text-[18px] font-extrabold leading-none tabular-nums",
@@ -386,33 +388,35 @@ export function RentalPeriodPlanDropdown({
               </StruckPrice>
             ) : null}
           </div>
-          {selectedIconUrl ? (
-            <div
-              className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border"
-              title={selectedTierLabel}
-            >
-              <img
-                src={selectedIconUrl}
-                alt={selectedTierLabel}
-                className="h-9 w-9 object-contain drop-shadow-sm"
-                onError={retryOriginalOnImageError}
-              />
-            </div>
-          ) : null}
-          <ChevronDown
-            className={cn(
-              "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
-              open && "rotate-180 text-violet-500",
-            )}
-          />
+          <div className="flex shrink-0 items-center gap-1.5">
+            {selectedIconUrl ? (
+              <div
+                className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border sm:h-12 sm:w-12"
+                title={selectedTierLabel}
+              >
+                <img
+                  src={selectedIconUrl}
+                  alt={selectedTierLabel}
+                  className="h-7 w-7 object-contain drop-shadow-sm sm:h-9 sm:w-9"
+                  onError={retryOriginalOnImageError}
+                />
+              </div>
+            ) : null}
+            <ChevronDown
+              className={cn(
+                "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
+                open && "rotate-180 text-violet-500",
+              )}
+            />
+          </div>
         </div>
       </div>
     </button>
   );
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <div className="min-w-0 w-full max-w-full space-y-3">
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <h3 className="text-base font-bold tracking-tight text-foreground">Rental period</h3>
           <p className="mt-0.5 text-[13px] font-medium text-violet-600 dark:text-violet-400">
@@ -420,15 +424,15 @@ export function RentalPeriodPlanDropdown({
           </p>
         </div>
         {legend.length > 0 ? (
-          <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-0.5 sm:flex-wrap sm:justify-end sm:overflow-visible">
+          <div className="flex min-w-0 w-full max-w-full flex-wrap items-center gap-1.5 sm:w-auto sm:justify-end">
             {legend.map((item) => (
               <div
                 key={item.tier}
-                className="flex shrink-0 items-center gap-1.5 rounded-full bg-muted/50 px-2 py-1 ring-1 ring-inset ring-border"
+                className="flex max-w-full items-center gap-1.5 rounded-full bg-muted/50 px-2 py-1 ring-1 ring-inset ring-border"
                 title={item.label}
               >
-                <img src={item.url} alt="" className="h-5 w-5 object-contain" onError={retryOriginalOnImageError} />
-                <span className="whitespace-nowrap text-[11px] font-semibold text-muted-foreground">
+                <img src={item.url} alt="" className="h-5 w-5 shrink-0 object-contain" onError={retryOriginalOnImageError} />
+                <span className="text-[11px] font-semibold leading-none text-muted-foreground">
                   {item.label}
                 </span>
               </div>
@@ -439,11 +443,11 @@ export function RentalPeriodPlanDropdown({
 
       {isMobile ? (
         <>
-          {triggerButton}
+          {triggerButton({ onClick: () => setOpen(true), "aria-haspopup": "dialog" })}
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetContent
               side="bottom"
-              className="flex max-h-[min(85dvh,40rem)] flex-col gap-0 overflow-hidden rounded-t-2xl border-border bg-card p-0"
+              className="flex max-h-[min(85dvh,40rem)] w-full max-w-full flex-col gap-0 overflow-hidden rounded-t-2xl border-border bg-card p-0"
             >
               <SheetHeader className="shrink-0 space-y-0 border-b border-border bg-card px-4 py-3 text-left">
                 <SheetTitle className="pr-8 text-base font-bold text-foreground">
@@ -467,13 +471,13 @@ export function RentalPeriodPlanDropdown({
         </>
       ) : (
         <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
+          <PopoverTrigger asChild>{triggerButton({ "aria-haspopup": "listbox" })}</PopoverTrigger>
           <PopoverContent
             align="start"
             side="bottom"
             sideOffset={6}
             collisionPadding={16}
-            className="z-[60] w-[--radix-popover-trigger-width] max-w-none overflow-hidden rounded-2xl border-border bg-card p-0 shadow-2xl shadow-black/20"
+            className="z-[60] w-[min(100vw-2rem,var(--radix-popover-trigger-width))] max-w-none overflow-hidden rounded-2xl border-border bg-card p-0 shadow-2xl shadow-black/20"
           >
             <div className="border-b border-border bg-muted/40 px-3.5 py-2.5">
               <p className="text-[12px] font-semibold text-muted-foreground">Choose a rental plan</p>

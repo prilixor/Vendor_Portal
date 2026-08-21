@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { StateCityFields } from "@/app/components/shared/StateCityFields";
@@ -23,6 +24,7 @@ import {
   UpdateAdminDoctorRequest,
 } from "@/app/services/adminApi";
 import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
+import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 import { Copy, Download, ExternalLink, Loader2, Mail, Pencil, Plus, Search, Stethoscope, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
@@ -65,6 +67,8 @@ const emptyNewHospital = (): NewHospitalDraft => ({
   longitude: 72.5714,
 });
 
+const PAGE_SIZE = 8;
+
 const AdminDoctors = () => {
   const [doctors, setDoctors] = useState<AdminDoctorDto[]>([]);
   const [hospitals, setHospitals] = useState<AdminHospitalDto[]>([]);
@@ -72,6 +76,7 @@ const AdminDoctors = () => {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AdminDoctorDto | null>(null);
   const [form, setForm] = useState<DoctorForm>(emptyForm());
@@ -91,6 +96,7 @@ const AdminDoctors = () => {
       ]);
       setDoctors(docs);
       setHospitals(hosps);
+      setPage(1);
     } catch (e) {
       toast.error(getUserFriendlyMessage(e, "Failed to load doctors"));
     } finally {
@@ -104,6 +110,12 @@ const AdminDoctors = () => {
   }, [statusFilter]);
 
   const filtered = useMemo(() => doctors, [doctors]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const pageRows = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage],
+  );
 
   const openCreate = () => {
     setEditing(null);
@@ -325,8 +337,9 @@ const AdminDoctors = () => {
             <p>No doctors yet. Add the first doctor to generate a Unique ID and QR.</p>
           </div>
         ) : (
-          <div className="divide-y">
-            {filtered.map((d) => (
+          <div>
+            <div className="divide-y">
+            {pageRows.map((d) => (
               <div key={d.id} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -342,9 +355,16 @@ const AdminDoctors = () => {
                       <Copy className="h-3 w-3" />
                     </button>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {d.email}
-                    {d.specialization ? ` · ${d.specialization}` : ""}
+                  <p className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm">
+                    <CopyableEmail email={d.email} textClassName="text-sm font-medium text-sky-600 dark:text-sky-400" />
+                    {d.contactNumber ? (
+                      <span className="font-medium text-violet-600 dark:text-violet-400">
+                        · {d.contactNumber}
+                      </span>
+                    ) : null}
+                    {d.specialization ? (
+                      <span className="text-muted-foreground">· {d.specialization}</span>
+                    ) : null}
                   </p>
                   {d.hospitals && d.hospitals.length > 0 && (
                     <p className="text-xs text-muted-foreground">
@@ -372,6 +392,16 @@ const AdminDoctors = () => {
                 </div>
               </div>
             ))}
+            </div>
+            <div className="px-4 pb-4 sm:px-6">
+              <TablePagination
+                page={safePage}
+                pageSize={PAGE_SIZE}
+                total={filtered.length}
+                onPageChange={setPage}
+                label="doctors"
+              />
+            </div>
           </div>
         )}
       </Card>

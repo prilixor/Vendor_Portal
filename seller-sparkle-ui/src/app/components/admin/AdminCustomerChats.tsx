@@ -120,29 +120,35 @@ export default function AdminCustomerChats() {
   const showChatOnMobile = !!selectedSessionId;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div
+        className={cn(
+          "flex items-center justify-between gap-3",
+          selectedSessionId && "max-lg:hidden",
+        )}
+      >
         <div className="min-w-0">
-          <h1 className="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-foreground">
-            <MessageSquare className="h-8 w-8 shrink-0 text-primary" />
-            <span className="truncate">Customer Order Chats</span>
+          <h1 className="flex items-start gap-2 text-xl font-extrabold tracking-tight text-foreground sm:items-center sm:gap-3 sm:text-3xl">
+            <MessageSquare className="mt-0.5 h-6 w-6 shrink-0 text-primary sm:mt-0 sm:h-8 sm:w-8" />
+            <span className="min-w-0 break-words">Customer Order Chats</span>
           </h1>
-          <p className="mt-1 font-medium text-muted-foreground">
+          <p className="mt-1 hidden font-medium text-muted-foreground sm:block">
             Reply to customer chats started from order details.
           </p>
         </div>
         <Button
           onClick={() => void refetchSessions()}
           variant="outline"
-          className="w-full gap-2 font-bold shadow-sm sm:w-auto"
+          size="sm"
+          className="shrink-0 gap-2 font-bold shadow-sm sm:h-10 sm:px-4"
           disabled={fetchingSessions}
         >
           <RefreshCw className={cn("h-4 w-4", fetchingSessions && "animate-spin")} />
-          Refresh
+          <span className="hidden sm:inline">Refresh</span>
         </Button>
       </div>
 
-      <div className="grid min-h-[560px] grid-cols-1 gap-5 lg:h-[calc(100vh-220px)] lg:grid-cols-12">
+      <div className="grid grid-cols-1 gap-5 lg:h-[calc(100vh-220px)] lg:min-h-[560px] lg:grid-cols-12">
         {/* Session list — same card pattern as Vendor Support Center */}
         <Card
           className={cn(
@@ -150,6 +156,7 @@ export default function AdminCustomerChats() {
             "lg:col-span-5 xl:col-span-4",
             showListOnMobile ? "flex" : "hidden",
             "lg:flex",
+            "h-[calc(100dvh-8.75rem)] lg:h-full",
           )}
         >
           <CardHeader className="shrink-0 space-y-3 border-b border-border/70 px-4 py-4">
@@ -200,7 +207,7 @@ export default function AdminCustomerChats() {
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <span className="truncate font-mono text-[11px] font-semibold tracking-wide text-muted-foreground">
+                        <span className="truncate font-mono text-[11px] font-semibold tracking-wide text-sky-600 dark:text-sky-400">
                           {s.orderNumber || "No order"}
                         </span>
                         <div className="flex shrink-0 items-center gap-1.5">
@@ -234,24 +241,25 @@ export default function AdminCustomerChats() {
                       </p>
 
                       {s.vendorName ? (
-                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                          Vendor: {s.vendorName}
+                        <p className="mt-1 line-clamp-1 text-xs">
+                          <span className="text-muted-foreground">Vendor: </span>
+                          <span className="font-medium text-violet-600 dark:text-violet-400">{s.vendorName}</span>
                         </p>
                       ) : null}
 
                       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border/50 pt-2">
                         <div className="flex min-w-0 items-center gap-1.5">
-                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted">
-                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300">
+                            <User className="h-3.5 w-3.5" />
                           </div>
                           <span
-                            className="truncate text-xs font-medium text-foreground/80"
+                            className="truncate text-xs font-medium text-teal-700 dark:text-teal-300"
                             title={s.customerName}
                           >
                             {s.customerName}
                           </span>
                         </div>
-                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                        <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
                           {formatDistanceToNow(new Date(s.lastMessageAt), { addSuffix: true })}
                         </span>
                       </div>
@@ -268,8 +276,8 @@ export default function AdminCustomerChats() {
           className={cn(
             "flex min-h-0 flex-col overflow-hidden border-border/70 bg-secondary/15 shadow-sm",
             "lg:col-span-7 xl:col-span-8",
-            showChatOnMobile ? "flex" : "hidden",
-            "lg:flex",
+            showChatOnMobile ? "flex h-[calc(100dvh-5rem)] lg:h-full" : "hidden",
+            "lg:flex lg:h-full",
             !activeSession && "items-center justify-center p-8 text-center sm:p-12",
           )}
         >
@@ -293,12 +301,12 @@ export default function AdminCustomerChats() {
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
+                  <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner sm:flex">
                     <User className="h-5 w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="truncate text-lg font-extrabold tracking-tight">
+                      <h2 className="min-w-0 break-words text-base font-extrabold tracking-tight text-teal-700 dark:text-teal-300 sm:text-lg">
                         {activeSession.customerName}
                       </h2>
                       {activeSession.isClosed ? (
@@ -313,27 +321,44 @@ export default function AdminCustomerChats() {
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
                       {activeSession.orderNumber && (
-                        <Badge variant="outline" className="max-w-full truncate font-mono text-[10px]">
-                          <Hash className="mr-1 h-3 w-3 shrink-0" />
-                          <span className="truncate">{activeSession.orderNumber}</span>
+                        <Badge
+                          variant="outline"
+                          className="max-w-full whitespace-normal break-all border-sky-200 bg-sky-50 font-mono text-[10px] leading-snug text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300"
+                        >
+                          <Hash className="mr-1 inline h-3 w-3 shrink-0" />
+                          {activeSession.orderNumber}
                         </Badge>
                       )}
                       {activeSession.orderId && (
-                        <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                        <Button variant="outline" size="sm" className="h-7 shrink-0 text-xs" asChild>
                           <Link to={`/admin/orders/${activeSession.orderId}`}>View order</Link>
                         </Button>
                       )}
                     </div>
-                    <p className="mt-1.5 line-clamp-2 text-sm text-muted-foreground">
-                      {activeSession.subject}
-                      {activeSession.vendorName ? ` · Vendor: ${activeSession.vendorName}` : ""}
-                    </p>
                   </div>
                 </div>
               </div>
 
+              {(activeSession.subject || activeSession.vendorName) && (
+                <div className="shrink-0 space-y-1 border-b bg-primary/5 px-3 py-2.5 sm:px-6">
+                  {activeSession.subject ? (
+                    <p className="break-words text-xs font-semibold leading-snug text-primary">
+                      {activeSession.subject}
+                    </p>
+                  ) : null}
+                  {activeSession.vendorName ? (
+                    <p className="break-words text-xs leading-snug">
+                      <span className="text-muted-foreground">Vendor: </span>
+                      <span className="font-medium text-violet-600 dark:text-violet-400">
+                        {activeSession.vendorName}
+                      </span>
+                    </p>
+                  ) : null}
+                </div>
+              )}
+
               <ScrollArea className="min-h-0 flex-1">
-                <div className="space-y-3 p-3 sm:p-6">
+                <div className="space-y-6 p-3 sm:p-6">
                   {loadingMessages ? (
                     <div className="min-h-[8rem]" aria-busy="true" aria-label="Loading messages" />
                   ) : messages.length === 0 ? (
@@ -346,26 +371,35 @@ export default function AdminCustomerChats() {
                       const prev = index > 0 ? messages[index - 1] : null;
                       const showDay = !prev || !isSameChatDay(prev.sentAt, msg.sentAt);
                       return (
-                        <div key={msg.id} className="flex flex-col space-y-3">
+                        <div key={msg.id} className="flex flex-col gap-2">
                           {showDay && <ChatDaySeparator date={msg.sentAt} />}
                           <div
                             className={cn(
-                              "flex w-fit max-w-[85%] flex-col rounded-lg p-3 text-sm shadow-sm sm:max-w-[80%]",
-                              isAdmin
-                                ? "ml-auto self-end rounded-tr-none bg-primary text-primary-foreground"
-                                : "mr-auto self-start rounded-tl-none border bg-card text-foreground"
+                              "flex max-w-[88%] flex-col sm:max-w-[75%]",
+                              isAdmin ? "ml-auto items-end" : "mr-auto items-start",
                             )}
                           >
-                            <span className="mb-1 text-[10px] font-bold uppercase tracking-wide opacity-80">
-                              {isAdmin ? "You (Admin)" : "Customer"}
-                            </span>
-                            <p className="break-words whitespace-pre-wrap leading-relaxed">{msg.messageText}</p>
-                            <span className="mt-1.5 self-end text-[10px] font-semibold opacity-75">
-                              {new Date(msg.sentAt).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
+                            <div className="mb-1 flex items-center gap-2 px-1">
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                {isAdmin ? "Support Team" : "Customer"}
+                              </span>
+                              <span className="text-[9px] font-medium text-slate-400">
+                                {new Date(msg.sentAt).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                            <div
+                              className={cn(
+                                "whitespace-pre-wrap rounded-2xl px-5 py-3 text-[14px] leading-relaxed shadow-sm",
+                                isAdmin
+                                  ? "rounded-tr-none bg-primary text-primary-foreground shadow-primary/10"
+                                  : "rounded-tl-none border bg-card text-foreground",
+                              )}
+                            >
+                              {msg.messageText}
+                            </div>
                           </div>
                         </div>
                       );

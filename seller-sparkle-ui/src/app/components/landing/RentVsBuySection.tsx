@@ -34,8 +34,8 @@ export const RentVsBuySection = ({ data }: RentVsBuySectionProps) => {
     <section id="rent-or-buy" className="scroll-target section-block cream reveal">
       <div className="section-inner">
         <div className="eyebrow">{eyebrow}</div>
-        <h2 className="display" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif", fontSize: "40px", fontWeight: 400 }}>
-          {title} <span style={{ color: "var(--teal-mid)", fontStyle: "italic" }}>{accentText}</span>
+        <h2 className="display">
+          {title} <span className="accent">{accentText}</span>
         </h2>
         <p className="sub" style={{ maxWidth: "640px" }}>
           {subtitle}

@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { apiClient } from "@/app/services/apiClient";
 import { cn } from "@/app/helpers/utils";
 import {
+  catalogDocumentDownloadFileName,
   catalogDocumentExtension,
   catalogDocumentFileName,
   catalogDocumentFormatLabel,
@@ -31,7 +32,7 @@ function useDocumentActions() {
 
   const download = async (doc: CatalogDocumentItem) => {
     try {
-      const filename = catalogDocumentFileName(doc.fileUrl);
+      const filename = catalogDocumentDownloadFileName(doc);
       await apiClient.downloadBlob(`/files/download?url=${encodeURIComponent(doc.fileUrl)}`, filename);
       toast.success("Download started");
     } catch {
