@@ -18,7 +18,7 @@ import {
 } from "@/app/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogClose } from "@/app/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Plus, FileText, CheckCircle2 } from "lucide-react";
+import { Loader2, Plus, FileText, CheckCircle2, MapPin } from "lucide-react";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { CustomerMedicalReference, type DoctorRefSelection } from "./CustomerMedicalReference";
 import { Checkbox } from "@/app/components/ui/checkbox";
@@ -37,6 +37,10 @@ const SHOW_VENDOR_PICKUP_OPTION = false;
 function formatAddressOption(a: { label?: string | null; line1: string; city: string }): string {
   const tail = `${a.line1}, ${a.city}`;
   return a.label?.trim() ? `${a.label.trim()} — ${tail}` : tail;
+}
+
+function formatCheckoutInr(value: number): string {
+  return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
 const CustomerCheckout = () => {
@@ -308,9 +312,17 @@ const CustomerCheckout = () => {
               ) : (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="checkout-address" required>
-                      Saved address
-                    </Label>
+                    <div className="flex items-center justify-between gap-3">
+                      <Label htmlFor="checkout-address" required>
+                        Saved address
+                      </Label>
+                      <Button variant="outline" size="sm" className="h-8 shrink-0 rounded-lg font-medium" asChild>
+                        <Link to="/customer/addresses">
+                          <MapPin className="h-3.5 w-3.5" />
+                          Manage addresses
+                        </Link>
+                      </Button>
+                    </div>
                     <Select
                       value={addressId || "none"}
                       onValueChange={(v) => setAddressId(v === "none" ? "" : v)}
@@ -328,9 +340,6 @@ const CustomerCheckout = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  <Button variant="link" className="h-auto px-0 text-xs text-muted-foreground" asChild>
-                    <Link to="/customer/addresses">Manage addresses</Link>
-                  </Button>
                 </>
               )}
             </CardContent>
@@ -509,51 +518,62 @@ const CustomerCheckout = () => {
             <p className="text-lg font-semibold">Order summary</p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-3 text-sm">
+            <div className="space-y-4 text-sm">
               {lines.map((l) => {
                 const imageUrl = resolveItemImageUrl(l);
                 const isPlanBased = !!l.rentalPricingPlanId && l.rentalFinalPrice != null;
+                const hasDiscount =
+                  isPlanBased &&
+                  l.rentalNormalPrice != null &&
+                  Number(l.rentalNormalPrice) > Number(l.rentalFinalPrice);
                 return (
-                <div key={l.listingId} className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
+                <div key={l.listingId} className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     {imageUrl ? (
                       <img
                         src={imageUrl}
                         alt={l.title}
-                        className="h-10 w-10 shrink-0 rounded-md object-cover border border-border/40 bg-muted"
+                        className="h-11 w-11 shrink-0 rounded-md object-cover border border-border/40 bg-muted"
                         onError={retryOriginalOnImageError}
                       />
                     ) : (
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border/40 bg-muted text-[10px] text-muted-foreground">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border/40 bg-muted text-[10px] text-muted-foreground">
                         No Img
                       </div>
                     )}
-                    <span className="min-w-0 leading-snug">
-                      <span className="font-medium tabular-nums">{l.quantity}</span>
-                      <span className="text-muted-foreground"> × </span>
-                      <span>{l.title}</span>
+                    <div className="min-w-0">
+                      <p className="leading-snug">
+                        <span className="font-medium tabular-nums">{l.quantity}</span>
+                        <span className="text-muted-foreground"> × </span>
+                        <span className="font-medium">{l.title}</span>
+                      </p>
                       {l.orderType === "rent" && isPlanBased ? (
-                        <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                          {dayPlanTitle(Number(l.rentalDurationDays ?? l.rentalDays ?? 0))}
-                          {" · Starts on delivery"}
-                          {l.rentalNormalPrice != null &&
-                          Number(l.rentalNormalPrice) > Number(l.rentalFinalPrice) ? (
-                            <>
-                              {" · "}
+                        <div className="mt-1 space-y-0.5">
+                          <p className="text-xs font-medium text-foreground">
+                            {dayPlanTitle(Number(l.rentalDurationDays ?? l.rentalDays ?? 0))}
+                          </p>
+                          {hasDiscount ? (
+                            <p className="flex flex-wrap items-baseline gap-x-1.5 tabular-nums">
                               <StruckPrice className="text-[11px] font-semibold text-rose-500 dark:text-rose-400">
-                                ₹{Number(l.rentalNormalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-                              </StruckPrice>{" "}
-                              <span className="font-semibold text-foreground">
-                                ₹{Number(l.rentalFinalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                                {formatCheckoutInr(Number(l.rentalNormalPrice))}
+                              </StruckPrice>
+                              <span className="text-sm font-semibold text-foreground">
+                                {formatCheckoutInr(Number(l.rentalFinalPrice))}
                               </span>
-                            </>
+                              <span className="text-[11px] text-muted-foreground">each</span>
+                            </p>
+                          ) : l.rentalFinalPrice != null ? (
+                            <p className="text-xs font-medium tabular-nums text-foreground">
+                              {formatCheckoutInr(Number(l.rentalFinalPrice))} each
+                            </p>
                           ) : null}
-                        </span>
+                          <p className="text-[11px] text-muted-foreground">Starts on delivery</p>
+                        </div>
                       ) : null}
-                    </span>
+                    </div>
                   </div>
-                  <span className="shrink-0 tabular-nums font-medium">
-                    ₹{estimateCartLineRent(l).toFixed(0)}
+                  <span className="shrink-0 pt-0.5 font-semibold tabular-nums">
+                    {formatCheckoutInr(estimateCartLineRent(l))}
                   </span>
                 </div>
                 );
@@ -563,40 +583,40 @@ const CustomerCheckout = () => {
               <div className="space-y-2.5 border-t pt-4 text-sm">
               <div className="flex justify-between gap-4 text-muted-foreground">
                 <span>Subtotal</span>
-                  <span className="tabular-nums text-foreground">₹{(quote?.subtotalAmount ?? totalEstimatedRent).toFixed(0)}</span>
+                  <span className="tabular-nums text-foreground">{formatCheckoutInr(quote?.subtotalAmount ?? totalEstimatedRent)}</span>
               </div>
               <div className="flex justify-between gap-4 text-muted-foreground">
                 <span>Deposit</span>
-                  <span className="tabular-nums text-foreground">₹{(quote?.depositAmount ?? totalDeposit).toFixed(0)}</span>
+                  <span className="tabular-nums text-foreground">{formatCheckoutInr(quote?.depositAmount ?? totalDeposit)}</span>
               </div>
               {expressFee > 0 ? (
                 <div className="flex justify-between gap-4 text-muted-foreground">
                   <span>Express delivery</span>
-                  <span className="tabular-nums text-foreground">₹{expressFee.toFixed(0)}</span>
+                  <span className="tabular-nums text-foreground">{formatCheckoutInr(expressFee)}</span>
                 </div>
               ) : null}
                 {distanceFee > 0 ? (
                   <div className="flex justify-between gap-4 text-muted-foreground">
                     <span>Distance delivery fee</span>
-                    <span className="tabular-nums text-foreground">₹{distanceFee.toFixed(0)}</span>
+                    <span className="tabular-nums text-foreground">{formatCheckoutInr(distanceFee)}</span>
                   </div>
                 ) : null}
               {/* Service fee UI hidden — keep for future re-enable */}
               {false && (
                 <div className="flex justify-between gap-4 text-muted-foreground">
                   <span>Service fee</span>
-                  <span className="tabular-nums text-foreground">₹{serviceFee.toFixed(0)}</span>
+                  <span className="tabular-nums text-foreground">{formatCheckoutInr(serviceFee)}</span>
                 </div>
               )}
               {gstAmount > 0 ? (
                 <div className="flex justify-between gap-4 text-muted-foreground">
                   <span>GST</span>
-                  <span className="tabular-nums text-foreground">₹{gstAmount.toFixed(0)}</span>
+                  <span className="tabular-nums text-foreground">{formatCheckoutInr(gstAmount)}</span>
                 </div>
               ) : null}
               <div className="flex justify-between gap-4 border-t pt-3 text-base font-bold">
                 <span>Total</span>
-                <span className="tabular-nums">₹{grandTotal.toFixed(0)}</span>
+                <span className="tabular-nums">{formatCheckoutInr(grandTotal)}</span>
               </div>
                 {quoteLoading && (
                   <p className="text-xs text-muted-foreground">Updating distance-based charges…</p>
@@ -605,8 +625,8 @@ const CustomerCheckout = () => {
                   <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
                     {quote.buySuggestions.map((s) => (
                       <p key={s.listingId} className="leading-relaxed">
-                        <span className="font-medium">{s.listingTitle}:</span> Rent ₹{s.rentAmount.toFixed(0)} meets or
-                        exceeds Buy ₹{s.buyAmount.toFixed(0)} — switched to Buy.
+                        <span className="font-medium">{s.listingTitle}:</span> Rent {formatCheckoutInr(s.rentAmount)} meets or
+                        exceeds Buy {formatCheckoutInr(s.buyAmount)} — switched to Buy.
                       </p>
                     ))}
                   </div>
