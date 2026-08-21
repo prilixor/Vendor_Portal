@@ -80,64 +80,85 @@ export const ContactSection = ({ data }: ContactSectionProps) => {
           </a>
         </div>
 
-        <div className="service-grid services-3col contact-cards">
-          <article className="service-card contact-card">
-            <div className="service-icon contact-card-icon">
+        <div className="contact-cards">
+          <article className="contact-card">
+            <div className="contact-card-icon">
               <svg viewBox="0 0 24 24" fill="none">
                 <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.9 21 3 13.1 3 3c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1L6.6 10.8z" fill="currentColor" />
               </svg>
             </div>
-            <div className="contact-card-body">
+            <div className="contact-card-main">
               <h4>Call Us</h4>
               <a
-                className="contact-action"
+                className="contact-value"
                 href={`tel:${phone.replace(/\s+/g, "")}`}
                 onClick={handleCallClick}
               >
-                <span>Phone</span>
-                <strong>{phone}</strong>
+                {phone}
               </a>
+              <div className="contact-pills">
+                <a
+                  className="contact-pill"
+                  href={`tel:${phone.replace(/\s+/g, "")}`}
+                  onClick={handleCallClick}
+                >
+                  Call now
+                </a>
+                <a
+                  className="contact-pill contact-pill--ghost"
+                  href={`https://wa.me/${phone.replace(/\D/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  WhatsApp
+                </a>
+              </div>
             </div>
           </article>
 
-          <article className="service-card contact-card">
-            <div className="service-icon contact-card-icon">
+          <article className="contact-card">
+            <div className="contact-card-icon">
               <svg viewBox="0 0 24 24" fill="none">
                 <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.7" />
                 <path d="M4 6.5l8 6 8-6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <div className="contact-card-body">
+            <div className="contact-card-main">
               <h4>Email Us</h4>
-              <a
-                className="contact-action"
-                href={`mailto:${businessEmail}`}
-                onClick={(e) => handleEmailClick(businessEmail, e)}
-              >
-                <span>Business</span>
-                <strong>{businessEmail}</strong>
-              </a>
-              <a
-                className="contact-action"
-                href={`mailto:${supportEmail}`}
-                onClick={(e) => handleEmailClick(supportEmail, e)}
-              >
-                <span>Support</span>
-                <strong>{supportEmail}</strong>
-              </a>
+              <div className="contact-lines">
+                <div className="contact-line">
+                  <span>Business</span>
+                  <a
+                    href={`mailto:${businessEmail}`}
+                    onClick={(e) => handleEmailClick(businessEmail, e)}
+                  >
+                    {businessEmail}
+                  </a>
+                </div>
+                <div className="contact-line">
+                  <span>Support</span>
+                  <a
+                    href={`mailto:${supportEmail}`}
+                    onClick={(e) => handleEmailClick(supportEmail, e)}
+                  >
+                    {supportEmail}
+                  </a>
+                </div>
+              </div>
             </div>
           </article>
 
-          <article className="service-card contact-card">
-            <div className="service-icon contact-card-icon">
+          <article className="contact-card">
+            <div className="contact-card-icon">
               <svg viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
                 <path d="M12 7v5l3.5 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <div className="contact-card-body">
+            <div className="contact-card-main">
               <h4>Business Hours</h4>
-              <p className="contact-hours">{operatingHours}</p>
+              <p className="contact-value contact-value--muted">{operatingHours}</p>
+              <p className="contact-hint">We reply to calls and email during these hours.</p>
             </div>
           </article>
         </div>

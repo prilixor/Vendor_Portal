@@ -943,64 +943,163 @@ h1.display-head .accent {
 }
 
 .contact-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
   margin-top: 28px;
+  align-items: stretch;
 }
 
 .contact-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 28px 22px 24px;
+  min-height: 100%;
 }
 
 .contact-card-icon {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   border-radius: 14px;
-  margin: 0 auto 16px;
+  margin: 0 auto 14px;
+  background: var(--cream);
+  color: var(--teal-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.contact-card-body {
-  min-width: 0;
+.contact-card-icon svg {
+  width: 22px;
+  height: 22px;
 }
 
-.contact-action {
+.contact-card-main {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--cream);
-  text-decoration: none;
-  text-align: left;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  flex: 1;
 }
 
-.contact-action span {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--gray-600);
+.contact-card h4 {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.1px;
+  color: var(--ink);
+  margin: 0 0 8px;
 }
 
-.contact-action strong {
-  font-size: 14px;
-  font-weight: 700;
+.contact-value {
+  display: block;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.4;
   color: var(--teal-mid);
+  text-decoration: none;
   overflow-wrap: anywhere;
 }
 
-.contact-action:hover {
-  border-color: rgba(26, 107, 86, 0.35);
-  background: #fff;
+.contact-value:hover {
+  text-decoration: underline;
 }
 
-.contact-card .contact-hours {
-  margin: 8px 0 0;
-  font-size: 14px;
-  line-height: 1.45;
+.contact-value--muted {
   color: var(--gray-600);
+  font-weight: 500;
+}
+
+.contact-hint {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--gray-400);
+}
+
+.contact-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.contact-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--teal-dark);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.contact-pill:hover {
+  opacity: 0.92;
+}
+
+.contact-pill--ghost {
+  background: #fff;
+  color: var(--teal-dark);
+  border: 1.5px solid var(--line);
+}
+
+.contact-pill--ghost:hover {
+  border-color: var(--teal-mid);
+  opacity: 1;
+}
+
+.contact-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.contact-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.contact-line span {
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gray-400);
+}
+
+.contact-line a {
+  color: var(--teal-mid);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.contact-line a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  .contact-cards {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1034,11 +1133,10 @@ h1.display-head .accent {
   }
 
   .contact-card {
-    display: flex;
+    flex-direction: row;
     align-items: flex-start;
-    gap: 12px;
     text-align: left;
-    padding: 14px;
+    padding: 16px;
     border-radius: 16px;
   }
 
@@ -1047,24 +1145,28 @@ h1.display-head .accent {
   }
 
   .contact-card-icon {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     border-radius: 12px;
-    margin: 0;
-    flex-shrink: 0;
+    margin: 0 12px 0 0;
   }
 
-  .contact-card-body {
+  .contact-card-main {
+    align-items: flex-start;
+  }
+
+  .contact-card h4 {
+    margin-bottom: 4px;
+  }
+
+  .contact-pills {
+    justify-content: flex-start;
+    margin-top: 10px;
+  }
+
+  .contact-pill {
     flex: 1;
-  }
-
-  .contact-card-body h4 {
-    margin-bottom: 2px;
-  }
-
-  .contact-action {
-    margin-top: 8px;
-    width: 100%;
+    min-width: 0;
   }
 
   .cta-panel {
