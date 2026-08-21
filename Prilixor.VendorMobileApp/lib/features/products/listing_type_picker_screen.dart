@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
 import 'create_listing_screen.dart';
@@ -57,9 +57,9 @@ class ListingTypePickerScreen extends StatelessWidget {
           _TypeCard(
             title: 'Equipment',
             subtitle: 'Rent medical devices & durable goods',
-            detail: 'Daily / monthly rent · deposit · quantity stock',
+            detail: 'Daily / monthly rent \u00b7 deposit \u00b7 quantity stock',
             icon: Icons.medical_services_outlined,
-            accent: const Color(0xFF60A5FA),
+            accent: const Color(0xFF3B82F6),
             highlighted: suggestedChemical == false,
             onTap: () => _openForm(context, isChemical: false),
           ),
@@ -67,9 +67,9 @@ class ListingTypePickerScreen extends StatelessWidget {
           _TypeCard(
             title: 'Chemical',
             subtitle: 'Sell lab / industrial chemicals',
-            detail: 'Per packaging size (1L, 5L…) · buy price · variant stock',
+            detail: 'Per packaging size (1L, 5L...) \u00b7 buy price \u00b7 variant stock',
             icon: Icons.science_outlined,
-            accent: const Color(0xFF34D399),
+            accent: const Color(0xFF10B981),
             highlighted: suggestedChemical == true,
             onTap: () => _openForm(context, isChemical: true),
           ),
@@ -100,8 +100,23 @@ class _TypeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final cardBg = isDark ? context.appColors.surface : Colors.white;
+
+    final borderColor = highlighted
+        ? (isDark ? accent.withValues(alpha: 0.65) : const Color(0xFF60A5FA))
+        : context.appColors.border;
+
+    final iconBg = isDark
+        ? accent.withValues(alpha: 0.16)
+        : (title == 'Equipment' ? const Color(0xFFDBEAFE) : const Color(0xFFD1FAE5));
+
+    final iconColor = isDark
+        ? accent
+        : (title == 'Equipment' ? const Color(0xFF1D4ED8) : const Color(0xFF047857));
+
     return Material(
-      color: AppTheme.card(context),
+      color: cardBg,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -109,11 +124,10 @@ class _TypeCard extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
+            color: cardBg,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: highlighted
-                  ? accent.withValues(alpha: 0.65)
-                  : context.appColors.border,
+              color: borderColor,
               width: highlighted ? 1.5 : 1,
             ),
             gradient: highlighted
@@ -121,8 +135,12 @@ class _TypeCard extends StatelessWidget {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      accent.withValues(alpha: 0.12),
-                      AppTheme.card(context),
+                      isDark
+                          ? accent.withValues(alpha: 0.12)
+                          : const Color(0xFFEFF6FF),
+                      isDark
+                          ? context.appColors.surface
+                          : const Color(0xFFF8FAFC),
                     ],
                   )
                 : null,
@@ -134,10 +152,10 @@ class _TypeCard extends StatelessWidget {
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.16),
+                  color: iconBg,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, color: accent, size: 28),
+                child: Icon(icon, color: iconColor, size: 28),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -162,13 +180,23 @@ class _TypeCard extends StatelessWidget {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: accent.withValues(alpha: 0.2),
+                              color: isDark
+                                  ? accent.withValues(alpha: 0.2)
+                                  : const Color(0xFFDBEAFE),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.transparent
+                                    : const Color(0xFF93C5FD),
+                                width: 0.8,
+                              ),
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
                               'Suggested',
                               style: TextStyle(
-                                color: accent,
+                                color: isDark
+                                    ? accent
+                                    : const Color(0xFF1D4ED8),
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                               ),
