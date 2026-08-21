@@ -1,5 +1,5 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import { customerApi, type RentalPricingPlanDto } from "@/app/services/customerApi";
 import { useCart } from "@/app/contexts/CartContext";
@@ -21,6 +21,8 @@ import { toast } from "sonner";
 import {
   AlertCircle,
   Check,
+  Heart,
+  LayoutGrid,
   ShoppingBag,
   ShoppingCart,
   CalendarDays,
@@ -81,11 +83,18 @@ const CustomerListingDetail = () => {
     durationLabel: string;
   } | null>(null);
 
+  const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["customer-listing", listingId],
     queryFn: () => customerApi.getListingDetail(listingId!),
     enabled: !!listingId,
   });
+  const { data: favorites = [] } = useQuery({
+    queryKey: ["customer-favorites"],
+    queryFn: () => customerApi.getFavorites(),
+    enabled: user?.role === "customer",
+  });
+  const isFavorite = !!listingId && favorites.some((f) => f.vendorProductListingId === listingId);
 
   const activeVariants = data?.variants?.filter((v) => v.isActive) || [];
   const activePlans = useMemo(
@@ -669,12 +678,12 @@ const CustomerListingDetail = () => {
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3.5">
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-2">
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     type="button"
-                    className="h-9 px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+                    className="h-9 rounded-lg px-3 font-medium"
                     onClick={() => {
                       if (user?.role !== "customer") {
                         toast.message("Sign in to save favorites");
@@ -683,21 +692,27 @@ const CustomerListingDetail = () => {
                         });
                         return;
                       }
-                      customerApi
-                        .addFavorite(data.id)
-                        .then(() => toast.success("Added to favorites"))
-                        .catch(() => toast.error("Failed to add favorite"));
+                      const action = isFavorite
+                        ? customerApi.removeFavorite(data.id).then(() => toast.success("Removed from favorites"))
+                        : customerApi.addFavorite(data.id).then(() => toast.success("Added to favorites"));
+                      action
+                        .then(() => queryClient.invalidateQueries({ queryKey: ["customer-favorites"] }))
+                        .catch(() => toast.error(isFavorite ? "Failed to remove favorite" : "Failed to add favorite"));
                     }}
                   >
-                    Favorite
+                    <Heart className={cn("h-4 w-4", isFavorite && "fill-destructive text-destructive")} />
+                    {isFavorite ? "Saved" : "Favorite"}
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className="h-9 px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+                    className="h-9 rounded-lg px-3 font-medium"
                     asChild
                   >
-                    <Link to="/customer/shop">More listings</Link>
+                    <Link to="/customer/shop">
+                      <LayoutGrid className="h-4 w-4" />
+                      More listings
+                    </Link>
                   </Button>
                 </div>
                 <p className="text-[12px] font-medium text-muted-foreground">

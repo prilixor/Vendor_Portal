@@ -187,7 +187,7 @@ const Vendors = () => {
                         <CopyableEmail
                           email={v.email}
                           truncate={false}
-                          className="mt-0.5 w-full"
+                          className="mt-0.5"
                           textClassName="text-xs"
                         />
                       </div>
