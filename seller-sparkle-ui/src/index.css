@@ -52,12 +52,16 @@
     --ring: 244 75% 58%;
 
     --radius: 0.75rem;
+    color-scheme: light;
 
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(244 75% 58%), hsl(262 83% 68%));
+    --gradient-auth: linear-gradient(160deg, hsl(244 74% 55%) 0%, hsl(252 70% 50%) 48%, hsl(262 68% 46%) 100%);
     --gradient-soft: linear-gradient(135deg, hsl(244 75% 97%), hsl(262 83% 97%));
     --gradient-mesh: radial-gradient(at 20% 0%, hsl(244 75% 96%) 0px, transparent 50%),
                      radial-gradient(at 80% 100%, hsl(262 83% 96%) 0px, transparent 50%);
+    --gradient-auth-mesh: radial-gradient(at 12% 0%, hsl(0 0% 100% / 0.18) 0px, transparent 52%),
+                          radial-gradient(at 88% 100%, hsl(262 83% 78% / 0.28) 0px, transparent 55%);
 
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 hsl(240 10% 12% / 0.04);
@@ -79,11 +83,12 @@
   }
 
   .dark {
-    --background: 240 10% 7%;
-    --foreground: 240 5% 96%;
+    color-scheme: dark;
+    --background: 240 12% 8%;
+    --foreground: 240 8% 96%;
 
-    --card: 240 10% 10%;
-    --card-foreground: 240 5% 96%;
+    --card: 240 12% 11%;
+    --card-foreground: 240 8% 96%;
 
     --popover: 240 10% 10%;
     --popover-foreground: 240 5% 96%;
@@ -96,8 +101,8 @@
     --secondary: 240 6% 15%;
     --secondary-foreground: 240 5% 96%;
 
-    --muted: 240 6% 14%;
-    --muted-foreground: 240 5% 65%;
+    --muted: 240 8% 15%;
+    --muted-foreground: 240 8% 72%;
 
     --accent: 262 30% 20%;
     --accent-foreground: 262 83% 90%;
@@ -114,8 +119,8 @@
     --info: 217 80% 65%;
     --info-soft: 217 30% 18%;
 
-    --border: 240 6% 18%;
-    --input: 240 6% 18%;
+    --border: 240 8% 20%;
+    --input: 240 8% 22%;
     --ring: 252 83% 68%;
 
     --sidebar-background: 240 10% 9%;
@@ -128,6 +133,10 @@
 
     /* Gradients - dark mode */
     --gradient-soft: linear-gradient(135deg, hsl(240 10% 12%), hsl(240 10% 14%));
+    --gradient-auth: linear-gradient(165deg, hsl(244 42% 26%) 0%, hsl(252 36% 16%) 52%, hsl(240 22% 9%) 100%);
+    --gradient-auth-mesh: radial-gradient(at 18% 8%, hsl(244 70% 48% / 0.35) 0px, transparent 52%),
+                          radial-gradient(at 88% 92%, hsl(262 60% 40% / 0.22) 0px, transparent 58%);
+    --shadow-glow: 0 10px 28px -8px hsl(244 75% 58% / 0.45);
   }
 }
 
@@ -165,6 +174,37 @@
   h1, h2, h3, h4, h5, h6 {
     @apply tracking-tight;
   }
+
+  /*
+    Chrome/Safari autofill paints a pale yellow/blue fill that breaks dark mode
+    and makes login fields look like light blocks on a black canvas.
+  */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: hsl(var(--foreground));
+    caret-color: hsl(var(--foreground));
+    box-shadow: 0 0 0 1000px hsl(var(--background)) inset;
+    transition: background-color 99999s ease-out 0s;
+  }
+
+  .dark input:-webkit-autofill,
+  .dark input:-webkit-autofill:hover,
+  .dark input:-webkit-autofill:focus,
+  .dark textarea:-webkit-autofill,
+  .dark select:-webkit-autofill {
+    -webkit-text-fill-color: hsl(var(--foreground));
+    caret-color: hsl(var(--foreground));
+    box-shadow: 0 0 0 1000px hsl(240 12% 9%) inset;
+  }
+
+  .dark .auth-form input:-webkit-autofill,
+  .dark .auth-form input:-webkit-autofill:hover,
+  .dark .auth-form input:-webkit-autofill:focus {
+    box-shadow: 0 0 0 1000px hsl(240 12% 9%) inset;
+  }
 }
 
 @layer utilities {
@@ -179,6 +219,119 @@
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+  }
+
+  /* Gradient CTAs stay brand-purple in dark mode; force light label text. */
+  .dark button.bg-gradient-primary,
+  .dark a.bg-gradient-primary {
+    color: #fff;
+  }
+
+  .auth-brand-panel {
+    background: var(--gradient-auth);
+  }
+  .auth-brand-mesh {
+    background: var(--gradient-auth-mesh);
+  }
+
+  /* Auth forms: readable fields, no light autofill blocks. */
+  .auth-form input:not([type="checkbox"]):not([type="radio"]) {
+    height: 2.75rem;
+    border-radius: 0.65rem;
+  }
+  .auth-form input:not([type="checkbox"]):not([type="radio"]):focus-visible {
+    --tw-ring-offset-width: 0px;
+  }
+  .auth-form .bg-gradient-primary {
+    height: 2.75rem;
+    border-radius: 0.7rem;
+    color: #fff;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+
+  /*
+    Dark auth: one quiet navy canvas (Linear / Stripe), not a neon billboard
+    beside an empty card. Light mode is unchanged.
+  */
+  .dark .auth-shell {
+    background: hsl(232 16% 6.5%);
+  }
+
+  .dark .auth-grain {
+    opacity: 0.045;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .dark .auth-brand-panel {
+    background:
+      radial-gradient(920px 540px at 8% -8%, hsl(244 38% 22% / 0.42), transparent 58%),
+      radial-gradient(640px 380px at 100% 108%, hsl(252 28% 14% / 0.32), transparent 52%),
+      hsl(232 18% 7.5%);
+  }
+
+  .dark .auth-brand-mesh {
+    background: linear-gradient(180deg, hsl(232 16% 6.5% / 0) 40%, hsl(232 16% 6.5% / 0.55) 100%);
+  }
+
+  .dark .auth-form input:not([type="checkbox"]):not([type="radio"]) {
+    background-color: hsl(232 14% 9.5%);
+    border-color: hsl(232 10% 18%);
+    color: hsl(220 14% 96%);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.03);
+  }
+
+  .dark .auth-form input:not([type="checkbox"]):not([type="radio"]):hover {
+    border-color: hsl(232 10% 26%);
+  }
+
+  .dark .auth-form input:not([type="checkbox"]):not([type="radio"]):focus-visible {
+    border-color: hsl(244 48% 58%);
+    box-shadow: 0 0 0 3px hsl(244 50% 48% / 0.22);
+    --tw-ring-color: transparent;
+  }
+
+  .dark .auth-form .bg-gradient-primary {
+    background: hsl(244 52% 52%);
+    color: #fff;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.16),
+      0 1px 1px hsl(0 0% 0% / 0.35),
+      0 8px 20px -10px hsl(244 60% 40% / 0.55);
+  }
+
+  .dark .auth-form .bg-gradient-primary:hover {
+    background: hsl(244 52% 56%);
+    opacity: 1;
+  }
+
+  .dark .auth-form .bg-gradient-primary:disabled {
+    opacity: 0.55;
+  }
+
+  .dark .auth-form a {
+    color: hsl(244 62% 78%);
+  }
+
+  .dark .auth-form a:hover {
+    color: hsl(244 70% 86%);
+  }
+
+  .dark .auth-form form + p {
+    margin-top: 1.15rem;
+    border-top: 1px solid hsl(232 10% 16%);
+    padding-top: 1.15rem;
+  }
+
+  .dark .auth-form input:-webkit-autofill,
+  .dark .auth-form input:-webkit-autofill:hover,
+  .dark .auth-form input:-webkit-autofill:focus {
+    -webkit-text-fill-color: hsl(220 14% 96%);
+    caret-color: hsl(220 14% 96%);
+    box-shadow: 0 0 0 1000px hsl(232 14% 9.5%) inset;
   }
 
   /* Diagonal strike: left-bottom → right-top (for old rental prices) */
