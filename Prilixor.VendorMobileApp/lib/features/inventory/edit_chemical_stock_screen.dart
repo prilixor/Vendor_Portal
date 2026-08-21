@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../core/theme.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_catalog_model.dart';
@@ -124,8 +126,8 @@ class _EditChemicalStockScreenState extends State<EditChemicalStockScreen> {
               children: [
                 Text(
                   _productName,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.appColors.textPrimary,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
@@ -133,12 +135,12 @@ class _EditChemicalStockScreenState extends State<EditChemicalStockScreen> {
                 const SizedBox(height: 6),
                 Text(
                   'Total units: $editTotal (was $_previousTotal)',
-                  style: const TextStyle(color: Colors.white54),
+                  style: TextStyle(color: context.appColors.textMuted),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Edit total units per packaging size. Reserved and available update automatically.',
-                  style: TextStyle(color: Colors.white54, fontSize: 13),
+                  style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
                 ),
                 const SizedBox(height: 12),
                 ChemicalVariantStockFields(

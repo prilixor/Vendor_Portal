@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/product_model.dart';
 import '../../core/providers/favorite_provider.dart';
@@ -236,11 +236,11 @@ class BrowseProductCard extends StatelessWidget {
                       buyLine,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         height: 1.2,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF34D399),
+                        color: context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF15803D),
                       ),
                     )
                   else

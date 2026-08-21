@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../core/models/vendor_order_model.dart';
 import '../../core/theme.dart';
@@ -105,11 +105,11 @@ String formatOrderDate(DateTime date) {
   final local = date.toLocal();
   final h = local.hour.toString().padLeft(2, '0');
   final m = local.minute.toString().padLeft(2, '0');
-  return '${months[local.month - 1]} ${local.day}, ${local.year} · $h:$m';
+  return '${months[local.month - 1]} ${local.day}, ${local.year} Â· $h:$m';
 }
 
 String formatDetailDate(String? value) {
-  if (value == null || value.trim().isEmpty) return '—';
+  if (value == null || value.trim().isEmpty) return 'â€”';
   final parsed = DateTime.tryParse(value);
   if (parsed == null) return value;
   const months = [
@@ -122,7 +122,7 @@ String formatDetailDate(String? value) {
 
 List<(String, String)> orderDetailRows(VendorOrder order) {
   final isBuy = order.orderType.toLowerCase() == 'buy';
-  final payout = '₹${order.payoutAmount.toStringAsFixed(0)}';
+  final payout = 'â‚¹${order.payoutAmount.toStringAsFixed(0)}';
 
   if (isBuy) {
     return [
@@ -150,15 +150,24 @@ class OrderStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = orderStatusColor(status);
+    final isDark = context.isDarkMode;
+    final isStatusActive = status.toLowerCase().trim() == 'active';
+    final color = (!isDark && isStatusActive)
+        ? const Color(0xFF15803D)
+        : orderStatusColor(status);
+    final bgColor = (!isDark && isStatusActive)
+        ? const Color(0xFFDCFCE7)
+        : color.withValues(alpha: 0.16);
+    final borderColor = (!isDark && isStatusActive)
+        ? const Color(0xFF86EFAC)
+        : color.withValues(alpha: 0.35);
+
     return Container(
-      height: 20,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
+        color: bgColor,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        border: Border.all(color: borderColor),
       ),
       child: Text(
         formatOrderStatusLabel(status),
@@ -175,7 +184,6 @@ class OrderStatusChip extends StatelessWidget {
     );
   }
 }
-
 class OrderTypeChip extends StatelessWidget {
   final String orderType;
 

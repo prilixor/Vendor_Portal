@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -183,17 +183,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _bestDealBadge() {
+    final isDark = context.isDarkMode;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+        color: isDark
+            ? const Color(0xFFF59E0B).withValues(alpha: 0.15)
+            : const Color(0xFFFEF3C7),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.35)),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFFF59E0B).withValues(alpha: 0.35)
+              : const Color(0xFFFCD34D),
+        ),
       ),
-      child: const Text(
+      child: Text(
         'BEST DEAL',
         style: TextStyle(
-          color: Color(0xFFFBBF24),
+          color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFB45309),
           fontSize: 9,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.3,
@@ -203,17 +210,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _pctOffBadge(int pct) {
+    final isDark = context.isDarkMode;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: const Color(0xFF10B981).withValues(alpha: 0.14),
+        color: isDark
+            ? const Color(0xFF10B981).withValues(alpha: 0.14)
+            : const Color(0xFFDCFCE7),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF10B981).withValues(alpha: 0.3)
+              : const Color(0xFF86EFAC),
+        ),
       ),
       child: Text(
         '$pct% OFF',
-        style: const TextStyle(
-          color: Color(0xFF34D399),
+        style: TextStyle(
+          color: isDark ? const Color(0xFF34D399) : const Color(0xFF15803D),
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
@@ -222,15 +236,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _saveAmountLabel(double amount) {
+    final isDark = context.isDarkMode;
+    final color = isDark ? const Color(0xFF34D399) : const Color(0xFF15803D);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.local_offer_outlined, size: 12, color: Color(0xFF34D399)),
+        Icon(Icons.local_offer_outlined, size: 12, color: color),
         const SizedBox(width: 3),
         Text(
           'Save ${formatPlanInr(amount)}',
-          style: const TextStyle(
-            color: Color(0xFF34D399),
+          style: TextStyle(
+            color: color,
             fontSize: 12,
             fontWeight: FontWeight.w800,
           ),
@@ -238,7 +254,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ],
     );
   }
-
   List<({String tier, String label, String url})> _tierLegend(List<RentalPricingPlanModel> plans) {
     const order = ['good', 'better', 'best_value', 'maximum_savings'];
     final byTier = <String, ({String label, String url})>{};
@@ -556,11 +571,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         margin: const EdgeInsets.only(left: 8),
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF0EA5E9).withValues(alpha: 0.2),
+                                          color: context.isDarkMode
+                                              ? const Color(0xFF38BDF8).withValues(alpha: 0.15)
+                                              : const Color(0xFFE0F2FE),
                                           borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(color: const Color(0xFF0EA5E9)),
+                                          border: Border.all(
+                                            color: context.isDarkMode
+                                                ? const Color(0xFF38BDF8).withValues(alpha: 0.35)
+                                                : const Color(0xFFBAE6FD),
+                                          ),
                                         ),
-                                        child: const Text('Chemical', style: TextStyle(color: Color(0xFF0EA5E9), fontSize: 12, fontWeight: FontWeight.bold)),
+                                        child: Text(
+                                          'Chemical',
+                                          style: TextStyle(
+                                            color: context.isDarkMode
+                                                ? const Color(0xFF38BDF8)
+                                                : const Color(0xFF0369A1),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
                                       ),
                                   ],
                                 ),
@@ -1719,58 +1749,60 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     const SizedBox(height: 3),
                                     Text(
                                       planListMetaLine(plan),
-                                      style: TextStyle(
-                                        color: context.appColors.textMuted,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    if (savings > 0) ...[
-                                      const SizedBox(height: 5),
-                                      Text(
-                                        pct > 0
-                                            ? '$pct% off · Save ${formatPlanInr(savings)}'
-                                            : 'Save ${formatPlanInr(savings)}',
-                                        style: const TextStyle(
-                                          color: Color(0xFF34D399),
+                                        style: TextStyle(
+                                          color: context.appColors.textMuted,
                                           fontSize: 11,
-                                          fontWeight: FontWeight.w800,
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
-                                    ],
-                                    // Web mobile row: price left, catalog icon right.
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                formatPlanInr(plan.finalRentalPrice),
-                                                style: TextStyle(
-                                                  color: priceColor,
-                                                  fontWeight: FontWeight.w800,
-                                                  fontSize: 15,
-                                                ),
-                                              ),
-                                              if (savings > 0) ...[
-                                                const SizedBox(height: 2),
-                                                StruckPrice(
-                                                  formatPlanInr(plan.normalPrice),
-                                                  style: const TextStyle(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ],
-                                            ],
+                                      if (savings > 0) ...[
+                                        const SizedBox(height: 5),
+                                        Text(
+                                          pct > 0
+                                              ? '$pct% off \u00b7 Save ${formatPlanInr(savings)}'
+                                              : 'Save ${formatPlanInr(savings)}',
+                                          style: TextStyle(
+                                            color: context.isDarkMode
+                                                ? const Color(0xFF34D399)
+                                                : const Color(0xFF15803D),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
                                           ),
                                         ),
-                                        if (_planIconAvatar(plan, size: 36) case final icon?) icon,
                                       ],
-                                    ),
+                                      // Web mobile row: price left, catalog icon right.
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  formatPlanInr(plan.finalRentalPrice),
+                                                  style: TextStyle(
+                                                    color: priceColor,
+                                                    fontWeight: FontWeight.w800,
+                                                    fontSize: 15,
+                                                  ),
+                                                ),
+                                                if (savings > 0) ...[
+                                                  const SizedBox(height: 2),
+                                                  StruckPrice(
+                                                    formatPlanInr(plan.normalPrice),
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                          if (_planIconAvatar(plan, size: 36) case final icon?) icon,
+                                        ],
+                                      ),
                                   ],
                                 ),
                               ),

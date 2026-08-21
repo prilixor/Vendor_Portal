@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/models/vendor_onboarding_model.dart';
@@ -74,7 +74,7 @@ class OnboardingStatusBanner extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Account · ${accountStatus.trim().isEmpty ? 'unknown' : accountStatus}',
+                      'Account ┬╖ ${accountStatus.trim().isEmpty ? 'unknown' : accountStatus}',
                       style: TextStyle(
                         color: context.appColors.textSecondary,
                         fontSize: 12,
@@ -138,16 +138,26 @@ class _ChecklistChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final bgColor = done
+        ? (isDark ? const Color(0xFF34D399).withValues(alpha: 0.14) : const Color(0xFFDCFCE7))
+        : (isDark ? context.appColors.textMuted.withValues(alpha: 0.08) : const Color(0xFFF1F5F9));
+    final borderColor = done
+        ? (isDark ? const Color(0xFF34D399).withValues(alpha: 0.35) : const Color(0xFF86EFAC))
+        : context.appColors.border;
+    final textColor = done
+        ? (isDark ? const Color(0xFF34D399) : const Color(0xFF15803D))
+        : context.appColors.textSecondary;
+    final iconColor = done
+        ? (isDark ? const Color(0xFF34D399) : const Color(0xFF16A34A))
+        : context.appColors.textMuted;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: (done ? const Color(0xFF34D399) : context.appColors.textMuted)
-            .withValues(alpha: done ? 0.14 : 0.08),
+        color: bgColor,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: (done ? const Color(0xFF34D399) : context.appColors.border)
-              .withValues(alpha: done ? 0.35 : 1.0),
-        ),
+        border: Border.all(color: borderColor),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -155,15 +165,15 @@ class _ChecklistChip extends StatelessWidget {
           Icon(
             done ? Icons.check_circle : Icons.radio_button_unchecked,
             size: 14,
-            color: done ? const Color(0xFF34D399) : context.appColors.textMuted,
+            color: iconColor,
           ),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
-              color: done ? const Color(0xFF34D399) : context.appColors.textSecondary,
+              color: textColor,
               fontSize: 11,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -171,7 +181,6 @@ class _ChecklistChip extends StatelessWidget {
     );
   }
 }
-
 class VerificationStatusChip extends StatelessWidget {
   final String status;
 
@@ -179,18 +188,19 @@ class VerificationStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = verificationStatusStyle(status);
+    final isDark = context.isDarkMode;
+    final style = verificationStatusStyle(status, isDark);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: style.color.withValues(alpha: 0.14),
+        color: style.bgColor,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: style.color.withValues(alpha: 0.35)),
+        border: Border.all(color: style.borderColor),
       ),
       child: Text(
         style.label,
         style: TextStyle(
-          color: style.color,
+          color: style.textColor,
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),
@@ -201,25 +211,46 @@ class VerificationStatusChip extends StatelessWidget {
 
 class VerificationStatusStyle {
   final String label;
-  final Color color;
+  final Color textColor;
+  final Color bgColor;
+  final Color borderColor;
 
-  const VerificationStatusStyle(this.label, this.color);
+  const VerificationStatusStyle(this.label, this.textColor, this.bgColor, this.borderColor);
 }
 
-VerificationStatusStyle verificationStatusStyle(String raw) {
+VerificationStatusStyle verificationStatusStyle(String raw, bool isDark) {
   final s = raw.toLowerCase();
   if (s == 'approved') {
-    return const VerificationStatusStyle('Approved', Color(0xFF34D399));
+    return VerificationStatusStyle(
+      'Approved',
+      isDark ? const Color(0xFF34D399) : const Color(0xFF15803D),
+      isDark ? const Color(0xFF34D399).withValues(alpha: 0.14) : const Color(0xFFDCFCE7),
+      isDark ? const Color(0xFF34D399).withValues(alpha: 0.35) : const Color(0xFF86EFAC),
+    );
   }
   if (s == 'rejected') {
-    return const VerificationStatusStyle('Rejected', Color(0xFFFB7185));
+    return VerificationStatusStyle(
+      'Rejected',
+      isDark ? const Color(0xFFFB7185) : const Color(0xFFB91C1C),
+      isDark ? const Color(0xFFFB7185).withValues(alpha: 0.14) : const Color(0xFFFEE2E2),
+      isDark ? const Color(0xFFFB7185).withValues(alpha: 0.35) : const Color(0xFFFCA5A5),
+    );
   }
   if (s == 'under_review' || s == 'submitted') {
-    return const VerificationStatusStyle('Under review', Color(0xFF60A5FA));
+    return VerificationStatusStyle(
+      'Under review',
+      isDark ? const Color(0xFF60A5FA) : const Color(0xFF1D4ED8),
+      isDark ? const Color(0xFF60A5FA).withValues(alpha: 0.14) : const Color(0xFFDBEAFE),
+      isDark ? const Color(0xFF60A5FA).withValues(alpha: 0.35) : const Color(0xFF93C5FD),
+    );
   }
-  return const VerificationStatusStyle('Pending', Color(0xFFFBBF24));
+  return VerificationStatusStyle(
+    'Pending',
+    isDark ? const Color(0xFFFBBF24) : const Color(0xFFB45309),
+    isDark ? const Color(0xFFFBBF24).withValues(alpha: 0.14) : const Color(0xFFFEF3C7),
+    isDark ? const Color(0xFFFBBF24).withValues(alpha: 0.35) : const Color(0xFFFCD34D),
+  );
 }
-
 class SavedBankAccountCard extends StatelessWidget {
   final String bankName;
   final String accountHolderName;
