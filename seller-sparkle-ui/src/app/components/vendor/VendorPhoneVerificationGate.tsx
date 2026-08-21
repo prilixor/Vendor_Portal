@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
-import { normalizeIndianMobileDigits } from "@/app/helpers/indianMobilePhone";
+import { isValidIndianMobile, normalizeIndianMobileDigits } from "@/app/helpers/indianMobilePhone";
 import { AuthLayout } from "@/app/components/layout/AuthLayout";
 
 type Props = {
@@ -40,7 +40,7 @@ export function VendorPhoneVerificationGate({ children }: Props) {
         const raw = profile.supportPhone?.trim() ?? "";
         const hasPhone = raw.length > 0;
         const verified = !!profile.isPhoneVerified;
-        if (hasPhone && !verified) {
+        if (hasPhone && !verified && isValidIndianMobile(raw)) {
           setPhone(normalizeIndianMobileDigits(raw));
           setNeedsVerify(true);
         } else {

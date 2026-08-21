@@ -13,6 +13,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { isValidIndianMobile, normalizeIndianMobileDigits } from "@/app/helpers/indianMobilePhone";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
 import { PORTAL_USER_KEY } from "@/app/helpers/authSession";
+import { isUnverifiedEmailError } from "@/app/helpers/authFailureToast";
 
 const Login = () => {
   const { login } = useAuth();
@@ -62,10 +63,9 @@ const Login = () => {
         try {
           const profile = await vendorOnboardingApi.getVendorProfile(vendorId);
           const rawPhone = profile.supportPhone?.trim() ?? "";
-          if (rawPhone && !profile.isPhoneVerified) {
+          if (rawPhone && !profile.isPhoneVerified && isValidIndianMobile(rawPhone)) {
             setPendingPhone(normalizeIndianMobileDigits(rawPhone));
             setOtpOpen(true);
-            toast.message("Verify your phone to continue.");
             return;
           }
         } catch {
@@ -76,22 +76,13 @@ const Login = () => {
       toast.success("Welcome back, Vendor!");
       goToVendor();
     } catch (error) {
-      let message = error instanceof Error ? error.message : "Sign in failed. Please try again.";
-      const code =
-        error && typeof error === "object" && "code" in error
-          ? String((error as { code?: string }).code ?? "")
-          : "";
-      const rawMessage = `${message} ${code}`;
-      message = message.replace(/\n?\[.*?\]/g, "").trim() || "Invalid email/phone or password.";
-
-      if (rawMessage.includes("EMAIL_NOT_VERIFIED")) {
+      if (isUnverifiedEmailError(error)) {
         setNeedsVerification(true);
         setErrors((prev) => ({ ...prev, form: undefined }));
         toast.error("Please verify your email before logging in.");
       } else {
         setNeedsVerification(false);
-        setErrors((prev) => ({ ...prev, form: message }));
-        toast.error(message);
+        setErrors((prev) => ({ ...prev, form: "Invalid email/phone or password." }));
       }
     } finally {
       setLoading(false);

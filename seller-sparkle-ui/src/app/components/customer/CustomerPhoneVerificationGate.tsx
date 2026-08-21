@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "@/app/guards/AuthContext";
 import { customerApi } from "@/app/services/customerApi";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
-import { normalizeIndianMobileDigits } from "@/app/helpers/indianMobilePhone";
+import { isValidIndianMobile, normalizeIndianMobileDigits } from "@/app/helpers/indianMobilePhone";
 import { AuthLayout } from "@/app/components/layout/AuthLayout";
 import { Button } from "@/app/components/ui/button";
 
@@ -57,7 +57,7 @@ export function CustomerPhoneVerificationGate({ children }: Props) {
         }
 
         setNeedsEmailVerify(false);
-        if (hasPhone && !phoneVerified) {
+        if (hasPhone && !phoneVerified && isValidIndianMobile(raw)) {
           setPhone(normalizeIndianMobileDigits(raw));
           setNeedsPhoneVerify(true);
         } else {

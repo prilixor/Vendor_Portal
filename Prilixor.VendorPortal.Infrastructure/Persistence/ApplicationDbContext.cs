@@ -725,6 +725,8 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.Email).HasColumnName("email");
             entity.Property(x => x.PasswordHash).HasColumnName("password_hash");
             entity.Property(x => x.FullName).HasColumnName("full_name");
+            entity.Property(x => x.Phone).HasColumnName("phone").IsRequired(false);
+            entity.Property(x => x.PhoneVerifiedAt).HasColumnName("phone_verified_at").IsRequired(false);
             entity.Property(x => x.Role).HasColumnName("role");
             entity.Property(x => x.RoleId).HasColumnName("role_id");
             entity.Property(x => x.IsSystemUser).HasColumnName("is_system_user");

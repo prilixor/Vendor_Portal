@@ -73,11 +73,8 @@ const AdminLogin = () => {
       } else {
         window.location.href = "/admin";
       }
-    } catch (error) {
-      const message =
-        (error instanceof Error ? error.message : "") || "Invalid email or password.";
-      setErrors((prev) => ({ ...prev, form: message }));
-      toast.error(message);
+    } catch {
+      setErrors((prev) => ({ ...prev, form: "Invalid email or password." }));
     } finally {
       setLoading(false);
     }

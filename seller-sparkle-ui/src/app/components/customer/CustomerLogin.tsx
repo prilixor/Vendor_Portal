@@ -12,6 +12,7 @@ import { customerApi } from "@/app/services/customerApi";
 import { authApi } from "@/app/services/authApi";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
 import { isValidIndianMobile, normalizeIndianMobileDigits } from "@/app/helpers/indianMobilePhone";
+import { isUnverifiedEmailError } from "@/app/helpers/authFailureToast";
 
 const CustomerLogin = () => {
   const location = useLocation();
@@ -53,31 +54,21 @@ const CustomerLogin = () => {
       setNeedsVerification(false);
       const profile = await customerApi.getProfile();
       const rawPhone = profile.phone?.trim() ?? "";
-      if (rawPhone && !profile.isPhoneVerified) {
+      if (rawPhone && !profile.isPhoneVerified && isValidIndianMobile(rawPhone)) {
         setPendingPhone(normalizeIndianMobileDigits(rawPhone));
         setOtpOpen(true);
-        toast.message("Verify your phone to continue.");
         return;
       }
       toast.success("Welcome!");
       goAfterAuth();
     } catch (error) {
-      let message = error instanceof Error ? error.message : "Sign in failed.";
-      const code =
-        error && typeof error === "object" && "code" in error
-          ? String((error as { code?: string }).code ?? "")
-          : "";
-      const rawMessage = `${message} ${code}`;
-      message = message.replace(/\n?\[.*?\]/g, "").trim() || "Invalid email/phone or password.";
-
-      if (rawMessage.includes("EMAIL_NOT_VERIFIED")) {
+      if (isUnverifiedEmailError(error)) {
         setNeedsVerification(true);
         setErrors((prev) => ({ ...prev, form: undefined }));
         toast.error("Please verify your email before logging in.");
       } else {
         setNeedsVerification(false);
-        setErrors((prev) => ({ ...prev, form: message }));
-        toast.error(message);
+        setErrors((prev) => ({ ...prev, form: "Invalid email/phone or password." }));
       }
     } finally {
       setLoading(false);

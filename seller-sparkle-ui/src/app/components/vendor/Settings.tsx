@@ -131,10 +131,12 @@ const Settings = () => {
       setFullName(updated.ownerName || "");
       setPhone(updated.supportPhone ? normalizeIndianMobileDigits(updated.supportPhone) : "");
       setPhoneVerified(!!updated.isPhoneVerified);
-      toast.success("Profile saved.");
-      if (!updated.isPhoneVerified) {
-        toast.message("Verify your phone to receive SMS order alerts.");
-      }
+      toast.success("Profile saved.", {
+        id: "vendor-profile-saved",
+        description: updated.isPhoneVerified
+          ? undefined
+          : "Verify your phone to receive SMS order alerts.",
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save profile.";
       toast.error(message);
