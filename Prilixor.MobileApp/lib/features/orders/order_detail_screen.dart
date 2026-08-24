@@ -499,8 +499,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                           Icons.photo_library_outlined,
                                                           size: 12,
                                                           color: photoCount == 0
-                                                              ? Colors.amber
-                                                              : const Color(0xFF34D399),
+                                                              ? (context.isDarkMode ? Colors.amber : const Color(0xFFD97706))
+                                                              : (context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669)),
                                                         ),
                                                         const SizedBox(width: 4),
                                                         Expanded(
@@ -508,8 +508,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                             photoLabel,
                                                             style: TextStyle(
                                                               color: photoCount == 0
-                                                                  ? Colors.amber
-                                                                  : const Color(0xFF34D399),
+                                                                  ? (context.isDarkMode ? Colors.amber : const Color(0xFFD97706))
+                                                                  : (context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669)),
                                                               fontSize: 11,
                                                               fontWeight: FontWeight.w600,
                                                             ),
@@ -1034,11 +1034,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
 
   Color _getStatusColor(String status) {
     final colors = context.appColors;
+    final isDark = context.isDarkMode;
     final s = status.toLowerCase().replaceAll('_', ' ');
-    if (s == 'active') return Colors.greenAccent;
-    if (s == 'pending' || s.contains('awaiting') || s == 'confirmed' || s.contains('transit')) return Colors.orangeAccent;
+    if (s == 'active') return isDark ? Colors.greenAccent : const Color(0xFF059669);
+    if (s == 'pending' || s.contains('awaiting') || s == 'confirmed' || s.contains('transit')) {
+      return isDark ? Colors.orangeAccent : const Color(0xFFD97706);
+    }
     if (s == 'cancelled' || s == 'canceled') return Colors.grey;
-    if (s == 'bought_out' || s == 'bought out') return Colors.purpleAccent;
+    if (s == 'bought_out' || s == 'bought out') return isDark ? Colors.purpleAccent : const Color(0xFF7C3AED);
     return colors.textSecondary;
   }
 
@@ -1427,18 +1430,25 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                 final images = requestsByOrderId[item.id]?.images ?? const <OrderImageModel>[];
                 final waiting = images.isEmpty;
                 final viewing = item.id == viewingOrderId;
+                final isDark = context.isDarkMode;
+                final waitingTextColor = isDark ? Colors.amber : const Color(0xFFD97706);
+                final waitingBorderColor = isDark ? Colors.amber.withValues(alpha: 0.35) : const Color(0xFFFDE68A);
+                final waitingBgColor = isDark ? Colors.amber.withValues(alpha: 0.08) : const Color(0xFFFFFBEB);
+                final waitingBadgeBg = isDark ? Colors.amber.withValues(alpha: 0.2) : const Color(0xFFFEF3C7);
+                final successTextColor = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
+                final successBadgeBg = isDark ? const Color(0xFF34D399).withValues(alpha: 0.18) : const Color(0xFFD1FAE5);
                 return Container(
                   width: double.infinity,
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: waiting
-                        ? Colors.amber.withValues(alpha: 0.08)
+                        ? waitingBgColor
                         : colors.surface,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: waiting
-                          ? Colors.amber.withValues(alpha: 0.35)
+                          ? waitingBorderColor
                           : colors.border,
                     ),
                   ),
@@ -1472,8 +1482,8 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: waiting
-                                  ? Colors.amber.withValues(alpha: 0.2)
-                                  : const Color(0xFF34D399).withValues(alpha: 0.18),
+                                  ? waitingBadgeBg
+                                  : successBadgeBg,
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
@@ -1481,7 +1491,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                                   ? 'Waiting for supplier photos'
                                   : '${images.length}/5 received',
                               style: TextStyle(
-                                color: waiting ? Colors.amber : const Color(0xFF34D399),
+                                color: waiting ? waitingTextColor : successTextColor,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                               ),

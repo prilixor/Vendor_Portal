@@ -721,11 +721,12 @@ class _TimerPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     final color = expired
         ? Colors.redAccent
         : urgent
-            ? Colors.amber
-            : const Color(0xFF60A5FA);
+            ? (isDark ? Colors.amber : const Color(0xFFD97706))
+            : (isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB));
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
