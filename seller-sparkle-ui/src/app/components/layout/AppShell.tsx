@@ -161,7 +161,7 @@ function VendorShellContent({
 
         <TopBar variant="vendor" onMenuClick={() => setMobileSidebarOpen(true)} />
 
-        <main className="relative min-w-0 flex-1 overflow-x-clip px-3 py-4 pb-24 sm:px-6 sm:py-6 lg:px-8">
+        <main className="relative z-0 min-w-0 flex-1 overflow-x-clip px-3 py-4 pb-24 sm:px-6 sm:py-6 lg:px-8">
 
           <div className="mx-auto w-full min-w-0 max-w-7xl">
 
@@ -500,7 +500,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
               <TopBar variant={variant} onMenuClick={() => setMobileSidebarOpen(true)} />
 
-              <main className="relative min-w-0 flex-1 overflow-x-clip px-3 py-4 sm:px-6 lg:px-8">
+              <main className="relative z-0 min-w-0 flex-1 overflow-x-clip px-3 py-4 sm:px-6 lg:px-8">
 
                 <div className="mx-auto w-full min-w-0 max-w-7xl">
 
