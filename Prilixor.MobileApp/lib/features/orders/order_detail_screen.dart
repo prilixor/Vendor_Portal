@@ -1473,7 +1473,10 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                                 const SizedBox(height: 2),
                                 Text(
                                   '${item.status.replaceAll('_', ' ')}${viewing ? ' · currently viewing' : ''}',
-                                  style: TextStyle(color: colors.textMuted, fontSize: 11),
+                                  style: TextStyle(
+                                    color: isDark ? const Color(0xFFCBD5E1) : colors.textMuted,
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ],
                             ),
@@ -1503,7 +1506,11 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                       if (waiting)
                         Text(
                           'Request already sent for this product \u2014 supplier has not uploaded photos yet.',
-                          style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.35),
+                          style: TextStyle(
+                            color: isDark ? const Color(0xFFE2E8F0) : colors.textMuted,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
                         )
                       else
                         GridView.builder(

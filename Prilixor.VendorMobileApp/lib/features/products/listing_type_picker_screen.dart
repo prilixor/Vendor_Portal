@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
 import 'create_listing_screen.dart';
@@ -103,17 +103,31 @@ class _TypeCard extends StatelessWidget {
     final isDark = context.isDarkMode;
     final cardBg = isDark ? context.appColors.surface : Colors.white;
 
+    final isEquipment = title == 'Equipment';
+
     final borderColor = highlighted
-        ? (isDark ? accent.withValues(alpha: 0.65) : const Color(0xFF60A5FA))
+        ? (isDark ? accent.withValues(alpha: 0.65) : (isEquipment ? const Color(0xFF60A5FA) : const Color(0xFF34D399)))
         : context.appColors.border;
 
     final iconBg = isDark
         ? accent.withValues(alpha: 0.16)
-        : (title == 'Equipment' ? const Color(0xFFDBEAFE) : const Color(0xFFD1FAE5));
+        : (isEquipment ? const Color(0xFFDBEAFE) : const Color(0xFFD1FAE5));
 
     final iconColor = isDark
         ? accent
-        : (title == 'Equipment' ? const Color(0xFF1D4ED8) : const Color(0xFF047857));
+        : (isEquipment ? const Color(0xFF1D4ED8) : const Color(0xFF047857));
+
+    final suggestedBg = isDark
+        ? accent.withValues(alpha: 0.22)
+        : (isEquipment ? const Color(0xFFDBEAFE) : const Color(0xFFD1FAE5));
+
+    final suggestedBorder = isDark
+        ? accent.withValues(alpha: 0.35)
+        : (isEquipment ? const Color(0xFF93C5FD) : const Color(0xFFA7F3D0));
+
+    final suggestedText = isDark
+        ? (isEquipment ? const Color(0xFF93C5FD) : const Color(0xFF6EE7B7))
+        : (isEquipment ? const Color(0xFF1D4ED8) : const Color(0xFF047857));
 
     return Material(
       color: cardBg,
@@ -136,8 +150,8 @@ class _TypeCard extends StatelessWidget {
                     end: Alignment.bottomRight,
                     colors: [
                       isDark
-                          ? accent.withValues(alpha: 0.12)
-                          : const Color(0xFFEFF6FF),
+                          ? accent.withValues(alpha: 0.14)
+                          : (isEquipment ? const Color(0xFFEFF6FF) : const Color(0xFFECFDF5)),
                       isDark
                           ? context.appColors.surface
                           : const Color(0xFFF8FAFC),
@@ -180,13 +194,9 @@ class _TypeCard extends StatelessWidget {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: isDark
-                                  ? accent.withValues(alpha: 0.2)
-                                  : const Color(0xFFDBEAFE),
+                              color: suggestedBg,
                               border: Border.all(
-                                color: isDark
-                                    ? Colors.transparent
-                                    : const Color(0xFF93C5FD),
+                                color: suggestedBorder,
                                 width: 0.8,
                               ),
                               borderRadius: BorderRadius.circular(999),
@@ -194,9 +204,7 @@ class _TypeCard extends StatelessWidget {
                             child: Text(
                               'Suggested',
                               style: TextStyle(
-                                color: isDark
-                                    ? accent
-                                    : const Color(0xFF1D4ED8),
+                                color: suggestedText,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -209,7 +217,9 @@ class _TypeCard extends StatelessWidget {
                     Text(
                       subtitle,
                       style: TextStyle(
-                        color: context.appColors.textSecondary,
+                        color: isDark
+                            ? const Color(0xFFE2E8F0)
+                            : context.appColors.textSecondary,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -218,7 +228,9 @@ class _TypeCard extends StatelessWidget {
                     Text(
                       detail,
                       style: TextStyle(
-                        color: context.appColors.textMuted,
+                        color: isDark
+                            ? const Color(0xFFCBD5E1)
+                            : context.appColors.textMuted,
                         fontSize: 12,
                         height: 1.35,
                       ),
@@ -229,7 +241,7 @@ class _TypeCard extends StatelessWidget {
               Icon(
                 Icons.arrow_forward_ios_rounded,
                 size: 16,
-                color: context.appColors.textMuted,
+                color: isDark ? const Color(0xFF94A3B8) : context.appColors.textMuted,
               ),
             ],
           ),

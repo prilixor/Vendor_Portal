@@ -1658,7 +1658,9 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
                     ),
                     Icon(
                       Icons.check_circle_rounded,
-                      color: Colors.greenAccent.withValues(alpha: 0.85),
+                      color: context.isDarkMode
+                          ? Colors.greenAccent.withValues(alpha: 0.85)
+                          : const Color(0xFF059669),
                       size: 18,
                     ),
                   ],

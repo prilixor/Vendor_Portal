@@ -1228,7 +1228,7 @@ class _BankTabState extends State<_BankTab> {
                   onPressed: () => setState(() => _obscureAccount = !_obscureAccount),
                   icon: Icon(
                     _obscureAccount ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: Colors.white54,
+                    color: context.isDarkMode ? Colors.white54 : context.appColors.textMuted,
                   ),
                 ),
               ),
@@ -1243,7 +1243,7 @@ class _BankTabState extends State<_BankTab> {
                   onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                   icon: Icon(
                     _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: Colors.white54,
+                    color: context.isDarkMode ? Colors.white54 : context.appColors.textMuted,
                   ),
                 ),
               ),
@@ -1252,19 +1252,33 @@ class _BankTabState extends State<_BankTab> {
                   margin: const EdgeInsets.only(bottom: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF34D399).withValues(alpha: 0.1),
+                    color: context.isDarkMode
+                        ? const Color(0xFF34D399).withValues(alpha: 0.1)
+                        : const Color(0xFFECFDF5),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.25)),
+                    border: Border.all(
+                      color: context.isDarkMode
+                          ? const Color(0xFF34D399).withValues(alpha: 0.25)
+                          : const Color(0xFFA7F3D0),
+                    ),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 18),
-                      SizedBox(width: 8),
+                      Icon(
+                        Icons.check_circle_rounded,
+                        color: context.isDarkMode
+                            ? const Color(0xFF34D399)
+                            : const Color(0xFF047857),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Account numbers match.',
                           style: TextStyle(
-                            color: Color(0xFF34D399),
+                            color: context.isDarkMode
+                                ? const Color(0xFF34D399)
+                                : const Color(0xFF047857),
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1278,19 +1292,33 @@ class _BankTabState extends State<_BankTab> {
                   margin: const EdgeInsets.only(bottom: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.redAccent.withValues(alpha: 0.1),
+                    color: context.isDarkMode
+                        ? Colors.redAccent.withValues(alpha: 0.1)
+                        : const Color(0xFFFEF2F2),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.redAccent.withValues(alpha: 0.25)),
+                    border: Border.all(
+                      color: context.isDarkMode
+                          ? Colors.redAccent.withValues(alpha: 0.25)
+                          : const Color(0xFFFECACA),
+                    ),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 18),
-                      SizedBox(width: 8),
+                      Icon(
+                        Icons.error_outline_rounded,
+                        color: context.isDarkMode
+                            ? Colors.redAccent
+                            : const Color(0xFFB91C1C),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Account numbers do not match.',
                           style: TextStyle(
-                            color: Colors.redAccent,
+                            color: context.isDarkMode
+                                ? Colors.redAccent
+                                : const Color(0xFFB91C1C),
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
