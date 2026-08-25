@@ -8,7 +8,22 @@ import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { ListPager } from "@/app/components/shared/ListPager";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Notification } from "@/app/models";
-import { CheckCheck, Bell, Info, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import {
+  CheckCheck,
+  Bell,
+  Info,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Camera,
+  ShoppingBag,
+  Truck,
+  CreditCard,
+  MessageSquare,
+  Package,
+  FileText,
+  LucideIcon,
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
@@ -24,12 +39,99 @@ import {
 import { getVendorRoute, VENDOR_SUPPORT_PANEL_ROUTE } from "@/app/helpers/vendorNav";
 import { useSupportChat } from "@/app/contexts/SupportChatContext";
 
-const typeIcons = {
-  info: { icon: Info, cls: "bg-info-soft text-info" },
-  success: { icon: CheckCircle2, cls: "bg-success-soft text-success" },
-  warning: { icon: AlertTriangle, cls: "bg-warning-soft text-warning" },
-  error: { icon: XCircle, cls: "bg-destructive-soft text-destructive" },
-};
+interface NotificationVisual {
+  icon: LucideIcon;
+  cls: string;
+}
+
+function getVendorNotificationVisual(notificationType?: string, title: string = ""): NotificationVisual {
+  const t = (notificationType ?? "").trim().toLowerCase();
+  const h = title.trim().toLowerCase();
+
+  // Photo requests (customer requested photos)
+  if (t.includes("photo") || h.includes("photo")) {
+    return { icon: Camera, cls: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300" };
+  }
+
+  // New orders / order requests / dispatch offers
+  if (
+    t === "dispatch_offer" ||
+    t === "new_order" ||
+    t.includes("order_request") ||
+    h.includes("order request") ||
+    h.includes("new order")
+  ) {
+    return { icon: ShoppingBag, cls: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300" };
+  }
+
+  // Shipping / Dispatch / Transit / Delivery
+  if (
+    t.includes("dispatch") ||
+    t.includes("transit") ||
+    t.includes("delivery") ||
+    t.includes("shipping") ||
+    h.includes("dispatch") ||
+    h.includes("delivery")
+  ) {
+    return { icon: Truck, cls: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" };
+  }
+
+  // Payouts & financial
+  if (t.includes("payout") || t.includes("payment") || h.includes("payout")) {
+    return { icon: CreditCard, cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" };
+  }
+
+  // Approvals & confirmations
+  if (
+    t === "success" ||
+    t.includes("approved") ||
+    t.includes("confirmed") ||
+    h.includes("approved") ||
+    h.includes("confirmed")
+  ) {
+    return { icon: CheckCircle2, cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" };
+  }
+
+  // Rejections / cancellations / failures
+  if (
+    t.includes("rejected") ||
+    t.includes("failed") ||
+    t.includes("cancel") ||
+    h.includes("rejected") ||
+    h.includes("cancelled")
+  ) {
+    return { icon: XCircle, cls: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300" };
+  }
+
+  // Support / chat replies
+  if (t.includes("support") || t.includes("chat") || h.includes("support")) {
+    return { icon: MessageSquare, cls: "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300" };
+  }
+
+  // Inventory / Stock / Warnings
+  if (
+    t.includes("stock") ||
+    t.includes("warning") ||
+    t.includes("expir") ||
+    t.includes("low_") ||
+    h.includes("stock") ||
+    h.includes("expir")
+  ) {
+    return { icon: AlertTriangle, cls: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300" };
+  }
+
+  // Product listing notices
+  if (t.startsWith("listing_") || t.includes("product") || h.includes("product")) {
+    return { icon: Package, cls: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300" };
+  }
+
+  // KYC / Docs / Bank
+  if (t.startsWith("document_") || t.startsWith("bank_") || h.includes("document")) {
+    return { icon: FileText, cls: "bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300" };
+  }
+
+  return { icon: Bell, cls: "bg-primary-soft text-primary" };
+}
 
 const Notifications = () => {
   const navigate = useNavigate();
@@ -221,7 +323,10 @@ const Notifications = () => {
           </div>
           <ul className="divide-y divide-border">
             {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((n) => {
-              const { icon: Icon, cls } = typeIcons[n.type];
+              const { icon: Icon, cls } = getVendorNotificationVisual(
+                n.notificationType,
+                n.title,
+              );
               const isRejection = isVerificationRejectionNotification(
                 n.notificationType ?? "",
               );
