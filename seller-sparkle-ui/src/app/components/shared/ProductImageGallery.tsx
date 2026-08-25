@@ -190,7 +190,8 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
         </div>
         <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-background/90 px-2.5 py-1 text-xs font-medium text-foreground shadow-sm ring-1 ring-border backdrop-blur-sm">
           <Search className="h-3.5 w-3.5" />
-          Click to zoom
+          <span className="sm:hidden">Tap to zoom</span>
+          <span className="hidden sm:inline">Click to zoom</span>
         </span>
       </button>
 
