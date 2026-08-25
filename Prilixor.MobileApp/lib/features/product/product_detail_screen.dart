@@ -668,7 +668,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   style: TextStyle(color: colors.textSecondary),
                                                 ),
                                                 Text(
-                                                  'â‚¹${(selectedVariant?.buyPrice ?? 0).toStringAsFixed(0)}',
+                                                  formatPlanInr(selectedVariant?.buyPrice ?? 0),
                                                   style: const TextStyle(color: Color(0xFF34D399), fontSize: 18, fontWeight: FontWeight.bold),
                                                 ),
                                               ],
@@ -700,7 +700,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                         children: altVariants.map((v) {
                                                           final stock = detail.variantStockOf(v.id);
                                                           return ActionChip(
-                                                            label: Text('${v.sizeLabel} Â· â‚¹${v.buyPrice.toStringAsFixed(0)} Â· $stock'),
+                                                            label: Text('${v.sizeLabel} · ${formatPlanInr(v.buyPrice)} · $stock'),
                                                             onPressed: () => setState(() => _selectedVariantId = v.id),
                                                             backgroundColor: Colors.amber.withValues(alpha: 0.15),
                                                             labelStyle: const TextStyle(color: Colors.amber, fontSize: 11),
@@ -1094,9 +1094,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                                 ),
                                                                 const SizedBox(height: 2),
                                                                 Text(
-                                                                  currentQty > 0
-                                                                      ? '$currentQty available'
-                                                                      : 'Select how many units',
+                                                                  _availableStockCaption(
+                                                                    currentQty: currentQty,
+                                                                    selectedVariant: selectedVariant,
+                                                                    isChemical: detail.isChemical,
+                                                                  ),
                                                                   style: TextStyle(
                                                                     color: colors.textMuted,
                                                                     fontSize: 12,
@@ -1332,65 +1334,113 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                      detail.hasActiveRentalPlans &&
                                      selectedPlan != null)) ...[
                                    const SizedBox(height: 12),
-                                   Row(
-                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                     children: [
-                                       RequiredLabel(
-                                         'Quantity',
-                                         required: true,
-                                         style: TextStyle(color: colors.textSecondary, fontSize: 16),
-                                       ),
-                                       Row(
+                                   Container(
+                                     width: double.infinity,
+                                     decoration: BoxDecoration(
+                                       color: colors.surfaceElevated,
+                                       borderRadius: BorderRadius.circular(16),
+                                       border: Border.all(color: colors.border),
+                                     ),
+                                     child: Padding(
+                                       padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
+                                       child: Row(
                                          children: [
-                                           IconButton(
-                                             icon: Icon(Icons.remove_circle_outline, color: colors.textPrimary),
-                                             onPressed: _quantity > 1
-                                                 ? () async {
-                                                     final next = _quantity - 1;
-                                                     if (actualOrderType == 'rent') {
-                                                       final blocked = await _promptRentToBuyIfNeeded(
-                                                         detail: detail,
-                                                         unitBuyPrice: unitBuyPrice,
-                                                         nextQty: next,
-                                                       );
-                                                       if (blocked || !mounted) return;
-                                                     }
-                                                     setState(() => _quantity = next);
-                                                   }
-                                                 : null,
-                                           ),
-                                           Text(
-                                             '$_quantity',
-                                             style: TextStyle(
-                                               color: colors.textPrimary,
-                                               fontSize: 16,
-                                               fontWeight: FontWeight.bold,
+                                           Expanded(
+                                             child: Column(
+                                               crossAxisAlignment: CrossAxisAlignment.start,
+                                               children: [
+                                                 RequiredLabel(
+                                                   'Quantity',
+                                                   required: true,
+                                                   style: TextStyle(
+                                                     color: colors.textPrimary,
+                                                     fontSize: 14,
+                                                     fontWeight: FontWeight.w800,
+                                                   ),
+                                                 ),
+                                                 const SizedBox(height: 2),
+                                                 Text(
+                                                   _availableStockCaption(
+                                                     currentQty: currentQty,
+                                                     selectedVariant: selectedVariant,
+                                                     isChemical: detail.isChemical,
+                                                   ),
+                                                   style: TextStyle(
+                                                     color: colors.textMuted,
+                                                     fontSize: 12,
+                                                     fontWeight: FontWeight.w500,
+                                                   ),
+                                                 ),
+                                               ],
                                              ),
                                            ),
-                                           IconButton(
-                                             icon: Icon(Icons.add_circle_outline, color: colors.textPrimary),
-                                             onPressed: _quantity < (currentQty > 0 ? currentQty : 1)
-                                                 ? () async {
-                                                     final next = _quantity + 1;
-                                                     if (actualOrderType == 'rent') {
-                                                       final blocked = await _promptRentToBuyIfNeeded(
-                                                         detail: detail,
-                                                         unitBuyPrice: unitBuyPrice,
-                                                         nextQty: next,
-                                                       );
-                                                       if (blocked || !mounted) return;
-                                                     }
-                                                     setState(() => _quantity = next);
-                                                   }
-                                                 : null,
+                                           Row(
+                                             children: [
+                                               IconButton(
+                                                 icon: Icon(
+                                                   Icons.remove_circle_outline,
+                                                   color: _quantity > 1
+                                                       ? colors.textPrimary
+                                                       : colors.textMuted,
+                                                 ),
+                                                 onPressed: _quantity > 1
+                                                     ? () async {
+                                                         final next = _quantity - 1;
+                                                         if (actualOrderType == 'rent') {
+                                                           final blocked =
+                                                               await _promptRentToBuyIfNeeded(
+                                                             detail: detail,
+                                                             unitBuyPrice: unitBuyPrice,
+                                                             nextQty: next,
+                                                           );
+                                                           if (blocked || !mounted) return;
+                                                         }
+                                                         setState(() => _quantity = next);
+                                                       }
+                                                     : null,
+                                               ),
+                                               Text(
+                                                 '$_quantity',
+                                                 style: TextStyle(
+                                                   color: colors.textPrimary,
+                                                   fontSize: 16,
+                                                   fontWeight: FontWeight.bold,
+                                                 ),
+                                               ),
+                                               IconButton(
+                                                 icon: Icon(
+                                                   Icons.add_circle_outline,
+                                                   color: _quantity <
+                                                           (currentQty > 0 ? currentQty : 1)
+                                                       ? colors.textPrimary
+                                                       : colors.textMuted,
+                                                 ),
+                                                 onPressed: _quantity <
+                                                         (currentQty > 0 ? currentQty : 1)
+                                                     ? () async {
+                                                         final next = _quantity + 1;
+                                                         if (actualOrderType == 'rent') {
+                                                           final blocked =
+                                                               await _promptRentToBuyIfNeeded(
+                                                             detail: detail,
+                                                             unitBuyPrice: unitBuyPrice,
+                                                             nextQty: next,
+                                                           );
+                                                           if (blocked || !mounted) return;
+                                                         }
+                                                         setState(() => _quantity = next);
+                                                       }
+                                                     : null,
+                                               ),
+                                             ],
                                            ),
                                          ],
                                        ),
-                                     ],
+                                     ),
                                    ),
                                    const SizedBox(height: 8),
                                    Text(
-                                     'Estimated ${actualOrderType == 'buy' ? 'buy amount' : 'rent'}: ₹${estimate.toStringAsFixed(0)}',
+                                     'Estimated ${actualOrderType == 'buy' ? 'buy amount' : 'rent'}: ${formatPlanInr(estimate)}',
                                      style: TextStyle(color: colors.textMuted, fontSize: 13),
                                    ),
                                  ],
@@ -1862,36 +1912,54 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return true;
   }
 
+  String _availableStockCaption({
+    required int currentQty,
+    ProductVariantModel? selectedVariant,
+    required bool isChemical,
+  }) {
+    if (currentQty <= 0) return 'Select how many units';
+    if (isChemical && selectedVariant != null) {
+      final size = selectedVariant.sizeLabel.trim();
+      if (size.isNotEmpty) return '$currentQty available · $size';
+    }
+    return '$currentQty available';
+  }
+
   Widget _documentsInline(List<CatalogDocumentModel> documents) {
     final colors = context.appColors;
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Icon(Icons.description_outlined, size: 16, color: colors.textMuted),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Wrap(
-            spacing: 2,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
-                'Documents',
-                style: TextStyle(
-                  color: colors.textMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+        Row(
+          children: [
+            Icon(Icons.description_outlined, size: 16, color: colors.textMuted),
+            const SizedBox(width: 6),
+            Text(
+              'Documents',
+              style: TextStyle(
+                color: colors.textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
               ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colors.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
               for (var i = 0; i < documents.length; i++) ...[
-                Text(
-                  '·',
-                  style: TextStyle(color: colors.textMuted.withValues(alpha: 0.45), fontSize: 12),
-                ),
-                _docInlineLink(documents[i]),
+                if (i > 0)
+                  Divider(height: 1, thickness: 1, color: colors.border.withValues(alpha: 0.7)),
+                _docInlineLink(documents[i], documents),
               ],
             ],
           ),
@@ -1900,31 +1968,54 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Widget _docInlineLink(CatalogDocumentModel doc) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        InkWell(
-          onTap: () => _openDoc(doc.fileUrl),
-          borderRadius: BorderRadius.circular(4),
-          child: Text(
-            doc.label,
-            style: const TextStyle(
-              color: Color(0xFF6C63FF),
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
+  Widget _docInlineLink(
+    CatalogDocumentModel doc,
+    List<CatalogDocumentModel> documents,
+  ) {
+    final colors = context.appColors;
+    final label = catalogDocumentListLabel(doc, documents);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openDoc(doc.fileUrl),
+        child: SizedBox(
+          height: 36,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 10, right: 2),
+            child: Row(
+              children: [
+                const Icon(Icons.insert_drive_file_outlined, size: 15, color: Color(0xFF6C63FF)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF6C63FF),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+                Tooltip(
+                  message: 'Download $label',
+                  child: InkWell(
+                    onTap: () => _openDoc(doc.fileUrl),
+                    customBorder: const CircleBorder(),
+                    child: SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: Icon(Icons.download_outlined, size: 16, color: colors.textMuted),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        IconButton(
-          padding: EdgeInsets.zero,
-          visualDensity: VisualDensity.compact,
-          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          tooltip: 'Download ${doc.label}',
-          icon: Icon(Icons.download_outlined, size: 16, color: context.appColors.textMuted),
-          onPressed: () => _openDoc(doc.fileUrl),
-        ),
-      ],
+      ),
     );
   }
 

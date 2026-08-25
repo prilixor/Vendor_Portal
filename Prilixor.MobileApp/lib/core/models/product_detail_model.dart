@@ -64,6 +64,19 @@ class CatalogDocumentModel {
   }
 }
 
+String catalogDocumentListLabel(
+  CatalogDocumentModel doc,
+  List<CatalogDocumentModel> items,
+) {
+  final key = doc.documentType.trim().toLowerCase();
+  final siblings = items
+      .where((d) => d.documentType.trim().toLowerCase() == key)
+      .toList();
+  if (siblings.length <= 1) return doc.label;
+  final n = siblings.indexWhere((d) => d.id == doc.id && d.fileUrl == doc.fileUrl) + 1;
+  return n > 0 ? '${doc.label} $n' : doc.label;
+}
+
 class ProductDetailModel {
   final String id;
   final String title;
@@ -79,6 +92,8 @@ class ProductDetailModel {
   final bool depositRequired;
   final String listingStatus;
   final int availableQuantity;
+  /// Combined stock across vendors for this catalog product.
+  final int productTotalAvailableQuantity;
   final String availabilityStatus;
   final String description;
   final List<String> imageUrls;
@@ -114,6 +129,7 @@ class ProductDetailModel {
     required this.depositRequired,
     required this.listingStatus,
     required this.availableQuantity,
+    this.productTotalAvailableQuantity = 0,
     required this.availabilityStatus,
     required this.description,
     required this.imageUrls,
@@ -175,11 +191,13 @@ class ProductDetailModel {
   }
 
   int availableForVariant(String? variantId) {
-    if (variantId == null || variantId.isEmpty) return availableQuantity;
-    for (final vi in variantInventory) {
-      if (vi.productVariantId == variantId) return vi.availableQuantity;
+    if (variantId != null && variantId.isNotEmpty) {
+      for (final vi in variantInventory) {
+        if (vi.productVariantId == variantId) return vi.availableQuantity;
+      }
+      return variantStockOf(variantId);
     }
-    return variantStockOf(variantId);
+    return productTotalAvailableQuantity;
   }
 
   factory ProductDetailModel.fromJson(Map<String, dynamic> json) {
@@ -202,6 +220,8 @@ class ProductDetailModel {
       depositRequired: json['depositRequired'] ?? false,
       listingStatus: json['listingStatus'] ?? '',
       availableQuantity: json['availableQuantity'] ?? 0,
+      productTotalAvailableQuantity:
+          json['productTotalAvailableQuantity'] ?? json['availableQuantity'] ?? 0,
       availabilityStatus: json['availabilityStatus'] ?? '',
       description: json['description'] ?? '',
       imageUrls: List<String>.from(json['imageUrls'] ?? [])
@@ -238,7 +258,7 @@ class ProductDetailModel {
   }
 
   Map<String, dynamic>? getAvailabilityBadge({int? qtyOverride}) {
-    final qty = qtyOverride ?? availableQuantity;
+    final qty = qtyOverride ?? productTotalAvailableQuantity;
     final s = availabilityStatus.trim().toLowerCase();
     final ls = listingStatus.trim().toLowerCase();
 
