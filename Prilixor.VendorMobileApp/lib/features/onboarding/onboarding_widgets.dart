@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/models/vendor_onboarding_model.dart';
@@ -271,19 +271,27 @@ class SavedBankAccountCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFF34D399).withValues(alpha: 0.12),
-            AppTheme.card(context),
-          ],
-        ),
+        color: isDark ? null : context.appColors.surface,
+        gradient: isDark
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF34D399).withValues(alpha: 0.12),
+                  AppTheme.card(context),
+                ],
+              )
+            : null,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.22)),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF34D399).withValues(alpha: 0.22)
+              : context.appColors.border,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -297,10 +305,22 @@ class SavedBankAccountCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF34D399).withValues(alpha: 0.16),
+                    color: isDark
+                        ? const Color(0xFF34D399).withValues(alpha: 0.16)
+                        : const Color(0xFFECFDF5),
                     borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.transparent
+                          : const Color(0xFFA7F3D0),
+                    ),
                   ),
-                  child: const Icon(Icons.account_balance_rounded, color: Color(0xFF34D399)),
+                  child: Icon(
+                    Icons.account_balance_rounded,
+                    color: isDark
+                        ? const Color(0xFF34D399)
+                        : const Color(0xFF059669),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -365,10 +385,13 @@ class _BankMetaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: AppTheme.bg(context).withValues(alpha: 0.65),
+        color: isDark
+            ? AppTheme.bg(context).withValues(alpha: 0.65)
+            : context.appColors.surfaceElevated,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: context.appColors.border),
       ),
