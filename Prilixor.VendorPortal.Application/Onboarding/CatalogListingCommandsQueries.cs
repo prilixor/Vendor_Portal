@@ -99,7 +99,8 @@ public sealed record CreateOrUpdateProductRentalPricingPlanDto(
     string? IconUrl = null,
     string? IconThumbnailUrl = null,
     string? ValueTier = null,
-    string? IconName = null);
+    string? IconName = null,
+    bool ResetToAutomatic = false);
 
 public sealed record CreateProductCommand(
     string CategoryId,
@@ -144,12 +145,18 @@ public sealed class CreateProductCommandValidator : AbstractValidator<CreateProd
         RuleFor(x => x.SecurityDeposit).GreaterThanOrEqualTo(0);
         RuleFor(x => x.BuyPrice).GreaterThanOrEqualTo(0).When(x => x.BuyPrice.HasValue);
         RuleFor(x => x.GstPercent).GreaterThanOrEqualTo(0).LessThanOrEqualTo(100);
+        RuleFor(x => x.DailyRent)
+            .GreaterThan(0)
+            .When(x => x.IsRentEnabled)
+            .WithErrorCode(RentalPricingEngine.DailyRateRequiredCode)
+            .WithMessage(RentalPricingEngine.DailyRateRequiredMessage);
     }
 }
 
 internal sealed class CreateProductCommandHandler(
     IVendorOnboardingRepository repository,
-    IVendorFileUrlResolver fileUrlResolver)
+    IVendorFileUrlResolver fileUrlResolver,
+    IRentalPricingService rentalPricingService)
     : ICommandHandler<CreateProductCommand, ProductDto>
 {
     public async Task<Result<ProductDto>> Handle(CreateProductCommand request, CancellationToken cancellationToken)
@@ -208,6 +215,16 @@ internal sealed class CreateProductCommandHandler(
         if (request.RentalPricingPlans != null && request.RentalPricingPlans.Count > 0)
         {
             ProductRentalPricingPlanSync.Apply(entity, request.RentalPricingPlans);
+        }
+
+        if (entity.IsRentEnabled)
+        {
+            var durationMasters = await repository.GetRentalDurationMastersAsync(activeOnly: true, cancellationToken);
+            var pricing = rentalPricingService.ApplyAutomaticPricing(entity, durationMasters);
+            if (pricing.IsFailure)
+            {
+                return Result.Failure<ProductDto>(pricing.Errors);
+            }
         }
 
         var hasChemicalFields = !string.IsNullOrWhiteSpace(request.CasNumber)
@@ -291,7 +308,8 @@ public sealed record GetProductsQuery(string? CategoryId) : IQuery<List<ProductD
 internal sealed class GetProductsQueryHandler(
     IVendorOnboardingRepository repository,
     ICustomerRepository customerRepository,
-    IVendorFileUrlResolver fileUrlResolver)
+    IVendorFileUrlResolver fileUrlResolver,
+    Microsoft.Extensions.Options.IOptions<Domain.Options.RentalPricingOptions> rentalPricingOptions)
     : IQueryHandler<GetProductsQuery, List<ProductDto>>
 {
     public async Task<Result<List<ProductDto>>> Handle(GetProductsQuery request, CancellationToken cancellationToken)
@@ -318,6 +336,8 @@ internal sealed class GetProductsQueryHandler(
 
         var liveIcons = RentalDurationIconLiveResolve.ToLookup(
             await repository.GetRentalDurationIconsAsync(activeOnly: false, cancellationToken));
+        var durationMasters = await repository.GetRentalDurationMastersAsync(activeOnly: true, cancellationToken);
+        var pricingOptions = rentalPricingOptions.Value;
 
         var result = rows.Select(x => new ProductDto(
             x.Id.ToString(),
@@ -365,7 +385,7 @@ internal sealed class GetProductsQueryHandler(
             x.ChemicalProperty?.SdsDocumentUrl,
             x.ChemicalProperty?.CoaDocumentUrl,
             favoriteCounts.GetValueOrDefault(x.Id, 0),
-            ProductRentalPricingPlanSync.ToDtos(x.RentalPricingPlans, fileUrlResolver, liveIcons),
+            ProductRentalPricingPlanSync.ToProjectedDtos(x, durationMasters, pricingOptions, fileUrlResolver, liveIcons),
             ProductCatalogDocuments.ToDtos(x, fileUrlResolver))).ToList();
 
         return Result.Success(result);
@@ -1551,12 +1571,18 @@ public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProd
         RuleFor(x => x.SecurityDeposit).GreaterThanOrEqualTo(0);
         RuleFor(x => x.BuyPrice).GreaterThanOrEqualTo(0).When(x => x.BuyPrice.HasValue);
         RuleFor(x => x.GstPercent).GreaterThanOrEqualTo(0).LessThanOrEqualTo(100);
+        RuleFor(x => x.DailyRent)
+            .GreaterThan(0)
+            .When(x => x.IsRentEnabled)
+            .WithErrorCode(RentalPricingEngine.DailyRateRequiredCode)
+            .WithMessage(RentalPricingEngine.DailyRateRequiredMessage);
     }
 }
 
 internal sealed class UpdateProductCommandHandler(
     IVendorOnboardingRepository repository,
-    IVendorFileUrlResolver fileUrlResolver)
+    IVendorFileUrlResolver fileUrlResolver,
+    IRentalPricingService rentalPricingService)
     : ICommandHandler<UpdateProductCommand, ProductDto>
 {
     public async Task<Result<ProductDto>> Handle(UpdateProductCommand request, CancellationToken cancellationToken)
@@ -1648,6 +1674,16 @@ internal sealed class UpdateProductCommandHandler(
             ProductRentalPricingPlanSync.Apply(entity, request.RentalPricingPlans);
         }
 
+        if (entity.IsRentEnabled)
+        {
+            var durationMasters = await repository.GetRentalDurationMastersAsync(activeOnly: true, cancellationToken);
+            var pricing = rentalPricingService.ApplyAutomaticPricing(entity, durationMasters);
+            if (pricing.IsFailure)
+            {
+                return Result.Failure<ProductDto>(pricing.Errors);
+            }
+        }
+
         var hasChemicalFields = !string.IsNullOrWhiteSpace(request.CasNumber)
             || !string.IsNullOrWhiteSpace(request.ChemicalFormula)
             || !string.IsNullOrWhiteSpace(request.BaseUnit)
@@ -1734,7 +1770,7 @@ internal sealed class UpdateProductCommandHandler(
     }
 }
 
-internal static class ProductRentalPricingPlanSync
+public static class ProductRentalPricingPlanSync
 {
     public static List<ProductRentalPricingPlanDto> ToDtos(
         IEnumerable<ProductRentalPricingPlan>? plans,
@@ -1746,13 +1782,16 @@ internal static class ProductRentalPricingPlanSync
             .Select(p =>
             {
                 var icon = RentalDurationIconLiveResolve.Resolve(p, liveIcons, fileUrlResolver);
+                var discountType = RentalPricingPlanMath.NormalizeDiscountType(p.DiscountType);
+                var isAutomatic = !RentalPricingPlanMath.IsManualOverride(discountType);
+                var discountAmount = Math.Max(0m, decimal.Round(p.NormalPrice - p.FinalRentalPrice, 2, MidpointRounding.AwayFromZero));
                 return new ProductRentalPricingPlanDto(
                     p.Id.ToString(),
                     p.ProductId.ToString(),
                     p.DurationLabel,
                     p.DurationDays,
                     p.NormalPrice,
-                    p.DiscountType,
+                    discountType,
                     p.DiscountValue,
                     p.FinalRentalPrice,
                     p.IsRecommended,
@@ -1764,10 +1803,85 @@ internal static class ProductRentalPricingPlanSync
                     icon.IconUrl,
                     icon.IconThumbnailUrl,
                     icon.ValueTier,
-                    icon.IconName);
+                    icon.IconName,
+                    discountAmount,
+                    isAutomatic);
             })
             .ToList()
         ?? [];
+
+    public static List<ProductRentalPricingPlanDto> ToProjectedDtos(
+        Product product,
+        IReadOnlyList<RentalDurationMaster> masters,
+        Domain.Options.RentalPricingOptions? options,
+        IVendorFileUrlResolver? fileUrlResolver = null,
+        IReadOnlyDictionary<Guid, RentalDurationIcon>? liveIcons = null)
+    {
+        if (product.IsRentEnabled && product.DailyRent > 0m)
+        {
+            var calculation = RentalPricingEngine.Calculate(
+                product.DailyRent,
+                product.BuyPrice,
+                ProductRentalPricingApplicator.ToDurationInputs(masters),
+                ProductRentalPricingApplicator.ToExistingInputs(product.RentalPricingPlans),
+                options ?? new Domain.Options.RentalPricingOptions());
+            return ToDtosFromCalculation(product.Id, calculation, product.RentalPricingPlans, fileUrlResolver, liveIcons);
+        }
+
+        return ToDtos(product.RentalPricingPlans, fileUrlResolver, liveIcons);
+    }
+
+    public static List<ProductRentalPricingPlanDto> ToDtosFromCalculation(
+        Guid productId,
+        RentalPricingCalculation calculation,
+        IEnumerable<ProductRentalPricingPlan>? existingPlans = null,
+        IVendorFileUrlResolver? fileUrlResolver = null,
+        IReadOnlyDictionary<Guid, RentalDurationIcon>? liveIcons = null)
+    {
+        var existingByMaster = (existingPlans ?? [])
+            .Where(p => p.RentalDurationMasterId.HasValue)
+            .GroupBy(p => p.RentalDurationMasterId!.Value)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        return calculation.Plans
+            .OrderBy(p => p.SortOrder)
+            .ThenBy(p => p.DurationDays)
+            .Select(p =>
+            {
+                existingByMaster.TryGetValue(p.DurationMasterId, out var row);
+                var icon = RentalDurationIconLiveResolve.Resolve(
+                    row?.RentalDurationIconId ?? p.RentalDurationIconId,
+                    row?.IconUrl ?? p.IconUrl,
+                    row?.IconThumbnailUrl ?? p.IconThumbnailUrl,
+                    row?.ValueTier ?? p.ValueTier,
+                    row?.IconName ?? p.IconName,
+                    liveIcons,
+                    fileUrlResolver);
+                var planId = p.ExistingPlanId ?? row?.Id ?? Guid.Empty;
+                return new ProductRentalPricingPlanDto(
+                    planId == Guid.Empty ? string.Empty : planId.ToString(),
+                    productId.ToString(),
+                    p.DurationLabel,
+                    p.DurationDays,
+                    p.BasePrice,
+                    p.PersistDiscountType,
+                    p.DiscountValue,
+                    p.FinalPrice,
+                    p.IsRecommended,
+                    p.IsEligible,
+                    p.SortOrder,
+                    p.DurationMasterId.ToString(),
+                    p.BillingCycles,
+                    (row?.RentalDurationIconId ?? p.RentalDurationIconId)?.ToString(),
+                    icon.IconUrl,
+                    icon.IconThumbnailUrl,
+                    icon.ValueTier,
+                    icon.IconName,
+                    p.DiscountAmount,
+                    p.IsAutomatic);
+            })
+            .ToList();
+    }
 
     /// <summary>
     /// Persist durable storage keys (S3 relative / uploads/…), never short-lived presigned URLs.
@@ -1796,8 +1910,11 @@ internal static class ProductRentalPricingPlanSync
 
         foreach (var dto in plans)
         {
-            var discountType = RentalPricingPlanMath.NormalizeDiscountType(dto.DiscountType);
-            var finalPrice = RentalPricingPlanMath.ComputeFinalPrice(dto.NormalPrice, discountType, dto.DiscountValue);
+            var discountType = dto.ResetToAutomatic
+                ? RentalPricingPlanMath.None
+                : RentalPricingPlanMath.NormalizeDiscountType(dto.DiscountType);
+            var discountValue = dto.ResetToAutomatic ? 0m : dto.DiscountValue;
+            var finalPrice = RentalPricingPlanMath.ComputeSafeFinalPrice(dto.NormalPrice, discountType, discountValue);
             var label = (dto.DurationLabel ?? string.Empty).Trim();
             Guid? masterId = null;
             if (!string.IsNullOrWhiteSpace(dto.RentalDurationMasterId)
@@ -1843,7 +1960,7 @@ internal static class ProductRentalPricingPlanSync
                 : decimal.Round(existing.DurationDays / 28m, 2, MidpointRounding.AwayFromZero);
             existing.NormalPrice = Math.Max(0m, dto.NormalPrice);
             existing.DiscountType = discountType;
-            existing.DiscountValue = Math.Max(0m, dto.DiscountValue);
+            existing.DiscountValue = Math.Max(0m, discountValue);
             existing.FinalRentalPrice = finalPrice;
             existing.IsRecommended = dto.IsRecommended;
             existing.IsActive = dto.IsActive;
@@ -1877,8 +1994,8 @@ internal static class ProductRentalPricingPlanSync
     }
 
     /// <summary>
-    /// Builds / refreshes duration chart rows from active masters using daily rate.
-    /// Preserves existing discounts, offer flags, best-value, and per-product icons when re-importing.
+    /// Builds / refreshes duration chart rows from active masters using the automatic pricing engine.
+    /// Preserves manually configured percentage/fixed discounts.
     /// </summary>
     public static void SeedOrRefreshFromMasters(
         Product entity,
@@ -1890,50 +2007,13 @@ internal static class ProductRentalPricingPlanSync
             return;
         }
 
-        var rate = Math.Max(0m, dailyRate);
-        var ordered = masters
-            .Where(m => m.IsActive && !m.IsDeleted)
-            .OrderBy(m => m.SortOrder)
-            .ThenBy(m => m.DurationDays)
-            .ToList();
-        if (ordered.Count == 0)
-        {
-            return;
-        }
-
-        entity.RentalPricingPlans ??= new List<ProductRentalPricingPlan>();
-        var dtos = ordered.Select(m =>
-        {
-            var existing =
-                entity.RentalPricingPlans.FirstOrDefault(p => p.RentalDurationMasterId == m.Id)
-                ?? entity.RentalPricingPlans.FirstOrDefault(p => p.DurationDays == m.DurationDays);
-            var normal = decimal.Round(rate * m.DurationDays, 2, MidpointRounding.AwayFromZero);
-            var discountType = existing?.DiscountType ?? RentalPricingPlanMath.None;
-            var discountValue = existing?.DiscountValue ?? 0m;
-            var billingCycles = m.BillingCycles > 0
-                ? m.BillingCycles
-                : decimal.Round(m.DurationDays / 28m, 2, MidpointRounding.AwayFromZero);
-            return new CreateOrUpdateProductRentalPricingPlanDto(
-                existing?.Id.ToString() ?? string.Empty,
-                m.DurationLabel,
-                m.DurationDays,
-                normal,
-                discountType,
-                discountValue,
-                RentalPricingPlanMath.ComputeFinalPrice(normal, discountType, discountValue),
-                existing?.IsRecommended ?? false,
-                existing?.IsActive ?? true,
-                m.SortOrder,
-                m.Id.ToString(),
-                billingCycles,
-                existing?.RentalDurationIconId?.ToString(),
-                existing?.IconUrl,
-                existing?.IconThumbnailUrl,
-                existing?.ValueTier,
-                existing?.IconName);
-        }).ToList();
-
-        Apply(entity, dtos);
+        entity.DailyRent = dailyRate;
+        var calculation = RentalPricingEngine.Calculate(
+            dailyRate,
+            entity.BuyPrice,
+            ProductRentalPricingApplicator.ToDurationInputs(masters),
+            ProductRentalPricingApplicator.ToExistingInputs(entity.RentalPricingPlans));
+        ProductRentalPricingApplicator.Apply(entity, calculation);
     }
 }
 
@@ -1980,7 +2060,9 @@ public sealed class UploadCatalogExcelCommandValidator : AbstractValidator<Uploa
     }
 }
 
-internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class UploadCatalogExcelCommandHandler(
+    IVendorOnboardingRepository repository,
+    IRentalPricingService rentalPricingService)
     : ICommandHandler<UploadCatalogExcelCommand, ExcelUploadResponseDto>
 {
     public async Task<Result<ExcelUploadResponseDto>> Handle(UploadCatalogExcelCommand request, CancellationToken cancellationToken)
@@ -2007,9 +2089,10 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                 return Result.Failure<ExcelUploadResponseDto>(new Error("excel.no_sheets", $"Excel file must contain 'Categories' and/or {sheetName} sheets.", ErrorCategory.Validation));
             }
 
-            // Process Variants sheet first if it exists
+            // Variants are chemical packaging sizes. Ignore them on equipment upload so a
+            // leaked Variants sheet cannot attach Acetone/etc. sizes onto equipment products.
             var variantsLookup = new Dictionary<string, List<ProductVariant>>(StringComparer.OrdinalIgnoreCase);
-            if (variantsSheet != null)
+            if (request.IsChemicalTemplate && variantsSheet != null)
             {
                 var vRowCount = variantsSheet.Dimension?.Rows ?? 0;
                 if (vRowCount > 1)
@@ -2356,7 +2439,7 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                                     }
                                     else
                                     {
-                                        ProductRentalPricingPlanSync.SeedOrRefreshFromMasters(existingProduct, durationMasters, dailyRent);
+                                        rentalPricingService.ApplyAutomaticPricing(existingProduct, durationMasters);
                                     }
                                 }
 
@@ -2435,7 +2518,7 @@ internal sealed class UploadCatalogExcelCommandHandler(IVendorOnboardingReposito
                                     }
                                     else
                                     {
-                                        ProductRentalPricingPlanSync.SeedOrRefreshFromMasters(product, durationMasters, dailyRent);
+                                        rentalPricingService.ApplyAutomaticPricing(product, durationMasters);
                                     }
                                 }
 
@@ -2565,11 +2648,12 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
             ExcelPackage.License.SetNonCommercialPersonal("Prilixor");
             using var package = new ExcelPackage();
 
-            // Get all categories and products
             var categories = (await repository.GetProductCategoriesAsync(cancellationToken))
                 .Where(c => c.IsChemical == request.IsChemicalTemplate)
                 .ToList();
-            var products = await repository.GetProductsAsync(null, cancellationToken);
+            var products = CatalogExcelScope.ProductsInCategories(
+                await repository.GetProductsAsync(null, cancellationToken),
+                categories);
 
             // Create Categories sheet
             var categoriesSheet = package.Workbook.Worksheets.Add("Categories");
@@ -2633,7 +2717,7 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
                 }
 
                 row = 2;
-                foreach (var product in products.Where(p => p.ChemicalProperty != null))
+                foreach (var product in products)
                 {
                     var category = categories.FirstOrDefault(c => c.Id == product.CategoryId);
                     productsSheet.Cells[row, 1].Value = category?.CategoryName ?? "";
@@ -2684,7 +2768,7 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
                 }
 
                 row = 2;
-                foreach (var product in products.Where(p => p.ChemicalProperty == null))
+                foreach (var product in products)
                 {
                     var category = categories.FirstOrDefault(c => c.Id == product.CategoryId);
                     productsSheet.Cells[row, 1].Value = category?.CategoryName ?? "";
@@ -2708,28 +2792,33 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
                 productsSheet.Cells[1, 1, 1, 16].AutoFitColumns();
             }
 
-            // Create Variants sheet if chemical template or if there are variants
-            var downloadVariantsSheet = package.Workbook.Worksheets.Add("Variants");
-            downloadVariantsSheet.Cells[1, 1].Value = "product_name";
-            downloadVariantsSheet.Cells[1, 2].Value = "sku";
-            downloadVariantsSheet.Cells[1, 3].Value = "size_value";
-            downloadVariantsSheet.Cells[1, 4].Value = "size_unit";
-            downloadVariantsSheet.Cells[1, 5].Value = "vendor_price";
-            downloadVariantsSheet.Cells[1, 6].Value = "buy_price";
-            downloadVariantsSheet.Cells[1, 7].Value = "is_active";
-
-            using (var headerRange = downloadVariantsSheet.Cells[1, 1, 1, 7])
+            // Variants (packaging sizes) are chemical-only. Equipment sample Excel has Categories + Products only.
+            if (CatalogExcelScope.IncludeVariantsSheet(request.IsChemicalTemplate))
             {
-                headerRange.Style.Font.Bold = true;
-                headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
-                headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
-            }
+                var downloadVariantsSheet = package.Workbook.Worksheets.Add("Variants");
+                downloadVariantsSheet.Cells[1, 1].Value = "product_name";
+                downloadVariantsSheet.Cells[1, 2].Value = "sku";
+                downloadVariantsSheet.Cells[1, 3].Value = "size_value";
+                downloadVariantsSheet.Cells[1, 4].Value = "size_unit";
+                downloadVariantsSheet.Cells[1, 5].Value = "vendor_price";
+                downloadVariantsSheet.Cells[1, 6].Value = "buy_price";
+                downloadVariantsSheet.Cells[1, 7].Value = "is_active";
 
-            var variantRow = 2;
-            foreach (var product in products)
-            {
-                if (product.Variants != null && product.Variants.Count > 0)
+                using (var headerRange = downloadVariantsSheet.Cells[1, 1, 1, 7])
                 {
+                    headerRange.Style.Font.Bold = true;
+                    headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
+                    headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+                }
+
+                var variantRow = 2;
+                foreach (var product in products)
+                {
+                    if (product.Variants == null || product.Variants.Count == 0)
+                    {
+                        continue;
+                    }
+
                     foreach (var v in product.Variants)
                     {
                         downloadVariantsSheet.Cells[variantRow, 1].Value = product.ProductName;
@@ -2742,8 +2831,8 @@ internal sealed class DownloadCatalogExcelQueryHandler(IVendorOnboardingReposito
                         variantRow++;
                     }
                 }
+                downloadVariantsSheet.Cells[1, 1, 1, 7].AutoFitColumns();
             }
-            downloadVariantsSheet.Cells[1, 1, 1, 7].AutoFitColumns();
 
             // Save to byte array
             var excelData = package.GetAsByteArray();

@@ -38,6 +38,7 @@ export function StruckPrice({
 }
 
 export function planSavings(plan: RentalPricingPlanDto): number {
+  if (typeof plan.discountAmount === "number") return Math.max(0, plan.discountAmount);
   return Math.max(0, Number(plan.normalPrice || 0) - Number(plan.finalRentalPrice || 0));
 }
 
@@ -46,6 +47,9 @@ export function planDiscountPercent(plan: RentalPricingPlanDto): number {
   const final = Number(plan.finalRentalPrice || 0);
   if (!(normal > 0) || final >= normal) return 0;
   if (plan.discountType === "percentage" && plan.discountValue > 0) {
+    return Math.min(100, Math.round(plan.discountValue));
+  }
+  if ((plan.discountType === "none" || plan.isAutomatic) && plan.discountValue > 0) {
     return Math.min(100, Math.round(plan.discountValue));
   }
   return Math.min(100, Math.round(((normal - final) / normal) * 100));

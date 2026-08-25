@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CalendarRange, ImagePlus, PencilLine, Sparkles } from "lucide-react";
 import { Input } from "../ui/input";
@@ -33,29 +33,28 @@ import {
 } from "@/app/helpers/rentalDurationIcons";
 import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
 
-function computeFinalPrice(normalPrice: number, discountType: RentalDiscountType, discountValue: number): number {
-  const normal = Math.max(0, normalPrice || 0);
-  const value = Math.max(0, discountValue || 0);
-  if (discountType === "fixed") return Math.max(0, Math.round((normal - value) * 100) / 100);
-  if (discountType === "percentage") {
-    const pct = Math.min(100, value);
-    return Math.max(0, Math.round(normal * (1 - pct / 100) * 100) / 100);
-  }
-  return Math.round(normal * 100) / 100;
-}
-
 function formatMoney(value: number): string {
   return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
-function discountTypeLabel(type: RentalDiscountType): string {
+function planDiscountAmount(plan: ProductRentalPricingPlanDto): number {
+  if (typeof plan.discountAmount === "number") return Math.max(0, plan.discountAmount);
+  return Math.max(0, Number(plan.normalPrice || 0) - Number(plan.finalRentalPrice || 0));
+}
+
+function isAutomaticPlan(plan: ProductRentalPricingPlanDto): boolean {
+  return plan.isAutomatic !== false && plan.discountType === "none";
+}
+
+function discountTypeLabel(type: RentalDiscountType, automatic = false): string {
+  if (automatic && type === "none") return "Automatic";
   switch (type) {
     case "percentage":
       return "Percent %";
     case "fixed":
       return "Fixed ₹";
     default:
-      return "None";
+      return "Automatic";
   }
 }
 
@@ -89,46 +88,6 @@ function tierBadgeClass(tier?: string | null): string {
   }
 }
 
-function buildPlansFromMasters(
-  masters: RentalDurationMasterDto[],
-  dailyRate: number,
-  existing: ProductRentalPricingPlanDto[],
-): ProductRentalPricingPlanDto[] {
-  const rate = Math.max(0, dailyRate || 0);
-  return masters.map((master, index) => {
-    const prior =
-      existing.find((p) => p.rentalDurationMasterId === master.id) ||
-      existing.find((p) => p.durationDays === master.durationDays);
-    const normalPrice = Math.round(rate * master.durationDays * 100) / 100;
-    const discountType = (prior?.discountType ?? "none") as RentalDiscountType;
-    const discountValue = prior?.discountValue ?? 0;
-    const billingCycles =
-      master.billingCycles && master.billingCycles > 0
-        ? master.billingCycles
-        : Math.round((master.durationDays / 28) * 100) / 100;
-    return {
-      id: prior?.id || "",
-      productId: prior?.productId || "",
-      rentalDurationMasterId: master.id,
-      durationLabel: master.durationLabel,
-      durationDays: master.durationDays,
-      billingCycles,
-      normalPrice,
-      discountType,
-      discountValue,
-      finalRentalPrice: computeFinalPrice(normalPrice, discountType, discountValue),
-      isRecommended: prior?.isRecommended ?? false,
-      isActive: prior?.isActive ?? true,
-      sortOrder: master.sortOrder ?? index,
-      rentalDurationIconId: prior?.rentalDurationIconId ?? null,
-      iconUrl: prior?.iconUrl ?? null,
-      iconThumbnailUrl: prior?.iconThumbnailUrl ?? null,
-      valueTier: prior?.valueTier ?? null,
-      iconName: prior?.iconName ?? null,
-    };
-  });
-}
-
 type Props = {
   dailyRate: number;
   hideDailyRateInput?: boolean;
@@ -137,6 +96,11 @@ type Props = {
   icons: RentalDurationIconDto[];
   plans: ProductRentalPricingPlanDto[];
   onChange: (plans: ProductRentalPricingPlanDto[]) => void;
+  onDiscountEdit?: () => void;
+  economicMaximumDays?: number | null;
+  eligiblePlanCount?: number;
+  configuredDurationCount?: number;
+  mostPopularDurationLabel?: string | null;
   disabled?: boolean;
 };
 
@@ -148,6 +112,11 @@ export function RentalDurationPricingEditor({
   icons,
   plans,
   onChange,
+  onDiscountEdit,
+  economicMaximumDays,
+  eligiblePlanCount,
+  configuredDurationCount,
+  mostPopularDurationLabel,
   disabled,
 }: Props) {
   const [chartOpen, setChartOpen] = useState(false);
@@ -182,41 +151,20 @@ export function RentalDurationPricingEditor({
     return resolveRentalIconUrl(plan.iconThumbnailUrl || plan.iconUrl);
   };
 
-  useEffect(() => {
-    if (activeMasters.length === 0) return;
-    const next = buildPlansFromMasters(activeMasters, dailyRate, plans);
-    const changed =
-      next.length !== plans.length ||
-      next.some((n, i) => {
-        const p = plans[i];
-        return (
-          !p ||
-          p.rentalDurationMasterId !== n.rentalDurationMasterId ||
-          p.durationLabel !== n.durationLabel ||
-          p.durationDays !== n.durationDays ||
-          p.billingCycles !== n.billingCycles ||
-          p.normalPrice !== n.normalPrice ||
-          p.finalRentalPrice !== n.finalRentalPrice ||
-          p.sortOrder !== n.sortOrder
-        );
-      });
-    if (changed) onChange(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeMasters, dailyRate]);
-
-  const updatePlan = (index: number, patch: Partial<ProductRentalPricingPlanDto>) => {
+  const updatePlan = (
+    index: number,
+    patch: Partial<ProductRentalPricingPlanDto>,
+    source: "discount" | "other" = "other",
+  ) => {
     const next = [...plans];
     const current = { ...next[index], ...patch };
-    const normal =
-      patch.normalPrice != null
-        ? current.normalPrice
-        : Math.round(Math.max(0, dailyRate || 0) * current.durationDays * 100) / 100;
-    current.normalPrice = normal;
-    current.finalRentalPrice = computeFinalPrice(
-      current.normalPrice,
-      current.discountType,
-      current.discountValue,
-    );
+    if (patch.discountType === "none") {
+      current.isAutomatic = true;
+      current.resetToAutomatic = true;
+    } else if (patch.discountType === "percentage" || patch.discountType === "fixed") {
+      current.isAutomatic = false;
+      current.resetToAutomatic = false;
+    }
     if (patch.isRecommended === true) {
       next.forEach((p, i) => {
         if (i !== index) next[i] = { ...p, isRecommended: false };
@@ -224,6 +172,7 @@ export function RentalDurationPricingEditor({
     }
     next[index] = current;
     onChange(next);
+    if (source === "discount") onDiscountEdit?.();
   };
 
   const applyIcon = (index: number, iconId: string) => {
@@ -256,7 +205,12 @@ export function RentalDurationPricingEditor({
   const priceTo = offeredPlans.length
     ? Math.max(...offeredPlans.map((p) => p.finalRentalPrice))
     : 0;
-  const canOpenChart = dailyRate > 0 && activeMasters.length > 0;
+  const offeredCount = eligiblePlanCount ?? offeredPlans.length;
+  const totalCount = configuredDurationCount ?? (plans.length || activeMasters.length);
+  const popularLabel =
+    mostPopularDurationLabel
+    || (bestPlan ? dayPlanTitle(bestPlan.durationDays, bestPlan.durationLabel) : null);
+  const canOpenChart = dailyRate > 0 && (plans.length > 0 || activeMasters.length > 0);
 
   const renderIconThumb = (src: string | null | undefined, alt = "", size: "sm" | "md" = "md") => {
     const box = size === "sm" ? "h-7 w-7" : "h-9 w-9";
@@ -316,24 +270,32 @@ export function RentalDurationPricingEditor({
     index: number,
     layout: "desktop" | "mobile" = "desktop",
   ) => {
-    const active = plan.discountType !== "none";
+    const automatic = isAutomaticPlan(plan);
+    const active = !automatic && plan.discountType !== "none";
     const unit = discountUnit(plan.discountType);
+    const autoPercent = automatic && Number(plan.discountValue) > 0 ? Number(plan.discountValue) : 0;
     return (
       <div
         className={cn(
           "flex items-center gap-1.5 rounded-lg border p-1 transition-colors",
-          active
-            ? "border-amber-300/80 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/30"
-            : "border-border/70 bg-muted/15",
+          automatic
+            ? "border-sky-300/80 bg-sky-50/70 dark:border-sky-800 dark:bg-sky-950/30"
+            : active
+              ? "border-amber-300/80 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/30"
+              : "border-border/70 bg-muted/15",
         )}
       >
         <Select
-          value={plan.discountType}
+          value={automatic ? "none" : plan.discountType}
           onValueChange={(v) =>
-            updatePlan(index, {
-              discountType: v as RentalDiscountType,
-              discountValue: v === "none" ? 0 : plan.discountValue,
-            })
+            updatePlan(
+              index,
+              {
+                discountType: v as RentalDiscountType,
+                discountValue: v === "none" ? 0 : plan.discountValue,
+              },
+              "discount",
+            )
           }
           disabled={disabled}
         >
@@ -341,15 +303,17 @@ export function RentalDurationPricingEditor({
             className={cn(
               "h-8 shrink-0 border-0 bg-transparent px-2.5 shadow-none focus:ring-0 focus:ring-offset-0 [&>span]:whitespace-nowrap [&>span]:overflow-visible [&>span]:line-clamp-none [&_svg]:h-3.5 [&_svg]:w-3.5",
               layout === "desktop" ? "w-[128px]" : "min-w-[128px] flex-1",
-              active
-                ? "font-medium text-amber-900 dark:text-amber-200"
-                : "text-muted-foreground",
+              automatic
+                ? "font-medium text-sky-900 dark:text-sky-200"
+                : active
+                  ? "font-medium text-amber-900 dark:text-amber-200"
+                  : "text-muted-foreground",
             )}
           >
-            <SelectValue>{discountTypeLabel(plan.discountType)}</SelectValue>
+            <SelectValue>{discountTypeLabel(plan.discountType, automatic)}</SelectValue>
           </SelectTrigger>
           <SelectContent className="z-[70]">
-            <SelectItem value="none">None</SelectItem>
+            <SelectItem value="none">Automatic</SelectItem>
             <SelectItem value="percentage">Percent %</SelectItem>
             <SelectItem value="fixed">Fixed ₹</SelectItem>
           </SelectContent>
@@ -357,33 +321,52 @@ export function RentalDurationPricingEditor({
         <div
           className={cn(
             "flex h-8 items-center gap-1 rounded-md border px-2",
-            active
-              ? "border-amber-200/80 bg-background dark:border-amber-900"
-              : "border-transparent bg-background/60",
-            !active && "opacity-50",
+            automatic
+              ? "border-sky-200/80 bg-background dark:border-sky-900"
+              : active
+                ? "border-amber-200/80 bg-background dark:border-amber-900"
+                : "border-transparent bg-background/60",
+            !active && !automatic && "opacity-50",
           )}
         >
           {unit === "₹" && (
             <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">₹</span>
           )}
-          <Input
-            type="number"
-            min={0}
-            max={plan.discountType === "percentage" ? 100 : undefined}
-            className={cn(
-              "h-7 border-0 bg-transparent p-0 text-right font-mono text-sm font-semibold tabular-nums shadow-none focus-visible:ring-0",
-              layout === "desktop" ? "w-[56px]" : "w-[64px]",
-              active
-                ? "text-amber-950 dark:text-amber-100"
-                : "text-muted-foreground",
-            )}
-            value={active ? plan.discountValue : ""}
-            placeholder="0"
-            disabled={disabled || !active}
-            onChange={(e) => updatePlan(index, { discountValue: Number(e.target.value) || 0 })}
-          />
-          {unit === "%" && (
-            <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">%</span>
+          {automatic ? (
+            <span className="w-[56px] text-right font-mono text-sm font-semibold tabular-nums text-sky-950 dark:text-sky-100">
+              {autoPercent > 0 ? autoPercent : "0"}
+            </span>
+          ) : (
+            <Input
+              type="number"
+              min={0}
+              max={plan.discountType === "percentage" ? 100 : undefined}
+              className={cn(
+                "h-7 border-0 bg-transparent p-0 text-right font-mono text-sm font-semibold tabular-nums shadow-none focus-visible:ring-0",
+                layout === "desktop" ? "w-[56px]" : "w-[64px]",
+                active
+                  ? "text-amber-950 dark:text-amber-100"
+                  : "text-muted-foreground",
+              )}
+              value={active ? plan.discountValue : ""}
+              placeholder="0"
+              disabled={disabled || !active}
+              onChange={(e) =>
+                updatePlan(index, { discountValue: Number(e.target.value) || 0 }, "discount")
+              }
+            />
+          )}
+          {(unit === "%" || automatic) && (
+            <span
+              className={cn(
+                "text-xs font-semibold",
+                automatic
+                  ? "text-sky-700 dark:text-sky-300"
+                  : "text-amber-700 dark:text-amber-300",
+              )}
+            >
+              %
+            </span>
           )}
         </div>
       </div>
@@ -419,7 +402,7 @@ export function RentalDurationPricingEditor({
               {canOpenChart ? (
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <Badge variant="secondary" className="font-normal">
-                    {offeredPlans.length} of {plans.length} offered
+                    {offeredCount} of {totalCount} available
                   </Badge>
                   {offeredPlans.length > 0 && (
                     <Badge variant="outline" className="font-mono font-normal">
@@ -428,9 +411,14 @@ export function RentalDurationPricingEditor({
                         : `${formatMoney(priceFrom)} – ${formatMoney(priceTo)}`}
                     </Badge>
                   )}
-                  {bestPlan && (
+                  {typeof economicMaximumDays === "number" && economicMaximumDays > 0 && (
+                    <Badge variant="outline" className="font-normal">
+                      Economic max {economicMaximumDays} days
+                    </Badge>
+                  )}
+                  {popularLabel && (
                     <Badge className="bg-blue-500/15 font-normal text-blue-800 hover:bg-blue-500/15 dark:text-blue-200">
-                      Most popular: {dayPlanTitle(bestPlan.durationDays, bestPlan.durationLabel)}
+                      Most popular: {popularLabel}
                     </Badge>
                   )}
                 </div>
@@ -469,7 +457,7 @@ export function RentalDurationPricingEditor({
                   More days, more savings
                 </span>
                 {" — "}
-                list price = daily rate × days
+                list and customer prices come from the rental pricing engine
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -522,12 +510,13 @@ export function RentalDurationPricingEditor({
                         <th className="px-4 py-3 font-semibold">Discount</th>
                         <th className="px-4 py-3 font-semibold text-right">Customer pays</th>
                         <th className="px-4 py-3 font-semibold text-center">Most popular</th>
-                        <th className="px-5 py-3 font-semibold text-center sm:px-6">Offer</th>
+                        <th className="px-5 py-3 font-semibold text-center sm:px-6">Available</th>
                       </tr>
                     </thead>
                     <tbody>
                       {plans.map((plan, index) => {
-                        const hasDiscount = plan.discountType !== "none" && plan.discountValue > 0;
+                        const hasDiscount = planDiscountAmount(plan) > 0;
+                        const automatic = isAutomaticPlan(plan);
                         const planTitle = dayPlanTitle(plan.durationDays, plan.durationLabel);
                         const preview = planIconPreviewUrl(plan);
                         const selectedIcon = activeIcons.find((i) => i.id === plan.rentalDurationIconId);
@@ -553,6 +542,17 @@ export function RentalDurationPricingEditor({
                                     Most popular
                                   </Badge>
                                 )}
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "text-[10px] font-medium",
+                                    automatic
+                                      ? "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300"
+                                      : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+                                  )}
+                                >
+                                  {automatic ? "Automatic" : "Manual"}
+                                </Badge>
                               </div>
                               {renderPlanMeta(plan)}
                             </td>
@@ -632,7 +632,7 @@ export function RentalDurationPricingEditor({
                               </div>
                               {hasDiscount && (
                                 <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-                                  Save {formatMoney(plan.normalPrice - plan.finalRentalPrice)}
+                                  Save {formatMoney(planDiscountAmount(plan))}
                                 </div>
                               )}
                             </td>
@@ -641,41 +641,31 @@ export function RentalDurationPricingEditor({
                               <div className="flex flex-col items-center gap-1">
                                 <Switch
                                   checked={plan.isRecommended}
-                                  disabled={disabled || !plan.isActive}
+                                  disabled={disabled || !plan.isActive || automatic}
                                   onCheckedChange={(checked) =>
                                     updatePlan(index, { isRecommended: checked })
                                   }
                                   aria-label={`Most popular for ${planTitle}`}
                                 />
                                 <span className="text-[10px] text-muted-foreground">
-                                  {plan.isRecommended ? "Yes" : "No"}
+                                  {automatic ? "Auto" : plan.isRecommended ? "Yes" : "No"}
                                 </span>
                               </div>
                             </td>
 
                             <td className="px-5 py-3.5 align-middle sm:px-6">
                               <div className="flex flex-col items-center gap-1">
-                                <Switch
-                                  checked={plan.isActive}
-                                  disabled={disabled}
-                                  onCheckedChange={(checked) =>
-                                    updatePlan(index, {
-                                      isActive: checked,
-                                      isRecommended: checked ? plan.isRecommended : false,
-                                    })
-                                  }
-                                  aria-label={`Offer ${planTitle}`}
-                                />
-                                <span
+                                <Badge
+                                  variant="outline"
                                   className={cn(
-                                    "text-[10px] font-medium",
+                                    "font-normal",
                                     plan.isActive
-                                      ? "text-emerald-700 dark:text-emerald-400"
+                                      ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
                                       : "text-muted-foreground",
                                   )}
                                 >
-                                  {plan.isActive ? "On" : "Off"}
-                                </span>
+                                  {plan.isActive ? "Available" : "Unavailable"}
+                                </Badge>
                               </div>
                             </td>
                           </tr>
@@ -688,7 +678,8 @@ export function RentalDurationPricingEditor({
                 {/* Compact / mobile cards */}
                 <div className="divide-y divide-border lg:hidden">
                   {plans.map((plan, index) => {
-                    const hasDiscount = plan.discountType !== "none" && plan.discountValue > 0;
+                    const hasDiscount = planDiscountAmount(plan) > 0;
+                    const automatic = isAutomaticPlan(plan);
                     const planTitle = dayPlanTitle(plan.durationDays, plan.durationLabel);
                     const preview = planIconPreviewUrl(plan);
                     const selectedIcon = activeIcons.find((i) => i.id === plan.rentalDurationIconId);
@@ -715,6 +706,17 @@ export function RentalDurationPricingEditor({
                                   Most popular
                                 </Badge>
                               )}
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px] font-medium",
+                                  automatic
+                                    ? "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300"
+                                    : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+                                )}
+                              >
+                                {automatic ? "Automatic" : "Manual"}
+                              </Badge>
                             </div>
                             {renderPlanMeta(plan, {
                               listPrice: plan.normalPrice,
@@ -734,7 +736,7 @@ export function RentalDurationPricingEditor({
                             </p>
                             {hasDiscount && (
                               <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-                                Save {formatMoney(plan.normalPrice - plan.finalRentalPrice)}
+                                Save {formatMoney(planDiscountAmount(plan))}
                               </p>
                             )}
                           </div>
@@ -774,27 +776,29 @@ export function RentalDurationPricingEditor({
 
                         <div className="grid grid-cols-2 gap-2">
                           <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                            <span className="text-xs text-muted-foreground">Most popular</span>
+                            <span className="text-xs text-muted-foreground">
+                              {automatic ? "Most popular (auto)" : "Most popular"}
+                            </span>
                             <Switch
                               checked={plan.isRecommended}
-                              disabled={disabled || !plan.isActive}
+                              disabled={disabled || !plan.isActive || automatic}
                               onCheckedChange={(checked) =>
                                 updatePlan(index, { isRecommended: checked })
                               }
                             />
                           </div>
                           <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                            <span className="text-xs text-muted-foreground">Offer</span>
-                            <Switch
-                              checked={plan.isActive}
-                              disabled={disabled}
-                              onCheckedChange={(checked) =>
-                                updatePlan(index, {
-                                  isActive: checked,
-                                  isRecommended: checked ? plan.isRecommended : false,
-                                })
-                              }
-                            />
+                            <span className="text-xs text-muted-foreground">Availability</span>
+                            <span
+                              className={cn(
+                                "text-xs font-medium",
+                                plan.isActive
+                                  ? "text-emerald-700 dark:text-emerald-400"
+                                  : "text-muted-foreground",
+                              )}
+                            >
+                              {plan.isActive ? "Available" : "Unavailable"}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -806,7 +810,9 @@ export function RentalDurationPricingEditor({
           </div>
 
           <DialogFooter className="shrink-0 gap-3 border-t border-border bg-muted/10 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <p className="text-xs text-muted-foreground">Changes apply when you save the product.</p>
+            <p className="text-xs text-muted-foreground">
+              Automatic prices come from the engine. Percent or fixed discounts stay as Configure Prices overrides until you switch back to Automatic.
+            </p>
             <Button type="button" onClick={() => setChartOpen(false)}>
               Done
             </Button>

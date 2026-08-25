@@ -121,6 +121,8 @@ export interface ProductRentalPricingPlanDto {
   iconThumbnailUrl?: string | null;
   valueTier?: string | null;
   iconName?: string | null;
+  discountAmount?: number;
+  isAutomatic?: boolean;
 }
 
 export interface ProductApiDto {

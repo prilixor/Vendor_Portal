@@ -23,7 +23,7 @@ import {
   type CreateRentalDurationMasterRequest,
   type RentalDurationMasterDto,
 } from "@/app/services/adminApi";
-import { CalendarRange, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { CalendarRange, Loader2, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { cn } from "@/app/helpers/utils";
@@ -61,6 +61,7 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
   const [form, setForm] = useState<FormState>(emptyForm());
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [recalculating, setRecalculating] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -212,6 +213,18 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
     }
   };
 
+  const recalculateCatalogPrices = async () => {
+    setRecalculating(true);
+    try {
+      const result = await adminApi.recalculateAllRentalPricing(false);
+      toast.success(`Updated automatic rental prices for ${result.productsProcessed} product(s). Manual Configure Prices overrides were kept.`);
+    } catch (e) {
+      toast.error(getUserFriendlyMessage(e, "Failed to recalculate rental prices"));
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {!embedded && (
@@ -260,6 +273,20 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
                 <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => void recalculateCatalogPrices()}
+              disabled={loading || saving || recalculating}
+            >
+              {recalculating ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Recalculate prices
+            </Button>
             <Button onClick={openCreate} className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               Add duration

@@ -400,6 +400,9 @@ export interface ProductRentalPricingPlanDto {
   iconThumbnailUrl?: string | null;
   valueTier?: string | null;
   iconName?: string | null;
+  discountAmount?: number;
+  isAutomatic?: boolean;
+  resetToAutomatic?: boolean;
 }
 
 export interface RentalDurationMasterDto {
@@ -956,6 +959,38 @@ export const adminApi = {
   async getProducts(categoryId?: string): Promise<ProductDto[]> {
     const url = categoryId ? `/admin/catalog/products?categoryId=${categoryId}` : '/admin/catalog/products';
     return apiClient.get<ProductDto[]>(url);
+  },
+
+  async previewRentalPricing(data: {
+    dailyRent: number;
+    buyPrice?: number | null;
+    isRentEnabled: boolean;
+    existingPlans?: ProductRentalPricingPlanDto[];
+  }): Promise<{
+    plans: ProductRentalPricingPlanDto[];
+    economicMaximumDays?: number | null;
+    eligiblePlanCount: number;
+    configuredDurationCount: number;
+    mostPopularDurationLabel?: string | null;
+  }> {
+    return apiClient.post("/admin/catalog/rental-pricing/preview", {
+      dailyRent: data.dailyRent,
+      buyPrice: data.buyPrice,
+      isRentEnabled: data.isRentEnabled,
+      existingPlans: data.existingPlans,
+    });
+  },
+
+  async recalculateProductRentalPricing(productId: string, resetManualOverrides = false): Promise<ProductDto> {
+    return apiClient.post(`/admin/catalog/products/${productId}/rental-pricing/recalculate`, {
+      resetManualOverrides,
+    });
+  },
+
+  async recalculateAllRentalPricing(resetManualOverrides = false): Promise<{ productsProcessed: number }> {
+    return apiClient.post("/admin/catalog/rental-pricing/recalculate", {
+      resetManualOverrides,
+    });
   },
 
   async createProduct(data: CreateProductRequest): Promise<ProductDto> {

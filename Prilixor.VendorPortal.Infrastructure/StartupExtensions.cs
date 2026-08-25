@@ -153,6 +153,9 @@ namespace Prilixor.VendorPortal.Infrastructure
             services.Configure<CustomerPricingOptions>(
                 configuration.GetSection(CustomerPricingOptions.SectionName));
 
+            services.Configure<RentalPricingOptions>(
+                configuration.GetSection(RentalPricingOptions.SectionName));
+
             return services;
         }
     }
