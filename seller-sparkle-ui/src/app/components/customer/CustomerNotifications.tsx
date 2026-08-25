@@ -2,7 +2,20 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { CheckCheck } from "lucide-react";
+import {
+  CheckCheck,
+  Bell,
+  Camera,
+  ShoppingBag,
+  Truck,
+  CreditCard,
+  Hourglass,
+  XCircle,
+  MessageSquare,
+  Package,
+  Hand,
+  LucideIcon,
+} from "lucide-react";
 import { customerApi, type CustomerNotificationApi } from "@/app/services/customerApi";
 import {
   customerNotificationTypeBadgeClass,
@@ -16,6 +29,71 @@ import { cn } from "@/app/helpers/utils";
 import { toast } from "sonner";
 
 export const customerNotificationsQueryKey = ["customer-notifications"] as const;
+
+interface CustomerNotificationVisual {
+  icon: LucideIcon;
+  cls: string;
+}
+
+function getCustomerNotificationVisual(notificationType?: string, title: string = ""): CustomerNotificationVisual {
+  const t = (notificationType ?? "").trim().toLowerCase();
+  const h = title.trim().toLowerCase();
+
+  // Welcome / Onboarding
+  if (t.includes("welcome") || h.includes("welcome")) {
+    return { icon: Hand, cls: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300" };
+  }
+
+  // Photo requests (inspection photos)
+  if (t.includes("photo") || h.includes("photo")) {
+    return { icon: Camera, cls: "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300" };
+  }
+
+  // Delivery / Transit / Shipping
+  if (
+    t.includes("dispatch") ||
+    t.includes("transit") ||
+    t.includes("delivery") ||
+    t.includes("shipping") ||
+    h.includes("dispatch") ||
+    h.includes("delivery") ||
+    h.includes("transit")
+  ) {
+    return { icon: Truck, cls: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" };
+  }
+
+  // Payments / Renewals
+  if (t.includes("payment") || t.includes("pay") || t.includes("invoice") || t.includes("refund") || h.includes("payment")) {
+    return { icon: CreditCard, cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" };
+  }
+
+  // Expirations / Extensions
+  if (t.includes("expir") || t.includes("return") || t.includes("continuation") || h.includes("expir") || h.includes("return")) {
+    return { icon: Hourglass, cls: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300" };
+  }
+
+  // Cancellations / Failures
+  if (t.includes("cancel") || t.includes("fail") || t.includes("reject") || h.includes("cancel") || h.includes("failed")) {
+    return { icon: XCircle, cls: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300" };
+  }
+
+  // Support / Chat replies
+  if (t.includes("support") || t.includes("chat") || h.includes("support") || h.includes("ticket")) {
+    return { icon: MessageSquare, cls: "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300" };
+  }
+
+  // Stock / Wishlist
+  if (t.includes("stock") || h.includes("stock") || h.includes("favorite")) {
+    return { icon: Package, cls: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300" };
+  }
+
+  // Orders
+  if (t.includes("order") || h.includes("order") || h.includes("rental")) {
+    return { icon: ShoppingBag, cls: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300" };
+  }
+
+  return { icon: Bell, cls: "bg-primary/10 text-primary" };
+}
 
 function relativeTime(iso: string): string {
   const d = new Date(iso);
@@ -201,13 +279,17 @@ const CustomerNotifications = () => {
                 const unread = !n.readAt;
                 const label = relativeTime(n.createdAt);
                 const typeBadge = customerNotificationTypeBadgeLabel(n.notificationType);
+                const { icon: VisualIcon, cls: visualCls } = getCustomerNotificationVisual(
+                  n.notificationType,
+                  n.title,
+                );
                 return (
                   <li key={n.id}>
                     <div
                       role="button"
                       tabIndex={0}
                       className={cn(
-                        "flex w-full min-w-0 gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/40 sm:gap-4 sm:px-5 sm:py-3.5",
+                        "flex w-full min-w-0 items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/40 sm:gap-4 sm:px-5 sm:py-3.5",
                         unread && "bg-muted/20",
                       )}
                       onClick={() => handleRowActivate(n)}
@@ -218,16 +300,15 @@ const CustomerNotifications = () => {
                         }
                       }}
                     >
-                      <span
-                        className={cn(
-                          "mt-1.5 h-2 w-2 shrink-0 rounded-full",
-                          unread ? "bg-primary" : "bg-transparent",
-                        )}
-                        aria-hidden
-                      />
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${visualCls}`}>
+                        <VisualIcon className="h-4 w-4" />
+                      </div>
                       <div className="min-w-0 flex-1 space-y-0.5 sm:space-y-1">
                         <div className="flex items-start gap-2">
                           <p className="min-w-0 flex-1 text-sm font-semibold leading-snug sm:text-base">{n.title}</p>
+                          {unread && (
+                            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden />
+                          )}
                           {typeBadge ? (
                             <span
                               className={cn(
