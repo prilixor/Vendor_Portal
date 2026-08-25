@@ -682,7 +682,7 @@ const CustomerCart = () => {
       const vi = detail.variantInventory?.find((x) => x.productVariantId === line.productVariantId);
       return vi?.availableQuantity ?? 0;
     }
-    return detail.availableQuantity;
+    return detail.productTotalAvailableQuantity ?? detail.availableQuantity;
   };
 
   const hasStockIssues = useMemo(

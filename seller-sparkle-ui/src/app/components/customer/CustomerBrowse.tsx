@@ -544,8 +544,8 @@ const CustomerBrowse = () => {
             const showBuy = isChem || !!item.isBuyEnabled;
             const badge = availabilityBadge(
               item.availabilityStatus,
-              item.availableQuantity,
-              item.productTotalAvailableQuantity,
+              item.productTotalAvailableQuantity ?? item.availableQuantity,
+              item.productTotalAvailableQuantity ?? item.availableQuantity,
               item.listingStatus,
             );
 

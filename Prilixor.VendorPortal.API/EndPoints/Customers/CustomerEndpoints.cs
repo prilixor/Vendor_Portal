@@ -175,6 +175,8 @@ public sealed class CustomerListingDetailResponse
     public bool DepositRequired { get; set; }
     public string ListingStatus { get; set; } = string.Empty;
     public int AvailableQuantity { get; set; }
+    /// <summary>Same catalog product, all public vendors combined (equipment units or chemical packs of every size).</summary>
+    public int ProductTotalAvailableQuantity { get; set; }
     public string AvailabilityStatus { get; set; } = "available";
     public string Description { get; set; } = string.Empty;
     public List<string> ImageUrls { get; set; } = [];
@@ -255,10 +257,11 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
             return TypedResults.Problem(title: "customers.listing_not_found", detail: "Listing not found.", statusCode: 404);
 
         var hint = string.IsNullOrWhiteSpace(agg.CategoryName) ? "Service area on request" : $"{agg.CategoryName} · rentals";
-        var availableQuantity = Math.Max(0, agg.InventoryAvailable);
-        var availabilityStatus = availableQuantity <= 0
-            ? "out_of_stock"
-            : (availableQuantity <= 3 ? "low_stock" : "available");
+        var customerVariantStock = agg.MarketplaceVariantInventory.Count > 0
+            ? agg.MarketplaceVariantInventory
+            : agg.VariantInventory;
+        var availableQuantity = Math.Max(0, agg.ProductTotalAvailableQuantity);
+        var availabilityStatus = CatalogListingAvailability.ToStatus(availableQuantity);
 
         var activeVariantBuyPrices = agg.Variants
             .Where(v => v.IsActive && v.BuyPrice > 0)
@@ -283,6 +286,7 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
             DepositRequired = agg.CategoryDepositRequired,
             ListingStatus = agg.ListingStatus,
             AvailableQuantity = availableQuantity,
+            ProductTotalAvailableQuantity = availableQuantity,
             AvailabilityStatus = availabilityStatus,
             Description = agg.Description,
             ImageUrls = agg.ImageUrls.Count > 0 ? agg.ImageUrls : [],
@@ -316,12 +320,12 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
                     SizeUnit = v.SizeUnit,
                     BuyPrice = v.BuyPrice,
                     IsActive = v.IsActive,
-                    AvailableQuantity = agg.VariantInventory
+                    AvailableQuantity = customerVariantStock
                         .FirstOrDefault(vi => vi.ProductVariantId.ToString() == v.Id)?.AvailableQuantity ?? 0,
                 })
                 .OrderBy(v => v.SizeValue)
                 .ToList(),
-            VariantInventory = agg.VariantInventory
+            VariantInventory = customerVariantStock
                 .Select(vi => new VariantInventoryItemResponse
                 {
                     ProductVariantId = vi.ProductVariantId,

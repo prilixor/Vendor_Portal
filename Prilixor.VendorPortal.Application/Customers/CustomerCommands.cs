@@ -910,19 +910,16 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
 
             if (line.ProductVariantId.HasValue)
             {
-                var variantInv = await vendors.GetVariantInventoryByListingIdAsync(agg.ListingId, cancellationToken);
-                var specificVariant = variantInv.FirstOrDefault(vi => vi.ProductVariantId == line.ProductVariantId.Value);
-                var varAvailable = specificVariant?.AvailableQuantity ?? 0;
+                var varAvailable = CustomerMarketplaceStock.ResolveAvailable(agg, line.ProductVariantId);
                 if (varAvailable < line.Quantity)
                     return Result.Failure<CustomerOrderQuoteDto>(new Error(
                         "customers.insufficient_stock",
-                        $"Not enough availability for \"{trackedListing.ListingTitle}\" ({specificVariant?.ProductVariant?.Sku ?? "Selected size"}).",
+                        $"Not enough availability for \"{trackedListing.ListingTitle}\" ({CustomerMarketplaceStock.SizeOrSkuLabel(agg, line.ProductVariantId)}).",
                         ErrorCategory.Validation));
             }
             else
             {
-                var inventory = await vendors.GetVendorInventoryByListingIdAsync(agg.ListingId, cancellationToken);
-                var available = inventory?.AvailableQuantity ?? trackedListing.AvailableQuantity;
+                var available = CustomerMarketplaceStock.ResolveAvailable(agg, null);
                 if (available < line.Quantity)
                     return Result.Failure<CustomerOrderQuoteDto>(new Error(
                         "customers.insufficient_stock",
@@ -1157,12 +1154,10 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
 
             if (line.ProductVariantId.HasValue)
             {
-                var variantInv = await vendors.GetVariantInventoryByListingIdAsync(agg.ListingId, cancellationToken);
-                var specificVariant = variantInv.FirstOrDefault(vi => vi.ProductVariantId == line.ProductVariantId.Value);
-                var varAvailable = specificVariant?.AvailableQuantity ?? 0;
+                var varAvailable = CustomerMarketplaceStock.ResolveAvailable(agg, line.ProductVariantId);
                 if (varAvailable < line.Quantity)
                 {
-                    var suggestions = BuildVariantSuggestions(agg, variantInv, line.ProductVariantId.Value);
+                    var suggestions = BuildVariantSuggestions(agg, line.ProductVariantId.Value);
                     var suggestionHint = suggestions.Count > 0
                         ? " Other sizes are in stock — see suggestions."
                         : string.Empty;
@@ -1172,15 +1167,14 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                         line.RentalDays,
                         orderType,
                         "customers.insufficient_stock",
-                        $"Not enough availability for \"{trackedListing.ListingTitle}\" ({specificVariant?.ProductVariant?.Sku ?? "Selected size"}).{suggestionHint}",
+                        $"Not enough availability for \"{trackedListing.ListingTitle}\" ({CustomerMarketplaceStock.SizeOrSkuLabel(agg, line.ProductVariantId)}).{suggestionHint}",
                         suggestions));
                     continue;
                 }
             }
             else
             {
-                var inventory = await vendors.GetVendorInventoryByListingIdAsync(agg.ListingId, cancellationToken);
-                var available = inventory?.AvailableQuantity ?? trackedListing.AvailableQuantity;
+                var available = CustomerMarketplaceStock.ResolveAvailable(agg, null);
                 if (available < line.Quantity)
                 {
                     failed.Add(new FailedCustomerOrderLineDto(
@@ -1514,25 +1508,31 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
     }
 
     /// <summary>
-    /// Builds alternate packaging-size suggestions for a chemical listing when the requested size (SKU)
-    /// cannot be fulfilled. Returns sibling variants of the same listing that currently have stock,
-    /// ordered by most-available first, so the customer can be nudged toward a size we can actually ship.
+    /// Builds alternate packaging-size suggestions when the requested size cannot be fulfilled.
+    /// Uses marketplace totals so a size in stock at another vendor still appears.
     /// </summary>
     private static List<VariantStockSuggestionDto> BuildVariantSuggestions(
         VendorProductListingAggregate agg,
-        IReadOnlyCollection<VendorVariantInventory> variantInventory,
         Guid requestedVariantId)
     {
-        return variantInventory
+        var stockSource = agg.MarketplaceVariantInventory.Count > 0
+            ? agg.MarketplaceVariantInventory
+            : agg.VariantInventory;
+
+        return stockSource
             .Where(vi => vi.ProductVariantId != requestedVariantId && vi.AvailableQuantity > 0)
             .OrderByDescending(vi => vi.AvailableQuantity)
-            .Select(vi => new VariantStockSuggestionDto(
-                vi.ProductVariantId,
-                vi.ProductVariant?.Sku ?? string.Empty,
-                vi.ProductVariant?.SizeValue ?? 0m,
-                vi.ProductVariant?.SizeUnit ?? string.Empty,
-                agg.Variants.FirstOrDefault(v => v.Id == vi.ProductVariantId.ToString())?.BuyPrice ?? 0m,
-                vi.AvailableQuantity))
+            .Select(vi =>
+            {
+                var variant = agg.Variants.FirstOrDefault(v => v.Id == vi.ProductVariantId.ToString());
+                return new VariantStockSuggestionDto(
+                    vi.ProductVariantId,
+                    variant?.Sku ?? string.Empty,
+                    variant?.SizeValue ?? 0m,
+                    variant?.SizeUnit ?? string.Empty,
+                    variant?.BuyPrice ?? 0m,
+                    vi.AvailableQuantity);
+            })
             .ToList();
     }
 }

@@ -2,9 +2,11 @@ using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Customers;
 using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.Domain.Customers;
+using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.DI;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 
 
@@ -16,7 +18,8 @@ public sealed class CustomerRepository(
     ApplicationDbContext vendorDb,
     CustomerPortalDbContext customerDb,
     CommonPortalDbContext commonDb,
-    IVendorFileUrlResolver fileUrlResolver)
+    IVendorFileUrlResolver fileUrlResolver,
+    IOptions<RentalPricingOptions> rentalPricingOptions)
     : ICustomerRepository, IScopedService
 
 {
@@ -226,6 +229,16 @@ public sealed class CustomerRepository(
             .Take(500)
             .ToList();
 
+        var variantAvailableSums = await GetVariantAvailableSumsAsync(
+            filteredRows.Select(r => r.Id).Distinct().ToList(),
+            cancellationToken);
+
+        int Qty(VendorProductListing listing) =>
+            ResolvePublicAvailableQuantity(
+                listing,
+                productMap.GetValueOrDefault(listing.ProductId),
+                variantAvailableSums);
+
         CustomerAddress? sortingAddress = null;
         if (customerId.HasValue)
         {
@@ -245,7 +258,7 @@ public sealed class CustomerRepository(
             .GroupBy(r => r.ProductId)
             .ToDictionary(
                 g => g.Key,
-                g => g.Sum(x => Math.Max(0, x.Inventory?.AvailableQuantity ?? x.AvailableQuantity)));
+                g => g.Sum(Qty));
 
         var representativeRows = filteredRows
             .GroupBy(r => r.ProductId)
@@ -265,13 +278,13 @@ public sealed class CustomerRepository(
                                 vendorLat,
                                 vendorLng);
                         })
-                        .ThenByDescending(r => Math.Max(0, r.Inventory?.AvailableQuantity ?? r.AvailableQuantity))
+                        .ThenByDescending(Qty)
                         .ThenByDescending(r => r.CreatedOnUtc);
                 }
                 else
                 {
                     ordered = g
-                        .OrderByDescending(r => Math.Max(0, r.Inventory?.AvailableQuantity ?? r.AvailableQuantity))
+                        .OrderByDescending(Qty)
                         .ThenByDescending(r => r.CreatedOnUtc);
                 }
 
@@ -295,11 +308,9 @@ public sealed class CustomerRepository(
 
             var productPrimaryUrl = ResolvePrimaryProductImageUrl(productMap.GetValueOrDefault(l.ProductId)?.ProductImages ?? []);
             var primaryUrl = ResolvePrimaryListingImageUrl(l.Images) ?? productPrimaryUrl;
-            var availableQuantity = Math.Max(0, l.Inventory?.AvailableQuantity ?? l.AvailableQuantity);
+            var availableQuantity = Qty(l);
             var productTotalAvailableQuantity = productAvailability.GetValueOrDefault(l.ProductId, availableQuantity);
-            var availabilityStatus = availableQuantity <= 0
-                ? "out_of_stock"
-                : (availableQuantity <= 3 ? "low_stock" : "available");
+            var availabilityStatus = CatalogListingAvailability.ToStatus(productTotalAvailableQuantity);
 
             var product = productMap.GetValueOrDefault(l.ProductId);
             var (buyPrice, maxBuyPrice) = ResolveCatalogBuyPrices(product);
@@ -492,7 +503,20 @@ public sealed class CustomerRepository(
             .ToListAsync(cancellationToken);
 
         var liveIcons = await GetLiveRentalDurationIconsAsync(cancellationToken);
-        return ToAggregate(l, product, variantInventory, liveIcons);
+        var durationMasters = await GetActiveRentalDurationMastersAsync(cancellationToken);
+        var isChemical = product.Category?.IsChemical == true || product.ChemicalProperty != null;
+        var (productTotal, marketplaceVariants) = await LoadMarketplaceAvailabilityAsync(
+            l.ProductId,
+            isChemical,
+            cancellationToken);
+        return ToAggregate(
+            l,
+            product,
+            variantInventory,
+            liveIcons,
+            durationMasters,
+            productTotal,
+            marketplaceVariants);
     }
 
     public async Task<List<VendorProductListingAggregate>> GetCandidateListingsByProductIdAsync(Guid productId, CancellationToken cancellationToken)
@@ -525,7 +549,23 @@ public sealed class CustomerRepository(
             .ToListAsync(cancellationToken);
 
         var liveIcons = await GetLiveRentalDurationIconsAsync(cancellationToken);
-        return listings.Select(l => ToAggregate(l, product, [], liveIcons)).ToList();
+        var durationMasters = await GetActiveRentalDurationMastersAsync(cancellationToken);
+        var listingIds = listings.Select(l => l.Id).ToList();
+        var variantRows = listingIds.Count == 0
+            ? new List<Prilixor.VendorPortal.Domain.Vendors.VendorVariantInventory>()
+            : await vendorDb.VendorVariantInventories
+                .AsNoTracking()
+                .Where(vi => listingIds.Contains(vi.VendorProductListingId))
+                .ToListAsync(cancellationToken);
+        var variantByListing = variantRows
+            .GroupBy(vi => vi.VendorProductListingId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+        return listings.Select(l => ToAggregate(
+            l,
+            product,
+            variantByListing.GetValueOrDefault(l.Id) ?? [],
+            liveIcons,
+            durationMasters)).ToList();
     }
 
 
@@ -1564,11 +1604,37 @@ public sealed class CustomerRepository(
         return RentalDurationIconLiveResolve.ToLookup(rows);
     }
 
+    private async Task<List<RentalDurationMaster>> GetActiveRentalDurationMastersAsync(
+        CancellationToken cancellationToken)
+    {
+        var rows = await commonDb.RentalDurationMasters
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.IsActive && x.DurationDays > 0)
+            .OrderBy(x => x.DurationDays)
+            .ThenBy(x => x.SortOrder)
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count == 0)
+        {
+            rows = await vendorDb.RentalDurationMasters
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted && x.IsActive && x.DurationDays > 0)
+                .OrderBy(x => x.DurationDays)
+                .ThenBy(x => x.SortOrder)
+                .ToListAsync(cancellationToken);
+        }
+
+        return rows;
+    }
+
     private VendorProductListingAggregate ToAggregate(
         VendorProductListing listing,
         Product product,
         List<Prilixor.VendorPortal.Domain.Vendors.VendorVariantInventory> variantInventory,
-        IReadOnlyDictionary<Guid, RentalDurationIcon>? liveIcons = null)
+        IReadOnlyDictionary<Guid, RentalDurationIcon>? liveIcons = null,
+        IReadOnlyList<RentalDurationMaster>? durationMasters = null,
+        int? productTotalAvailableQuantity = null,
+        List<VariantInventoryItem>? marketplaceVariantInventory = null)
     {
         var inv = listing.Inventory;
         var imgs = ResolveOrderedDistinctListingImageUrls(listing.Images);
@@ -1579,6 +1645,10 @@ public sealed class CustomerRepository(
         var desc = string.IsNullOrWhiteSpace(product.LongDescription)
             ? product.ShortDescription ?? string.Empty
             : product.LongDescription!;
+        var listingAvailable = CatalogListingAvailability.ResolveAvailableQuantity(
+            product.Category?.IsChemical == true || product.ChemicalProperty != null,
+            inv?.AvailableQuantity ?? listing.AvailableQuantity,
+            variantInventory.Count > 0 ? variantInventory.Sum(vi => vi.AvailableQuantity) : null);
 
         return new VendorProductListingAggregate
         {
@@ -1616,7 +1686,12 @@ public sealed class CustomerRepository(
             Description = desc,
             ImageUrls = imgs,
             InventoryId = inv?.Id,
-            InventoryAvailable = inv?.AvailableQuantity ?? listing.AvailableQuantity,
+            InventoryAvailable = listingAvailable,
+            ProductTotalAvailableQuantity = productTotalAvailableQuantity ?? listingAvailable,
+            MarketplaceVariantInventory = marketplaceVariantInventory
+                ?? variantInventory
+                    .Select(vi => new VariantInventoryItem(vi.ProductVariantId, vi.AvailableQuantity))
+                    .ToList(),
             InventoryReserved = inv?.ReservedQuantity ?? 0,
             InventoryTotal = inv?.TotalQuantity ?? listing.AvailableQuantity,
             InventoryRented = inv?.RentedQuantity ?? 0,
@@ -1638,33 +1713,12 @@ public sealed class CustomerRepository(
                 v.VendorPrice,
                 v.BuyPrice,
                 v.IsActive)).ToList() ?? [],
-            RentalPricingPlans = product.RentalPricingPlans?
-                .OrderByDescending(p => p.IsRecommended)
-                .ThenByDescending(p => p.DurationDays)
-                .ThenBy(p => p.SortOrder)
-                .Select(p =>
-                {
-                    var icon = RentalDurationIconLiveResolve.Resolve(p, liveIcons, fileUrlResolver);
-                    return new Prilixor.VendorPortal.Application.Onboarding.ProductRentalPricingPlanDto(
-                        p.Id.ToString(),
-                        p.ProductId.ToString(),
-                        p.DurationLabel,
-                        p.DurationDays,
-                        p.NormalPrice,
-                        p.DiscountType,
-                        p.DiscountValue,
-                        p.FinalRentalPrice,
-                        p.IsRecommended,
-                        p.IsActive,
-                        p.SortOrder,
-                        p.RentalDurationMasterId?.ToString(),
-                        p.BillingCycles,
-                        p.RentalDurationIconId?.ToString(),
-                        icon.IconUrl,
-                        icon.IconThumbnailUrl,
-                        icon.ValueTier,
-                        icon.IconName);
-                }).ToList() ?? [],
+            RentalPricingPlans = ProductRentalPricingPlanSync.ToProjectedDtos(
+                product,
+                durationMasters ?? [],
+                rentalPricingOptions.Value,
+                fileUrlResolver,
+                liveIcons),
             VariantInventory = variantInventory
                 .Select(vi => new VariantInventoryItem(vi.ProductVariantId, vi.AvailableQuantity))
                 .ToList(),
@@ -2192,8 +2246,19 @@ public sealed class CustomerRepository(
             });
         }
 
-        return filtered
-            .OrderByDescending(r => Math.Max(0, r.Inventory?.AvailableQuantity ?? r.AvailableQuantity) > 0 ? 1 : 0)
+        var filteredList = filtered.ToList();
+        var variantAvailableSums = await GetVariantAvailableSumsAsync(
+            filteredList.Select(l => l.Id).Distinct().ToList(),
+            cancellationToken);
+
+        int Qty(VendorProductListing listing) =>
+            ResolvePublicAvailableQuantity(
+                listing,
+                productMap.GetValueOrDefault(listing.ProductId),
+                variantAvailableSums);
+
+        return filteredList
+            .OrderByDescending(r => Qty(r) > 0 ? 1 : 0)
             .ThenBy(r => r.ListingTitle)
             .Take(take)
             .Select(l =>
@@ -2204,10 +2269,8 @@ public sealed class CustomerRepository(
                     vendorName = l.Vendor.Email;
                 var primaryUrl = ResolvePrimaryListingImageUrl(l.Images)
                     ?? ResolvePrimaryProductImageUrl(product?.ProductImages ?? []);
-                var availableQuantity = Math.Max(0, l.Inventory?.AvailableQuantity ?? l.AvailableQuantity);
-                var availabilityStatus = availableQuantity <= 0
-                    ? "out_of_stock"
-                    : (availableQuantity <= 3 ? "low_stock" : "available");
+                var availableQuantity = Qty(l);
+                var availabilityStatus = CatalogListingAvailability.ToStatus(availableQuantity);
                 var (buyPrice, maxBuyPrice) = ResolveCatalogBuyPrices(product);
 
                 return new AdminOrderableListingDto(
@@ -2393,6 +2456,83 @@ public sealed class CustomerRepository(
         }
 
         return (product.BuyPrice, null);
+    }
+
+    /// <summary>
+    /// Customer-facing stock for one catalog product: every public vendor listing.
+    /// Chemicals are grouped by packaging size (ProductVariantId).
+    /// </summary>
+    private async Task<(int ProductTotal, List<VariantInventoryItem> VariantTotals)> LoadMarketplaceAvailabilityAsync(
+        Guid productId,
+        bool isChemical,
+        CancellationToken cancellationToken)
+    {
+        var listings = await vendorDb.VendorProductListings
+            .AsNoTracking()
+            .Include(x => x.Inventory)
+            .Where(x =>
+                x.ProductId == productId &&
+                !x.IsDeleted &&
+                !x.Vendor.IsDeleted &&
+                (EF.Functions.ILike(x.ListingStatus, "active") || EF.Functions.ILike(x.ListingStatus, "approved")) &&
+                EF.Functions.ILike(x.Vendor.AccountStatus, "active"))
+            .ToListAsync(cancellationToken);
+
+        if (listings.Count == 0)
+            return (0, []);
+
+        if (isChemical)
+        {
+            var listingIds = listings.Select(l => l.Id).ToList();
+            var variantRows = await vendorDb.VendorVariantInventories
+                .AsNoTracking()
+                .Where(vi => listingIds.Contains(vi.VendorProductListingId))
+                .Select(vi => new { vi.ProductVariantId, vi.AvailableQuantity })
+                .ToListAsync(cancellationToken);
+
+            var byVariant = CatalogListingAvailability.SumByVariantId(
+                variantRows.Select(v => (v.ProductVariantId, v.AvailableQuantity)));
+            var variantTotals = byVariant
+                .Select(kv => new VariantInventoryItem(kv.Key, kv.Value))
+                .ToList();
+            var productTotal = variantTotals.Count > 0
+                ? CatalogListingAvailability.SumAvailable(variantTotals.Select(v => v.AvailableQuantity))
+                : CatalogListingAvailability.SumAvailable(
+                    listings.Select(l => l.Inventory?.AvailableQuantity ?? l.AvailableQuantity));
+            return (productTotal, variantTotals);
+        }
+
+        var equipmentTotal = CatalogListingAvailability.SumAvailable(
+            listings.Select(l => l.Inventory?.AvailableQuantity ?? l.AvailableQuantity));
+        return (equipmentTotal, []);
+    }
+
+    private async Task<Dictionary<Guid, int>> GetVariantAvailableSumsAsync(
+        IReadOnlyCollection<Guid> listingIds,
+        CancellationToken cancellationToken)
+    {
+        if (listingIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await vendorDb.VendorVariantInventories
+            .AsNoTracking()
+            .Where(vi => listingIds.Contains(vi.VendorProductListingId))
+            .GroupBy(vi => vi.VendorProductListingId)
+            .Select(g => new { ListingId = g.Key, Available = g.Sum(x => x.AvailableQuantity) })
+            .ToDictionaryAsync(x => x.ListingId, x => x.Available, cancellationToken);
+    }
+
+    private static int ResolvePublicAvailableQuantity(
+        VendorProductListing listing,
+        Product? product,
+        IReadOnlyDictionary<Guid, int> variantAvailableSums)
+    {
+        var isChemical = product?.Category?.IsChemical == true || product?.ChemicalProperty != null;
+        int? variantSum = variantAvailableSums.TryGetValue(listing.Id, out var sum) ? sum : null;
+        var listingLevel = listing.Inventory?.AvailableQuantity ?? listing.AvailableQuantity;
+        return CatalogListingAvailability.ResolveAvailableQuantity(isChemical, listingLevel, variantSum);
     }
 }
 
