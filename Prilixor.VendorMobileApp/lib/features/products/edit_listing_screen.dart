@@ -6,6 +6,7 @@ import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/admin_sizing_pricing.dart';
 
 /// Edit listing status — catalog name is always the Admin product/chemical name.
 class EditListingScreen extends StatefulWidget {
@@ -92,6 +93,14 @@ class _EditListingScreenState extends State<EditListingScreen> {
     }
     _initFromRow(row);
 
+    CatalogProduct? catalogProduct;
+    for (final p in provider.products) {
+      if (p.id == row.listing.productId) {
+        catalogProduct = p;
+        break;
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Edit listing')),
       body: ListView(
@@ -110,6 +119,53 @@ class _EditListingScreenState extends State<EditListingScreen> {
             'Customers always see this Admin product/chemical name.',
             style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
           ),
+          if (row.isChemical) ...[
+            const SizedBox(height: 16),
+            Text(
+              'ADMIN SIZING & PRICING',
+              style: TextStyle(
+                color: context.appColors.textSecondary,
+                fontWeight: FontWeight.w800,
+                fontSize: 11,
+                letterSpacing: 0.8,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+              decoration: BoxDecoration(
+                color: AppTheme.card(context),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.appColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: context.appColors.surfaceElevated,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: context.appColors.border),
+                      ),
+                      child: Text(
+                        'Read-only',
+                        style: TextStyle(
+                          color: context.appColors.textSecondary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  AdminSizingPricingBody(product: catalogProduct),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Text(
             'Status',
