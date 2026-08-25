@@ -1635,12 +1635,12 @@ internal sealed class UpdateProductCommandHandler(
             entity.Variants ??= new List<ProductVariant>();
             foreach (var v in request.Variants)
             {
-                var existing = entity.Variants.FirstOrDefault(x => (!string.IsNullOrEmpty(v.Id) && x.Id == Guid.Parse(v.Id)) || x.Sku == v.Sku);
+                var existing = FindMatchingVariant(entity.Variants, v);
                 if (existing is null)
                 {
                     entity.Variants.Add(new ProductVariant
                     {
-                        Id = string.IsNullOrEmpty(v.Id) ? Guid.NewGuid() : Guid.Parse(v.Id),
+                        Id = Guid.CreateVersion7(),
                         ProductId = entity.Id,
                         Sku = v.Sku,
                         SizeValue = v.SizeValue,
@@ -1661,7 +1661,7 @@ internal sealed class UpdateProductCommandHandler(
                 }
             }
             var toRemove = entity.Variants
-                .Where(x => !request.Variants.Any(v => (!string.IsNullOrEmpty(v.Id) && x.Id == Guid.Parse(v.Id)) || x.Sku == v.Sku))
+                .Where(x => request.Variants.All(v => !VariantMatches(x, v)))
                 .ToList();
             foreach (var tr in toRemove)
             {
@@ -1767,6 +1767,22 @@ internal sealed class UpdateProductCommandHandler(
             0,
             ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver, liveIcons),
             ProductCatalogDocuments.ToDtos(entity, fileUrlResolver)));
+    }
+
+    private static ProductVariant? FindMatchingVariant(
+        IEnumerable<ProductVariant> variants,
+        CreateOrUpdateProductVariantDto dto) =>
+        variants.FirstOrDefault(x => VariantMatches(x, dto));
+
+    private static bool VariantMatches(ProductVariant variant, CreateOrUpdateProductVariantDto dto)
+    {
+        if (!string.IsNullOrWhiteSpace(dto.Id) && Guid.TryParse(dto.Id, out var variantId) && variant.Id == variantId)
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(dto.Sku)
+            && string.Equals(variant.Sku, dto.Sku, StringComparison.OrdinalIgnoreCase);
     }
 }
 
