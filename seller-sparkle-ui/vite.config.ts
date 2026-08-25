@@ -9,7 +9,7 @@ function blinksmedFavicon(): Plugin {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const pathname = req.url?.split("?")[0];
-        if (pathname === "/favicon.ico" || pathname === "/favicon.svg") {
+        if (pathname === "/favicon.ico" || pathname === "/favicon.svg" || pathname === "/bm-icon.png" || pathname === "/bm-icon.ico" || pathname === "/bm-icon.svg") {
           res.setHeader("Cache-Control", "no-store, no-cache, max-age=0");
         }
         next();
