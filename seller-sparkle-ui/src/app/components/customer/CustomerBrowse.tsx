@@ -49,7 +49,7 @@ export function availabilityBadge(
   }
   if (qty <= 0 && totalAcrossVendors > 0) {
     return {
-      label: "Out at this vendor",
+      label: "Currently unavailable",
       className: "pointer-events-none absolute left-3 top-3 border-0 bg-orange-600 text-white hover:bg-orange-600",
     };
   }

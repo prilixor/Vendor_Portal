@@ -9,7 +9,7 @@ import { ListPager } from "@/app/components/shared/ListPager";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
-import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
 import {
@@ -194,7 +194,6 @@ const CustomerOrders = () => {
         (o) =>
           o.orderNumber.toLowerCase().includes(q) ||
           o.listingTitle.toLowerCase().includes(q) ||
-          o.vendorName.toLowerCase().includes(q) ||
           o.id.toLowerCase().includes(q),
       );
     }
@@ -210,7 +209,6 @@ const CustomerOrders = () => {
         (o) =>
           o.orderNumber.toLowerCase().includes(q) ||
           o.listingTitle.toLowerCase().includes(q) ||
-          o.vendorName.toLowerCase().includes(q) ||
           o.id.toLowerCase().includes(q),
       );
     }
@@ -393,7 +391,7 @@ const CustomerOrders = () => {
                                 {o.orderType.toUpperCase()}
                               </Badge>
                               <Badge
-                                title={formatOrderStatusTitle(o.status)}
+                                title={formatCustomerOrderStatusTitle(o.status)}
                                 className={cn("shrink-0", orderStatusBadgeSizeClass, "px-1.5 sm:px-2", orderStatusBadgeClass(o.status))}
                                 variant="outline"
                               >

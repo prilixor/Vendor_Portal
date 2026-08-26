@@ -393,7 +393,7 @@ const CustomerCheckout = () => {
                   >
                     <div className="flex items-center gap-3">
                       <RadioGroupItem value="vendor_pickup" id="delivery-pickup" />
-                      <span className="text-sm font-medium">Vendor pickup</span>
+                      <span className="text-sm font-medium">Pickup in person</span>
                     </div>
                     <span className="shrink-0 text-sm text-muted-foreground">Free</span>
                   </label>
@@ -651,7 +651,7 @@ const CustomerCheckout = () => {
               )}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
-              You&apos;ll be charged after the vendor confirms.
+              You&apos;ll be charged after BlinksMed confirms.
             </p>
           </CardContent>
         </Card>

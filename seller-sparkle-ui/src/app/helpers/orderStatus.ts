@@ -3,6 +3,14 @@ export function formatOrderStatusTitle(status: string): string {
   return status.replace(/_/g, " ");
 }
 
+/**
+ * Customer surfaces must never reveal the fulfilling vendor — BlinksMed is the
+ * only party a customer deals with. Use this for any status shown to customers.
+ */
+export function formatCustomerOrderStatusTitle(status: string): string {
+  return formatOrderStatusTitle(status).replace(/\bvendors?\b/gi, "BlinksMed");
+}
+
 /** Compact list/detail badge label so long statuses stay on one line. */
 export function formatOrderStatusLabel(status: string): string {
   const normalized = status.trim().toLowerCase().replace(/_/g, " ");

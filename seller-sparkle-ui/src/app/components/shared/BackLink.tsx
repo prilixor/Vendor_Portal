@@ -13,8 +13,11 @@ type BackLinkProps = {
 export function BackLink({ to, label, className, onClick }: BackLinkProps) {
   const content = (
     <>
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/80 bg-card text-foreground shadow-2xs transition-all duration-200 group-hover:-translate-x-0.5 group-hover:border-primary/40 group-hover:bg-accent group-hover:shadow-xs">
-        <ChevronLeft className="h-5 w-5" strokeWidth={2.2} />
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-card text-foreground shadow-sm transition-all duration-200 group-hover:border-primary/40 group-hover:bg-accent group-hover:shadow-md">
+        <ChevronLeft
+          className="h-5 w-5 transition-transform duration-200 group-hover:-translate-x-0.5"
+          strokeWidth={2.2}
+        />
       </span>
       <span className="tracking-tight">{label}</span>
     </>
