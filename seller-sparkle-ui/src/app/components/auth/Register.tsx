@@ -123,7 +123,13 @@ const Register = () => {
   };
 
   return (
-    <AuthLayout title="Create your vendor account" subtitle="Start onboarding in less than 5 minutes.">
+    <AuthLayout
+      title="Create your vendor account"
+      subtitle="Start onboarding in less than 5 minutes."
+      portalType="vendor"
+      backTo="/login"
+      backLabel="Back to sign in"
+    >
       <form onSubmit={submit} className="space-y-3.5">
         <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.

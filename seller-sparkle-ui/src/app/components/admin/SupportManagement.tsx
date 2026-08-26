@@ -397,16 +397,14 @@ export default function SupportManagement() {
             <>
               {/* Header */}
               <div className="relative z-10 flex items-start gap-2 border-b border-border bg-card px-3 py-3 shadow-sm sm:items-center sm:px-6 sm:py-5">
-                <Button
+                <button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="mt-0.5 h-9 w-9 shrink-0 lg:hidden"
                   onClick={closeTicket}
                   aria-label="Back to tickets"
+                  className="group mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-card text-foreground shadow-2xs transition-all duration-200 hover:border-primary/40 hover:bg-accent active:scale-95 lg:hidden"
                 >
-                  <ChevronLeft className="h-5 w-5" />
-                </Button>
+                  <ChevronLeft className="h-5 w-5 transition-transform group-hover:-translate-x-0.5" strokeWidth={2.2} />
+                </button>
                 <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center sm:gap-4">
                   <div className={cn("hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-inner sm:flex", getStatusBadge(selectedTicket.status))}>
                     {getStatusIcon(selectedTicket.status)}

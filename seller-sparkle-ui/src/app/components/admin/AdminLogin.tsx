@@ -81,7 +81,13 @@ const AdminLogin = () => {
   };
 
   return (
-    <AuthLayout title="Admin Sign In" subtitle="Access the admin dashboard and manage vendors." portalType="admin">
+    <AuthLayout
+      title="Admin Sign In"
+      subtitle="Access the admin dashboard and manage vendors."
+      portalType="admin"
+      backTo="/"
+      backLabel="Back to home"
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.

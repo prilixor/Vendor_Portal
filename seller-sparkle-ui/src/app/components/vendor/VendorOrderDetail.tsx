@@ -20,6 +20,7 @@ import {
   type OrderContinuationsDto,
 } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
+import { BackLink } from "@/app/components/shared/BackLink";
 import { VendorDoctorLookupDialog } from "@/app/components/vendor/VendorDoctorLookupDialog";
 import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
 
@@ -780,13 +781,7 @@ const VendorOrderDetail = () => {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-6">
-      <Button
-        variant="ghost"
-        className="-ml-2 h-auto px-2 text-sm text-muted-foreground hover:text-foreground"
-        onClick={() => navigate("/vendor/orders")}
-      >
-        ← Back to orders
-      </Button>
+      <BackLink to="/vendor/orders" label="Back to orders" />
 
       <Card className="overflow-hidden border-border/80 shadow-sm">
         {!order ? (

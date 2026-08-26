@@ -8,6 +8,7 @@ import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeCla
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { toast } from "sonner";
+import { BackLink } from "@/app/components/shared/BackLink";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
@@ -350,9 +351,7 @@ const AdminOrderDetail = () => {
   if (!selectedOrder) {
     return (
       <div className="mx-auto max-w-5xl space-y-4">
-        <Button variant="ghost" className="-ml-2 h-auto px-2 text-sm text-muted-foreground" asChild>
-          <Link to="/admin/orders">← Back to orders</Link>
-        </Button>
+        <BackLink to="/admin/orders" label="Back to orders" />
         <p className="text-sm text-muted-foreground">Order not found.</p>
       </div>
     );
@@ -365,13 +364,7 @@ const AdminOrderDetail = () => {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <Button
-        variant="ghost"
-        className="-ml-2 h-auto px-2 text-sm text-muted-foreground hover:text-foreground"
-        onClick={() => navigate("/admin/orders")}
-      >
-        ← Back to orders
-      </Button>
+      <BackLink to="/admin/orders" label="Back to orders" />
 
       {/* Group header */}
       <Card className="overflow-hidden border-border/80 shadow-sm">

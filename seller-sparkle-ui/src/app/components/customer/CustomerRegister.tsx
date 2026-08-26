@@ -62,7 +62,13 @@ const CustomerRegister = () => {
   };
 
   return (
-    <AuthLayout title="Create customer account" subtitle="Rent equipment from verified vendors in one place." portalType="customer">
+    <AuthLayout
+      title="Create customer account"
+      subtitle="Rent equipment from verified vendors in one place."
+      portalType="customer"
+      backTo="/customer/login"
+      backLabel="Back to sign in"
+    >
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3.5">
         <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.

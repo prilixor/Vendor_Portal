@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText, ChevronRight } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
+import { BackLink } from "@/app/components/shared/BackLink";
 import { cn } from "@/app/helpers/utils";
 
 const sections = [
@@ -76,9 +77,7 @@ const TermsAndConditions = () => {
       <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-14 items-center justify-between px-4 lg:px-8">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate(-1)} className="flex shrink-0 h-8 w-8 items-center justify-center rounded-full hover:bg-muted text-muted-foreground transition-colors" aria-label="Go back">
-              <ArrowLeft className="h-4 w-4" />
-            </button>
+            <BackLink onClick={() => navigate(-1)} label="Back" />
             <Link to="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary shadow-sm">
                 <FileText className="h-4 w-4 text-white" />

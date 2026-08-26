@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { BarChart3, Moon, ShieldCheck, Sun, Zap } from "lucide-react";
 import { BrandMark } from "@/app/components/shared/BrandMark";
+import { BackLink } from "@/app/components/shared/BackLink";
 import { Button } from "@/app/components/ui/button";
 
 interface AuthLayoutProps {
@@ -8,6 +9,8 @@ interface AuthLayoutProps {
   title: string;
   subtitle: string;
   portalType?: "vendor" | "customer" | "admin";
+  backTo?: string;
+  backLabel?: string;
 }
 
 const portalContent = {
@@ -49,7 +52,14 @@ const portalContent = {
   },
 };
 
-export const AuthLayout = ({ children, title, subtitle, portalType = "vendor" }: AuthLayoutProps) => {
+export const AuthLayout = ({
+  children,
+  title,
+  subtitle,
+  portalType = "vendor",
+  backTo,
+  backLabel,
+}: AuthLayoutProps) => {
   const content = portalContent[portalType] || portalContent.vendor;
   const [dark, setDark] = useState(() =>
     typeof document === "undefined" ? false : document.documentElement.classList.contains("dark"),
@@ -125,6 +135,11 @@ export const AuthLayout = ({ children, title, subtitle, portalType = "vendor" }:
         </Button>
 
         <div className="auth-form relative w-full max-w-[420px] animate-fade-in">
+          {backTo && (
+            <div className="mb-6">
+              <BackLink to={backTo} label={backLabel ?? "Back"} />
+            </div>
+          )}
           <div className="mb-7 flex items-center gap-3 lg:hidden">
             <BrandMark size="md" rounded="xl" />
             <p className="text-sm font-semibold text-foreground">{content.brandTitle}</p>

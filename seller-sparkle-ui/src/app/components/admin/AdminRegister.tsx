@@ -145,7 +145,13 @@ const AdminRegister = () => {
   };
 
   return (
-    <AuthLayout title="Create admin account" subtitle="Add a new administrator to the system." portalType="admin">
+    <AuthLayout
+      title="Create admin account"
+      subtitle="Add a new administrator to the system."
+      portalType="admin"
+      backTo="/admin/login"
+      backLabel="Back to sign in"
+    >
       <form onSubmit={submit} className="space-y-3.5">
         <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.

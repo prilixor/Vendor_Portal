@@ -80,7 +80,13 @@ const Login = () => {
   };
 
   return (
-    <AuthLayout title="Vendor sign in" subtitle="Access your workspace and manage your listings." portalType="vendor">
+    <AuthLayout
+      title="Vendor sign in"
+      subtitle="Access your workspace and manage your listings."
+      portalType="vendor"
+      backTo="/"
+      backLabel="Back to home"
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.

@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, IconTooltip }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
+import { BackLink } from "@/app/components/shared/BackLink";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 
@@ -671,11 +672,9 @@ const VendorDetails = () => {
 
         <p className="mt-1 text-sm text-muted-foreground">This vendor does not exist or may have been removed.</p>
 
-        <Button className="mt-4" variant="outline" onClick={() => navigate("/admin/vendors")}>
-
-          <ChevronLeft className="mr-2 h-4 w-4" /> Back to vendors
-
-        </Button>
+        <div className="mt-4">
+          <BackLink to="/admin/vendors" label="Back to vendors" />
+        </div>
 
       </Card>
 
@@ -1049,9 +1048,7 @@ const VendorDetails = () => {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button variant="outline" className="h-9 shrink-0 whitespace-nowrap px-2.5 text-xs sm:h-10 sm:px-4 sm:text-sm" onClick={() => navigate("/admin/vendors")}>
-              <ChevronLeft className="mr-1 h-4 w-4 sm:mr-2" /> Back
-            </Button>
+            <BackLink to="/admin/vendors" label="Back to vendors" />
             </div>
             </div>
 
