@@ -64,7 +64,7 @@ const CustomerRegister = () => {
   return (
     <AuthLayout
       title="Create customer account"
-      subtitle="Rent equipment from verified vendors in one place."
+      subtitle="Rent verified medical equipment from BlinksMed in one place."
       portalType="customer"
       backTo="/customer/login"
       backLabel="Back to sign in"
