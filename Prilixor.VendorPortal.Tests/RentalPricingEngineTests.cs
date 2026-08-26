@@ -16,27 +16,50 @@ public class RentalPricingEngineTests
         var result = RentalPricingEngine.Calculate(100m, 10_000m, durations, options: Options);
 
         Assert.Equal([10, 30, 45, 60, 180], result.Plans.Select(p => p.DurationDays).ToArray());
-        Assert.Equal(90, result.EconomicMaximumDays);
+        Assert.Equal(60, result.EconomicMaximumDays);
         Assert.True(result.Plans.Single(p => p.DurationDays == 60).IsEligible);
         Assert.False(result.Plans.Single(p => p.DurationDays == 180).IsEligible);
     }
 
     [Fact]
-    public void Example_daily_rate_and_buy_price_selects_largest_plan_at_or_below_economic_max()
+    public void Prompt_example_selects_112_day_max_plan_and_integer_curve()
     {
-        var durations = Durations((7, 7), (14, 14), (21, 21), (28, 28), (42, 42), (56, 56), (70, 70), (84, 84));
+        var durations = Durations(
+            (7, 7), (14, 14), (21, 21), (28, 28), (42, 42), (56, 56),
+            (70, 70), (84, 84), (98, 98), (112, 112), (126, 126), (140, 140));
 
-        var result = RentalPricingEngine.Calculate(166.25m, 10_000m, durations, options: Options);
+        var result = RentalPricingEngine.Calculate(210m, 25_000m, durations, options: Options);
+        var byDays = result.Plans.ToDictionary(p => p.DurationDays);
 
-        Assert.Equal(54, result.EconomicMaximumDays);
-        Assert.Equal(5, result.EligibleCount);
-        Assert.Equal([7, 14, 21, 28, 42], result.Plans.Where(p => p.IsEligible).Select(p => p.DurationDays).ToArray());
-        Assert.Equal([56, 70, 84], result.Plans.Where(p => !p.IsEligible).Select(p => p.DurationDays).ToArray());
-        Assert.Equal(6982.50m, result.Plans.Single(p => p.DurationDays == 42).BasePrice);
+        Assert.Equal(112, result.EconomicMaximumDays);
+        Assert.Equal(10, result.EligibleCount);
+        Assert.Equal(
+            [7, 14, 21, 28, 42, 56, 70, 84, 98, 112],
+            result.Plans.Where(p => p.IsEligible).Select(p => p.DurationDays).ToArray());
+        Assert.Equal([126, 140], result.Plans.Where(p => !p.IsEligible).Select(p => p.DurationDays).ToArray());
+
+        Assert.Equal(0m, byDays[7].DiscountValue);
+        Assert.Equal(1m, byDays[14].DiscountValue);
+        Assert.Equal(1m, byDays[21].DiscountValue);
+        Assert.Equal(2m, byDays[28].DiscountValue);
+        Assert.Equal(4m, byDays[42].DiscountValue);
+        Assert.Equal(6m, byDays[56].DiscountValue);
+        Assert.Equal(9m, byDays[70].DiscountValue);
+        Assert.Equal(13m, byDays[84].DiscountValue);
+        Assert.Equal(16m, byDays[98].DiscountValue);
+        Assert.Equal(20m, byDays[112].DiscountValue);
+        Assert.Equal(0m, byDays[126].DiscountValue);
+        Assert.False(byDays[126].IsEligible);
+
+        Assert.Equal(1470m, byDays[7].BasePrice);
+        Assert.Equal(1470m, byDays[7].FinalPrice);
+        Assert.Equal(23520m, byDays[112].BasePrice);
+        Assert.True(byDays[112].FinalPrice < byDays[112].BasePrice);
+        Assert.Equal(RentalPricingPlanMath.None, byDays[112].PersistDiscountType);
     }
 
     [Fact]
-    public void New_duration_becomes_eligible_when_below_economic_maximum()
+    public void New_duration_becomes_eligible_when_base_amount_does_not_exceed_buy_price()
     {
         var without50 = Durations((7, 7), (14, 14), (21, 21), (28, 28), (42, 42), (56, 56));
         var with50 = Durations((7, 7), (14, 14), (21, 21), (28, 28), (42, 42), (50, 50), (56, 56));
@@ -44,10 +67,9 @@ public class RentalPricingEngineTests
         var before = RentalPricingEngine.Calculate(166.25m, 10_000m, without50, options: Options);
         var after = RentalPricingEngine.Calculate(166.25m, 10_000m, with50, options: Options);
 
-        Assert.Equal(42, before.Plans.Where(p => p.IsEligible).Max(p => p.DurationDays));
-        Assert.Equal(50, after.Plans.Where(p => p.IsEligible).Max(p => p.DurationDays));
+        Assert.Equal(56, before.Plans.Where(p => p.IsEligible).Max(p => p.DurationDays));
         Assert.True(after.Plans.Single(p => p.DurationDays == 50).IsEligible);
-        Assert.False(after.Plans.Single(p => p.DurationDays == 56).IsEligible);
+        Assert.True(after.Plans.Single(p => p.DurationDays == 56).IsEligible);
     }
 
     [Fact]
@@ -69,51 +91,108 @@ public class RentalPricingEngineTests
     }
 
     [Fact]
-    public void Minimum_eligible_plan_gets_zero_discount_and_maximum_can_reach_configured_max()
+    public void Unsorted_and_duplicate_master_ids_are_normalized()
+    {
+        var seven = Guid.NewGuid();
+        var fourteen = Guid.NewGuid();
+        var durations = new List<RentalDurationPricingInput>
+        {
+            new(fourteen, "14 Days", 14, 0.5m, 2),
+            new(seven, "7 Days", 7, 0.25m, 1),
+            new(seven, "7 Days dup", 7, 0.25m, 9),
+            new(Guid.NewGuid(), "112 Days", 112, 4m, 3),
+        };
+
+        var result = RentalPricingEngine.Calculate(210m, 25_000m, durations, options: Options);
+
+        Assert.Equal([7, 14, 112], result.Plans.Select(p => p.DurationDays).ToArray());
+        Assert.Equal(0m, result.Plans.Single(p => p.DurationDays == 7).DiscountValue);
+        Assert.Equal(20m, result.Plans.Single(p => p.DurationDays == 112).DiscountValue);
+    }
+
+    [Fact]
+    public void Seven_day_plan_is_always_zero_and_max_plan_is_twenty()
     {
         var durations = Durations((7, 7), (14, 14), (21, 21), (28, 28), (42, 42));
-
         var result = RentalPricingEngine.Calculate(166.25m, 10_000m, durations, options: Options);
-        var eligible = result.Plans.Where(p => p.IsEligible).ToList();
+        var eligible = result.Plans.Where(p => p.IsEligible).OrderBy(p => p.DurationDays).ToList();
 
         Assert.Equal(0m, eligible[0].DiscountValue);
+        Assert.Equal(7, eligible[0].DurationDays);
         Assert.Equal(20m, eligible[^1].DiscountValue);
-        Assert.Equal(RentalPricingPlanMath.None, eligible[^1].PersistDiscountType);
         Assert.True(eligible[^1].IsAutomatic);
     }
 
     [Fact]
-    public void Automatic_discounts_round_down_to_five_percent_steps_and_never_exceed_max()
+    public void Automatic_discounts_round_to_nearest_integer_not_five_percent_steps()
     {
-        Assert.Equal(0m, RentalPricingEngine.RoundAutomaticDiscountPercent(4.3m, Options));
-        Assert.Equal(5m, RentalPricingEngine.RoundAutomaticDiscountPercent(7.8m, Options));
-        Assert.Equal(10m, RentalPricingEngine.RoundAutomaticDiscountPercent(11.4m, Options));
-        Assert.Equal(15m, RentalPricingEngine.RoundAutomaticDiscountPercent(15.1m, Options));
-        Assert.Equal(15m, RentalPricingEngine.RoundAutomaticDiscountPercent(18.2m, Options));
+        Assert.Equal(2m, RentalPricingEngine.RoundAutomaticDiscountPercent(1.79m, Options));
+        Assert.Equal(4m, RentalPricingEngine.RoundAutomaticDiscountPercent(3.85m, Options));
+        Assert.Equal(6m, RentalPricingEngine.RoundAutomaticDiscountPercent(6.38m, Options));
+        Assert.Equal(9m, RentalPricingEngine.RoundAutomaticDiscountPercent(9.30m, Options));
+        Assert.Equal(13m, RentalPricingEngine.RoundAutomaticDiscountPercent(12.56m, Options));
+        Assert.Equal(16m, RentalPricingEngine.RoundAutomaticDiscountPercent(16.14m, Options));
         Assert.Equal(20m, RentalPricingEngine.RoundAutomaticDiscountPercent(20m, Options));
         Assert.Equal(20m, RentalPricingEngine.RoundAutomaticDiscountPercent(25m, Options));
+        Assert.Equal(0m, RentalPricingEngine.RoundAutomaticDiscountPercent(0.4m, Options));
+        Assert.Equal(1m, RentalPricingEngine.RoundAutomaticDiscountPercent(0.5m, Options));
     }
 
     [Fact]
-    public void Intermediate_example_discounts_use_curve_then_round_down()
+    public void Legacy_five_percent_and_ninety_percent_config_cannot_change_automatic_math()
     {
-        var durations = Durations((7, 7), (14, 14), (21, 21), (28, 28), (42, 42));
-        var result = RentalPricingEngine.Calculate(166.25m, 10_000m, durations, options: Options);
+        var stale = new RentalPricingOptions
+        {
+            TargetRecoveryPercentage = 90m,
+            DiscountStepPercent = 5m,
+            MaximumDiscountPercent = 20m,
+            DiscountCurveExponent = 1.5,
+            MinimumPlanDays = 7,
+        };
+        var durations = Durations(
+            (7, 7), (14, 14), (21, 21), (28, 28), (42, 42), (56, 56),
+            (70, 70), (84, 84), (98, 98), (112, 112), (126, 126));
+
+        var result = RentalPricingEngine.Calculate(210m, 25_000m, durations, options: stale);
         var byDays = result.Plans.ToDictionary(p => p.DurationDays);
 
-        Assert.Equal(0m, byDays[7].DiscountValue);
-        Assert.Equal(0m, byDays[14].DiscountValue);
-        Assert.Equal(5m, byDays[21].DiscountValue);
-        Assert.Equal(5m, byDays[28].DiscountValue);
-        Assert.Equal(20m, byDays[42].DiscountValue);
-        Assert.Equal(1163.75m, byDays[7].BasePrice);
-        Assert.Equal(1163.75m, byDays[7].FinalPrice);
-        Assert.True(byDays[21].DiscountAmount > 0m);
-        Assert.True(byDays[21].FinalPrice < byDays[21].BasePrice);
+        Assert.Equal(112, result.EconomicMaximumDays);
+        Assert.True(byDays[112].IsEligible);
+        Assert.Equal(1m, byDays[14].DiscountValue);
+        Assert.Equal(20m, byDays[112].DiscountValue);
     }
 
     [Fact]
-    public void Only_one_eligible_plan_gets_zero_automatic_discount()
+    public void Plan_greater_than_seven_days_gets_at_least_one_percent()
+    {
+        var durations = Durations((7, 7), (14, 14), (112, 112));
+        var result = RentalPricingEngine.Calculate(210m, 25_000m, durations, options: Options);
+        var fourteen = result.Plans.Single(p => p.DurationDays == 14);
+
+        Assert.True(fourteen.IsEligible);
+        Assert.True(fourteen.DiscountValue >= 1m);
+        Assert.Equal(1m, fourteen.DiscountValue);
+    }
+
+    [Fact]
+    public void Discounts_never_decrease_as_duration_increases()
+    {
+        var durations = Durations(
+            (7, 7), (14, 14), (21, 21), (28, 28), (42, 42), (56, 56),
+            (70, 70), (84, 84), (98, 98), (112, 112));
+        var result = RentalPricingEngine.Calculate(210m, 25_000m, durations, options: Options);
+        var eligible = result.Plans.Where(p => p.IsEligible).OrderBy(p => p.DurationDays).ToList();
+
+        for (var i = 1; i < eligible.Count; i++)
+        {
+            Assert.True(
+                eligible[i].DiscountValue >= eligible[i - 1].DiscountValue,
+                $"{eligible[i].DurationDays}d discount {eligible[i].DiscountValue} fell below {eligible[i - 1].DurationDays}d {eligible[i - 1].DiscountValue}");
+        }
+    }
+
+    [Fact]
+    public void Only_seven_day_plan_gets_zero_automatic_discount()
     {
         var durations = Durations((7, 7), (90, 90));
         var result = RentalPricingEngine.Calculate(166.25m, 10_000m, durations, options: Options);
@@ -123,6 +202,30 @@ public class RentalPricingEngineTests
         Assert.Equal(7, eligible[0].DurationDays);
         Assert.Equal(0m, eligible[0].DiscountValue);
         Assert.Equal(eligible[0].BasePrice, eligible[0].FinalPrice);
+        Assert.False(result.Plans.Single(p => p.DurationDays == 90).IsEligible);
+    }
+
+    [Fact]
+    public void Single_eligible_plan_longer_than_seven_days_gets_max_discount()
+    {
+        var durations = Durations((14, 14), (180, 180));
+        var result = RentalPricingEngine.Calculate(210m, 25_000m, durations, options: Options);
+        var fourteen = result.Plans.Single(p => p.DurationDays == 14);
+
+        Assert.True(fourteen.IsEligible);
+        Assert.Equal(20m, fourteen.DiscountValue);
+        Assert.False(result.Plans.Single(p => p.DurationDays == 180).IsEligible);
+    }
+
+    [Fact]
+    public void Plan_shorter_than_seven_days_stays_at_zero_percent()
+    {
+        var durations = Durations((5, 5), (7, 7), (14, 14), (112, 112));
+        var result = RentalPricingEngine.Calculate(210m, 25_000m, durations, options: Options);
+
+        Assert.Equal(0m, result.Plans.Single(p => p.DurationDays == 5).DiscountValue);
+        Assert.Equal(0m, result.Plans.Single(p => p.DurationDays == 7).DiscountValue);
+        Assert.True(result.Plans.Single(p => p.DurationDays == 14).DiscountValue >= 1m);
     }
 
     [Fact]
@@ -139,6 +242,20 @@ public class RentalPricingEngineTests
             Assert.Equal(0m, p.DiscountValue);
             Assert.Equal(p.DurationDays * 100m, p.BasePrice);
             Assert.Equal(p.BasePrice, p.FinalPrice);
+        });
+    }
+
+    [Fact]
+    public void Buy_price_below_first_plan_marks_all_plans_unavailable()
+    {
+        var durations = Durations((7, 7), (14, 14));
+        var result = RentalPricingEngine.Calculate(210m, 100m, durations, options: Options);
+
+        Assert.Equal(0, result.EligibleCount);
+        Assert.All(result.Plans, p =>
+        {
+            Assert.False(p.IsEligible);
+            Assert.Equal(0m, p.DiscountValue);
         });
     }
 
@@ -241,6 +358,7 @@ public class RentalPricingEngineTests
         Assert.True(popular[0].IsEligible);
         Assert.Equal(21, popular[0].DurationDays);
         Assert.Equal(2, RentalPricingEngine.MiddleIndex(5));
+        Assert.Equal(2, RentalPricingEngine.MiddleIndex(6));
     }
 
     [Fact]
@@ -263,11 +381,14 @@ public class RentalPricingEngineTests
     }
 
     [Fact]
-    public void Economic_maximum_uses_floor_of_recovery_divided_by_daily_rate()
+    public void Economic_maximum_uses_floor_of_buy_price_divided_by_daily_rate()
     {
-        Assert.Equal(54, RentalPricingEngine.CalculateEconomicMaximumDays(166.25m, 10_000m, Options));
+        Assert.Equal(119, RentalPricingEngine.CalculateEconomicMaximumDays(210m, 25_000m, Options));
+        Assert.Equal(60, RentalPricingEngine.CalculateEconomicMaximumDays(166.25m, 10_000m, Options));
         Assert.Null(RentalPricingEngine.CalculateEconomicMaximumDays(166.25m, null, Options));
         Assert.Null(RentalPricingEngine.CalculateEconomicMaximumDays(0m, 10_000m, Options));
+        Assert.True(RentalPricingEngine.IsWithinBuyPrice(112, 210m, 25_000m));
+        Assert.False(RentalPricingEngine.IsWithinBuyPrice(126, 210m, 25_000m));
     }
 
     private static List<RentalDurationPricingInput> Durations(params (int Sort, int Days)[] items) =>

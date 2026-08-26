@@ -348,7 +348,7 @@ public class ApplicationDbContext : DbContext
         {
             entity.ToTable("chemical_properties");
             entity.HasKey(x => x.Id);
-            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
             entity.Property(x => x.ProductId).HasColumnName("product_id");
             entity.Property(x => x.CasNumber).HasColumnName("cas_number");
             entity.Property(x => x.ChemicalFormula).HasColumnName("chemical_formula");
@@ -367,7 +367,7 @@ public class ApplicationDbContext : DbContext
         {
             entity.ToTable("product_variants");
             entity.HasKey(x => x.Id);
-            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
             entity.Property(x => x.ProductId).HasColumnName("product_id");
             entity.Property(x => x.Sku).HasColumnName("sku");
             entity.Property(x => x.SizeValue).HasColumnName("size_value");

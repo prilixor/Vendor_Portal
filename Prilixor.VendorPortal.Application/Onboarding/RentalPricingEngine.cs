@@ -88,26 +88,32 @@ public static class RentalPricingEngine
         }
 
         var rate = dailyRate;
-        var economicMaximumDays = CalculateEconomicMaximumDays(rate, buyPrice, options);
-        var hasBuyPriceCap = economicMaximumDays.HasValue;
+        var hasBuyPriceCap = buyPrice is > 0m;
+        var theoreticalMaximumDays = CalculateEconomicMaximumDays(rate, buyPrice);
 
         var eligible = new List<RentalDurationPricingInput>();
         foreach (var duration in orderedDurations)
         {
-            if (!hasBuyPriceCap || duration.DurationDays <= economicMaximumDays)
+            if (!hasBuyPriceCap || IsWithinBuyPrice(duration.DurationDays, rate, buyPrice!.Value))
             {
                 eligible.Add(duration);
             }
         }
 
-        var autoDiscountByMaster = CalculateAutomaticDiscounts(eligible, options);
+        var economicMaximumDays = hasBuyPriceCap && eligible.Count > 0
+            ? eligible[^1].DurationDays
+            : theoreticalMaximumDays;
+
+        var autoDiscountByMaster = hasBuyPriceCap
+            ? CalculateAutomaticDiscounts(eligible, options)
+            : eligible.ToDictionary(d => d.Id, _ => 0m);
         var recommendedMasterId = SelectMostPopularDurationId(eligible, existingByMaster, resetManualOverrides);
 
         var plans = new List<ComputedRentalPlan>(orderedDurations.Count);
         foreach (var duration in orderedDurations)
         {
             existingByMaster.TryGetValue(duration.Id, out var existing);
-            var isEligible = !hasBuyPriceCap || duration.DurationDays <= economicMaximumDays;
+            var isEligible = !hasBuyPriceCap || IsWithinBuyPrice(duration.DurationDays, rate, buyPrice!.Value);
             var basePrice = RoundMoney(rate * duration.DurationDays);
             var isManual = !resetManualOverrides
                 && existing is not null
@@ -169,7 +175,8 @@ public static class RentalPricingEngine
     }
 
     /// <summary>
-    /// Floor(buyPrice × recovery% ÷ dailyRate). Null when buy price cannot be used as an economic cap.
+    /// Floor(buyPrice ÷ dailyRate). Null when buy price cannot be used as an economic cap.
+    /// Eligible plans are those whose base amount (days × daily rate) does not exceed buy price.
     /// </summary>
     public static int? CalculateEconomicMaximumDays(
         decimal dailyRate,
@@ -181,16 +188,12 @@ public static class RentalPricingEngine
             return null;
         }
 
-        options ??= new RentalPricingOptions();
-        var recoveryPercent = Math.Clamp(options.TargetRecoveryPercentage, 0m, 100m);
-        var targetAmount = buyPrice.Value * (recoveryPercent / 100m);
-        if (targetAmount <= 0m)
-        {
-            return 0;
-        }
-
-        return (int)decimal.Floor(targetAmount / dailyRate);
+        _ = options;
+        return (int)decimal.Floor(buyPrice.Value / dailyRate);
     }
+
+    public static bool IsWithinBuyPrice(int durationDays, decimal dailyRate, decimal buyPrice) =>
+        durationDays > 0 && dailyRate > 0m && buyPrice > 0m && (dailyRate * durationDays) <= buyPrice;
 
     /// <summary>
     /// Isolated most-popular rule: keep a manual plan's recommendation when still eligible; otherwise the middle eligible duration.
@@ -231,26 +234,23 @@ public static class RentalPricingEngine
         return (eligibleCount - 1) / 2;
     }
 
+    /// <summary>
+    /// Nearest whole-integer percent, clamped to 0…MaximumDiscountPercent.
+    /// </summary>
     public static decimal RoundAutomaticDiscountPercent(
         decimal rawPercent,
         RentalPricingOptions? options = null)
     {
         options ??= new RentalPricingOptions();
         var max = Math.Max(0m, options.MaximumDiscountPercent);
-        var step = options.DiscountStepPercent;
         var raw = Math.Clamp(rawPercent, 0m, max);
-        if (step <= 0m)
+        var rounded = decimal.Round(raw, 0, MidpointRounding.AwayFromZero);
+        if (rounded > max)
         {
-            return decimal.Round(raw, 2, MidpointRounding.ToZero);
+            rounded = max;
         }
 
-        var stepped = decimal.Floor(raw / step) * step;
-        if (stepped > max)
-        {
-            stepped = max;
-        }
-
-        return stepped < 0m ? 0m : stepped;
+        return rounded < 0m ? 0m : rounded;
     }
 
     private static Dictionary<Guid, decimal> CalculateAutomaticDiscounts(
@@ -263,29 +263,50 @@ public static class RentalPricingEngine
             return result;
         }
 
-        if (eligible.Count == 1)
-        {
-            result[eligible[0].Id] = 0m;
-            return result;
-        }
-
-        var minDays = eligible[0].DurationDays;
-        var maxDays = eligible[^1].DurationDays;
-        var span = maxDays - minDays;
+        var minAnchor = options.MinimumPlanDays > 0 ? options.MinimumPlanDays : 7;
         var maxDiscount = Math.Max(0m, options.MaximumDiscountPercent);
+        var maxDiscountInteger = RoundAutomaticDiscountPercent(maxDiscount, options);
         var exponent = options.DiscountCurveExponent <= 0 ? 1d : options.DiscountCurveExponent;
+        var maxDays = eligible[^1].DurationDays;
 
         foreach (var duration in eligible)
         {
+            if (duration.DurationDays <= minAnchor)
+            {
+                result[duration.Id] = 0m;
+                continue;
+            }
+
+            if (maxDays > minAnchor && duration.DurationDays == maxDays)
+            {
+                result[duration.Id] = maxDiscountInteger;
+                continue;
+            }
+
+            var span = maxDays - minAnchor;
             if (span <= 0)
             {
                 result[duration.Id] = 0m;
                 continue;
             }
 
-            var progress = Math.Clamp((double)(duration.DurationDays - minDays) / span, 0d, 1d);
+            var progress = Math.Clamp((double)(duration.DurationDays - minAnchor) / span, 0d, 1d);
             var raw = (decimal)((double)maxDiscount * Math.Pow(progress, exponent));
-            result[duration.Id] = RoundAutomaticDiscountPercent(raw, options);
+            var rounded = RoundAutomaticDiscountPercent(raw, options);
+            result[duration.Id] = rounded < 1m ? 1m : rounded;
+        }
+
+        decimal previous = 0m;
+        foreach (var duration in eligible)
+        {
+            var current = result[duration.Id];
+            if (current < previous)
+            {
+                current = previous;
+            }
+
+            result[duration.Id] = current;
+            previous = current;
         }
 
         return result;
