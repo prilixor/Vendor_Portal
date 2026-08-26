@@ -52,10 +52,17 @@ export const LandingHeader = ({ activeSection = "home", onSectionClick, settings
       e.preventDefault();
       if (onSectionClick) {
         onSectionClick(sectionId);
-      }
-      const el = document.getElementById(sectionId);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        if (sectionId === "home") {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else {
+          const el = document.getElementById(sectionId);
+          if (el) {
+            const headerOffset = 80;
+            const offsetPosition = el.getBoundingClientRect().top + window.pageYOffset - headerOffset;
+            window.scrollTo({ top: offsetPosition, behavior: "smooth" });
+          }
+        }
       }
     } else if (pagePath && location.pathname === pagePath) {
       // Stay on page
