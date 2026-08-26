@@ -22,9 +22,11 @@ import {
   MessageSquare,
   Package,
   FileText,
+  Loader2,
   LucideIcon,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { cn } from "@/app/helpers/utils";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -291,6 +293,30 @@ const Notifications = () => {
     }
   };
 
+  const activateNotification = (n: Notification) => {
+    if (!n.read) {
+      void toggleRead(n.id);
+    }
+    let route = getVendorRoute(n.notificationType, n.title);
+
+    if (route === VENDOR_SUPPORT_PANEL_ROUTE) {
+      openSupportPanel();
+      return;
+    }
+
+    // Try to extract order ID from message
+    const uuidRegex = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+    const match = n.message.match(uuidRegex);
+
+    if (route === "/vendor/orders" && match) {
+      route = `/vendor/orders/${match[1]}`;
+    }
+
+    if (route) {
+      navigate(route);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -308,12 +334,17 @@ const Notifications = () => {
         <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
       )}
 
-      {hasLoaded && !busy && (
+      {hasLoaded && (
         <>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
           <div className="flex items-center justify-between border-b border-border pb-4">
-            <h2 className="font-semibold">Inbox</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold">Inbox</h2>
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Refreshing" />
+              ) : null}
+            </div>
             <Tabs value={filter} onValueChange={(v: string) => { setFilter(v as "all" | "unread"); setPage(1); }}>
               <TabsList>
                 <TabsTrigger value="all">All</TabsTrigger>
@@ -338,70 +369,60 @@ const Notifications = () => {
                 n.notificationType ?? "",
               );
               return (
-                <li
-                  key={n.id}
-                  className={`flex cursor-pointer flex-col items-stretch gap-3 p-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-start ${!n.read ? "bg-primary-soft/30" : ""}`}
-                  onClick={() => {
-                    if (!n.read) {
-                      void toggleRead(n.id);
-                    }
-                    let route = getVendorRoute(n.notificationType, n.title);
-
-                    if (route === VENDOR_SUPPORT_PANEL_ROUTE) {
-                      openSupportPanel();
-                      return;
-                    }
-                    
-                    // Try to extract order ID from message
-                    const uuidRegex = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
-                    const match = n.message.match(uuidRegex);
-                    
-                    if (route === "/vendor/orders" && match) {
-                      route = `/vendor/orders/${match[1]}`;
-                    }
-
-                    if (route) {
-                      navigate(route);
-                    }
-                  }}
-                >
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${cls}`}>
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start gap-2">
-                        <p className="min-w-0 flex-1 text-sm font-semibold break-words">{n.title}</p>
-                        {!n.read && (
-                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden />
-                        )}
-                      </div>
-                      {body && (
-                        <p className="mt-0.5 text-sm text-muted-foreground break-words">{body}</p>
-                      )}
-                      {adminComment && (
-                        <AdminCommentHint
-                          className="mt-2"
-                          comment={adminComment}
-                        />
-                      )}
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 shrink-0 self-start px-2 text-xs sm:self-auto sm:text-sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void toggleRead(n.id);
+                <li key={n.id}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className={cn(
+                      "relative flex cursor-pointer flex-col items-stretch gap-3 p-4 transition-colors hover:bg-muted/30 focus-visible:bg-muted/40 focus-visible:outline-none sm:flex-row sm:items-start",
+                      !n.read && "bg-primary-soft/30",
+                    )}
+                    onClick={() => activateNotification(n)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        activateNotification(n);
+                      }
                     }}
-                    disabled={busy}
                   >
-                    Mark {n.read ? "unread" : "read"}
-                  </Button>
+                    {!n.read ? (
+                      <span className="absolute inset-y-0 left-0 w-[3px] bg-primary" aria-hidden />
+                    ) : null}
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${cls}`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={cn("text-sm break-words", n.read ? "font-medium" : "font-semibold")}>
+                          {n.title}
+                        </p>
+                        {body && (
+                          <p className="mt-0.5 text-sm text-muted-foreground break-words">{body}</p>
+                        )}
+                        {adminComment && (
+                          <AdminCommentHint
+                            className="mt-2"
+                            comment={adminComment}
+                          />
+                        )}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 shrink-0 self-start px-2 text-xs sm:self-auto sm:text-sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void toggleRead(n.id);
+                      }}
+                      disabled={busy}
+                    >
+                      Mark {n.read ? "unread" : "read"}
+                    </Button>
+                  </div>
                 </li>
               );
             })}
