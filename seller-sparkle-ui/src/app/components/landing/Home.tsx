@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import "./landing.css";
 import { LandingHeader } from "./LandingHeader";
 import { LandingFooter } from "./LandingFooter";
@@ -12,8 +12,12 @@ import { FAQSection } from "./FAQSection";
 import { useQuery } from "@tanstack/react-query";
 import { websiteContentApi } from "@/app/services/websiteContentApi";
 
+const sectionIds = ["home", "about", "services", "how-it-works", "rent-or-buy", "contact"];
+
 export const Home = () => {
   const [activeSection, setActiveSection] = useState("home");
+  const isClickScrollingRef = useRef(false);
+  const clickTimeoutRef = useRef<number | null>(null);
 
   // Fetch API-driven dynamic public content
   const { data, isLoading } = useQuery({
@@ -22,6 +26,34 @@ export const Home = () => {
     staleTime: 1000 * 60 * 5, // 5 minutes cache
     retry: 1,
   });
+
+  const handleSectionClick = useCallback((sectionId: string) => {
+    setActiveSection(sectionId);
+    isClickScrollingRef.current = true;
+
+    if (clickTimeoutRef.current) {
+      window.clearTimeout(clickTimeoutRef.current);
+    }
+
+    if (sectionId === "home") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      const el = document.getElementById(sectionId);
+      if (el) {
+        const headerOffset = 80;
+        const offsetPosition = el.getBoundingClientRect().top + window.pageYOffset - headerOffset;
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: "smooth",
+        });
+      }
+    }
+
+    // Lock scroll spy while smooth scroll is taking place so underline doesn't flicker
+    clickTimeoutRef.current = window.setTimeout(() => {
+      isClickScrollingRef.current = false;
+    }, 900);
+  }, []);
 
   useEffect(() => {
     // Scroll reveal observer
@@ -40,10 +72,10 @@ export const Home = () => {
     revealEls.forEach((el) => revealObs.observe(el));
 
     // ScrollSpy listener for reliable section activation on manual scroll
-    const sectionIds = ["home", "about", "services", "how-it-works", "rent-or-buy", "contact"];
-
     const handleScrollSpy = () => {
-      const headerOffset = 140; // Accounts for sticky header offset
+      if (isClickScrollingRef.current) return;
+
+      const headerOffset = 130;
       const scrollPosition = window.scrollY + headerOffset;
 
       // Top of page
@@ -53,7 +85,7 @@ export const Home = () => {
       }
 
       // Bottom of page
-      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 50) {
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 60) {
         setActiveSection("contact");
         return;
       }
@@ -62,7 +94,7 @@ export const Home = () => {
       for (const id of sectionIds) {
         const el = document.getElementById(id);
         if (el) {
-          const top = el.offsetTop;
+          const top = el.getBoundingClientRect().top + window.scrollY;
           if (scrollPosition >= top) {
             currentSection = id;
           }
@@ -77,22 +109,21 @@ export const Home = () => {
     // Hash link scrolling if navigated with hash
     if (window.location.hash) {
       const id = window.location.hash.substring(1);
-      const el = document.getElementById(id);
-      if (el) {
+      if (sectionIds.includes(id)) {
         setTimeout(() => {
-          el.scrollIntoView({ behavior: "smooth", block: "start" });
-          if (sectionIds.includes(id)) {
-            setActiveSection(id);
-          }
-        }, 100);
+          handleSectionClick(id);
+        }, 150);
       }
     }
 
     return () => {
       revealObs.disconnect();
       window.removeEventListener("scroll", handleScrollSpy);
+      if (clickTimeoutRef.current) {
+        window.clearTimeout(clickTimeoutRef.current);
+      }
     };
-  }, []);
+  }, [handleSectionClick]);
 
   return (
     <div className="bm-landing-body">
@@ -101,7 +132,11 @@ export const Home = () => {
         <span className="bm-orb bm-orb--2"></span>
       </div>
 
-      <LandingHeader activeSection={activeSection} onSectionClick={(id) => setActiveSection(id)} settings={data?.settings} />
+      <LandingHeader
+        activeSection={activeSection}
+        onSectionClick={handleSectionClick}
+        settings={data?.settings}
+      />
 
       <main>
         <HeroSection data={data?.home} />
