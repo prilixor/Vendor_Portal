@@ -343,14 +343,11 @@ const CustomerListingDetail = () => {
   };
 
   return (
-    <div className="relative min-w-0 max-w-full overflow-x-clip space-y-5">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-        <div className="absolute -right-6 top-8 h-36 w-36 rounded-full bg-primary/10 blur-3xl" />
-      </div>
+    <div className="relative mx-auto min-w-0 max-w-[1080px] overflow-x-clip space-y-5">
       <BackLink to="/customer/shop" label="Back to shop" />
 
-      <div className="relative grid min-w-0 gap-8 lg:grid-cols-2 lg:gap-10">
-        <div className="min-w-0">
+      <div className="relative grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] xl:gap-10">
+        <div className="min-w-0 lg:sticky lg:top-20">
           <ProductImageGallery images={images} alt={data.title} />
         </div>
 
@@ -794,7 +791,6 @@ const CustomerListingDetail = () => {
         onConfirmBuy={() => {
           if (!canBuy || unitPrice <= 0) return;
           setOrderType("buy");
-          setPeriods(1);
         }}
       />
     </div>
