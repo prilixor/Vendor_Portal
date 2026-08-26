@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { formatDistanceToNow } from "date-fns";
 import {
   CheckCheck,
   Bell,
   Camera,
+  ChevronRight,
   ShoppingBag,
   Truck,
   CreditCard,
@@ -26,6 +26,7 @@ import { Card } from "@/app/components/ui/card";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { ListPager } from "@/app/components/shared/ListPager";
 import { cn } from "@/app/helpers/utils";
+import { customerNotificationCopy } from "@/app/helpers/customerNotificationCopy";
 import { toast } from "sonner";
 
 export const customerNotificationsQueryKey = ["customer-notifications"] as const;
@@ -95,10 +96,26 @@ function getCustomerNotificationVisual(notificationType?: string, title: string 
   return { icon: Bell, cls: "bg-primary/10 text-primary" };
 }
 
-function relativeTime(iso: string): string {
+/** Compact age keeps the right-hand meta column aligned instead of ragged. */
+function compactAge(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return formatDistanceToNow(d, { addSuffix: true });
+  const minutes = Math.max(0, Math.floor((Date.now() - d.getTime()) / 60000));
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
+  if (days < 30) return `${Math.floor(days / 7)}w`;
+  if (days < 365) return `${Math.floor(days / 30)}mo`;
+  return `${Math.floor(days / 365)}y`;
+}
+
+function absoluteTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
 const getCustomerRoute = (notificationType?: string, title?: string): string | null => {
@@ -238,9 +255,20 @@ const CustomerNotifications = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
+            {!isLoading && unreadCount > 0 ? (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-primary">
+                {unreadCount}
+              </span>
+            ) : null}
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {isLoading ? "Loading…" : unreadCount === 0 ? "All caught up" : `${unreadCount} unread`}
+            {isLoading
+              ? "Loading…"
+              : unreadCount === 0
+                ? "You're all caught up"
+                : `${unreadCount} unread of ${notifications.length}`}
           </p>
         </div>
         <Button
@@ -271,13 +299,22 @@ const CustomerNotifications = () => {
         {isLoading ? (
           <PageLoaderSlot className="min-h-[8rem] py-0" />
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-border/70">
             {sortedNotifications.length === 0 ? (
-              <li className="px-4 py-8 text-center text-sm text-muted-foreground sm:px-5 sm:py-12">No notifications yet.</li>
+              <li className="flex flex-col items-center gap-2 px-4 py-14 text-center">
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+                  <Bell className="h-5 w-5 text-muted-foreground" />
+                </span>
+                <p className="text-sm font-medium">No notifications yet</p>
+                <p className="text-xs text-muted-foreground">
+                  Order updates and delivery news will show up here.
+                </p>
+              </li>
             ) : (
               sortedNotifications.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((n) => {
                 const unread = !n.readAt;
-                const label = relativeTime(n.createdAt);
+                const age = compactAge(n.createdAt);
+                const exactTime = absoluteTime(n.createdAt);
                 const typeBadge = customerNotificationTypeBadgeLabel(n.notificationType);
                 const { icon: VisualIcon, cls: visualCls } = getCustomerNotificationVisual(
                   n.notificationType,
@@ -289,8 +326,8 @@ const CustomerNotifications = () => {
                       role="button"
                       tabIndex={0}
                       className={cn(
-                        "flex w-full min-w-0 items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/40 sm:gap-4 sm:px-5 sm:py-3.5",
-                        unread && "bg-muted/20",
+                        "relative flex w-full min-w-0 cursor-pointer items-start gap-3 py-3.5 pl-4 pr-3 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none sm:gap-4 sm:py-4 sm:pl-5 sm:pr-4",
+                        unread && "bg-primary/[0.04]",
                       )}
                       onClick={() => handleRowActivate(n)}
                       onKeyDown={(e) => {
@@ -300,44 +337,44 @@ const CustomerNotifications = () => {
                         }
                       }}
                     >
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${visualCls}`}>
+                      {unread ? (
+                        <span className="absolute inset-y-0 left-0 w-[3px] bg-primary" aria-hidden />
+                      ) : null}
+
+                      <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", visualCls)}>
                         <VisualIcon className="h-4 w-4" />
                       </div>
-                      <div className="min-w-0 flex-1 space-y-0.5 sm:space-y-1">
-                        <div className="flex items-start gap-2">
-                          <p className="min-w-0 flex-1 text-sm font-semibold leading-snug sm:text-base">{n.title}</p>
-                          {unread && (
-                            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden />
+
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className={cn(
+                            "line-clamp-2 text-sm leading-snug text-foreground sm:truncate",
+                            unread ? "font-semibold" : "font-medium",
                           )}
+                        >
+                          {customerNotificationCopy(n.title)}
+                        </p>
+                        <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-muted-foreground">
+                          {customerNotificationCopy(n.body)}
+                        </p>
+                        <div className="mt-1.5 flex items-center gap-2 sm:hidden">
                           {typeBadge ? (
                             <span
                               className={cn(
-                                "mt-0.5 shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold leading-4 sm:hidden",
+                                "shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold leading-4",
                                 customerNotificationTypeBadgeClass(n.notificationType),
                               )}
                             >
                               {typeBadge}
                             </span>
                           ) : null}
-                        </div>
-                        <p className="text-xs leading-snug text-muted-foreground sm:text-sm sm:leading-normal">{n.body}</p>
-                        <div className="flex items-center justify-between gap-2 sm:justify-start">
-                          {n.relatedOrderId ? (
-                            <Link
-                              to={`/customer/orders/${encodeURIComponent(n.relatedOrderId)}`}
-                              className="text-xs font-medium text-primary underline-offset-4 hover:underline"
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => e.stopPropagation()}
-                            >
-                              View order
-                            </Link>
-                          ) : null}
-                          <time className="shrink-0 text-[11px] tabular-nums text-muted-foreground sm:hidden">
-                            {label || "—"}
+                          <time dateTime={n.createdAt} className="text-[11px] tabular-nums text-muted-foreground">
+                            {age}
                           </time>
                         </div>
                       </div>
-                      <div className="hidden shrink-0 flex-col items-end gap-1 sm:flex">
+
+                      <div className="hidden w-[5.5rem] shrink-0 flex-col items-end gap-1.5 sm:flex">
                         {typeBadge ? (
                           <span
                             className={cn(
@@ -348,10 +385,19 @@ const CustomerNotifications = () => {
                             {typeBadge}
                           </span>
                         ) : null}
-                        <time className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                          {label || "—"}
+                        <time
+                          dateTime={n.createdAt}
+                          title={exactTime}
+                          className="whitespace-nowrap text-xs tabular-nums text-muted-foreground"
+                        >
+                          {age}
                         </time>
                       </div>
+
+                      <ChevronRight
+                        className="mt-1 hidden h-4 w-4 shrink-0 text-muted-foreground/40 sm:block"
+                        aria-hidden
+                      />
                     </div>
                   </li>
                 );

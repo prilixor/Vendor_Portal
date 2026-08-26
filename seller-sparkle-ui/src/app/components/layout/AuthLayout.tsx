@@ -31,9 +31,9 @@ const portalContent = {
     brandSubtitle: "Rent equipment with ease",
     heroTitle: "Find and rent medical equipment instantly.",
     heroDesc:
-      "Browse catalogs from verified local vendors, compare prices, manage your bookings, and get fast delivery directly to your doorstep.",
+      "Browse the BlinksMed catalog, compare prices, manage your bookings, and get fast delivery directly to your doorstep.",
     features: [
-      { icon: ShieldCheck, title: "Verified Vendors", desc: "Only trusted, KYC-approved suppliers." },
+      { icon: ShieldCheck, title: "Verified Equipment", desc: "Every item quality-checked before delivery." },
       { icon: Zap, title: "Transparent Pricing", desc: "Clear daily/monthly rental rates and deposit details." },
       { icon: BarChart3, title: "Fast Delivery", desc: "Doorstep delivery, installation, and pickup options." },
     ],
