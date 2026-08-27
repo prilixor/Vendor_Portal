@@ -19,7 +19,7 @@ const CustomerLogin = () => {
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({});
 
   const validate = () => {
     const e: typeof errors = {};
@@ -34,13 +34,14 @@ const CustomerLogin = () => {
     ev.preventDefault();
     if (!validate()) return;
     setLoading(true);
+    setErrors((prev) => ({ ...prev, form: undefined }));
     try {
       await login(email.trim(), password, "customer");
       toast.success("Welcome!");
       navigate(from.startsWith("/customer") ? from : "/customer/shop", { replace: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Sign in failed.";
-      toast.error(message);
+    } catch {
+      setErrors((prev) => ({ ...prev, form: "Invalid email or password." }));
+    } finally {
       setLoading(false);
     }
   };
@@ -74,7 +75,7 @@ const CustomerLogin = () => {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password" required>Password</Label>
-            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+            <Link to="/forgot-password?portal=customer" className="text-xs font-medium text-primary hover:underline">
               Forgot?
             </Link>
           </div>
@@ -97,6 +98,12 @@ const CustomerLogin = () => {
           </div>
           {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
         </div>
+
+        {errors.form && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {errors.form}
+          </div>
+        )}
 
         <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11 text-white font-semibold" disabled={loading}>
           {loading ? (

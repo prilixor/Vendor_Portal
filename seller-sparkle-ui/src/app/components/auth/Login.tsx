@@ -10,6 +10,7 @@ import { getCustomerPortalHref } from "@/app/helpers/portalHost";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { isValidIndianMobile } from "@/app/helpers/indianMobilePhone";
+import { isUnverifiedEmailError } from "@/app/helpers/authFailureToast";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -21,7 +22,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({});
 
   const validate = () => {
     const e: typeof errors = {};
@@ -37,6 +38,7 @@ const Login = () => {
     ev.preventDefault();
     if (!validate()) return;
     setLoading(true);
+    setErrors((prev) => ({ ...prev, form: undefined }));
     try {
       await login(email, password, "vendor");
       setNeedsVerification(false);
@@ -44,15 +46,13 @@ const Login = () => {
       // Use window.location.href to force full page reload
       window.location.href = "/vendor";
     } catch (error) {
-      let message = error instanceof Error ? error.message : "Sign in failed. Please try again.";
-      const rawMessage = message;
-      message = message.replace(/\n?\[.*?\]/g, "").trim();
-      
-      if (rawMessage.includes("EMAIL_NOT_VERIFIED")) {
+      if (isUnverifiedEmailError(error)) {
         setNeedsVerification(true);
+        setErrors((prev) => ({ ...prev, form: undefined }));
         toast.error("Please verify your email before logging in.");
       } else {
-        toast.error(message);
+        setNeedsVerification(false);
+        setErrors((prev) => ({ ...prev, form: "Invalid email/phone or password." }));
       }
     } finally {
       setLoading(false);
@@ -108,7 +108,7 @@ const Login = () => {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password" required>Password</Label>
-            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
+            <Link to="/forgot-password?portal=vendor" className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
           </div>
           <div className="relative">
             <Input
@@ -131,6 +131,12 @@ const Login = () => {
           </div>
           {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
         </div>
+
+        {errors.form && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {errors.form}
+          </div>
+        )}
 
         <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11 text-white font-semibold" disabled={loading}>
           {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in…</> : "Sign in"}

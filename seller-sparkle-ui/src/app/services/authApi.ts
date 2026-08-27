@@ -42,6 +42,8 @@ export interface ChangePasswordResponse {
 
 export interface ForgotPasswordRequest {
   email: string;
+  /** customer | vendor | admin — preserved on the email reset link */
+  portal?: "customer" | "vendor" | "admin";
 }
 
 export interface ForgotPasswordResponse {
@@ -120,8 +122,11 @@ export const authApi = {
     return apiClient.post<ChangePasswordResponse>('/auth/change-password', payload);
   },
 
-  async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
-    return apiClient.post<ForgotPasswordResponse>('/auth/forgot-password', { email });
+  async forgotPassword(
+    email: string,
+    portal?: "customer" | "vendor" | "admin",
+  ): Promise<ForgotPasswordResponse> {
+    return apiClient.post<ForgotPasswordResponse>('/auth/forgot-password', { email, portal });
   },
 
   async resetPassword(token: string, newPassword: string, confirmPassword: string): Promise<ResetPasswordResponse> {

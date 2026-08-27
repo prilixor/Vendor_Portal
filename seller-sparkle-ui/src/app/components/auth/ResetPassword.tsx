@@ -7,10 +7,19 @@ import { Label } from "@/app/components/ui/label";
 import { authApi } from "@/app/services/authApi";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import {
+  authPortalLoginPath,
+  authPortalSignInLabel,
+  forgotPasswordPath,
+  resolveAuthPortalType,
+} from "@/app/helpers/portalHost";
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") || "";
+  const portalType = resolveAuthPortalType(searchParams.get("portal"));
+  const loginPath = authPortalLoginPath(portalType);
+  const signInLabel = authPortalSignInLabel(portalType);
   
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -52,13 +61,13 @@ const ResetPassword = () => {
 
   if (!token) {
     return (
-      <AuthLayout title="Invalid Token" subtitle="The reset token is missing or invalid.">
+      <AuthLayout title="Invalid Token" subtitle="The reset token is missing or invalid." portalType={portalType}>
         <div className="space-y-6">
           <p className="text-center text-sm text-muted-foreground">
             Please check your email for a valid reset link or request a new one.
           </p>
           <Button asChild className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11">
-            <Link to="/forgot-password">Request New Link</Link>
+            <Link to={forgotPasswordPath(portalType)}>Request New Link</Link>
           </Button>
         </div>
       </AuthLayout>
@@ -67,16 +76,13 @@ const ResetPassword = () => {
 
   if (success) {
     return (
-      <AuthLayout title="Password Reset" subtitle="Your password has been successfully reset.">
+      <AuthLayout title="Password Reset" subtitle="Your password has been successfully reset." portalType={portalType}>
         <div className="space-y-6">
           <p className="text-center text-sm text-muted-foreground">
             You can now sign in with your new password.
           </p>
           <Button asChild className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11">
-            <Link to="/customer/login">Customer sign in</Link>
-          </Button>
-          <Button variant="outline" asChild className="w-full">
-            <Link to="/login">Vendor sign in</Link>
+            <Link to={loginPath}>{signInLabel}</Link>
           </Button>
         </div>
       </AuthLayout>
@@ -84,7 +90,7 @@ const ResetPassword = () => {
   }
 
   return (
-    <AuthLayout title="Reset Password" subtitle="Enter your new password below.">
+    <AuthLayout title="Reset Password" subtitle="Enter your new password below." portalType={portalType}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.
@@ -144,7 +150,7 @@ const ResetPassword = () => {
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Remember your password?{" "}
-        <Link to="/login" className="font-semibold text-primary hover:underline">Sign in</Link>
+        <Link to={loginPath} className="font-semibold text-primary hover:underline">{signInLabel}</Link>
       </p>
     </AuthLayout>
   );

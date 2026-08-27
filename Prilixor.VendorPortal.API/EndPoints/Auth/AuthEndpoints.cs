@@ -62,6 +62,8 @@ public sealed record ChangePasswordResponse(bool Success, string Message, DateTi
 public sealed class ForgotPasswordRequest
 {
     public string Email { get; set; } = string.Empty;
+    /// <summary>Optional: customer | vendor | admin — preserved on the email reset link for UI branding.</summary>
+    public string? Portal { get; set; }
 }
 
 public sealed record ForgotPasswordResponse(bool Success, string Message);
@@ -433,7 +435,11 @@ public sealed class ForgotPasswordEndpoint(
 
             // Send reset link email (FrontendUrl in appsettings / env — must match deployed SPA host)
             var frontendBase = configuration["FrontendUrl"]?.Trim().TrimEnd('/') ?? "https://blinksmed.com";
-            var resetLink = $"{frontendBase}/reset-password?token={Uri.EscapeDataString(token)}";
+            var portal = (req.Portal ?? string.Empty).Trim().ToLowerInvariant();
+            var portalQs = portal is "customer" or "vendor" or "admin"
+                ? $"&portal={Uri.EscapeDataString(portal)}"
+                : string.Empty;
+            var resetLink = $"{frontendBase}/reset-password?token={Uri.EscapeDataString(token)}{portalQs}";
             var subject = "Reset Your Password";
             var body = $@"
                 <h2>Password Reset Request</h2>
