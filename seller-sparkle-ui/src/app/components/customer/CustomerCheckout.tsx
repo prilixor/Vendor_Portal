@@ -27,6 +27,7 @@ import { BackLink } from "@/app/components/shared/BackLink";
 import { StruckPrice } from "@/app/components/shared/RentalPeriodPlanDropdown";
 import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
 import { formatRentalDuration } from "@/app/helpers/rentalPeriod";
+import { lastShopHref } from "@/app/helpers/customerShopBrowse";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
 type DeliveryChoice = "standard" | "express" | "vendor_pickup";
@@ -225,7 +226,7 @@ const CustomerCheckout = () => {
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">Your cart is empty.</p>
         <Button asChild variant="outline">
-          <Link to="/customer/shop">Continue shopping</Link>
+          <Link to={lastShopHref()}>Continue shopping</Link>
         </Button>
       </div>
     );

@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { evaluateRentVsBuy } from "@/app/helpers/rentalPeriod";
 import { cn } from "@/app/helpers/utils";
+import { lastShopHref, persistShopBrowseMode, shopHrefForListing } from "@/app/helpers/customerShopBrowse";
 
 function availabilityBadge(status: string, qty: number): { label: string; className: string } | null {
   const s = status.trim().toLowerCase();
@@ -160,6 +161,11 @@ const CustomerListingDetail = () => {
     setSelectedPlanId(recommended?.id ?? activePlans[0]?.id ?? "");
   }, [hasPricingPlans, activePlans, selectedPlanId]);
 
+  useEffect(() => {
+    if (!data) return;
+    persistShopBrowseMode(data.isChemical ? "chemicals" : "equipment");
+  }, [data]);
+
   if (!listingId) {
     return <p className="text-sm text-muted-foreground">Invalid listing.</p>;
   }
@@ -169,7 +175,7 @@ const CustomerListingDetail = () => {
       <div className="space-y-4">
         <p className="text-sm text-destructive">{error instanceof Error ? error.message : "Listing not found."}</p>
         <Button variant="outline" asChild>
-          <Link to="/customer/shop">Back to shop</Link>
+          <Link to={lastShopHref()}>Back to shop</Link>
         </Button>
       </div>
     );
@@ -344,7 +350,7 @@ const CustomerListingDetail = () => {
 
   return (
     <div className="relative mx-auto min-w-0 max-w-[1080px] overflow-x-clip space-y-5">
-      <BackLink to="/customer/shop" label="Back to shop" />
+      <BackLink to={shopHrefForListing(!!data.isChemical)} label="Back to shop" />
 
       <div className="relative grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] xl:gap-10">
         <div className="min-w-0 lg:sticky lg:top-20">
@@ -765,7 +771,7 @@ const CustomerListingDetail = () => {
                     className="h-9 rounded-lg px-3 font-medium"
                     asChild
                   >
-                    <Link to="/customer/shop">
+                    <Link to={shopHrefForListing(!!data.isChemical)}>
                       <LayoutGrid className="h-4 w-4" />
                       More listings
                     </Link>
