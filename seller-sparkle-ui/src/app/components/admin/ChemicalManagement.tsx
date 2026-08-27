@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useQueryTab } from "@/app/helpers/queryTab";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -31,6 +32,7 @@ import {
 
 const PAGE_SIZE = 10;
 const CHEMICAL_FORM_STEPS = ["Basic", "Specs", "Packaging", "Media"] as const;
+const CHEMICAL_TABS = ["chemical", "categories"] as const;
 
 type ChemSize = { sizeValue: number; sizeUnit: string; buyPrice: number };
 
@@ -181,7 +183,7 @@ const ChemicalManagement = () => {
   const [categories, setCategories] = useState<ProductCategoryDto[]>([]);
   const [products, setProducts] = useState<ProductDto[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("chemical");
+  const [activeTab, setActiveTab] = useQueryTab(CHEMICAL_TABS, "chemical");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -1134,15 +1136,15 @@ const ChemicalManagement = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 border-b border-border pb-4">
             <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
-              <TabsTrigger value="categories" className="text-xs sm:text-sm">
-                <FolderTree className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
-                <span className="truncate">Categories</span>
-                <span className="hidden sm:inline ml-1">({categories.filter(c => c.isChemical).length})</span>
-              </TabsTrigger>
               <TabsTrigger value="chemical" className="text-xs sm:text-sm">
                 <FlaskConical className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
                 <span className="truncate">Chemicals</span>
                 <span className="hidden sm:inline ml-1">({products.filter(isChemicalProduct).length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="categories" className="text-xs sm:text-sm">
+                <FolderTree className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate">Categories</span>
+                <span className="hidden sm:inline ml-1">({categories.filter(c => c.isChemical).length})</span>
               </TabsTrigger>
             </TabsList>
 
@@ -1181,7 +1183,7 @@ const ChemicalManagement = () => {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={`Search ${activeTab}...`}
+                placeholder={activeTab === "categories" ? "Search categories..." : "Search chemicals..."}
                 className="pl-9 w-full"
               />
             </div>
