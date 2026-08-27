@@ -16,6 +16,13 @@ import {
   normalizeIndianMobileDigits,
   requiredIndianMobileError,
 } from "@/app/helpers/indianMobilePhone";
+import {
+  PASSWORDS_MATCH_MESSAGE,
+  passwordsMeetConfirm,
+  patchLivePasswordPair,
+  submitConfirmPasswordError,
+  submitPasswordLengthError,
+} from "@/app/helpers/passwordValidation";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 
 const Settings = () => {
@@ -35,6 +42,20 @@ const Settings = () => {
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordUpdatedAt, setPasswordUpdatedAt] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const passwordsMatch = passwordsMeetConfirm(newPassword, confirmPassword);
+
+  const SETTINGS_PAIR_KEYS = { password: "newPassword", confirm: "confirmPassword" } as const;
+  const SETTINGS_PAIR_MESSAGES = {
+    length: "New password must be at least 8 characters.",
+    mismatch: "New password and confirm password must match.",
+    confirmRequired: "Please confirm your new password.",
+  };
+
+  const syncPasswordPair = (nextPassword: string, nextConfirm: string) => {
+    setFieldErrors((prev) =>
+      patchLivePasswordPair(prev, nextPassword, nextConfirm, SETTINGS_PAIR_KEYS, SETTINGS_PAIR_MESSAGES),
+    );
+  };
 
   const clearFieldError = (key: string) => {
     setFieldErrors((prev) => {
@@ -136,14 +157,12 @@ const Settings = () => {
     }
     if (!newPassword) {
       errors.newPassword = "Please enter a new password.";
-    } else if (newPassword.length < 8) {
-      errors.newPassword = "New password must be at least 8 characters.";
+    } else {
+      const passwordErr = submitPasswordLengthError(newPassword, SETTINGS_PAIR_MESSAGES.length);
+      if (passwordErr) errors.newPassword = passwordErr;
     }
-    if (!confirmPassword) {
-      errors.confirmPassword = "Please confirm your new password.";
-    } else if (newPassword && newPassword !== confirmPassword) {
-      errors.confirmPassword = "New password and confirm password must match.";
-    }
+    const confirmErr = submitConfirmPasswordError(newPassword, confirmPassword, SETTINGS_PAIR_MESSAGES);
+    if (confirmErr) errors.confirmPassword = confirmErr;
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       toast.error("Please fill in the required fields.");
@@ -279,8 +298,9 @@ const Settings = () => {
                   type={showNewPassword ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => {
-                    setNewPassword(e.target.value);
-                    clearFieldError("newPassword");
+                    const value = e.target.value;
+                    setNewPassword(value);
+                    syncPasswordPair(value, confirmPassword);
                   }}
                   disabled={savingPassword}
                   className={fieldErrors.newPassword ? "border-destructive" : ""}
@@ -310,11 +330,18 @@ const Settings = () => {
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => {
-                    setConfirmPassword(e.target.value);
-                    clearFieldError("confirmPassword");
+                    const value = e.target.value;
+                    setConfirmPassword(value);
+                    syncPasswordPair(newPassword, value);
                   }}
                   disabled={savingPassword}
-                  className={fieldErrors.confirmPassword ? "border-destructive" : ""}
+                  className={
+                    fieldErrors.confirmPassword
+                      ? "border-destructive"
+                      : passwordsMatch
+                        ? "border-emerald-500/60"
+                        : ""
+                  }
                 />
                 <Button
                   type="button"
@@ -328,6 +355,9 @@ const Settings = () => {
                 </Button>
               </div>
               <FieldError message={fieldErrors.confirmPassword} />
+              {!fieldErrors.confirmPassword && passwordsMatch && (
+                <p className="text-xs text-emerald-600">{PASSWORDS_MATCH_MESSAGE}</p>
+              )}
             </div>
             <Button variant="outline" className="w-full" onClick={() => void updatePassword()} disabled={savingPassword}>
               Update password

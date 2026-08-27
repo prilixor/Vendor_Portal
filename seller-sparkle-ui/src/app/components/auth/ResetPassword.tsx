@@ -13,20 +13,23 @@ import {
   forgotPasswordPath,
   resolveAuthPortalType,
 } from "@/app/helpers/portalHost";
+import {
+  PASSWORDS_MATCH_MESSAGE,
+  passwordsMeetConfirm,
+  patchLivePasswordPair,
+  submitConfirmPasswordError,
+  submitPasswordLengthError,
+} from "@/app/helpers/passwordValidation";
 import { cn } from "@/app/helpers/utils";
 
 type ResetFieldErrors = { newPassword?: string; confirmPassword?: string };
 
-function livePairErrors(nextNew: string, nextConfirm: string): ResetFieldErrors {
-  const e: ResetFieldErrors = {};
-  if (nextNew.length > 0 && nextNew.length < 8) {
-    e.newPassword = "Password must be at least 8 characters";
-  }
-  if (nextConfirm.length > 0 && nextNew !== nextConfirm) {
-    e.confirmPassword = "Passwords do not match";
-  }
-  return e;
-}
+const RESET_PAIR_KEYS = { password: "newPassword", confirm: "confirmPassword" } as const;
+const RESET_PAIR_MESSAGES = {
+  length: "Password must be at least 8 characters",
+  mismatch: "Passwords do not match",
+  confirmRequired: "Please confirm your password",
+};
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
@@ -42,22 +45,40 @@ const ResetPassword = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<ResetFieldErrors>({});
   const [success, setSuccess] = useState(false);
-  const passwordsMatch = newPassword.length >= 8 && newPassword === confirmPassword && confirmPassword.length > 0;
+  const passwordsMatch = passwordsMeetConfirm(newPassword, confirmPassword);
 
   const onNewPasswordChange = (value: string) => {
     setNewPassword(value);
-    setErrors(livePairErrors(value, confirmPassword));
+    setErrors((prev) =>
+      patchLivePasswordPair(
+        prev as Record<string, string>,
+        value,
+        confirmPassword,
+        RESET_PAIR_KEYS,
+        RESET_PAIR_MESSAGES,
+      ) as ResetFieldErrors,
+    );
   };
 
   const onConfirmPasswordChange = (value: string) => {
     setConfirmPassword(value);
-    setErrors(livePairErrors(newPassword, value));
+    setErrors((prev) =>
+      patchLivePasswordPair(
+        prev as Record<string, string>,
+        newPassword,
+        value,
+        RESET_PAIR_KEYS,
+        RESET_PAIR_MESSAGES,
+      ) as ResetFieldErrors,
+    );
   };
 
   const validate = () => {
     const e: ResetFieldErrors = {};
-    if (newPassword.length < 8) e.newPassword = "Password must be at least 8 characters";
-    if (!confirmPassword || newPassword !== confirmPassword) e.confirmPassword = "Passwords do not match";
+    const passwordErr = submitPasswordLengthError(newPassword, RESET_PAIR_MESSAGES.length);
+    if (passwordErr) e.newPassword = passwordErr;
+    const confirmErr = submitConfirmPasswordError(newPassword, confirmPassword, RESET_PAIR_MESSAGES);
+    if (confirmErr) e.confirmPassword = confirmErr;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -142,7 +163,11 @@ const ResetPassword = () => {
               {showPwd ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
             </button>
           </div>
-          {errors.newPassword && <p className="text-xs text-destructive">{errors.newPassword}</p>}
+          {errors.newPassword ? (
+            <p className="text-xs text-destructive">{errors.newPassword}</p>
+          ) : newPassword.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">At least 8 characters.</p>
+          ) : null}
         </div>
 
         <div className="space-y-1.5">
@@ -174,7 +199,7 @@ const ResetPassword = () => {
           {errors.confirmPassword ? (
             <p className="text-xs text-destructive">{errors.confirmPassword}</p>
           ) : passwordsMatch ? (
-            <p className="text-xs text-emerald-600">Passwords match</p>
+            <p className="text-xs text-emerald-600">{PASSWORDS_MATCH_MESSAGE}</p>
           ) : null}
         </div>
 
