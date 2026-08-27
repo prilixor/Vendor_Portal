@@ -2089,7 +2089,8 @@ public sealed class CustomerRepository(
             countMap.GetValueOrDefault(c.Id))).ToList();
     }
 
-    public async Task<AdminCustomerDetailDto?> GetCustomerDetailForAdminAsync(Guid customerId, CancellationToken cancellationToken)
+    public async Task<AdminCustomerDetailDto?> GetCustomerDetailForAdminAsync(
+        Guid customerId, int ordersPage, int ordersPageSize, CancellationToken cancellationToken)
     {
         var c = await customerDb.Customers.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == customerId && !x.IsDeleted, cancellationToken);
@@ -2101,10 +2102,16 @@ public sealed class CustomerRepository(
             .ThenBy(a => a.CreatedOnUtc)
             .ToListAsync(cancellationToken);
 
-        var orders = await customerDb.CustomerRentalOrders.AsNoTracking()
-            .Where(o => o.CustomerId == customerId && !o.IsDeleted)
+        var orderQuery = customerDb.CustomerRentalOrders.AsNoTracking()
+            .Where(o => o.CustomerId == customerId && !o.IsDeleted);
+
+        var orderCount = await orderQuery.CountAsync(cancellationToken);
+        var page = Math.Max(1, ordersPage);
+        var size = ordersPageSize is < 1 or > 50 ? 10 : ordersPageSize;
+        var orders = await orderQuery
             .OrderByDescending(o => o.CreatedOnUtc)
-            .Take(20)
+            .Skip((page - 1) * size)
+            .Take(size)
             .ToListAsync(cancellationToken);
 
         return new AdminCustomerDetailDto(
@@ -2119,7 +2126,8 @@ public sealed class CustomerRepository(
                 a.Id.ToString(), a.Label, a.Line1, a.City, a.State, a.Postal, a.IsDefault)).ToList(),
             orders.Select(o => new AdminCustomerOrderSummaryDto(
                 o.Id.ToString(), o.OrderNumber, o.Status, o.TotalAmount, o.CreatedOnUtc,
-                o.PlacedByAdminId?.ToString())).ToList());
+                o.PlacedByAdminId?.ToString())).ToList(),
+            orderCount);
     }
 
     public async Task<List<AdminOrderableListingDto>> SearchOrderableListingsForAdminAsync(

@@ -26,7 +26,8 @@ public sealed record AdminCustomerDetailDto(
     DateTimeOffset? LastLoginAt,
     DateTimeOffset CreatedAt,
     IReadOnlyList<AdminCustomerAddressDto> Addresses,
-    IReadOnlyList<AdminCustomerOrderSummaryDto> RecentOrders);
+    IReadOnlyList<AdminCustomerOrderSummaryDto> RecentOrders,
+    int OrderCount);
 
 public sealed record AdminCustomerAddressDto(
     string Id,
@@ -58,14 +59,16 @@ internal sealed class GetAdminCustomersQueryHandler(ICustomerRepository customer
     }
 }
 
-public sealed record GetAdminCustomerDetailQuery(Guid CustomerId) : IQuery<AdminCustomerDetailDto>;
+public sealed record GetAdminCustomerDetailQuery(Guid CustomerId, int OrdersPage = 1, int OrdersPageSize = 10)
+    : IQuery<AdminCustomerDetailDto>;
 
 internal sealed class GetAdminCustomerDetailQueryHandler(ICustomerRepository customers)
     : IQueryHandler<GetAdminCustomerDetailQuery, AdminCustomerDetailDto>
 {
     public async Task<Result<AdminCustomerDetailDto>> Handle(GetAdminCustomerDetailQuery request, CancellationToken cancellationToken)
     {
-        var detail = await customers.GetCustomerDetailForAdminAsync(request.CustomerId, cancellationToken);
+        var detail = await customers.GetCustomerDetailForAdminAsync(
+            request.CustomerId, request.OrdersPage, request.OrdersPageSize, cancellationToken);
         if (detail is null)
             return Result.Failure<AdminCustomerDetailDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
         return Result.Success(detail);
