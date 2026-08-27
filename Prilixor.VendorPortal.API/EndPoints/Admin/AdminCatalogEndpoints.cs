@@ -371,6 +371,89 @@ public sealed class DeleteProductEndpoint(IMediator mediator)
     }
 }
 
+public sealed class RecalculateProductRentalPricingRequest
+{
+    public string ProductId { get; set; } = string.Empty;
+    public bool ResetManualOverrides { get; set; }
+}
+
+public sealed class RecalculateProductRentalPricingEndpoint(IMediator mediator)
+    : Endpoint<RecalculateProductRentalPricingRequest, Results<Ok<ProductDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("catalog/products/{productId}/rental-pricing/recalculate");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<ProductDto>, ProblemHttpResult>> ExecuteAsync(
+        RecalculateProductRentalPricingRequest req,
+        CancellationToken ct)
+    {
+        req.ProductId = Route<string>("productId") ?? req.ProductId;
+        var result = await mediator.Send(
+            new RecalculateProductRentalPricingCommand(req.ProductId, req.ResetManualOverrides),
+            ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class RecalculateAllProductRentalPricingRequest
+{
+    public bool ResetManualOverrides { get; set; }
+}
+
+public sealed class RecalculateAllProductRentalPricingEndpoint(IMediator mediator)
+    : Endpoint<RecalculateAllProductRentalPricingRequest, Results<Ok<RecalculateAllProductRentalPricingResultDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("catalog/rental-pricing/recalculate");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<RecalculateAllProductRentalPricingResultDto>, ProblemHttpResult>> ExecuteAsync(
+        RecalculateAllProductRentalPricingRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(
+            new RecalculateAllProductRentalPricingCommand(req.ResetManualOverrides),
+            ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class PreviewProductRentalPricingRequest
+{
+    public decimal DailyRent { get; set; }
+    public decimal? BuyPrice { get; set; }
+    public bool IsRentEnabled { get; set; } = true;
+    public List<CreateOrUpdateProductRentalPricingPlanDto>? ExistingPlans { get; set; }
+}
+
+public sealed class PreviewProductRentalPricingEndpoint(IMediator mediator)
+    : Endpoint<PreviewProductRentalPricingRequest, Results<Ok<PreviewProductRentalPricingDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("catalog/rental-pricing/preview");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<PreviewProductRentalPricingDto>, ProblemHttpResult>> ExecuteAsync(
+        PreviewProductRentalPricingRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(
+            new PreviewProductRentalPricingQuery(req.DailyRent, req.BuyPrice, req.IsRentEnabled, req.ExistingPlans),
+            ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class AddProductImageEndpoint(IMediator mediator)
     : Endpoint<AddProductImageRequest, Results<Ok<ProductImageDto>, ProblemHttpResult>>
 {

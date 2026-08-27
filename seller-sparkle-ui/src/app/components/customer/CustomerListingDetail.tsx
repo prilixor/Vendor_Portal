@@ -1,7 +1,7 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
-import { customerApi, type RentalPricingPlanDto } from "@/app/services/customerApi";
+import { customerApi, type CustomerListingDetailApi, type RentalPricingPlanDto } from "@/app/services/customerApi";
 import { useCart } from "@/app/contexts/CartContext";
 import { useAuth } from "@/app/guards/AuthContext";
 import { Button } from "@/app/components/ui/button";
@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { evaluateRentVsBuy } from "@/app/helpers/rentalPeriod";
 import { cn } from "@/app/helpers/utils";
+import { lastShopHref, persistShopBrowseMode, shopHrefForListing } from "@/app/helpers/customerShopBrowse";
 
 function availabilityBadge(status: string, qty: number): { label: string; className: string } | null {
   const s = status.trim().toLowerCase();
@@ -67,6 +68,26 @@ function formatInr(value: number): string {
   return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
+function variantStockOfDetail(data: CustomerListingDetailApi, variantId: string): number {
+  const fromVariant = data.variants?.find((v) => v.id === variantId)?.availableQuantity;
+  if (typeof fromVariant === "number") return Math.max(0, fromVariant);
+  return Math.max(
+    0,
+    data.variantInventory?.find((vi) => vi.productVariantId === variantId)?.availableQuantity ?? 0,
+  );
+}
+
+/** Equipment: all vendors combined. Chemicals: selected pack size across vendors. */
+function resolveCustomerAvailableQuantity(
+  data: CustomerListingDetailApi,
+  selectedVariantId: string,
+): number {
+  if (selectedVariantId) {
+    return variantStockOfDetail(data, selectedVariantId);
+  }
+  return Math.max(0, data.productTotalAvailableQuantity ?? data.availableQuantity ?? 0);
+}
+
 const CustomerListingDetail = () => {
   const { listingId } = useParams<{ listingId: string }>();
   const navigate = useNavigate();
@@ -97,6 +118,16 @@ const CustomerListingDetail = () => {
   const isFavorite = !!listingId && favorites.some((f) => f.vendorProductListingId === listingId);
 
   const activeVariants = data?.variants?.filter((v) => v.isActive) || [];
+  const resolvedVariantId = useMemo(() => {
+    if (selectedVariantId && activeVariants.some((v) => v.id === selectedVariantId)) {
+      return selectedVariantId;
+    }
+    if (!data || activeVariants.length === 0) return "";
+    return (
+      activeVariants.find((v) => variantStockOfDetail(data, v.id) > 0)?.id ??
+      activeVariants[0].id
+    );
+  }, [data, activeVariants, selectedVariantId]);
   const activePlans = useMemo(
     () => sortActiveRentalPlans(data?.rentalPricingPlans),
     [data?.rentalPricingPlans],
@@ -105,10 +136,20 @@ const CustomerListingDetail = () => {
   const selectedPlan = activePlans.find((p) => p.id === selectedPlanId) ?? null;
 
   useEffect(() => {
-    if (activeVariants.length > 0 && !selectedVariantId) {
-      setSelectedVariantId(activeVariants[0].id);
-    }
+    if (!data || activeVariants.length === 0) return;
+    if (selectedVariantId && activeVariants.some((v) => v.id === selectedVariantId)) return;
+    const inStock = activeVariants.find((v) => variantStockOfDetail(data, v.id) > 0);
+    setSelectedVariantId(inStock?.id ?? activeVariants[0].id);
   }, [data, activeVariants, selectedVariantId]);
+
+  useEffect(() => {
+    if (!data) return;
+    const available = resolveCustomerAvailableQuantity(data, resolvedVariantId);
+    setQty((prev) => {
+      if (available <= 0) return 1;
+      return Math.min(Math.max(1, prev), available);
+    });
+  }, [data, resolvedVariantId]);
 
   useEffect(() => {
     if (!hasPricingPlans) {
@@ -120,6 +161,11 @@ const CustomerListingDetail = () => {
     setSelectedPlanId(recommended?.id ?? activePlans[0]?.id ?? "");
   }, [hasPricingPlans, activePlans, selectedPlanId]);
 
+  useEffect(() => {
+    if (!data) return;
+    persistShopBrowseMode(data.isChemical ? "chemicals" : "equipment");
+  }, [data]);
+
   if (!listingId) {
     return <p className="text-sm text-muted-foreground">Invalid listing.</p>;
   }
@@ -129,7 +175,7 @@ const CustomerListingDetail = () => {
       <div className="space-y-4">
         <p className="text-sm text-destructive">{error instanceof Error ? error.message : "Listing not found."}</p>
         <Button variant="outline" asChild>
-          <Link to="/customer/shop">Back to shop</Link>
+          <Link to={lastShopHref()}>Back to shop</Link>
         </Button>
       </div>
     );
@@ -141,7 +187,7 @@ const CustomerListingDetail = () => {
 
   const images = data.imageUrls?.length ? data.imageUrls : [];
 
-  const selectedVariant = activeVariants.find((v) => v.id === selectedVariantId);
+  const selectedVariant = activeVariants.find((v) => v.id === resolvedVariantId);
   // Chemicals are buy-only and get a spec sheet; equipment follows its own rent/buy flags.
   const isChemical = !!data.isChemical;
   const canRent = !isChemical && (data.isRentEnabled ?? true);
@@ -154,11 +200,7 @@ const CustomerListingDetail = () => {
       data.molecularWeight != null);
   const actualOrderType: "rent" | "buy" = canRent && canBuy ? orderType : canBuy ? "buy" : "rent";
 
-  // Determine current available quantity and status based on selected variant (if any)
-  const currentAvailableQuantity =
-    selectedVariant && data.variantInventory
-      ? (data.variantInventory.find((vi) => vi.productVariantId === selectedVariant.id)?.availableQuantity ?? 0)
-      : data.availableQuantity;
+  const currentAvailableQuantity = resolveCustomerAvailableQuantity(data, resolvedVariantId);
 
   const currentAvailabilityStatus =
     currentAvailableQuantity <= 0
@@ -225,10 +267,7 @@ const CustomerListingDetail = () => {
     setSelectedPlanId(plan.id);
   };
 
-  const variantStockOf = (variantId: string) =>
-    activeVariants.find((v) => v.id === variantId)?.availableQuantity ??
-    data.variantInventory?.find((vi) => vi.productVariantId === variantId)?.availableQuantity ??
-    0;
+  const variantStockOf = (variantId: string) => variantStockOfDetail(data, variantId);
 
   // When the chosen packaging size cannot cover the requested quantity, offer sibling
   // sizes that are actually in stock (real-world "1 L out, try 5 L" nudge).
@@ -245,7 +284,7 @@ const CustomerListingDetail = () => {
     : [];
 
   const handleAdd = () => {
-    if (activeVariants.length > 0 && !selectedVariantId) {
+    if (activeVariants.length > 0 && !resolvedVariantId) {
       toast.error("Please select a packaging size.");
       return;
     }
@@ -288,7 +327,7 @@ const CustomerListingDetail = () => {
       rentalPeriodUnit: "day",
       orderType: actualOrderType,
       prescriptionRequired: data.prescriptionRequired,
-      productVariantId: selectedVariantId || undefined,
+      productVariantId: resolvedVariantId || undefined,
       buyPrice: unitPrice,
       isBuyEnabled: canBuy,
       ...(planBased
@@ -310,14 +349,11 @@ const CustomerListingDetail = () => {
   };
 
   return (
-    <div className="relative min-w-0 max-w-full overflow-x-clip space-y-5">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-        <div className="absolute -right-6 top-8 h-36 w-36 rounded-full bg-primary/10 blur-3xl" />
-      </div>
-      <BackLink to="/customer/shop" label="Back to shop" />
+    <div className="relative mx-auto min-w-0 max-w-[1080px] overflow-x-clip space-y-5">
+      <BackLink to={shopHrefForListing(!!data.isChemical)} label="Back to shop" />
 
-      <div className="relative grid min-w-0 gap-8 lg:grid-cols-2 lg:gap-10">
-        <div className="min-w-0">
+      <div className="relative grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] xl:gap-10">
+        <div className="min-w-0 lg:sticky lg:top-20">
           <ProductImageGallery images={images} alt={data.title} />
         </div>
 
@@ -325,7 +361,9 @@ const CustomerListingDetail = () => {
           <header className="space-y-2.5">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
-                Medical equipment
+                {data.isChemical
+                  ? (data.categoryName?.trim() || "Chemicals")
+                  : (data.categoryName?.trim() || "Medical equipment")}
               </p>
               {badge ? <Badge className={badge.className}>{badge.label}</Badge> : null}
             </div>
@@ -336,7 +374,9 @@ const CustomerListingDetail = () => {
               <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">{data.description}</p>
             ) : null}
             {(data.documents?.length ?? 0) > 0 ? (
-              <CustomerProductDocumentsInline documents={data.documents ?? []} />
+              <div className="pt-1">
+                <CustomerProductDocumentsInline documents={data.documents ?? []} />
+              </div>
             ) : null}
             {data.prescriptionRequired ? (
               <p className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
@@ -353,17 +393,23 @@ const CustomerListingDetail = () => {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                     Packaging size
                   </p>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div
+                    className={cn(
+                      "grid gap-2",
+                      activeVariants.length === 1 ? "grid-cols-1" : "grid-cols-2",
+                      "sm:flex sm:flex-wrap",
+                    )}
+                  >
                     {activeVariants.map((v) => {
                       const stock = variantStockOf(v.id);
-                      const isSelected = v.id === selectedVariantId;
+                      const isSelected = v.id === resolvedVariantId;
                       const isOut = stock <= 0;
                       return (
                         <button
                           key={v.id}
                           type="button"
                           onClick={() => setSelectedVariantId(v.id)}
-                          className={`rounded-lg border px-2.5 py-1.5 text-left text-xs font-semibold transition-all ${
+                          className={`min-w-0 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold transition-all sm:min-w-[7.25rem] sm:py-1.5 ${
                             isSelected
                               ? "border-primary bg-gradient-primary text-primary-foreground shadow-sm"
                               : isOut
@@ -641,8 +687,23 @@ const CustomerListingDetail = () => {
 
               {/* Qty lives in the rental checkout strip when pricing plans are shown */}
               {!(actualOrderType === "rent" && hasPricingPlans) ? (
-                <div className="grid gap-2">
-                  <div className="rounded-xl border border-border bg-muted/20 px-2.5 py-1.5">
+                <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+                  <div className="flex items-center justify-between gap-3 px-4 py-4">
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-bold tracking-tight text-foreground">
+                        Quantity
+                        <span className="ml-0.5 text-destructive" aria-hidden>
+                          *
+                        </span>
+                      </p>
+                      <p className="mt-0.5 text-[12px] font-medium text-muted-foreground">
+                        {currentAvailableQuantity > 0
+                          ? selectedVariant
+                            ? `${currentAvailableQuantity} available · ${selectedVariant.sizeValue} ${selectedVariant.sizeUnit}`
+                            : `${currentAvailableQuantity} available`
+                          : "Out of stock"}
+                      </p>
+                    </div>
                     <QuantityStepper
                       orientation="inline"
                       label="Qty"
@@ -651,6 +712,7 @@ const CustomerListingDetail = () => {
                       min={1}
                       max={Math.max(1, currentAvailableQuantity)}
                       onChange={handleQtyChange}
+                      className="[&>span]:sr-only"
                     />
                   </div>
                 </div>
@@ -709,7 +771,7 @@ const CustomerListingDetail = () => {
                     className="h-9 rounded-lg px-3 font-medium"
                     asChild
                   >
-                    <Link to="/customer/shop">
+                    <Link to={shopHrefForListing(!!data.isChemical)}>
                       <LayoutGrid className="h-4 w-4" />
                       More listings
                     </Link>
@@ -735,7 +797,6 @@ const CustomerListingDetail = () => {
         onConfirmBuy={() => {
           if (!canBuy || unitPrice <= 0) return;
           setOrderType("buy");
-          setPeriods(1);
         }}
       />
     </div>

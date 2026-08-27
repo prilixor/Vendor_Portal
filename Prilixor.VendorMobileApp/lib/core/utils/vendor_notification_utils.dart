@@ -3,51 +3,148 @@ import 'package:flutter/material.dart';
 import '../models/vendor_notification_model.dart';
 import '../theme.dart';
 
-enum VendorNotificationVisualType { info, success, warning, error }
+enum VendorNotificationVisualType {
+  photoRequest,
+  orderRequest,
+  dispatch,
+  payout,
+  success,
+  warning,
+  error,
+  support,
+  product,
+  document,
+  info,
+}
 
 VendorNotificationVisualType visualTypeFor(VendorNotification n) {
   final t = n.notificationType.trim().toLowerCase();
+  final title = n.title.trim().toLowerCase();
+
+  // Photo requests (e.g. customer requested photos)
+  if (t.contains('photo') || title.contains('photo')) {
+    return VendorNotificationVisualType.photoRequest;
+  }
+
+  // New orders / dispatch offers / order requests
+  if (t == 'dispatch_offer' ||
+      t == 'new_order' ||
+      t.contains('order_request') ||
+      title.contains('order request') ||
+      title.contains('new order')) {
+    return VendorNotificationVisualType.orderRequest;
+  }
+
+  // Shipping / Dispatch / Transit / Delivery
+  if (t.contains('dispatch') ||
+      t.contains('transit') ||
+      t.contains('delivery') ||
+      t.contains('shipping') ||
+      title.contains('dispatch') ||
+      title.contains('delivery')) {
+    return VendorNotificationVisualType.dispatch;
+  }
+
+  // Payouts & financial
+  if (t.contains('payout') || t.contains('payment') || title.contains('payout')) {
+    return VendorNotificationVisualType.payout;
+  }
+
+  // Approvals & confirmations
   if (t == 'success' ||
       t.contains('approved') ||
-      t.contains('payout') ||
-      t.contains('confirmed')) {
+      t.contains('confirmed') ||
+      title.contains('approved') ||
+      title.contains('confirmed')) {
     return VendorNotificationVisualType.success;
   }
+
+  // Rejections / cancellations / failures
   if (t.contains('rejected') ||
       t.contains('failed') ||
-      t.contains('cancel')) {
+      t.contains('cancel') ||
+      title.contains('rejected') ||
+      title.contains('cancelled')) {
     return VendorNotificationVisualType.error;
   }
+
+  // Support / chat replies
+  if (t.contains('support') || t.contains('chat') || title.contains('support')) {
+    return VendorNotificationVisualType.support;
+  }
+
+  // Inventory / Stock / Expirations
   if (t.contains('stock') ||
       t.contains('warning') ||
       t.contains('expir') ||
-      t.contains('low_')) {
+      t.contains('low_') ||
+      title.contains('stock') ||
+      title.contains('expir')) {
     return VendorNotificationVisualType.warning;
   }
+
+  // Product listing notices
+  if (t.startsWith('listing_') || t.contains('product') || title.contains('product')) {
+    return VendorNotificationVisualType.product;
+  }
+
+  // KYC / Docs / Bank
+  if (t.startsWith('document_') || t.startsWith('bank_') || title.contains('document')) {
+    return VendorNotificationVisualType.document;
+  }
+
   return VendorNotificationVisualType.info;
 }
 
 IconData iconForVisualType(VendorNotificationVisualType type) {
   switch (type) {
+    case VendorNotificationVisualType.photoRequest:
+      return Icons.add_a_photo_outlined;
+    case VendorNotificationVisualType.orderRequest:
+      return Icons.shopping_bag_outlined;
+    case VendorNotificationVisualType.dispatch:
+      return Icons.local_shipping_outlined;
+    case VendorNotificationVisualType.payout:
+      return Icons.payments_outlined;
     case VendorNotificationVisualType.success:
       return Icons.check_circle_outline;
     case VendorNotificationVisualType.warning:
-      return Icons.warning_amber_outlined;
+      return Icons.hourglass_bottom_rounded;
     case VendorNotificationVisualType.error:
-      return Icons.error_outline;
+      return Icons.cancel_outlined;
+    case VendorNotificationVisualType.support:
+      return Icons.chat_bubble_outline_rounded;
+    case VendorNotificationVisualType.product:
+      return Icons.category_outlined;
+    case VendorNotificationVisualType.document:
+      return Icons.assignment_outlined;
     case VendorNotificationVisualType.info:
-      return Icons.info_outline;
+      return Icons.notifications_active_outlined;
   }
 }
 
 Color colorForVisualType(VendorNotificationVisualType type) {
   switch (type) {
+    case VendorNotificationVisualType.photoRequest:
+      return const Color(0xFF0EA5E9); // Sky blue
+    case VendorNotificationVisualType.orderRequest:
+      return const Color(0xFF6366F1); // Indigo
+    case VendorNotificationVisualType.dispatch:
+      return const Color(0xFF3B82F6); // Blue
+    case VendorNotificationVisualType.payout:
+      return const Color(0xFF10B981); // Emerald
     case VendorNotificationVisualType.success:
-      return const Color(0xFF34D399);
+      return const Color(0xFF10B981); // Emerald
     case VendorNotificationVisualType.warning:
-      return const Color(0xFFFBBF24);
+      return const Color(0xFFF59E0B); // Amber
     case VendorNotificationVisualType.error:
-      return const Color(0xFFF87171);
+      return const Color(0xFFEF4444); // Rose
+    case VendorNotificationVisualType.support:
+      return const Color(0xFF8B5CF6); // Purple
+    case VendorNotificationVisualType.product:
+      return const Color(0xFF14B8A6); // Teal
+    case VendorNotificationVisualType.document:
+      return const Color(0xFFF97316); // Orange
     case VendorNotificationVisualType.info:
       return AppTheme.accent;
   }

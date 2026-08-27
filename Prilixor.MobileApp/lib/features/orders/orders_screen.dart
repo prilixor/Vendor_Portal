@@ -256,7 +256,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                             ),
                                             enabledBorder: OutlineInputBorder(
                                               borderRadius: BorderRadius.circular(14),
-                                              borderSide: const BorderSide(color: Color(0xFF334155)),
+                                              borderSide: BorderSide(color: context.appColors.border),
                                             ),
                                             focusedBorder: OutlineInputBorder(
                                               borderRadius: BorderRadius.circular(14),
@@ -282,7 +282,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                               border: Border.all(
                                                 color: _statusFilter != 'All'
                                                     ? const Color(0xFF6C63FF)
-                                                    : const Color(0xFF334155),
+                                                    : context.appColors.border,
                                               ),
                                             ),
                                             child: Stack(
@@ -291,7 +291,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                                 Icon(
                                                   Icons.tune_rounded,
                                                   size: 20,
-                                                  color: _statusFilter != 'All' ? Colors.white : const Color(0xFFCBD5E1),
+                                                  color: _statusFilter != 'All' ? Colors.white : context.appColors.textSecondary,
                                                 ),
                                                 if (_statusFilter != 'All')
                                                   Positioned(
@@ -556,7 +556,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       decoration: BoxDecoration(
         color: context.appColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: context.appColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -576,8 +576,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
-                    color: Color(0xFF94A3B8),
+                  style: TextStyle(
+                    color: context.appColors.textSecondary,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -601,8 +601,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
           const SizedBox(height: 6),
           Text(
             subtitle,
-            style: const TextStyle(
-              color: Color(0xFF64748B),
+            style: TextStyle(
+              color: context.appColors.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w500,
               height: 1.25,
@@ -755,7 +755,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         const SizedBox(height: 4),
                         Text(
                           '₹${order.totalAmount.toStringAsFixed(0)}',
-                          style: const TextStyle(color: Color(0xFFA5B4FC), fontSize: 14, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: context.isDarkMode ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -777,22 +781,22 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              // Always wrap on phones — never force RENT + long status + Details on one line.
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                alignment: WrapAlignment.spaceBetween,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      _buildOrderTypeBadge(context, order.orderType),
-                      _buildStatusBadge(context, order.status, compact: compact),
-                    ],
+                  Flexible(
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _buildOrderTypeBadge(context, order.orderType),
+                        _buildStatusBadge(context, order.status, compact: compact),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -833,22 +837,32 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Widget _buildOrderTypeBadge(BuildContext context, String orderType) {
     final isDark = context.isDarkMode;
     final isBuy = orderType.toLowerCase().trim() == 'buy';
-    final bg = isBuy ? const Color(0xFF312E81) : const Color(0xFF134E4A);
-    final fg = isBuy ? const Color(0xFFA5B4FC) : const Color(0xFF5EEAD4);
-    final border = isBuy ? const Color(0xFF4338CA) : const Color(0xFF0F766E);
+    final bg = isBuy
+        ? (isDark ? const Color(0xFF312E81).withValues(alpha: 0.45) : const Color(0xFFEEF2FF))
+        : (isDark ? const Color(0xFF134E4A).withValues(alpha: 0.45) : const Color(0xFFF0FDFA));
+    final fg = isBuy
+        ? (isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA))
+        : (isDark ? const Color(0xFF5EEAD4) : const Color(0xFF0F766E));
+    final border = isBuy
+        ? (isDark ? const Color(0xFF4338CA).withValues(alpha: 0.7) : const Color(0xFFC7D2FE))
+        : (isDark ? const Color(0xFF0F766E).withValues(alpha: 0.7) : const Color(0xFF99F6E4));
 
     return Container(
-      height: 26,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isDark ? bg.withValues(alpha: 0.45) : bg.withValues(alpha: 0.15),
+        color: bg,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: isDark ? border.withValues(alpha: 0.7) : bg.withValues(alpha: 0.3)),
+        border: Border.all(color: border),
       ),
       child: Text(
         orderType.toUpperCase(),
-        style: TextStyle(color: fg, fontSize: 10, fontWeight: FontWeight.bold, height: 1.1),
+        style: TextStyle(
+          color: fg,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.4,
+          height: 1.1,
+        ),
       ),
     );
   }
@@ -859,9 +873,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final colorsTuple = _statusColors(context, isDark, status);
 
     return Container(
-      height: 26,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: colorsTuple.$1,
         borderRadius: BorderRadius.circular(6),
@@ -869,7 +881,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ),
       child: Text(
         label,
-        style: TextStyle(color: colorsTuple.$3, fontSize: 10, fontWeight: FontWeight.w700, height: 1.1),
+        style: TextStyle(
+          color: colorsTuple.$3,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          height: 1.1,
+        ),
         maxLines: 1,
         softWrap: false,
         overflow: TextOverflow.ellipsis,
@@ -895,30 +912,45 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   (Color, Color, Color) _statusColors(BuildContext context, bool isDark, String status) {
-    final colors = context.appColors;
-    final s = status.toLowerCase().replaceAll('_', ' ');
+    final s = status.toLowerCase().replaceAll('_', ' ').trim();
     if (s == 'active') {
-      return isDark ? (const Color(0xFF14532D).withValues(alpha: 0.4), const Color(0xFF16A34A), const Color(0xFF86EFAC)) : (Colors.green.shade50, Colors.green.shade300, Colors.green.shade800);
+      return isDark
+          ? (const Color(0xFF14532D).withValues(alpha: 0.4), const Color(0xFF16A34A), const Color(0xFF86EFAC))
+          : (const Color(0xFFF0FDF4), const Color(0xFF86EFAC), const Color(0xFF15803D));
     }
-    if (s == 'pending' || s == 'awaiting vendor acceptance') {
-      return isDark ? (const Color(0xFF78350F).withValues(alpha: 0.35), const Color(0xFFD97706), const Color(0xFFFCD34D)) : (Colors.orange.shade50, Colors.orange.shade300, Colors.orange.shade800);
+    if (s == 'pending' || s == 'awaiting vendor acceptance' || s == 'awaiting') {
+      return isDark
+          ? (const Color(0xFF78350F).withValues(alpha: 0.35), const Color(0xFFD97706), const Color(0xFFFCD34D))
+          : (const Color(0xFFFFFBEB), const Color(0xFFFDE68A), const Color(0xFFB45309));
     }
     if (s == 'confirmed') {
-      return isDark ? (const Color(0xFF0C4A6E).withValues(alpha: 0.4), const Color(0xFF0284C7), const Color(0xFF7DD3FC)) : (Colors.blue.shade50, Colors.blue.shade300, Colors.blue.shade800);
+      return isDark
+          ? (const Color(0xFF0C4A6E).withValues(alpha: 0.4), const Color(0xFF0284C7), const Color(0xFF7DD3FC))
+          : (const Color(0xFFF0F9FF), const Color(0xFFBAE6FD), const Color(0xFF0369A1));
     }
     if (s.contains('transit')) {
-      return isDark ? (const Color(0xFF1E3A8A).withValues(alpha: 0.4), const Color(0xFF3B82F6), const Color(0xFF93C5FD)) : (Colors.indigo.shade50, Colors.indigo.shade300, Colors.indigo.shade800);
+      return isDark
+          ? (const Color(0xFF1E3A8A).withValues(alpha: 0.4), const Color(0xFF3B82F6), const Color(0xFF93C5FD))
+          : (const Color(0xFFEEF2FF), const Color(0xFFC7D2FE), const Color(0xFF4338CA));
     }
     if (s == 'returned' || s == 'completed') {
-      return isDark ? (const Color(0xFF334155).withValues(alpha: 0.5), const Color(0xFF64748B), const Color(0xFFE2E8F0)) : (Colors.blueGrey.shade50, Colors.blueGrey.shade300, Colors.blueGrey.shade800);
+      return isDark
+          ? (const Color(0xFF334155).withValues(alpha: 0.5), const Color(0xFF64748B), const Color(0xFFE2E8F0))
+          : (const Color(0xFFF8FAFC), const Color(0xFFCBD5E1), const Color(0xFF475569));
     }
-    if (s == 'bought out') {
-      return isDark ? (const Color(0xFF4A044E).withValues(alpha: 0.4), const Color(0xFFC026D3), const Color(0xFFF0ABFC)) : (Colors.purple.shade50, Colors.purple.shade300, Colors.purple.shade800);
+    if (s == 'bought out' || s == 'buyout') {
+      return isDark
+          ? (const Color(0xFF4A044E).withValues(alpha: 0.4), const Color(0xFFC026D3), const Color(0xFFF0ABFC))
+          : (const Color(0xFFFDF4FF), const Color(0xFFF5D0FE), const Color(0xFF86198F));
     }
-    if (s.contains('cancel')) {
-      return isDark ? (const Color(0xFF7F1D1D).withValues(alpha: 0.35), const Color(0xFFEF4444), const Color(0xFFFCA5A5)) : (Colors.red.shade50, Colors.red.shade300, Colors.red.shade800);
+    if (s.contains('cancel') || s.contains('fail')) {
+      return isDark
+          ? (const Color(0xFF7F1D1D).withValues(alpha: 0.35), const Color(0xFFEF4444), const Color(0xFFFCA5A5))
+          : (const Color(0xFFFEF2F2), const Color(0xFFFECACA), const Color(0xFFB91C1C));
     }
-    return (context.appColors.border, context.appColors.border, context.appColors.textSecondary);
+    return isDark
+        ? (context.appColors.surfaceElevated, context.appColors.border, context.appColors.textSecondary)
+        : (const Color(0xFFF1F5F9), const Color(0xFFE2E8F0), const Color(0xFF475569));
   }
 
   String _formatOrderDate(String? value) {

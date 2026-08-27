@@ -16,7 +16,7 @@ import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { AdminProductMediaStep } from "@/app/components/admin/AdminProductMediaStep";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Textarea } from "@/app/components/ui/textarea";
-import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto } from "@/app/services/adminApi";
+import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, ProductVariantDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto } from "@/app/services/adminApi";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { resolveCatalogProductImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown, FlaskConical } from "lucide-react";
@@ -54,6 +54,55 @@ function buildChemicalSku(
   return `${base}-${n}`;
 }
 
+type VariantField = "sku" | "sizeValue" | "sizeUnit" | "vendorPrice" | "buyPrice";
+
+const variantErrorKey = (index: number, field: VariantField) => `variants.${index}.${field}`;
+
+/**
+ * Packaging sizes carry the price for a chemical, so each row is validated per field the same
+ * way equipment validates its pricing inputs — inline message plus red border on the input.
+ */
+function validateChemicalVariants(variants: ProductVariantDto[] | undefined) {
+  const errors: Record<string, string> = {};
+  const rows = variants ?? [];
+
+  if (rows.length === 0) {
+    errors.variants = "Add at least one packaging size (e.g. 1 L, 5 L) with buy price.";
+    return errors;
+  }
+
+  const seenSkus = new Set<string>();
+  rows.forEach((v, index) => {
+    const sku = readVariantSku(v);
+    if (!sku) {
+      errors[variantErrorKey(index, "sku")] = "Please enter a SKU.";
+    } else if (seenSkus.has(sku.toLowerCase())) {
+      errors[variantErrorKey(index, "sku")] = "This SKU is already used by another size.";
+    } else {
+      seenSkus.add(sku.toLowerCase());
+    }
+
+    if (!(Number(v.sizeValue) > 0)) {
+      errors[variantErrorKey(index, "sizeValue")] = "Enter a size greater than 0.";
+    }
+    if (!v.sizeUnit?.trim()) {
+      errors[variantErrorKey(index, "sizeUnit")] = "Please select a unit.";
+    }
+    if (Number(v.vendorPrice) < 0 || Number.isNaN(Number(v.vendorPrice))) {
+      errors[variantErrorKey(index, "vendorPrice")] = "Vendor payout cannot be negative.";
+    }
+    if (!(Number(v.buyPrice) > 0)) {
+      errors[variantErrorKey(index, "buyPrice")] = "Enter a customer buy price greater than 0.";
+    }
+  });
+
+  if (Object.keys(errors).length > 0) {
+    errors.variants = "Please fix the highlighted packaging sizes.";
+  }
+
+  return errors;
+}
+
 function readNum(...vals: unknown[]) {
   for (const val of vals) {
     if (val === "" || val == null) continue;
@@ -89,8 +138,8 @@ function bindChemicalVariants(
   });
 }
 
-const packNumClass =
-  "h-9 w-full min-w-0 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+/** Packaging price inputs use the same height and native steppers as the equipment pricing inputs. */
+const packNumClass = "w-full min-w-0";
 
 /**
  * Chemical buy price shown as a tap/click disclosure. Chemicals price per packaging size
@@ -272,6 +321,17 @@ const ChemicalManagement = () => {
       if (!prev[key]) return prev;
       const next = { ...prev };
       delete next[key];
+      return next;
+    });
+  };
+
+  /** Row indices shift when a size is removed, so drop every keyed packaging error. */
+  const clearVariantErrors = () => {
+    setFieldErrors((prev) => {
+      const keys = Object.keys(prev).filter((k) => k === "variants" || k.startsWith("variants."));
+      if (keys.length === 0) return prev;
+      const next = { ...prev };
+      keys.forEach((k) => delete next[k]);
       return next;
     });
   };
@@ -515,17 +575,7 @@ const ChemicalManagement = () => {
       }
     }
     if (step === 2) {
-      const variants = productForm.variants || [];
-      if (variants.length === 0) {
-        errors.variants = "Add at least one packaging size (e.g. 1 L, 5 L) with buy price.";
-      } else {
-        const invalid = variants.find(
-          (v) => !v.sizeUnit?.trim() || !(Number(v.sizeValue) > 0) || !(Number(v.buyPrice) > 0)
-        );
-        if (invalid) {
-          errors.variants = "Each size needs Size value, Unit, and Buy price greater than 0.";
-        }
-      }
+      Object.assign(errors, validateChemicalVariants(productForm.variants));
     }
     if (Object.keys(errors).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errors }));
@@ -742,17 +792,7 @@ const ChemicalManagement = () => {
     if (!productForm.baseUnit?.trim()) {
       errors.baseUnit = "Please enter a base unit (e.g. L, Kg, g).";
     }
-    const variants = productForm.variants || [];
-    if (variants.length === 0) {
-      errors.variants = "Add at least one packaging size (e.g. 1 L, 5 L) with buy price.";
-    } else {
-      const invalid = variants.find(
-        (v) => !v.sizeUnit?.trim() || !(Number(v.sizeValue) > 0) || !(Number(v.buyPrice) > 0)
-      );
-      if (invalid) {
-        errors.variants = "Each size needs Size value, Unit, and Buy price greater than 0.";
-      }
-    }
+    Object.assign(errors, validateChemicalVariants(productForm.variants));
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       if (errors.categoryId || errors.productName || errors.baseUnit) setProductFormStep(0);
@@ -1822,27 +1862,33 @@ const ChemicalManagement = () => {
                           className="space-y-3 rounded-xl border border-border bg-card p-3"
                         >
                           <div className="flex items-start gap-2">
-                            <div className="min-w-0 flex-1 space-y-1">
-                              <Label className="text-[11px] text-muted-foreground">SKU</Label>
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              <Label required>SKU</Label>
                               <Input
                                 value={v.sku ?? ""}
                                 onChange={(e) => {
                                   const updated = [...(productForm.variants || [])];
                                   updated[idx] = { ...updated[idx], sku: e.target.value };
                                   setProductForm({ ...productForm, variants: updated });
+                                  clearFieldError(variantErrorKey(idx, "sku"));
+                                  clearFieldError("variants");
                                 }}
-                                className="h-9 font-mono text-xs text-sky-700 dark:text-sky-300"
+                                className={`font-mono text-sky-700 dark:text-sky-300 ${
+                                  fieldErrors[variantErrorKey(idx, "sku")] ? "border-destructive" : ""
+                                }`}
                                 placeholder="ACE-0P5LTR"
                               />
+                              <FieldError message={fieldErrors[variantErrorKey(idx, "sku")]} />
                             </div>
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="mt-5 h-9 w-9 shrink-0 text-destructive"
+                              className="mt-6 h-10 w-10 shrink-0 text-destructive"
                               onClick={() => {
                                 const updated = (productForm.variants || []).filter((_, i) => i !== idx);
                                 setProductForm({ ...productForm, variants: updated });
+                                clearVariantErrors();
                               }}
                               aria-label="Remove size"
                             >
@@ -1850,9 +1896,9 @@ const ChemicalManagement = () => {
                             </Button>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1">
-                              <Label className="text-[11px] text-muted-foreground">Size value</Label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label required>Size value</Label>
                               <Input
                                 type="number"
                                 inputMode="decimal"
@@ -1863,22 +1909,31 @@ const ChemicalManagement = () => {
                                   const updated = [...(productForm.variants || [])];
                                   updated[idx] = { ...updated[idx], sizeValue: e.target.value === "" ? 0 : Number(e.target.value) };
                                   setProductForm({ ...productForm, variants: updated });
+                                  clearFieldError(variantErrorKey(idx, "sizeValue"));
+                                  clearFieldError("variants");
                                 }}
-                                className={packNumClass}
+                                className={`${packNumClass} ${
+                                  fieldErrors[variantErrorKey(idx, "sizeValue")] ? "border-destructive" : ""
+                                }`}
                                 placeholder="0.5"
                               />
+                              <FieldError message={fieldErrors[variantErrorKey(idx, "sizeValue")]} />
                             </div>
-                            <div className="space-y-1">
-                              <Label className="text-[11px] text-muted-foreground">Unit</Label>
+                            <div className="space-y-1.5">
+                              <Label required>Unit</Label>
                               <Select
                                 value={v.sizeUnit}
                                 onValueChange={(val) => {
                                   const updated = [...(productForm.variants || [])];
                                   updated[idx] = { ...updated[idx], sizeUnit: val };
                                   setProductForm({ ...productForm, variants: updated });
+                                  clearFieldError(variantErrorKey(idx, "sizeUnit"));
+                                  clearFieldError("variants");
                                 }}
                               >
-                                <SelectTrigger className="h-9 text-xs">
+                                <SelectTrigger
+                                  className={fieldErrors[variantErrorKey(idx, "sizeUnit")] ? "border-destructive" : ""}
+                                >
                                   <SelectValue placeholder="Unit" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1890,9 +1945,10 @@ const ChemicalManagement = () => {
                                   <SelectItem value="Pack">Pack</SelectItem>
                                 </SelectContent>
                               </Select>
+                              <FieldError message={fieldErrors[variantErrorKey(idx, "sizeUnit")]} />
                             </div>
-                            <div className="space-y-1">
-                              <Label className="text-[11px] text-muted-foreground">Vendor payout ₹</Label>
+                            <div className="space-y-1.5">
+                              <Label>Vendor payout (INR)</Label>
                               <Input
                                 type="number"
                                 inputMode="decimal"
@@ -1903,13 +1959,18 @@ const ChemicalManagement = () => {
                                   const updated = [...(productForm.variants || [])];
                                   updated[idx] = { ...updated[idx], vendorPrice: e.target.value === "" ? 0 : Number(e.target.value) };
                                   setProductForm({ ...productForm, variants: updated });
+                                  clearFieldError(variantErrorKey(idx, "vendorPrice"));
+                                  clearFieldError("variants");
                                 }}
-                                className={packNumClass}
+                                className={`${packNumClass} ${
+                                  fieldErrors[variantErrorKey(idx, "vendorPrice")] ? "border-destructive" : ""
+                                }`}
                                 placeholder="60"
                               />
+                              <FieldError message={fieldErrors[variantErrorKey(idx, "vendorPrice")]} />
                             </div>
-                            <div className="space-y-1">
-                              <Label className="text-[11px] text-muted-foreground">Customer buy ₹</Label>
+                            <div className="space-y-1.5">
+                              <Label required>Customer buy (INR)</Label>
                               <Input
                                 type="number"
                                 inputMode="decimal"
@@ -1920,10 +1981,15 @@ const ChemicalManagement = () => {
                                   const updated = [...(productForm.variants || [])];
                                   updated[idx] = { ...updated[idx], buyPrice: e.target.value === "" ? 0 : Number(e.target.value) };
                                   setProductForm({ ...productForm, variants: updated });
+                                  clearFieldError(variantErrorKey(idx, "buyPrice"));
+                                  clearFieldError("variants");
                                 }}
-                                className={packNumClass}
+                                className={`${packNumClass} ${
+                                  fieldErrors[variantErrorKey(idx, "buyPrice")] ? "border-destructive" : ""
+                                }`}
                                 placeholder="75"
                               />
+                              <FieldError message={fieldErrors[variantErrorKey(idx, "buyPrice")]} />
                             </div>
                           </div>
 

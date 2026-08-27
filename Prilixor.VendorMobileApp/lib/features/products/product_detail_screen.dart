@@ -7,6 +7,7 @@ import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/utils/media_url.dart';
+import '../../shared/widgets/admin_sizing_pricing.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/catalog_image_viewer_screen.dart';
 import '../inventory/inventory_detail_screen.dart';
@@ -790,7 +791,17 @@ class _ListingDetailsPanel extends StatelessWidget {
               ),
           ],
         ),
-        if (!row.isChemical) ...[
+        if (row.isChemical) ...[
+          const SizedBox(height: 10),
+          _DetailSection(
+            title: 'Admin sizing & pricing',
+            icon: Icons.payments_outlined,
+            badge: 'Read-only',
+            children: [
+              AdminSizingPricingBody(product: catalogProduct),
+            ],
+          ),
+        ] else ...[
           const SizedBox(height: 10),
           _DetailSection(
             title: 'Customer pricing',

@@ -69,10 +69,10 @@ export function CustomerStoreHeader() {
       <div className="mx-auto flex h-14 min-w-0 max-w-[1400px] items-center gap-2 px-3 sm:h-16 sm:gap-3 sm:px-6 lg:px-8">
         <Link to="/customer/shop" className="flex shrink-0 items-center" aria-label="BlinksMed shop">
           {/* Full lockup already includes BLINKSMED + Buy | Rent | Care */}
-          <BrandMark size="lg" className="h-10 w-10 sm:h-14 sm:w-14" />
+          <BrandMark size="lg" rounded="2xl" className="h-10 w-10 sm:h-14 sm:w-14" />
         </Link>
 
-        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-0.5 sm:gap-2">
+        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1 sm:gap-2">
           <Button
             variant="ghost"
             size="icon"
@@ -99,7 +99,7 @@ export function CustomerStoreHeader() {
             >
               <Bell className="h-4 w-4" />
               {unreadCustomerCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-destructive-foreground">
                   {unreadCustomerCount > 99 ? "99+" : unreadCustomerCount}
                 </span>
               )}
@@ -115,7 +115,7 @@ export function CustomerStoreHeader() {
           >
             <ShoppingCart className="h-4 w-4" />
             {cartCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shadow-glow">
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold leading-none text-primary-foreground shadow-glow">
                 {cartCount > 99 ? "99+" : cartCount}
               </span>
             )}
@@ -124,7 +124,7 @@ export function CustomerStoreHeader() {
           {signedIn ? (
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-muted transition-colors">
+                <button className="flex items-center gap-2 rounded-lg p-1 hover:bg-muted transition-colors md:pr-2">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-gradient-primary text-xs font-semibold text-primary-foreground">
                       {initials}

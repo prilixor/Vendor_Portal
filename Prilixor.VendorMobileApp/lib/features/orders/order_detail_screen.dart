@@ -484,14 +484,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                         Icon(
                                                           Icons.photo_library_outlined,
                                                           size: 12,
-                                                          color: Colors.amber.shade300,
+                                                          color: context.isDarkMode ? Colors.amber.shade300 : const Color(0xFFD97706),
                                                         ),
                                                         const SizedBox(width: 4),
                                                         Expanded(
                                                           child: Text(
                                                             'Customer photos requested \u00b7 upload needed',
                                                             style: TextStyle(
-                                                              color: Colors.amber.shade300,
+                                                              color: context.isDarkMode ? Colors.amber.shade300 : const Color(0xFFD97706),
                                                               fontSize: 10.5,
                                                               fontWeight: FontWeight.w700,
                                                             ),
@@ -503,17 +503,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                     const SizedBox(height: 4),
                                                     Row(
                                                       children: [
-                                                        const Icon(
+                                                        Icon(
                                                           Icons.photo_library_outlined,
                                                           size: 12,
-                                                          color: Color(0xFF34D399),
+                                                          color: context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669),
                                                         ),
                                                         const SizedBox(width: 4),
                                                         Expanded(
                                                           child: Text(
                                                             '$photoCount/5 customer photos uploaded',
-                                                            style: const TextStyle(
-                                                              color: Color(0xFF34D399),
+                                                            style: TextStyle(
+                                                              color: context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669),
                                                               fontSize: 10.5,
                                                               fontWeight: FontWeight.w700,
                                                             ),
@@ -821,21 +821,28 @@ class _PendingContinuationsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF78350F).withValues(alpha: 0.35),
+        color: isDark
+            ? const Color(0xFF78350F).withValues(alpha: 0.35)
+            : const Color(0xFFFFFBEB),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.amber.withValues(alpha: 0.45)),
+        border: Border.all(
+          color: isDark
+              ? Colors.amber.withValues(alpha: 0.45)
+              : const Color(0xFFFDE68A),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Pending customer requests',
             style: TextStyle(
-              color: Color(0xFFFBBF24),
+              color: isDark ? const Color(0xFFFBBF24) : const Color(0xFF92400E),
               fontWeight: FontWeight.w800,
               fontSize: 16,
             ),
@@ -903,13 +910,18 @@ class _RequestBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: context.appColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.amber.withValues(alpha: 0.25)),
+        border: Border.all(
+          color: isDark
+              ? Colors.amber.withValues(alpha: 0.25)
+              : const Color(0xFFFDE68A),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1138,8 +1150,9 @@ class _PhotoRequestCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: context.appColors.surface,
+                            color: context.isDarkMode ? context.appColors.surface : context.appColors.surfaceElevated,
                             borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: context.appColors.border),
                           ),
                           child: Text(
                             '${images.length}/$maxImages',
@@ -1155,15 +1168,21 @@ class _PhotoRequestCard extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: Colors.amber.withValues(alpha: 0.2),
+                              color: context.isDarkMode ? Colors.amber.withValues(alpha: 0.2) : const Color(0xFFFEF3C7),
                               borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: context.isDarkMode
+                                    ? Colors.amber.withValues(alpha: 0.35)
+                                    : const Color(0xFFFDE68A),
+                                width: 1,
+                              ),
                             ),
                             child: Text(
                               'Action needed',
                               style: TextStyle(
-                                color: Colors.amber.shade200,
+                                color: context.isDarkMode ? Colors.amber.shade200 : const Color(0xFF92400E),
                                 fontSize: 10,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
@@ -1639,7 +1658,9 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
                     ),
                     Icon(
                       Icons.check_circle_rounded,
-                      color: Colors.greenAccent.withValues(alpha: 0.85),
+                      color: context.isDarkMode
+                          ? Colors.greenAccent.withValues(alpha: 0.85)
+                          : const Color(0xFF059669),
                       size: 18,
                     ),
                   ],

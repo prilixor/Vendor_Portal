@@ -109,7 +109,7 @@ export function CustomerMedicalReference({ title, value, onChange }: CustomerMed
     <div className="space-y-4">
       {title && <h3 className="text-base font-semibold text-foreground">{title}</h3>}
       <p className="text-sm text-muted-foreground leading-relaxed">
-        Enter the Unique ID from your doctor (or from their QR / share page). This is optional and helps vendors
+        Enter the Unique ID from your doctor (or from their QR / share page). This is optional and helps BlinksMed
         know who referred the equipment.
       </p>
 

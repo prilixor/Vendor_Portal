@@ -361,6 +361,7 @@ public sealed class VendorOnboardingRepository(
 
         CopyProductValues(product, legacyProduct);
         await EnsureRentalPricingPlanGraphAsync(dbContext, legacyProduct, cancellationToken);
+        await EnsureVariantAndChemicalGraphAsync(dbContext, legacyProduct, cancellationToken);
     }
 
     public async Task UpdateProductAsync(Product product, CancellationToken cancellationToken)
@@ -376,6 +377,7 @@ public sealed class VendorOnboardingRepository(
         }
 
         await EnsureRentalPricingPlanGraphAsync(commonDbContext, product, cancellationToken);
+        await EnsureVariantAndChemicalGraphAsync(commonDbContext, product, cancellationToken);
 
         // Must include ChemicalProperty/Variants/Plans so CopyProductValues updates existing rows
         // instead of inserting duplicates (uq_chemical_properties_product / sku uniqueness).
@@ -392,6 +394,7 @@ public sealed class VendorOnboardingRepository(
 
         CopyProductValues(product, legacyProduct);
         await EnsureRentalPricingPlanGraphAsync(dbContext, legacyProduct, cancellationToken);
+        await EnsureVariantAndChemicalGraphAsync(dbContext, legacyProduct, cancellationToken);
     }
 
     /// <summary>
@@ -449,6 +452,126 @@ public sealed class VendorOnboardingRepository(
                      .ToList())
         {
             orphan.State = EntityState.Deleted;
+        }
+    }
+
+    /// <summary>
+    /// Same store-generated-key trap as rental plans: chemical updates assign Guids on
+    /// packaging sizes and chemical_properties, then copy them into the vendor DB. EF
+    /// treats a non-empty Guid as an existing row (Modified) and UPDATE affects 0 rows.
+    /// </summary>
+    private static async Task EnsureVariantAndChemicalGraphAsync(
+        DbContext ctx,
+        Product product,
+        CancellationToken cancellationToken)
+    {
+        ctx.ChangeTracker.DetectChanges();
+
+        if (product.ChemicalProperty != null)
+        {
+            var chem = product.ChemicalProperty;
+            var existingChem = await ctx.Set<ChemicalProperty>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == chem.Id || c.ProductId == product.Id, cancellationToken);
+
+            if (existingChem is not null && existingChem.Id != chem.Id)
+            {
+                var tracked = ctx.Set<ChemicalProperty>().Local.FirstOrDefault(c => c.Id == existingChem.Id)
+                    ?? await ctx.Set<ChemicalProperty>().FirstAsync(c => c.Id == existingChem.Id, cancellationToken);
+                tracked.CasNumber = chem.CasNumber;
+                tracked.ChemicalFormula = chem.ChemicalFormula;
+                tracked.PurityPercentage = chem.PurityPercentage;
+                tracked.MolecularWeight = chem.MolecularWeight;
+                tracked.BaseUnit = chem.BaseUnit;
+                tracked.SdsDocumentUrl = chem.SdsDocumentUrl;
+                tracked.CoaDocumentUrl = chem.CoaDocumentUrl;
+
+                var chemEntry = ctx.Entry(chem);
+                if (!ReferenceEquals(tracked, chem) && chemEntry.State != EntityState.Detached)
+                {
+                    chemEntry.State = EntityState.Detached;
+                }
+
+                product.ChemicalProperty = tracked;
+            }
+            else
+            {
+                await EnsurePreKeyedChildStateAsync(ctx, chem, cancellationToken);
+            }
+        }
+
+        var keepIds = product.Variants?.Select(v => v.Id).ToHashSet() ?? [];
+
+        if (product.Variants != null)
+        {
+            foreach (var variant in product.Variants)
+            {
+                await EnsurePreKeyedChildStateAsync(ctx, variant, cancellationToken);
+            }
+        }
+
+        foreach (var orphan in ctx.ChangeTracker.Entries<ProductVariant>()
+                     .Where(e => e.Entity.ProductId == product.Id
+                                 && e.State is not (EntityState.Deleted or EntityState.Detached)
+                                 && !keepIds.Contains(e.Entity.Id))
+                     .ToList())
+        {
+            orphan.State = EntityState.Deleted;
+        }
+
+        foreach (var deleted in ctx.ChangeTracker.Entries<ProductVariant>()
+                     .Where(e => e.Entity.ProductId == product.Id && e.State == EntityState.Deleted)
+                     .ToList())
+        {
+            var exists = await ctx.Set<ProductVariant>()
+                .AsNoTracking()
+                .AnyAsync(v => v.Id == deleted.Entity.Id, cancellationToken);
+            if (!exists)
+            {
+                deleted.State = EntityState.Detached;
+            }
+        }
+    }
+
+    private static async Task EnsurePreKeyedChildStateAsync<T>(
+        DbContext ctx,
+        T entity,
+        CancellationToken cancellationToken) where T : class
+    {
+        var entry = ctx.Entry(entity);
+        var id = entry.Property("Id").CurrentValue is Guid guid ? guid : Guid.Empty;
+        if (id == Guid.Empty)
+        {
+            return;
+        }
+
+        if (entry.State == EntityState.Detached)
+        {
+            var exists = await ctx.Set<T>()
+                .AsNoTracking()
+                .AnyAsync(e => EF.Property<Guid>(e, "Id") == id, cancellationToken);
+            if (exists)
+            {
+                ctx.Attach(entity);
+                ctx.Entry(entity).State = EntityState.Modified;
+            }
+            else
+            {
+                ctx.Add(entity);
+            }
+
+            return;
+        }
+
+        if (entry.State == EntityState.Modified)
+        {
+            var exists = await ctx.Set<T>()
+                .AsNoTracking()
+                .AnyAsync(e => EF.Property<Guid>(e, "Id") == id, cancellationToken);
+            if (!exists)
+            {
+                entry.State = EntityState.Added;
+            }
         }
     }
 

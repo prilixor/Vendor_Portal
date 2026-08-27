@@ -162,6 +162,9 @@ namespace Prilixor.VendorPortal.Infrastructure
             services.Configure<RazorpayOptions>(
                 configuration.GetSection(RazorpayOptions.SectionName));
 
+            services.Configure<RentalPricingOptions>(
+                configuration.GetSection(RentalPricingOptions.SectionName));
+
             return services;
         }
     }

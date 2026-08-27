@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
+import { BackLink } from "@/app/components/shared/BackLink";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
@@ -1120,19 +1121,14 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
 
           {step === "configure" && (
             <>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="-ml-2"
+              <BackLink
                 onClick={() => {
                   setStep("search");
                   setSelected(null);
                   setDetail(null);
                 }}
-              >
-                <ArrowLeft className="h-4 w-4 mr-1.5" /> Back to search
-              </Button>
+                label="Back to search"
+              />
 
               {selected && (
                 <div className={cn(

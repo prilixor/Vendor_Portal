@@ -55,9 +55,15 @@ const ForgotPassword = () => {
   }
 
   return (
-    <AuthLayout title="Forgot Password" subtitle="Enter your email to receive a password reset link.">
+    <AuthLayout
+      title="Forgot Password"
+      subtitle="Enter your email to receive a password reset link."
+      portalType="vendor"
+      backTo="/login"
+      backLabel="Back to sign in"
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="text-xs text-muted-foreground -mt-1">
+        <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.
         </p>
         <div className="space-y-1.5">

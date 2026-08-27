@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, type MouseEvent } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, type MouseEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Heart, ImageOff, MapPin } from "lucide-react";
 import { customerApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
@@ -11,6 +11,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Switch } from "@/app/components/ui/switch";
 import { Label } from "@/app/components/ui/label";
 import { cn, imageSrcCandidates } from "@/app/helpers/utils";
+import {
+  applyShopBrowseModeToSearchParams,
+  persistShopBrowseMode,
+  resolveShopBrowseMode,
+  shopHrefForBrowseMode,
+  SHOP_TAB_PARAM,
+  type ShopBrowseMode,
+} from "@/app/helpers/customerShopBrowse";
 import { useAuth } from "@/app/guards/AuthContext";
 import {
   ActiveFilterChips,
@@ -49,7 +57,7 @@ export function availabilityBadge(
   }
   if (qty <= 0 && totalAcrossVendors > 0) {
     return {
-      label: "Out at this vendor",
+      label: "Currently unavailable",
       className: "pointer-events-none absolute left-3 top-3 border-0 bg-orange-600 text-white hover:bg-orange-600",
     };
   }
@@ -121,7 +129,9 @@ const CustomerBrowse = () => {
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
-  const [browseMode, setBrowseMode] = useState<"equipment" | "chemicals">("equipment");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get(SHOP_TAB_PARAM);
+  const browseMode = resolveShopBrowseMode(tabParam);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftCategory, setDraftCategory] = useState<string | undefined>(undefined);
   const [draftStock, setDraftStock] = useState<StockFilter>("all");
@@ -133,6 +143,18 @@ const CustomerBrowse = () => {
   useEffect(() => {
     dismissBootSplash();
   }, []);
+
+  useLayoutEffect(() => {
+    persistShopBrowseMode(browseMode);
+    if (browseMode === "chemicals" && tabParam !== "chemicals") {
+      setSearchParams((prev) => applyShopBrowseModeToSearchParams(prev, "chemicals"), { replace: true });
+    }
+  }, [browseMode, tabParam, setSearchParams]);
+
+  const setBrowseMode = (mode: ShopBrowseMode) => {
+    persistShopBrowseMode(mode);
+    setSearchParams((prev) => applyShopBrowseModeToSearchParams(prev, mode), { replace: true });
+  };
 
   const { data: favoritesData = [] } = useQuery({
     queryKey: ["customer-favorites"],
@@ -303,7 +325,7 @@ const CustomerBrowse = () => {
     e.stopPropagation();
     if (user?.role !== "customer") {
       toast.message("Sign in to save favorites");
-      navigate("/customer/login", { state: { from: "/customer/shop" } });
+      navigate("/customer/login", { state: { from: shopHrefForBrowseMode(browseMode) } });
       return;
     }
     if (wishlist.has(id)) {
@@ -544,8 +566,8 @@ const CustomerBrowse = () => {
             const showBuy = isChem || !!item.isBuyEnabled;
             const badge = availabilityBadge(
               item.availabilityStatus,
-              item.availableQuantity,
-              item.productTotalAvailableQuantity,
+              item.productTotalAvailableQuantity ?? item.availableQuantity,
+              item.productTotalAvailableQuantity ?? item.availableQuantity,
               item.listingStatus,
             );
 

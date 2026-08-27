@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText, ChevronRight } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
+import { BackLink } from "@/app/components/shared/BackLink";
+import { BrandMark } from "@/app/components/shared/BrandMark";
 import { cn } from "@/app/helpers/utils";
 
 const sections = [
@@ -70,20 +72,25 @@ const TermsAndConditions = () => {
     }
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1 && window.history.state?.idx > 0) {
+      navigate(-1);
+    } else {
+      window.close();
+      navigate("/");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background font-sans selection:bg-primary/10">
       {/* Refined Minimal Header */}
       <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-14 items-center justify-between px-4 lg:px-8">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate(-1)} className="flex shrink-0 h-8 w-8 items-center justify-center rounded-full hover:bg-muted text-muted-foreground transition-colors" aria-label="Go back">
-              <ArrowLeft className="h-4 w-4" />
-            </button>
+            <BackLink onClick={handleBack} label="Back" />
             <Link to="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary shadow-sm">
-                <FileText className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-sm font-bold tracking-tight">Vendor Portal</span>
+              <BrandMark size="sm" rounded="lg" className="h-8 w-8" />
+              <span className="text-sm font-bold tracking-tight">BlinksMed</span>
             </Link>
           </div>
           <div className="flex items-center gap-4">
@@ -140,7 +147,7 @@ const TermsAndConditions = () => {
                   </p>
                 </div>
                 <Button asChild className="w-full text-xs h-9 font-semibold shadow-sm hover:shadow-md transition-all duration-200 bg-primary text-primary-foreground" size="sm">
-                  <Link to="/contact-us">Contact Support</Link>
+                  <a href="mailto:support@blinksmed.in?subject=Terms%20and%20Conditions%20Inquiry">Contact Support</a>
                 </Button>
               </div>
             </div>
@@ -345,13 +352,17 @@ const TermsAndConditions = () => {
                   <div className="grid gap-6 sm:grid-cols-2">
                     <div>
                       <p className="text-[11px] font-bold uppercase tracking-widest text-primary mb-2">Inquiries</p>
-                      <p className="font-semibold text-foreground">vendors@blinksmed.com</p>
-                      <p className="text-sm">+1 (555) 012-3456</p>
+                      <a href="mailto:support@blinksmed.in" className="font-semibold text-foreground hover:text-primary transition-colors block">
+                        support@blinksmed.in
+                      </a>
+                      <a href="tel:+918511225390" className="text-sm text-muted-foreground hover:text-foreground transition-colors block mt-1">
+                        +91 8511225390
+                      </a>
                     </div>
                     <div>
                       <p className="text-[11px] font-bold uppercase tracking-widest text-primary mb-2">Operational Hours</p>
-                      <p className="text-sm">Monday — Friday</p>
-                      <p className="text-sm italic">9:00 AM — 6:00 PM EST</p>
+                      <p className="text-sm font-medium text-foreground">Monday — Saturday</p>
+                      <p className="text-sm text-muted-foreground">8:00 AM — 8:00 PM IST</p>
                     </div>
                   </div>
                 </div>

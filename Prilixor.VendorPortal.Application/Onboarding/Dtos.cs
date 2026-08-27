@@ -158,7 +158,9 @@ public sealed record ProductRentalPricingPlanDto(
     string? IconUrl = null,
     string? IconThumbnailUrl = null,
     string? ValueTier = null,
-    string? IconName = null);
+    string? IconName = null,
+    decimal DiscountAmount = 0,
+    bool IsAutomatic = false);
 
 public sealed record RentalDurationMasterDto(
     string Id,

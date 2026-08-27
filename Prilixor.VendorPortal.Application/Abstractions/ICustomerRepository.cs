@@ -241,8 +241,18 @@ public sealed class VendorProductListingAggregate
     public string? CoaDocumentUrl { get; init; }
     public List<Prilixor.VendorPortal.Application.Onboarding.ProductDocumentDto> Documents { get; init; } = [];
     public int InventoryBlocked { get; init; }
-    /// <summary>Per-variant (SKU-level) available stock for chemical listings.</summary>
+    /// <summary>Per-variant (SKU-level) available stock for this vendor listing.</summary>
     public List<VariantInventoryItem> VariantInventory { get; init; } = [];
+    /// <summary>
+    /// Customer-facing units for this catalog product across all public vendor listings
+    /// (equipment: listing inventory; chemicals: sum of every packaging size).
+    /// </summary>
+    public int ProductTotalAvailableQuantity { get; init; }
+    /// <summary>
+    /// Packaging-size stock summed across all public vendor listings (1 Kg, 500 g, 1 Ltr, …).
+    /// Empty for equipment.
+    /// </summary>
+    public List<VariantInventoryItem> MarketplaceVariantInventory { get; init; } = [];
 }
 
 /// <summary>Lightweight stock summary for one packaging size (SKU).</summary>

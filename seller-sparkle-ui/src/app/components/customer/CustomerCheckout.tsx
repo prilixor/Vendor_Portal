@@ -28,6 +28,7 @@ import { BackLink } from "@/app/components/shared/BackLink";
 import { StruckPrice } from "@/app/components/shared/RentalPeriodPlanDropdown";
 import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
 import { formatRentalDuration } from "@/app/helpers/rentalPeriod";
+import { lastShopHref } from "@/app/helpers/customerShopBrowse";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 
 type DeliveryChoice = "standard" | "express" | "vendor_pickup";
@@ -260,7 +261,7 @@ const CustomerCheckout = () => {
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">Your cart is empty.</p>
         <Button asChild variant="outline">
-          <Link to="/customer/shop">Continue shopping</Link>
+          <Link to={lastShopHref()}>Continue shopping</Link>
         </Button>
       </div>
     );
@@ -428,7 +429,7 @@ const CustomerCheckout = () => {
                   >
                     <div className="flex items-center gap-3">
                       <RadioGroupItem value="vendor_pickup" id="delivery-pickup" />
-                      <span className="text-sm font-medium">Vendor pickup</span>
+                      <span className="text-sm font-medium">Pickup in person</span>
                     </div>
                     <span className="shrink-0 text-sm text-muted-foreground">Free</span>
                   </label>

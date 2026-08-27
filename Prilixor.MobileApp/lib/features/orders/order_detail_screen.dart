@@ -499,8 +499,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                           Icons.photo_library_outlined,
                                                           size: 12,
                                                           color: photoCount == 0
-                                                              ? Colors.amber
-                                                              : const Color(0xFF34D399),
+                                                              ? (context.isDarkMode ? Colors.amber : const Color(0xFFD97706))
+                                                              : (context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669)),
                                                         ),
                                                         const SizedBox(width: 4),
                                                         Expanded(
@@ -508,8 +508,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                             photoLabel,
                                                             style: TextStyle(
                                                               color: photoCount == 0
-                                                                  ? Colors.amber
-                                                                  : const Color(0xFF34D399),
+                                                                  ? (context.isDarkMode ? Colors.amber : const Color(0xFFD97706))
+                                                                  : (context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669)),
                                                               fontSize: 11,
                                                               fontWeight: FontWeight.w600,
                                                             ),
@@ -1034,11 +1034,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
 
   Color _getStatusColor(String status) {
     final colors = context.appColors;
+    final isDark = context.isDarkMode;
     final s = status.toLowerCase().replaceAll('_', ' ');
-    if (s == 'active') return Colors.greenAccent;
-    if (s == 'pending' || s.contains('awaiting') || s == 'confirmed' || s.contains('transit')) return Colors.orangeAccent;
+    if (s == 'active') return isDark ? Colors.greenAccent : const Color(0xFF059669);
+    if (s == 'pending' || s.contains('awaiting') || s == 'confirmed' || s.contains('transit')) {
+      return isDark ? Colors.orangeAccent : const Color(0xFFD97706);
+    }
     if (s == 'cancelled' || s == 'canceled') return Colors.grey;
-    if (s == 'bought_out' || s == 'bought out') return Colors.purpleAccent;
+    if (s == 'bought_out' || s == 'bought out') return isDark ? Colors.purpleAccent : const Color(0xFF7C3AED);
     return colors.textSecondary;
   }
 
@@ -1266,125 +1269,135 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
     final multi = items.length > 1;
 
     return Material(
-      color: Colors.white.withValues(alpha: 0.05),
+      color: colors.surface,
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Request photos from your supplier',
-            style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 6),
-          Text(
-            multi
-                ? 'Sent to each product’s supplier (vendor) — not BlinksMed support. Choose products or request all. Up to 5 photos per item.'
-                : 'Sent to the supplier for this product — not BlinksMed support chat below. Up to 5 photos.',
-            style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.35),
-          ),
-          SizedBox(height: 14),
-          if (loading)
-            Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
-                  ),
-                  SizedBox(width: 10),
-                  Text('Loading photo requests…', style: TextStyle(color: colors.textMuted, fontSize: 13)),
-                ],
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Request photos from your supplier',
+              style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              multi
+                  ? 'Sent to each product’s supplier (vendor) — not BlinksMed support. Choose products or request all. Up to 5 photos per item.'
+                  : 'Sent to the supplier for this product — not BlinksMed support chat below. Up to 5 photos.',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 13,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
               ),
-            )
-          else ...[
-            if (eligible.isNotEmpty) ...[
-              if (multi) ...[
-                Row(
+            ),
+            const SizedBox(height: 14),
+            if (loading)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
                   children: [
-                    TextButton(
-                      onPressed: busy ? null : onSelectAll,
-                      child: Text('Select all', style: TextStyle(color: Color(0xFF6C63FF), fontSize: 12)),
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
                     ),
-                    TextButton(
-                      onPressed: busy ? null : onClear,
-                      child: Text('Clear', style: TextStyle(color: colors.textMuted, fontSize: 12)),
-                    ),
+                    const SizedBox(width: 10),
+                    Text('Loading photo requests…', style: TextStyle(color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
                   ],
                 ),
-                ...eligible.map((item) {
-                  final checked = selectedIds.contains(item.id);
-                  return CheckboxListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    value: checked,
-                    activeColor: Color(0xFF6C63FF),
-                    checkColor: Colors.white,
-                    title: Text(
-                      item.listingTitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colors.textPrimary, fontSize: 13),
-                    ),
-                    subtitle: Text(
-                      item.status.replaceAll('_', ' '),
-                      style: TextStyle(color: colors.textMuted, fontSize: 11),
-                    ),
-                    onChanged: busy ? null : (v) => onToggle(item.id, v == true),
-                  );
-                }),
-                SizedBox(height: 8),
-                _photoActionButton(
-                  colors: colors,
-                  filled: true,
-                  icon: busy
-                      ? SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: colors.textPrimary),
-                        )
-                      : Icon(Icons.photo_library_outlined, size: 18, color: colors.textPrimary),
-                  label: 'Request all (${eligible.length})',
-                  onPressed: busy ? null : onRequestAll,
+              )
+            else ...[
+              if (eligible.isNotEmpty) ...[
+                if (multi) ...[
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: busy ? null : onSelectAll,
+                        child: const Text('Select all', style: TextStyle(color: Color(0xFF6C63FF), fontSize: 12)),
+                      ),
+                      TextButton(
+                        onPressed: busy ? null : onClear,
+                        child: Text('Clear', style: TextStyle(color: colors.textMuted, fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                  ...eligible.map((item) {
+                    final checked = selectedIds.contains(item.id);
+                    return CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      value: checked,
+                      activeColor: const Color(0xFF6C63FF),
+                      checkColor: Colors.white,
+                      title: Text(
+                        item.listingTitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: colors.textPrimary, fontSize: 13),
+                      ),
+                      subtitle: Text(
+                        item.status.replaceAll('_', ' '),
+                        style: TextStyle(color: colors.textMuted, fontSize: 11),
+                      ),
+                      onChanged: busy ? null : (v) => onToggle(item.id, v == true),
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                  _photoActionButton(
+                    colors: colors,
+                    filled: true,
+                    icon: busy
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: colors.textPrimary),
+                          )
+                        : Icon(Icons.photo_library_outlined, size: 18, color: colors.textPrimary),
+                    label: 'Request all (${eligible.length})',
+                    onPressed: busy ? null : onRequestAll,
+                  ),
+                  const SizedBox(height: 10),
+                  _photoActionButton(
+                    colors: colors,
+                    filled: false,
+                    icon: Icon(Icons.check_box_outlined, size: 18, color: colors.textPrimary),
+                    label: 'Request selected (${selectedIds.length})',
+                    onPressed: busy || selectedIds.isEmpty ? null : onRequestSelected,
+                  ),
+                ] else
+                  _photoActionButton(
+                    colors: colors,
+                    filled: false,
+                    icon: busy
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: colors.textSecondary),
+                          )
+                        : Icon(Icons.photo_library_outlined, size: 18, color: colors.textPrimary),
+                    label: busy ? 'Sending…' : 'Request photos from supplier',
+                    onPressed: busy ? null : onRequestSelected,
+                  ),
+                const SizedBox(height: 16),
+              ],
+              if (withRequest.isEmpty && eligible.isEmpty)
+                Text(
+                  'You can request supplier photos after a supplier accepts each product.',
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 13,
+                    height: 1.4,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-                SizedBox(height: 10),
-                _photoActionButton(
-                  colors: colors,
-                  filled: false,
-                  icon: Icon(Icons.check_box_outlined, size: 18, color: colors.textPrimary),
-                  label: 'Request selected (${selectedIds.length})',
-                  onPressed: busy || selectedIds.isEmpty ? null : onRequestSelected,
-                ),
-              ] else
-                _photoActionButton(
-                  colors: colors,
-                  filled: false,
-                  icon: busy
-                      ? SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: colors.textSecondary),
-                        )
-                      : Icon(Icons.photo_library_outlined, size: 18, color: colors.textPrimary),
-                  label: busy ? 'Sending…' : 'Request photos from supplier',
-                  onPressed: busy ? null : onRequestSelected,
-                ),
-              SizedBox(height: 16),
-            ],
-            if (withRequest.isEmpty && eligible.isEmpty)
-              Text(
-                'You can request supplier photos after a supplier accepts each product.',
-                style: TextStyle(color: colors.textMuted, fontSize: 13),
-              ),
             if (withRequest.isNotEmpty) ...[
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1417,18 +1430,25 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                 final images = requestsByOrderId[item.id]?.images ?? const <OrderImageModel>[];
                 final waiting = images.isEmpty;
                 final viewing = item.id == viewingOrderId;
+                final isDark = context.isDarkMode;
+                final waitingTextColor = isDark ? Colors.amber : const Color(0xFFD97706);
+                final waitingBorderColor = isDark ? Colors.amber.withValues(alpha: 0.35) : const Color(0xFFFDE68A);
+                final waitingBgColor = isDark ? Colors.amber.withValues(alpha: 0.08) : const Color(0xFFFFFBEB);
+                final waitingBadgeBg = isDark ? Colors.amber.withValues(alpha: 0.2) : const Color(0xFFFEF3C7);
+                final successTextColor = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
+                final successBadgeBg = isDark ? const Color(0xFF34D399).withValues(alpha: 0.18) : const Color(0xFFD1FAE5);
                 return Container(
                   width: double.infinity,
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: waiting
-                        ? Colors.amber.withValues(alpha: 0.08)
+                        ? waitingBgColor
                         : colors.surface,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: waiting
-                          ? Colors.amber.withValues(alpha: 0.35)
+                          ? waitingBorderColor
                           : colors.border,
                     ),
                   ),
@@ -1453,7 +1473,10 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                                 const SizedBox(height: 2),
                                 Text(
                                   '${item.status.replaceAll('_', ' ')}${viewing ? ' · currently viewing' : ''}',
-                                  style: TextStyle(color: colors.textMuted, fontSize: 11),
+                                  style: TextStyle(
+                                    color: isDark ? const Color(0xFFCBD5E1) : colors.textMuted,
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ],
                             ),
@@ -1462,8 +1485,8 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: waiting
-                                  ? Colors.amber.withValues(alpha: 0.2)
-                                  : const Color(0xFF34D399).withValues(alpha: 0.18),
+                                  ? waitingBadgeBg
+                                  : successBadgeBg,
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
@@ -1471,7 +1494,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                                   ? 'Waiting for supplier photos'
                                   : '${images.length}/5 received',
                               style: TextStyle(
-                                color: waiting ? Colors.amber : const Color(0xFF34D399),
+                                color: waiting ? waitingTextColor : successTextColor,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -1483,7 +1506,11 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                       if (waiting)
                         Text(
                           'Request already sent for this product \u2014 supplier has not uploaded photos yet.',
-                          style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.35),
+                          style: TextStyle(
+                            color: isDark ? const Color(0xFFE2E8F0) : colors.textMuted,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
                         )
                       else
                         GridView.builder(

@@ -105,11 +105,11 @@ String formatOrderDate(DateTime date) {
   final local = date.toLocal();
   final h = local.hour.toString().padLeft(2, '0');
   final m = local.minute.toString().padLeft(2, '0');
-  return '${months[local.month - 1]} ${local.day}, ${local.year} · $h:$m';
+  return '${months[local.month - 1]} ${local.day}, ${local.year} Â· $h:$m';
 }
 
 String formatDetailDate(String? value) {
-  if (value == null || value.trim().isEmpty) return '—';
+  if (value == null || value.trim().isEmpty) return 'â€”';
   final parsed = DateTime.tryParse(value);
   if (parsed == null) return value;
   const months = [
@@ -122,7 +122,7 @@ String formatDetailDate(String? value) {
 
 List<(String, String)> orderDetailRows(VendorOrder order) {
   final isBuy = order.orderType.toLowerCase() == 'buy';
-  final payout = '₹${order.payoutAmount.toStringAsFixed(0)}';
+  final payout = 'â‚¹${order.payoutAmount.toStringAsFixed(0)}';
 
   if (isBuy) {
     return [
@@ -150,15 +150,71 @@ class OrderStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = orderStatusColor(status);
+    final isDark = context.isDarkMode;
+    final s = status.toLowerCase().trim().replaceAll('_', ' ');
+    final isStatusActive = s == 'active';
+    final isStatusPending = s.contains('awaiting') || s.contains('pending');
+    final isStatusConfirmed = s == 'confirmed';
+    final isStatusTransit = s.contains('transit');
+    final isStatusReturned = s == 'returned';
+    final isStatusCancelled = s.contains('cancel');
+    final isStatusFailed = s.contains('dispatch failed') || s.contains('failed');
+    final isStatusBought = s.contains('bought');
+
+    Color color;
+    Color bgColor;
+    Color borderColor;
+
+    if (!isDark) {
+      if (isStatusActive) {
+        color = const Color(0xFF047857);
+        bgColor = const Color(0xFFECFDF5);
+        borderColor = const Color(0xFFA7F3D0);
+      } else if (isStatusPending) {
+        color = const Color(0xFF92400E);
+        bgColor = const Color(0xFFFEF3C7);
+        borderColor = const Color(0xFFFDE68A);
+      } else if (isStatusConfirmed) {
+        color = const Color(0xFF1D4ED8);
+        bgColor = const Color(0xFFEFF6FF);
+        borderColor = const Color(0xFFBFDBFE);
+      } else if (isStatusTransit) {
+        color = const Color(0xFF6D28D9);
+        bgColor = const Color(0xFFF5F3FF);
+        borderColor = const Color(0xFFDDD6FE);
+      } else if (isStatusFailed) {
+        color = const Color(0xFFB91C1C);
+        bgColor = const Color(0xFFFEF2F2);
+        borderColor = const Color(0xFFFECACA);
+      } else if (isStatusBought) {
+        color = const Color(0xFFBE185D);
+        bgColor = const Color(0xFFFDF2F8);
+        borderColor = const Color(0xFFFBCFE8);
+      } else if (isStatusReturned) {
+        color = const Color(0xFF334155);
+        bgColor = const Color(0xFFF1F5F9);
+        borderColor = const Color(0xFFCBD5E1);
+      } else if (isStatusCancelled) {
+        color = const Color(0xFF64748B);
+        bgColor = const Color(0xFFF8FAFC);
+        borderColor = const Color(0xFFE2E8F0);
+      } else {
+        color = const Color(0xFF475569);
+        bgColor = const Color(0xFFF1F5F9);
+        borderColor = const Color(0xFFCBD5E1);
+      }
+    } else {
+      color = orderStatusColor(status);
+      bgColor = color.withValues(alpha: 0.16);
+      borderColor = color.withValues(alpha: 0.35);
+    }
+
     return Container(
-      height: 20,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
+        color: bgColor,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        border: Border.all(color: borderColor),
       ),
       child: Text(
         formatOrderStatusLabel(status),
@@ -183,13 +239,36 @@ class OrderTypeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = orderTypeColor(orderType);
+    final isDark = context.isDarkMode;
+    final isBuy = orderType.toLowerCase() == 'buy';
+
+    Color color;
+    Color bgColor;
+    Color borderColor;
+
+    if (!isDark) {
+      if (isBuy) {
+        color = const Color(0xFF4338CA);
+        bgColor = const Color(0xFFEEF2FF);
+        borderColor = const Color(0xFFC7D2FE);
+      } else {
+        color = const Color(0xFF047857);
+        bgColor = const Color(0xFFECFDF5);
+        borderColor = const Color(0xFFA7F3D0);
+      }
+    } else {
+      final base = orderTypeColor(orderType);
+      color = base;
+      bgColor = base.withValues(alpha: 0.14);
+      borderColor = base.withValues(alpha: 0.35);
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
+        color: bgColor,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        border: Border.all(color: borderColor),
       ),
       child: Text(
         orderType.toUpperCase(),

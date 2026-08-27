@@ -12,6 +12,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
 import { BackLink } from "@/app/components/shared/BackLink";
+import { lastShopHref } from "@/app/helpers/customerShopBrowse";
 import { StruckPrice } from "@/app/components/shared/RentalPeriodPlanDropdown";
 import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
 import {
@@ -625,7 +626,7 @@ function OrderSummaryPanel({
             </Button>
           )}
           <Button asChild variant="ghost" className="h-10 w-full text-muted-foreground">
-            <Link to="/customer/shop">Continue shopping</Link>
+            <Link to={lastShopHref()}>Continue shopping</Link>
           </Button>
         </div>
       </div>
@@ -682,7 +683,7 @@ const CustomerCart = () => {
       const vi = detail.variantInventory?.find((x) => x.productVariantId === line.productVariantId);
       return vi?.availableQuantity ?? 0;
     }
-    return detail.availableQuantity;
+    return detail.productTotalAvailableQuantity ?? detail.availableQuantity;
   };
 
   const hasStockIssues = useMemo(
@@ -758,7 +759,7 @@ const CustomerCart = () => {
         <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-primary/15 blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 left-1/3 h-24 w-24 rounded-full bg-primary-glow/10 blur-2xl" />
         <div className="relative space-y-3">
-          <BackLink to="/customer/shop" label="Back to shop" />
+          <BackLink to={lastShopHref()} label="Back to shop" />
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="space-y-1">
               <div className="flex items-center gap-3">
@@ -789,7 +790,7 @@ const CustomerCart = () => {
             Browse equipment to rent or buy, then return here to checkout.
           </p>
           <Button asChild size="lg" className="mt-6 bg-gradient-primary px-6 shadow-glow hover:opacity-95">
-            <Link to="/customer/shop">
+            <Link to={lastShopHref()}>
               Browse shop
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>

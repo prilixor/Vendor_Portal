@@ -157,45 +157,47 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
 
   if (safeImages.length === 0) {
     return (
-      <div className={cn("relative w-full overflow-hidden rounded-xl border bg-card", className)}>
-        <div className="block w-full pb-[75%]" aria-hidden />
+      <div className={cn("relative w-full overflow-hidden rounded-lg border bg-muted/40", className)}>
+        <div className="aspect-[4/3] w-full lg:aspect-square" aria-hidden />
         <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">No photos</div>
       </div>
     );
   }
 
   return (
-    <div className={cn("min-w-0 space-y-3", className)}>
+    <div className={cn("min-w-0 space-y-2.5", className)}>
       <button
         type="button"
         onClick={() => openLightbox(imgIx)}
-        className="group relative block w-full overflow-hidden rounded-xl border bg-card text-left outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+        className="group relative block w-full overflow-hidden rounded-lg border border-border/80 bg-muted/35 text-left outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="Open image zoom viewer"
       >
-        <div className="block w-full pb-[75%]" aria-hidden />
-        <div
-          className="absolute inset-0 overflow-hidden"
-          onMouseMove={onHoverMove}
-          onMouseLeave={() => setOrigin("50% 50%")}
-        >
-          <img
-            src={current}
-            alt={alt}
-            className="customer-catalog-media-img pointer-events-none absolute inset-0 h-full w-full object-contain object-center transition-transform duration-150 ease-out md:group-hover:scale-[1.85]"
-            style={{ transformOrigin: origin, maxWidth: "none", maxHeight: "none" }}
-            loading="lazy"
-            decoding="async"
-            onError={retryOriginalOnImageError}
-          />
+        <div className="relative aspect-[4/3] w-full lg:aspect-square">
+          <div
+            className="absolute inset-3 overflow-hidden sm:inset-4 lg:inset-[1.125rem]"
+            onMouseMove={onHoverMove}
+            onMouseLeave={() => setOrigin("50% 50%")}
+          >
+            <img
+              src={current}
+              alt={alt}
+              className="customer-catalog-media-img pointer-events-none absolute inset-0 h-full w-full object-contain object-center transition-transform duration-150 ease-out md:group-hover:scale-[1.85]"
+              style={{ transformOrigin: origin, maxWidth: "none", maxHeight: "none" }}
+              loading="lazy"
+              decoding="async"
+              onError={retryOriginalOnImageError}
+            />
+          </div>
         </div>
-        <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-background/90 px-2.5 py-1 text-xs font-medium text-foreground shadow-sm ring-1 ring-border backdrop-blur-sm">
-          <Search className="h-3.5 w-3.5" />
-          Click to zoom
+        <span className="pointer-events-none absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 rounded-md bg-background/90 px-2 py-0.5 text-[11px] font-medium text-foreground shadow-sm ring-1 ring-border backdrop-blur-sm">
+          <Search className="h-3 w-3" />
+          <span className="sm:hidden">Tap to zoom</span>
+          <span className="hidden sm:inline">Click to zoom</span>
         </span>
       </button>
 
       {safeImages.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
           {safeImages.map((url, i) => (
             <button
               key={`thumb-${i}`}
@@ -203,8 +205,8 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
               onClick={() => setImgIx(i)}
               onDoubleClick={() => openLightbox(i)}
               className={cn(
-                "relative h-16 w-16 shrink-0 overflow-hidden rounded-md border-2 bg-card",
-                i === imgIx ? "border-primary" : "border-transparent hover:border-border",
+                "relative h-14 w-14 shrink-0 overflow-hidden rounded-md border bg-muted/40",
+                i === imgIx ? "border-primary ring-1 ring-primary/40" : "border-border/70 hover:border-foreground/30",
               )}
               aria-label={`View image ${i + 1}`}
             >

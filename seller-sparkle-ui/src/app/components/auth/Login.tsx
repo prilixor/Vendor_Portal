@@ -80,9 +80,15 @@ const Login = () => {
   };
 
   return (
-    <AuthLayout title="Vendor sign in" subtitle="Access your workspace and manage your listings." portalType="vendor">
+    <AuthLayout
+      title="Vendor sign in"
+      subtitle="Access your workspace and manage your listings."
+      portalType="vendor"
+      backTo="/"
+      backLabel="Back to home"
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="text-xs text-muted-foreground -mt-1">
+        <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.
         </p>
         <div className="space-y-1.5">
@@ -126,12 +132,12 @@ const Login = () => {
           {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
         </div>
 
-        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>
+        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11 text-white font-semibold" disabled={loading}>
           {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in…</> : "Sign in"}
         </Button>
 
         {needsVerification && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-3">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-3 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
             <p>Please verify your email before logging in.</p>
             <Button type="button" variant="outline" className="w-full" onClick={() => void resendVerification()} disabled={resendLoading}>
               {resendLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resending…</> : "Resend Verification Email"}

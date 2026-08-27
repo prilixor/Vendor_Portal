@@ -8,8 +8,25 @@ import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { ListPager } from "@/app/components/shared/ListPager";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Notification } from "@/app/models";
-import { CheckCheck, Bell, Info, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import {
+  CheckCheck,
+  Bell,
+  Info,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Camera,
+  ShoppingBag,
+  Truck,
+  CreditCard,
+  MessageSquare,
+  Package,
+  FileText,
+  Loader2,
+  LucideIcon,
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { cn } from "@/app/helpers/utils";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -24,12 +41,99 @@ import {
 import { getVendorRoute, VENDOR_SUPPORT_PANEL_ROUTE } from "@/app/helpers/vendorNav";
 import { useSupportChat } from "@/app/contexts/SupportChatContext";
 
-const typeIcons = {
-  info: { icon: Info, cls: "bg-info-soft text-info" },
-  success: { icon: CheckCircle2, cls: "bg-success-soft text-success" },
-  warning: { icon: AlertTriangle, cls: "bg-warning-soft text-warning" },
-  error: { icon: XCircle, cls: "bg-destructive-soft text-destructive" },
-};
+interface NotificationVisual {
+  icon: LucideIcon;
+  cls: string;
+}
+
+function getVendorNotificationVisual(notificationType?: string, title: string = ""): NotificationVisual {
+  const t = (notificationType ?? "").trim().toLowerCase();
+  const h = title.trim().toLowerCase();
+
+  // Photo requests (customer requested photos)
+  if (t.includes("photo") || h.includes("photo")) {
+    return { icon: Camera, cls: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300" };
+  }
+
+  // New orders / order requests / dispatch offers
+  if (
+    t === "dispatch_offer" ||
+    t === "new_order" ||
+    t.includes("order_request") ||
+    h.includes("order request") ||
+    h.includes("new order")
+  ) {
+    return { icon: ShoppingBag, cls: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300" };
+  }
+
+  // Shipping / Dispatch / Transit / Delivery
+  if (
+    t.includes("dispatch") ||
+    t.includes("transit") ||
+    t.includes("delivery") ||
+    t.includes("shipping") ||
+    h.includes("dispatch") ||
+    h.includes("delivery")
+  ) {
+    return { icon: Truck, cls: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" };
+  }
+
+  // Payouts & financial
+  if (t.includes("payout") || t.includes("payment") || h.includes("payout")) {
+    return { icon: CreditCard, cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" };
+  }
+
+  // Approvals & confirmations
+  if (
+    t === "success" ||
+    t.includes("approved") ||
+    t.includes("confirmed") ||
+    h.includes("approved") ||
+    h.includes("confirmed")
+  ) {
+    return { icon: CheckCircle2, cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" };
+  }
+
+  // Rejections / cancellations / failures
+  if (
+    t.includes("rejected") ||
+    t.includes("failed") ||
+    t.includes("cancel") ||
+    h.includes("rejected") ||
+    h.includes("cancelled")
+  ) {
+    return { icon: XCircle, cls: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300" };
+  }
+
+  // Support / chat replies
+  if (t.includes("support") || t.includes("chat") || h.includes("support")) {
+    return { icon: MessageSquare, cls: "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300" };
+  }
+
+  // Inventory / Stock / Warnings
+  if (
+    t.includes("stock") ||
+    t.includes("warning") ||
+    t.includes("expir") ||
+    t.includes("low_") ||
+    h.includes("stock") ||
+    h.includes("expir")
+  ) {
+    return { icon: AlertTriangle, cls: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300" };
+  }
+
+  // Product listing notices
+  if (t.startsWith("listing_") || t.includes("product") || h.includes("product")) {
+    return { icon: Package, cls: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300" };
+  }
+
+  // KYC / Docs / Bank
+  if (t.startsWith("document_") || t.startsWith("bank_") || h.includes("document")) {
+    return { icon: FileText, cls: "bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300" };
+  }
+
+  return { icon: Bell, cls: "bg-primary-soft text-primary" };
+}
 
 const Notifications = () => {
   const navigate = useNavigate();
@@ -189,6 +293,30 @@ const Notifications = () => {
     }
   };
 
+  const activateNotification = (n: Notification) => {
+    if (!n.read) {
+      void toggleRead(n.id);
+    }
+    let route = getVendorRoute(n.notificationType, n.title);
+
+    if (route === VENDOR_SUPPORT_PANEL_ROUTE) {
+      openSupportPanel();
+      return;
+    }
+
+    // Try to extract order ID from message
+    const uuidRegex = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+    const match = n.message.match(uuidRegex);
+
+    if (route === "/vendor/orders" && match) {
+      route = `/vendor/orders/${match[1]}`;
+    }
+
+    if (route) {
+      navigate(route);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -206,12 +334,17 @@ const Notifications = () => {
         <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
       )}
 
-      {hasLoaded && !busy && (
+      {hasLoaded && (
         <>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
           <div className="flex items-center justify-between border-b border-border pb-4">
-            <h2 className="font-semibold">Inbox</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold">Inbox</h2>
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Refreshing" />
+              ) : null}
+            </div>
             <Tabs value={filter} onValueChange={(v: string) => { setFilter(v as "all" | "unread"); setPage(1); }}>
               <TabsList>
                 <TabsTrigger value="all">All</TabsTrigger>
@@ -221,7 +354,10 @@ const Notifications = () => {
           </div>
           <ul className="divide-y divide-border">
             {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((n) => {
-              const { icon: Icon, cls } = typeIcons[n.type];
+              const { icon: Icon, cls } = getVendorNotificationVisual(
+                n.notificationType,
+                n.title,
+              );
               const isRejection = isVerificationRejectionNotification(
                 n.notificationType ?? "",
               );
@@ -233,70 +369,60 @@ const Notifications = () => {
                 n.notificationType ?? "",
               );
               return (
-                <li
-                  key={n.id}
-                  className={`flex cursor-pointer flex-col items-stretch gap-3 p-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-start ${!n.read ? "bg-primary-soft/30" : ""}`}
-                  onClick={() => {
-                    if (!n.read) {
-                      void toggleRead(n.id);
-                    }
-                    let route = getVendorRoute(n.notificationType, n.title);
-
-                    if (route === VENDOR_SUPPORT_PANEL_ROUTE) {
-                      openSupportPanel();
-                      return;
-                    }
-                    
-                    // Try to extract order ID from message
-                    const uuidRegex = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
-                    const match = n.message.match(uuidRegex);
-                    
-                    if (route === "/vendor/orders" && match) {
-                      route = `/vendor/orders/${match[1]}`;
-                    }
-
-                    if (route) {
-                      navigate(route);
-                    }
-                  }}
-                >
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${cls}`}>
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start gap-2">
-                        <p className="min-w-0 flex-1 text-sm font-semibold break-words">{n.title}</p>
-                        {!n.read && (
-                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden />
-                        )}
-                      </div>
-                      {body && (
-                        <p className="mt-0.5 text-sm text-muted-foreground break-words">{body}</p>
-                      )}
-                      {adminComment && (
-                        <AdminCommentHint
-                          className="mt-2"
-                          comment={adminComment}
-                        />
-                      )}
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 shrink-0 self-start px-2 text-xs sm:self-auto sm:text-sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void toggleRead(n.id);
+                <li key={n.id}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className={cn(
+                      "relative flex cursor-pointer flex-col items-stretch gap-3 p-4 transition-colors hover:bg-muted/30 focus-visible:bg-muted/40 focus-visible:outline-none sm:flex-row sm:items-start",
+                      !n.read && "bg-primary-soft/30",
+                    )}
+                    onClick={() => activateNotification(n)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        activateNotification(n);
+                      }
                     }}
-                    disabled={busy}
                   >
-                    Mark {n.read ? "unread" : "read"}
-                  </Button>
+                    {!n.read ? (
+                      <span className="absolute inset-y-0 left-0 w-[3px] bg-primary" aria-hidden />
+                    ) : null}
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${cls}`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={cn("text-sm break-words", n.read ? "font-medium" : "font-semibold")}>
+                          {n.title}
+                        </p>
+                        {body && (
+                          <p className="mt-0.5 text-sm text-muted-foreground break-words">{body}</p>
+                        )}
+                        {adminComment && (
+                          <AdminCommentHint
+                            className="mt-2"
+                            comment={adminComment}
+                          />
+                        )}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 shrink-0 self-start px-2 text-xs sm:self-auto sm:text-sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void toggleRead(n.id);
+                      }}
+                      disabled={busy}
+                    >
+                      Mark {n.read ? "unread" : "read"}
+                    </Button>
+                  </div>
                 </li>
               );
             })}
