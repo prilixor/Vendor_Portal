@@ -7,6 +7,7 @@ import { Label } from "@/app/components/ui/label";
 import { apiClient } from "@/app/services/apiClient";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { forgotPasswordPath } from "@/app/helpers/portalHost";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -109,7 +110,7 @@ const AdminLogin = () => {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password" required>Password</Label>
-            <Link to="/forgot-password?portal=admin" className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
+            <Link to={forgotPasswordPath("admin", email)} className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
           </div>
           <div className="relative">
             <Input

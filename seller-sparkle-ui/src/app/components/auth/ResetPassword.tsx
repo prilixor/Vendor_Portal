@@ -13,6 +13,20 @@ import {
   forgotPasswordPath,
   resolveAuthPortalType,
 } from "@/app/helpers/portalHost";
+import { cn } from "@/app/helpers/utils";
+
+type ResetFieldErrors = { newPassword?: string; confirmPassword?: string };
+
+function livePairErrors(nextNew: string, nextConfirm: string): ResetFieldErrors {
+  const e: ResetFieldErrors = {};
+  if (nextNew.length > 0 && nextNew.length < 8) {
+    e.newPassword = "Password must be at least 8 characters";
+  }
+  if (nextConfirm.length > 0 && nextNew !== nextConfirm) {
+    e.confirmPassword = "Passwords do not match";
+  }
+  return e;
+}
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
@@ -26,13 +40,24 @@ const ResetPassword = () => {
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ newPassword?: string; confirmPassword?: string }>({});
+  const [errors, setErrors] = useState<ResetFieldErrors>({});
   const [success, setSuccess] = useState(false);
+  const passwordsMatch = newPassword.length >= 8 && newPassword === confirmPassword && confirmPassword.length > 0;
+
+  const onNewPasswordChange = (value: string) => {
+    setNewPassword(value);
+    setErrors(livePairErrors(value, confirmPassword));
+  };
+
+  const onConfirmPasswordChange = (value: string) => {
+    setConfirmPassword(value);
+    setErrors(livePairErrors(newPassword, value));
+  };
 
   const validate = () => {
-    const e: typeof errors = {};
+    const e: ResetFieldErrors = {};
     if (newPassword.length < 8) e.newPassword = "Password must be at least 8 characters";
-    if (newPassword !== confirmPassword) e.confirmPassword = "Passwords do not match";
+    if (!confirmPassword || newPassword !== confirmPassword) e.confirmPassword = "Passwords do not match";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -102,7 +127,8 @@ const ResetPassword = () => {
               id="newPassword"
               type={showPwd ? "text" : "password"}
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              onChange={(e) => onNewPasswordChange(e.target.value)}
               placeholder="••••••••"
               aria-invalid={!!errors.newPassword}
               className={errors.newPassword ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
@@ -126,10 +152,15 @@ const ResetPassword = () => {
               id="confirmPassword"
               type={showConfirmPwd ? "text" : "password"}
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              onChange={(e) => onConfirmPasswordChange(e.target.value)}
               placeholder="••••••••"
               aria-invalid={!!errors.confirmPassword}
-              className={errors.confirmPassword ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
+              className={cn(
+                "pr-10",
+                errors.confirmPassword && "border-destructive focus-visible:ring-destructive",
+                passwordsMatch && "border-emerald-500/60",
+              )}
             />
             <button
               type="button"
@@ -140,7 +171,11 @@ const ResetPassword = () => {
               {showConfirmPwd ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
             </button>
           </div>
-          {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword}</p>}
+          {errors.confirmPassword ? (
+            <p className="text-xs text-destructive">{errors.confirmPassword}</p>
+          ) : passwordsMatch ? (
+            <p className="text-xs text-emerald-600">Passwords match</p>
+          ) : null}
         </div>
 
         <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>

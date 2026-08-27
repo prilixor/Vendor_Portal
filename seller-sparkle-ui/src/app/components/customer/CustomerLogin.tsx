@@ -5,7 +5,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
-import { getVendorPortalHref } from "@/app/helpers/portalHost";
+import { getVendorPortalHref, forgotPasswordPath } from "@/app/helpers/portalHost";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 
@@ -75,7 +75,7 @@ const CustomerLogin = () => {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password" required>Password</Label>
-            <Link to="/forgot-password?portal=customer" className="text-xs font-medium text-primary hover:underline">
+            <Link to={forgotPasswordPath("customer", email)} className="text-xs font-medium text-primary hover:underline">
               Forgot?
             </Link>
           </div>

@@ -13,12 +13,19 @@ import {
   resolveAuthPortalType,
 } from "@/app/helpers/portalHost";
 
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+function initialForgotEmail(raw: string | null): string {
+  const trimmed = (raw ?? "").trim();
+  return EMAIL_RE.test(trimmed) ? trimmed : "";
+}
+
 const ForgotPassword = () => {
   const [searchParams] = useSearchParams();
   const portalType = resolveAuthPortalType(searchParams.get("portal"));
   const loginPath = authPortalLoginPath(portalType);
   const signInLabel = authPortalSignInLabel(portalType);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => initialForgotEmail(searchParams.get("email")));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [success, setSuccess] = useState(false);

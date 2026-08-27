@@ -6,7 +6,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
 import { authApi } from "@/app/services/authApi";
-import { getCustomerPortalHref } from "@/app/helpers/portalHost";
+import { getCustomerPortalHref, forgotPasswordPath } from "@/app/helpers/portalHost";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { isValidIndianMobile } from "@/app/helpers/indianMobilePhone";
@@ -108,7 +108,7 @@ const Login = () => {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password" required>Password</Label>
-            <Link to="/forgot-password?portal=vendor" className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
+            <Link to={forgotPasswordPath("vendor", email)} className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
           </div>
           <div className="relative">
             <Input

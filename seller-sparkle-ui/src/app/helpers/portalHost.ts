@@ -36,8 +36,13 @@ export function authPortalSignInLabel(portal: AuthPortalType): string {
   return "Vendor sign in";
 }
 
-export function forgotPasswordPath(portal: AuthPortalType): string {
-  return `/forgot-password?portal=${portal}`;
+export function forgotPasswordPath(portal: AuthPortalType, email?: string): string {
+  const params = new URLSearchParams({ portal });
+  const trimmed = email?.trim() ?? "";
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmed)) {
+    params.set("email", trimmed);
+  }
+  return `/forgot-password?${params.toString()}`;
 }
 
 function normalizePath(path: string): string {

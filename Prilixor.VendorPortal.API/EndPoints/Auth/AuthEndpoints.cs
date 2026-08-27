@@ -435,24 +435,18 @@ public sealed class ForgotPasswordEndpoint(
 
             // Send reset link email (FrontendUrl in appsettings / env — must match deployed SPA host)
             var frontendBase = configuration["FrontendUrl"]?.Trim().TrimEnd('/') ?? "https://blinksmed.com";
-            var portal = (req.Portal ?? string.Empty).Trim().ToLowerInvariant();
-            var portalQs = portal is "customer" or "vendor" or "admin"
-                ? $"&portal={Uri.EscapeDataString(portal)}"
-                : string.Empty;
+            var portal = ResolveForgotPasswordPortal(req.Portal, vendor is not null, admin is not null, customer is not null);
+            var portalQs = string.IsNullOrEmpty(portal)
+                ? string.Empty
+                : $"&portal={Uri.EscapeDataString(portal)}";
             var resetLink = $"{frontendBase}/reset-password?token={Uri.EscapeDataString(token)}{portalQs}";
+            var fromName = EmailTemplates.AuthPortalFromDisplayName(portal);
             var subject = "Reset Your Password";
-            var body = $@"
-                <h2>Password Reset Request</h2>
-                <p>You requested a password reset for your account.</p>
-                <p>Click the link below to reset your password:</p>
-                <p><a href='{resetLink}'>Reset Password</a></p>
-                <p>This link will expire in 15 minutes.</p>
-                <p>If you didn't request this, please ignore this email.</p>
-            ";
+            var body = EmailTemplates.PasswordReset(resetLink, portal);
 
             try
             {
-                await emailService.SendEmailAsync(email, subject, body, ct);
+                await emailService.SendEmailAsync(email, subject, body, ct, fromName);
             }
             catch
             {
@@ -462,6 +456,29 @@ public sealed class ForgotPasswordEndpoint(
 
         // Always return success (don't reveal if email exists)
         return TypedResults.Ok(new ForgotPasswordResponse(true, "If the email exists, a reset link has been sent."));
+    }
+
+    private static string ResolveForgotPasswordPortal(
+        string? requestedPortal,
+        bool isVendor,
+        bool isAdmin,
+        bool isCustomer)
+    {
+        var requested = EmailTemplates.NormalizeAuthPortal(requestedPortal);
+        if (!string.IsNullOrEmpty(requested))
+            return requested;
+
+        if (isAdmin && !isVendor && !isCustomer)
+            return "admin";
+        if (isCustomer && !isVendor && !isAdmin)
+            return "customer";
+        if (isVendor && !isAdmin && !isCustomer)
+            return "vendor";
+        if (isAdmin)
+            return "admin";
+        if (isCustomer)
+            return "customer";
+        return "vendor";
     }
 }
 

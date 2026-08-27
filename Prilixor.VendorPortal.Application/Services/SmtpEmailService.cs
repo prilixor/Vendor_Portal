@@ -28,8 +28,13 @@ public class SmtpEmailService : IEmailService
         _logger = logger;
     }
 
-    public Task SendEmailAsync(string toEmail, string subject, string body, CancellationToken ct = default) =>
-        SendEmailAsync(toEmail, subject, body, null, null, null, ct);
+    public Task SendEmailAsync(
+        string toEmail,
+        string subject,
+        string body,
+        CancellationToken ct = default,
+        string? fromDisplayName = null) =>
+        SendEmailAsync(toEmail, subject, body, null, null, null, ct, fromDisplayName);
 
     public async Task SendEmailAsync(
         string toEmail,
@@ -38,7 +43,8 @@ public class SmtpEmailService : IEmailService
         string? plainTextBody,
         IReadOnlyList<EmailInlineImage>? inlineImages,
         IReadOnlyList<EmailFileAttachment>? attachments,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? fromDisplayName = null)
     {
         try
         {
@@ -48,9 +54,10 @@ public class SmtpEmailService : IEmailService
                 Credentials = new NetworkCredential(_options.Username, _options.Password)
             };
 
+            var displayName = string.IsNullOrWhiteSpace(fromDisplayName) ? _options.FromName : fromDisplayName.Trim();
             using var mailMessage = SmtpMailMessageFactory.Create(
                 _options.FromEmail,
-                _options.FromName,
+                displayName,
                 toEmail,
                 subject,
                 htmlBody,

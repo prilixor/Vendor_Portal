@@ -514,4 +514,99 @@ The BlinksMed Team";
 </body>
 </html>";
     }
+
+    public static string NormalizeAuthPortal(string? portal)
+    {
+        var value = (portal ?? string.Empty).Trim().ToLowerInvariant();
+        return value is "admin" or "customer" or "vendor" ? value : "";
+    }
+
+    public static string AuthPortalFromDisplayName(string? portal) =>
+        NormalizeAuthPortal(portal) switch
+        {
+            "admin" => "BlinksMed Admin Portal",
+            "customer" => "BlinksMed Customer Portal",
+            _ => "BlinksMed Vendor Portal",
+        };
+
+    public static string PasswordReset(string resetLink, string? portal)
+    {
+        var fromName = WebUtility.HtmlEncode(AuthPortalFromDisplayName(portal));
+        var kind = NormalizeAuthPortal(portal);
+        var account = kind switch
+        {
+            "admin" => "admin",
+            "customer" => "customer",
+            _ => "vendor",
+        };
+        var headerBg = kind switch
+        {
+            "admin" => "#4c1d95",
+            "customer" => "#0f766e",
+            _ => "#2563eb",
+        };
+        var headerSub = kind switch
+        {
+            "admin" => "#ddd6fe",
+            "customer" => "#ccfbf1",
+            _ => "#dbeafe",
+        };
+        var safeLink = WebUtility.HtmlEncode(resetLink);
+        var preview = $"Reset your {account} password. This link expires in 15 minutes.";
+
+        return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <title>Reset Your Password</title>
+    <style type='text/css'>
+      body, table, td, a {{ -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }}
+      table, td {{ mso-table-lspace: 0pt; mso-table-rspace: 0pt; }}
+    </style>
+</head>
+<body style='margin: 0; padding: 0; background-color: #eef2f6;'>
+    <div style='display: none; max-height: 0; overflow: hidden; mso-hide: all;'>{WebUtility.HtmlEncode(preview)}</div>
+    <table role='presentation' cellpadding='0' cellspacing='0' border='0' width='100%' style='background-color: #eef2f6;'>
+      <tr>
+        <td align='center' style='padding: 24px 12px;'>
+          <table role='presentation' cellpadding='0' cellspacing='0' border='0' width='600' style='width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden;'>
+            <tr>
+              <td bgcolor='{headerBg}' style='padding: 28px 28px 24px; background-color: {headerBg};'>
+                <p style='margin: 0 0 6px; font-family: Arial, Helvetica, sans-serif; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: {headerSub}; font-weight: bold;'>BlinksMed</p>
+                <h1 style='margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 24px; line-height: 32px; color: #ffffff; font-weight: 700;'>Password reset request</h1>
+                <p style='margin: 10px 0 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 22px; color: {headerSub};'>{fromName}</p>
+              </td>
+            </tr>
+            <tr>
+              <td style='padding: 28px; font-family: Arial, Helvetica, sans-serif; font-size: 16px; line-height: 24px; color: #334155;'>
+                <p style='margin: 0 0 16px;'>You requested a password reset for your <strong>{account}</strong> account.</p>
+                <p style='margin: 0 0 24px;'>Click the button below to choose a new password. This link expires in 15 minutes.</p>
+                <table role='presentation' cellpadding='0' cellspacing='0' border='0' align='center' style='margin: 0 auto 24px;'>
+                  <tr>
+                    <td align='center' bgcolor='{headerBg}' style='border-radius: 8px; background-color: {headerBg};'>
+                      <a href='{safeLink}' style='display: inline-block; padding: 14px 28px; font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: bold; color: #ffffff; text-decoration: none;'>Reset Password</a>
+                    </td>
+                  </tr>
+                </table>
+                <p style='margin: 0 0 8px; font-size: 13px; line-height: 20px; color: #64748b;'>If the button does not work, copy and paste this link into your browser:</p>
+                <p style='margin: 0 0 24px; font-size: 12px; line-height: 18px; color: #2563eb; word-break: break-all;'><a href='{safeLink}' style='color: #2563eb; text-decoration: underline;'>{safeLink}</a></p>
+                <p style='margin: 0 0 24px; font-size: 14px; color: #64748b;'>If you didn't request this, you can ignore this email. Your password will stay the same.</p>
+                <p style='margin: 0; font-size: 14px; color: #64748b;'>Best regards,<br><strong style='color: #0f172a;'>{fromName}</strong></p>
+              </td>
+            </tr>
+            <tr>
+              <td style='padding: 16px 28px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 17px; color: #94a3b8;'>
+                This message was sent by {fromName}. For security, never share this link with anyone.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+</body>
+</html>";
+    }
 }
