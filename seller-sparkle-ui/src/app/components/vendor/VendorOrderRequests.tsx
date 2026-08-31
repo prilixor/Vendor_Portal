@@ -5,6 +5,7 @@ import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,6 +38,7 @@ import { useNavigate } from "react-router-dom";
 import { VendorDoctorLookupDialog } from "@/app/components/vendor/VendorDoctorLookupDialog";
 
 const COLLAPSE_AFTER = 3;
+const PAGE_SIZE = 8;
 
 type OfferGroup = {
   baseOrderNumber: string;
@@ -107,6 +109,7 @@ const VendorOrderRequests = () => {
   const [doctorLookupOpen, setDoctorLookupOpen] = useState(false);
   const [doctorLookupCode, setDoctorLookupCode] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [page, setPage] = useState(1);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [rejectOffer, setRejectOffer] = useState<VendorDispatchOfferApiDto | null>(null);
 
@@ -175,6 +178,17 @@ const VendorOrderRequests = () => {
       (a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime(),
     );
   }, [pendingOffers, searchQuery, typeFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, typeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageGroups = useMemo(
+    () => groups.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [groups, safePage],
+  );
 
   const totalItems = useMemo(
     () => groups.reduce((sum, g) => sum + g.items.length, 0),
@@ -321,7 +335,7 @@ const VendorOrderRequests = () => {
         </div>
       ) : (
         <div className="space-y-4 pb-2">
-          {groups.map((group) => {
+          {pageGroups.map((group) => {
             const expired = new Date(group.expiresAt).getTime() <= now;
             const urgent =
               !expired && new Date(group.expiresAt).getTime() - now <= 10 * 60 * 1000;
@@ -507,6 +521,13 @@ const VendorOrderRequests = () => {
               </div>
             );
           })}
+          <TablePagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            total={groups.length}
+            onPageChange={setPage}
+            label="requests"
+          />
         </div>
       )}
       </Card>

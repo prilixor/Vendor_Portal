@@ -24,7 +24,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { ListPager } from "@/app/components/shared/ListPager";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { cn } from "@/app/helpers/utils";
 import { customerNotificationCopy } from "@/app/helpers/customerNotificationCopy";
 import { toast } from "sonner";
@@ -407,14 +407,13 @@ const CustomerNotifications = () => {
         )}
       </Card>
 
-      {sortedNotifications.length > PAGE_SIZE && (
-        <ListPager
-          page={page}
-          totalPages={Math.max(1, Math.ceil(sortedNotifications.length / PAGE_SIZE))}
-          summary={`Page ${page} of ${Math.max(1, Math.ceil(sortedNotifications.length / PAGE_SIZE))} · ${sortedNotifications.length} items`}
-          onPageChange={setPage}
-        />
-      )}
+      <TablePagination
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={sortedNotifications.length}
+        onPageChange={setPage}
+        label="items"
+      />
     </div>
   );
 };

@@ -8,7 +8,6 @@ import { Badge } from "@/app/components/ui/badge";
 import { adminApi, AdminCustomerDetailDto, AdminCustomerListItemDto } from "@/app/services/adminApi";
 import { AdminPlaceCustomerOrderDialog } from "@/app/components/admin/AdminPlaceCustomerOrderDialog";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { ListPager } from "@/app/components/shared/ListPager";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Loader2, LogIn, Mail, MapPin, Phone, Search, ShoppingCart, ChevronRight, UserRound } from "lucide-react";
 import { toast } from "sonner";
@@ -188,15 +187,13 @@ export const AdminCustomers = () => {
               <p className="text-xs text-muted-foreground">Try a different email, name, or phone.</p>
             </div>
           )}
-          {rows.length > 0 && (
-            <ListPager
-              className="pt-2"
-              page={safePage}
-              totalPages={totalPages}
-              summary={`Page ${safePage} of ${totalPages} · ${rows.length} customer${rows.length !== 1 ? "s" : ""}`}
-              onPageChange={setPage}
-            />
-          )}
+          <TablePagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            total={rows.length}
+            onPageChange={setPage}
+            label="customers"
+          />
         </div>
       )}
       {!hasPermission(ADMIN_PERMISSIONS.customersView) && (

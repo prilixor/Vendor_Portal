@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Switch } from "@/app/components/ui/switch";
 import { adminApi, AdminUserDto } from "@/app/services/adminApi";
 import {
@@ -37,6 +38,7 @@ import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 
 const MAX_SUPER_ADMINS = 2;
+const PAGE_SIZE = 8;
 
 const roleConfig: Record<string, { label: string; icon: typeof Shield; cls: string }> = {
   super_admin: { label: "Super admin", icon: Shield, cls: "bg-primary-soft text-primary" },
@@ -69,10 +71,18 @@ const Admins = () => {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [tempPasswordResult, setTempPasswordResult] = useState<string | null>(null);
   const [copiedTemp, setCopiedTemp] = useState(false);
+  const [page, setPage] = useState(1);
 
   const superAdminCount = useMemo(
     () => admins.filter((a) => a.role === "super_admin" && a.isActive !== false).length,
     [admins],
+  );
+
+  const totalPages = Math.max(1, Math.ceil(admins.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageAdmins = useMemo(
+    () => admins.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [admins, safePage],
   );
 
   const clearFieldError = (key: string) => {
@@ -404,8 +414,9 @@ const Admins = () => {
             )}
           </div>
         ) : (
+          <>
           <ul className="divide-y divide-border">
-            {admins.map((a) => {
+            {pageAdmins.map((a) => {
               const cfg = roleConfig[a.role] ?? {
                 label: roleLabel(a.role),
                 icon: Users,
@@ -490,6 +501,16 @@ const Admins = () => {
               );
             })}
           </ul>
+          <div className="px-4 pb-4 sm:px-6">
+            <TablePagination
+              page={safePage}
+              pageSize={PAGE_SIZE}
+              total={admins.length}
+              onPageChange={setPage}
+              label="admins"
+            />
+          </div>
+          </>
         )}
       </Card>
 

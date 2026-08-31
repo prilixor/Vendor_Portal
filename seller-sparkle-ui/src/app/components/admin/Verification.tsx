@@ -6,6 +6,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw, FileText, Eye, Building, AlertCircle, Calendar, MapPin, ExternalLink } from "lucide-react";
 import { IconTooltip } from "@/app/components/ui/tooltip";
@@ -139,12 +140,15 @@ const BankAccountDetailsGrid = ({ bank }: { bank: VendorBankAccountDto }) => (
   </div>
 );
 
+const PAGE_SIZE = 8;
+
 const Verification = () => {
   const [vendors, setVendors] = useState<VendorDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const initialFilter = (searchParams.get("status") as "all" | "pending" | "active" | "rejected" | "suspended" | "banned") ?? "all";
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<"all" | "pending" | "active" | "rejected" | "suspended" | "banned">(
     ["all", "pending", "active", "rejected", "suspended", "banned"].includes(initialFilter) ? initialFilter : "all"
   );
@@ -195,6 +199,10 @@ const Verification = () => {
   useEffect(() => {
     loadVendors();
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, filter]);
 
   // Load documents when a vendor is selected
   useEffect(() => {
@@ -435,6 +443,10 @@ const Verification = () => {
     return hasProfile && isReadyForVerification && m && s;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageVendors = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   const serviceAreasNeedRadiusReview =
     serviceAreas.length === 0 || serviceAreas.some((a) => !a.isRadiusSetByAdmin);
 
@@ -650,6 +662,7 @@ const Verification = () => {
         {loading ? (
           <PageLoaderSlot />
         ) : (
+          <>
           <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full min-w-[700px] text-sm">
               <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -661,7 +674,7 @@ const Verification = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((v) => {
+                {pageVendors.map((v) => {
                   const profile = vendorProfiles.get(v.id);
                   return (
                     <tr key={v.id} className="hover:bg-muted/20">
@@ -689,6 +702,14 @@ const Verification = () => {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            total={filtered.length}
+            onPageChange={setPage}
+            label="vendors"
+          />
+          </>
         )}
       </Card>
 

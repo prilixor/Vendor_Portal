@@ -7,7 +7,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { ListPager } from "@/app/components/shared/ListPager";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 
 import { Button } from "@/app/components/ui/button";
 
@@ -1580,15 +1580,13 @@ const VendorDetails = () => {
 
             </div>
 
-            {equipmentListings.length > 0 && (
-              <ListPager
-                className="pt-3"
-                page={safeEquipmentPage}
-                totalPages={equipmentTotalPages}
-                summary={`Page ${safeEquipmentPage} of ${equipmentTotalPages} · ${equipmentListings.length} ${equipmentListings.length === 1 ? "listing" : "listings"}${equipmentSearch.trim().length > 0 ? " matching search" : ""}`}
-                onPageChange={setEquipmentPage}
-              />
-            )}
+            <TablePagination
+              page={safeEquipmentPage}
+              pageSize={LISTING_PAGE_SIZE}
+              total={equipmentListings.length}
+              onPageChange={setEquipmentPage}
+              label="listings"
+            />
 
           </Card>
 
@@ -1663,15 +1661,13 @@ const VendorDetails = () => {
 
             </div>
 
-            {chemicalListings.length > 0 && (
-              <ListPager
-                className="pt-3"
-                page={safeChemicalPage}
-                totalPages={chemicalTotalPages}
-                summary={`Page ${safeChemicalPage} of ${chemicalTotalPages} · ${chemicalListings.length} ${chemicalListings.length === 1 ? "listing" : "listings"}${chemicalSearch.trim().length > 0 ? " matching search" : ""}`}
-                onPageChange={setChemicalPage}
-              />
-            )}
+            <TablePagination
+              page={safeChemicalPage}
+              pageSize={LISTING_PAGE_SIZE}
+              total={chemicalListings.length}
+              onPageChange={setChemicalPage}
+              label="listings"
+            />
 
           </Card>
 

@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { ListPager } from "@/app/components/shared/ListPager";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import {
   RefreshCw,
@@ -463,16 +463,13 @@ export const AdminOrders = () => {
               </div>
             ))}
 
-            {/* Pagination Controls */}
-            {filtered.length > 0 && (
-              <ListPager
-                className="pt-4"
-                page={safePage}
-                totalPages={totalPages}
-                summary={`Page ${safePage} of ${totalPages} · ${filtered.length} order item${filtered.length !== 1 ? "s" : ""}`}
-                onPageChange={setPage}
-              />
-            )}
+            <TablePagination
+              page={safePage}
+              pageSize={PAGE_SIZE}
+              total={filtered.length}
+              onPageChange={setPage}
+              label="order items"
+            />
           </div>
         )}
       </Card>
