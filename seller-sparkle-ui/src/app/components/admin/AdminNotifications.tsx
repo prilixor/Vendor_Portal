@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { ListPager } from "@/app/components/shared/ListPager";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import {
   Bell,
@@ -346,19 +346,15 @@ export const AdminNotifications = () => {
     return "bg-muted text-muted-foreground border-border/40";
   };
 
-  const renderPagination = (totalItems: number) => {
-    const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
-    if (totalItems <= PAGE_SIZE) return null;
-    return (
-      <ListPager
-        className="border-t border-border/40 pt-6 mt-6"
-        page={page}
-        totalPages={totalPages}
-        summary={`Page ${page} of ${totalPages} · ${totalItems} items`}
-        onPageChange={setPage}
-      />
-    );
-  };
+  const renderPagination = (totalItems: number) => (
+    <TablePagination
+      page={page}
+      pageSize={PAGE_SIZE}
+      total={totalItems}
+      onPageChange={setPage}
+      label="items"
+    />
+  );
 
   return (
     <div className="space-y-6">

@@ -8,10 +8,8 @@ import { Badge } from "@/app/components/ui/badge";
 import { adminApi, AdminCustomerDetailDto, AdminCustomerListItemDto } from "@/app/services/adminApi";
 import { AdminPlaceCustomerOrderDialog } from "@/app/components/admin/AdminPlaceCustomerOrderDialog";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { ListPager } from "@/app/components/shared/ListPager";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Loader2, LogIn, Mail, MapPin, Phone, Search, ShoppingCart, ChevronRight, UserRound } from "lucide-react";
-
-const PAGE_SIZE = 8;
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { ADMIN_PERMISSIONS } from "@/app/helpers/adminNav";
@@ -20,6 +18,9 @@ import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn } from "@/app/helpers/utils";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
+
+const PAGE_SIZE = 8;
+const ORDERS_PAGE_SIZE = 10;
 
 function formatMoney(amount: number) {
   return `₹${Number(amount).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -186,15 +187,13 @@ export const AdminCustomers = () => {
               <p className="text-xs text-muted-foreground">Try a different email, name, or phone.</p>
             </div>
           )}
-          {rows.length > 0 && (
-            <ListPager
-              className="pt-2"
-              page={safePage}
-              totalPages={totalPages}
-              summary={`Page ${safePage} of ${totalPages} · ${rows.length} customer${rows.length !== 1 ? "s" : ""}`}
-              onPageChange={setPage}
-            />
-          )}
+          <TablePagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            total={rows.length}
+            onPageChange={setPage}
+            label="customers"
+          />
         </div>
       )}
       {!hasPermission(ADMIN_PERMISSIONS.customersView) && (
@@ -212,6 +211,7 @@ export const AdminCustomerDetail = () => {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [impersonating, setImpersonating] = useState(false);
+  const [ordersPage, setOrdersPage] = useState(1);
 
   const reload = async () => {
     if (!customerId) return;
@@ -234,6 +234,11 @@ export const AdminCustomerDetail = () => {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per customerId
   }, [customerId, navigate]);
+
+  const orders = detail?.recentOrders ?? [];
+  const ordersTotalPages = Math.max(1, Math.ceil(orders.length / ORDERS_PAGE_SIZE));
+  const safeOrdersPage = Math.min(ordersPage, ordersTotalPages);
+  const pageOrders = orders.slice((safeOrdersPage - 1) * ORDERS_PAGE_SIZE, safeOrdersPage * ORDERS_PAGE_SIZE);
 
   if (loading || !detail) {
     return <PageLoaderSlot />;
@@ -360,42 +365,53 @@ export const AdminCustomerDetail = () => {
 
       <Card className="p-5 space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="font-semibold">Recent orders</h3>
-          <p className="text-xs text-muted-foreground">{detail.recentOrders.length} shown</p>
+          <h3 className="font-semibold">Orders</h3>
+          <p className="text-xs text-muted-foreground">
+            {orders.length} {orders.length === 1 ? "order" : "orders"}
+          </p>
         </div>
-        {detail.recentOrders.length === 0 ? (
+        {orders.length === 0 ? (
           <p className="text-sm text-muted-foreground">No orders yet.</p>
         ) : (
-          <div className="divide-y rounded-md border">
-            {detail.recentOrders.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                className="w-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 py-3 text-left hover:bg-muted/40 transition-colors"
-                onClick={() => navigate(`/admin/orders/${encodeURIComponent(o.id)}`)}
-              >
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-sm">{o.orderNumber}</span>
-                    <Badge
-                      title={formatOrderStatusTitle(o.status)}
-                      variant="outline"
-                      className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(o.status))}
-                    >
-                      {formatOrderStatusLabel(o.status)}
-                    </Badge>
-                    {o.placedByAdminId && (
-                      <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
-                        By admin
+          <>
+            <div className="divide-y rounded-md border">
+              {pageOrders.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  className="w-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 py-3 text-left hover:bg-muted/40 transition-colors"
+                  onClick={() => navigate(`/admin/orders/${encodeURIComponent(o.id)}`)}
+                >
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-sm">{o.orderNumber}</span>
+                      <Badge
+                        title={formatOrderStatusTitle(o.status)}
+                        variant="outline"
+                        className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(o.status))}
+                      >
+                        {formatOrderStatusLabel(o.status)}
                       </Badge>
-                    )}
+                      {o.placedByAdminId && (
+                        <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
+                          By admin
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{formatDate(o.createdAt)}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{formatDate(o.createdAt)}</p>
-                </div>
-                <span className="text-sm font-semibold tabular-nums shrink-0">{formatMoney(o.totalAmount)}</span>
-              </button>
-            ))}
-          </div>
+                  <span className="text-sm font-semibold tabular-nums shrink-0">{formatMoney(o.totalAmount)}</span>
+                </button>
+              ))}
+            </div>
+            <TablePagination
+              page={safeOrdersPage}
+              pageSize={ORDERS_PAGE_SIZE}
+              total={orders.length}
+              onPageChange={setOrdersPage}
+              label="orders"
+            />
+          </>
         )}
       </Card>
 

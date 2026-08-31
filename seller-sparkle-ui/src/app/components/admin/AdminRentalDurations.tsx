@@ -17,6 +17,7 @@ import {
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import {
   adminApi,
@@ -44,6 +45,8 @@ const emptyForm = (): FormState => ({
   isActive: true,
 });
 
+const PAGE_SIZE = 8;
+
 type AdminRentalDurationsProps = {
   /** When true, omit PageHeader (used inside Rental Setup tabs). */
   embedded?: boolean;
@@ -56,6 +59,7 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<RentalDurationMasterDto | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -103,6 +107,17 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder || a.durationDays - b.durationDays);
   }, [rows, search, statusFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage],
+  );
 
   const deleteTarget = useMemo(
     () => rows.find((r) => r.id === deleteId) ?? null,
@@ -332,7 +347,7 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((row) => (
+                  {pageRows.map((row) => (
                     <tr
                       key={row.id}
                       className={cn(
@@ -418,7 +433,7 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
 
             {/* Mobile cards */}
             <div className="divide-y divide-border md:hidden">
-              {filtered.map((row) => (
+              {pageRows.map((row) => (
                 <div key={row.id} className={cn("space-y-3 p-4", !row.isActive && "opacity-70")}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
@@ -456,6 +471,15 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="px-4 pb-4 sm:px-5">
+              <TablePagination
+                page={safePage}
+                pageSize={PAGE_SIZE}
+                total={filtered.length}
+                onPageChange={setPage}
+                label="durations"
+              />
             </div>
           </>
         )}
