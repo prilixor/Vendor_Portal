@@ -9,6 +9,28 @@ import '../../shared/widgets/brand_page_loader.dart';
 import 'inventory_detail_screen.dart';
 import 'track_serial_screen.dart';
 
+InventoryTotals _sumRecords(Iterable<InventoryRecord> rows) {
+  var total = 0;
+  var available = 0;
+  var reserved = 0;
+  var rented = 0;
+  var blocked = 0;
+  for (final row in rows) {
+    total += row.total;
+    available += row.available;
+    reserved += row.reserved;
+    rented += row.rented;
+    blocked += row.blocked;
+  }
+  return InventoryTotals(
+    total: total,
+    available: available,
+    reserved: reserved,
+    rented: rented,
+    blocked: blocked,
+  );
+}
+
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
 
@@ -57,6 +79,12 @@ class _InventoryScreenState extends State<InventoryScreen>
   Widget build(BuildContext context) {
     final provider = Provider.of<VendorCatalogProvider>(context);
     final totals = provider.inventoryTotals;
+    final equipmentTotals = _sumRecords(
+      provider.inventoryRecords.where((r) => !r.isChemical),
+    );
+    final chemicalTotals = _sumRecords(
+      provider.inventoryRecords.where((r) => r.isChemical),
+    );
     final isChemicalTab = _tabController.index == 1;
     final filtered = _filtered(provider.inventoryRecords, isChemicalTab);
 
@@ -97,7 +125,11 @@ class _InventoryScreenState extends State<InventoryScreen>
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: _KpiStrip(totals: totals),
+              child: _KpiStrip(
+                totals: totals,
+                equipment: equipmentTotals,
+                chemical: chemicalTotals,
+              ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -171,26 +203,163 @@ class _InventoryScreenState extends State<InventoryScreen>
 
 class _KpiStrip extends StatelessWidget {
   final InventoryTotals totals;
-  const _KpiStrip({required this.totals});
+  final InventoryTotals equipment;
+  final InventoryTotals chemical;
+
+  const _KpiStrip({
+    required this.totals,
+    required this.equipment,
+    required this.chemical,
+  });
+
+  void _openSplit(
+    BuildContext context, {
+    required String label,
+    required int combined,
+    required int equipmentCount,
+    required int chemicalCount,
+    required Color color,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: context.appColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$label stock',
+                  style: TextStyle(
+                    color: context.appColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'How this combined count splits between equipment and chemicals.',
+                  style: TextStyle(
+                    color: context.appColors.textMuted,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _SplitCountRow(
+                  label: 'Equipment',
+                  value: equipmentCount,
+                  color: color,
+                ),
+                const SizedBox(height: 8),
+                _SplitCountRow(
+                  label: 'Chemicals',
+                  value: chemicalCount,
+                  color: color,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Divider(height: 1, color: context.appColors.border),
+                ),
+                _SplitCountRow(
+                  label: 'All stock',
+                  value: combined,
+                  color: color,
+                  emphasize: true,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final chips = [
+      (
+        label: 'Total',
+        tooltip: 'Total units in catalog. Tap for equipment vs chemical counts.',
+        value: totals.total,
+        equipment: equipment.total,
+        chemical: chemical.total,
+        color: context.appColors.textPrimary,
+      ),
+      (
+        label: 'Available',
+        tooltip: 'Available units ready to fulfill. Tap for equipment vs chemical counts.',
+        value: totals.available,
+        equipment: equipment.available,
+        chemical: chemical.available,
+        color: const Color(0xFF10B981),
+      ),
+      (
+        label: 'Reserved',
+        tooltip: 'Reserved — held for pending orders. Tap for equipment vs chemical counts.',
+        value: totals.reserved,
+        equipment: equipment.reserved,
+        chemical: chemical.reserved,
+        color: const Color(0xFFF59E0B),
+      ),
+      (
+        label: 'Rented',
+        tooltip: 'Rented units currently out. Tap for equipment vs chemical counts.',
+        value: totals.rented,
+        equipment: equipment.rented,
+        chemical: chemical.rented,
+        color: const Color(0xFF3B82F6),
+      ),
+      (
+        label: 'Blocked',
+        tooltip: 'Blocked units that cannot be sold or rented. Tap for equipment vs chemical counts.',
+        value: totals.blocked,
+        equipment: equipment.blocked,
+        chemical: chemical.blocked,
+        color: const Color(0xFFEF4444),
+      ),
+    ];
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 6),
       decoration: BoxDecoration(
         color: context.appColors.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: context.appColors.border),
       ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+      child: Row(
         children: [
-          _KpiChip(label: 'Total', value: totals.total, color: context.appColors.textPrimary),
-          _KpiChip(label: 'Available', value: totals.available, color: const Color(0xFF10B981)),
-          _KpiChip(label: 'Reserved', value: totals.reserved, color: const Color(0xFFF59E0B)),
-          _KpiChip(label: 'Rented', value: totals.rented, color: const Color(0xFF3B82F6)),
-          _KpiChip(label: 'Blocked', value: totals.blocked, color: const Color(0xFFEF4444)),
+          for (var i = 0; i < chips.length; i++) ...[
+            if (i > 0)
+              Container(
+                width: 1,
+                height: 40,
+                color: context.appColors.border,
+              ),
+            Expanded(
+              child: _KpiChip(
+                label: chips[i].label,
+                tooltip: chips[i].tooltip,
+                value: chips[i].value,
+                color: chips[i].color,
+                onTap: () => _openSplit(
+                  context,
+                  label: chips[i].label,
+                  combined: chips[i].value,
+                  equipmentCount: chips[i].equipment,
+                  chemicalCount: chips[i].chemical,
+                  color: chips[i].color,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -199,37 +368,112 @@ class _KpiStrip extends StatelessWidget {
 
 class _KpiChip extends StatelessWidget {
   final String label;
+  final String tooltip;
   final int value;
   final Color color;
+  final VoidCallback onTap;
 
   const _KpiChip({
     required this.label,
+    required this.tooltip,
     required this.value,
     required this.color,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(color: color, fontSize: 11)),
-          Text(
-            '$value',
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+            child: Semantics(
+              button: true,
+              label: '$label: $value. Tap to see equipment and chemical counts.',
+              child: Column(
+                children: [
+                  SizedBox(
+                    height: 14,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: context.appColors.textMuted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          height: 1.1,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '$value',
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        height: 1.1,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+class _SplitCountRow extends StatelessWidget {
+  final String label;
+  final int value;
+  final Color color;
+  final bool emphasize;
+
+  const _SplitCountRow({
+    required this.label,
+    required this.value,
+    required this.color,
+    this.emphasize = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: context.appColors.textPrimary,
+              fontWeight: emphasize ? FontWeight.w800 : FontWeight.w600,
+              fontSize: emphasize ? 16 : 15,
+            ),
+          ),
+        ),
+        Text(
+          '$value',
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w800,
+            fontSize: emphasize ? 20 : 18,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -242,7 +486,41 @@ class _InventoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final util = record.utilization.clamp(0, 100).toStringAsFixed(0);
+    final util = record.utilization.clamp(0, 100);
+    final utilPct = util.toStringAsFixed(0);
+    final cells = <({String label, String semantics, int value, Color color})>[
+      (
+        label: 'Total',
+        semantics: 'Total ${record.total}',
+        value: record.total,
+        color: context.appColors.textPrimary,
+      ),
+      (
+        label: 'Available',
+        semantics: 'Available ${record.available}',
+        value: record.available,
+        color: const Color(0xFF10B981),
+      ),
+      if (!record.isChemical)
+        (
+          label: 'Rented',
+          semantics: 'Rented ${record.rented}',
+          value: record.rented,
+          color: const Color(0xFF3B82F6),
+        ),
+      (
+        label: 'Reserved',
+        semantics: 'Reserved ${record.reserved} — held for pending orders',
+        value: record.reserved,
+        color: const Color(0xFFF59E0B),
+      ),
+      (
+        label: 'Blocked',
+        semantics: 'Blocked ${record.blocked}',
+        value: record.blocked,
+        color: const Color(0xFFEF4444),
+      ),
+    ];
 
     return Material(
       color: context.appColors.surface,
@@ -251,7 +529,7 @@ class _InventoryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: context.appColors.border),
@@ -261,30 +539,30 @@ class _InventoryCard extends StatelessWidget {
             children: [
               Text(
                 record.productName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: context.appColors.textPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 15,
+                  height: 1.25,
                 ),
               ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 12,
-                runSpacing: 6,
+              _UtilizationMeter(percent: util, label: utilPct),
+              const SizedBox(height: 10),
+              Row(
                 children: [
-                  _Stat('Total', record.total),
-                  _Stat('Avail', record.available),
-                  _Stat('Reserved', record.reserved),
-                  if (!record.isChemical) _Stat('Rented', record.rented),
-                  if (record.blocked > 0) _Stat('Blocked', record.blocked),
+                  for (final cell in cells)
+                    Expanded(
+                      child: _CountCell(
+                        label: cell.label,
+                        semanticsLabel: cell.semantics,
+                        value: cell.value,
+                        color: cell.color,
+                      ),
+                    ),
                 ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                record.isChemical
-                    ? 'Chemical · variant stock'
-                    : 'Utilization $util%',
-                style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
               ),
             ],
           ),
@@ -294,16 +572,98 @@ class _InventoryCard extends StatelessWidget {
   }
 }
 
-class _Stat extends StatelessWidget {
+class _CountCell extends StatelessWidget {
   final String label;
+  final String semanticsLabel;
   final int value;
-  const _Stat(this.label, this.value);
+  final Color color;
+
+  const _CountCell({
+    required this.label,
+    required this.semanticsLabel,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      '$label: $value',
-      style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 12),
+    return Semantics(
+      label: semanticsLabel,
+      child: Column(
+        children: [
+          SizedBox(
+            height: 13,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                style: TextStyle(
+                  color: context.appColors.textMuted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 3),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              '$value',
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w800,
+                fontSize: 14,
+                height: 1.1,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UtilizationMeter extends StatelessWidget {
+  final num percent;
+  final String label;
+
+  const _UtilizationMeter({required this.percent, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = (percent / 100).clamp(0.0, 1.0).toDouble();
+    return Semantics(
+      label: 'Utilization $label percent',
+      child: Row(
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: t,
+                minHeight: 6,
+                backgroundColor: context.appColors.border,
+                color: const Color(0xFF6C63FF),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '$label%',
+            style: TextStyle(
+              color: context.appColors.textPrimary,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

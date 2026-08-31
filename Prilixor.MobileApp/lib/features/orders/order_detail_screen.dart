@@ -8,6 +8,7 @@ import '../../core/providers/order_provider.dart';
 import '../../core/models/order_model.dart';
 import '../../core/models/order_image_request_model.dart';
 import '../../core/utils/rental_period.dart';
+import '../../core/utils/order_badges.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/struck_price.dart';
@@ -525,7 +526,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                         padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                         decoration: BoxDecoration(color: _getStatusColor(order.status).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16)),
                                                         child: Text(
-                                                          _statusBadgeLabel(order.status),
+                                                          formatOrderStatusLabel(order.status),
                                                           maxLines: 1,
                                                           overflow: TextOverflow.ellipsis,
                                                           style: TextStyle(color: _getStatusColor(order.status), fontSize: 10, fontWeight: FontWeight.bold),
@@ -672,7 +673,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                             child: _labeledValue(
                                               colors,
                                               'ORDER TYPE',
-                                              provider.currentOrder!.orderType.toUpperCase(),
+                                              formatOrderTypeLabel(provider.currentOrder!.orderType),
                                             ),
                                           ),
                                         ],
@@ -1023,15 +1024,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     );
   }
 
-  String _statusBadgeLabel(String status) {
-    final s = status.trim().toLowerCase().replaceAll('_', ' ');
-    if (s == 'awaiting vendor acceptance' || s == 'pending vendor acceptance') {
-      return 'Awaiting';
-    }
-    if (s == 'dispatch failed') return 'Failed';
-    return status.replaceAll('_', ' ');
-  }
-
   Color _getStatusColor(String status) {
     final colors = context.appColors;
     final isDark = context.isDarkMode;
@@ -1344,7 +1336,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                         style: TextStyle(color: colors.textPrimary, fontSize: 13),
                       ),
                       subtitle: Text(
-                        item.status.replaceAll('_', ' '),
+                        formatOrderStatusLabel(item.status),
                         style: TextStyle(color: colors.textMuted, fontSize: 11),
                       ),
                       onChanged: busy ? null : (v) => onToggle(item.id, v == true),
@@ -1472,7 +1464,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  '${item.status.replaceAll('_', ' ')}${viewing ? ' · currently viewing' : ''}',
+                                  '${formatOrderStatusLabel(item.status)}${viewing ? ' · currently viewing' : ''}',
                                   style: TextStyle(
                                     color: isDark ? const Color(0xFFCBD5E1) : colors.textMuted,
                                     fontSize: 11,

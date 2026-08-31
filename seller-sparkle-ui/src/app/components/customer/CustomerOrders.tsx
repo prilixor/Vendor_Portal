@@ -9,7 +9,7 @@ import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
-import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
 import {
@@ -388,7 +388,7 @@ const CustomerOrders = () => {
                           <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1 border-t border-border/20 pt-3 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
                             <div className="flex min-w-0 flex-nowrap items-center gap-1">
                               <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-semibold leading-none sm:px-2", orderTypeBadgeClass(o.orderType))} variant="outline">
-                                {o.orderType.toUpperCase()}
+                                {formatOrderTypeLabel(o.orderType)}
                               </Badge>
                               <Badge
                                 title={formatCustomerOrderStatusTitle(o.status)}

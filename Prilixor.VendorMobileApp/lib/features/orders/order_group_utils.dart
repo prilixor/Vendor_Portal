@@ -70,12 +70,19 @@ List<VendorOrder> orderGroupItems({
 }
 
 String formatOrderStatusLabel(String status) {
-  final s = status.trim().toLowerCase().replaceAll('_', ' ');
-  if (s == 'awaiting vendor acceptance' || s == 'pending vendor acceptance') {
+  final s = status.trim().toLowerCase().replaceAll('_', ' ').replaceAll(RegExp(r'\s+'), ' ');
+  if (s == 'awaiting vendor acceptance' ||
+      s == 'pending vendor acceptance' ||
+      s == 'awaiting') {
     return 'Awaiting';
   }
   if (s == 'dispatch failed') return 'Failed';
-  return status.replaceAll('_', ' ');
+  if (s.isEmpty) return status;
+  return s
+      .split(' ')
+      .where((w) => w.isNotEmpty)
+      .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+      .join(' ');
 }
 
 Color orderStatusColor(String status) {
@@ -95,6 +102,10 @@ Color orderTypeColor(String type) {
   return type.toLowerCase() == 'buy'
       ? const Color(0xFF818CF8)
       : const Color(0xFF34D399);
+}
+
+String orderTypeLabel(String type) {
+  return type.toLowerCase() == 'buy' ? 'Buy' : 'Rent';
 }
 
 String formatOrderDate(DateTime date) {
@@ -127,7 +138,7 @@ List<(String, String)> orderDetailRows(VendorOrder order) {
   if (isBuy) {
     return [
       ('Purchase date', formatDetailDate(order.startDate)),
-      ('Order type', order.orderType.toUpperCase()),
+      ('Order type', orderTypeLabel(order.orderType)),
       ('Quantity', '${order.quantity}'),
       ('Vendor payout', payout),
     ];
@@ -137,7 +148,7 @@ List<(String, String)> orderDetailRows(VendorOrder order) {
     ('Start date', formatDetailDate(order.startDate)),
     ('End date', formatDetailDate(order.endDate)),
     ('Rental days', '${order.rentalDays}'),
-    ('Order type', order.orderType.toUpperCase()),
+    ('Order type', orderTypeLabel(order.orderType)),
     ('Quantity', '${order.quantity}'),
     ('Vendor payout', payout),
   ];
@@ -271,7 +282,7 @@ class OrderTypeChip extends StatelessWidget {
         border: Border.all(color: borderColor),
       ),
       child: Text(
-        orderType.toUpperCase(),
+        orderTypeLabel(orderType),
         style: TextStyle(
           color: color,
           fontSize: 10,

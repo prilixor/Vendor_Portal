@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/app/components/ui/hover-card";
 import { InventoryMovement, InventoryRecord } from "@/app/models";
 import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2, Barcode, Trash2, Search, FlaskConical } from "lucide-react";
 import { format } from "date-fns";
@@ -63,6 +64,52 @@ const assetStatusClass = (status: string) => {
       return "bg-muted-soft text-muted-foreground";
   }
 };
+
+type StockMetric = "total" | "available" | "reserved" | "rented" | "blocked";
+
+const StockSplitHover = ({
+  label,
+  equipment,
+  chemical,
+  combined,
+  children,
+}: {
+  label: string;
+  equipment: number;
+  chemical: number;
+  combined: number;
+  children: React.ReactNode;
+}) => (
+  <HoverCard openDelay={120} closeDelay={80}>
+    <HoverCardTrigger asChild>
+      <div className="cursor-default outline-none">{children}</div>
+    </HoverCardTrigger>
+    <HoverCardContent className="w-56 p-3" side="bottom" align="center">
+      <p className="text-sm font-semibold">{label} stock</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">Equipment vs chemicals</p>
+      <div className="mt-2.5 space-y-1.5 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <Package className="h-3.5 w-3.5" />
+            Equipment
+          </span>
+          <span className="font-mono font-bold tabular-nums">{equipment}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <FlaskConical className="h-3.5 w-3.5" />
+            Chemicals
+          </span>
+          <span className="font-mono font-bold tabular-nums">{chemical}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-border pt-1.5 font-semibold">
+          <span>All stock</span>
+          <span className="font-mono tabular-nums">{combined}</span>
+        </div>
+      </div>
+    </HoverCardContent>
+  </HoverCard>
+);
 
 const Inventory = () => {
   const { user } = useAuth();
@@ -322,6 +369,21 @@ const Inventory = () => {
     [inventory]
   );
 
+  const splitTotals = useMemo(() => {
+    const empty = () => ({ total: 0, available: 0, reserved: 0, rented: 0, blocked: 0 });
+    const equipment = empty();
+    const chemical = empty();
+    for (const row of inventory) {
+      const bucket = listingIsChemical[row.productId] || row.isChemical ? chemical : equipment;
+      bucket.total += row.total;
+      bucket.available += row.available;
+      bucket.reserved += row.reserved;
+      bucket.rented += row.rented;
+      bucket.blocked += row.blocked;
+    }
+    return { equipment, chemical };
+  }, [inventory, listingIsChemical]);
+
   const tabCounts = useMemo(
     () => ({
       equipment: inventory.filter((r) => !listingIsChemical[r.productId]).length,
@@ -330,12 +392,12 @@ const Inventory = () => {
     [inventory, listingIsChemical],
   );
 
-  const summaryStats = [
-    { label: "Total", short: "Total", value: totals.total, cls: "text-foreground" },
-    { label: "Available", short: "Avail", value: totals.available, cls: "text-success" },
-    { label: "Reserved", short: "Rsvd", value: totals.reserved, cls: "text-warning" },
-    { label: "Rented", short: "Rent", value: totals.rented, cls: "text-info" },
-    { label: "Blocked", short: "Block", value: totals.blocked, cls: "text-destructive" },
+  const summaryStats: { key: StockMetric; label: string; value: number; cls: string }[] = [
+    { key: "total", label: "Total", value: totals.total, cls: "text-foreground" },
+    { key: "available", label: "Available", value: totals.available, cls: "text-success" },
+    { key: "reserved", label: "Reserved", value: totals.reserved, cls: "text-warning" },
+    { key: "rented", label: "Rented", value: totals.rented, cls: "text-info" },
+    { key: "blocked", label: "Blocked", value: totals.blocked, cls: "text-destructive" },
   ];
 
   const filteredAssets = useMemo(
@@ -883,19 +945,40 @@ const Inventory = () => {
           <div className="overflow-hidden rounded-xl border border-border/60 bg-card sm:hidden">
             <div className="grid grid-cols-5 divide-x divide-border">
               {summaryStats.map((stat) => (
-                <div key={stat.label} className="px-1 py-3 text-center">
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{stat.short}</p>
-                  <p className={cn("mt-1 font-mono text-base font-bold tabular-nums", stat.cls)}>{stat.value}</p>
-                </div>
+                <StockSplitHover
+                  key={stat.key}
+                  label={stat.label}
+                  equipment={splitTotals.equipment[stat.key]}
+                  chemical={splitTotals.chemical[stat.key]}
+                  combined={stat.value}
+                >
+                  <div
+                    className="px-1 py-3 text-center"
+                    aria-label={`${stat.label}: ${stat.value}. Equipment ${splitTotals.equipment[stat.key]}, chemicals ${splitTotals.chemical[stat.key]}.`}
+                  >
+                    <p className="text-[10px] font-medium leading-tight tracking-wide text-muted-foreground">{stat.label}</p>
+                    <p className={cn("mt-1 font-mono text-base font-bold tabular-nums", stat.cls)}>{stat.value}</p>
+                  </div>
+                </StockSplitHover>
               ))}
             </div>
           </div>
           <div className="hidden gap-4 sm:grid sm:grid-cols-3 lg:grid-cols-5">
-            <StatCard label="Total" value={totals.total} icon={Boxes} accent="primary" />
-            <StatCard label="Available" value={totals.available} icon={CheckCircle2} accent="success" />
-            <StatCard label="Reserved" value={totals.reserved} icon={Clock} accent="warning" />
-            <StatCard label="Rented" value={totals.rented} icon={Package} accent="info" />
-            <StatCard label="Blocked" value={totals.blocked} icon={Lock} accent="primary" />
+            {summaryStats.map((stat) => {
+              const icon = { total: Boxes, available: CheckCircle2, reserved: Clock, rented: Package, blocked: Lock }[stat.key];
+              const accent = { total: "primary", available: "success", reserved: "warning", rented: "info", blocked: "primary" }[stat.key] as "primary" | "success" | "warning" | "info";
+              return (
+                <StockSplitHover
+                  key={stat.key}
+                  label={stat.label}
+                  equipment={splitTotals.equipment[stat.key]}
+                  chemical={splitTotals.chemical[stat.key]}
+                  combined={stat.value}
+                >
+                  <StatCard label={stat.label} value={stat.value} icon={icon} accent={accent} />
+                </StockSplitHover>
+              );
+            })}
           </div>
 
       <Card className="mt-4 min-w-0 overflow-hidden border-border/60 p-4 [overflow-anchor:none] sm:mt-6 sm:p-6 lg:p-8">
@@ -906,12 +989,12 @@ const Inventory = () => {
               <TabsTrigger value="equipment" className="min-w-0 gap-1.5 px-2 py-2 text-xs sm:px-3 sm:text-sm">
                 <Package className="h-4 w-4 shrink-0" />
                 <span className="truncate">Equipment</span>
-                <span className="hidden text-muted-foreground sm:inline">({tabCounts.equipment})</span>
+                <span className="text-muted-foreground">({tabCounts.equipment})</span>
               </TabsTrigger>
               <TabsTrigger value="chemical" className="min-w-0 gap-1.5 px-2 py-2 text-xs sm:px-3 sm:text-sm">
                 <FlaskConical className="h-4 w-4 shrink-0" />
                 <span className="truncate">Chemicals</span>
-                <span className="hidden text-muted-foreground sm:inline">({tabCounts.chemical})</span>
+                <span className="text-muted-foreground">({tabCounts.chemical})</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -931,11 +1014,11 @@ const Inventory = () => {
           {paginatedInventory.map((row) => {
             const utilization = row.total === 0 ? 0 : ((row.rented + row.reserved) / row.total) * 100;
             const stockCells = [
-              { label: "Total", value: row.total, cls: "text-foreground" },
-              { label: "Avail", value: row.available, cls: "text-success" },
-              ...(activeTab === "equipment" ? [{ label: "Rented", value: row.rented, cls: "text-info" }] : []),
-              { label: "Rsvd", value: row.reserved, cls: "text-warning" },
-              { label: "Block", value: row.blocked, cls: "text-destructive" },
+              { label: "Total", title: "Total units", value: row.total, cls: "text-foreground" },
+              { label: "Available", title: "Available units ready to fulfill", value: row.available, cls: "text-success" },
+              ...(activeTab === "equipment" ? [{ label: "Rented", title: "Rented units currently out", value: row.rented, cls: "text-info" }] : []),
+              { label: "Reserved", title: "Reserved — held for pending orders", value: row.reserved, cls: "text-warning" },
+              { label: "Blocked", title: "Blocked units that cannot be sold or rented", value: row.blocked, cls: "text-destructive" },
             ];
             return (
               <div key={row.productId} className="min-w-0 rounded-xl border border-border bg-card p-3">
@@ -943,7 +1026,11 @@ const Inventory = () => {
                   <ListingThumb src={row.primaryImage} alt={row.productName} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-sm font-medium leading-snug">{row.productName}</p>
-                    <div className="mt-2 flex items-center gap-2">
+                    <div
+                      className="mt-2 flex items-center gap-2"
+                      title={`Utilization ${utilization.toFixed(0)}% — reserved and rented as a share of total`}
+                      aria-label={`Utilization ${utilization.toFixed(0)} percent`}
+                    >
                       <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
                         <div className="h-full bg-gradient-primary" style={{ width: `${utilization}%` }} />
                       </div>
@@ -953,8 +1040,8 @@ const Inventory = () => {
                 </div>
                 <div className={cn("mt-3 grid overflow-hidden rounded-lg border border-border bg-border", activeTab === "equipment" ? "grid-cols-5" : "grid-cols-4")}>
                   {stockCells.map((cell) => (
-                    <div key={cell.label} className="bg-card px-1 py-2 text-center">
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{cell.label}</p>
+                    <div key={cell.label} className="bg-card px-1 py-2 text-center" title={cell.title}>
+                      <p className="text-[10px] font-medium leading-tight tracking-wide text-muted-foreground">{cell.label}</p>
                       <p className={cn("font-mono text-sm font-semibold tabular-nums", cell.cls)}>{cell.value}</p>
                     </div>
                   ))}

@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/providers/order_detail_provider.dart';
 import '../../core/models/order_model.dart';
+import '../../core/utils/order_badges.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/guest_sign_in_prompt.dart';
@@ -792,7 +793,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         _buildOrderTypeBadge(context, order.orderType),
-                        _buildStatusBadge(context, order.status, compact: compact),
+                        _buildStatusBadge(context, order.status),
                       ],
                     ),
                   ),
@@ -855,7 +856,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         border: Border.all(color: border),
       ),
       child: Text(
-        orderType.toUpperCase(),
+        formatOrderTypeLabel(orderType),
         style: TextStyle(
           color: fg,
           fontSize: 10,
@@ -867,9 +868,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Widget _buildStatusBadge(BuildContext context, String status, {bool compact = false}) {
+  Widget _buildStatusBadge(BuildContext context, String status) {
     final isDark = context.isDarkMode;
-    final label = _statusDisplayLabel(status, compact: compact);
+    final label = formatOrderStatusLabel(status);
     final colorsTuple = _statusColors(context, isDark, status);
 
     return Container(
@@ -892,23 +893,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
         overflow: TextOverflow.ellipsis,
       ),
     );
-  }
-
-  String _statusDisplayLabel(String status, {bool compact = false}) {
-    final s = status.trim().toLowerCase().replaceAll('_', ' ');
-    if (compact) {
-      if (s == 'dispatch failed') return 'Failed';
-      if (s == 'awaiting vendor acceptance') return 'Awaiting';
-      if (s == 'out for delivery' || s.contains('transit')) return 'In transit';
-      if (s == 'bought out') return 'Buyout';
-    }
-    final raw = status.trim().replaceAll('_', ' ');
-    if (raw.isEmpty) return status;
-    return raw
-        .split(' ')
-        .where((w) => w.isNotEmpty)
-        .map((w) => '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
-        .join(' ');
   }
 
   (Color, Color, Color) _statusColors(BuildContext context, bool isDark, String status) {

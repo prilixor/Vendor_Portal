@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Check, Barcode, CheckCircle2, ImagePlus, Images, Loader2, Plus, Stethoscope, X } from "lucide-react";
-import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -1056,7 +1056,7 @@ const VendorOrderDetail = () => {
                             </span>
                           )}
                         </div>
-                        <p className="text-sm font-medium uppercase">{order.orderType}</p>
+                        <p className="text-sm font-medium">{formatOrderTypeLabel(order.orderType)}</p>
                       </div>
                     </>
                   ) : (
@@ -1131,7 +1131,7 @@ const VendorOrderDetail = () => {
                             </span>
                           )}
                         </div>
-                        <p className="text-sm font-medium uppercase">{order.orderType}</p>
+                        <p className="text-sm font-medium">{formatOrderTypeLabel(order.orderType)}</p>
                       </div>
                     </>
                   )}

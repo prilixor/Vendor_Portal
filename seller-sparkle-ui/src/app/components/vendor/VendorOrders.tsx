@@ -11,7 +11,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 import { ChevronRight, RefreshCw, User } from "lucide-react";
-import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import {
   ActiveFilterChips,
@@ -44,7 +44,7 @@ function formatOrderItemSummary(groupCount: number, itemCount: number): string {
 
 const statusTabs = [
   { id: "all", label: "All" },
-  { id: "awaiting_vendor_acceptance", label: "Awaiting Acceptance" },
+  { id: "awaiting_vendor_acceptance", label: "Awaiting" },
   { id: "confirmed", label: "Confirmed" },
   { id: "in_transit", label: "In Transit" },
   { id: "active", label: "Active" },
@@ -383,7 +383,7 @@ const VendorOrders = () => {
                         <div className="flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-2 border-t border-border/20 pt-3 sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
                           <div className="flex items-center gap-1.5">
                             <Badge className={cn("whitespace-nowrap text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(order.orderType))} variant="outline">
-                              {order.orderType.toUpperCase()}
+                              {formatOrderTypeLabel(order.orderType)}
                             </Badge>
                             <Badge
                               title={formatOrderStatusTitle(order.status)}

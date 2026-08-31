@@ -11,6 +11,7 @@ import { TablePagination } from "@/app/components/shared/TablePagination";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorExpiringOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
+import { formatOrderTypeLabel } from "@/app/helpers/orderStatus";
 
 const PAGE_SIZE = 8;
 
@@ -164,7 +165,7 @@ const VendorExpirations = () => {
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-foreground break-words">{row.listingTitle}</p>
                           <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2.5 sm:gap-y-1">
-                            <span>Order <strong className="font-medium text-foreground">{row.orderNumber}</strong> ({row.orderType.toUpperCase()})</span>
+                            <span>Order <strong className="font-medium text-foreground">{row.orderNumber}</strong> ({formatOrderTypeLabel(row.orderType)})</span>
                             <span className="hidden text-muted-foreground/30 sm:inline" aria-hidden="true">•</span>
                             <span>Customer <strong className="font-medium text-foreground">{row.customerName}</strong></span>
                             <span className="hidden text-muted-foreground/30 sm:inline" aria-hidden="true">•</span>

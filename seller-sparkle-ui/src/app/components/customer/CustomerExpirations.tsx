@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/app/components/ui/card";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { cn } from "@/app/helpers/utils";
+import { formatOrderTypeLabel } from "@/app/helpers/orderStatus";
 
 function formatEndDate(value: string): string {
   const parsed = new Date(value);
@@ -126,7 +127,7 @@ const CustomerExpirations = () => {
                       </Link>
                       <p className="mt-0.5 break-all text-[11px] leading-snug tabular-nums text-muted-foreground">
                         {row.orderNumber}
-                        <span className="whitespace-nowrap uppercase"> · {row.orderType}</span>
+                        <span className="whitespace-nowrap"> · {formatOrderTypeLabel(row.orderType)}</span>
                       </p>
                       <p className={cn("mt-1 text-xs tabular-nums", endDateClass(row.daysLeft))}>
                         Ends {formatEndDate(row.endDate)}

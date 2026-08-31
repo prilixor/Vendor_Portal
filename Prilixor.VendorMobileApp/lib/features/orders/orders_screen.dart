@@ -26,7 +26,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   static const _statusFilters = <(String id, String label)>[
     ('all', 'All'),
-    ('awaiting_vendor_acceptance', 'Awaiting Acceptance'),
+    ('awaiting_vendor_acceptance', 'Awaiting'),
     ('confirmed', 'Confirmed'),
     ('in_transit', 'In Transit'),
     ('active', 'Active'),
