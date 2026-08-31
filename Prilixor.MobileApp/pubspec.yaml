@@ -61,11 +61,10 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
+  # Tab favicon uses web/bm-icon.* (same tight mark as Vendor/Customer web).
+  # Do not regenerate it from the padded Android launcher tile.
   web:
-    generate: true
-    image_path: assets/branding/app_icon.png
-    background_color: "#FFFFFF"
-    theme_color: "#00338D"
+    generate: false
   image_path: assets/branding/app_icon.png
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: assets/branding/app_icon.png
