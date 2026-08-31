@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { customerApi, type ExpiringOrderApi } from "@/app/services/customerApi";
@@ -6,6 +7,7 @@ import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { cn } from "@/app/helpers/utils";
 
 function formatEndDate(value: string): string {
@@ -40,11 +42,35 @@ function endDateClass(daysLeft: number): string {
   return "font-medium text-foreground";
 }
 
+const PAGE_SIZE = 8;
+
 const CustomerExpirations = () => {
+  const [page, setPage] = useState(1);
   const { data, isLoading, error } = useQuery({
     queryKey: ["customer-order-expirations"],
     queryFn: () => customerApi.getOrderExpirations(30),
   });
+
+  const groups = useMemo(() => {
+    const next: { baseOrderNumber: string; items: ExpiringOrderApi[] }[] = [];
+    (data ?? []).forEach((row) => {
+      const baseNum = getBaseOrderNumber(row.orderNumber);
+      let group = next.find((g) => g.baseOrderNumber === baseNum);
+      if (!group) {
+        group = { baseOrderNumber: baseNum, items: [] };
+        next.push(group);
+      }
+      group.items.push(row);
+    });
+    return next;
+  }, [data]);
+
+  const totalPages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageGroups = useMemo(
+    () => groups.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [groups, safePage],
+  );
 
   if (isLoading) {
     return <PageLoaderSlot />;
@@ -57,17 +83,6 @@ const CustomerExpirations = () => {
       </p>
     );
   }
-
-  const groups: { baseOrderNumber: string; items: ExpiringOrderApi[] }[] = [];
-  (data ?? []).forEach((row) => {
-    const baseNum = getBaseOrderNumber(row.orderNumber);
-    let group = groups.find((g) => g.baseOrderNumber === baseNum);
-    if (!group) {
-      group = { baseOrderNumber: baseNum, items: [] };
-      groups.push(group);
-    }
-    group.items.push(row);
-  });
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -84,7 +99,7 @@ const CustomerExpirations = () => {
         </Card>
       ) : (
         <div className="space-y-3 sm:space-y-4">
-          {groups.map((group) => (
+          {pageGroups.map((group) => (
             <div
               key={group.baseOrderNumber}
               className="overflow-hidden rounded-xl border border-border/80 bg-card p-3 shadow-sm sm:p-6"
@@ -139,6 +154,13 @@ const CustomerExpirations = () => {
               </div>
             </div>
           ))}
+          <TablePagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            total={groups.length}
+            onPageChange={setPage}
+            label="orders"
+          />
         </div>
       )}
     </div>

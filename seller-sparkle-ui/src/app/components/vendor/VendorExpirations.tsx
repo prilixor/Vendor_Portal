@@ -7,7 +7,7 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Input } from "@/app/components/ui/input";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { ListPager } from "@/app/components/shared/ListPager";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorExpiringOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
@@ -104,9 +104,7 @@ const VendorExpirations = () => {
     [groups, safePage],
   );
 
-  const itemCount = filteredRows.length;
   const groupCount = groups.length;
-  const hasSearch = debouncedSearch.length > 0;
 
   return (
     <div>
@@ -188,12 +186,12 @@ const VendorExpirations = () => {
               </div>
             ))}
 
-            <ListPager
-              className="pt-2"
+            <TablePagination
               page={safePage}
-              totalPages={totalPages}
-              summary={`Page ${safePage} of ${totalPages} · ${groupCount} order${groupCount !== 1 ? "s" : ""} · ${itemCount} item${itemCount !== 1 ? "s" : ""}${hasSearch ? " matching search" : ""}`}
+              pageSize={PAGE_SIZE}
+              total={groupCount}
               onPageChange={setPage}
+              label="orders"
             />
           </div>
         )}

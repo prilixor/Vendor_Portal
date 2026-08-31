@@ -5,7 +5,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { ListPager } from "@/app/components/shared/ListPager";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto } from "@/app/services/vendorOnboardingApi";
@@ -411,12 +411,12 @@ const VendorOrders = () => {
                 </div>
               ));
             })()}
-            <ListPager
-              className="pt-2"
+            <TablePagination
               page={safePage}
-              totalPages={totalPages}
-              summary={`Page ${safePage} of ${totalPages} · ${formatOrderItemSummary(orderGroupCount, itemCount)}`}
+              pageSize={PAGE_SIZE}
+              total={sortedOrders.length}
               onPageChange={setPage}
+              label="order items"
             />
           </div>
         )}
