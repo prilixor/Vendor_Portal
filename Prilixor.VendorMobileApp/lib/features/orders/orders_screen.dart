@@ -278,86 +278,65 @@ class _OrdersScreenState extends State<OrdersScreen> {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  style: TextStyle(color: colors.textPrimary, fontSize: 14),
-                  onChanged: (v) => setState(() => _searchQuery = v),
-                  decoration: InputDecoration(
-                    hintText: 'Search by order, item, or customer',
-                    hintStyle: TextStyle(
-                      color: colors.textMuted,
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.accent, size: 20),
-                    isDense: true,
-                    filled: true,
-                    fillColor: AppTheme.card(context),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: colors.border.withValues(alpha: 0.7)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppTheme.accent, width: 1.2),
-                    ),
+              TextField(
+                controller: _searchController,
+                style: TextStyle(color: colors.textPrimary, fontSize: 14),
+                onChanged: (v) => setState(() => _searchQuery = v),
+                decoration: InputDecoration(
+                  hintText: 'Search orders',
+                  hintStyle: TextStyle(
+                    color: colors.textMuted,
+                    fontSize: 13,
+                  ),
+                  prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.accent, size: 20),
+                  prefixIconConstraints: const BoxConstraints(minWidth: 44, maxWidth: 44),
+                  isDense: true,
+                  filled: true,
+                  fillColor: AppTheme.card(context),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: colors.border.withValues(alpha: 0.7)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: AppTheme.accent, width: 1.2),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Material(
-                color: _statusFilter != 'all' ? AppTheme.accent : AppTheme.card(context),
-                borderRadius: BorderRadius.circular(14),
-                child: InkWell(
-                  onTap: () => _openStatusFilterSheet(counts),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: _statusFilter != 'all'
-                            ? AppTheme.accent
-                            : colors.border.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.tune_rounded,
-                      size: 20,
-                      color: _statusFilter != 'all' ? Colors.white : colors.textMuted,
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _OrdersToolbarButton(
+                      icon: Icons.tune_rounded,
+                      label: _statusFilter == 'all'
+                          ? 'Filter status'
+                          : _labelFor(_statusFilter),
+                      active: _statusFilter != 'all',
+                      onTap: () => _openStatusFilterSheet(counts),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Material(
-                color: AppTheme.card(context),
-                borderRadius: BorderRadius.circular(14),
-                child: InkWell(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ExpirationsScreen()),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: colors.border.withValues(alpha: 0.7)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _OrdersToolbarButton(
+                      icon: Icons.timer_outlined,
+                      label: 'Expirations',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const ExpirationsScreen()),
+                        );
+                      },
                     ),
-                    child: Icon(Icons.timer_outlined, size: 20, color: colors.textMuted),
                   ),
-                ),
+                ],
               ),
             ],
           ),
@@ -523,10 +502,11 @@ class _OrdersSummaryHeader extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Grouped by order ID — tap an item to update status.',
+                  'Grouped by order ID. Tap an item to update status.',
                   style: TextStyle(
                     color: colors.textSecondary,
                     fontSize: 11,
+                    height: 1.35,
                   ),
                 ),
               ],
@@ -561,63 +541,20 @@ class _OrderGroupCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.card(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.border.withValues(alpha: 0.7)),
+        border: Border.all(color: colors.border.withValues(alpha: 0.65)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: context.isDarkMode ? 0.18 : 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        group.baseOrderNumber,
-                        style: TextStyle(
-                          color: colors.textPrimary,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Consolidated fulfillment · ${group.items.length} ${group.items.length == 1 ? 'item' : 'items'}',
-                        style: TextStyle(
-                          color: colors.textMuted,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '₹${group.totalPayout.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        color: AppTheme.accent,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      'Ordered on: ${formatOrderDate(group.latestCreated)}',
-                      style: TextStyle(
-                        color: colors.textMuted,
-                        fontSize: 10,
-                      ),
-                      textAlign: TextAlign.right,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: colors.border.withValues(alpha: 0.5)),
+          OrderGroupCardHeader(group: group),
+          Divider(height: 1, color: colors.border.withValues(alpha: 0.45)),
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
             child: Column(
@@ -648,6 +585,64 @@ class _OrderGroupSkeleton extends StatelessWidget {
         color: AppTheme.card(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colors.border.withValues(alpha: 0.5)),
+      ),
+    );
+  }
+}
+
+class _OrdersToolbarButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool active;
+
+  const _OrdersToolbarButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.active = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final bg = active ? AppTheme.accent.withValues(alpha: 0.14) : AppTheme.card(context);
+    final border = active ? AppTheme.accent.withValues(alpha: 0.45) : colors.border.withValues(alpha: 0.7);
+    final fg = active ? AppTheme.accent : colors.textSecondary;
+
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: border),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 17, color: fg),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: active ? AppTheme.accent : colors.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

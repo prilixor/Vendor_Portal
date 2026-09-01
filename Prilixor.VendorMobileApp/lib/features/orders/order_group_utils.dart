@@ -355,7 +355,7 @@ class OrderMetaChip extends StatelessWidget {
   }
 }
 
-/// Vendor Web parity: customer, qty, payout, and location on one metadata row.
+/// Vendor Web parity: customer/qty/payout on one row, location on its own row.
 class OrderItemMetaLine extends StatelessWidget {
   final VendorOrder order;
 
@@ -376,62 +376,169 @@ class OrderItemMetaLine extends StatelessWidget {
       height: 1.35,
     );
 
-    return Wrap(
-      spacing: 12,
-      runSpacing: 4,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
+        Wrap(
+          spacing: 10,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Icon(
-              Icons.person_outline_rounded,
-              size: 13,
-              color: colors.textMuted.withValues(alpha: 0.75),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.person_outline_rounded,
+                  size: 13,
+                  color: colors.textMuted.withValues(alpha: 0.8),
+                ),
+                const SizedBox(width: 4),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 108),
+                  child: Text(
+                    order.customerName,
+                    style: muted,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 4),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 120),
-              child: Text(
-                order.customerName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: muted,
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: 'Qty: ', style: muted),
+                  TextSpan(text: '${order.quantity}', style: value),
+                ],
+              ),
+            ),
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: 'Payout: ', style: muted),
+                  TextSpan(
+                    text: '₹${order.payoutAmount.toStringAsFixed(0)}',
+                    style: value,
+                  ),
+                ],
               ),
             ),
           ],
         ),
-        Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(text: 'Qty: ', style: muted),
-              TextSpan(text: '${order.quantity}', style: value),
-            ],
-          ),
-        ),
-        Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(text: 'Payout: ', style: muted),
-              TextSpan(
-                text: '₹${order.payoutAmount.toStringAsFixed(0)}',
-                style: value,
+        const SizedBox(height: 5),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Icon(
+                Icons.location_on_outlined,
+                size: 13,
+                color: colors.textMuted.withValues(alpha: 0.8),
               ),
-            ],
-          ),
-        ),
-        Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(text: 'Location: ', style: muted),
-              TextSpan(
-                text: order.customerLocation,
-                style: value.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: 'Location: ', style: muted),
+                    TextSpan(
+                      text: order.customerLocation,
+                      style: value.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ],
+    );
+  }
+}
+
+/// Group card header — order id, payout, fulfillment, and ordered-on date.
+class OrderGroupCardHeader extends StatelessWidget {
+  final OrderGroup group;
+
+  const OrderGroupCardHeader({super.key, required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final itemLabel =
+        '${group.items.length} ${group.items.length == 1 ? 'item' : 'items'}';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  group.baseOrderNumber,
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    letterSpacing: -0.15,
+                    height: 1.25,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '₹${group.totalPayout.toStringAsFixed(0)}',
+                style: const TextStyle(
+                  color: AppTheme.accent,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  height: 1.25,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Consolidated fulfillment · $itemLabel',
+            style: TextStyle(
+              color: colors.textMuted,
+              fontSize: 11,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text.rich(
+              TextSpan(
+                style: TextStyle(
+                  color: colors.textMuted,
+                  fontSize: 11,
+                  height: 1.35,
+                ),
+                children: [
+                  const TextSpan(text: 'Ordered on: '),
+                  TextSpan(
+                    text: formatOrderDate(group.latestCreated),
+                    style: TextStyle(
+                      color: colors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -452,7 +559,9 @@ class OrderGroupListItem extends StatelessWidget {
     final colors = context.appColors;
 
     return Material(
-      color: colors.surface,
+      color: context.isDarkMode
+          ? colors.surfaceElevated.withValues(alpha: 0.55)
+          : const Color(0xFFFAFBFC),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
@@ -460,7 +569,7 @@ class OrderGroupListItem extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colors.border.withValues(alpha: 0.65)),
+            border: Border.all(color: colors.border.withValues(alpha: 0.55)),
           ),
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -469,7 +578,7 @@ class OrderGroupListItem extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  OrderThumb(url: order.imageUrl, size: 56),
+                  OrderThumb(url: order.imageUrl, size: 54),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -482,18 +591,19 @@ class OrderGroupListItem extends StatelessWidget {
                           style: TextStyle(
                             color: colors.textPrimary,
                             fontWeight: FontWeight.w700,
-                            fontSize: 13,
+                            fontSize: 14,
+                            height: 1.25,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 7),
                         OrderItemMetaLine(order: order),
                       ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              Divider(height: 1, color: colors.border.withValues(alpha: 0.45)),
+              const SizedBox(height: 11),
+              Divider(height: 1, color: colors.border.withValues(alpha: 0.4)),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -501,18 +611,26 @@ class OrderGroupListItem extends StatelessWidget {
                   const SizedBox(width: 6),
                   OrderStatusChip(status: order.status),
                   const Spacer(),
-                  Text(
-                    'Details',
-                    style: TextStyle(
-                      color: AppTheme.accent,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Details',
+                          style: TextStyle(
+                            color: AppTheme.accent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppTheme.accent,
+                          size: 18,
+                        ),
+                      ],
                     ),
-                  ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppTheme.accent,
-                    size: 18,
                   ),
                 ],
               ),
