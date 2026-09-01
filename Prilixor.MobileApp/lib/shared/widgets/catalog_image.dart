@@ -57,6 +57,7 @@ Widget _catalogNetworkImage({
 }) {
   return Image.network(
     url,
+    key: ValueKey(url),
     width: width,
     height: height,
     fit: fit,

@@ -25,6 +25,38 @@ String? resolveMediaUrl(String? raw) {
   return '$apiBase/${url.replaceFirst(RegExp(r'^/+'), '')}';
 }
 
+/// Rental tier icons — keep S3 presigned URLs intact; rewrite only same-API relative paths.
+String? resolveRentalIconUrl(String? raw) {
+  if (raw == null) return null;
+  final url = raw.trim();
+  if (url.isEmpty || url.toLowerCase() == 'null') return null;
+  if (url.startsWith('data:')) return url;
+
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      final uri = Uri.parse(url);
+      final apiBase = ApiClient().baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
+      final apiUri = Uri.parse(apiBase.startsWith('http') ? apiBase : 'https://$apiBase');
+      // External hosts (S3 presigned, CDN) must not be rewritten.
+      if (uri.host != apiUri.host || uri.port != apiUri.port) {
+        return url;
+      }
+    } catch (_) {
+      return url;
+    }
+    return url;
+  }
+
+  return resolveMediaUrl(url);
+}
+
+String? resolveRentalIconUrlFromPlan({
+  String? iconUrl,
+  String? iconThumbnailUrl,
+}) {
+  return resolveRentalIconUrl(iconUrl) ?? resolveRentalIconUrl(iconThumbnailUrl);
+}
+
 /// Prefer thumbnail, then listing/product primary, then first gallery URL.
 /// Mirrors web `resolveItemImageUrl`.
 String? originalUrlFromThumb(String url) {

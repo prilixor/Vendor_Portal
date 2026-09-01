@@ -135,24 +135,34 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   String? _planIconUrl(RentalPricingPlanModel plan) {
-    // Match web: prefer iconUrl, then thumbnail.
-    return resolveMediaUrl(plan.iconUrl) ?? resolveMediaUrl(plan.iconThumbnailUrl);
+    return resolveRentalIconUrlFromPlan(
+      iconUrl: plan.iconUrl,
+      iconThumbnailUrl: plan.iconThumbnailUrl,
+    );
   }
 
-  /// Match web [RentalPeriodPlanDropdown]: only show catalog icons; blank when unset.
+  /// Match web [RentalPeriodPlanDropdown] legend + trigger icon chips.
   Widget? _planIconAvatar(RentalPricingPlanModel? plan, {double size = 40}) {
     final url = plan == null ? null : _planIconUrl(plan);
     if (url == null || url.isEmpty) return null;
+    final colors = context.appColors;
+    final iconSize = size * 0.72;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: const Color(0xFF334155).withValues(alpha: 0.6),
-        border: Border.all(color: Colors.white12),
+        color: colors.surfaceElevated,
+        border: Border.all(color: colors.border),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: CatalogImage(url: url, width: size, height: size, fit: BoxFit.contain),
+      alignment: Alignment.center,
+      child: CatalogImage(
+        key: ValueKey(url),
+        url: url,
+        width: iconSize,
+        height: iconSize,
+        fit: BoxFit.contain,
+      ),
     );
   }
 

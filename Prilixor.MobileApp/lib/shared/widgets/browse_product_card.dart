@@ -7,6 +7,7 @@ import '../../core/utils/rental_period.dart';
 import '../../core/utils/rental_plan_display.dart';
 import '../utils/require_auth.dart';
 import 'catalog_image.dart';
+import 'favorite_overlay_button.dart';
 
 /// Grid cell height for Discover / related product cards (2-col mobile).
 const double kBrowseProductCardExtent = 304;
@@ -122,34 +123,21 @@ class BrowseProductCard extends StatelessWidget {
                       ),
                     ),
                   Positioned(
-                    top: 6,
-                    right: 6,
+                    top: 8,
+                    right: 8,
                     child: Consumer<FavoriteProvider>(
                       builder: (context, favoriteProvider, _) {
                         final isFavorite = favoriteProvider.isFavorite(product.id);
-                        return Material(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: () async {
-                              final ok = await ensureAuthenticated(
-                                context,
-                                message: 'Sign in to save favorites.',
-                              );
-                              if (!ok || !context.mounted) return;
-                              await favoriteProvider.toggleFavorite(product.id);
-                            },
-                            child: SizedBox(
-                              width: 32,
-                              height: 32,
-                              child: Icon(
-                                isFavorite ? Icons.favorite : Icons.favorite_border,
-                                color: isFavorite ? const Color(0xFFFF5A5F) : Colors.white,
-                                size: 17,
-                              ),
-                            ),
-                          ),
+                        return FavoriteOverlayButton(
+                          isFavorite: isFavorite,
+                          onTap: () async {
+                            final ok = await ensureAuthenticated(
+                              context,
+                              message: 'Sign in to save favorites.',
+                            );
+                            if (!ok || !context.mounted) return;
+                            await favoriteProvider.toggleFavorite(product.id);
+                          },
                         );
                       },
                     ),

@@ -16,6 +16,7 @@ import {
   formatBillingCycles,
   rentalValueTierLabel,
   resolveRentalIconUrl,
+  resolveRentalIconUrlFromPlan,
 } from "@/app/helpers/rentalDurationIcons";
 
 export function formatPlanInr(value: number): string {
@@ -93,7 +94,7 @@ function PlanOptionRow({
   const savings = planSavings(plan);
   const pctOff = planDiscountPercent(plan);
   const cyclesLabel = formatBillingCycles(planBillingCycles(plan));
-  const iconUrl = resolveRentalIconUrl(plan.iconUrl || plan.iconThumbnailUrl);
+  const iconUrl = resolveRentalIconUrlFromPlan(plan);
   const title = dayPlanTitle(plan.durationDays, plan.durationLabel);
   const tierLabel = rentalValueTierLabel(plan.valueTier);
   const perDay = planPerDay(plan);
@@ -272,11 +273,11 @@ export function RentalPeriodPlanDropdown({
 
     for (const plan of plans) {
       const tier = (plan.valueTier || "").toLowerCase().replace(/-/g, "_");
-      const raw = plan.iconUrl || plan.iconThumbnailUrl;
-      if (!tier || !raw || byTier.has(tier)) continue;
+      const url = resolveRentalIconUrlFromPlan(plan);
+      if (!tier || !url || byTier.has(tier)) continue;
       byTier.set(tier, {
         label: rentalValueTierLabel(tier),
-        url: resolveRentalIconUrl(raw),
+        url,
       });
     }
 
@@ -303,7 +304,7 @@ export function RentalPeriodPlanDropdown({
   const selectedSavings = planSavings(selected);
   const selectedPctOff = planDiscountPercent(selected);
   const selectedCycles = formatBillingCycles(planBillingCycles(selected));
-  const selectedIconUrl = resolveRentalIconUrl(selected.iconUrl || selected.iconThumbnailUrl);
+  const selectedIconUrl = resolveRentalIconUrlFromPlan(selected);
   const selectedTitle = dayPlanTitle(selected.durationDays, selected.durationLabel);
   const selectedTierLabel = rentalValueTierLabel(selected.valueTier);
   const selectedPerDay = planPerDay(selected);
