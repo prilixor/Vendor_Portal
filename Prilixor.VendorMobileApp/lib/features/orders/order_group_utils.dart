@@ -116,7 +116,7 @@ String formatOrderDate(DateTime date) {
   final local = date.toLocal();
   final h = local.hour.toString().padLeft(2, '0');
   final m = local.minute.toString().padLeft(2, '0');
-  return '${months[local.month - 1]} ${local.day}, ${local.year} Â· $h:$m';
+  return '${months[local.month - 1]} ${local.day}, ${local.year} \u00b7 $h:$m';
 }
 
 String formatDetailDate(String? value) {
@@ -133,7 +133,7 @@ String formatDetailDate(String? value) {
 
 List<(String, String)> orderDetailRows(VendorOrder order) {
   final isBuy = order.orderType.toLowerCase() == 'buy';
-  final payout = 'â‚¹${order.payoutAmount.toStringAsFixed(0)}';
+  final payout = '₹${order.payoutAmount.toStringAsFixed(0)}';
 
   if (isBuy) {
     return [
@@ -301,9 +301,22 @@ class OrderThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    final colors = context.appColors;
+    return Container(
       width: size,
       height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.border.withValues(alpha: 0.75)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: context.isDarkMode ? 0.2 : 0.06),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
       child: CatalogImage(
         url: url,
         fit: BoxFit.cover,
@@ -336,6 +349,175 @@ class OrderMetaChip extends StatelessWidget {
           color: highlight ? colors.accent : colors.textSecondary,
           fontSize: 10,
           fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+/// Vendor Web parity: customer, qty, payout, and location on one metadata row.
+class OrderItemMetaLine extends StatelessWidget {
+  final VendorOrder order;
+
+  const OrderItemMetaLine({super.key, required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final muted = TextStyle(
+      color: colors.textMuted,
+      fontSize: 11,
+      height: 1.35,
+    );
+    final value = TextStyle(
+      color: colors.textPrimary,
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      height: 1.35,
+    );
+
+    return Wrap(
+      spacing: 12,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.person_outline_rounded,
+              size: 13,
+              color: colors.textMuted.withValues(alpha: 0.75),
+            ),
+            const SizedBox(width: 4),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 120),
+              child: Text(
+                order.customerName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: muted,
+              ),
+            ),
+          ],
+        ),
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: 'Qty: ', style: muted),
+              TextSpan(text: '${order.quantity}', style: value),
+            ],
+          ),
+        ),
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: 'Payout: ', style: muted),
+              TextSpan(
+                text: '₹${order.payoutAmount.toStringAsFixed(0)}',
+                style: value,
+              ),
+            ],
+          ),
+        ),
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: 'Location: ', style: muted),
+              TextSpan(
+                text: order.customerLocation,
+                style: value.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Grouped order list row — matches Vendor Web item card layout.
+class OrderGroupListItem extends StatelessWidget {
+  final VendorOrder order;
+  final VoidCallback onTap;
+
+  const OrderGroupListItem({
+    super.key,
+    required this.order,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Material(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colors.border.withValues(alpha: 0.65)),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  OrderThumb(url: order.imageUrl, size: 56),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          order.listingTitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        OrderItemMetaLine(order: order),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Divider(height: 1, color: colors.border.withValues(alpha: 0.45)),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  OrderTypeChip(orderType: order.orderType),
+                  const SizedBox(width: 6),
+                  OrderStatusChip(status: order.status),
+                  const Spacer(),
+                  Text(
+                    'Details',
+                    style: TextStyle(
+                      color: AppTheme.accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppTheme.accent,
+                    size: 18,
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

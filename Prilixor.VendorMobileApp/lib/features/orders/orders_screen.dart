@@ -605,11 +605,12 @@ class _OrderGroupCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      formatOrderDate(group.latestCreated),
+                      'Ordered on: ${formatOrderDate(group.latestCreated)}',
                       style: TextStyle(
                         color: colors.textMuted,
                         fontSize: 10,
                       ),
+                      textAlign: TextAlign.right,
                     ),
                   ],
                 ),
@@ -617,93 +618,21 @@ class _OrderGroupCard extends StatelessWidget {
             ),
           ),
           Divider(height: 1, color: colors.border.withValues(alpha: 0.5)),
-          ...group.items.map(
-            (order) => _OrderGroupItemRow(
-              order: order,
-              onTap: () => onOpenItem(order.orderId),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+            child: Column(
+              children: [
+                for (var i = 0; i < group.items.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 10),
+                  OrderGroupListItem(
+                    order: group.items[i],
+                    onTap: () => onOpenItem(group.items[i].orderId),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _OrderGroupItemRow extends StatelessWidget {
-  final VendorOrder order;
-  final VoidCallback onTap;
-
-  const _OrderGroupItemRow({required this.order, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.appColors;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              OrderThumb(url: order.imageUrl),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      order.listingTitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: colors.textPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        OrderMetaChip(label: order.customerName),
-                        OrderMetaChip(label: 'Qty ${order.quantity}'),
-                        OrderMetaChip(
-                          label: '₹${order.payoutAmount.toStringAsFixed(0)}',
-                          highlight: true,
-                        ),
-                        OrderTypeChip(orderType: order.orderType),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      order.customerLocation,
-                      style: TextStyle(
-                        color: colors.textMuted,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  OrderStatusChip(status: order.status),
-                  const SizedBox(height: 8),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppTheme.accent.withValues(alpha: 0.9),
-                    size: 22,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
