@@ -255,6 +255,8 @@ class VendorProductListing {
   final String listingStatus;
   final int favoriteCount;
   final bool isChemical;
+  final String? primaryImageUrl;
+  final String? primaryThumbnailUrl;
 
   const VendorProductListing({
     required this.id,
@@ -269,6 +271,8 @@ class VendorProductListing {
     required this.listingStatus,
     this.favoriteCount = 0,
     this.isChemical = false,
+    this.primaryImageUrl,
+    this.primaryThumbnailUrl,
   });
 
   factory VendorProductListing.fromJson(Map<String, dynamic> json) {
@@ -285,6 +289,8 @@ class VendorProductListing {
       listingStatus: json['listingStatus']?.toString() ?? 'draft',
       favoriteCount: _toInt(json['favoriteCount']),
       isChemical: json['isChemical'] == true,
+      primaryImageUrl: json['primaryImageUrl']?.toString(),
+      primaryThumbnailUrl: json['primaryThumbnailUrl']?.toString(),
     );
   }
 }
@@ -380,6 +386,7 @@ class InventoryRecord {
   final int reserved;
   final int rented;
   final int blocked;
+  final String? primaryImageUrl;
 
   const InventoryRecord({
     required this.listingId,
@@ -391,6 +398,7 @@ class InventoryRecord {
     this.reserved = 0,
     this.rented = 0,
     this.blocked = 0,
+    this.primaryImageUrl,
   });
 
   double get utilization {

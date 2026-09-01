@@ -315,23 +315,31 @@ class _ListingHeroCarouselState extends State<_ListingHeroCarousel> {
       borderRadius: BorderRadius.circular(12),
       child: AspectRatio(
         aspectRatio: 16 / 9,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            GestureDetector(
-              onTap: _openImageGallery,
-              child: urls.length == 1
-                  ? CatalogImage(url: urls.first, fit: BoxFit.cover)
-                  : PageView.builder(
-                      controller: _pageController,
-                      itemCount: urls.length,
-                      onPageChanged: (index) => setState(() => _index = index),
-                      itemBuilder: (_, index) => CatalogImage(
-                        url: urls[index],
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-            ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: context.appColors.surfaceElevated,
+            border: Border.all(color: context.appColors.border.withValues(alpha: 0.65)),
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              GestureDetector(
+                onTap: _openImageGallery,
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: urls.length == 1
+                      ? CatalogImage(url: urls.first, fit: BoxFit.contain)
+                      : PageView.builder(
+                          controller: _pageController,
+                          itemCount: urls.length,
+                          onPageChanged: (index) => setState(() => _index = index),
+                          itemBuilder: (_, index) => CatalogImage(
+                            url: urls[index],
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                ),
+              ),
             if (urls.length > 1) ...[
               Positioned(
                 top: 10,
@@ -377,7 +385,8 @@ class _ListingHeroCarouselState extends State<_ListingHeroCarousel> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
 

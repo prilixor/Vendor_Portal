@@ -6,6 +6,7 @@ import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/theme.dart';
 import '../../shared/widgets/brand_page_loader.dart';
+import '../../shared/widgets/listing_thumb.dart';
 import 'inventory_detail_screen.dart';
 import 'track_serial_screen.dart';
 
@@ -529,40 +530,61 @@ class _InventoryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: context.appColors.border),
+            border: Border.all(color: context.appColors.border.withValues(alpha: 0.7)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: context.isDarkMode ? 0.12 : 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                record.productName,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: context.appColors.textPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                  height: 1.25,
-                ),
+              ListingThumb(
+                url: record.primaryImageUrl,
+                size: 52,
+                semanticsLabel: '${record.productName} photo',
               ),
-              const SizedBox(height: 8),
-              _UtilizationMeter(percent: util, label: utilPct),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  for (final cell in cells)
-                    Expanded(
-                      child: _CountCell(
-                        label: cell.label,
-                        semanticsLabel: cell.semantics,
-                        value: cell.value,
-                        color: cell.color,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      record.productName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: context.appColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        height: 1.25,
+                        letterSpacing: -0.1,
                       ),
                     ),
-                ],
+                    const SizedBox(height: 8),
+                    _UtilizationMeter(percent: util, label: utilPct),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        for (final cell in cells)
+                          Expanded(
+                            child: _CountCell(
+                              label: cell.label,
+                              semanticsLabel: cell.semantics,
+                              value: cell.value,
+                              color: cell.color,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

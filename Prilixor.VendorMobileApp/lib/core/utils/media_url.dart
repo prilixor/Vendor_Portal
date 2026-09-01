@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../api/api_client.dart';
+import '../models/vendor_catalog_model.dart';
 import 'open_document_bytes_stub.dart'
     if (dart.library.io) 'open_document_bytes_io.dart'
     if (dart.library.html) 'open_document_bytes_web.dart' as opener;
@@ -119,7 +120,33 @@ String? resolveItemImageUrl({
   return null;
 }
 
-/// Converts stored file references to a path the `/files/download` endpoint can read locally.
+/// Pick a list-row thumbnail from catalog product images (primary first).
+String? resolveCatalogProductImageUrl(List<CatalogProductImage>? images) {
+  if (images == null || images.isEmpty) return null;
+  final sorted = [...images]..sort((a, b) {
+      final primaryDelta = (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0);
+      if (primaryDelta != 0) return primaryDelta;
+      return a.displayOrder.compareTo(b.displayOrder);
+    });
+  final primary = sorted.first;
+  return resolveItemImageUrl(
+    primaryImageUrl: primary.imageUrl,
+    thumbnailUrl: primary.thumbnailUrl,
+  );
+}
+
+/// Listing row thumbnail — listing primary first, then catalog product gallery.
+String? resolveListingPrimaryImageUrl({
+  String? listingPrimaryImageUrl,
+  String? listingPrimaryThumbnailUrl,
+  List<CatalogProductImage>? catalogImages,
+}) {
+  return resolveItemImageUrl(
+        primaryImageUrl: listingPrimaryImageUrl,
+        primaryThumbnailUrl: listingPrimaryThumbnailUrl,
+      ) ??
+      resolveCatalogProductImageUrl(catalogImages);
+}
 String? normalizeFileDownloadUrl(String fileUrl) {
   final trimmed = fileUrl.trim();
   if (trimmed.isEmpty) return null;

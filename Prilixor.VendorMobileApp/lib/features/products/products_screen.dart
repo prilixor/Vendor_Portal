@@ -7,6 +7,7 @@ import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
 import '../../shared/widgets/brand_page_loader.dart';
+import '../../shared/widgets/listing_thumb.dart';
 import 'listing_type_picker_screen.dart';
 import 'product_detail_screen.dart';
 
@@ -198,17 +199,6 @@ class _ProductsScreenState extends State<ProductsScreen>
     );
   }
 
-  Color _statusColor(ListingUiStatus status) {
-    switch (status) {
-      case ListingUiStatus.active:
-        return Colors.green;
-      case ListingUiStatus.inactive:
-        return Colors.orange;
-      case ListingUiStatus.draft:
-        return Colors.grey;
-    }
-  }
-
   String _statusLabel(ListingUiStatus status) {
     switch (status) {
       case ListingUiStatus.active:
@@ -389,7 +379,6 @@ class _ProductsScreenState extends State<ProductsScreen>
                                 final row = filtered[index];
                                 return _ProductCard(
                                   row: row,
-                                  statusColor: _statusColor(row.status),
                                   statusLabel: _statusLabel(row.status),
                                   onTap: () {
                                     Navigator.of(context).push(
@@ -412,92 +401,164 @@ class _ProductsScreenState extends State<ProductsScreen>
 
 class _ProductCard extends StatelessWidget {
   final VendorListingRow row;
-  final Color statusColor;
   final String statusLabel;
   final VoidCallback onTap;
 
   const _ProductCard({
     required this.row,
-    required this.statusColor,
     required this.statusLabel,
     required this.onTap,
   });
 
+  Color _statusBg(ListingUiStatus status, BuildContext context) {
+    final isDark = context.isDarkMode;
+    switch (status) {
+      case ListingUiStatus.active:
+        return isDark ? const Color(0xFF064E3B).withValues(alpha: 0.35) : const Color(0xFFECFDF5);
+      case ListingUiStatus.inactive:
+        return isDark ? const Color(0xFF78350F).withValues(alpha: 0.3) : const Color(0xFFFEF3C7);
+      case ListingUiStatus.draft:
+        return isDark ? context.appColors.surfaceElevated : const Color(0xFFF1F5F9);
+    }
+  }
+
+  Color _statusFg(ListingUiStatus status, BuildContext context) {
+    final isDark = context.isDarkMode;
+    switch (status) {
+      case ListingUiStatus.active:
+        return isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857);
+      case ListingUiStatus.inactive:
+        return isDark ? const Color(0xFFFCD34D) : const Color(0xFF92400E);
+      case ListingUiStatus.draft:
+        return context.appColors.textSecondary;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final listing = row.listing;
+    final colors = context.appColors;
+    final title = row.productName.trim().isNotEmpty
+        ? row.productName
+        : listing.listingTitle;
     final priceLine = row.isChemical
         ? _chemicalPrice(row)
         : '₹${listing.dailyRent.toStringAsFixed(0)}/day · Qty ${row.quantity}';
 
     return Material(
-      color: context.appColors.surface,
+      color: colors.surface,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: context.appColors.border),
+            border: Border.all(color: colors.border.withValues(alpha: 0.7)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: context.isDarkMode ? 0.12 : 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      row.productName.trim().isNotEmpty
-                          ? row.productName
-                          : listing.listingTitle,
+              ListingThumb(
+                url: row.primaryImageUrl,
+                size: 56,
+                semanticsLabel: '$title photo',
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colors.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              height: 1.25,
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _statusBg(row.status, context),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: _statusFg(row.status, context).withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Text(
+                            statusLabel,
+                            style: TextStyle(
+                              color: _statusFg(row.status, context),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      row.categoryName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: context.appColors.textPrimary,
+                        color: colors.textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      priceLine,
+                      style: const TextStyle(
+                        color: AppTheme.accent,
                         fontWeight: FontWeight.w700,
-                        fontSize: 16,
+                        fontSize: 13,
                       ),
                     ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      statusLabel,
-                      style: TextStyle(
-                        color: statusColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
+                    if (listing.favoriteCount > 0) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.favorite_rounded,
+                            size: 13,
+                            color: colors.accent.withValues(alpha: 0.85),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${listing.favoriteCount} favorites',
+                            style: TextStyle(
+                              color: colors.textSecondary,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                row.categoryName,
-                style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                priceLine,
-                style: const TextStyle(
-                  color: Color(0xFF6C63FF),
-                  fontWeight: FontWeight.w600,
+                    ],
+                  ],
                 ),
               ),
-              if (listing.favoriteCount > 0) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '❤ ${listing.favoriteCount} favorites',
-                  style: const TextStyle(color: Colors.pinkAccent, fontSize: 12),
-                ),
-              ],
             ],
           ),
         ),
