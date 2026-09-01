@@ -6,6 +6,7 @@ import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/theme.dart';
 import '../../shared/widgets/brand_page_loader.dart';
+import '../../shared/widgets/inventory_kpi_strip.dart';
 import '../../shared/widgets/listing_thumb.dart';
 import 'inventory_detail_screen.dart';
 import 'track_serial_screen.dart';
@@ -328,112 +329,24 @@ class _KpiStrip extends StatelessWidget {
       ),
     ];
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(4, 6, 4, 6),
-      decoration: BoxDecoration(
-        color: context.appColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.appColors.border),
-      ),
-      child: Row(
-        children: [
-          for (var i = 0; i < chips.length; i++) ...[
-            if (i > 0)
-              Container(
-                width: 1,
-                height: 40,
-                color: context.appColors.border,
-              ),
-            Expanded(
-              child: _KpiChip(
-                label: chips[i].label,
-                tooltip: chips[i].tooltip,
-                value: chips[i].value,
-                color: chips[i].color,
-                onTap: () => _openSplit(
-                  context,
-                  label: chips[i].label,
-                  combined: chips[i].value,
-                  equipmentCount: chips[i].equipment,
-                  chemicalCount: chips[i].chemical,
-                  color: chips[i].color,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _KpiChip extends StatelessWidget {
-  final String label;
-  final String tooltip;
-  final int value;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _KpiChip({
-    required this.label,
-    required this.tooltip,
-    required this.value,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-            child: Semantics(
-              button: true,
-              label: '$label: $value. Tap to see equipment and chemical counts.',
-              child: Column(
-                children: [
-                  SizedBox(
-                    height: 14,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        style: TextStyle(
-                          color: context.appColors.textMuted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          height: 1.1,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '$value',
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        height: 1.1,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+    return InventoryKpiStrip(
+      metrics: [
+        for (final chip in chips)
+          InventoryKpiMetric(
+            label: chip.label,
+            value: chip.value,
+            color: chip.color,
+            tooltip: chip.tooltip,
+            onTap: () => _openSplit(
+              context,
+              label: chip.label,
+              combined: chip.value,
+              equipmentCount: chip.equipment,
+              chemicalCount: chip.chemical,
+              color: chip.color,
             ),
           ),
-        ),
-      ),
+      ],
     );
   }
 }

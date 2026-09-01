@@ -6,6 +6,7 @@ import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/inventory_kpi_strip.dart';
 import 'edit_chemical_stock_screen.dart';
 import 'edit_equipment_stock_screen.dart';
 import 'listing_assets_screen.dart';
@@ -152,7 +153,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          _StatsGrid(record: record),
+          InventoryKpiStrip.fromRecord(record, context),
           const SizedBox(height: 16),
           if (record.isChemical) ...[
             OutlinedButton.icon(
@@ -368,54 +369,6 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                 ),
         ],
       ),
-    );
-  }
-}
-
-class _StatsGrid extends StatelessWidget {
-  final InventoryRecord record;
-  const _StatsGrid({required this.record});
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      ('Total', record.total),
-      ('Available', record.available),
-      ('Reserved', record.reserved),
-      if (!record.isChemical) ('Rented', record.rented),
-      ('Blocked', record.blocked),
-    ];
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: items
-          .map(
-            (e) => Container(
-              width: (MediaQuery.of(context).size.width - 48) / 2,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppTheme.card(context),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: context.appColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(e.$1, style: TextStyle(color: context.appColors.textSecondary, fontSize: 12)),
-                  Text(
-                    '${e.$2}',
-                    style: TextStyle(
-                      color: context.appColors.textPrimary,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-          .toList(),
     );
   }
 }
