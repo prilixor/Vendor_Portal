@@ -16,6 +16,18 @@ import '../../core/providers/order_provider.dart';
 class CustomerDashboard extends StatefulWidget {
   const CustomerDashboard({super.key});
 
+  static final GlobalKey<State<CustomerDashboard>> navigationKey =
+      GlobalKey<State<CustomerDashboard>>();
+
+  /// Pop nested routes (e.g. product detail) and open the Cart tab.
+  static void openCartTab(BuildContext context) {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    final state = navigationKey.currentState;
+    if (state is _CustomerDashboardState) {
+      state._onTabTapped(1);
+    }
+  }
+
   @override
   State<CustomerDashboard> createState() => _CustomerDashboardState();
 }

@@ -131,7 +131,7 @@ class _AuthGateState extends State<AuthGate> {
       return const BrandSplash(label: 'Loading BlinksMed…');
     }
     if (auth.isAuthenticated) {
-      return const CustomerDashboard();
+      return CustomerDashboard(key: CustomerDashboard.navigationKey);
     }
     return const WelcomeScreen();
   }
@@ -217,7 +217,9 @@ class WelcomeScreen extends StatelessWidget {
                     // Checkout, medical refs, orders, and account require sign-in.
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (context) => const CustomerDashboard()),
+                      MaterialPageRoute(
+                        builder: (context) => CustomerDashboard(key: CustomerDashboard.navigationKey),
+                      ),
                     );
                   },
                   child: const Text('Browse catalog', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),

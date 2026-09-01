@@ -22,6 +22,7 @@ import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
 import '../../shared/widgets/struck_price.dart';
 import '../../shared/utils/require_auth.dart';
+import '../dashboard/customer_dashboard.dart';
 import 'product_image_viewer_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -1530,124 +1531,174 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                     ),
       bottomSheet: detail != null
-          ? SafeArea(
-              top: false,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                decoration: BoxDecoration(
-                  color: colors.surface,
-                  border: Border(top: BorderSide(color: colors.border)),
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6C63FF),
-                      disabledBackgroundColor: colors.border,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ? Consumer<CartProvider>(
+              builder: (context, cart, _) {
+                final inCart = cart.hasLine(
+                  detail.id,
+                  productVariantId: _selectedVariantId,
+                );
+                final addBlocked = !canAdd ||
+                    cannotFulfill ||
+                    (actualOrderType == 'rent' &&
+                        (!detail.hasActiveRentalPlans || selectedPlan == null));
+
+                return SafeArea(
+                  top: false,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                    decoration: BoxDecoration(
+                      color: colors.surface,
+                      border: Border(top: BorderSide(color: colors.border)),
                     ),
-                    onPressed: !canAdd ||
-                            cannotFulfill ||
-                            (actualOrderType == 'rent' &&
-                                (!detail.hasActiveRentalPlans || selectedPlan == null))
-                        ? null
-                        : () async {
-                            if (_quantity < 1 ||
-                                (actualOrderType == 'rent' &&
-                                    (!detail.hasActiveRentalPlans || selectedPlan == null))) {
-                              showRequiredFieldsBlocked(
-                                context,
-                                message: detail.hasActiveRentalPlans
-                                    ? 'Please select a rental period and quantity.'
-                                    : 'Rental plans are not configured for this product.',
-                              );
-                              return;
-                            }
-                            if (_quantity > currentQty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Only $currentQty unit(s) available in stock.')),
-                              );
-                              return;
-                            }
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: inCart
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFF6C63FF),
+                          disabledBackgroundColor: colors.border,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: inCart
+                            ? () => CustomerDashboard.openCartTab(context)
+                            : addBlocked
+                                ? null
+                                : () async {
+                                    if (_quantity < 1 ||
+                                        (actualOrderType == 'rent' &&
+                                            (!detail.hasActiveRentalPlans ||
+                                                selectedPlan == null))) {
+                                      showRequiredFieldsBlocked(
+                                        context,
+                                        message: detail.hasActiveRentalPlans
+                                            ? 'Please select a rental period and quantity.'
+                                            : 'Rental plans are not configured for this product.',
+                                      );
+                                      return;
+                                    }
+                                    if (_quantity > currentQty) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Only $currentQty unit(s) available in stock.',
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
 
-                            if (actualOrderType == 'rent') {
-                              final blocked = await _promptRentToBuyIfNeeded(
-                                detail: detail,
-                                unitBuyPrice: unitBuyPrice,
-                              );
-                              if (!mounted || blocked) return;
-                            }
+                                    if (actualOrderType == 'rent') {
+                                      final blocked = await _promptRentToBuyIfNeeded(
+                                        detail: detail,
+                                        unitBuyPrice: unitBuyPrice,
+                                      );
+                                      if (!mounted || blocked) return;
+                                    }
 
-                            final displayTitle = selectedVariant != null
-                                ? '${detail.title} (${selectedVariant.sizeLabel})'
-                                : detail.title;
+                                    final displayTitle = selectedVariant != null
+                                        ? '${detail.title} (${selectedVariant.sizeLabel})'
+                                        : detail.title;
 
-                            final finalType = detail.canRent && detail.canBuy
-                                ? _orderType
-                                : (detail.canBuy ? 'buy' : 'rent');
+                                    final finalType = detail.canRent && detail.canBuy
+                                        ? _orderType
+                                        : (detail.canBuy ? 'buy' : 'rent');
 
-                            Provider.of<CartProvider>(context, listen: false).addLine(
-                              CartLineModel(
-                                listingId: detail.id,
-                                title: displayTitle,
-                                vendorName: detail.vendorName,
-                                primaryImageUrl: detail.primaryImageUrl ??
-                                    resolveItemImageUrl(imageUrls: detail.imageUrls),
-                                dailyRent: detail.dailyRent,
-                                weeklyRent: detail.weeklyRent,
-                                monthlyRent: detail.monthlyRent,
-                                securityDeposit: detail.securityDeposit,
-                                quantity: _quantity,
-                                rentalDays: finalType == 'buy' ? 0 : (selectedPlan?.durationDays ?? 0),
-                                rentalPeriodUnit: rentalUnitDay,
-                                orderType: finalType,
-                                prescriptionRequired: detail.prescriptionRequired,
-                                productVariantId: _selectedVariantId,
-                                buyPrice: unitBuyPrice > 0 ? unitBuyPrice : detail.buyPrice,
-                                isBuyEnabled: detail.canBuy,
-                                isRentEnabled: detail.isRentEnabled,
-                                isChemical: detail.isChemical,
-                                rentalPricingPlanId:
-                                    finalType == 'rent' ? selectedPlan?.id : null,
-                                rentalDurationLabel: finalType == 'rent' && selectedPlan != null
-                                    ? dayPlanTitle(
-                                        selectedPlan.durationDays,
-                                        selectedPlan.durationLabel,
-                                      )
-                                    : null,
-                                rentalDurationDays:
-                                    finalType == 'rent' ? selectedPlan?.durationDays : null,
-                                rentalNormalPrice:
-                                    finalType == 'rent' ? selectedPlan?.normalPrice : null,
-                                rentalDiscountType:
-                                    finalType == 'rent' ? selectedPlan?.discountType : null,
-                                rentalDiscountValue:
-                                    finalType == 'rent' ? selectedPlan?.discountValue : null,
-                                rentalFinalPrice:
-                                    finalType == 'rent' ? selectedPlan?.finalRentalPrice : null,
+                                    cart.addLine(
+                                      CartLineModel(
+                                        listingId: detail.id,
+                                        title: displayTitle,
+                                        vendorName: detail.vendorName,
+                                        primaryImageUrl: detail.primaryImageUrl ??
+                                            resolveItemImageUrl(
+                                              imageUrls: detail.imageUrls,
+                                            ),
+                                        dailyRent: detail.dailyRent,
+                                        weeklyRent: detail.weeklyRent,
+                                        monthlyRent: detail.monthlyRent,
+                                        securityDeposit: detail.securityDeposit,
+                                        quantity: _quantity,
+                                        rentalDays: finalType == 'buy'
+                                            ? 0
+                                            : (selectedPlan?.durationDays ?? 0),
+                                        rentalPeriodUnit: rentalUnitDay,
+                                        orderType: finalType,
+                                        prescriptionRequired: detail.prescriptionRequired,
+                                        productVariantId: _selectedVariantId,
+                                        buyPrice: unitBuyPrice > 0
+                                            ? unitBuyPrice
+                                            : detail.buyPrice,
+                                        isBuyEnabled: detail.canBuy,
+                                        isRentEnabled: detail.isRentEnabled,
+                                        isChemical: detail.isChemical,
+                                        rentalPricingPlanId: finalType == 'rent'
+                                            ? selectedPlan?.id
+                                            : null,
+                                        rentalDurationLabel: finalType == 'rent' &&
+                                                selectedPlan != null
+                                            ? dayPlanTitle(
+                                                selectedPlan.durationDays,
+                                                selectedPlan.durationLabel,
+                                              )
+                                            : null,
+                                        rentalDurationDays: finalType == 'rent'
+                                            ? selectedPlan?.durationDays
+                                            : null,
+                                        rentalNormalPrice: finalType == 'rent'
+                                            ? selectedPlan?.normalPrice
+                                            : null,
+                                        rentalDiscountType: finalType == 'rent'
+                                            ? selectedPlan?.discountType
+                                            : null,
+                                        rentalDiscountValue: finalType == 'rent'
+                                            ? selectedPlan?.discountValue
+                                            : null,
+                                        rentalFinalPrice: finalType == 'rent'
+                                            ? selectedPlan?.finalRentalPrice
+                                            : null,
+                                      ),
+                                    );
+                                  },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              inCart
+                                  ? Icons.shopping_cart_outlined
+                                  : Icons.add_shopping_cart_outlined,
+                              size: 20,
+                              color: canAdd || inCart
+                                  ? Colors.white
+                                  : colors.textSecondary,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              !canAdd
+                                  ? 'Out of stock'
+                                  : inCart
+                                      ? 'Go to cart'
+                                      : (actualOrderType == 'buy'
+                                          ? 'Add to cart \u2014 Buy'
+                                          : 'Add to cart \u2014 Rent'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: canAdd || inCart
+                                    ? Colors.white
+                                    : colors.textSecondary,
                               ),
-                            );
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Added to Cart!'), backgroundColor: Colors.green),
-                            );
-                          },
-                    child: Text(
-                      canAdd
-                          ? (actualOrderType == 'buy'
-                              ? 'Add to cart \u2014 Buy'
-                              : 'Add to cart \u2014 Rent')
-                          : 'Out of stock',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: canAdd ? Colors.white : colors.textSecondary,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             )
           : null,
     );
