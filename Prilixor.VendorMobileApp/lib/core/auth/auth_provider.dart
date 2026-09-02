@@ -210,7 +210,7 @@ class AuthProvider extends ChangeNotifier {
         _errorMessage =
             'Cannot reach API (${_apiClient.baseUrl}). Use the live API URL (api.blinksmed.com) or start local API.';
       } else if (status == 401) {
-        _errorMessage = detail ?? 'Invalid email or password';
+        _errorMessage = detail ?? 'Invalid email/phone or password.';
       } else if (status == 403) {
         _errorMessage =
             detail ?? 'Please verify your email before logging in.';

@@ -98,10 +98,14 @@ const Login = () => {
             type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@company.com or 9876543210"
+            placeholder="Enter email or 10-digit mobile number"
+            aria-describedby="login-identifier-hint"
             aria-invalid={!!errors.email}
             className={errors.email ? "border-destructive focus-visible:ring-destructive" : ""}
           />
+          <p id="login-identifier-hint" className="text-xs text-muted-foreground">
+            Example email: vendor@example.com · Mobile: 10 digits starting with 6–9
+          </p>
           {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
         </div>
 

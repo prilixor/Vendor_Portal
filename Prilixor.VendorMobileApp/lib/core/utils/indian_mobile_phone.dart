@@ -52,4 +52,24 @@ class IndianMobilePhone {
     if (trimmed.isEmpty) return 'Phone number is required.';
     return isValid(trimmed) ? null : invalidMessage;
   }
+
+  static bool isValidEmail(String? value) {
+    final trimmed = (value ?? '').trim();
+    if (trimmed.isEmpty) return false;
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(trimmed);
+  }
+
+  /// Vendor login — email or 10-digit Indian mobile (web Login.tsx parity).
+  static String? loginIdentifierError(String? value) {
+    final trimmed = (value ?? '').trim();
+    if (trimmed.isEmpty) return 'Email or phone number is required.';
+    if (isValidEmail(trimmed) || isValid(trimmed)) return null;
+    return 'Enter a valid email address or 10-digit Indian mobile number.';
+  }
+
+  static String normalizeLoginIdentifier(String value) {
+    final trimmed = value.trim();
+    if (isValidEmail(trimmed)) return trimmed;
+    return normalizeDigits(trimmed);
+  }
 }

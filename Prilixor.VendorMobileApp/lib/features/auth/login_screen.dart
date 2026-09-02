@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../dashboard/vendor_dashboard.dart';
@@ -17,41 +18,45 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _identifierController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final FocusNode _emailFocusNode = FocusNode();
+  final FocusNode _identifierFocusNode = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
-  String? _emailError;
+  String? _identifierError;
   String? _passwordError;
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
-    _emailFocusNode.dispose();
+    _identifierFocusNode.dispose();
     _passwordFocusNode.dispose();
     super.dispose();
   }
 
   bool _validate() {
-    final emailErr =
-        requiredMessage(_emailController.text, message: 'Email is required');
-    final passwordErr = requiredMessage(
-      _passwordController.text,
-      message: 'Password is required',
-    );
+    final identifierErr =
+        IndianMobilePhone.loginIdentifierError(_identifierController.text);
+    final password = _passwordController.text.trim();
+    String? passwordErr;
+    if (password.isEmpty) {
+      passwordErr = 'Password is required.';
+    } else if (password.length < 8) {
+      passwordErr = 'Password must be at least 8 characters.';
+    }
+
     setState(() {
-      _emailError = emailErr;
+      _identifierError = identifierErr;
       _passwordError = passwordErr;
     });
-    return emailErr == null && passwordErr == null;
+    return identifierErr == null && passwordErr == null;
   }
 
   Future<void> _handleLogin() async {
     if (!_validate()) {
       showRequiredFieldsBlocked(context);
-      if (_emailError != null) {
-        _emailFocusNode.requestFocus();
+      if (_identifierError != null) {
+        _identifierFocusNode.requestFocus();
       } else {
         _passwordFocusNode.requestFocus();
       }
@@ -59,8 +64,11 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final identifier = IndianMobilePhone.normalizeLoginIdentifier(
+      _identifierController.text,
+    );
     final success = await authProvider.login(
-      _emailController.text.trim(),
+      identifier,
       _passwordController.text.trim(),
     );
 
@@ -100,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 32),
               Text(
-                'Vendor Sign In',
+                'Vendor sign in',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 28,
@@ -110,33 +118,54 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Sign in to manage orders, inventory, and your store.',
+                'Access your workspace and manage your listings.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: context.appColors.textSecondary),
+                style: TextStyle(
+                  fontSize: 16,
+                  color: context.appColors.textSecondary,
+                  height: 1.35,
+                ),
               ),
               const SizedBox(height: 32),
               const RequiredFieldsNote(),
               CustomTextField(
-                label: 'Email Address',
-                icon: Icons.email_rounded,
+                label: 'Email or phone number',
+                hintText: 'Enter email or 10-digit mobile number',
+                icon: Icons.alternate_email_rounded,
                 required: true,
-                errorText: _emailError,
-                controller: _emailController,
-                focusNode: _emailFocusNode,
-                keyboardType: TextInputType.emailAddress,
+                errorText: _identifierError,
+                controller: _identifierController,
+                focusNode: _identifierFocusNode,
+                keyboardType: TextInputType.text,
                 textInputAction: TextInputAction.next,
                 onChanged: (_) {
-                  if (_emailError != null) setState(() => _emailError = null);
+                  if (_identifierError != null) {
+                    setState(() => _identifierError = null);
+                  }
                 },
                 onSubmitted: (_) {
-                  if (_emailController.text.trim().isEmpty) {
-                    setState(() => _emailError = 'Email is required');
-                    _emailFocusNode.requestFocus();
+                  final err = IndianMobilePhone.loginIdentifierError(
+                    _identifierController.text,
+                  );
+                  if (err != null) {
+                    setState(() => _identifierError = err);
+                    _identifierFocusNode.requestFocus();
                     showRequiredFieldsBlocked(context);
                   } else {
                     _passwordFocusNode.requestFocus();
                   }
                 },
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Example email: vendor@example.com · Mobile: 10 digits starting with 6–9',
+                  style: TextStyle(
+                    color: context.appColors.textMuted,
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               CustomTextField(
@@ -170,7 +199,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     );
                   },
                   child: const Text(
-                    'Forgot Password?',
+                    'Forgot?',
                     style: TextStyle(
                       color: Color(0xFF6C63FF),
                       fontWeight: FontWeight.bold,
@@ -193,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         )
                       : const Text(
-                          'Sign In',
+                          'Sign in',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -206,32 +235,32 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    'New vendor? ',
+                    'New to the platform? ',
                     style: TextStyle(color: context.appColors.textMuted),
                   ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const RegisterScreen(),
-                          ),
-                        );
-                      },
-                      child: const Text(
-                        'Create an account',
-                        style: TextStyle(
-                          color: Color(0xFF6C63FF),
-                          fontWeight: FontWeight.bold,
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const RegisterScreen(),
                         ),
+                      );
+                    },
+                    child: const Text(
+                      'Create an account',
+                      style: TextStyle(
+                        color: Color(0xFF6C63FF),
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    );
   }
 }
