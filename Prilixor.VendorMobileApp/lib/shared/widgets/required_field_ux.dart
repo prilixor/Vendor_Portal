@@ -120,11 +120,26 @@ InputDecoration requiredInputDecoration(
   final colors = context.appColors;
   final hasError = errorText != null && errorText.isNotEmpty;
   final borderRadius = BorderRadius.circular(12);
+  final compact = MediaQuery.sizeOf(context).width < 400;
   return InputDecoration(
-    label: RequiredLabel(label, required: required),
+    label: RequiredLabel(
+      label,
+      required: required,
+      style: compact
+          ? TextStyle(
+              color: colors.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            )
+          : null,
+    ),
     floatingLabelBehavior: FloatingLabelBehavior.auto,
     hintText: hintText,
-    hintStyle: TextStyle(color: colors.textMuted),
+    hintStyle: TextStyle(
+      color: colors.textMuted,
+      fontSize: compact ? 13 : 14,
+    ),
+    isDense: compact,
     errorText: hasError ? errorText : null,
     errorStyle: const TextStyle(color: kFieldErrorColor, fontSize: 12),
     prefixIcon: prefixIcon != null
@@ -133,7 +148,10 @@ InputDecoration requiredInputDecoration(
     suffixIcon: suffixIcon,
     filled: filled,
     fillColor: fillColor ?? colors.surface,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    contentPadding: EdgeInsets.symmetric(
+      horizontal: compact ? 12 : 16,
+      vertical: compact ? 12 : 14,
+    ),
     border: OutlineInputBorder(
       borderRadius: borderRadius,
       borderSide: BorderSide(color: colors.border.withValues(alpha: 0.5)),

@@ -72,4 +72,10 @@ class IndianMobilePhone {
     if (isValidEmail(trimmed)) return trimmed;
     return normalizeDigits(trimmed);
   }
+
+  /// Compact login placeholder that fits narrow phones (iPhone SE, etc.).
+  static String loginIdentifierHint(double width) {
+    if (width < 360) return 'Email or mobile';
+    return 'Email or mobile number';
+  }
 }

@@ -92,16 +92,16 @@ const Login = () => {
           Fields marked <span className="text-destructive">*</span> are required.
         </p>
         <div className="space-y-1.5">
-          <Label htmlFor="email" required>Email or Phone Number</Label>
+          <Label htmlFor="email" required>Email or phone</Label>
           <Input
             id="email"
             type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter email or 10-digit mobile number"
+            placeholder="Email or mobile number"
             aria-describedby="login-identifier-hint"
             aria-invalid={!!errors.email}
-            className={errors.email ? "border-destructive focus-visible:ring-destructive" : ""}
+            className={`placeholder:text-xs sm:placeholder:text-sm ${errors.email ? "border-destructive focus-visible:ring-destructive" : ""}`}
           />
           <p id="login-identifier-hint" className="text-xs text-muted-foreground">
             Example email: vendor@example.com · Mobile: 10 digits starting with 6–9

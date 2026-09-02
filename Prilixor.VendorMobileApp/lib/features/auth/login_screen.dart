@@ -91,6 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
+    final fieldWidth = MediaQuery.sizeOf(context).width - 48;
 
     return Scaffold(
       backgroundColor: AppTheme.bg(context),
@@ -129,8 +130,8 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 32),
               const RequiredFieldsNote(),
               CustomTextField(
-                label: 'Email or phone number',
-                hintText: 'Enter email or 10-digit mobile number',
+                label: 'Email or phone',
+                hintText: IndianMobilePhone.loginIdentifierHint(fieldWidth),
                 icon: Icons.alternate_email_rounded,
                 required: true,
                 errorText: _identifierError,
