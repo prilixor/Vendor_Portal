@@ -21,10 +21,13 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { authApi } from "@/app/services/authApi";
 import { customerApi, type CustomerNotificationPreferenceApi } from "@/app/services/customerApi";
 import {
-  applyPasswordPairLiveErrors,
-  passwordsMatch,
+  PASSWORDS_MATCH_MESSAGE,
+  passwordsMeetConfirm,
+  patchLivePasswordPair,
+  submitConfirmPasswordError,
+  submitPasswordLengthError,
 } from "@/app/helpers/passwordValidation";
-import { toast } from "sonner";
+import { cn } from "@/app/helpers/utils";
 
 const CustomerSettings = () => {
   const { user, setSessionUser } = useAuth();
@@ -69,6 +72,20 @@ const CustomerSettings = () => {
 
   const [profileFieldErrors, setProfileFieldErrors] = useState<Record<string, string>>({});
   const [passwordFieldErrors, setPasswordFieldErrors] = useState<Record<string, string>>({});
+  const passwordsMatch = passwordsMeetConfirm(newPassword, confirmPassword);
+
+  const SETTINGS_PAIR_KEYS = { password: "newPassword", confirm: "confirmPassword" } as const;
+  const SETTINGS_PAIR_MESSAGES = {
+    length: "New password must be at least 8 characters.",
+    mismatch: "New password and confirm password must match.",
+    confirmRequired: "Please confirm your new password.",
+  };
+
+  const syncPasswordPair = (nextPassword: string, nextConfirm: string) => {
+    setPasswordFieldErrors((prev) =>
+      patchLivePasswordPair(prev, nextPassword, nextConfirm, SETTINGS_PAIR_KEYS, SETTINGS_PAIR_MESSAGES),
+    );
+  };
 
   const clearProfileFieldError = (key: string) => {
     setProfileFieldErrors((prev) => {
@@ -205,9 +222,12 @@ const CustomerSettings = () => {
     const errors: Record<string, string> = {};
     if (!currentPassword) errors.currentPassword = "Please enter your current password.";
     if (!newPassword) errors.newPassword = "Please enter a new password.";
-    else if (newPassword.length < 8) errors.newPassword = "New password must be at least 8 characters.";
-    if (!confirmPassword) errors.confirmPassword = "Please confirm your new password.";
-    else if (newPassword && newPassword !== confirmPassword) errors.confirmPassword = "New password and confirm password must match.";
+    else {
+      const passwordErr = submitPasswordLengthError(newPassword, SETTINGS_PAIR_MESSAGES.length);
+      if (passwordErr) errors.newPassword = passwordErr;
+    }
+    const confirmErr = submitConfirmPasswordError(newPassword, confirmPassword, SETTINGS_PAIR_MESSAGES);
+    if (confirmErr) errors.confirmPassword = confirmErr;
     if (Object.keys(errors).length > 0) {
       setPasswordFieldErrors(errors);
       toast.error("Please fill in the required fields.");
@@ -430,20 +450,7 @@ const CustomerSettings = () => {
                           onChange={(e) => {
                             const value = e.target.value;
                             setNewPassword(value);
-                            setPasswordFieldErrors((prev) =>
-                              applyPasswordPairLiveErrors(
-                                prev,
-                                value,
-                                confirmPassword,
-                                { password: "newPassword", confirm: "confirmPassword" },
-                                {
-                                  passwordEmptyMessage: "Please enter a new password.",
-                                  passwordShortMessage: "New password must be at least 8 characters.",
-                                  confirmEmptyMessage: "Please confirm your new password.",
-                                  confirmMismatchMessage: "New password and confirm password must match.",
-                                },
-                              ),
-                            );
+                            syncPasswordPair(value, confirmPassword);
                           }}
                           autoComplete="new-password"
                           className={
@@ -474,29 +481,14 @@ const CustomerSettings = () => {
                           onChange={(e) => {
                             const value = e.target.value;
                             setConfirmPassword(value);
-                            setPasswordFieldErrors((prev) =>
-                              applyPasswordPairLiveErrors(
-                                prev,
-                                newPassword,
-                                value,
-                                { password: "newPassword", confirm: "confirmPassword" },
-                                {
-                                  passwordEmptyMessage: "Please enter a new password.",
-                                  passwordShortMessage: "New password must be at least 8 characters.",
-                                  confirmEmptyMessage: "Please confirm your new password.",
-                                  confirmMismatchMessage: "New password and confirm password must match.",
-                                },
-                              ),
-                            );
+                            syncPasswordPair(newPassword, value);
                           }}
                           autoComplete="new-password"
-                          className={
-                            passwordFieldErrors.confirmPassword
-                              ? "border-destructive pr-10"
-                              : passwordsMatch(newPassword, confirmPassword)
-                                ? "border-emerald-500/60 pr-10"
-                                : "pr-10"
-                          }
+                          className={cn(
+                            "pr-10",
+                            passwordFieldErrors.confirmPassword && "border-destructive",
+                            passwordsMatch && "border-emerald-500/60",
+                          )}
                         />
                         <button
                           type="button"
@@ -508,10 +500,9 @@ const CustomerSettings = () => {
                         </button>
                       </div>
                       <FieldError message={passwordFieldErrors.confirmPassword} />
-                      {!passwordFieldErrors.confirmPassword &&
-                        passwordsMatch(newPassword, confirmPassword) && (
-                          <p className="text-xs text-emerald-600">Passwords match</p>
-                        )}
+                      {!passwordFieldErrors.confirmPassword && passwordsMatch && (
+                        <p className="text-xs text-emerald-600">{PASSWORDS_MATCH_MESSAGE}</p>
+                      )}
                     </div>
                   </FormGrid>
                 </div>

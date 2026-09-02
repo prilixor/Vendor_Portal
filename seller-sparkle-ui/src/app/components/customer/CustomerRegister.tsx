@@ -157,44 +157,44 @@ const CustomerRegister = () => {
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (!validateAll()) return;
+    if (!validateAll()) {
+      toast.error("Please fill in the required fields correctly.");
+      return;
+    }
     setLoading(true);
     try {
-      const emailTrimmed = email.trim();
       const phoneNormalized = normalizeIndianMobileDigits(phone);
-      const hasEmail = isValidEmail(emailTrimmed);
-
-      const result = await registerCustomer(
-        hasEmail ? emailTrimmed : null,
+      const res = await registerCustomer({
+        fullName: fullName.trim(),
+        email: email.trim() || undefined,
+        phone: phoneNormalized,
         password,
-        fullName.trim(),
-        phoneNormalized,
-      );
+      });
 
-      // Phone is required → verify SMS while still anonymous (no JWT), then sign in.
-      if (result.requiresPhoneOtp) {
-        setPendingPhone(phoneNormalized);
-        setPendingLoginId(hasEmail ? emailTrimmed : phoneNormalized);
+      setPendingPhone(phoneNormalized);
+      setPendingLoginId(res.loginIdentifier || phoneNormalized);
+
+      if (res.requiresPhoneVerification) {
         setOtpOpen(true);
         return;
       }
 
-      const loginId = hasEmail ? emailTrimmed : phoneNormalized;
-      await login(loginId, password, "customer");
-      toast.success("Account created.");
-      goToShop();
-    } catch (error) {
-      const raw = error instanceof Error ? error.message : "";
-      const lower = raw.toLowerCase();
-      const isConflict =
-        lower.includes("already") ||
-        lower.includes("exists") ||
-        lower.includes("in use") ||
-        lower.includes("taken") ||
-        lower.includes("registration failed");
+      if (res.token) {
+        toast.success("Welcome!");
+        goToShop();
+        return;
+      }
+
+      toast.success("Registration complete. Please sign in.");
+      navigate("/customer/login");
+    } catch (error: any) {
+      const raw =
+        error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        (error instanceof Error ? error.message : "");
       toast.error(
-        isConflict
-          ? "Registration failed. If an account with this email or phone number exists, please try logging in."
+        raw && (raw.includes("phone number is already") || raw.includes("email is already"))
+          ? raw
           : raw || "Registration failed.",
       );
     } finally {
@@ -203,9 +203,15 @@ const CustomerRegister = () => {
   };
 
   return (
-    <AuthLayout title="Create customer account" subtitle="Rent equipment from verified vendors in one place." portalType="customer">
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4" noValidate>
-        <p className="text-xs text-muted-foreground -mt-1">
+    <AuthLayout
+      title="Create customer account"
+      subtitle="Rent verified medical equipment from BlinksMed in one place."
+      portalType="customer"
+      backTo="/customer/login"
+      backLabel="Back to sign in"
+    >
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3.5" noValidate>
+        <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Phone is required for sign in. Email is optional.{" "}
           Fields marked <span className="text-destructive">*</span> are always required.
         </p>
@@ -317,7 +323,7 @@ const CustomerRegister = () => {
           ) : null}
         </div>
 
-        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>
+        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11 text-white font-semibold" disabled={loading}>
           {loading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating…

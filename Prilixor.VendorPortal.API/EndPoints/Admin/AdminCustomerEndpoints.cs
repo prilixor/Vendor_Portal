@@ -33,8 +33,14 @@ public sealed class GetAdminCustomersEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminCustomerDetailRequest
+{
+    public int OrdersPage { get; set; } = 1;
+    public int OrdersPageSize { get; set; } = 10;
+}
+
 public sealed class GetAdminCustomerDetailEndpoint(IMediator mediator)
-    : EndpointWithoutRequest<Results<Ok<AdminCustomerDetailDto>, ProblemHttpResult>>
+    : Endpoint<GetAdminCustomerDetailRequest, Results<Ok<AdminCustomerDetailDto>, ProblemHttpResult>>
 {
     public override void Configure()
     {
@@ -43,13 +49,16 @@ public sealed class GetAdminCustomerDetailEndpoint(IMediator mediator)
         Policies($"Perm:{AdminPermissions.CustomersView}");
     }
 
-    public override async Task<Results<Ok<AdminCustomerDetailDto>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    public override async Task<Results<Ok<AdminCustomerDetailDto>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminCustomerDetailRequest req, CancellationToken ct)
     {
         var idStr = Route<string>("customerId");
         if (!Guid.TryParse(idStr, out var customerId))
             return TypedResults.Problem(title: "validation.error", detail: "Invalid customer id.", statusCode: 400);
 
-        var result = await mediator.Send(new GetAdminCustomerDetailQuery(customerId), ct);
+        var page = req.OrdersPage < 1 ? 1 : req.OrdersPage;
+        var pageSize = req.OrdersPageSize is < 1 or > 50 ? 10 : req.OrdersPageSize;
+        var result = await mediator.Send(new GetAdminCustomerDetailQuery(customerId, page, pageSize), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 
 import '../api/api_client.dart';
+import '../utils/media_url.dart';
 import '../utils/multipart_file_util.dart';
 import '../models/vendor_catalog_model.dart';
 
@@ -158,12 +159,22 @@ class VendorCatalogProvider extends ChangeNotifier {
           status: normalizeListingStatus(listing.listingStatus),
           buyPriceMin: buyMin ?? product?.buyPrice,
           buyPriceMax: buyMax ?? product?.buyPrice,
+          primaryImageUrl: resolveListingPrimaryImageUrl(
+            listingPrimaryImageUrl: listing.primaryImageUrl,
+            listingPrimaryThumbnailUrl: listing.primaryThumbnailUrl,
+            catalogImages: product?.images,
+          ),
         );
       }).toList();
+
+      final imageByListingId = {
+        for (final row in _listingRows) row.listing.id: row.primaryImageUrl,
+      };
 
       _inventoryRecords = await _buildInventoryRecords(
         vendorId: vendorId,
         productById: productById,
+        imageByListingId: imageByListingId,
       );
 
       _movements = await _loadAllMovements(vendorId, productById);
@@ -1154,6 +1165,7 @@ class VendorCatalogProvider extends ChangeNotifier {
   Future<List<InventoryRecord>> _buildInventoryRecords({
     required String vendorId,
     required Map<String, CatalogProduct> productById,
+    required Map<String, String?> imageByListingId,
   }) async {
     final rows = <InventoryRecord>[];
     for (final listing in _listings) {
@@ -1174,6 +1186,7 @@ class VendorCatalogProvider extends ChangeNotifier {
               catalogProductId: listing.productId,
               isChemical: true,
               productName: baseName,
+              primaryImageUrl: imageByListingId[listing.id],
               total: variantRows.fold(0, (s, r) => s + r.totalQuantity),
               available:
                   variantRows.fold(0, (s, r) => s + r.availableQuantity),
@@ -1194,6 +1207,7 @@ class VendorCatalogProvider extends ChangeNotifier {
             catalogProductId: listing.productId,
             isChemical: isChemical,
             productName: baseName,
+            primaryImageUrl: imageByListingId[listing.id],
             total: inv.total,
             available: inv.available,
             reserved: inv.reserved,
@@ -1225,6 +1239,7 @@ class VendorCatalogProvider extends ChangeNotifier {
               catalogProductId: listing.productId,
               isChemical: isChemical,
               productName: baseName,
+              primaryImageUrl: imageByListingId[listing.id],
               total: _toInt(map['totalQuantity']),
               available: _toInt(map['availableQuantity']),
               reserved: _toInt(map['reservedQuantity']),
@@ -1240,6 +1255,7 @@ class VendorCatalogProvider extends ChangeNotifier {
             catalogProductId: listing.productId,
             isChemical: isChemical,
             productName: baseName,
+            primaryImageUrl: imageByListingId[listing.id],
             total: listing.availableQuantity,
             available: listing.availableQuantity,
           ),

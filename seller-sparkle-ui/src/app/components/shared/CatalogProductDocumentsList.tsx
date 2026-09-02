@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Download, ExternalLink, Eye, FileText, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/app/components/ui/button";
@@ -259,7 +259,18 @@ export function CatalogProductDocumentsList({
   );
 }
 
-/** One-line customer links — tap name to view, icon to download. No cards or sheets. */
+function catalogDocumentListLabel(
+  doc: CatalogDocumentItem,
+  items: CatalogDocumentItem[],
+): string {
+  const label = catalogDocumentTypeLabel(doc.documentType);
+  const key = doc.documentType.trim().toLowerCase();
+  const siblings = items.filter((d) => d.documentType.trim().toLowerCase() === key);
+  if (siblings.length <= 1) return label;
+  return `${label} ${siblings.findIndex((d) => d.id === doc.id) + 1}`;
+}
+
+/** Customer document links — stacked rows on phones, wrap chips on larger screens. */
 export function CustomerProductDocumentsInline({
   documents,
   className,
@@ -268,49 +279,51 @@ export function CustomerProductDocumentsInline({
   className?: string;
 }) {
   const { preview, setPreview, download, openPreview } = useDocumentActions();
+  const headingId = useId();
   const items = sortCatalogDocuments(documents.filter((d) => d.fileUrl?.trim()));
 
   if (items.length === 0) return null;
 
   return (
     <>
-      <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1.5", className)}>
-        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+      <section className={cn("space-y-2", className)} aria-labelledby={headingId}>
+        <h2
+          id={headingId}
+          className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
+        >
           <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
           Documents
-        </span>
-        <ul className="flex flex-wrap items-center gap-x-1 gap-y-1">
-          {items.map((doc, index) => {
-            const label = catalogDocumentTypeLabel(doc.documentType);
+        </h2>
+        <ul className="flex flex-col overflow-hidden rounded-xl border border-border/80 bg-card sm:flex-row sm:flex-wrap sm:gap-2 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent">
+          {items.map((doc) => {
+            const label = catalogDocumentListLabel(doc, items);
             return (
-              <li key={doc.id} className="inline-flex items-center">
-                {index > 0 ? (
-                  <span className="mr-1 text-muted-foreground/35" aria-hidden>
-                    ·
-                  </span>
-                ) : null}
-                <span className="inline-flex items-center gap-0.5">
+              <li
+                key={doc.id}
+                className="flex min-h-11 min-w-0 items-stretch border-b border-border/70 last:border-b-0 sm:min-h-0 sm:border-0"
+              >
+                <div className="flex min-w-0 flex-1 items-center sm:rounded-full sm:border sm:border-border/80 sm:bg-muted/40 sm:pl-3 sm:pr-0.5">
                   <button
                     type="button"
-                    className="text-[13px] font-medium text-primary underline-offset-2 hover:underline"
+                    className="min-w-0 flex-1 truncate px-3 py-2.5 text-left text-[13px] font-medium text-primary underline-offset-2 hover:underline sm:flex-none sm:px-0 sm:py-1.5"
                     onClick={() => openPreview(doc)}
                   >
                     {label}
                   </button>
                   <button
                     type="button"
-                    className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-8 sm:w-8 sm:rounded-full"
                     aria-label={`Download ${label}`}
                     onClick={() => void download(doc)}
                   >
-                    <Download className="h-3 w-3" />
+                    <Download className="h-3.5 w-3.5" />
                   </button>
-                </span>
+                </div>
               </li>
             );
           })}
         </ul>
-      </div>
+      </section>
 
       <DocumentPreviewDialog
         preview={preview}

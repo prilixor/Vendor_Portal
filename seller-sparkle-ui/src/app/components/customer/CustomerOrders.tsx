@@ -5,11 +5,11 @@ import { ChevronRight } from "lucide-react";
 import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { ListPager } from "@/app/components/shared/ListPager";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
-import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
 import {
@@ -194,7 +194,6 @@ const CustomerOrders = () => {
         (o) =>
           o.orderNumber.toLowerCase().includes(q) ||
           o.listingTitle.toLowerCase().includes(q) ||
-          o.vendorName.toLowerCase().includes(q) ||
           o.id.toLowerCase().includes(q),
       );
     }
@@ -210,7 +209,6 @@ const CustomerOrders = () => {
         (o) =>
           o.orderNumber.toLowerCase().includes(q) ||
           o.listingTitle.toLowerCase().includes(q) ||
-          o.vendorName.toLowerCase().includes(q) ||
           o.id.toLowerCase().includes(q),
       );
     }
@@ -390,10 +388,10 @@ const CustomerOrders = () => {
                           <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1 border-t border-border/20 pt-3 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
                             <div className="flex min-w-0 flex-nowrap items-center gap-1">
                               <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-semibold leading-none sm:px-2", orderTypeBadgeClass(o.orderType))} variant="outline">
-                                {o.orderType.toUpperCase()}
+                                {formatOrderTypeLabel(o.orderType)}
                               </Badge>
                               <Badge
-                                title={formatOrderStatusTitle(o.status)}
+                                title={formatCustomerOrderStatusTitle(o.status)}
                                 className={cn("shrink-0", orderStatusBadgeSizeClass, "px-1.5 sm:px-2", orderStatusBadgeClass(o.status))}
                                 variant="outline"
                               >
@@ -451,14 +449,13 @@ const CustomerOrders = () => {
             </p>
           )}
 
-          {filtered.length > 0 && (
-            <ListPager
-              page={safePage}
-              totalPages={totalPages}
-              summary={`Page ${safePage} of ${totalPages} · ${filtered.length} order${filtered.length !== 1 ? "s" : ""}`}
-              onPageChange={setPage}
-            />
-          )}
+          <TablePagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            total={filtered.length}
+            onPageChange={setPage}
+            label="orders"
+          />
         </>
       )}
     </div>

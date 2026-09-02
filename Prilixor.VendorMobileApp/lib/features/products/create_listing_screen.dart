@@ -7,6 +7,7 @@ import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/admin_sizing_pricing.dart';
 import '../../shared/widgets/chemical_variant_stock_fields.dart';
 
 /// Step 2 — create equipment or chemical listing (web Products create dialog parity).
@@ -345,7 +346,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                     subtitle: 'Read-only — set by platform Admin',
                     trailing: _ReadOnlyBadge(),
                     child: widget.isChemical
-                        ? _ChemicalPricingInfo(product: selectedProduct)
+                        ? AdminSizingPricingBody(product: selectedProduct)
                         : _EquipmentPricingInfo(product: selectedProduct),
                   ),
                 ],
@@ -873,85 +874,6 @@ class _BottomSaveBar extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _ChemicalPricingInfo extends StatelessWidget {
-  final CatalogProduct product;
-  const _ChemicalPricingInfo({required this.product});
-
-  @override
-  Widget build(BuildContext context) {
-    final variants = product.variants.where((v) => v.isActive).toList();
-    if (variants.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: context.appColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: context.appColors.border, style: BorderStyle.solid),
-        ),
-        child: Text(
-          product.buyPrice != null && product.buyPrice! > 0
-              ? 'Buy price ₹${product.buyPrice!.toStringAsFixed(0)} · no packaging sizes yet'
-              : 'No packaging sizes defined. Ask Admin to add variants first.',
-          style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
-        ),
-      );
-    }
-    return Column(
-      children: variants.map((v) {
-        return Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: context.appColors.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: context.appColors.border),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      v.label,
-                      style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      v.sku,
-                      style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'Customer ₹${v.buyPrice.toStringAsFixed(0)}',
-                    style: TextStyle(color: context.appColors.textSecondary, fontSize: 12),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Payout ₹${v.vendorPrice.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                      color: AppTheme.accent,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      }).toList(),
     );
   }
 }

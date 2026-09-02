@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { apiClient } from "@/app/services/apiClient";
 import { setImpersonationSession } from "@/app/helpers/authSession";
 import { PageLoader } from "@/app/components/shared/PageLoader";
+import { BackLink } from "@/app/components/shared/BackLink";
 import { toast } from "sonner";
 
 /** Consumes a one-time impersonation exchange code and starts a vendor or customer session. */
@@ -54,10 +55,8 @@ const ImpersonationConsume = () => {
     <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-6">
       {error ? (
         <>
-          <p className="text-destructive">{error}</p>
-          <button className="text-primary underline" onClick={() => navigate("/admin/login")}>
-            Back to admin login
-          </button>
+          <p className="text-destructive text-sm font-medium">{error}</p>
+          <BackLink to="/admin/login" label="Back to admin login" />
         </>
       ) : (
         <PageLoader label={status} className="min-h-0 py-0" />

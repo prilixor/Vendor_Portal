@@ -7,7 +7,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { ListPager } from "@/app/components/shared/ListPager";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 
 import { Button } from "@/app/components/ui/button";
 
@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, IconTooltip }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
+import { BackLink } from "@/app/components/shared/BackLink";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 
@@ -671,11 +672,9 @@ const VendorDetails = () => {
 
         <p className="mt-1 text-sm text-muted-foreground">This vendor does not exist or may have been removed.</p>
 
-        <Button className="mt-4" variant="outline" onClick={() => navigate("/admin/vendors")}>
-
-          <ChevronLeft className="mr-2 h-4 w-4" /> Back to vendors
-
-        </Button>
+        <div className="mt-4">
+          <BackLink to="/admin/vendors" label="Back to vendors" />
+        </div>
 
       </Card>
 
@@ -1049,9 +1048,7 @@ const VendorDetails = () => {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button variant="outline" className="h-9 shrink-0 whitespace-nowrap px-2.5 text-xs sm:h-10 sm:px-4 sm:text-sm" onClick={() => navigate("/admin/vendors")}>
-              <ChevronLeft className="mr-1 h-4 w-4 sm:mr-2" /> Back
-            </Button>
+            <BackLink to="/admin/vendors" label="Back to vendors" />
             </div>
             </div>
 
@@ -1583,15 +1580,13 @@ const VendorDetails = () => {
 
             </div>
 
-            {equipmentListings.length > 0 && (
-              <ListPager
-                className="pt-3"
-                page={safeEquipmentPage}
-                totalPages={equipmentTotalPages}
-                summary={`Page ${safeEquipmentPage} of ${equipmentTotalPages} · ${equipmentListings.length} ${equipmentListings.length === 1 ? "listing" : "listings"}${equipmentSearch.trim().length > 0 ? " matching search" : ""}`}
-                onPageChange={setEquipmentPage}
-              />
-            )}
+            <TablePagination
+              page={safeEquipmentPage}
+              pageSize={LISTING_PAGE_SIZE}
+              total={equipmentListings.length}
+              onPageChange={setEquipmentPage}
+              label="listings"
+            />
 
           </Card>
 
@@ -1666,15 +1661,13 @@ const VendorDetails = () => {
 
             </div>
 
-            {chemicalListings.length > 0 && (
-              <ListPager
-                className="pt-3"
-                page={safeChemicalPage}
-                totalPages={chemicalTotalPages}
-                summary={`Page ${safeChemicalPage} of ${chemicalTotalPages} · ${chemicalListings.length} ${chemicalListings.length === 1 ? "listing" : "listings"}${chemicalSearch.trim().length > 0 ? " matching search" : ""}`}
-                onPageChange={setChemicalPage}
-              />
-            )}
+            <TablePagination
+              page={safeChemicalPage}
+              pageSize={LISTING_PAGE_SIZE}
+              total={chemicalListings.length}
+              onPageChange={setChemicalPage}
+              label="listings"
+            />
 
           </Card>
 

@@ -12,15 +12,16 @@ import {
   normalizeIndianMobileDigits,
   requiredIndianMobileError,
 } from "@/app/helpers/indianMobilePhone";
-import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
-import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
 import {
-  applyPasswordPairLiveErrors,
-  confirmPasswordError,
-  passwordLengthError,
-  passwordsMatch,
+  PASSWORDS_MATCH_MESSAGE,
+  passwordsMeetConfirm,
+  patchLivePasswordPair,
+  submitConfirmPasswordError,
+  submitPasswordLengthError,
 } from "@/app/helpers/passwordValidation";
 import { cn } from "@/app/helpers/utils";
+import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
+import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
 import { clearImpersonationSession, clearPortalSession } from "@/app/helpers/authSession";
 
 const Field = ({ id, label, type, value, onChange, placeholder, error, required }: any) => (
@@ -47,7 +48,7 @@ const PasswordField = ({
   placeholder,
   error,
   hint,
-  successHint,
+  ok,
   required,
   show,
   onToggle,
@@ -59,7 +60,7 @@ const PasswordField = ({
   placeholder?: string;
   error?: string;
   hint?: string;
-  successHint?: string;
+  ok?: boolean;
   required?: boolean;
   show: boolean;
   onToggle: () => void;
@@ -74,10 +75,11 @@ const PasswordField = ({
         onChange={onChange}
         placeholder={placeholder}
         aria-invalid={!!error}
+        autoComplete="new-password"
         className={cn(
           "pr-10",
           error && "border-destructive focus-visible:ring-destructive",
-          !error && successHint && "border-emerald-500/60",
+          ok && "border-emerald-500/60",
         )}
       />
       <button
@@ -91,10 +93,8 @@ const PasswordField = ({
     </div>
     {error ? (
       <p className="text-xs text-destructive">{error}</p>
-    ) : successHint ? (
-      <p className="text-xs text-emerald-600">{successHint}</p>
     ) : hint ? (
-      <p className="text-[11px] text-muted-foreground">{hint}</p>
+      <p className={cn("text-xs", ok ? "text-emerald-600" : "text-muted-foreground")}>{hint}</p>
     ) : null}
   </div>
 );
@@ -130,32 +130,32 @@ const Register = () => {
     navigate(`/verify-email-sent?email=${encodeURIComponent(mail)}&portal=vendor&phoneVerified=1`);
   };
 
+  const passwordsMatch = passwordsMeetConfirm(password, confirm);
+
+  const syncPasswordPair = (nextPassword: string, nextConfirm: string) => {
+    setErrors((prev) =>
+      patchLivePasswordPair(
+        prev,
+        nextPassword,
+        nextConfirm,
+        { password: "password", confirm: "confirm" },
+        { length: "Use at least 8 characters" },
+      ),
+    );
+  };
+
   const validate = () => {
     const e: Record<string, string> = {};
     if (name.trim().length < 2) e.name = "Please enter your full name";
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) e.email = "Enter a valid email";
     const phoneErr = requiredIndianMobileError(phone);
     if (phoneErr) e.phone = phoneErr;
-    const pwdErr = passwordLengthError(password, { shortMessage: "At least 8 characters" });
-    if (pwdErr) e.password = pwdErr;
-    const confErr = confirmPasswordError(password, confirm);
-    if (confErr) e.confirm = confErr;
+    const passwordErr = submitPasswordLengthError(password, "Use at least 8 characters");
+    if (passwordErr) e.password = passwordErr;
+    const confirmErr = submitConfirmPasswordError(password, confirm);
+    if (confirmErr) e.confirm = confirmErr;
     setErrors(e);
     return Object.keys(e).length === 0;
-  };
-
-  const onPasswordChange = (value: string) => {
-    setPassword(value);
-    setErrors((prev) =>
-      applyPasswordPairLiveErrors(prev, value, confirm, { password: "password", confirm: "confirm" }),
-    );
-  };
-
-  const onConfirmChange = (value: string) => {
-    setConfirm(value);
-    setErrors((prev) =>
-      applyPasswordPairLiveErrors(prev, password, value, { password: "password", confirm: "confirm" }),
-    );
   };
 
   const submit = async (ev: React.FormEvent) => {
@@ -183,9 +183,11 @@ const Register = () => {
       title="Create your vendor account"
       subtitle="Start onboarding in less than 5 minutes."
       portalType="vendor"
+      backTo="/login"
+      backLabel="Back to sign in"
     >
-      <form onSubmit={submit} className="space-y-4">
-        <p className="text-xs text-muted-foreground -mt-1">
+      <form onSubmit={submit} className="space-y-3.5">
+        <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.
         </p>
         <Field id="name" label="Full name" type="text" value={name} onChange={(e: any) => setName(e.target.value)} placeholder="John Doe" error={errors.name} required />
@@ -211,10 +213,14 @@ const Register = () => {
             id="password"
             label="Password"
             value={password}
-            onChange={(e) => onPasswordChange(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setPassword(value);
+              syncPasswordPair(value, confirm);
+            }}
             placeholder="••••••••"
             error={errors.password}
-            hint={password.length > 0 && password.length < 8 ? `${password.length}/8 characters` : undefined}
+            hint={password.length === 0 ? "At least 8 characters." : undefined}
             required
             show={showPwd}
             onToggle={() => setShowPwd((v) => !v)}
@@ -223,21 +229,26 @@ const Register = () => {
             id="confirm"
             label="Confirm"
             value={confirm}
-            onChange={(e) => onConfirmChange(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setConfirm(value);
+              syncPasswordPair(password, value);
+            }}
             placeholder="••••••••"
             error={errors.confirm}
-            successHint={passwordsMatch(password, confirm) ? "Passwords match" : undefined}
+            hint={passwordsMatch ? PASSWORDS_MATCH_MESSAGE : undefined}
+            ok={passwordsMatch}
             required
             show={showConfirmPwd}
             onToggle={() => setShowConfirmPwd((v) => !v)}
           />
         </div>
 
-        <div className="flex items-start space-x-2 py-1">
-          <Checkbox
-            id="terms"
-            checked={agreed}
-            onCheckedChange={(checked) => setAgreed(checked === true)}
+        <div className="flex items-start space-x-2">
+          <Checkbox 
+            id="terms" 
+            checked={agreed} 
+            onCheckedChange={(checked) => setAgreed(checked === true)} 
             className="mt-0.5"
           />
           <Label
@@ -256,7 +267,7 @@ const Register = () => {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-muted-foreground">
+      <p className="mt-5 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
         <Link to="/login" className="font-semibold text-primary hover:underline">Sign in</Link>
       </p>

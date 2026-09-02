@@ -11,6 +11,7 @@ import { useCart } from "@/app/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
 import { useNotificationContext } from "@/app/contexts/NotificationContext";
+import { useSupportChat } from "@/app/contexts/SupportChatContext";
 import { BrandMark } from "@/app/components/shared/BrandMark";
 
 interface SidebarProps {
@@ -47,6 +48,9 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
 
   // 3. Get Unread Vendor Notifications (for Vendor variant)
   const { unreadCount: unreadVendorCount } = useNotificationContext();
+
+  // 4. Support chat trigger (for Vendor in-portal support)
+  const { openSupportPanel } = useSupportChat();
 
   // Inject badges dynamically based on the current navigation item
   const dynamicSections = useMemo(() => {
@@ -209,13 +213,41 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
       {!collapsed && (
         <div className="m-3 hidden rounded-xl bg-gradient-soft p-3 text-xs lg:block">
           <p className="font-semibold">Need help?</p>
-          <p className="mt-0.5 text-muted-foreground">Check the docs or chat with support.</p>
+          <p className="mt-0.5 text-muted-foreground">
+            {variant === "vendor" ? (
+              <>
+                Check the docs or{" "}
+                <button
+                  type="button"
+                  onClick={() => openSupportPanel()}
+                  className="font-medium text-primary underline underline-offset-2 hover:opacity-80 transition-opacity"
+                >
+                  chat with support
+                </button>
+                .
+              </>
+            ) : (
+              "Check the docs or chat with support."
+            )}
+          </p>
           <div className="mt-2.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
             <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">Terms</Link>
             <span>•</span>
             <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">Privacy</Link>
             <span>•</span>
-            <Link to="/contact-us" className="hover:text-primary hover:underline transition-colors">Contact</Link>
+            {variant === "vendor" ? (
+              <button
+                type="button"
+                onClick={() => openSupportPanel()}
+                className="hover:text-primary hover:underline transition-colors cursor-pointer"
+              >
+                Contact
+              </button>
+            ) : variant === "customer" ? (
+              <Link to="/customer/support" className="hover:text-primary hover:underline transition-colors">Contact</Link>
+            ) : (
+              <Link to="/admin/support" className="hover:text-primary hover:underline transition-colors">Contact</Link>
+            )}
           </div>
         </div>
       )}

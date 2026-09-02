@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import {
   ArrowLeft,
+  ChevronLeft,
   Hash,
   MessageSquare,
   RefreshCw,
@@ -291,16 +292,14 @@ export default function AdminCustomerChats() {
             <>
               <div className="relative z-10 flex shrink-0 flex-col gap-3 border-b border-border bg-card px-3 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5">
                 <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <Button
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="mt-0.5 h-8 w-8 shrink-0 lg:hidden"
                     onClick={() => selectSession(null)}
                     aria-label="Back to chat list"
+                    className="group mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-card text-foreground shadow-2xs transition-all duration-200 hover:border-primary/40 hover:bg-accent active:scale-95 lg:hidden"
                   >
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
+                    <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" strokeWidth={2.2} />
+                  </button>
                   <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner sm:flex">
                     <User className="h-5 w-5" />
                   </div>

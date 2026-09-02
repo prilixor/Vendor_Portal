@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { MessageCircle, X, Send, Loader2, Paperclip, Bot, User, FileText, Plus, Ticket, ChevronLeft, AlertCircle, CheckCircle2, RefreshCw, XCircle } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -171,12 +171,14 @@ function supportPanelStyle(fab: FabPos): CSSProperties {
   };
 }
 
-function useDraggableSupportFab() {
+function useDraggableSupportFab(onTap: () => void) {
   const [pos, setPos] = useState<FabPos>(() => (typeof window === "undefined" ? { x: 0, y: 0 } : loadFabPos()));
   const [dragging, setDragging] = useState(false);
   const [viewportTick, setViewportTick] = useState(0);
   const posRef = useRef(pos);
   posRef.current = pos;
+  const onTapRef = useRef(onTap);
+  onTapRef.current = onTap;
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -185,6 +187,7 @@ function useDraggableSupportFab() {
     origY: number;
     moved: boolean;
   } | null>(null);
+  /** Swallow the synthetic click that follows a handled pointerup (tap or drag). */
   const skipClickRef = useRef(false);
 
   useEffect(() => {
@@ -206,8 +209,18 @@ function useDraggableSupportFab() {
     };
   }, []);
 
+  const releaseCapture = (node: HTMLDivElement, pointerId: number) => {
+    try {
+      if (node.hasPointerCapture(pointerId)) node.releasePointerCapture(pointerId);
+    } catch {
+      // ignore: capture already released
+    }
+  };
+
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
+    // Do not capture yet. Immediate capture retargets `click` to this wrapper
+    // and the inner button never opens the panel.
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -216,7 +229,6 @@ function useDraggableSupportFab() {
       origY: posRef.current.y,
       moved: false,
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
   }, []);
 
   const onPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
@@ -225,9 +237,16 @@ function useDraggableSupportFab() {
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
     if (!drag.moved && dx * dx + dy * dy < FAB_DRAG_THRESHOLD * FAB_DRAG_THRESHOLD) return;
-    drag.moved = true;
-    skipClickRef.current = true;
-    setDragging(true);
+    if (!drag.moved) {
+      drag.moved = true;
+      skipClickRef.current = true;
+      setDragging(true);
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // ignore: pointer already gone
+      }
+    }
     setPos(clampFabPos({ x: drag.origX + dx, y: drag.origY + dy }));
   }, []);
 
@@ -235,8 +254,30 @@ function useDraggableSupportFab() {
     const drag = dragRef.current;
     if (!drag || event.pointerId !== drag.pointerId) return;
     dragRef.current = null;
+    releaseCapture(event.currentTarget, event.pointerId);
     setDragging(false);
     if (drag.moved) {
+      skipClickRef.current = true;
+      setPos((current) => {
+        const next = clampFabPos(current);
+        saveFabPos(next);
+        return next;
+      });
+      return;
+    }
+    // Pointer capture / touch-action:none often swallows the following click.
+    // Treat an unmoved press as the open/close gesture here.
+    skipClickRef.current = true;
+    onTapRef.current();
+  }, []);
+
+  const onLostPointerCapture = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    dragRef.current = null;
+    setDragging(false);
+    if (drag.moved) {
+      skipClickRef.current = true;
       setPos((current) => {
         const next = clampFabPos(current);
         saveFabPos(next);
@@ -245,22 +286,34 @@ function useDraggableSupportFab() {
     }
   }, []);
 
-  const consumeDragClick = useCallback(() => {
-    if (!skipClickRef.current) return false;
-    skipClickRef.current = false;
-    return true;
+  const onClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (skipClickRef.current) {
+      skipClickRef.current = false;
+      return;
+    }
+    onTapRef.current();
+  }, []);
+
+  const onKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onTapRef.current();
   }, []);
 
   return {
     pos,
     dragging,
     viewportTick,
-    consumeDragClick,
     fabProps: {
       onPointerDown,
       onPointerMove,
       onPointerUp: endDrag,
-      onPointerCancel: endDrag,
+      onPointerCancel: onLostPointerCapture,
+      onLostPointerCapture,
+      onClick,
+      onKeyDown,
     },
   };
 }
@@ -286,7 +339,9 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
   const [forceNextAsNewTicket, setForceNextAsNewTicket] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { pos, dragging, viewportTick, consumeDragClick, fabProps } = useDraggableSupportFab();
+  const { pos, dragging, viewportTick, fabProps } = useDraggableSupportFab(() => {
+    setIsOpen((open) => !open);
+  });
   const panelStyle = useMemo(() => supportPanelStyle(pos), [pos, viewportTick]);
 
   const refreshUnreadBadge = useCallback(async () => {
@@ -316,6 +371,10 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
       window.removeEventListener("focus", onFocus);
     };
   }, [vendorId, refreshUnreadBadge]);
+
+  useEffect(() => {
+    if (isOpen) void refreshUnreadBadge();
+  }, [isOpen, refreshUnreadBadge]);
 
   // Load tickets when widget opens or ticket list view is shown
   useEffect(() => {
@@ -949,22 +1008,21 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
 
       {/* Floating Button — drag to reposition; tap to open. Position is remembered. */}
       <div
-        className="fixed z-[60] touch-none"
+        className="fixed z-[60] touch-none group outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-full"
         style={{ left: pos.x, top: pos.y, width: FAB_SIZE, height: FAB_SIZE }}
+        role="button"
+        tabIndex={0}
+        aria-label="BlinksMed Support. Drag to move, tap to open."
+        title="Drag to move · tap to open"
         {...fabProps}
       >
       <Button
-        onClick={() => {
-          if (consumeDragClick()) return;
-          const next = !isOpen;
-          setIsOpen(next);
-          if (next) void refreshUnreadBadge();
-        }}
+        type="button"
+        tabIndex={-1}
+        aria-hidden
         size="icon"
-        aria-label="BlinksMed Support. Drag to move."
-        title="Drag to move · tap to open"
         className={cn(
-          "relative h-14 w-14 cursor-grab touch-none rounded-full shadow-2xl transition-colors duration-300 active:cursor-grabbing group select-none",
+          "relative h-14 w-14 cursor-grab touch-none rounded-full shadow-2xl transition-colors duration-300 active:cursor-grabbing select-none pointer-events-none",
           dragging && "cursor-grabbing",
           !dragging && "hover:scale-105 active:scale-95 transition-transform",
           isOpen ? "bg-white text-primary border border-primary/20 shadow-xl" : "bg-gradient-to-r from-primary to-primary/80 text-white shadow-xl"

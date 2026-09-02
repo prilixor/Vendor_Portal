@@ -41,7 +41,9 @@ public sealed class CreateRentalDurationMasterCommandValidator : AbstractValidat
     }
 }
 
-internal sealed class CreateRentalDurationMasterCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class CreateRentalDurationMasterCommandHandler(
+    IVendorOnboardingRepository repository,
+    IRentalPricingService rentalPricingService)
     : ICommandHandler<CreateRentalDurationMasterCommand, RentalDurationMasterDto>
 {
     public async Task<Result<RentalDurationMasterDto>> Handle(
@@ -74,6 +76,7 @@ internal sealed class CreateRentalDurationMasterCommandHandler(IVendorOnboarding
 
         await repository.AddRentalDurationMasterAsync(entity, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
+        await rentalPricingService.RecalculateAllAutomaticAsync(resetManualOverrides: false, cancellationToken);
 
         return Result.Success(new RentalDurationMasterDto(
             entity.Id.ToString(),
@@ -105,7 +108,9 @@ public sealed class UpdateRentalDurationMasterCommandValidator : AbstractValidat
     }
 }
 
-internal sealed class UpdateRentalDurationMasterCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class UpdateRentalDurationMasterCommandHandler(
+    IVendorOnboardingRepository repository,
+    IRentalPricingService rentalPricingService)
     : ICommandHandler<UpdateRentalDurationMasterCommand, RentalDurationMasterDto>
 {
     public async Task<Result<RentalDurationMasterDto>> Handle(
@@ -148,6 +153,7 @@ internal sealed class UpdateRentalDurationMasterCommandHandler(IVendorOnboarding
 
         await repository.UpdateRentalDurationMasterAsync(entity, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
+        await rentalPricingService.RecalculateAllAutomaticAsync(resetManualOverrides: false, cancellationToken);
 
         return Result.Success(new RentalDurationMasterDto(
             entity.Id.ToString(),
@@ -169,7 +175,9 @@ public sealed class DeleteRentalDurationMasterCommandValidator : AbstractValidat
     }
 }
 
-internal sealed class DeleteRentalDurationMasterCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class DeleteRentalDurationMasterCommandHandler(
+    IVendorOnboardingRepository repository,
+    IRentalPricingService rentalPricingService)
     : ICommandHandler<DeleteRentalDurationMasterCommand>
 {
     public async Task<Result> Handle(DeleteRentalDurationMasterCommand request, CancellationToken cancellationToken)
@@ -193,6 +201,7 @@ internal sealed class DeleteRentalDurationMasterCommandHandler(IVendorOnboarding
 
         await repository.DeleteRentalDurationMasterAsync(id, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
+        await rentalPricingService.RecalculateAllAutomaticAsync(resetManualOverrides: false, cancellationToken);
         return Result.Success();
     }
 }

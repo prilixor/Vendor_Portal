@@ -16,6 +16,7 @@ import {
   formatBillingCycles,
   rentalValueTierLabel,
   resolveRentalIconUrl,
+  resolveRentalIconUrlFromPlan,
 } from "@/app/helpers/rentalDurationIcons";
 
 export function formatPlanInr(value: number): string {
@@ -38,6 +39,7 @@ export function StruckPrice({
 }
 
 export function planSavings(plan: RentalPricingPlanDto): number {
+  if (typeof plan.discountAmount === "number") return Math.max(0, plan.discountAmount);
   return Math.max(0, Number(plan.normalPrice || 0) - Number(plan.finalRentalPrice || 0));
 }
 
@@ -46,6 +48,9 @@ export function planDiscountPercent(plan: RentalPricingPlanDto): number {
   const final = Number(plan.finalRentalPrice || 0);
   if (!(normal > 0) || final >= normal) return 0;
   if (plan.discountType === "percentage" && plan.discountValue > 0) {
+    return Math.min(100, Math.round(plan.discountValue));
+  }
+  if ((plan.discountType === "none" || plan.isAutomatic) && plan.discountValue > 0) {
     return Math.min(100, Math.round(plan.discountValue));
   }
   return Math.min(100, Math.round(((normal - final) / normal) * 100));
@@ -89,7 +94,7 @@ function PlanOptionRow({
   const savings = planSavings(plan);
   const pctOff = planDiscountPercent(plan);
   const cyclesLabel = formatBillingCycles(planBillingCycles(plan));
-  const iconUrl = resolveRentalIconUrl(plan.iconUrl || plan.iconThumbnailUrl);
+  const iconUrl = resolveRentalIconUrlFromPlan(plan);
   const title = dayPlanTitle(plan.durationDays, plan.durationLabel);
   const tierLabel = rentalValueTierLabel(plan.valueTier);
   const perDay = planPerDay(plan);
@@ -268,11 +273,11 @@ export function RentalPeriodPlanDropdown({
 
     for (const plan of plans) {
       const tier = (plan.valueTier || "").toLowerCase().replace(/-/g, "_");
-      const raw = plan.iconUrl || plan.iconThumbnailUrl;
-      if (!tier || !raw || byTier.has(tier)) continue;
+      const url = resolveRentalIconUrlFromPlan(plan);
+      if (!tier || !url || byTier.has(tier)) continue;
       byTier.set(tier, {
         label: rentalValueTierLabel(tier),
-        url: resolveRentalIconUrl(raw),
+        url,
       });
     }
 
@@ -299,7 +304,7 @@ export function RentalPeriodPlanDropdown({
   const selectedSavings = planSavings(selected);
   const selectedPctOff = planDiscountPercent(selected);
   const selectedCycles = formatBillingCycles(planBillingCycles(selected));
-  const selectedIconUrl = resolveRentalIconUrl(selected.iconUrl || selected.iconThumbnailUrl);
+  const selectedIconUrl = resolveRentalIconUrlFromPlan(selected);
   const selectedTitle = dayPlanTitle(selected.durationDays, selected.durationLabel);
   const selectedTierLabel = rentalValueTierLabel(selected.valueTier);
   const selectedPerDay = planPerDay(selected);

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/product_model.dart';
 import '../../core/providers/favorite_provider.dart';
@@ -7,6 +7,7 @@ import '../../core/utils/rental_period.dart';
 import '../../core/utils/rental_plan_display.dart';
 import '../utils/require_auth.dart';
 import 'catalog_image.dart';
+import 'favorite_overlay_button.dart';
 
 /// Grid cell height for Discover / related product cards (2-col mobile).
 const double kBrowseProductCardExtent = 304;
@@ -122,34 +123,21 @@ class BrowseProductCard extends StatelessWidget {
                       ),
                     ),
                   Positioned(
-                    top: 6,
-                    right: 6,
+                    top: 8,
+                    right: 8,
                     child: Consumer<FavoriteProvider>(
                       builder: (context, favoriteProvider, _) {
                         final isFavorite = favoriteProvider.isFavorite(product.id);
-                        return Material(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: () async {
-                              final ok = await ensureAuthenticated(
-                                context,
-                                message: 'Sign in to save favorites.',
-                              );
-                              if (!ok || !context.mounted) return;
-                              await favoriteProvider.toggleFavorite(product.id);
-                            },
-                            child: SizedBox(
-                              width: 32,
-                              height: 32,
-                              child: Icon(
-                                isFavorite ? Icons.favorite : Icons.favorite_border,
-                                color: isFavorite ? const Color(0xFFFF5A5F) : Colors.white,
-                                size: 17,
-                              ),
-                            ),
-                          ),
+                        return FavoriteOverlayButton(
+                          isFavorite: isFavorite,
+                          onTap: () async {
+                            final ok = await ensureAuthenticated(
+                              context,
+                              message: 'Sign in to save favorites.',
+                            );
+                            if (!ok || !context.mounted) return;
+                            await favoriteProvider.toggleFavorite(product.id);
+                          },
                         );
                       },
                     ),
@@ -236,11 +224,11 @@ class BrowseProductCard extends StatelessWidget {
                       buyLine,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         height: 1.2,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF34D399),
+                        color: context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF15803D),
                       ),
                     )
                   else

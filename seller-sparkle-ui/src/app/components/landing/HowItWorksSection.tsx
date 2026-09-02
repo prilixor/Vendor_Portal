@@ -106,10 +106,10 @@ export const HowItWorksSection = ({ data }: HowItWorksSectionProps) => {
     <section id="how-it-works" className="scroll-target section-block cream reveal">
       <div className="section-inner">
         <div className="eyebrow">{eyebrow}</div>
-        <h2 className="display" style={{ fontSize: "clamp(32px,4vw,44px)", fontWeight: 400 }}>
+        <h2 className="display">
           {title}
           {accentText && (
-            <span style={{ color: "var(--teal-mid)", fontStyle: "italic", marginLeft: title.endsWith(" ") ? "0" : "6px" }}>
+            <span className="accent" style={{ marginLeft: title.endsWith(" ") ? "0" : "6px" }}>
               {accentText}
             </span>
           )}

@@ -7,6 +7,7 @@ import { Label } from "@/app/components/ui/label";
 import { apiClient } from "@/app/services/apiClient";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { forgotPasswordPath } from "@/app/helpers/portalHost";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -81,9 +82,15 @@ const AdminLogin = () => {
   };
 
   return (
-    <AuthLayout title="Admin Sign In" subtitle="Access the admin dashboard and manage vendors." portalType="admin">
+    <AuthLayout
+      title="Admin Sign In"
+      subtitle="Access the admin dashboard and manage vendors."
+      portalType="admin"
+      backTo="/"
+      backLabel="Back to home"
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="text-xs text-muted-foreground -mt-1">
+        <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.
         </p>
         <div className="space-y-1.5">
@@ -103,7 +110,7 @@ const AdminLogin = () => {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password" required>Password</Label>
-            <Link to="/forgot-password?portal=admin" className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
+            <Link to={forgotPasswordPath("admin", email)} className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
           </div>
           <div className="relative">
             <Input
@@ -133,7 +140,7 @@ const AdminLogin = () => {
           </div>
         )}
 
-        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>
+        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11 text-white font-semibold" disabled={loading}>
           {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in…</> : "Sign in as Admin"}
         </Button>
       </form>

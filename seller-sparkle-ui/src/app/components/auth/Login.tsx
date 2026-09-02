@@ -7,7 +7,7 @@ import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
 import { authApi } from "@/app/services/authApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
-import { getCustomerPortalHref } from "@/app/helpers/portalHost";
+import { getCustomerPortalHref, forgotPasswordPath } from "@/app/helpers/portalHost";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { isValidIndianMobile, normalizeIndianMobileDigits } from "@/app/helpers/indianMobilePhone";
@@ -110,29 +110,39 @@ const Login = () => {
   };
 
   return (
-    <AuthLayout title="Vendor sign in" subtitle="Access your workspace and manage your listings." portalType="vendor">
+    <AuthLayout
+      title="Vendor sign in"
+      subtitle="Access your workspace and manage your listings."
+      portalType="vendor"
+      backTo="/"
+      backLabel="Back to home"
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="text-xs text-muted-foreground -mt-1">
+        <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.
         </p>
         <div className="space-y-1.5">
-          <Label htmlFor="email" required>Email or Phone Number</Label>
+          <Label htmlFor="email" required>Email or phone</Label>
           <Input
             id="email"
             type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@company.com or 9876543210"
+            placeholder="Email or mobile number"
+            aria-describedby="login-identifier-hint"
             aria-invalid={!!errors.email}
-            className={errors.email ? "border-destructive focus-visible:ring-destructive" : ""}
+            className={`placeholder:text-xs sm:placeholder:text-sm ${errors.email ? "border-destructive focus-visible:ring-destructive" : ""}`}
           />
+          <p id="login-identifier-hint" className="text-xs text-muted-foreground">
+            Example email: vendor@example.com · Mobile: 10 digits starting with 6–9
+          </p>
           {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
         </div>
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password" required>Password</Label>
-            <Link to="/forgot-password?portal=vendor" className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
+            <Link to={forgotPasswordPath("vendor", email)} className="text-xs font-medium text-primary hover:underline">Forgot?</Link>
           </div>
           <div className="relative">
             <Input
@@ -162,12 +172,12 @@ const Login = () => {
           </div>
         )}
 
-        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>
+        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11 text-white font-semibold" disabled={loading}>
           {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in…</> : "Sign in"}
         </Button>
 
         {needsVerification && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-3">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-3 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
             <p>Please verify your email before logging in.</p>
             <Button type="button" variant="outline" className="w-full" onClick={() => void resendVerification()} disabled={resendLoading}>
               {resendLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resending…</> : "Resend Verification Email"}

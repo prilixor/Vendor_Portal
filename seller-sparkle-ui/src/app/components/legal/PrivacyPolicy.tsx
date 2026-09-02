@@ -1,9 +1,20 @@
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, ShieldCheck, Lock, Eye, Database, Globe, ChevronRight } from "lucide-react";
+import { ShieldCheck, Lock, Eye, Database, Globe, ChevronRight } from "lucide-react";
+import { BackLink } from "@/app/components/shared/BackLink";
+import { BrandMark } from "@/app/components/shared/BrandMark";
 import { cn } from "@/app/helpers/utils";
 
 const PrivacyPolicy = () => {
   const navigate = useNavigate();
+
+  const handleBack = () => {
+    if (window.history.length > 1 && window.history.state?.idx > 0) {
+      navigate(-1);
+    } else {
+      window.close();
+      navigate("/");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background selection:bg-primary/10">
@@ -11,14 +22,10 @@ const PrivacyPolicy = () => {
       <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-14 items-center justify-between px-4 lg:px-8">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate(-1)} className="flex shrink-0 h-8 w-8 items-center justify-center rounded-full hover:bg-muted text-muted-foreground transition-colors" aria-label="Go back">
-              <ArrowLeft className="h-4 w-4" />
-            </button>
+            <BackLink onClick={handleBack} label="Back" />
             <Link to="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary shadow-sm">
-                <ShieldCheck className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-sm font-bold tracking-tight">Vendor Portal</span>
+              <BrandMark size="sm" rounded="lg" className="h-8 w-8" />
+              <span className="text-sm font-bold tracking-tight">BlinksMed</span>
             </Link>
           </div>
           <div className="flex items-center gap-4">
@@ -150,7 +157,7 @@ const PrivacyPolicy = () => {
               Our dedicated privacy team is available to address your concerns or handle data rights requests.
             </p>
             <a 
-              href="mailto:privacy@blinksmed.com" 
+              href="mailto:support@blinksmed.in?subject=Privacy%20Inquiry" 
               className="inline-flex items-center justify-center rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-glow hover:opacity-90 transition-all"
             >
               Contact Privacy Team

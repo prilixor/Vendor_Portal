@@ -298,7 +298,9 @@ class _DispatchDetailsSheetState extends State<DispatchDetailsSheet> {
                                 ),
                                 Icon(
                                   Icons.check_circle_outline,
-                                  color: Colors.greenAccent.withValues(alpha: 0.85),
+                                  color: context.isDarkMode
+                                      ? Colors.greenAccent.withValues(alpha: 0.85)
+                                      : const Color(0xFF059669),
                                   size: 20,
                                 ),
                               ],

@@ -15,6 +15,7 @@ class CustomTextField extends StatefulWidget {
   final TextInputAction? textInputAction;
   final FocusNode? focusNode;
   final TextInputType? keyboardType;
+  final String? hintText;
 
   const CustomTextField({
     super.key,
@@ -29,6 +30,7 @@ class CustomTextField extends StatefulWidget {
     this.textInputAction,
     this.focusNode,
     this.keyboardType,
+    this.hintText,
   });
 
   @override
@@ -41,6 +43,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
+    final compact = MediaQuery.sizeOf(context).width < 400;
     final obscure = widget.isPassword && _obscure;
     return TextField(
       controller: widget.controller,
@@ -56,9 +59,14 @@ class _CustomTextFieldState extends State<CustomTextField> {
         label: widget.label,
         required: widget.required,
         errorText: widget.errorText,
+        hintText: widget.hintText,
         prefixIcon: widget.icon,
       ).copyWith(
-        prefixIcon: Icon(widget.icon, color: AppTheme.accent),
+        prefixIcon: Icon(
+          widget.icon,
+          color: AppTheme.accent,
+          size: compact ? 20 : 24,
+        ),
         suffixIcon: widget.isPassword
             ? IconButton(
                 tooltip: _obscure ? 'Show password' : 'Hide password',

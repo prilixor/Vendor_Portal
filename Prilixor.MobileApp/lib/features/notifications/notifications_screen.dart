@@ -189,69 +189,119 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         }
       },
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isUnread ? const Color(0xFF6C63FF).withValues(alpha: 0.1) : colors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: isUnread
-              ? Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.3))
-              : Border.all(color: colors.border),
+          color: isUnread
+              ? _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode).withValues(alpha: context.isDarkMode ? 0.09 : 0.04)
+              : colors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isUnread
+                ? _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode).withValues(alpha: context.isDarkMode ? 0.4 : 0.28)
+                : colors.border.withValues(alpha: context.isDarkMode ? 0.6 : 0.8),
+            width: isUnread ? 1.2 : 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: context.isDarkMode ? 0.15 : 0.025),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: isUnread ? const Color(0xFF6C63FF).withValues(alpha: 0.2) : colors.surfaceElevated,
-                shape: BoxShape.circle,
+                color: _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode)
+                    .withValues(alpha: context.isDarkMode ? 0.18 : 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode)
+                      .withValues(alpha: context.isDarkMode ? 0.35 : 0.22),
+                  width: 0.8,
+                ),
               ),
               child: Icon(
-                _getIconForType(notification.notificationType),
-                color: isUnread ? const Color(0xFF6C63FF) : colors.textMuted,
+                _getIconForNotification(notification.notificationType, notification.title),
+                color: _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode),
                 size: 20,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        notification.title,
-                        style: TextStyle(
-                          color: colors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: isUnread ? FontWeight.bold : FontWeight.w500,
+                      Expanded(
+                        child: Text(
+                          notification.title,
+                          style: TextStyle(
+                            color: colors.textPrimary,
+                            fontSize: 14.5,
+                            fontWeight: isUnread ? FontWeight.w800 : FontWeight.w600,
+                            height: 1.25,
+                          ),
                         ),
                       ),
-                      if (notification.notificationType.isNotEmpty)
+                      if (isUnread) ...[
+                        const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(top: 4),
                           decoration: BoxDecoration(
-                            color: colors.surfaceElevated,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            notification.notificationType.toLowerCase().replaceAll('_', ' '),
-                            style: TextStyle(color: colors.textMuted, fontSize: 10),
+                            color: _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode),
+                            shape: BoxShape.circle,
                           ),
                         ),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    notification.body,
-                    style: TextStyle(color: colors.textSecondary, fontSize: 14),
-                  ),
+                  if (_getBadgeLabel(notification.notificationType) != null) ...[
+                    const SizedBox(height: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode)
+                            .withValues(alpha: context.isDarkMode ? 0.18 : 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        _getBadgeLabel(notification.notificationType)!,
+                        style: TextStyle(
+                          color: _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (notification.body.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      notification.body,
+                      style: TextStyle(
+                        color: context.isDarkMode ? const Color(0xFFCBD5E1) : colors.textSecondary,
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Text(
                     _formatDate(notification.createdAt),
-                    style: TextStyle(color: colors.textMuted, fontSize: 12),
+                    style: TextStyle(
+                      color: colors.textMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
@@ -262,12 +312,140 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  IconData _getIconForType(String type) {
-    final lowerType = type.toLowerCase();
-    if (lowerType.contains('order')) return Icons.shopping_bag_outlined;
-    if (lowerType.contains('expire') || lowerType.contains('return')) return Icons.timer_outlined;
-    if (lowerType.contains('message') || lowerType.contains('chat')) return Icons.chat_bubble_outline;
-    return Icons.notifications_none;
+  IconData _getIconForNotification(String type, String title) {
+    final t = type.trim().toLowerCase();
+    final h = title.trim().toLowerCase();
+
+    if (t.contains('welcome') || h.contains('welcome')) {
+      return Icons.waving_hand_outlined;
+    }
+    if (t.contains('photo') || h.contains('photo')) {
+      return Icons.add_a_photo_outlined;
+    }
+    if (t.contains('dispatch') ||
+        t.contains('transit') ||
+        t.contains('delivery') ||
+        t.contains('shipping') ||
+        h.contains('dispatch') ||
+        h.contains('delivery') ||
+        h.contains('transit')) {
+      return Icons.local_shipping_outlined;
+    }
+    if (t.contains('pay') ||
+        t.contains('refund') ||
+        t.contains('invoice') ||
+        h.contains('payment') ||
+        h.contains('refund')) {
+      return Icons.payments_outlined;
+    }
+    if (t.contains('expire') ||
+        t.contains('expir') ||
+        t.contains('return') ||
+        t.contains('continuation') ||
+        h.contains('expir') ||
+        h.contains('return')) {
+      return Icons.hourglass_bottom_rounded;
+    }
+    if (t.contains('cancel') ||
+        t.contains('fail') ||
+        t.contains('reject') ||
+        h.contains('cancel') ||
+        h.contains('failed')) {
+      return Icons.cancel_outlined;
+    }
+    if (t.contains('support') ||
+        t.contains('chat') ||
+        t.contains('message') ||
+        h.contains('support') ||
+        h.contains('ticket')) {
+      return Icons.chat_bubble_outline_rounded;
+    }
+    if (t.contains('stock') || h.contains('stock') || h.contains('favorite')) {
+      return Icons.inventory_2_outlined;
+    }
+    if (t.contains('order') || h.contains('order') || h.contains('rental')) {
+      return Icons.shopping_bag_outlined;
+    }
+    return Icons.notifications_active_outlined;
+  }
+
+  Color _getColorForNotification(String type, String title, bool isDark) {
+    final t = type.trim().toLowerCase();
+    final h = title.trim().toLowerCase();
+
+    if (t.contains('welcome') || h.contains('welcome')) {
+      return isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7); // Sky
+    }
+    if (t.contains('photo') || h.contains('photo')) {
+      return isDark ? const Color(0xFF22D3EE) : const Color(0xFF0891B2); // Cyan
+    }
+    if (t.contains('dispatch') ||
+        t.contains('transit') ||
+        t.contains('delivery') ||
+        t.contains('shipping') ||
+        h.contains('dispatch') ||
+        h.contains('delivery') ||
+        h.contains('transit')) {
+      return isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB); // Blue
+    }
+    if (t.contains('pay') ||
+        t.contains('refund') ||
+        t.contains('invoice') ||
+        h.contains('payment') ||
+        h.contains('refund')) {
+      return isDark ? const Color(0xFF34D399) : const Color(0xFF059669); // Emerald
+    }
+    if (t.contains('expire') ||
+        t.contains('expir') ||
+        t.contains('return') ||
+        t.contains('continuation') ||
+        h.contains('expir') ||
+        h.contains('return')) {
+      return isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706); // Amber
+    }
+    if (t.contains('cancel') ||
+        t.contains('fail') ||
+        t.contains('reject') ||
+        h.contains('cancel') ||
+        h.contains('failed')) {
+      return isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626); // Rose
+    }
+    if (t.contains('support') ||
+        t.contains('chat') ||
+        t.contains('message') ||
+        h.contains('support') ||
+        h.contains('ticket')) {
+      return isDark ? const Color(0xFFA78BFA) : const Color(0xFF7C3AED); // Purple
+    }
+    if (t.contains('stock') || h.contains('stock') || h.contains('favorite')) {
+      return isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0D9488); // Teal
+    }
+    if (t.contains('order') || h.contains('order') || h.contains('rental')) {
+      return isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5); // Indigo
+    }
+    return isDark ? const Color(0xFFA5B4FC) : const Color(0xFF6C63FF);
+  }
+
+  String? _getBadgeLabel(String type) {
+    final t = type.trim().toLowerCase();
+    if (t.isEmpty || t == 'general') return null;
+    if (t == 'welcome') return 'Welcome';
+    if (t == 'order_pending') return 'Pending';
+    if (t == 'order_confirmed') return 'Confirmed';
+    if (t == 'order_status_updated') return 'Order update';
+    if (t == 'order_dispatched' || t.contains('dispatch')) return 'Dispatched';
+    if (t == 'order_in_transit' || t.contains('transit')) return 'In transit';
+    if (t == 'order_delivered' || t.contains('deliver')) return 'Delivered';
+    if (t.contains('payment') || t.contains('pay')) return 'Payment';
+    if (t == 'order_cancelled' || t.contains('cancel')) return 'Cancelled';
+    if (t == 'order_dispatch_failed' || t.contains('fail')) return 'Action needed';
+    if (t == 'order_expiring_soon' || t.contains('expir')) return 'Expiring';
+    if (t.contains('continuation')) return 'Extension';
+    if (t.contains('photo')) return 'Photos';
+    if (t == 'support_chat_reply' || t.contains('support') || t.contains('chat')) return 'Support';
+    if (t == 'back_in_stock' || t.contains('stock')) return 'Back in stock';
+    final words = t.replaceAll('_', ' ').replaceFirst('order ', '');
+    return words.split(' ').map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '').join(' ');
   }
 
   String _formatDate(DateTime date) {

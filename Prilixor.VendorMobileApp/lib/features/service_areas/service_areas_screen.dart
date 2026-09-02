@@ -169,19 +169,29 @@ class _ServiceAreasHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            AppTheme.accent.withValues(alpha: 0.18),
-            AppTheme.card(context),
-          ],
+          colors: isDark
+              ? [
+                  const Color(0xFF312E81).withValues(alpha: 0.35),
+                  AppTheme.card(context),
+                ]
+              : [
+                  AppTheme.accent.withValues(alpha: 0.14),
+                  AppTheme.accent.withValues(alpha: 0.04),
+                ],
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.22)),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF6366F1).withValues(alpha: 0.28)
+              : AppTheme.accent.withValues(alpha: 0.25),
+        ),
       ),
       child: Row(
         children: [
@@ -189,10 +199,35 @@ class _ServiceAreasHeader extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: AppTheme.accent.withValues(alpha: 0.16),
+              color: isDark
+                  ? const Color(0xFF6366F1).withValues(alpha: 0.2)
+                  : Colors.white,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark
+                    ? const Color(0xFF818CF8).withValues(alpha: 0.35)
+                    : AppTheme.accent.withValues(alpha: 0.2),
+              ),
+              boxShadow: isDark
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFF6366F1).withValues(alpha: 0.12),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : [
+                      BoxShadow(
+                        color: AppTheme.accent.withValues(alpha: 0.08),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
             ),
-            child: const Icon(Icons.map_outlined, color: AppTheme.accent),
+            child: Icon(
+              Icons.map_outlined,
+              color: isDark ? const Color(0xFFA5B4FC) : AppTheme.accent,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -213,8 +248,11 @@ class _ServiceAreasHeader extends StatelessWidget {
                       ? 'Place pins for your zones. Coverage radius is set by Admin.'
                       : '$count active ${count == 1 ? 'area' : 'areas'} · radius set by Admin',
                   style: TextStyle(
-                    color: context.appColors.textMuted,
+                    color: isDark
+                        ? const Color(0xFFC7D2FE)
+                        : const Color(0xFF4338CA),
                     fontSize: 12,
+                    fontWeight: isDark ? FontWeight.w500 : FontWeight.w600,
                   ),
                 ),
               ],

@@ -21,7 +21,7 @@ import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea
 import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { toast } from "sonner";
 import { isSameChatDay } from "@/app/helpers/chatDayLabel";
-import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
@@ -57,7 +57,7 @@ function orderStatusBadgeClass(status: string): string {
 }
 
 function customerFacingStatus(status: string): string {
-  return formatOrderStatusTitle(status).replace(/\bvendor\b/gi, "supplier");
+  return formatCustomerOrderStatusTitle(status);
 }
 
 function formatDetailDate(value?: string | null): string {
@@ -773,7 +773,7 @@ const CustomerOrderDetail = () => {
               <DetailRow label="End date">{formatDetailDate(activeItem.endDate)}</DetailRow>
               <DetailRow label="Quantity">{activeItem.quantity}</DetailRow>
               <DetailRow label="Order type">
-                <span className="uppercase">{activeItem.orderType}</span>
+                {formatOrderTypeLabel(activeItem.orderType)}
               </DetailRow>
               <DetailRow label="Rental period" rowStart>
                 {compactDurationLabel(activeItem.rentalDurationLabel) || (

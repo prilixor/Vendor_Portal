@@ -196,6 +196,10 @@ class CartProvider extends ChangeNotifier {
     );
   }
 
+  bool hasLine(String listingId, {String? productVariantId}) {
+    return _indexOfLine(listingId, productVariantId: productVariantId) >= 0;
+  }
+
   void addLine(CartLineModel newLine) {
     final existingIndex = _indexOfLine(
       newLine.listingId,

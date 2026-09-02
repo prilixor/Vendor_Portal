@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useQueryTab } from "@/app/helpers/queryTab";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -32,6 +33,24 @@ import { AdminProductMediaStep } from "@/app/components/admin/AdminProductMediaS
 
 const PAGE_SIZE = 10;
 const PRODUCT_FORM_STEPS = ["Basic", "Pricing", "Tax & media"] as const;
+const PRODUCT_TABS = ["equipment", "categories"] as const;
+
+function isAutomaticPricingPlan(plan: ProductRentalPricingPlanDto): boolean {
+  return plan.resetToAutomatic === true || (plan.discountType === "none" && plan.isAutomatic !== false);
+}
+
+function toRentalPlanSaveDto(plan: ProductRentalPricingPlanDto, index: number): ProductRentalPricingPlanDto {
+  const automatic = isAutomaticPricingPlan(plan);
+  return {
+    ...plan,
+    durationLabel: (plan.durationLabel ?? "").trim(),
+    discountType: automatic ? "none" : plan.discountType,
+    discountValue: automatic ? 0 : plan.discountValue,
+    sortOrder: index,
+    resetToAutomatic: automatic,
+    isAutomatic: automatic,
+  };
+}
 
 const ProductManagement = () => {
   const [categories, setCategories] = useState<ProductCategoryDto[]>([]);
@@ -39,7 +58,7 @@ const ProductManagement = () => {
   const [rentalDurationMasters, setRentalDurationMasters] = useState<RentalDurationMasterDto[]>([]);
   const [rentalDurationIcons, setRentalDurationIcons] = useState<RentalDurationIconDto[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("categories");
+  const [activeTab, setActiveTab] = useQueryTab(PRODUCT_TABS, "equipment");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -63,6 +82,13 @@ const ProductManagement = () => {
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [productFormStep, setProductFormStep] = useState(0);
   const [editingProduct, setEditingProduct] = useState<ProductDto | null>(null);
+  const [pricingPreviewNonce, setPricingPreviewNonce] = useState(0);
+  const [rentalPreviewMeta, setRentalPreviewMeta] = useState<{
+    economicMaximumDays?: number | null;
+    eligiblePlanCount: number;
+    configuredDurationCount: number;
+    mostPopularDurationLabel?: string | null;
+  } | null>(null);
   const [productForm, setProductForm] = useState<CreateProductRequest>({
     categoryId: "",
     productName: "",
@@ -85,6 +111,8 @@ const ProductManagement = () => {
     isActive: true,
     rentalPricingPlans: [],
   });
+  const productFormRef = useRef(productForm);
+  productFormRef.current = productForm;
   const [productImages, setProductImages] = useState<ProductImageDto[]>([]);
   const [productImagesLoading, setProductImagesLoading] = useState(false);
   const [busyProductImageId, setBusyProductImageId] = useState<string | null>(null);
@@ -167,6 +195,59 @@ const ProductManagement = () => {
     setCategoryPage(1);
     setProductPage(1);
   }, [search, statusFilter, showFavoritesOnly, activeTab]);
+
+  useEffect(() => {
+    if (!productDialogOpen) return;
+
+    const form = productFormRef.current;
+    if (!form.isRentEnabled || !(Number(form.dailyRent) > 0)) {
+      setProductForm((prev) =>
+        (prev.rentalPricingPlans ?? []).length === 0 ? prev : { ...prev, rentalPricingPlans: [] },
+      );
+      setRentalPreviewMeta(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const latest = productFormRef.current;
+          const result = await adminApi.previewRentalPricing({
+            dailyRent: Number(latest.dailyRent) || 0,
+            buyPrice: latest.buyPrice,
+            isRentEnabled: latest.isRentEnabled,
+            existingPlans: (latest.rentalPricingPlans ?? []).map((plan, index) =>
+              toRentalPlanSaveDto(plan, index),
+            ),
+          });
+          if (cancelled) return;
+          setProductForm((prev) => ({ ...prev, rentalPricingPlans: result.plans }));
+          setRentalPreviewMeta({
+            economicMaximumDays: result.economicMaximumDays,
+            eligiblePlanCount: result.eligiblePlanCount,
+            configuredDurationCount: result.configuredDurationCount,
+            mostPopularDurationLabel: result.mostPopularDurationLabel,
+          });
+        } catch (error) {
+          if (cancelled) return;
+          const message = error instanceof Error ? error.message : "Failed to preview rental prices.";
+          toast.error(message);
+        }
+      })();
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    productDialogOpen,
+    productForm.dailyRent,
+    productForm.buyPrice,
+    productForm.isRentEnabled,
+    pricingPreviewNonce,
+  ]);
 
   const paginatedCategories = useMemo(() => {
     const start = (categoryPage - 1) * PAGE_SIZE;
@@ -401,7 +482,7 @@ const ProductManagement = () => {
         }
         if (productForm.dailyRent > 0 && !hasActivePlan) {
           errors.rentalPricingPlans =
-            "No active priced duration plans. Check Rental Duration Master and enable rows.";
+            "No eligible priced duration plans. Check daily rate, buy price, and Rental Duration Master.";
         }
       }
     }
@@ -421,6 +502,8 @@ const ProductManagement = () => {
   const openProductDialog = (product?: ProductDto) => {
     setFieldErrors({});
     setProductFormStep(0);
+    setPricingPreviewNonce(0);
+    setRentalPreviewMeta(null);
     if (product) {
       setEditingProduct(product);
       setProductForm({
@@ -615,7 +698,7 @@ const ProductManagement = () => {
       }
       if (productForm.dailyRent > 0 && !hasActivePlan) {
         errors.rentalPricingPlans =
-          "No active rental duration plans. Configure Rental Duration Master and set discounts/active rows.";
+          "No eligible priced duration plans. Check daily rate, buy price, and Rental Duration Master.";
       }
     }
     if (productForm.gstPercent == null || Number.isNaN(Number(productForm.gstPercent))) {
@@ -645,25 +728,9 @@ const ProductManagement = () => {
         monthlyRent: daily > 0 ? daily * 30 : productForm.monthlyRent || 0,
         vendorWeeklyRent: vendorDaily > 0 ? vendorDaily * 7 : productForm.vendorWeeklyRent || 0,
         vendorMonthlyRent: vendorDaily > 0 ? vendorDaily * 30 : productForm.vendorMonthlyRent || 0,
-        rentalPricingPlans: (productForm.rentalPricingPlans ?? []).map((p, index) => ({
-          id: p.id || undefined,
-          rentalDurationMasterId: p.rentalDurationMasterId || undefined,
-          durationLabel: p.durationLabel.trim(),
-          durationDays: p.durationDays,
-          billingCycles: p.billingCycles ?? 0,
-          normalPrice: p.normalPrice,
-          discountType: p.discountType,
-          discountValue: p.discountType === "none" ? 0 : p.discountValue,
-          finalRentalPrice: p.finalRentalPrice,
-          isRecommended: p.isRecommended,
-          isActive: p.isActive,
-          sortOrder: index,
-          rentalDurationIconId: p.rentalDurationIconId || null,
-          iconUrl: p.iconUrl || null,
-          iconThumbnailUrl: p.iconThumbnailUrl || null,
-          valueTier: p.valueTier || null,
-          iconName: p.iconName || null,
-        })),
+        rentalPricingPlans: (productForm.rentalPricingPlans ?? []).map((p, index) =>
+          toRentalPlanSaveDto(p, index),
+        ),
       };
 
       if (editingProduct) {
@@ -930,15 +997,15 @@ const ProductManagement = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 border-b border-border pb-4">
             <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
-              <TabsTrigger value="categories" className="text-xs sm:text-sm">
-                <FolderTree className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
-                <span className="truncate">Categories</span>
-                <span className="hidden sm:inline ml-1">({categories.filter(c => !c.isChemical).length})</span>
-              </TabsTrigger>
               <TabsTrigger value="equipment" className="text-xs sm:text-sm">
                 <Package className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
                 <span className="truncate">Equipment</span>
                 <span className="hidden sm:inline ml-1">({products.filter((p) => !isChemicalProduct(p)).length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="categories" className="text-xs sm:text-sm">
+                <FolderTree className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate">Categories</span>
+                <span className="hidden sm:inline ml-1">({categories.filter(c => !c.isChemical).length})</span>
               </TabsTrigger>
             </TabsList>
 
@@ -977,7 +1044,7 @@ const ProductManagement = () => {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={`Search ${activeTab}...`}
+                placeholder={activeTab === "categories" ? "Search categories..." : "Search equipment..."}
                 className="pl-9 w-full"
               />
             </div>
@@ -1592,6 +1659,11 @@ const ProductManagement = () => {
               masters={rentalDurationMasters}
               icons={rentalDurationIcons}
               plans={productForm.rentalPricingPlans ?? []}
+              economicMaximumDays={rentalPreviewMeta?.economicMaximumDays}
+              eligiblePlanCount={rentalPreviewMeta?.eligiblePlanCount}
+              configuredDurationCount={rentalPreviewMeta?.configuredDurationCount}
+              mostPopularDurationLabel={rentalPreviewMeta?.mostPopularDurationLabel}
+              onDiscountEdit={() => setPricingPreviewNonce((n) => n + 1)}
               onChange={(rentalPricingPlans: ProductRentalPricingPlanDto[]) => {
                 setProductForm({ ...productForm, rentalPricingPlans });
                 clearFieldError("rentalPricingPlans");

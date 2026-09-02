@@ -199,7 +199,7 @@ function LoaderBrandPlate({ artwork, size }: { artwork: "mark" | "logo"; size: n
         className={cn("block object-contain object-center", ready ? "opacity-100" : "opacity-0")}
         decoding="sync"
         loading="eager"
-        fetchPriority="high"
+        {...{ fetchpriority: "high" }}
         onLoad={() => setPainted(true)}
       />
       {ready ? (

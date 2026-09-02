@@ -17,13 +17,14 @@ import {
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import {
   adminApi,
   type CreateRentalDurationMasterRequest,
   type RentalDurationMasterDto,
 } from "@/app/services/adminApi";
-import { CalendarRange, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { CalendarRange, Loader2, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { cn } from "@/app/helpers/utils";
@@ -44,6 +45,8 @@ const emptyForm = (): FormState => ({
   isActive: true,
 });
 
+const PAGE_SIZE = 8;
+
 type AdminRentalDurationsProps = {
   /** When true, omit PageHeader (used inside Rental Setup tabs). */
   embedded?: boolean;
@@ -56,11 +59,13 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<RentalDurationMasterDto | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [recalculating, setRecalculating] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -102,6 +107,17 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder || a.durationDays - b.durationDays);
   }, [rows, search, statusFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage],
+  );
 
   const deleteTarget = useMemo(
     () => rows.find((r) => r.id === deleteId) ?? null,
@@ -212,6 +228,18 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
     }
   };
 
+  const recalculateCatalogPrices = async () => {
+    setRecalculating(true);
+    try {
+      const result = await adminApi.recalculateAllRentalPricing(false);
+      toast.success(`Updated automatic rental prices for ${result.productsProcessed} product(s). Manual Configure Prices overrides were kept.`);
+    } catch (e) {
+      toast.error(getUserFriendlyMessage(e, "Failed to recalculate rental prices"));
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {!embedded && (
@@ -260,6 +288,20 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
                 <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => void recalculateCatalogPrices()}
+              disabled={loading || saving || recalculating}
+            >
+              {recalculating ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Recalculate prices
+            </Button>
             <Button onClick={openCreate} className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               Add duration
@@ -305,7 +347,7 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((row) => (
+                  {pageRows.map((row) => (
                     <tr
                       key={row.id}
                       className={cn(
@@ -391,7 +433,7 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
 
             {/* Mobile cards */}
             <div className="divide-y divide-border md:hidden">
-              {filtered.map((row) => (
+              {pageRows.map((row) => (
                 <div key={row.id} className={cn("space-y-3 p-4", !row.isActive && "opacity-70")}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
@@ -429,6 +471,15 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="px-4 pb-4 sm:px-5">
+              <TablePagination
+                page={safePage}
+                pageSize={PAGE_SIZE}
+                total={filtered.length}
+                onPageChange={setPage}
+                label="durations"
+              />
             </div>
           </>
         )}

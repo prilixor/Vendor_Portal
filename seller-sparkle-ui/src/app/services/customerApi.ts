@@ -78,6 +78,8 @@ export interface RentalPricingPlanDto {
   iconThumbnailUrl?: string | null;
   valueTier?: string | null;
   iconName?: string | null;
+  discountAmount?: number;
+  isAutomatic?: boolean;
 }
 
 export interface RentalDurationIconDto {
@@ -107,6 +109,8 @@ export interface CustomerListingDetailApi {
   depositRequired: boolean;
   listingStatus: string;
   availableQuantity: number;
+  /** Combined stock across vendors for this catalog product. */
+  productTotalAvailableQuantity?: number;
   availabilityStatus: "available" | "low_stock" | "out_of_stock" | string;
   description: string;
   imageUrls: string[];

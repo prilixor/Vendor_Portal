@@ -166,6 +166,7 @@ export interface AdminCustomerDetailDto {
     createdAt: string;
     placedByAdminId?: string;
   }[];
+  orderCount: number;
 }
 
 export interface AdminOrderableListingDto {
@@ -400,6 +401,9 @@ export interface ProductRentalPricingPlanDto {
   iconThumbnailUrl?: string | null;
   valueTier?: string | null;
   iconName?: string | null;
+  discountAmount?: number;
+  isAutomatic?: boolean;
+  resetToAutomatic?: boolean;
 }
 
 export interface RentalDurationMasterDto {
@@ -962,6 +966,38 @@ export const adminApi = {
     return apiClient.get<ProductDto[]>(url);
   },
 
+  async previewRentalPricing(data: {
+    dailyRent: number;
+    buyPrice?: number | null;
+    isRentEnabled: boolean;
+    existingPlans?: ProductRentalPricingPlanDto[];
+  }): Promise<{
+    plans: ProductRentalPricingPlanDto[];
+    economicMaximumDays?: number | null;
+    eligiblePlanCount: number;
+    configuredDurationCount: number;
+    mostPopularDurationLabel?: string | null;
+  }> {
+    return apiClient.post("/admin/catalog/rental-pricing/preview", {
+      dailyRent: data.dailyRent,
+      buyPrice: data.buyPrice,
+      isRentEnabled: data.isRentEnabled,
+      existingPlans: data.existingPlans,
+    });
+  },
+
+  async recalculateProductRentalPricing(productId: string, resetManualOverrides = false): Promise<ProductDto> {
+    return apiClient.post(`/admin/catalog/products/${productId}/rental-pricing/recalculate`, {
+      resetManualOverrides,
+    });
+  },
+
+  async recalculateAllRentalPricing(resetManualOverrides = false): Promise<{ productsProcessed: number }> {
+    return apiClient.post("/admin/catalog/rental-pricing/recalculate", {
+      resetManualOverrides,
+    });
+  },
+
   async createProduct(data: CreateProductRequest): Promise<ProductDto> {
     return apiClient.post<ProductDto>('/admin/catalog/products', data);
   },
@@ -1109,8 +1145,16 @@ export const adminApi = {
     return apiClient.get<AdminCustomerListItemDto[]>(`/admin/customers${q}`);
   },
 
-  async getAdminCustomer(customerId: string): Promise<AdminCustomerDetailDto> {
-    return apiClient.get<AdminCustomerDetailDto>(`/admin/customers/${customerId}`);
+  async getAdminCustomer(
+    customerId: string,
+    ordersPage = 1,
+    ordersPageSize = 10,
+  ): Promise<AdminCustomerDetailDto> {
+    const params = new URLSearchParams({
+      ordersPage: String(ordersPage),
+      ordersPageSize: String(ordersPageSize),
+    });
+    return apiClient.get<AdminCustomerDetailDto>(`/admin/customers/${customerId}?${params.toString()}`);
   },
 
   async searchOrderableListings(search?: string, take = 40, isChemical?: boolean): Promise<AdminOrderableListingDto[]> {

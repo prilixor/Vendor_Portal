@@ -7,6 +7,7 @@ import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { adminApi, AdminPermissionDto, AdminRoleDto } from "@/app/services/adminApi";
 import { cn } from "@/app/helpers/utils";
@@ -90,6 +91,8 @@ function categoryCoverage(
     .sort((a, b) => b.enabled - a.enabled);
 }
 
+const PAGE_SIZE = 8;
+
 const AdminRoles = () => {
   const [roles, setRoles] = useState<AdminRoleDto[]>([]);
   const [permissions, setPermissions] = useState<AdminPermissionDto[]>([]);
@@ -103,6 +106,7 @@ const AdminRoles = () => {
   const [saving, setSaving] = useState(false);
   const [permSearch, setPermSearch] = useState("");
   const [listSearch, setListSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   const byCategory = useMemo(() => {
     const q = permSearch.trim().toLowerCase();
@@ -133,6 +137,17 @@ const AdminRoles = () => {
         (r.description ?? "").toLowerCase().includes(q),
     );
   }, [roles, listSearch]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [listSearch]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRoles.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageRoles = useMemo(
+    () => filteredRoles.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filteredRoles, safePage],
+  );
 
   const stats = useMemo(() => {
     const system = roles.filter((r) => r.isSystem).length;
@@ -327,8 +342,9 @@ const AdminRoles = () => {
             <p className="text-xs text-muted-foreground">Try another name or clear the filter.</p>
           </div>
         ) : (
+          <>
           <div className="grid gap-4 p-4 sm:p-6 md:grid-cols-2 xl:grid-cols-3">
-            {filteredRoles.map((role) => {
+            {pageRoles.map((role) => {
               const locked = role.code === "super_admin";
               const visual = roleVisual(role.code);
               const Icon = visual.icon;
@@ -457,6 +473,16 @@ const AdminRoles = () => {
               );
             })}
           </div>
+          <div className="px-4 pb-4 sm:px-6">
+            <TablePagination
+              page={safePage}
+              pageSize={PAGE_SIZE}
+              total={filteredRoles.length}
+              onPageChange={setPage}
+              label="roles"
+            />
+          </div>
+          </>
         )}
       </Card>
 

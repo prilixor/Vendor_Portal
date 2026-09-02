@@ -8,6 +8,8 @@ type BrandMarkProps = {
   /** Outer box size (Tailwind). Default matches previous 36px tile. */
   size?: "sm" | "md" | "lg";
   rounded?: "lg" | "xl" | "2xl";
+  /** `onBrand` is a glass-white tile for purple/gradient marketing panels. */
+  tone?: "default" | "onBrand";
   alt?: string;
 };
 
@@ -28,6 +30,7 @@ export function BrandMark({
   className,
   size = "md",
   rounded = "xl",
+  tone = "default",
   alt = "BlinksMed",
 }: BrandMarkProps) {
   return (
@@ -37,7 +40,10 @@ export function BrandMark({
       width={size === "lg" ? 56 : size === "sm" ? 36 : 44}
       height={size === "lg" ? 56 : size === "sm" ? 36 : 44}
       className={cn(
-        "shrink-0 object-contain object-center bg-white p-0.5 shadow-sm ring-1 ring-black/5 dark:ring-white/10",
+        "shrink-0 overflow-hidden object-contain object-center",
+        tone === "onBrand"
+          ? "bg-white p-1 shadow-[0_12px_32px_rgba(0,0,0,0.18)] ring-1 ring-white/45"
+          : "bg-white p-0.5 shadow-sm ring-1 ring-black/5 dark:ring-white/10",
         sizeClass[size],
         roundClass[rounded],
         className,

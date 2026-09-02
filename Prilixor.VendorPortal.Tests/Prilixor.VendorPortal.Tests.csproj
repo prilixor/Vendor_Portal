@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Prilixor.VendorPortal.Application\Prilixor.VendorPortal.Application.csproj" />
+    <ProjectReference Include="..\Prilixor.VendorPortal.Domain\Prilixor.VendorPortal.Domain.csproj" />
     <ProjectReference Include="..\Prilixor.VendorPortal.Infrastructure\Prilixor.VendorPortal.Infrastructure.csproj" />
   </ItemGroup>
 

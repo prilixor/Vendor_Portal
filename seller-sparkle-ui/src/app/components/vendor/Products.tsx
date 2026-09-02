@@ -27,6 +27,8 @@ import { cn, resolveItemImageUrl, resolveCatalogProductImageUrl } from "@/app/he
 import { Badge } from "@/app/components/ui/badge";
 import { CatalogMediaLauncher } from "@/app/components/shared/CatalogProductMediaSection";
 
+type ChemStockSize = { label: string; sku: string; total: number; available: number };
+
 type LocalListing = ProductListing & {
   productId: string;
   categoryId: string;
@@ -46,6 +48,8 @@ type LocalListing = ProductListing & {
   variants?: any[];
   rentalPricingPlans?: any[];
   catalogImage?: string;
+  /** Per-packaging-size stock for chemical listings (same source as Admin vendor chemicals). */
+  sizeStocks?: ChemStockSize[];
 };
 
 type CatalogCategory = {
@@ -121,6 +125,87 @@ const blankListing = (category?: CatalogCategory, product?: CatalogProduct): Loc
   variants: product?.variants || [],
   rentalPricingPlans: product?.rentalPricingPlans || [],
 });
+
+const mapVariantRowsToSizeStocks = (rows: VendorVariantInventoryDto[]): ChemStockSize[] =>
+  rows
+    .slice()
+    .sort((a, b) => (a.sizeValue ?? 0) - (b.sizeValue ?? 0))
+    .map((r) => ({
+      label: `${r.sizeValue} ${r.sizeUnit}`.trim(),
+      sku: r.sku,
+      total: r.totalQuantity || 0,
+      available: r.availableQuantity || 0,
+    }));
+
+const ChemQtySizeRows = ({ sizes, rowClassName }: { sizes: ChemStockSize[]; rowClassName?: string }) => (
+  <>
+    {sizes.map((s, i) => (
+      <div key={s.sku || i} className={cn("flex items-center justify-between gap-6", rowClassName)}>
+        <span className="truncate text-muted-foreground" title={s.sku || s.label}>
+          {s.label}
+        </span>
+        <span className="shrink-0 font-semibold tabular-nums">
+          {s.total}
+          {s.available !== s.total ? (
+            <span className="ml-1 font-normal text-muted-foreground">· {s.available}</span>
+          ) : null}
+        </span>
+      </div>
+    ))}
+  </>
+);
+
+/** Desktop hover popup — same pattern as Buy Price “Price by size”. */
+const ChemQtyHover = ({ quantity, sizes }: { quantity: number; sizes: ChemStockSize[] }) => (
+  <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="inline-flex cursor-default flex-col items-end">
+          <span className="whitespace-nowrap tabular-nums">{quantity}</span>
+          <span className="font-sans text-[10px] font-normal text-muted-foreground">
+            {sizes.length} {sizes.length === 1 ? "size" : "sizes"}
+          </span>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="left" align="center" className="min-w-[10rem] p-0">
+        <div className="border-b border-border/60 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Qty by size
+        </div>
+        <div className="max-h-64 divide-y divide-border/40 overflow-auto px-3 py-1.5 font-sans text-xs">
+          <ChemQtySizeRows sizes={sizes} rowClassName="py-1" />
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+);
+
+/** Mobile: tap “Show all” instead of hover (same idea as ChemSizeBreakdown). */
+const ChemQtyBreakdown = ({ sizes }: { sizes: ChemStockSize[] }) => {
+  const COLLAPSED_COUNT = 3;
+  const [expanded, setExpanded] = useState(false);
+  const hasMore = sizes.length > COLLAPSED_COUNT;
+  const visible = expanded ? sizes : sizes.slice(0, COLLAPSED_COUNT);
+  return (
+    <div className="mt-1">
+      <div
+        className={`divide-y divide-border/40 rounded-md border border-border/60 ${
+          expanded ? "max-h-52 overflow-auto" : ""
+        }`}
+      >
+        <ChemQtySizeRows sizes={visible} rowClassName="px-2.5 py-1 text-xs font-normal" />
+      </div>
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="mt-1 text-xs font-medium text-primary hover:underline"
+        >
+          {expanded ? "Show less" : `Show all ${sizes.length} sizes`}
+        </button>
+      )}
+    </div>
+  );
+};
 
 /**
  * Per-size price breakdown for a chemical. Collapses to the first few sizes with a
@@ -427,13 +512,12 @@ const Products = () => {
       })
       .map((l) => l.id);
 
-    const variantInventoryByListing = new Map<string, number>();
+    const variantInventoryByListing = new Map<string, VendorVariantInventoryDto[]>();
     await Promise.all(
       chemicalListingIds.map(async (listingId) => {
         try {
           const rows = await vendorOnboardingApi.getVariantInventory(user.id, listingId);
-          const total = rows.reduce((sum, r) => sum + (r.totalQuantity || 0), 0);
-          variantInventoryByListing.set(listingId, total);
+          variantInventoryByListing.set(listingId, rows);
         } catch {
           // Keep listing-level qty as fallback when variant inventory is unavailable.
         }
@@ -448,8 +532,24 @@ const Products = () => {
         const category = product ? byCategoryId.get(product.categoryId) : undefined;
         const isChemical = !!(category?.isChemical || product?.baseUnit || product?.casNumber || product?.chemicalFormula || l.isChemical);
         const listingQty = inventoryMap.get(l.id)?.totalQuantity ?? l.availableQuantity;
-        const quantity = isChemical && variantInventoryByListing.has(l.id)
-          ? (variantInventoryByListing.get(l.id) ?? 0)
+        const fetchedVariantRows = isChemical ? variantInventoryByListing.get(l.id) : undefined;
+        const variantRows = fetchedVariantRows ?? [];
+        const sizeStocks = variantRows.length > 0
+          ? mapVariantRowsToSizeStocks(variantRows)
+          : (isChemical && fetchedVariantRows && (product?.variants?.length ?? 0) > 0
+            ? (product!.variants || [])
+                .filter((v: any) => v?.isActive !== false)
+                .slice()
+                .sort((a: any, b: any) => (a.sizeValue ?? 0) - (b.sizeValue ?? 0))
+                .map((v: any) => ({
+                  label: `${v.sizeValue} ${v.sizeUnit}`.trim(),
+                  sku: (v.sku as string) || "",
+                  total: 0,
+                  available: 0,
+                }))
+            : []);
+        const quantity = isChemical && fetchedVariantRows
+          ? variantRows.reduce((sum, r) => sum + (r.totalQuantity || 0), 0)
           : listingQty;
         return {
           id: l.id,
@@ -488,6 +588,7 @@ const Products = () => {
           variants: product?.variants || [],
           rentalPricingPlans: product?.rentalPricingPlans || [],
           isChemical,
+          sizeStocks: isChemical ? sizeStocks : undefined,
         };
       })
     );
@@ -869,7 +970,13 @@ const Products = () => {
                       ₹{p.securityDeposit}
                     </td>
                   )}
-                  <td className="px-3 py-3 text-right sm:px-4">{p.quantity}</td>
+                  <td className="px-3 py-3 text-right sm:px-4">
+                    {activeTab === "chemical" && (p.sizeStocks?.length ?? 0) > 0 ? (
+                      <ChemQtyHover quantity={p.quantity} sizes={p.sizeStocks!} />
+                    ) : (
+                      p.quantity
+                    )}
+                  </td>
                   <td className="px-3 py-3 sm:px-4">
                     <Switch
                       checked={p.status === "active"}
@@ -940,6 +1047,9 @@ const Products = () => {
                   <div className="min-w-0 text-right">
                     <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Qty</dt>
                     <dd className="font-mono tabular-nums">{p.quantity}</dd>
+                    {activeTab === "chemical" && (p.sizeStocks?.length ?? 0) > 0 ? (
+                      <ChemQtyBreakdown sizes={p.sizeStocks!} />
+                    ) : null}
                   </div>
                   {activeTab === "equipment" ? (
                     <>

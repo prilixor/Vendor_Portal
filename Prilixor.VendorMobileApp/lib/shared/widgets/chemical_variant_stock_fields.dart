@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/models/vendor_catalog_model.dart';
@@ -22,7 +22,8 @@ class ChemicalVariantStockFields extends StatefulWidget {
       _ChemicalVariantStockFieldsState();
 }
 
-class _ChemicalVariantStockFieldsState extends State<ChemicalVariantStockFields> {
+class _ChemicalVariantStockFieldsState
+    extends State<ChemicalVariantStockFields> {
   final Map<String, TextEditingController> _controllers = {};
 
   @override
@@ -108,7 +109,7 @@ class _ChemicalVariantStockFieldsState extends State<ChemicalVariantStockFields>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${widget.rows[i].sizeLabel} · ${widget.rows[i].sku}',
+                  '${widget.rows[i].sizeLabel} \u00b7 ${widget.rows[i].sku}',
                   style: TextStyle(
                     color: context.appColors.textPrimary,
                     fontWeight: FontWeight.w600,
@@ -117,8 +118,11 @@ class _ChemicalVariantStockFieldsState extends State<ChemicalVariantStockFields>
                 const SizedBox(height: 8),
                 if (widget.readOnly)
                   Text(
-                    'Total ${widget.rows[i].total} · Reserved ${widget.rows[i].reserved} · Available ${widget.rows[i].available}',
-                    style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
+                    'Total ${widget.rows[i].total} \u00b7 Reserved ${widget.rows[i].reserved} \u00b7 Available ${widget.rows[i].available}',
+                    style: TextStyle(
+                      color: context.appColors.textMuted,
+                      fontSize: 13,
+                    ),
                   )
                 else
                   TextField(
@@ -141,8 +145,11 @@ class _ChemicalVariantStockFieldsState extends State<ChemicalVariantStockFields>
                 if (!widget.readOnly && widget.rows[i].reserved > 0) ...[
                   const SizedBox(height: 6),
                   Text(
-                    'Reserved ${widget.rows[i].reserved} · Available ${widget.rows[i].available}',
-                    style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
+                    'Reserved ${widget.rows[i].reserved} \u00b7 Available ${widget.rows[i].available}',
+                    style: TextStyle(
+                      color: context.appColors.textMuted,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ],

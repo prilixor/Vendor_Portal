@@ -4,12 +4,12 @@ import { AuthLayout } from "@/app/components/layout/AuthLayout";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
+import { authApi } from "@/app/services/authApi";
 import { getVendorPortalHref } from "@/app/helpers/portalHost";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { authApi } from "@/app/services/authApi";
-import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
+import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
 import { normalizeIndianMobileDigits, requiredIndianMobileError } from "@/app/helpers/indianMobilePhone";
 import { OTP_RESEND_COOLDOWN_SECONDS, parseOtpSendCooldown } from "@/app/helpers/otpSendCooldown";
 
@@ -83,10 +83,16 @@ const CustomerLogin = () => {
     }
   };
 
-    return (
-    <AuthLayout title="Customer sign in" subtitle="Enter your mobile number to receive a one-time code." portalType="customer">
+  return (
+    <AuthLayout
+      title="Customer sign in"
+      subtitle="Enter your mobile number to receive a one-time code."
+      portalType="customer"
+      backTo="/customer/shop"
+      backLabel="Back to shop"
+    >
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-        <p className="text-xs text-muted-foreground -mt-1">
+        <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.
         </p>
         <div className="space-y-1.5">
@@ -115,7 +121,7 @@ const CustomerLogin = () => {
 
         <Button
           type="submit"
-          className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11"
+          className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11 text-white font-semibold"
           disabled={loading || cooldown > 0}
         >
           {loading ? (

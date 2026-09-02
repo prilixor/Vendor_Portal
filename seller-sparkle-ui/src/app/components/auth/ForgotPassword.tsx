@@ -34,6 +34,13 @@ import {
   resolveAuthPortalType,
 } from "@/app/helpers/portalHost";
 
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+function initialForgotEmail(raw: string | null): string {
+  const trimmed = (raw ?? "").trim();
+  return EMAIL_RE.test(trimmed) ? trimmed : "";
+}
+
 type Mode = "email" | "sms";
 /** phone → enter number; otp → enter SMS code; password dialog opens after Continue. */
 type SmsStep = "phone" | "otp";
@@ -68,7 +75,7 @@ const ForgotPassword = () => {
     if (method === "email") return "email";
     return portalType === "customer" ? "sms" : "email";
   });
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => initialForgotEmail(searchParams.get("email")));
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -99,6 +106,20 @@ const ForgotPassword = () => {
       : portalType === "vendor"
         ? "Reset your vendor password via email link."
         : "Use email if your account has an email; use SMS if you registered with a phone.";
+
+  const subtitle =
+    portalType === "admin"
+      ? "Reset your admin password via email link."
+      : portalType === "vendor"
+        ? "Reset your vendor password via email link."
+        : "Reset your customer password via email link.";
+
+  const emailPlaceholder =
+    portalType === "admin"
+      ? "admin@company.com"
+      : portalType === "customer"
+        ? "you@email.com"
+        : "you@company.com";
 
   const validateEmail = () => {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
@@ -283,6 +304,8 @@ const ForgotPassword = () => {
         title="Password updated"
         subtitle="You can now sign in with your new password."
         portalType={portalType}
+        backTo={loginPath}
+        backLabel="Back to sign in"
       >
         <div className="space-y-6">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">

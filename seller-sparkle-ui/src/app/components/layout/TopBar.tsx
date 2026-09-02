@@ -113,7 +113,7 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
 
   return (
     <>
-    <header className="sticky top-0 z-30 flex h-14 min-w-0 items-center gap-2 overflow-x-clip border-b border-border bg-background/80 px-3 backdrop-blur-xl sm:h-16 sm:gap-4 sm:px-6">
+    <header className="sticky top-0 z-40 flex h-14 min-w-0 items-center gap-2 border-b border-border bg-background/80 px-3 backdrop-blur-xl sm:h-16 sm:gap-4 sm:px-6">
       {onMenuClick && (
         <Button variant="ghost" size="icon" onClick={onMenuClick} className="lg:hidden" aria-label="Menu">
           <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -233,9 +233,9 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
         )}
 
         {user && user.role === variant && (
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-muted transition-colors">
+              <button type="button" className="relative z-10 flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-muted transition-colors">
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="bg-gradient-primary text-xs font-semibold text-primary-foreground">
                     {initials}
@@ -248,7 +248,12 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
                 <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground sm:block" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent
+              align="end"
+              sideOffset={8}
+              collisionPadding={12}
+              className="z-[80] max-h-[min(24rem,calc(100dvh-5rem))] w-56 overflow-y-auto"
+            >
               <DropdownMenuLabel>
                 <div>
                   <p className="text-sm font-semibold">{user?.name}</p>
@@ -258,6 +263,11 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
               <DropdownMenuSeparator />
               {variant === "admin" && (
                 <DropdownMenuItem onClick={() => navigate("/admin/settings")}>
+                  <Settings className="mr-2 h-4 w-4" /> Settings
+                </DropdownMenuItem>
+              )}
+              {variant === "vendor" && (
+                <DropdownMenuItem onClick={() => navigate("/vendor/settings")}>
                   <Settings className="mr-2 h-4 w-4" /> Settings
                 </DropdownMenuItem>
               )}

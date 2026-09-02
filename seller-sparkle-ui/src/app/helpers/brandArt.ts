@@ -1,5 +1,8 @@
 export const BRAND_MARK_SRC = "/branding/blinksmed-mark.png";
 export const BRAND_LOGO_SRC = "/branding/blinksmed-logo.png";
+/** Unique path + version so Chrome does not keep serving the old Lovable /favicon.ico cache. */
+export const FAVICON_HREF = "/bm-icon.png?v=20260825r";
+export const FAVICON_SVG_HREF = "/bm-icon.svg?v=20260825r";
 
 const ready = new Set<string>();
 const waiters = new Set<() => void>();
@@ -27,6 +30,24 @@ function decodeSrc(src: string) {
 export function preloadBrandArt() {
   decodeSrc(BRAND_MARK_SRC);
   decodeSrc(BRAND_LOGO_SRC);
+}
+
+/** Replace leftover Lovable / cached origin icons with the BlinksMed mark. */
+export function applyFavicon() {
+  if (typeof document === "undefined") return;
+  const links = document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"]');
+  links.forEach((el) => el.remove());
+  const png = document.createElement("link");
+  png.rel = "icon";
+  png.type = "image/png";
+  png.sizes = "32x32";
+  png.href = FAVICON_HREF;
+  document.head.appendChild(png);
+  const svg = document.createElement("link");
+  svg.rel = "icon";
+  svg.type = "image/svg+xml";
+  svg.href = FAVICON_SVG_HREF;
+  document.head.appendChild(svg);
 }
 
 export function brandArtSrc(artwork: "mark" | "logo") {

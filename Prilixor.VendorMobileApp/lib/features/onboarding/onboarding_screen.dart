@@ -26,6 +26,27 @@ import 'onboarding_widgets.dart';
 import '../service_areas/service_area_map_picker.dart';
 import '../support/support_chat_screen.dart';
 
+Widget buildOnboardingTabHeader(
+  BuildContext context, {
+  required VoidCallback onRejectedHelp,
+}) {
+  final onboarding = Provider.of<VendorOnboardingProvider>(context);
+  final status = Provider.of<VendorProfileProvider>(context).status;
+  final verification = onboarding.latestVerification;
+
+  return OnboardingTabHeader(
+    showRejected: onboarding.hasRejectedVerificationItems,
+    rejectedDocuments: onboarding.rejectedDocuments,
+    rejectedBank: onboarding.hasRejectedBankAccount,
+    onRejectedHelp: onRejectedHelp,
+    accountStatus: status?.accountStatus,
+    verificationStatus: verification?.reviewStatus,
+    isVerified: onboarding.isVerified,
+    documentsUploaded: onboarding.documents.length,
+    hasBank: onboarding.primaryBank != null,
+  );
+}
+
 class OnboardingScreen extends StatefulWidget {
   final int initialTab;
 
@@ -39,6 +60,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String? _selectedDocType = vendorDocumentTypes.first;
+  bool _hasLoadedOnce = false;
 
   @override
   void initState() {
@@ -70,6 +92,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       profile.fetchProfile(vendorId),
       Provider.of<VendorLocationProvider>(context, listen: false).fetchStates(),
     ]);
+    if (mounted) setState(() => _hasLoadedOnce = true);
   }
 
   Future<void> _submitVerification() async {
@@ -120,18 +143,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget build(BuildContext context) {
     final onboarding = Provider.of<VendorOnboardingProvider>(context);
     final profileProvider = Provider.of<VendorProfileProvider>(context);
-    final status = profileProvider.status;
-    final verification = onboarding.latestVerification;
 
-    final statusBanner = status == null
-        ? null
-        : OnboardingStatusBanner(
-            accountStatus: status.accountStatus,
-            verificationStatus: verification?.reviewStatus,
-            isVerified: onboarding.isVerified,
-            documentsUploaded: onboarding.documents.length,
-            hasBank: onboarding.primaryBank != null,
-          );
+    final showInitialLoader =
+        !_hasLoadedOnce && onboarding.loading && onboarding.documents.isEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -156,35 +170,22 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           ],
         ),
       ),
-      body: onboarding.loading && onboarding.documents.isEmpty
+      body: showInitialLoader
           ? const BrandPageLoader()
-          : Column(
+          : TabBarView(
+              controller: _tabController,
               children: [
-                if (onboarding.hasRejectedVerificationItems)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: OnboardingRejectedHelpBanner(
-                      rejectedDocuments: onboarding.rejectedDocuments,
-                      rejectedBank: onboarding.hasRejectedBankAccount,
-                      onGetHelp: () => _openVerificationSupportHelp(onboarding),
-                    ),
-                  ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _ProfileTab(
-                        profile: profileProvider.profile,
-                        header: statusBanner,
-                      ),
-                      _DocumentsTab(
-                        header: statusBanner,
-                        selectedType: _selectedDocType,
-                        onTypeChanged: (v) => setState(() => _selectedDocType = v),
-                      ),
-                      _BankTab(header: statusBanner),
-                    ],
-                  ),
+                _ProfileTab(
+                  profile: profileProvider.profile,
+                  onRejectedHelp: () => _openVerificationSupportHelp(onboarding),
+                ),
+                _DocumentsTab(
+                  selectedType: _selectedDocType,
+                  onTypeChanged: (v) => setState(() => _selectedDocType = v),
+                  onRejectedHelp: () => _openVerificationSupportHelp(onboarding),
+                ),
+                _BankTab(
+                  onRejectedHelp: () => _openVerificationSupportHelp(onboarding),
                 ),
               ],
             ),
@@ -194,15 +195,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
 class _ProfileTab extends StatefulWidget {
   final VendorProfile? profile;
-  final Widget? header;
+  final VoidCallback onRejectedHelp;
 
-  const _ProfileTab({this.profile, this.header});
+  const _ProfileTab({
+    this.profile,
+    required this.onRejectedHelp,
+  });
 
   @override
   State<_ProfileTab> createState() => _ProfileTabState();
 }
 
-class _ProfileTabState extends State<_ProfileTab> {
+class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientMixin {
   final _businessController = TextEditingController();
   final _ownerController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -492,12 +496,32 @@ class _ProfileTabState extends State<_ProfileTab> {
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     final colors = context.appColors;
     final saving = Provider.of<VendorOnboardingProvider>(context).saving;
+
     if (widget.profile == null) {
-      return Center(
-        child: Text('No profile loaded.', style: TextStyle(color: context.appColors.textMuted)),
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        children: [
+          buildOnboardingTabHeader(
+            context,
+            onRejectedHelp: widget.onRejectedHelp,
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text(
+                'No profile loaded.',
+                style: TextStyle(color: context.appColors.textMuted),
+              ),
+            ),
+          ),
+        ],
       );
     }
 
@@ -508,10 +532,10 @@ class _ProfileTabState extends State<_ProfileTab> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
-        if (widget.header != null) ...[
-          widget.header!,
-          const SizedBox(height: 16),
-        ],
+        buildOnboardingTabHeader(
+          context,
+          onRejectedHelp: widget.onRejectedHelp,
+        ),
         OnboardingFormSection(
           title: 'Business details',
           subtitle: 'Shown to customers on your store profile.',
@@ -739,29 +763,37 @@ class _ProfileTabState extends State<_ProfileTab> {
   }
 }
 
-class _DocumentsTab extends StatelessWidget {
-  final Widget? header;
+class _DocumentsTab extends StatefulWidget {
   final String? selectedType;
   final ValueChanged<String?> onTypeChanged;
+  final VoidCallback onRejectedHelp;
 
   const _DocumentsTab({
-    this.header,
     required this.selectedType,
     required this.onTypeChanged,
+    required this.onRejectedHelp,
   });
+
+  @override
+  State<_DocumentsTab> createState() => _DocumentsTabState();
+}
+
+class _DocumentsTabState extends State<_DocumentsTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
 
   Future<void> _upload(BuildContext context) async {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
-    if (vendorId == null || selectedType == null) return;
+    if (vendorId == null || widget.selectedType == null) return;
 
     final existing = Provider.of<VendorOnboardingProvider>(context, listen: false)
         .documents
-        .where((d) => d.documentType == selectedType)
+        .where((d) => d.documentType == widget.selectedType)
         .toList();
     if (existing.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$selectedType is already uploaded. View or delete it first.'),
+          content: Text('${widget.selectedType} is already uploaded. View or delete it first.'),
         ),
       );
       return;
@@ -795,7 +827,7 @@ class _DocumentsTab extends StatelessWidget {
     final provider = Provider.of<VendorOnboardingProvider>(context, listen: false);
     final ok = await provider.uploadDocument(
       vendorId: vendorId,
-      documentType: selectedType!,
+      documentType: widget.selectedType!,
       file: file,
     );
     if (!context.mounted) return;
@@ -843,6 +875,7 @@ class _DocumentsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final onboarding = Provider.of<VendorOnboardingProvider>(context);
     final docs = onboarding.documents;
     final saving = onboarding.saving;
@@ -851,17 +884,17 @@ class _DocumentsTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
-        if (header != null) ...[
-          header!,
-          const SizedBox(height: 16),
-        ],
+        buildOnboardingTabHeader(
+          context,
+          onRejectedHelp: widget.onRejectedHelp,
+        ),
         OnboardingFormSection(
           title: 'Upload new document',
           subtitle: 'PDF or image (PNG, JPG, WEBP). One file per document type.',
           child: Column(
             children: [
               DropdownButtonFormField<String>(
-                initialValue: selectedType,
+                initialValue: widget.selectedType,
                 dropdownColor: context.appColors.surface,
                 style: TextStyle(color: context.appColors.textPrimary),
                 decoration: InputDecoration(
@@ -888,7 +921,7 @@ class _DocumentsTab extends StatelessWidget {
                     ),
                   );
                 }).toList(),
-                onChanged: onTypeChanged,
+                onChanged: widget.onTypeChanged,
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -1122,15 +1155,15 @@ class _MissingDocumentRow extends StatelessWidget {
 }
 
 class _BankTab extends StatefulWidget {
-  final Widget? header;
+  final VoidCallback onRejectedHelp;
 
-  const _BankTab({this.header});
+  const _BankTab({required this.onRejectedHelp});
 
   @override
   State<_BankTab> createState() => _BankTabState();
 }
 
-class _BankTabState extends State<_BankTab> {
+class _BankTabState extends State<_BankTab> with AutomaticKeepAliveClientMixin {
   final _holderController = TextEditingController();
   final _bankController = TextEditingController();
   final _branchController = TextEditingController();
@@ -1229,7 +1262,11 @@ class _BankTabState extends State<_BankTab> {
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     final saving = Provider.of<VendorOnboardingProvider>(context).saving;
     final bank = Provider.of<VendorOnboardingProvider>(context).primaryBank;
     if (_bankId == null && bank != null) {
@@ -1244,10 +1281,10 @@ class _BankTabState extends State<_BankTab> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
-        if (widget.header != null) ...[
-          widget.header!,
-          const SizedBox(height: 16),
-        ],
+        buildOnboardingTabHeader(
+          context,
+          onRejectedHelp: widget.onRejectedHelp,
+        ),
         if (bank != null)
           SavedBankAccountCard(
             bankName: bank.bankName,
@@ -1333,7 +1370,7 @@ class _BankTabState extends State<_BankTab> {
                   onPressed: () => setState(() => _obscureAccount = !_obscureAccount),
                   icon: Icon(
                     _obscureAccount ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: Colors.white54,
+                    color: context.isDarkMode ? Colors.white54 : context.appColors.textMuted,
                   ),
                 ),
               ),
@@ -1348,7 +1385,7 @@ class _BankTabState extends State<_BankTab> {
                   onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                   icon: Icon(
                     _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: Colors.white54,
+                    color: context.isDarkMode ? Colors.white54 : context.appColors.textMuted,
                   ),
                 ),
               ),
@@ -1357,19 +1394,33 @@ class _BankTabState extends State<_BankTab> {
                   margin: const EdgeInsets.only(bottom: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF34D399).withValues(alpha: 0.1),
+                    color: context.isDarkMode
+                        ? const Color(0xFF34D399).withValues(alpha: 0.1)
+                        : const Color(0xFFECFDF5),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.25)),
+                    border: Border.all(
+                      color: context.isDarkMode
+                          ? const Color(0xFF34D399).withValues(alpha: 0.25)
+                          : const Color(0xFFA7F3D0),
+                    ),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 18),
-                      SizedBox(width: 8),
+                      Icon(
+                        Icons.check_circle_rounded,
+                        color: context.isDarkMode
+                            ? const Color(0xFF34D399)
+                            : const Color(0xFF047857),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Account numbers match.',
                           style: TextStyle(
-                            color: Color(0xFF34D399),
+                            color: context.isDarkMode
+                                ? const Color(0xFF34D399)
+                                : const Color(0xFF047857),
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1383,19 +1434,33 @@ class _BankTabState extends State<_BankTab> {
                   margin: const EdgeInsets.only(bottom: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.redAccent.withValues(alpha: 0.1),
+                    color: context.isDarkMode
+                        ? Colors.redAccent.withValues(alpha: 0.1)
+                        : const Color(0xFFFEF2F2),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.redAccent.withValues(alpha: 0.25)),
+                    border: Border.all(
+                      color: context.isDarkMode
+                          ? Colors.redAccent.withValues(alpha: 0.25)
+                          : const Color(0xFFFECACA),
+                    ),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 18),
-                      SizedBox(width: 8),
+                      Icon(
+                        Icons.error_outline_rounded,
+                        color: context.isDarkMode
+                            ? Colors.redAccent
+                            : const Color(0xFFB91C1C),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Account numbers do not match.',
                           style: TextStyle(
-                            color: Colors.redAccent,
+                            color: context.isDarkMode
+                                ? Colors.redAccent
+                                : const Color(0xFFB91C1C),
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),

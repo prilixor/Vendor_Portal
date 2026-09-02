@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -10,6 +10,7 @@ import '../../core/models/order_image_model.dart';
 import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/vendor_photo_picker.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/struck_price.dart';
 import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
@@ -237,7 +238,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
   }
 
-  Future<void> _pickAndUploadPhotos() async {
+  Future<void> _pickAndUploadPhotos([VendorPhotoPickSource? source]) async {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     final provider = Provider.of<VendorOrderProvider>(context, listen: false);
@@ -248,14 +249,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       );
       return;
     }
-    final result = await FilePicker.pickFiles(
-      type: FileType.image,
-      allowMultiple: true,
-      withData: true,
+
+    final pickedSource = source ?? await showVendorPhotoSourceSheet(context);
+    if (pickedSource == null || !mounted) return;
+
+    final files = await pickVendorPhotoFiles(
+      source: pickedSource,
+      maxCount: remaining,
     );
-    if (result == null || result.files.isEmpty || !mounted) return;
+    if (files.isEmpty || !mounted) return;
+
     var uploaded = 0;
-    for (final file in result.files.take(remaining)) {
+    for (final file in files) {
       final ok = await provider.uploadOrderImage(
         vendorId: vendorId,
         orderId: _selectedOrderId,
@@ -484,14 +489,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                         Icon(
                                                           Icons.photo_library_outlined,
                                                           size: 12,
-                                                          color: Colors.amber.shade300,
+                                                          color: context.isDarkMode ? Colors.amber.shade300 : const Color(0xFFD97706),
                                                         ),
                                                         const SizedBox(width: 4),
                                                         Expanded(
                                                           child: Text(
                                                             'Customer photos requested \u00b7 upload needed',
                                                             style: TextStyle(
-                                                              color: Colors.amber.shade300,
+                                                              color: context.isDarkMode ? Colors.amber.shade300 : const Color(0xFFD97706),
                                                               fontSize: 10.5,
                                                               fontWeight: FontWeight.w700,
                                                             ),
@@ -503,17 +508,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                     const SizedBox(height: 4),
                                                     Row(
                                                       children: [
-                                                        const Icon(
+                                                        Icon(
                                                           Icons.photo_library_outlined,
                                                           size: 12,
-                                                          color: Color(0xFF34D399),
+                                                          color: context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669),
                                                         ),
                                                         const SizedBox(width: 4),
                                                         Expanded(
                                                           child: Text(
                                                             '$photoCount/5 customer photos uploaded',
-                                                            style: const TextStyle(
-                                                              color: Color(0xFF34D399),
+                                                            style: TextStyle(
+                                                              color: context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669),
                                                               fontSize: 10.5,
                                                               fontWeight: FontWeight.w700,
                                                             ),
@@ -821,21 +826,28 @@ class _PendingContinuationsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF78350F).withValues(alpha: 0.35),
+        color: isDark
+            ? const Color(0xFF78350F).withValues(alpha: 0.35)
+            : const Color(0xFFFFFBEB),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.amber.withValues(alpha: 0.45)),
+        border: Border.all(
+          color: isDark
+              ? Colors.amber.withValues(alpha: 0.45)
+              : const Color(0xFFFDE68A),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Pending customer requests',
             style: TextStyle(
-              color: Color(0xFFFBBF24),
+              color: isDark ? const Color(0xFFFBBF24) : const Color(0xFF92400E),
               fontWeight: FontWeight.w800,
               fontSize: 16,
             ),
@@ -903,13 +915,18 @@ class _RequestBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: context.appColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.amber.withValues(alpha: 0.25)),
+        border: Border.all(
+          color: isDark
+              ? Colors.amber.withValues(alpha: 0.25)
+              : const Color(0xFFFDE68A),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -974,7 +991,7 @@ class _PhotoRequestCard extends StatelessWidget {
   final List<OrderImage> images;
   final bool busy;
   final bool canUpload;
-  final VoidCallback onAdd;
+  final Future<void> Function([VendorPhotoPickSource? source]) onAdd;
   final Future<void> Function(String imageId) onDelete;
 
   const _PhotoRequestCard({
@@ -1028,12 +1045,83 @@ class _PhotoRequestCard extends StatelessWidget {
     );
   }
 
+  Widget _emptyUploadZone(BuildContext context) {
+    final colors = context.appColors;
+    return CustomPaint(
+      painter: _DashedBorderPainter(
+        color: AppTheme.accent.withValues(alpha: 0.55),
+        radius: 14,
+      ),
+      child: Ink(
+        decoration: BoxDecoration(
+          color: AppTheme.accent.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!kIsWeb) ...[
+                SizedBox(
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    onPressed: busy ? null : () => onAdd(VendorPhotoPickSource.camera),
+                    icon: const Icon(Icons.photo_camera_outlined, size: 20),
+                    label: const Text('Take photo'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              SizedBox(
+                height: 46,
+                child: OutlinedButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => onAdd(
+                            kIsWeb ? null : VendorPhotoPickSource.gallery,
+                          ),
+                  icon: const Icon(Icons.photo_library_outlined, size: 20),
+                  label: Text(kIsWeb ? 'Choose photos' : 'Choose from gallery'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colors.textPrimary,
+                    side: BorderSide(color: colors.border),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                busy ? 'Uploading\u2026' : 'Up to $maxImages photos',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colors.textMuted,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _addTile({required bool large, required BuildContext context}) {
     final radius = BorderRadius.circular(large ? 14 : 10);
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: busy ? null : onAdd,
+        onTap: busy ? null : () => onAdd(),
         borderRadius: radius,
         child: CustomPaint(
           painter: _DashedBorderPainter(
@@ -1059,7 +1147,7 @@ class _PhotoRequestCard extends StatelessWidget {
                     ),
                     SizedBox(height: large ? 8 : 4),
                     Text(
-                      busy ? 'Uploading\u2026' : (large ? 'Tap to add photos' : 'Add photo'),
+                      busy ? 'Uploading\u2026' : (large ? 'Add photo' : 'Add'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: context.appColors.textPrimary,
@@ -1070,7 +1158,7 @@ class _PhotoRequestCard extends StatelessWidget {
                     if (large) ...[
                       const SizedBox(height: 4),
                       Text(
-                        'Up to $maxImages photos',
+                        'Camera or gallery',
                         style: TextStyle(
                           color: context.appColors.textMuted,
                           fontSize: 11,
@@ -1138,8 +1226,9 @@ class _PhotoRequestCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: context.appColors.surface,
+                            color: context.isDarkMode ? context.appColors.surface : context.appColors.surfaceElevated,
                             borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: context.appColors.border),
                           ),
                           child: Text(
                             '${images.length}/$maxImages',
@@ -1155,15 +1244,21 @@ class _PhotoRequestCard extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: Colors.amber.withValues(alpha: 0.2),
+                              color: context.isDarkMode ? Colors.amber.withValues(alpha: 0.2) : const Color(0xFFFEF3C7),
                               borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: context.isDarkMode
+                                    ? Colors.amber.withValues(alpha: 0.35)
+                                    : const Color(0xFFFDE68A),
+                                width: 1,
+                              ),
                             ),
                             child: Text(
                               'Action needed',
                               style: TextStyle(
-                                color: Colors.amber.shade200,
+                                color: context.isDarkMode ? Colors.amber.shade200 : const Color(0xFF92400E),
                                 fontSize: 10,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
@@ -1216,11 +1311,7 @@ class _PhotoRequestCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (emptyUpload)
-            SizedBox(
-              width: double.infinity,
-              height: 132,
-              child: _addTile(large: true, context: context),
-            )
+            _emptyUploadZone(context)
           else if (images.isEmpty)
             Container(
               width: double.infinity,
@@ -1639,7 +1730,9 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
                     ),
                     Icon(
                       Icons.check_circle_rounded,
-                      color: Colors.greenAccent.withValues(alpha: 0.85),
+                      color: context.isDarkMode
+                          ? Colors.greenAccent.withValues(alpha: 0.85)
+                          : const Color(0xFF059669),
                       size: 18,
                     ),
                   ],

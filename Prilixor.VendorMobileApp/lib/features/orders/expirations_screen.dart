@@ -112,9 +112,10 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
               style: TextStyle(color: colors.textPrimary, fontSize: 14),
               onChanged: (v) => setState(() => _searchQuery = v),
               decoration: InputDecoration(
-                hintText: 'Search by order, item, or customer',
+                hintText: 'Search expirations',
                 hintStyle: TextStyle(color: colors.textMuted, fontSize: 13),
                 prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.accent, size: 20),
+                prefixIconConstraints: const BoxConstraints(minWidth: 44, maxWidth: 44),
                 suffixIcon: hasSearch
                     ? IconButton(
                         icon: Icon(Icons.close, color: colors.textMuted),
@@ -157,13 +158,43 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
           if (keys.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              child: Text(
-                '${keys.length} ${keys.length == 1 ? 'order' : 'orders'} · ${filtered.length} ${filtered.length == 1 ? 'item' : 'items'}'
-                '${hasSearch ? ' matching search' : ''}',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.45),
-                  fontSize: 12,
-                ),
+              child: Builder(
+                builder: (context) {
+                  final urgentCount =
+                      filtered.where((row) => row.isUrgentBadge).length;
+                  return Text.rich(
+                    TextSpan(
+                      style: TextStyle(
+                        color: colors.textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        height: 1.35,
+                      ),
+                      children: [
+                        TextSpan(
+                          text:
+                              '${keys.length} ${keys.length == 1 ? 'order' : 'orders'} · ${filtered.length} ${filtered.length == 1 ? 'item' : 'items'}',
+                        ),
+                        if (hasSearch)
+                          const TextSpan(text: ' matching search'),
+                        if (urgentCount > 0) ...[
+                          const TextSpan(text: ' · '),
+                          TextSpan(
+                            text: urgentCount == 1
+                                ? '1 due soon'
+                                : '$urgentCount due soon',
+                            style: TextStyle(
+                              color: context.isDarkMode
+                                  ? const Color(0xFFFCA5A5)
+                                  : const Color(0xFFB91C1C),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
           const SizedBox(height: 10),
@@ -208,15 +239,16 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
                                 Icon(
                                   Icons.search_off_outlined,
                                   size: 56,
-                                  color: Colors.white.withValues(alpha: 0.2),
+                                  color: context.appColors.textMuted.withValues(alpha: 0.55),
                                 ),
                                 const SizedBox(height: 14),
                                 Center(
                                   child: Text(
                                     'No expirations match “${_searchQuery.trim()}”.',
                                     style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.55),
+                                      color: context.appColors.textSecondary,
                                       fontSize: 14,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                     textAlign: TextAlign.center,
                                   ),
@@ -257,46 +289,77 @@ class _WindowFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: AppTheme.card(context),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.appColors.border),
-      ),
-      child: Row(
-        children: [7, 15, 30].map((d) {
-          final selected = withinDays == d;
-          return Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(right: d == 30 ? 0 : 6),
-              child: Material(
-                color: selected
-                    ? AppTheme.accent
-                    : context.appColors.surface,
-                borderRadius: BorderRadius.circular(10),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: () => onChanged(d),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: Center(
-                      child: Text(
-                        '$d days',
-                        style: TextStyle(
-                          color: selected ? Colors.white : context.appColors.textSecondary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
+    final colors = context.appColors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Show rentals ending within',
+          style: TextStyle(
+            color: colors.textMuted,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.15,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: AppTheme.card(context),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: colors.border.withValues(alpha: 0.75)),
+          ),
+          child: Row(
+            children: [7, 15, 30].map((d) {
+              final selected = withinDays == d;
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: d == 30 ? 0 : 4),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    decoration: BoxDecoration(
+                      color: selected ? AppTheme.accent : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: selected
+                          ? [
+                              BoxShadow(
+                                color: AppTheme.accent.withValues(alpha: 0.28),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () => onChanged(d),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                          child: Center(
+                            child: Text(
+                              '$d days',
+                              style: TextStyle(
+                                color: selected ? Colors.white : colors.textSecondary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                                letterSpacing: 0.1,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -314,65 +377,181 @@ class _OrderGroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final itemLabel = '${items.length} ${items.length == 1 ? 'item' : 'items'}';
+
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.card(context),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.appColors.border),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border.withValues(alpha: 0.65)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: context.isDarkMode ? 0.18 : 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-            child: Column(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'ORDER GROUP',
-                  style: TextStyle(
-                    color: context.appColors.textMuted,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: AppTheme.accent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.event_note_rounded,
+                    size: 18,
+                    color: AppTheme.accent.withValues(alpha: 0.95),
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  baseOrderNumber,
-                  style: TextStyle(
-                    color: context.appColors.textPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'ORDER GROUP',
+                        style: TextStyle(
+                          color: colors.textMuted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.9,
+                          height: 1.15,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        baseOrderNumber,
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                          letterSpacing: -0.2,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        itemLabel,
+                        style: TextStyle(
+                          color: colors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          Divider(height: 1, color: context.appColors.border),
-          ...List.generate(items.length, (index) {
-            final row = items[index];
-            return Column(
+          Divider(height: 1, color: colors.border.withValues(alpha: 0.45)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+            child: Column(
               children: [
-                if (index > 0)
-                  Divider(height: 1, color: context.appColors.border),
-                _ExpirationTile(
-                  row: row,
-                  formatEnd: formatEnd,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => OrderDetailScreen(orderId: row.orderId),
-                      ),
-                    );
-                  },
-                ),
+                for (var i = 0; i < items.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 10),
+                  _ExpirationTile(
+                    row: items[i],
+                    formatEnd: formatEnd,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => OrderDetailScreen(orderId: items[i].orderId),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ],
-            );
-          }),
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _ExpirationMetaRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool emphasizeValue;
+  final bool accentValue;
+
+  const _ExpirationMetaRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.emphasizeValue = false,
+    this.accentValue = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final isDark = context.isDarkMode;
+    final labelStyle = TextStyle(
+      color: colors.textMuted,
+      fontSize: 11.5,
+      fontWeight: FontWeight.w500,
+      height: 1.4,
+    );
+    Color valueColor;
+    if (accentValue) {
+      valueColor = isDark ? const Color(0xFFFCA5A5) : const Color(0xFFB91C1C);
+    } else if (emphasizeValue) {
+      valueColor = colors.textPrimary;
+    } else {
+      valueColor = colors.textSecondary;
+    }
+    final valueStyle = TextStyle(
+      color: valueColor,
+      fontSize: 11.5,
+      fontWeight: FontWeight.w700,
+      height: 1.4,
+      letterSpacing: emphasizeValue ? -0.1 : 0,
+      fontFeatures: emphasizeValue ? const [FontFeature.tabularFigures()] : null,
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(
+            icon,
+            size: 14,
+            color: colors.textMuted.withValues(alpha: 0.85),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: '$label ', style: labelStyle),
+                TextSpan(text: value, style: valueStyle),
+              ],
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -390,61 +569,116 @@ class _ExpirationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final isDark = context.isDarkMode;
     final urgent = row.isUrgentBadge;
+    final endLabel = formatEnd(row.endDate);
+    final tileBg = isDark
+        ? colors.surfaceElevated.withValues(alpha: 0.42)
+        : const Color(0xFFFAFBFC);
+    final borderColor = urgent
+        ? (isDark ? const Color(0xFFFCA5A5).withValues(alpha: 0.55) : const Color(0xFFFECACA))
+        : colors.border.withValues(alpha: 0.55);
 
     return Material(
-      color: Colors.transparent,
+      color: tileBg,
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: borderColor),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Column(
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      row.listingTitle,
-                      style: TextStyle(
-                        color: context.appColors.textPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        height: 1.25,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        OrderTypeChip(orderType: row.orderType),
-                        Text(
-                          row.orderNumber,
-                          style: TextStyle(
-                            color: context.appColors.textMuted,
-                            fontSize: 10,
-                          ),
+                    Expanded(
+                      child: Text(
+                        row.listingTitle,
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          height: 1.28,
+                          letterSpacing: -0.15,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${row.customerName} · Ends ${formatEnd(row.endDate)}',
-                      style: TextStyle(
-                        color: context.appColors.textSecondary,
-                        fontSize: 11,
                       ),
+                    ),
+                    const SizedBox(width: 10),
+                    _DaysLeftBadge(
+                      label: row.daysLeftLabel,
+                      urgent: urgent,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              _DaysLeftBadge(
-                label: row.daysLeftLabel,
-                urgent: urgent,
+              Divider(height: 1, color: colors.border.withValues(alpha: 0.38)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _ExpirationMetaRow(
+                            icon: Icons.receipt_long_outlined,
+                            label: 'Order',
+                            value: row.orderNumber,
+                            emphasizeValue: true,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        OrderTypeChip(orderType: row.orderType),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    _ExpirationMetaRow(
+                      icon: Icons.person_outline_rounded,
+                      label: 'Customer',
+                      value: row.customerName,
+                      emphasizeValue: true,
+                    ),
+                    const SizedBox(height: 5),
+                    _ExpirationMetaRow(
+                      icon: Icons.event_outlined,
+                      label: 'Ends',
+                      value: endLabel,
+                      emphasizeValue: true,
+                      accentValue: urgent,
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'View order',
+                            style: TextStyle(
+                              color: AppTheme.accent,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppTheme.accent,
+                            size: 18,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -465,25 +699,42 @@ class _DaysLeftBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final isDark = context.isDarkMode;
+
+    Color bg;
+    Color border;
+    Color text;
+
+    if (urgent) {
+      bg = isDark
+          ? const Color(0xFF7F1D1D).withValues(alpha: 0.35)
+          : const Color(0xFFFEF2F2);
+      border = isDark
+          ? const Color(0xFFFCA5A5).withValues(alpha: 0.45)
+          : const Color(0xFFFECACA);
+      text = isDark ? const Color(0xFFFCA5A5) : const Color(0xFFB91C1C);
+    } else {
+      bg = isDark ? colors.surfaceElevated : colors.surfaceElevated;
+      border = colors.border.withValues(alpha: isDark ? 0.75 : 1);
+      text = colors.textSecondary;
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: urgent
-            ? Colors.redAccent.withValues(alpha: 0.16)
-            : context.appColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: urgent
-              ? Colors.redAccent.withValues(alpha: 0.45)
-              : context.appColors.border,
-        ),
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: urgent ? Colors.redAccent : context.appColors.textSecondary,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
+          color: text,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+          height: 1.1,
+          letterSpacing: 0.15,
         ),
       ),
     );

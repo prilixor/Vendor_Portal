@@ -8,18 +8,28 @@ import { authApi } from "@/app/services/authApi";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import {
-  applyPasswordPairLiveErrors,
-  confirmPasswordError,
-  passwordLengthError,
-  passwordsMatch,
-} from "@/app/helpers/passwordValidation";
-import { cn } from "@/app/helpers/utils";
-import {
   authPortalLoginPath,
   authPortalSignInLabel,
   forgotPasswordPath,
   resolveAuthPortalType,
 } from "@/app/helpers/portalHost";
+import {
+  PASSWORDS_MATCH_MESSAGE,
+  passwordsMeetConfirm,
+  patchLivePasswordPair,
+  submitConfirmPasswordError,
+  submitPasswordLengthError,
+} from "@/app/helpers/passwordValidation";
+import { cn } from "@/app/helpers/utils";
+
+type ResetFieldErrors = { newPassword?: string; confirmPassword?: string };
+
+const RESET_PAIR_KEYS = { password: "newPassword", confirm: "confirmPassword" } as const;
+const RESET_PAIR_MESSAGES = {
+  length: "Password must be at least 8 characters",
+  mismatch: "Passwords do not match",
+  confirmRequired: "Please confirm your password",
+};
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
@@ -27,55 +37,56 @@ const ResetPassword = () => {
   const portalType = resolveAuthPortalType(searchParams.get("portal"));
   const loginPath = authPortalLoginPath(portalType);
   const signInLabel = authPortalSignInLabel(portalType);
-
+  
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ newPassword?: string; confirmPassword?: string }>({});
+  const [errors, setErrors] = useState<ResetFieldErrors>({});
   const [success, setSuccess] = useState(false);
-
-  const validate = () => {
-    const e: typeof errors = {};
-    const pwdErr = passwordLengthError(newPassword, {
-      shortMessage: "Password must be at least 8 characters",
-    });
-    if (pwdErr) e.newPassword = pwdErr;
-    const confErr = confirmPasswordError(newPassword, confirmPassword);
-    if (confErr) e.confirmPassword = confErr;
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
+  const passwordsMatch = passwordsMeetConfirm(newPassword, confirmPassword);
 
   const onNewPasswordChange = (value: string) => {
     setNewPassword(value);
     setErrors((prev) =>
-      applyPasswordPairLiveErrors(prev, value, confirmPassword, {
-        password: "newPassword",
-        confirm: "confirmPassword",
-      }, {
-        passwordShortMessage: "Password must be at least 8 characters",
-      }),
+      patchLivePasswordPair(
+        prev as Record<string, string>,
+        value,
+        confirmPassword,
+        RESET_PAIR_KEYS,
+        RESET_PAIR_MESSAGES,
+      ) as ResetFieldErrors,
     );
   };
 
-  const onConfirmChange = (value: string) => {
+  const onConfirmPasswordChange = (value: string) => {
     setConfirmPassword(value);
     setErrors((prev) =>
-      applyPasswordPairLiveErrors(prev, newPassword, value, {
-        password: "newPassword",
-        confirm: "confirmPassword",
-      }, {
-        passwordShortMessage: "Password must be at least 8 characters",
-      }),
+      patchLivePasswordPair(
+        prev as Record<string, string>,
+        newPassword,
+        value,
+        RESET_PAIR_KEYS,
+        RESET_PAIR_MESSAGES,
+      ) as ResetFieldErrors,
     );
+  };
+
+  const validate = () => {
+    const e: ResetFieldErrors = {};
+    const passwordErr = submitPasswordLengthError(newPassword, RESET_PAIR_MESSAGES.length);
+    if (passwordErr) e.newPassword = passwordErr;
+    const confirmErr = submitConfirmPasswordError(newPassword, confirmPassword, RESET_PAIR_MESSAGES);
+    if (confirmErr) e.confirmPassword = confirmErr;
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!validate()) return;
-
+    
     if (!token) {
       toast.error("Invalid or missing reset token.");
       return;
@@ -96,11 +107,7 @@ const ResetPassword = () => {
 
   if (!token) {
     return (
-      <AuthLayout
-        title="Invalid Token"
-        subtitle="The reset token is missing or invalid."
-        portalType={portalType}
-      >
+      <AuthLayout title="Invalid Token" subtitle="The reset token is missing or invalid." portalType={portalType}>
         <div className="space-y-6">
           <p className="text-center text-sm text-muted-foreground">
             Please check your email for a valid reset link or request a new one.
@@ -115,11 +122,7 @@ const ResetPassword = () => {
 
   if (success) {
     return (
-      <AuthLayout
-        title="Password Reset"
-        subtitle="Your password has been successfully reset."
-        portalType={portalType}
-      >
+      <AuthLayout title="Password Reset" subtitle="Your password has been successfully reset." portalType={portalType}>
         <div className="space-y-6">
           <p className="text-center text-sm text-muted-foreground">
             You can now sign in with your new password.
@@ -134,8 +137,8 @@ const ResetPassword = () => {
 
   return (
     <AuthLayout title="Reset Password" subtitle="Enter your new password below." portalType={portalType}>
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4" noValidate>
-        <p className="text-xs text-muted-foreground -mt-1">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
           Fields marked <span className="text-destructive">*</span> are required.
         </p>
         <div className="space-y-1.5">
@@ -145,13 +148,11 @@ const ResetPassword = () => {
               id="newPassword"
               type={showPwd ? "text" : "password"}
               value={newPassword}
+              autoComplete="new-password"
               onChange={(e) => onNewPasswordChange(e.target.value)}
               placeholder="••••••••"
               aria-invalid={!!errors.newPassword}
-              className={cn(
-                "pr-10",
-                errors.newPassword && "border-destructive focus-visible:ring-destructive",
-              )}
+              className={errors.newPassword ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
             />
             <button
               type="button"
@@ -164,8 +165,8 @@ const ResetPassword = () => {
           </div>
           {errors.newPassword ? (
             <p className="text-xs text-destructive">{errors.newPassword}</p>
-          ) : newPassword.length > 0 && newPassword.length < 8 ? (
-            <p className="text-[11px] text-muted-foreground">{newPassword.length}/8 characters</p>
+          ) : newPassword.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">At least 8 characters.</p>
           ) : null}
         </div>
 
@@ -176,13 +177,14 @@ const ResetPassword = () => {
               id="confirmPassword"
               type={showConfirmPwd ? "text" : "password"}
               value={confirmPassword}
-              onChange={(e) => onConfirmChange(e.target.value)}
+              autoComplete="new-password"
+              onChange={(e) => onConfirmPasswordChange(e.target.value)}
               placeholder="••••••••"
               aria-invalid={!!errors.confirmPassword}
               className={cn(
                 "pr-10",
                 errors.confirmPassword && "border-destructive focus-visible:ring-destructive",
-                passwordsMatch(newPassword, confirmPassword) && !errors.confirmPassword && "border-emerald-500/60",
+                passwordsMatch && "border-emerald-500/60",
               )}
             />
             <button
@@ -196,8 +198,8 @@ const ResetPassword = () => {
           </div>
           {errors.confirmPassword ? (
             <p className="text-xs text-destructive">{errors.confirmPassword}</p>
-          ) : passwordsMatch(newPassword, confirmPassword) ? (
-            <p className="text-xs text-emerald-600">Passwords match</p>
+          ) : passwordsMatch ? (
+            <p className="text-xs text-emerald-600">{PASSWORDS_MATCH_MESSAGE}</p>
           ) : null}
         </div>
 
