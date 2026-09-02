@@ -175,6 +175,7 @@ const CustomerOrders = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ["customer-orders"],
     queryFn: () => customerApi.getOrders(),
+    refetchInterval: 30_000,
   });
 
   const cancelMut = useMutation({

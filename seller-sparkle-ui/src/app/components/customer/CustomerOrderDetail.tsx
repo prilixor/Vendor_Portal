@@ -74,6 +74,9 @@ function isCustomerOrderCancellable(status: string): boolean {
 
 const MAX_ORDER_IMAGES = 5;
 
+/** Match Customer Mobile order detail polling while the page is open. */
+const CUSTOMER_ORDER_POLL_MS = 15_000;
+
 function orderStatusCompact(status: string): string {
   return status.trim().toLowerCase().replace(/\s+/g, "_");
 }
@@ -389,12 +392,14 @@ const CustomerOrderDetail = () => {
     queryKey: ["customer-order", currentItemId],
     queryFn: () => customerApi.getOrder(currentItemId!),
     enabled: !!currentItemId,
+    refetchInterval: CUSTOMER_ORDER_POLL_MS,
   });
 
   // Fetch all orders to group them locally
   const { data: allOrders } = useQuery({
     queryKey: ["customer-orders"],
     queryFn: () => customerApi.getOrders(),
+    refetchInterval: CUSTOMER_ORDER_POLL_MS,
   });
 
   const cancelMut = useMutation({
@@ -511,6 +516,7 @@ const CustomerOrderDetail = () => {
       queryKey: ["customer-order-image-request", itemId],
       queryFn: () => customerApi.getOrderImageRequest(itemId),
       enabled: groupItemIds.length > 0,
+      refetchInterval: CUSTOMER_ORDER_POLL_MS,
     })),
   });
 

@@ -30,6 +30,10 @@ import { supportApi } from "@/app/services/supportApi";
 import { useAuth } from "@/app/guards/AuthContext";
 
 import { NotificationProvider, useNotificationContext } from "@/app/contexts/NotificationContext";
+import {
+  VendorDispatchOffersProvider,
+  useVendorDispatchOffersContext,
+} from "@/app/contexts/VendorDispatchOffersContext";
 
 import { SupportChatProvider } from "@/app/contexts/SupportChatContext";
 
@@ -90,6 +94,7 @@ function VendorShellContent({
 }) {
 
   const { unreadCount: unreadVendorCount } = useNotificationContext();
+  const { pendingCount: pendingOrderRequestsCount } = useVendorDispatchOffersContext();
 
   const verification = useVendorVerification();
 
@@ -104,6 +109,8 @@ function VendorShellContent({
     () =>
 
       getVendorNav(unreadVendorCount, {
+
+        pendingOrderRequestsCount,
 
         operationsBlocked: verification.operationsBlocked,
 
@@ -121,7 +128,7 @@ function VendorShellContent({
 
       }),
 
-    [unreadVendorCount, verification.operationsBlocked, verification.bannerVariant],
+    [unreadVendorCount, pendingOrderRequestsCount, verification.operationsBlocked, verification.bannerVariant],
 
   );
 
@@ -392,7 +399,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
   return (
 
     <NotificationProvider vendorId={variant === "vendor" ? user?.id : undefined}>
-
+      <VendorDispatchOffersProvider vendorId={variant === "vendor" ? user?.id : undefined}>
       <SupportChatProvider>
 
         {isCustomerShell ? (
@@ -517,6 +524,8 @@ export const AppShell = ({ variant }: AppShellProps) => {
         )}
 
       </SupportChatProvider>
+
+      </VendorDispatchOffersProvider>
 
     </NotificationProvider>
 
