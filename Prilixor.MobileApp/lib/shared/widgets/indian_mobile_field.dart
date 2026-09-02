@@ -46,63 +46,68 @@ class IndianMobileField extends StatelessWidget {
         const SizedBox(height: 8),
         AnimatedContainer(
           duration: const Duration(milliseconds: 150),
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: colors.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: borderColor, width: hasError ? 1.4 : 1),
           ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                decoration: BoxDecoration(
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ColoredBox(
                   color: colors.surfaceElevated,
-                  borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(11),
-                  ),
-                  border: Border(
-                    right: BorderSide(color: colors.border),
-                  ),
-                ),
-                child: Text(
-                  '+91',
-                  style: TextStyle(
-                    color: colors.textSecondary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  enabled: enabled,
-                  keyboardType: TextInputType.phone,
-                  textInputAction: textInputAction,
-                  inputFormatters: const [_IndianMobileInputFormatter()],
-                  style: TextStyle(color: colors.textPrimary, fontSize: 15),
-                  onChanged: onChanged,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    errorBorder: InputBorder.none,
-                    disabledBorder: InputBorder.none,
-                    hintText: '9876543210',
-                    hintStyle: TextStyle(
-                      color: colors.textMuted,
-                      fontSize: 15,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 16,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                    child: Text(
+                      '+91',
+                      style: TextStyle(
+                        color: colors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+                VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  color: colors.border,
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    enabled: enabled,
+                    keyboardType: TextInputType.phone,
+                    textInputAction: textInputAction,
+                    inputFormatters: const [_IndianMobileInputFormatter()],
+                    style: TextStyle(color: colors.textPrimary, fontSize: 15),
+                    onChanged: onChanged,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      filled: true,
+                      fillColor: colors.surface,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      hintText: '9876543210',
+                      hintStyle: TextStyle(
+                        color: colors.textMuted,
+                        fontSize: 15,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         if (hasError) ...[

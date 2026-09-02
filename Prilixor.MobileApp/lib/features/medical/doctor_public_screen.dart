@@ -53,7 +53,9 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
 
   void _goShop() {
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const CustomerDashboard()),
+      MaterialPageRoute(
+        builder: (_) => CustomerDashboard(key: CustomerDashboard.navigationKey),
+      ),
       (_) => false,
     );
     // Ensure catalog is ready for Discover tab.

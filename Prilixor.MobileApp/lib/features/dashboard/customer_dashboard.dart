@@ -19,13 +19,23 @@ class CustomerDashboard extends StatefulWidget {
   static final GlobalKey<State<CustomerDashboard>> navigationKey =
       GlobalKey<State<CustomerDashboard>>();
 
+  static _CustomerDashboardState? _activeInstance;
+
+  static const cartTabIndex = 1;
+
   /// Pop nested routes (e.g. product detail) and open the Cart tab.
   static void openCartTab(BuildContext context) {
     Navigator.of(context).popUntil((route) => route.isFirst);
-    final state = navigationKey.currentState;
-    if (state is _CustomerDashboardState) {
-      state._onTabTapped(1);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _switchToCartTab());
+  }
+
+  static void _switchToCartTab() {
+    final fromKey = navigationKey.currentState;
+    if (fromKey is _CustomerDashboardState) {
+      fromKey.showCartTab();
+      return;
     }
+    _activeInstance?.showCartTab();
   }
 
   @override
@@ -39,9 +49,12 @@ class _CustomerDashboardState extends State<CustomerDashboard> with WidgetsBindi
   static const _ordersTab = 2;
   static const _alertsTab = 3;
 
+  void showCartTab() => _onTabTapped(CustomerDashboard.cartTabIndex);
+
   @override
   void initState() {
     super.initState();
+    CustomerDashboard._activeInstance = this;
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshLiveData(silent: false);
@@ -55,6 +68,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> with WidgetsBindi
 
   @override
   void dispose() {
+    if (CustomerDashboard._activeInstance == this) {
+      CustomerDashboard._activeInstance = null;
+    }
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
     super.dispose();
