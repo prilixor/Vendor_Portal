@@ -255,6 +255,57 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> sendCustomerLoginOtp(String phone) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.sendCustomerLoginOtp(phone);
+      _isLoading = false;
+      notifyListeners();
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      _errorMessage = _extractErrorMessage(e, 'Failed to send OTP.');
+    } catch (_) {
+      _errorMessage = 'Failed to send OTP.';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> loginWithCustomerPhoneOtp(String phone, String code) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.verifyCustomerLoginOtp(phone, code);
+      if (response.statusCode == 200 && response.data is Map) {
+        final data = Map<String, dynamic>.from(response.data as Map);
+        final token = data['token']?.toString();
+        final refreshToken = data['refreshToken']?.toString();
+
+        if (token != null && token.isNotEmpty) {
+          await _storage.write(key: 'jwt_token', value: token);
+          if (refreshToken != null && refreshToken.isNotEmpty) {
+            await _storage.write(key: 'refresh_token', value: refreshToken);
+          }
+          _isAuthenticated = true;
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        }
+      }
+    } on DioException catch (e) {
+      _errorMessage = _extractErrorMessage(e, 'Invalid or expired OTP.');
+    } catch (_) {
+      _errorMessage = 'Invalid or expired OTP.';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
   Future<bool> sendForgotPasswordSmsOtp(String phone, String role) async {
     _isLoading = true;
     _errorMessage = null;

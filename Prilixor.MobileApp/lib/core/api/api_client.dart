@@ -164,6 +164,14 @@ class ApiClient {
     return dio.post('/auth/phone/verify-otp', data: {'phone': phone, 'code': code, 'role': role});
   }
 
+  Future<Response> sendCustomerLoginOtp(String phone) {
+    return dio.post('/auth/login/sms/send-otp', data: {'phone': phone});
+  }
+
+  Future<Response> verifyCustomerLoginOtp(String phone, String code) {
+    return dio.post('/auth/login/sms/verify-otp', data: {'phone': phone, 'code': code});
+  }
+
   Future<Response> sendForgotPasswordSmsOtp(String phone, String role) {
     return dio.post('/auth/forgot-password/sms/send-otp', data: {'phone': phone, 'role': role});
   }

@@ -13,6 +13,9 @@ class PhoneOtpDialog extends StatefulWidget {
   final String? description;
   final String? successMessage;
   final VoidCallback? onVerified;
+  final bool skipAutoSend;
+  final Future<bool> Function(String phone)? onSendOtp;
+  final Future<bool> Function(String phone, String code)? onVerifyOtp;
 
   const PhoneOtpDialog({
     super.key,
@@ -23,6 +26,9 @@ class PhoneOtpDialog extends StatefulWidget {
     this.description,
     this.successMessage,
     this.onVerified,
+    this.skipAutoSend = false,
+    this.onSendOtp,
+    this.onVerifyOtp,
   });
 
   static Future<bool?> show(
@@ -34,12 +40,15 @@ class PhoneOtpDialog extends StatefulWidget {
     String? description,
     String? successMessage,
     VoidCallback? onVerified,
+    bool skipAutoSend = false,
+    Future<bool> Function(String phone)? onSendOtp,
+    Future<bool> Function(String phone, String code)? onVerifyOtp,
   }) {
     return showDialog<bool>(
       context: context,
       barrierDismissible: !required,
-      builder: (ctx) => PopScope(canPop: !required,
-        
+      builder: (ctx) => PopScope(
+        canPop: !required,
         child: PhoneOtpDialog(
           phone: phone,
           role: role,
@@ -48,6 +57,9 @@ class PhoneOtpDialog extends StatefulWidget {
           description: description,
           successMessage: successMessage,
           onVerified: onVerified,
+          skipAutoSend: skipAutoSend,
+          onSendOtp: onSendOtp,
+          onVerifyOtp: onVerifyOtp,
         ),
       ),
     );
@@ -69,7 +81,11 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
   @override
   void initState() {
     super.initState();
-    _sendCode();
+    if (widget.skipAutoSend) {
+      _startCooldown();
+    } else {
+      _sendCode();
+    }
   }
 
   @override
@@ -106,7 +122,9 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
 
     final provider = context.read<AuthProvider>();
     try {
-      final success = await provider.sendPhoneOtp(widget.phone, widget.role);
+      final success = widget.onSendOtp != null
+          ? await widget.onSendOtp!(widget.phone)
+          : await provider.sendPhoneOtp(widget.phone, widget.role);
       if (!mounted) return;
       if (success) {
         _startCooldown();
@@ -143,7 +161,9 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
 
     final provider = context.read<AuthProvider>();
     try {
-      final success = await provider.verifyPhoneOtp(widget.phone, code, widget.role);
+      final success = widget.onVerifyOtp != null
+          ? await widget.onVerifyOtp!(widget.phone, code)
+          : await provider.verifyPhoneOtp(widget.phone, code, widget.role);
       if (!mounted) return;
       if (success) {
         final msg = widget.successMessage ?? 'Phone number verified successfully.';
