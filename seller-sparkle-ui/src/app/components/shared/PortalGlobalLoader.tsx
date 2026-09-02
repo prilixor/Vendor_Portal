@@ -17,14 +17,19 @@ const BACKGROUND_QUERY_HEADS = new Set([
   "admin-customer-chat-messages",
   "chat-messages",
   "customer-notifications",
+  "customer-order",
+  "customer-orders",
+  "customer-order-image-request",
 ]);
 
 function isPortalPageLoad(query: {
   queryKey: readonly unknown[];
-  state: { data: unknown; fetchStatus: string };
+  state: { data: unknown; fetchStatus: string; dataUpdatedAt: number };
 }) {
   const head = query.queryKey[0];
   if (typeof head === "string" && BACKGROUND_QUERY_HEADS.has(head)) return false;
+  // Refetch when cached data exists — background sync, not a page load.
+  if (query.state.data !== undefined && query.state.dataUpdatedAt > 0) return false;
   return query.state.data === undefined && query.state.fetchStatus === "fetching";
 }
 

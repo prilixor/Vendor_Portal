@@ -178,6 +178,8 @@ const CustomerOrders = () => {
     refetchInterval: 30_000,
   });
 
+  const showInitialLoader = isLoading && !data;
+
   const cancelMut = useMutation({
     mutationFn: (id: string) => customerApi.cancelOrder(id),
     onSuccess: () => {
@@ -296,7 +298,7 @@ const CustomerOrders = () => {
         <span className="font-medium">Dispatch failed</span> means no replacement supplier was available.
       </p>
 
-      {isLoading ? (
+      {showInitialLoader ? (
         <PageLoaderSlot />
       ) : (
         <>

@@ -388,7 +388,7 @@ const CustomerOrderDetail = () => {
   // Fetch current selected item details
   const currentItemId = selectedItemId || orderId;
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ["customer-order", currentItemId],
     queryFn: () => customerApi.getOrder(currentItemId!),
     enabled: !!currentItemId,
@@ -520,7 +520,10 @@ const CustomerOrderDetail = () => {
     })),
   });
 
-  const imageRequestLoading = imageRequestQueries.some((q) => q.isLoading || q.isFetching);
+  const imageRequestLoading = imageRequestQueries.some((q) => q.isLoading);
+  const isBackgroundSync =
+    (isFetching && Boolean(data)) ||
+    imageRequestQueries.some((q) => q.isFetching && q.data !== undefined);
   /** True until every item's request status has been fetched at least once (avoid treating "unknown" as eligible). */
   const imageRequestsReady =
     groupItemIds.length === 0 ||
@@ -661,7 +664,7 @@ const CustomerOrderDetail = () => {
     );
   }
 
-  if (isLoading || !data) {
+  if ((isLoading && !data) || !data) {
     return <PageLoaderSlot />;
   }
 
@@ -669,7 +672,14 @@ const CustomerOrderDetail = () => {
 
   return (
     <div className="mx-auto max-w-3xl space-y-2.5 sm:space-y-4">
-      <BackLink to="/customer/orders" label="Back to orders" />
+      <div className="flex items-center justify-between gap-3">
+        <BackLink to="/customer/orders" label="Back to orders" />
+        {isBackgroundSync ? (
+          <span className="text-[11px] font-medium text-muted-foreground" aria-live="polite">
+            Updating…
+          </span>
+        ) : null}
+      </div>
 
       <Card className="overflow-hidden border-border/80 shadow-sm">
         <CardContent className="p-3 sm:p-4">
