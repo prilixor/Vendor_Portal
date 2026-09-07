@@ -86,6 +86,9 @@
 
 .logo-mark {
   flex-shrink: 0;
+  height: 48px;
+  width: auto;
+  max-width: 220px;
 }
 
 .logo-text {

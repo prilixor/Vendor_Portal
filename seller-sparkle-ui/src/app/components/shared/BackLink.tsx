@@ -7,15 +7,24 @@ type BackLinkProps = {
   label: string;
   className?: string;
   onClick?: () => void;
+  compact?: boolean;
 };
 
 /** Modern squircle back navigation button with chevron icon, matching website design tokens and dark/light theme. */
-export function BackLink({ to, label, className, onClick }: BackLinkProps) {
+export function BackLink({ to, label, className, onClick, compact = false }: BackLinkProps) {
   const content = (
     <>
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-card text-foreground shadow-sm transition-all duration-200 group-hover:border-primary/40 group-hover:bg-accent group-hover:shadow-md">
+      <span
+        className={cn(
+          "flex shrink-0 items-center justify-center rounded-xl border border-border/80 bg-card text-foreground shadow-sm transition-all duration-200 group-hover:border-primary/40 group-hover:bg-accent group-hover:shadow-md",
+          compact ? "h-7 w-7 rounded-lg" : "h-9 w-9",
+        )}
+      >
         <ChevronLeft
-          className="h-5 w-5 transition-transform duration-200 group-hover:-translate-x-0.5"
+          className={cn(
+            "transition-transform duration-200 group-hover:-translate-x-0.5",
+            compact ? "h-4 w-4" : "h-5 w-5",
+          )}
           strokeWidth={2.2}
         />
       </span>

@@ -105,12 +105,16 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
         >
           <X className="h-4 w-4" />
         </button>
-        <div className="flex items-center gap-2.5 overflow-hidden">
-          <BrandMark />
-          {!collapsed && (
-            <div className="overflow-hidden">
-              <p className="truncate text-sm font-bold leading-tight">{brandHeading ?? "Vendor Portal"}</p>
-              <p className="truncate text-[11px] text-muted-foreground">{brandLabel}</p>
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden">
+          {collapsed ? (
+            <BrandMark variant="mark" size="sm" />
+          ) : (
+            <div className="min-w-0 overflow-hidden">
+              <BrandMark size="sm" />
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                {brandHeading ?? "Vendor Portal"}
+                {brandLabel ? ` · ${brandLabel}` : ""}
+              </p>
             </div>
           )}
         </div>

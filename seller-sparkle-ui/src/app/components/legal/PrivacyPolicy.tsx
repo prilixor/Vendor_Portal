@@ -23,9 +23,8 @@ const PrivacyPolicy = () => {
         <div className="container mx-auto flex h-14 items-center justify-between px-4 lg:px-8">
           <div className="flex items-center gap-4">
             <BackLink onClick={handleBack} label="Back" />
-            <Link to="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-              <BrandMark size="sm" rounded="lg" className="h-8 w-8" />
-              <span className="text-sm font-bold tracking-tight">BlinksMed</span>
+            <Link to="/" className="flex items-center hover:opacity-80 transition-opacity" aria-label="BlinksMed home">
+              <BrandMark size="sm" />
             </Link>
           </div>
           <div className="flex items-center gap-4">

@@ -97,11 +97,8 @@ const DoctorPublicPage = () => {
 
       <div className="relative mx-auto flex min-h-screen max-w-lg flex-col px-4 py-8 sm:px-6">
         <header className="mb-8 flex items-center gap-3">
-          <BrandMark size="lg" />
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-200/80">BlinksMed</p>
-            <p className="text-sm text-teal-50/70">Doctor reference</p>
-          </div>
+          <BrandMark size="lg" tone="onBrand" />
+          <p className="text-sm text-teal-50/70">Doctor reference</p>
         </header>
 
         <main className="flex flex-1 flex-col justify-center">
