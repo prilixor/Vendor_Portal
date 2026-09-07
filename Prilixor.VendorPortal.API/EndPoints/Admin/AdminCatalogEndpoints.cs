@@ -834,7 +834,7 @@ public sealed class GetRentalDurationIconsEndpoint(IMediator mediator)
 public sealed class CreateRentalDurationIconRequest
 {
     public string Name { get; set; } = string.Empty;
-    public string ValueTier { get; set; } = "good";
+    public string ValueTier { get; set; } = string.Empty;
     public string ImageUrl { get; set; } = string.Empty;
     public string? ThumbnailUrl { get; set; }
     public int SortOrder { get; set; }
@@ -870,7 +870,7 @@ public sealed class UpdateRentalDurationIconRequest
 {
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
-    public string ValueTier { get; set; } = "good";
+    public string ValueTier { get; set; } = string.Empty;
     public string ImageUrl { get; set; } = string.Empty;
     public string? ThumbnailUrl { get; set; }
     public int SortOrder { get; set; }

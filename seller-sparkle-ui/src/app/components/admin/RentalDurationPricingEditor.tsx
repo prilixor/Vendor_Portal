@@ -28,7 +28,6 @@ import type {
 } from "../../services/adminApi";
 import {
   dayPlanTitle,
-  rentalValueTierLabel,
   resolveRentalIconUrl,
 } from "@/app/helpers/rentalDurationIcons";
 import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
@@ -84,7 +83,7 @@ function tierBadgeClass(tier?: string | null): string {
     case "maximum_savings":
       return "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300";
     default:
-      return "";
+      return "border-border bg-muted/40 text-foreground";
   }
 }
 
@@ -593,7 +592,7 @@ export function RentalDurationPricingEditor({
                                               tierBadgeClass(icon.valueTier),
                                             )}
                                           >
-                                            {rentalValueTierLabel(icon.valueTier)}
+                                            {icon.name}
                                           </Badge>
                                         </div>
                                       </SelectItem>

@@ -41,7 +41,7 @@ const AdminRentalSetup = () => {
     <div className="space-y-6">
       <PageHeader
         title="Rental Setup"
-        description="Manage billing-cycle durations and value-tier icons used on product rental pricing charts."
+        description="Manage billing-cycle durations and rental icons used on product pricing charts. Add any icon name you need."
       />
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>

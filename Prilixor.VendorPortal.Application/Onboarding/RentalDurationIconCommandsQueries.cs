@@ -51,7 +51,7 @@ public sealed class CreateRentalDurationIconCommandValidator : AbstractValidator
     public CreateRentalDurationIconCommandValidator()
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.ValueTier).NotEmpty().MaximumLength(32);
+        RuleFor(x => x.ValueTier).MaximumLength(RentalDurationValueTiers.MaxLength);
         RuleFor(x => x.ImageUrl).NotEmpty().MaximumLength(2000);
         RuleFor(x => x.ThumbnailUrl).MaximumLength(2000).When(x => !string.IsNullOrWhiteSpace(x.ThumbnailUrl));
         RuleFor(x => x.SortOrder).GreaterThanOrEqualTo(0);
@@ -71,7 +71,7 @@ internal sealed class CreateRentalDurationIconCommandHandler(
         {
             Id = Guid.CreateVersion7(),
             Name = request.Name.Trim(),
-            ValueTier = RentalDurationValueTiers.Normalize(request.ValueTier),
+            ValueTier = RentalDurationValueTiers.Normalize(request.ValueTier, request.Name),
             ImageUrl = request.ImageUrl.Trim(),
             ThumbnailUrl = string.IsNullOrWhiteSpace(request.ThumbnailUrl) ? null : request.ThumbnailUrl.Trim(),
             SortOrder = request.SortOrder,
@@ -99,7 +99,7 @@ public sealed class UpdateRentalDurationIconCommandValidator : AbstractValidator
     {
         RuleFor(x => x.Id).NotEmpty();
         RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.ValueTier).NotEmpty().MaximumLength(32);
+        RuleFor(x => x.ValueTier).MaximumLength(RentalDurationValueTiers.MaxLength);
         RuleFor(x => x.ImageUrl).NotEmpty().MaximumLength(2000);
         RuleFor(x => x.ThumbnailUrl).MaximumLength(2000).When(x => !string.IsNullOrWhiteSpace(x.ThumbnailUrl));
         RuleFor(x => x.SortOrder).GreaterThanOrEqualTo(0);
@@ -133,7 +133,7 @@ internal sealed class UpdateRentalDurationIconCommandHandler(
         }
 
         entity.Name = request.Name.Trim();
-        entity.ValueTier = RentalDurationValueTiers.Normalize(request.ValueTier);
+        entity.ValueTier = RentalDurationValueTiers.Normalize(request.ValueTier, request.Name);
         entity.ImageUrl = PreferStoredReference(request.ImageUrl, entity.ImageUrl);
         entity.ThumbnailUrl = string.IsNullOrWhiteSpace(request.ThumbnailUrl)
             ? null
@@ -142,6 +142,8 @@ internal sealed class UpdateRentalDurationIconCommandHandler(
         entity.IsActive = request.IsActive;
 
         await repository.UpdateRentalDurationIconAsync(entity, cancellationToken);
+        if (!request.IsActive)
+            await repository.ClearRentalDurationIconAssignmentsAsync(entity.Id, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
         return Result.Success(GetRentalDurationIconsQueryHandler.ToDto(entity, fileUrlResolver));
     }
@@ -209,6 +211,7 @@ internal sealed class DeleteRentalDurationIconCommandHandler(IVendorOnboardingRe
         }
 
         await repository.DeleteRentalDurationIconAsync(id, cancellationToken);
+        await repository.ClearRentalDurationIconAssignmentsAsync(id, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }

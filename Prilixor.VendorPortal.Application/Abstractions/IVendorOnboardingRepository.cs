@@ -76,6 +76,7 @@ public interface IVendorOnboardingRepository
     Task AddRentalDurationIconAsync(RentalDurationIcon entity, CancellationToken cancellationToken);
     Task UpdateRentalDurationIconAsync(RentalDurationIcon entity, CancellationToken cancellationToken);
     Task DeleteRentalDurationIconAsync(Guid id, CancellationToken cancellationToken);
+    Task ClearRentalDurationIconAssignmentsAsync(Guid iconId, CancellationToken cancellationToken);
 
     Task<VendorProductListing?> GetVendorProductListingByIdAsync(Guid vendorId, Guid listingId, CancellationToken cancellationToken);
     Task<VendorProductListing?> GetVendorProductListingByVendorProductAsync(Guid vendorId, Guid productId, CancellationToken cancellationToken);

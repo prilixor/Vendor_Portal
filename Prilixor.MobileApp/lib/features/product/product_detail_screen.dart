@@ -266,17 +266,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
   List<({String tier, String label, String url})> _tierLegend(List<RentalPricingPlanModel> plans) {
-    const order = ['good', 'better', 'best_value', 'maximum_savings'];
-    final byTier = <String, ({String label, String url})>{};
+    final byIcon = <String, ({String label, String url})>{};
     for (final plan in plans) {
-      final tier = (plan.valueTier ?? '').toLowerCase().replaceAll('-', '_');
       final url = _planIconUrl(plan);
-      if (tier.isEmpty || url == null || url.isEmpty || byTier.containsKey(tier)) continue;
-      byTier[tier] = (label: rentalValueTierLabel(tier), url: url);
+      final key = plan.rentalDurationIconId ?? plan.iconName ?? plan.valueTier ?? '';
+      if (key.isEmpty || url == null || url.isEmpty || byIcon.containsKey(key)) continue;
+      byIcon[key] = (label: rentalIconLabel(plan), url: url);
     }
     return [
-      for (final t in order)
-        if (byTier[t] != null) (tier: t, label: byTier[t]!.label, url: byTier[t]!.url),
+      for (final entry in byIcon.entries)
+        (tier: entry.key, label: entry.value.label, url: entry.value.url),
     ];
   }
 

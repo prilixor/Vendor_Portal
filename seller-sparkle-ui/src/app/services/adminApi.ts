@@ -380,7 +380,7 @@ export interface ProductVariantDto {
 
 export type RentalDiscountType = "none" | "fixed" | "percentage";
 
-export type RentalValueTier = "good" | "better" | "best_value" | "maximum_savings";
+export type RentalValueTier = string;
 
 export interface ProductRentalPricingPlanDto {
   id: string;

@@ -14,8 +14,7 @@ import {
 import {
   dayPlanTitle,
   formatBillingCycles,
-  rentalValueTierLabel,
-  resolveRentalIconUrl,
+  rentalIconLabel,
   resolveRentalIconUrlFromPlan,
 } from "@/app/helpers/rentalDurationIcons";
 
@@ -96,7 +95,7 @@ function PlanOptionRow({
   const cyclesLabel = formatBillingCycles(planBillingCycles(plan));
   const iconUrl = resolveRentalIconUrlFromPlan(plan);
   const title = dayPlanTitle(plan.durationDays, plan.durationLabel);
-  const tierLabel = rentalValueTierLabel(plan.valueTier);
+  const tierLabel = rentalIconLabel(plan);
   const perDay = planPerDay(plan);
   const meta = [
     `${plan.durationDays} days`,
@@ -268,22 +267,19 @@ export function RentalPeriodPlanDropdown({
   const selected = plans.find((p) => p.id === selectedPlanId) ?? plans[0] ?? null;
 
   const legend = useMemo(() => {
-    const order = ["good", "better", "best_value", "maximum_savings"];
-    const byTier = new Map<string, { url: string; label: string }>();
+    const byIcon = new Map<string, { url: string; label: string }>();
 
     for (const plan of plans) {
-      const tier = (plan.valueTier || "").toLowerCase().replace(/-/g, "_");
       const url = resolveRentalIconUrlFromPlan(plan);
-      if (!tier || !url || byTier.has(tier)) continue;
-      byTier.set(tier, {
-        label: rentalValueTierLabel(tier),
+      const key = plan.rentalDurationIconId || plan.iconName || plan.valueTier || "";
+      if (!key || !url || byIcon.has(key)) continue;
+      byIcon.set(key, {
+        label: rentalIconLabel(plan),
         url,
       });
     }
 
-    return order
-      .filter((t) => byTier.has(t))
-      .map((tier) => ({ tier, ...byTier.get(tier)! }));
+    return [...byIcon.entries()].map(([tier, item]) => ({ tier, ...item }));
   }, [plans]);
 
   const bestSavingsPlanId = useMemo(() => {
@@ -306,7 +302,7 @@ export function RentalPeriodPlanDropdown({
   const selectedCycles = formatBillingCycles(planBillingCycles(selected));
   const selectedIconUrl = resolveRentalIconUrlFromPlan(selected);
   const selectedTitle = dayPlanTitle(selected.durationDays, selected.durationLabel);
-  const selectedTierLabel = rentalValueTierLabel(selected.valueTier);
+  const selectedTierLabel = rentalIconLabel(selected);
   const selectedPerDay = planPerDay(selected);
   const selectedIsBestDeal = selected.id === bestSavingsPlanId && selectedPctOff > 0;
 
