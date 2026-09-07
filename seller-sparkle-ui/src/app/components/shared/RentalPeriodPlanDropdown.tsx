@@ -159,8 +159,16 @@ function PlanOptionRow({
         ) : null}
 
         {/* Price under text on very narrow rows so it never paints over meta */}
-        <div className="mt-1.5 flex items-center justify-between gap-2 sm:hidden">
-          <div>
+        <div className="mt-1.5 flex items-center justify-end gap-2 sm:hidden">
+          {iconUrl ? (
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border"
+              title={tierLabel}
+            >
+              <img src={iconUrl} alt={tierLabel} className="h-7 w-7 object-contain drop-shadow-sm" onError={retryOriginalOnImageError} />
+            </div>
+          ) : null}
+          <div className="text-right">
             <p
               className={cn(
                 "text-[15px] font-extrabold tabular-nums",
@@ -175,18 +183,18 @@ function PlanOptionRow({
               </StruckPrice>
             ) : null}
           </div>
-          {iconUrl ? (
-            <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border"
-              title={tierLabel}
-            >
-              <img src={iconUrl} alt={tierLabel} className="h-7 w-7 object-contain drop-shadow-sm" onError={retryOriginalOnImageError} />
-            </div>
-          ) : null}
         </div>
       </div>
 
       <div className="hidden shrink-0 items-start gap-2 sm:flex">
+        {iconUrl ? (
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border"
+            title={tierLabel}
+          >
+            <img src={iconUrl} alt={tierLabel} className="h-8 w-8 object-contain drop-shadow-sm" onError={retryOriginalOnImageError} />
+          </div>
+        ) : null}
         <div className="text-right">
           <p
             className={cn(
@@ -202,16 +210,6 @@ function PlanOptionRow({
             </StruckPrice>
           ) : null}
         </div>
-        {iconUrl ? (
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border"
-            title={tierLabel}
-          >
-            <img src={iconUrl} alt={tierLabel} className="h-8 w-8 object-contain drop-shadow-sm" onError={retryOriginalOnImageError} />
-          </div>
-        ) : (
-          <div className="h-10 w-10 shrink-0" aria-hidden />
-        )}
       </div>
     </button>
   );
@@ -371,8 +369,21 @@ export function RentalPeriodPlanDropdown({
           )}
         </div>
 
-        <div className="flex min-w-0 shrink-0 items-center justify-between gap-2 sm:justify-end">
-          <div className="text-left sm:text-right">
+        <div className="flex min-w-0 shrink-0 items-center justify-end gap-2">
+          {selectedIconUrl ? (
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border sm:h-12 sm:w-12"
+              title={selectedTierLabel}
+            >
+              <img
+                src={selectedIconUrl}
+                alt={selectedTierLabel}
+                className="h-7 w-7 object-contain drop-shadow-sm sm:h-9 sm:w-9"
+                onError={retryOriginalOnImageError}
+              />
+            </div>
+          ) : null}
+          <div className="text-right">
             <p
               className={cn(
                 "text-[18px] font-extrabold leading-none tabular-nums",
@@ -389,27 +400,12 @@ export function RentalPeriodPlanDropdown({
               </StruckPrice>
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {selectedIconUrl ? (
-              <div
-                className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border sm:h-12 sm:w-12"
-                title={selectedTierLabel}
-              >
-                <img
-                  src={selectedIconUrl}
-                  alt={selectedTierLabel}
-                  className="h-7 w-7 object-contain drop-shadow-sm sm:h-9 sm:w-9"
-                  onError={retryOriginalOnImageError}
-                />
-              </div>
-            ) : null}
-            <ChevronDown
-              className={cn(
-                "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
-                open && "rotate-180 text-violet-500",
-              )}
-            />
-          </div>
+          <ChevronDown
+            className={cn(
+              "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
+              open && "rotate-180 text-violet-500",
+            )}
+          />
         </div>
       </div>
     </button>

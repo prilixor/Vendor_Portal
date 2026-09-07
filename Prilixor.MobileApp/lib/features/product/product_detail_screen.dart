@@ -1013,6 +1013,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                       mainAxisSize: MainAxisSize.min,
                                                       crossAxisAlignment: CrossAxisAlignment.start,
                                                       children: [
+                                                        if (_planIconAvatar(selectedPlan, size: 48)
+                                                            case final icon?) ...[
+                                                          icon,
+                                                          const SizedBox(width: 8),
+                                                        ],
                                                         Column(
                                                           crossAxisAlignment: CrossAxisAlignment.end,
                                                           children: [
@@ -1039,11 +1044,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                             ],
                                                           ],
                                                         ),
-                                                        if (_planIconAvatar(selectedPlan, size: 48)
-                                                            case final icon?) ...[
-                                                          const SizedBox(width: 8),
-                                                          icon,
-                                                        ],
                                                         const SizedBox(width: 2),
                                                         Padding(
                                                           padding: const EdgeInsets.only(top: 2),
@@ -1880,37 +1880,39 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                           ),
                                         ),
                                       ],
-                                      // Web mobile row: price left, catalog icon right.
+                                      // Web row: catalog icon, then amount on the right.
                                       const SizedBox(height: 8),
                                       Row(
+                                        mainAxisAlignment: MainAxisAlignment.end,
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  formatPlanInr(plan.finalRentalPrice),
-                                                  style: TextStyle(
-                                                    color: priceColor,
-                                                    fontWeight: FontWeight.w800,
-                                                    fontSize: 15,
+                                          if (_planIconAvatar(plan, size: 36) case final icon?) ...[
+                                            icon,
+                                            const SizedBox(width: 8),
+                                          ],
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                formatPlanInr(plan.finalRentalPrice),
+                                                style: TextStyle(
+                                                  color: priceColor,
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 15,
+                                                ),
+                                              ),
+                                              if (savings > 0) ...[
+                                                const SizedBox(height: 2),
+                                                StruckPrice(
+                                                  formatPlanInr(plan.normalPrice),
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w600,
                                                   ),
                                                 ),
-                                                if (savings > 0) ...[
-                                                  const SizedBox(height: 2),
-                                                  StruckPrice(
-                                                    formatPlanInr(plan.normalPrice),
-                                                    style: const TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight: FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ],
                                               ],
-                                            ),
+                                            ],
                                           ),
-                                          if (_planIconAvatar(plan, size: 36) case final icon?) icon,
                                         ],
                                       ),
                                   ],
