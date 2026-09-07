@@ -189,7 +189,7 @@ const CustomerSupport = () => {
                 <a
                   href={`mailto:${businessEmail}`}
                   onClick={(e) => handleEmailClick(businessEmail, e)}
-                  className="font-semibold text-primary hover:underline cursor-pointer"
+                  className="cursor-pointer font-semibold text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
                 >
                   {businessEmail}
                 </a>
@@ -199,7 +199,7 @@ const CustomerSupport = () => {
                 <a
                   href={`mailto:${supportEmail}`}
                   onClick={(e) => handleEmailClick(supportEmail, e)}
-                  className="font-semibold text-primary hover:underline cursor-pointer"
+                  className="cursor-pointer font-semibold text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
                 >
                   {supportEmail}
                 </a>

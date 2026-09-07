@@ -112,7 +112,7 @@ export const HeroSection = ({ data }: HeroSectionProps) => {
                 <rect x="40" y="60" width="220" height="340" rx="6" fill="#f7f2ea" opacity="0.6" />
                 <g transform="translate(120,330)">
                   <path d="M20 40 Q10 -20 70 -30 Q130 -20 120 40 L120 90 L20 90 Z" fill="#efe6d3" stroke="#cbb894" strokeWidth="3" />
-                  <rect x="20" y="90" width="480" height="70" rx="10" fill="#1a6b56" />
+                  <rect x="20" y="90" width="480" height="70" rx="10" fill="#052a72" />
                   <rect x="30" y="150" width="470" height="20" rx="6" fill="#d8c6a4" />
                 </g>
               </svg>

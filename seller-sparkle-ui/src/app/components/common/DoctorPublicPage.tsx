@@ -171,7 +171,7 @@ const DoctorPublicPage = () => {
                           href={mapsUrl(h)}
                           target="_blank"
                           rel="noreferrer"
-                          className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:underline"
+                          className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-teal-700 no-underline transition-colors hover:text-[#052A72] hover:no-underline"
                         >
                           Open in maps
                           <ExternalLink className="h-3 w-3" />

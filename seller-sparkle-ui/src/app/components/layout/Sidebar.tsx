@@ -235,22 +235,22 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
             )}
           </p>
           <div className="mt-2.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-            <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">Terms</Link>
+            <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary hover:no-underline">Terms</Link>
             <span>•</span>
-            <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">Privacy</Link>
+            <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary hover:no-underline">Privacy</Link>
             <span>•</span>
             {variant === "vendor" ? (
               <button
                 type="button"
                 onClick={() => openSupportPanel()}
-                className="hover:text-primary hover:underline transition-colors cursor-pointer"
+                className="cursor-pointer transition-colors hover:text-primary hover:no-underline"
               >
                 Contact
               </button>
             ) : variant === "customer" ? (
-              <Link to="/customer/support" className="hover:text-primary hover:underline transition-colors">Contact</Link>
+              <Link to="/customer/support" className="transition-colors hover:text-primary hover:no-underline">Contact</Link>
             ) : (
-              <Link to="/admin/support" className="hover:text-primary hover:underline transition-colors">Contact</Link>
+              <Link to="/admin/support" className="transition-colors hover:text-primary hover:no-underline">Contact</Link>
             )}
           </div>
         </div>

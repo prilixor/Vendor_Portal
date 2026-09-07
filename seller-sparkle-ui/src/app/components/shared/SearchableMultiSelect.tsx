@@ -220,7 +220,7 @@ export const SearchableMultiSelect = ({
                 <span>{selectedIds.length} selected</span>
                 <button
                   type="button"
-                  className="font-medium text-foreground hover:underline"
+                  className="font-medium text-foreground no-underline transition-colors hover:text-primary hover:no-underline"
                   onClick={() => setOpen(false)}
                 >
                   Done

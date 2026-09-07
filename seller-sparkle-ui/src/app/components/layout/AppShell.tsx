@@ -186,7 +186,7 @@ function VendorShellContent({
 
                   type="button"
 
-                  className="font-semibold text-primary underline"
+                  className="font-semibold text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
 
                   onClick={() => {
                     clearImpersonationSession();
@@ -424,7 +424,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
                     type="button"
 
-                    className="font-semibold text-primary underline"
+                    className="font-semibold text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
 
                     onClick={() => {
                       clearImpersonationSession();

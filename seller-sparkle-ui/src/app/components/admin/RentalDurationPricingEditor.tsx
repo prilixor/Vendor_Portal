@@ -470,7 +470,7 @@ export function RentalDurationPricingEditor({
                 Manage{" "}
                 <Link
                   to="/admin/rental-setup"
-                  className="font-medium text-primary underline-offset-2 hover:underline"
+                  className="font-medium text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
                   onClick={() => setChartOpen(false)}
                 >
                   durations
@@ -478,7 +478,7 @@ export function RentalDurationPricingEditor({
                 {" · "}
                 <Link
                   to="/admin/rental-setup?tab=icons"
-                  className="font-medium text-primary underline-offset-2 hover:underline"
+                  className="font-medium text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
                   onClick={() => setChartOpen(false)}
                 >
                   icons

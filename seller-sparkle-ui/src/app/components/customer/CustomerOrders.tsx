@@ -364,22 +364,22 @@ const CustomerOrders = () => {
                             <div className="min-w-0 flex-1">
                               <Link
                                 to={`/customer/orders/${encodeURIComponent(o.id)}`}
-                                className="block truncate text-sm font-semibold text-foreground hover:underline"
+                                className="block truncate text-sm font-semibold text-foreground no-underline transition-colors hover:text-[#052A72] hover:no-underline dark:hover:text-[#8BB4FF]"
                               >
                                 {o.listingTitle}
                               </Link>
                               {o.orderType?.toLowerCase() === "buy" ? (
-                                <p className="mt-1 truncate text-xs text-muted-foreground">
-                                  {formatOrderDate(o.startDate)}
-                                  <span className="text-muted-foreground/40"> · </span>
-                                  Qty {o.quantity}
+                                <p className="mt-1 truncate font-sans text-xs font-semibold">
+                                  <span className="text-[#052A72] dark:text-[#8BB4FF]">{formatOrderDate(o.startDate)}</span>
+                                  <span className="text-[#3FA40B]/50 dark:text-[#6BC73A]/50"> · </span>
+                                  <span className="text-[#3FA40B] dark:text-[#6BC73A]">Qty {o.quantity}</span>
                                 </p>
                               ) : (
-                                <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                                  <p className="truncate">
+                                <div className="mt-1 space-y-0.5 font-sans text-xs font-semibold">
+                                  <p className="truncate text-[#052A72] dark:text-[#8BB4FF]">
                                     {formatDateRange(o.startDate, o.endDate)}
                                   </p>
-                                  <p className="truncate">
+                                  <p className="truncate text-[#3FA40B] dark:text-[#6BC73A]">
                                     {durationText ? `${durationText} · ` : null}
                                     Qty {o.quantity}
                                   </p>

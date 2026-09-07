@@ -198,7 +198,7 @@ const ChemQtyBreakdown = ({ sizes }: { sizes: ChemStockSize[] }) => {
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="mt-1 text-xs font-medium text-primary hover:underline"
+          className="mt-1 text-xs font-medium text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
         >
           {expanded ? "Show less" : `Show all ${sizes.length} sizes`}
         </button>
@@ -239,7 +239,7 @@ const ChemSizeBreakdown = ({ sizes }: { sizes: any[] }) => {
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="mt-1 text-xs font-medium text-primary hover:underline"
+          className="mt-1 text-xs font-medium text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
         >
           {expanded ? "Show less" : `Show all ${sizes.length} sizes`}
         </button>
