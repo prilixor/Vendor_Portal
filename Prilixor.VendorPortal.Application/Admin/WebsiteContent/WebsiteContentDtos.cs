@@ -27,6 +27,11 @@ public class HomeContentDto
     public List<HomeFeatureDto> Features { get; set; } = [];
 }
 
+public class HomeHeroImageUploadDto
+{
+    public string FileUrl { get; set; } = string.Empty;
+}
+
 public class AudienceCategoryDto
 {
     public Guid Id { get; set; }

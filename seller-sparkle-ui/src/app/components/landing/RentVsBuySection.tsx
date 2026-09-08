@@ -37,7 +37,7 @@ export const RentVsBuySection = ({ data }: RentVsBuySectionProps) => {
         <h2 className="display">
           {title} <span className="accent">{accentText}</span>
         </h2>
-        <p className="sub" style={{ maxWidth: "640px" }}>
+        <p className="sub">
           {subtitle}
         </p>
 

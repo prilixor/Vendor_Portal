@@ -31,10 +31,28 @@
 }
 
 /* Wide desktops: fill side gutters and give sections breathing room.
-   14" laptops (~1366–1536 CSS px) keep the compact 1280 rail above. */
+   14" laptops (~1366 CSS px) stay near 1280; 15–16" and up use more of the screen. */
+@media (min-width: 1366px) {
+  :root {
+    --page-max: min(1400px, calc(100vw - 48px));
+    --page-gutter: 28px;
+  }
+}
+
+@media (min-width: 1536px) {
+  :root {
+    --page-max: min(1480px, calc(100vw - 56px));
+    --page-gutter: 32px;
+    --section-y: 28px;
+    --section-stack: 20px;
+    --block-gap: 18px;
+    --grid-gap: 14px;
+  }
+}
+
 @media (min-width: 1600px) {
   :root {
-    --page-max: 1480px;
+    --page-max: min(1560px, calc(100vw - 64px));
     --page-gutter: 32px;
     --section-y: 36px;
     --section-stack: 24px;
@@ -63,7 +81,7 @@
 
 @media (min-width: 1920px) {
   :root {
-    --page-max: 1680px;
+    --page-max: min(1760px, calc(100vw - 72px));
     --page-gutter: 40px;
     --section-y: 52px;
     --section-stack: 32px;
@@ -81,7 +99,7 @@
 
 @media (min-width: 2400px) {
   :root {
-    --page-max: 1880px;
+    --page-max: min(1960px, calc(100vw - 80px));
     --page-gutter: 48px;
     --section-y: 64px;
     --section-stack: 40px;
@@ -107,7 +125,7 @@
 .bm-landing-body h3,
 .bm-landing-body h4,
 .bm-landing-body p {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-wrap: break-word;
 }
 
@@ -461,8 +479,12 @@ h2.display span,
   font-size: 15.5px;
   line-height: 1.55;
   color: var(--gray-600);
-  max-width: var(--copy-max);
+  max-width: none;
   text-align: left;
+}
+
+.hero-copy .sub {
+  max-width: none;
 }
 
 .page-banner .sub,
@@ -553,7 +575,7 @@ h1.display-head .accent {
   align-items: flex-start;
   gap: var(--grid-gap);
   margin-top: var(--block-gap);
-  padding: 0 56px;
+  padding: 0;
   flex-wrap: nowrap;
 }
 
@@ -562,11 +584,11 @@ h1.display-head .accent {
 }
 
 @media (max-width: 980px) {
-  .feature-row { padding: 0 28px; }
+  .feature-row { padding: 0; }
 }
 
 @media (max-width: 560px) {
-  .feature-row { flex-wrap: wrap; justify-content: flex-start; padding: 0 24px; }
+  .feature-row { flex-wrap: wrap; justify-content: flex-start; padding: 0; }
 }
 
 .feature {
@@ -674,7 +696,7 @@ h1.display-head .accent {
   margin-top: 8px;
   font-size: 15.5px;
   color: var(--gray-600);
-  max-width: var(--copy-max);
+  max-width: none;
   line-height: 1.55;
 }
 
@@ -691,7 +713,7 @@ h1.display-head .accent {
   font-family: inherit;
   font-size: clamp(22px, 2.3vw, 28px);
   font-weight: 500;
-  max-width: 520px;
+  max-width: none;
   line-height: 1.28;
   letter-spacing: -0.2px;
   color: var(--ink);
@@ -701,7 +723,7 @@ h1.display-head .accent {
 .services-head p {
   font-size: 15px;
   color: var(--gray-600);
-  max-width: 360px;
+  max-width: none;
   line-height: 1.6;
 }
 
@@ -1034,6 +1056,11 @@ h1.display-head .accent {
 
 .contact-hero-copy {
   min-width: 0;
+  flex: 1;
+}
+
+.contact-hero-copy .sub {
+  max-width: none;
 }
 
 .contact-display {
@@ -1483,7 +1510,7 @@ h1.display-head .accent {
 }
 
 .faq-search-wrap {
-  max-width: 520px;
+  max-width: none;
   margin: 10px 0 0;
 }
 

@@ -80,6 +80,7 @@ export function HomeContentManager() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingHero, setUploadingHero] = useState(false);
 
   useEffect(() => {
     const loadContent = async () => {
@@ -95,7 +96,9 @@ export function HomeContentManager() {
           if (data.home.secondaryCtaLabel) setSecondaryCtaLabel(data.home.secondaryCtaLabel);
           if (data.home.secondaryCtaLink) setSecondaryCtaLink(data.home.secondaryCtaLink);
           if (data.home.trustLabel) setTrustLabel(data.home.trustLabel);
-          if (data.home.heroImageUrl) setHeroImageUrl(data.home.heroImageUrl);
+          if (data.home.heroImageUrl && !data.home.heroImageUrl.startsWith("data:")) {
+            setHeroImageUrl(data.home.heroImageUrl);
+          }
           if (data.home.features && data.home.features.length > 0) setFeatures(data.home.features);
         }
       } catch (err) {
@@ -119,7 +122,7 @@ export function HomeContentManager() {
         secondaryCtaLabel,
         secondaryCtaLink,
         trustLabel,
-        heroImageUrl: heroImageUrl || undefined,
+        heroImageUrl: heroImageUrl && !heroImageUrl.startsWith("data:") ? heroImageUrl : undefined,
         features,
       });
       await queryClient.invalidateQueries({ queryKey: ["publicWebsiteContent"] });
@@ -131,18 +134,25 @@ export function HomeContentManager() {
     }
   };
 
-  const handleHeroImageUpload = (file: File) => {
+  const handleHeroImageUpload = async (file: File) => {
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Hero image file size must be less than 5MB.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      setHeroImageUrl(result);
-      toast.success("Hero image uploaded.");
-    };
-    reader.readAsDataURL(file);
+    setUploadingHero(true);
+    try {
+      const uploaded = await websiteContentApi.uploadHomeHeroImage(file);
+      if (!uploaded?.fileUrl) {
+        toast.error("Hero image upload did not return a file URL.");
+        return;
+      }
+      setHeroImageUrl(uploaded.fileUrl);
+      toast.success("Hero image uploaded. Save Home Content to publish it.");
+    } catch {
+      toast.error("Failed to upload hero image.");
+    } finally {
+      setUploadingHero(false);
+    }
   };
 
   const handleReset = () => {
@@ -295,7 +305,7 @@ export function HomeContentManager() {
               <ImageIcon className="h-4 w-4 text-primary" /> Hero Banner Right Image / Graphic
             </Label>
             <p className="text-xs text-muted-foreground">
-              Upload a custom hero photo/graphic to replace the default vector illustration on the right side of the hero section.
+              Upload a custom hero photo to replace the default illustration. The image is stored as a compressed file; only its URL is saved with homepage content.
             </p>
 
             {heroImageUrl ? (
@@ -320,17 +330,21 @@ export function HomeContentManager() {
                 </div>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center rounded-lg border border-dashed p-6 max-w-md cursor-pointer hover:bg-muted/30 transition-colors">
+              <label className={`flex flex-col items-center justify-center rounded-lg border border-dashed p-6 max-w-md transition-colors ${uploadingHero ? "cursor-wait opacity-70" : "cursor-pointer hover:bg-muted/30"}`}>
                 <Upload className="h-6 w-6 text-muted-foreground mb-2" />
-                <span className="text-sm font-medium">Click to upload custom hero banner image</span>
-                <span className="text-xs text-muted-foreground">PNG, JPG, SVG, WebP (max 5MB)</span>
+                <span className="text-sm font-medium">
+                  {uploadingHero ? "Uploading hero image…" : "Click to upload custom hero banner image"}
+                </span>
+                <span className="text-xs text-muted-foreground">PNG, JPG, SVG, WebP, or GIF (max 5MB). Large photos are compressed; GIFs stay animated.</span>
                 <input
                   type="file"
-                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
                   className="hidden"
+                  disabled={uploadingHero}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) handleHeroImageUpload(file);
+                    e.target.value = "";
+                    if (file) void handleHeroImageUpload(file);
                   }}
                 />
               </label>
@@ -458,7 +472,7 @@ export function HomeContentManager() {
         <Button variant="outline" onClick={handleReset}>
           <RotateCcw className="mr-2 h-4 w-4" /> Reset Defaults
         </Button>
-        <Button onClick={handleSave} disabled={saving}>
+        <Button onClick={handleSave} disabled={saving || uploadingHero}>
           <Save className="mr-2 h-4 w-4" />
           {saving ? "Saving Changes..." : "Save Home Content"}
         </Button>

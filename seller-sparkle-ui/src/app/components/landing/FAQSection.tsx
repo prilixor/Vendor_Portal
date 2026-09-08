@@ -222,7 +222,7 @@ export const FAQSection = ({ faqs, categoriesData, contactData }: FAQSectionProp
         <h2 className="display">
           Answers when you need <span className="accent">clarity.</span>
         </h2>
-        <p className="sub" style={{ maxWidth: "720px" }}>
+        <p className="sub">
           Rentals, purchases, chemicals, delivery, and support: everything in one place.
         </p>
 

@@ -197,6 +197,12 @@ export const websiteContentApi = {
     return await apiClient.put<HomeContentDto>('/admin/website-content/home', payload);
   },
 
+  uploadHomeHeroImage: async (file: File): Promise<{ fileUrl: string }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return await apiClient.postForm<{ fileUrl: string }>("/admin/website-content/home/hero-image", formData);
+  },
+
   updateAboutContent: async (data: Partial<AboutContentDto>): Promise<AboutContentDto> => {
     return await apiClient.put<AboutContentDto>('/admin/website-content/about', data);
   },

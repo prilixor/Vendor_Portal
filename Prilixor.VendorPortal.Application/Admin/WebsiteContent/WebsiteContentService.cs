@@ -208,7 +208,7 @@ public class WebsiteContentQueryHandler(IWebsiteContentRepository repository)
             SecondaryCtaLabel = request.SecondaryCtaLabel,
             SecondaryCtaLink = request.SecondaryCtaLink,
             TrustLabel = request.TrustLabel,
-            HeroImageUrl = request.HeroImageUrl
+            HeroImageUrl = StripEmbeddedHeroImage(request.HeroImageUrl)
         };
 
         var features = request.Features?.Select(f => new WebsiteHomeFeature
@@ -490,6 +490,13 @@ public class WebsiteContentQueryHandler(IWebsiteContentRepository repository)
         return Result<WebsiteSettingsDto>.Success(updated != null ? MapSettings(updated) : MapSettings(settings));
     }
 
+    private static string? StripEmbeddedHeroImage(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return null;
+        return url.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ? null : url;
+    }
+
     private static HomeContentDto MapHome(WebsiteHomeContent h) => new()
     {
         Id = h.Id,
@@ -501,7 +508,7 @@ public class WebsiteContentQueryHandler(IWebsiteContentRepository repository)
         SecondaryCtaLabel = h.SecondaryCtaLabel,
         SecondaryCtaLink = h.SecondaryCtaLink,
         TrustLabel = h.TrustLabel,
-        HeroImageUrl = h.HeroImageUrl,
+        HeroImageUrl = StripEmbeddedHeroImage(h.HeroImageUrl),
         Features = h.Features?.Where(f => !f.IsDeleted).Select(f => new HomeFeatureDto
         {
             Id = f.Id,
