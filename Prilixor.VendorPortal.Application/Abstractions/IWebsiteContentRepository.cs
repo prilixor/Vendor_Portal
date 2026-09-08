@@ -5,7 +5,11 @@ namespace Prilixor.VendorPortal.Application.Abstractions;
 public interface IWebsiteContentRepository
 {
     Task<WebsiteHomeContent?> GetHomeContentAsync(CancellationToken ct = default);
-    Task UpdateHomeContentAsync(WebsiteHomeContent home, List<WebsiteHomeFeature> features, CancellationToken ct = default);
+    Task UpdateHomeContentAsync(
+        WebsiteHomeContent home,
+        List<WebsiteHomeFeature> features,
+        List<WebsiteHomeHeroSlide>? heroSlides = null,
+        CancellationToken ct = default);
 
     Task<WebsiteAboutContent?> GetAboutContentAsync(CancellationToken ct = default);
     Task UpdateAboutContentAsync(WebsiteAboutContent about, CancellationToken ct = default);

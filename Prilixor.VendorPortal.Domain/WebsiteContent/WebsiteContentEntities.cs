@@ -15,6 +15,7 @@ public class WebsiteHomeContent : AuditableEntity<Guid>, ISoftDelete
     public string? HeroImageUrl { get; set; }
 
     public ICollection<WebsiteHomeFeature> Features { get; set; } = [];
+    public ICollection<WebsiteHomeHeroSlide> HeroSlides { get; set; } = [];
 
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
@@ -32,6 +33,20 @@ public class WebsiteHomeFeature : AuditableEntity<Guid>, ISoftDelete
     public string? CustomIconUrl { get; set; }
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
+
+    public bool IsDeleted { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
+    public Guid? DeletedBy { get; set; }
+}
+
+public class WebsiteHomeHeroSlide : AuditableEntity<Guid>, ISoftDelete
+{
+    public Guid HomeContentId { get; set; }
+    public WebsiteHomeContent? HomeContent { get; set; }
+
+    public string Label { get; set; } = string.Empty;
+    public string ImageUrl { get; set; } = string.Empty;
+    public int SortOrder { get; set; }
 
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

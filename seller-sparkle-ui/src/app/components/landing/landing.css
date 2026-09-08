@@ -401,22 +401,98 @@
   min-height: 0;
   overflow: hidden;
   align-self: stretch;
+  background: #012363;
+  aspect-ratio: 16 / 10;
 }
 
-.hero-image svg,
-.hero-photo {
+.hero-image svg.hero-photo,
+.hero-image img.hero-photo {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  max-width: none;
+  max-height: none;
   display: block;
   object-fit: cover;
   object-position: center;
 }
 
+.hero-showcase {
+  position: absolute;
+  inset: 0;
+}
+
+.hero-showcase-slide {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+  pointer-events: none;
+}
+
+.hero-showcase-slide.is-active {
+  opacity: 1;
+  z-index: 1;
+}
+
+.hero-showcase-veil {
+  position: absolute;
+  inset: auto 0 0;
+  height: 42%;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(1, 35, 99, 0.38), transparent);
+}
+
+.hero-showcase-caption {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 3;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #052a72;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  box-shadow: 0 4px 14px rgba(5, 42, 114, 0.12);
+}
+
+.hero-image img.hero-photo {
+  opacity: 0;
+  transform-origin: center center;
+}
+
+.hero-image img.hero-photo.is-ready {
+  opacity: 1;
+  transition: opacity 0.4s ease;
+}
+
+/* Still photos: gentle Ken Burns. GIFs already have their own motion — a
+   second CSS zoom fights the file and over-crops the scene. */
+.hero-image img.hero-photo.is-ready:not(.hero-photo--gif) {
+  animation: bm-hero-zoom 22s ease-in-out infinite;
+}
+
+.hero-image img.hero-photo--gif.is-ready {
+  transform: scale(1.03);
+  animation: none;
+}
+
+.hero-image .hero-showcase-slide img.hero-photo {
+  opacity: 1;
+  animation: bm-hero-zoom 18s ease-in-out infinite;
+}
+
 .hero {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: stretch;
   background: linear-gradient(125deg, #f4f6fb 0%, #eef1f8 45%, #eef6e8 100%);
   border-radius: 20px;
@@ -430,7 +506,7 @@
   padding: var(--hero-copy-pad);
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: center;
   min-width: 0;
 }
 
@@ -1950,13 +2026,15 @@ h1.display-head .accent {
 
 @media (max-width: 980px) {
   .hero { grid-template-columns: 1fr; }
-  .hero-copy { padding: 14px 16px; }
+  .hero-copy {
+    padding: 14px 16px;
+    justify-content: flex-start;
+  }
   .hero-image {
     min-height: 0;
     order: -1;
     aspect-ratio: 16 / 10;
   }
-  .hero-photo { position: absolute; }
   .service-grid { grid-template-columns: repeat(2, 1fr); }
   .compare { grid-template-columns: 1fr; }
   .hero-copy .sub,
@@ -1988,6 +2066,33 @@ h1.display-head .accent {
 @keyframes bm-hero-in {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Slow Ken Burns on the uploaded hero photo/GIF. Starts slightly zoomed so
+   letterbox bars at the GIF edges are cropped out of the frame. */
+@keyframes bm-hero-zoom {
+  0%, 100% { transform: scale(1.02); }
+  50% { transform: scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-image img.hero-photo.is-ready:not(.hero-photo--gif) {
+    animation: none;
+    transform: scale(1.02);
+  }
+
+  .hero-image img.hero-photo--gif.is-ready {
+    transform: none;
+  }
+
+  .hero-showcase-slide {
+    transition: none;
+  }
+
+  .hero-showcase-slide img.hero-photo {
+    animation: none;
+    transform: none;
+  }
 }
 
 .scroll-target {

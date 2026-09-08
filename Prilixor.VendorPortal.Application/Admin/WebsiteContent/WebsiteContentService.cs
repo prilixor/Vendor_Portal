@@ -17,7 +17,8 @@ public record UpdateHomeContentCommand(
     string SecondaryCtaLink,
     string TrustLabel,
     string? HeroImageUrl,
-    List<HomeFeatureDto> Features
+    List<HomeFeatureDto> Features,
+    List<HomeHeroSlideDto>? HeroSlides = null
 ) : IRequest<Result<HomeContentDto>>;
 
 public record UpdateAboutContentCommand(
@@ -221,7 +222,22 @@ public class WebsiteContentQueryHandler(IWebsiteContentRepository repository)
             IsActive = f.IsActive
         }).ToList() ?? [];
 
-        await repository.UpdateHomeContentAsync(home, features, ct);
+        List<WebsiteHomeHeroSlide>? slides = null;
+        if (request.HeroSlides != null)
+        {
+            slides = request.HeroSlides
+                .Select(s => new WebsiteHomeHeroSlide
+                {
+                    Label = TruncateHeroLabel((s.Label ?? string.Empty).Trim()),
+                    ImageUrl = StripEmbeddedHeroImage(s.ImageUrl) ?? string.Empty,
+                    SortOrder = s.SortOrder
+                })
+                .Where(s => !string.IsNullOrWhiteSpace(s.ImageUrl) && !string.IsNullOrWhiteSpace(s.Label))
+                .Take(5)
+                .ToList();
+        }
+
+        await repository.UpdateHomeContentAsync(home, features, slides, ct);
         var updated = await repository.GetHomeContentAsync(ct);
         return Result<HomeContentDto>.Success(updated != null ? MapHome(updated) : MapHome(home));
     }
@@ -497,6 +513,9 @@ public class WebsiteContentQueryHandler(IWebsiteContentRepository repository)
         return url.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ? null : url;
     }
 
+    private static string TruncateHeroLabel(string label) =>
+        label.Length <= 80 ? label : label[..80];
+
     private static HomeContentDto MapHome(WebsiteHomeContent h) => new()
     {
         Id = h.Id,
@@ -518,7 +537,18 @@ public class WebsiteContentQueryHandler(IWebsiteContentRepository repository)
             CustomIconUrl = f.CustomIconUrl,
             SortOrder = f.SortOrder,
             IsActive = f.IsActive
-        }).OrderBy(f => f.SortOrder).ToList() ?? []
+        }).OrderBy(f => f.SortOrder).ToList() ?? [],
+        HeroSlides = h.HeroSlides?
+            .Where(s => !s.IsDeleted && !string.IsNullOrWhiteSpace(s.ImageUrl))
+            .OrderBy(s => s.SortOrder)
+            .Take(5)
+            .Select(s => new HomeHeroSlideDto
+            {
+                Id = s.Id,
+                Label = s.Label,
+                ImageUrl = s.ImageUrl,
+                SortOrder = s.SortOrder
+            }).ToList() ?? []
     };
 
     private static AboutContentDto MapAbout(WebsiteAboutContent a) => new()

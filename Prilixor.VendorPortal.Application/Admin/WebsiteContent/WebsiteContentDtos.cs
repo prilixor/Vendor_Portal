@@ -11,6 +11,14 @@ public class HomeFeatureDto
     public bool IsActive { get; set; } = true;
 }
 
+public class HomeHeroSlideDto
+{
+    public Guid Id { get; set; }
+    public string Label { get; set; } = string.Empty;
+    public string ImageUrl { get; set; } = string.Empty;
+    public int SortOrder { get; set; }
+}
+
 public class HomeContentDto
 {
     public Guid Id { get; set; }
@@ -25,6 +33,7 @@ public class HomeContentDto
     public string? HeroImageUrl { get; set; }
 
     public List<HomeFeatureDto> Features { get; set; } = [];
+    public List<HomeHeroSlideDto> HeroSlides { get; set; } = [];
 }
 
 public class HomeHeroImageUploadDto

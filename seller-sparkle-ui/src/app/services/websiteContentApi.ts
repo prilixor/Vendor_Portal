@@ -10,6 +10,13 @@ export interface HomeFeatureDto {
   isActive?: boolean;
 }
 
+export interface HomeHeroSlideDto {
+  id?: string;
+  label: string;
+  imageUrl: string;
+  sortOrder?: number;
+}
+
 export interface HomeContentDto {
   id?: string;
   heroTitle: string;
@@ -22,6 +29,7 @@ export interface HomeContentDto {
   trustLabel: string;
   heroImageUrl?: string;
   features: HomeFeatureDto[];
+  heroSlides?: HomeHeroSlideDto[];
 }
 
 export interface AudienceCategoryDto {
@@ -192,6 +200,10 @@ export const websiteContentApi = {
       features: data.features?.map((f) => ({
         ...f,
         id: isValidGuid(f.id) ? f.id : undefined,
+      })),
+      heroSlides: data.heroSlides?.map((s) => ({
+        ...s,
+        id: isValidGuid(s.id) ? s.id : undefined,
       })),
     };
     return await apiClient.put<HomeContentDto>('/admin/website-content/home', payload);

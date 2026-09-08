@@ -1,9 +1,70 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { HomeContentDto } from "@/app/services/websiteContentApi";
-import { ShieldCheck, CalendarRange, Headphones, Sparkles } from "lucide-react";
+import { cn } from "@/app/helpers/utils";
 
 interface HeroSectionProps {
   data?: HomeContentDto;
+  /** True after the public CMS query has resolved at least once. */
+  cmsReady?: boolean;
+}
+
+const PRODUCT_HERO_SLIDES = [
+  { src: "/branding/blinksmed-hero-equipment.jpg", label: "Hospital equipment" },
+  { src: "/branding/blinksmed-hero-homecare.jpg", label: "Home care rentals" },
+  { src: "/branding/blinksmed-hero-lab.jpg", label: "Laboratory chemicals" },
+] as const;
+
+const HERO_FADE_MS = 1400;
+const HERO_HOLD_MS = 5200;
+
+type HeroSlide = { src: string; label: string };
+
+function HeroProductShowcase({ slides }: { slides: HeroSlide[] }) {
+  const [active, setActive] = useState(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReduceMotion(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion || slides.length < 2) return undefined;
+    const id = window.setInterval(() => {
+      setActive((i) => (i + 1) % slides.length);
+    }, HERO_HOLD_MS + HERO_FADE_MS);
+    return () => window.clearInterval(id);
+  }, [reduceMotion, slides.length]);
+
+  useEffect(() => {
+    slides.forEach((slide) => {
+      const img = new Image();
+      img.src = slide.src;
+    });
+  }, [slides]);
+
+  useEffect(() => {
+    setActive(0);
+  }, [slides]);
+
+  return (
+    <div className="hero-showcase">
+      {slides.map((slide, index) => (
+        <figure
+          key={`${slide.src}-${slide.label}-${index}`}
+          className={cn("hero-showcase-slide", index === active && "is-active")}
+        >
+          <img src={slide.src} alt="" className="hero-photo is-ready" decoding="async" />
+        </figure>
+      ))}
+      <div className="hero-showcase-veil" />
+      <p className="hero-showcase-caption">{slides[active]?.label}</p>
+    </div>
+  );
 }
 
 const renderFeatureIcon = (iconName?: string, customUrl?: string) => {
@@ -40,7 +101,7 @@ const renderFeatureIcon = (iconName?: string, customUrl?: string) => {
   }
 };
 
-export const HeroSection = ({ data }: HeroSectionProps) => {
+export const HeroSection = ({ data, cmsReady = false }: HeroSectionProps) => {
   const heroTitle = data?.heroTitle || "A trusted marketplace for";
   const heroAccent = data?.heroAccent || "medical equipment & supplies.";
   const heroSubtitle =
@@ -60,6 +121,13 @@ export const HeroSection = ({ data }: HeroSectionProps) => {
   ];
 
   const features = data?.features && data.features.length > 0 ? data.features : defaultFeatures;
+  const slides = useMemo(() => {
+    const cmsSlides = (data?.heroSlides ?? [])
+      .filter((s) => s.imageUrl && s.label?.trim())
+      .slice(0, 5)
+      .map((s) => ({ src: s.imageUrl, label: s.label.trim() }));
+    return cmsSlides.length > 0 ? cmsSlides : [...PRODUCT_HERO_SLIDES];
+  }, [data?.heroSlides]);
 
   return (
     <div id="home" className="scroll-target">
@@ -87,44 +155,7 @@ export const HeroSection = ({ data }: HeroSectionProps) => {
             </div>
           </div>
           <div className="hero-image" aria-hidden="true">
-            {data?.heroImageUrl ? (
-              <img
-                src={data.heroImageUrl}
-                alt=""
-                className="hero-photo"
-              />
-            ) : (
-              <svg className="hero-photo" viewBox="0 0 800 520" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <linearGradient id="heroNavy" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#012363" />
-                    <stop offset="100%" stopColor="#052a72" />
-                  </linearGradient>
-                  <linearGradient id="heroGlow" x1="0" y1="1" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#3fa40b" stopOpacity="0.35" />
-                    <stop offset="100%" stopColor="#3fa40b" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <rect width="800" height="520" fill="url(#heroNavy)" />
-                <rect width="800" height="520" fill="url(#heroGlow)" />
-                <g fill="none" stroke="#9ad15a" strokeWidth="10" opacity="0.85">
-                  <circle cx="250" cy="250" r="118" />
-                  <circle cx="250" cy="250" r="78" strokeWidth="6" opacity="0.55" />
-                </g>
-                <rect x="430" y="88" width="280" height="168" rx="14" fill="#0a3a8a" stroke="#7ec63a" strokeWidth="2" />
-                <rect x="448" y="108" width="244" height="20" rx="6" fill="#3fa40b" opacity="0.85" />
-                <rect x="448" y="140" width="180" height="10" rx="4" fill="#cfe7b6" opacity="0.7" />
-                <rect x="448" y="160" width="210" height="10" rx="4" fill="#cfe7b6" opacity="0.45" />
-                <rect x="448" y="180" width="140" height="10" rx="4" fill="#cfe7b6" opacity="0.45" />
-                <rect x="448" y="208" width="88" height="24" rx="12" fill="#3fa40b" />
-                <rect x="546" y="208" width="72" height="24" rx="12" fill="#ffffff" opacity="0.18" />
-                <rect x="430" y="280" width="130" height="150" rx="12" fill="#0a3a8a" />
-                <rect x="580" y="280" width="130" height="150" rx="12" fill="#0a3a8a" />
-                <path d="M495 310v80M445 350h100" stroke="#3fa40b" strokeWidth="6" strokeLinecap="round" />
-                <circle cx="645" cy="355" r="28" fill="none" stroke="#9ad15a" strokeWidth="6" />
-                <text x="448" y="126" fill="#ffffff" fontSize="13" fontFamily="Inter, Arial, sans-serif" fontWeight="700">BLINKSMED</text>
-              </svg>
-            )}
+            <HeroProductShowcase slides={slides} />
           </div>
         </div>
 

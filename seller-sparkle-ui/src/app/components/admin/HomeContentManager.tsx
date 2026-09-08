@@ -7,7 +7,7 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { FormGrid } from "@/app/components/shared/FormGrid";
-import { websiteContentApi, HomeFeatureDto } from "@/app/services/websiteContentApi";
+import { websiteContentApi, HomeFeatureDto, HomeHeroSlideDto } from "@/app/services/websiteContentApi";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Globe,
@@ -29,6 +29,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+
+const MAX_HERO_SLIDES = 5;
+const SUGGESTED_HERO_LABELS = [
+  "Hospital equipment",
+  "Home care",
+  "Lab chemicals",
+  "Others",
+];
 
 const PRESET_FEATURE_ICONS = [
   { value: "ShieldCheck", label: "Shield Check (Verified)" },
@@ -55,7 +63,7 @@ export function HomeContentManager() {
   const [trustLabel, setTrustLabel] = useState(
     "TRUSTED BY HEALTHCARE PROFESSIONALS, CLINICS, HOSPITALS & LABORATORIES"
   );
-  const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
+  const [heroSlides, setHeroSlides] = useState<HomeHeroSlideDto[]>([]);
 
   const [features, setFeatures] = useState<HomeFeatureDto[]>([
     {
@@ -80,7 +88,7 @@ export function HomeContentManager() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [uploadingHero, setUploadingHero] = useState(false);
+  const [uploadingSlideId, setUploadingSlideId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadContent = async () => {
@@ -96,8 +104,8 @@ export function HomeContentManager() {
           if (data.home.secondaryCtaLabel) setSecondaryCtaLabel(data.home.secondaryCtaLabel);
           if (data.home.secondaryCtaLink) setSecondaryCtaLink(data.home.secondaryCtaLink);
           if (data.home.trustLabel) setTrustLabel(data.home.trustLabel);
-          if (data.home.heroImageUrl && !data.home.heroImageUrl.startsWith("data:")) {
-            setHeroImageUrl(data.home.heroImageUrl);
+          if (data.home.heroSlides && data.home.heroSlides.length > 0) {
+            setHeroSlides(data.home.heroSlides);
           }
           if (data.home.features && data.home.features.length > 0) setFeatures(data.home.features);
         }
@@ -113,6 +121,15 @@ export function HomeContentManager() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const publishableSlides = heroSlides
+        .filter((s) => s.imageUrl && !s.imageUrl.startsWith("data:") && s.label?.trim())
+        .slice(0, MAX_HERO_SLIDES)
+        .map((s, index) => ({
+          ...s,
+          label: s.label.trim(),
+          sortOrder: index + 1,
+        }));
+      const skipped = heroSlides.length - publishableSlides.length;
       await websiteContentApi.updateHomeContent({
         heroTitle,
         heroAccent,
@@ -122,11 +139,18 @@ export function HomeContentManager() {
         secondaryCtaLabel,
         secondaryCtaLink,
         trustLabel,
-        heroImageUrl: heroImageUrl && !heroImageUrl.startsWith("data:") ? heroImageUrl : undefined,
+        heroImageUrl: undefined,
         features,
+        heroSlides: publishableSlides,
       });
       await queryClient.invalidateQueries({ queryKey: ["publicWebsiteContent"] });
-      toast.success("Home section updated! Landing page synced.");
+      if (skipped > 0) {
+        toast.success("Home section updated. Slides without a name and image were skipped.");
+      } else if (publishableSlides.length === 0) {
+        toast.success("Home section updated. Homepage will use the default 3 photos.");
+      } else {
+        toast.success("Home section updated! Landing page synced.");
+      }
     } catch (err) {
       toast.error("Failed to save home content to database.");
     } finally {
@@ -134,25 +158,46 @@ export function HomeContentManager() {
     }
   };
 
-  const handleHeroImageUpload = async (file: File) => {
+  const handleHeroSlideUpload = async (slideId: string, file: File) => {
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Hero image file size must be less than 5MB.");
       return;
     }
-    setUploadingHero(true);
+    setUploadingSlideId(slideId);
     try {
       const uploaded = await websiteContentApi.uploadHomeHeroImage(file);
       if (!uploaded?.fileUrl) {
         toast.error("Hero image upload did not return a file URL.");
         return;
       }
-      setHeroImageUrl(uploaded.fileUrl);
-      toast.success("Hero image uploaded. Save Home Content to publish it.");
+      setHeroSlides((prev) =>
+        prev.map((s) => (s.id === slideId ? { ...s, imageUrl: uploaded.fileUrl } : s)),
+      );
+      toast.success("Slide image uploaded. Save Home Content to publish it.");
     } catch {
       toast.error("Failed to upload hero image.");
     } finally {
-      setUploadingHero(false);
+      setUploadingSlideId(null);
     }
+  };
+
+  const handleHeroSlideChange = (id: string, field: keyof HomeHeroSlideDto, value: string) => {
+    setHeroSlides((prev) => prev.map((s) => (s.id === id ? { ...s, [field]: value } : s)));
+  };
+
+  const handleAddHeroSlide = (label = "") => {
+    if (heroSlides.length >= MAX_HERO_SLIDES) {
+      toast.error(`You can add up to ${MAX_HERO_SLIDES} hero images.`);
+      return;
+    }
+    setHeroSlides((prev) => [
+      ...prev,
+      { id: `s_${Date.now()}`, label, imageUrl: "", sortOrder: prev.length + 1 },
+    ]);
+  };
+
+  const handleDeleteHeroSlide = (id: string) => {
+    setHeroSlides((prev) => prev.filter((s) => s.id !== id));
   };
 
   const handleReset = () => {
@@ -166,8 +211,8 @@ export function HomeContentManager() {
     setSecondaryCtaLabel("Learn How It Works");
     setSecondaryCtaLink("/#how-it-works");
     setTrustLabel("TRUSTED BY HEALTHCARE PROFESSIONALS, CLINICS, HOSPITALS & LABORATORIES");
-    setHeroImageUrl(null);
-    toast.info("Content reset to defaults.");
+    setHeroSlides([]);
+    toast.info("Content reset to defaults. Save to show the default 3 homepage photos.");
   };
 
   const handleFeatureChange = (id: string, field: keyof HomeFeatureDto, value: any) => {
@@ -222,7 +267,7 @@ export function HomeContentManager() {
                 Hero Banner Settings
               </CardTitle>
               <CardDescription>
-                Configure main headline, text, call-to-action buttons, trust bar, and hero banner graphic/image.
+                Configure main headline, text, call-to-action buttons, trust bar, and up to 5 named hero photos.
               </CardDescription>
             </div>
             <Badge variant="outline" className="gap-1 border-primary/30 text-primary">
@@ -299,55 +344,123 @@ export function HomeContentManager() {
             />
           </div>
 
-          {/* Hero Banner Image Graphic Selector */}
-          <div className="space-y-2 pt-3 border-t">
-            <Label className="flex items-center gap-1.5 font-medium">
-              <ImageIcon className="h-4 w-4 text-primary" /> Hero Banner Right Image / Graphic
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              Upload a custom hero photo to replace the default illustration. The image is stored as a compressed file; only its URL is saved with homepage content.
-            </p>
-
-            {heroImageUrl ? (
-              <div className="relative rounded-lg border bg-muted/20 p-3 max-w-md">
-                <div className="flex h-52 w-full items-center justify-center rounded-md border bg-background/80 p-2 overflow-hidden">
-                  <img
-                    src={heroImageUrl}
-                    alt="Hero Preview"
-                    className="max-h-full max-w-full object-contain rounded"
-                  />
-                </div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2">
-                  <span className="text-xs text-muted-foreground">Custom Hero Image Loaded</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 w-full sm:w-auto text-destructive hover:bg-destructive/10"
-                    onClick={() => setHeroImageUrl(null)}
-                  >
-                    <X className="mr-1.5 h-3.5 w-3.5" /> Remove & Use Default Graphic
-                  </Button>
-                </div>
+          {/* Named hero slideshow (max 5). Empty = homepage default 3 photos. */}
+          <div className="space-y-3 pt-3 border-t">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <Label className="flex items-center gap-1.5 font-medium">
+                  <ImageIcon className="h-4 w-4 text-primary" /> Hero slideshow images
+                </Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Add up to {MAX_HERO_SLIDES} photos with names shown as badges (for example Hospital equipment, Home care, Lab chemicals, Others).
+                  If you save none, the homepage keeps the default 3 photos and badges.
+                </p>
               </div>
+              <Badge variant="outline">{heroSlides.length}/{MAX_HERO_SLIDES}</Badge>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {SUGGESTED_HERO_LABELS.map((label) => (
+                <Button
+                  key={label}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  disabled={heroSlides.length >= MAX_HERO_SLIDES}
+                  onClick={() => handleAddHeroSlide(label)}
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  {label}
+                </Button>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8"
+                disabled={heroSlides.length >= MAX_HERO_SLIDES}
+                onClick={() => handleAddHeroSlide()}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Custom name
+              </Button>
+            </div>
+
+            {heroSlides.length === 0 ? (
+              <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-4">
+                No custom slides yet. Homepage will show Hospital equipment, Home care rentals, and Laboratory chemicals.
+              </p>
             ) : (
-              <label className={`flex flex-col items-center justify-center rounded-lg border border-dashed p-6 max-w-md transition-colors ${uploadingHero ? "cursor-wait opacity-70" : "cursor-pointer hover:bg-muted/30"}`}>
-                <Upload className="h-6 w-6 text-muted-foreground mb-2" />
-                <span className="text-sm font-medium">
-                  {uploadingHero ? "Uploading hero image…" : "Click to upload custom hero banner image"}
-                </span>
-                <span className="text-xs text-muted-foreground">PNG, JPG, SVG, WebP, or GIF (max 5MB). Large photos are compressed; GIFs stay animated.</span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
-                  className="hidden"
-                  disabled={uploadingHero}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    e.target.value = "";
-                    if (file) void handleHeroImageUpload(file);
-                  }}
-                />
-              </label>
+              <div className="grid gap-4 md:grid-cols-2">
+                {heroSlides.map((slide, idx) => {
+                  const slideId = slide.id ?? `slide-${idx}`;
+                  const uploading = uploadingSlideId === slideId;
+                  return (
+                    <div key={slideId} className="rounded-lg border bg-muted/10 p-3 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-muted-foreground">Slide #{idx + 1}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDeleteHeroSlide(slideId)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Name / badge</Label>
+                        <Input
+                          value={slide.label}
+                          maxLength={80}
+                          placeholder="Hospital equipment"
+                          onChange={(e) => handleHeroSlideChange(slideId, "label", e.target.value)}
+                          className="h-9"
+                        />
+                      </div>
+                      {slide.imageUrl ? (
+                        <div className="space-y-2">
+                          <div className="flex h-40 w-full items-center justify-center rounded-md border bg-background/80 p-2 overflow-hidden">
+                            <img
+                              src={slide.imageUrl}
+                              alt={slide.label || "Hero slide"}
+                              className="max-h-full max-w-full object-contain rounded"
+                            />
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 w-full text-destructive hover:bg-destructive/10"
+                            onClick={() => handleHeroSlideChange(slideId, "imageUrl", "")}
+                          >
+                            <X className="mr-1.5 h-3.5 w-3.5" /> Remove image
+                          </Button>
+                        </div>
+                      ) : (
+                        <label className={`flex flex-col items-center justify-center rounded-lg border border-dashed p-4 transition-colors ${uploading ? "cursor-wait opacity-70" : "cursor-pointer hover:bg-muted/30"}`}>
+                          <Upload className="h-5 w-5 text-muted-foreground mb-1.5" />
+                          <span className="text-sm font-medium">
+                            {uploading ? "Uploading…" : "Upload slide image"}
+                          </span>
+                          <span className="text-xs text-muted-foreground">PNG, JPG, WebP, SVG, or GIF (max 5MB)</span>
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
+                            className="hidden"
+                            disabled={uploading}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = "";
+                              if (file) void handleHeroSlideUpload(slideId, file);
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </CardContent>
@@ -472,7 +585,7 @@ export function HomeContentManager() {
         <Button variant="outline" onClick={handleReset}>
           <RotateCcw className="mr-2 h-4 w-4" /> Reset Defaults
         </Button>
-        <Button onClick={handleSave} disabled={saving || uploadingHero}>
+        <Button onClick={handleSave} disabled={saving || !!uploadingSlideId}>
           <Save className="mr-2 h-4 w-4" />
           {saving ? "Saving Changes..." : "Save Home Content"}
         </Button>

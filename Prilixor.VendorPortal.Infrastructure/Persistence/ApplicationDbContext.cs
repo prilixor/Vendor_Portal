@@ -57,6 +57,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<RentalDurationMaster> RentalDurationMasters => Set<RentalDurationMaster>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeContent> WebsiteHomeContents => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeContent>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeFeature> WebsiteHomeFeatures => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeFeature>();
+    public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeHeroSlide> WebsiteHomeHeroSlides => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeHeroSlide>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteAboutContent> WebsiteAboutContents => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteAboutContent>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteAudienceCategory> WebsiteAudienceCategories => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteAudienceCategory>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteServicesHeader> WebsiteServicesHeaders => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteServicesHeader>();
