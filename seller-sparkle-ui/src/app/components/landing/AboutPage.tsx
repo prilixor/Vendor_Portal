@@ -29,7 +29,7 @@ export const AboutPage = () => {
 
       <LandingHeader activeSection="about" settings={data?.settings} />
 
-      <main style={{ paddingTop: "20px" }}>
+      <main>
         <AboutSection data={data?.about} />
       </main>
 

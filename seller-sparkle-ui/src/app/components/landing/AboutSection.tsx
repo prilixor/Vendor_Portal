@@ -103,15 +103,15 @@ export const AboutSection = ({ data }: AboutSectionProps) => {
 
   return (
     <section id="about" className="scroll-target section-block cream reveal">
-      <div className="page-banner">
-        <div className="eyebrow">ABOUT US</div>
-        <h2>
-          {bannerTitle} <span className="accent">{bannerAccent}</span>
-        </h2>
-        <p className="sub">{bannerSub}</p>
-      </div>
+      <div className="section-inner">
+        <div className="page-banner">
+          <div className="eyebrow">ABOUT US</div>
+          <h2>
+            {bannerTitle} <span className="accent">{bannerAccent}</span>
+          </h2>
+          <p className="sub">{bannerSub}</p>
+        </div>
 
-      <div className="section-inner" style={{ paddingTop: "24px" }}>
         {/* MISSION & VISION */}
         <div className="compare">
           <div className="compare-card">
@@ -125,7 +125,7 @@ export const AboutSection = ({ data }: AboutSectionProps) => {
         </div>
 
         {/* WHO WE SERVE */}
-        <div className="services-head" style={{ marginTop: "24px" }}>
+        <div className="services-head">
           <h3>
             Who we <span className="accent" style={{ color: "var(--teal-mid)", fontStyle: "italic" }}>serve.</span>
           </h3>

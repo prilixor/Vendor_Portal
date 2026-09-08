@@ -33,9 +33,9 @@ const PrivacyPolicy = () => {
         </div>
       </header>
 
-      <main className="container mx-auto py-8 lg:py-16 px-4 lg:px-8 max-w-4xl">
+      <main className="container mx-auto py-8 lg:py-10 px-4 lg:px-8 max-w-4xl">
         {/* Refined Hero Section */}
-        <div className="mb-14 text-center">
+        <div className="mb-8 text-center">
           <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/[0.08] text-primary mb-4 ring-1 ring-primary/20">
             <ShieldCheck className="h-7 w-7" />
           </div>
@@ -49,7 +49,7 @@ const PrivacyPolicy = () => {
         </div>
 
         {/* Improved Cards Section */}
-        <div className="grid gap-6 md:grid-cols-2 mb-16">
+        <div className="grid gap-4 md:grid-cols-2 mb-10">
           <div className="group p-5 rounded-2xl border bg-card shadow-sm hover:shadow-md hover:border-primary/20 hover:-translate-y-1 transition-all duration-300">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary mb-4 group-hover:bg-primary group-hover:text-white transition-colors">
               <Lock className="h-5 w-5" />
@@ -71,7 +71,7 @@ const PrivacyPolicy = () => {
         </div>
 
         {/* Content Sections with Improved Spacing & Hierarchy */}
-        <div className="space-y-14">
+        <div className="space-y-8">
           <section className="group">
             <div className="flex items-center gap-4 mb-4">
               <h2 className="text-xl font-bold text-foreground">1. Information We Collect</h2>
@@ -164,7 +164,7 @@ const PrivacyPolicy = () => {
           </section>
         </div>
 
-        <div className="mt-20 pt-10 border-t flex flex-col sm:flex-row items-center justify-between gap-6 pb-12">
+        <div className="mt-12 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-6 pb-8">
           <p className="text-xs text-muted-foreground/60 font-medium">
             © 2026 BlinksMed Inc. All rights reserved.
           </p>

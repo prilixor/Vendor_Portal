@@ -216,13 +216,13 @@ export const FAQSection = ({ faqs, categoriesData, contactData }: FAQSectionProp
   return (
     <section id="faqs" className="scroll-target section-block">
       <div className="section-inner reveal">
-        <div className="eyebrow" style={{ justifyContent: "center" }}>
+        <div className="eyebrow">
           FREQUENTLY ASKED QUESTIONS
         </div>
-        <h2 className="display" style={{ textAlign: "center" }}>
+        <h2 className="display">
           Answers when you need <span className="accent">clarity.</span>
         </h2>
-        <p className="sub" style={{ textAlign: "center", marginLeft: "auto", marginRight: "auto", maxWidth: "720px", textWrap: "balance" }}>
+        <p className="sub" style={{ maxWidth: "720px" }}>
           Rentals, purchases, chemicals, delivery, and support: everything in one place.
         </p>
 
@@ -323,7 +323,7 @@ export const FAQSection = ({ faqs, categoriesData, contactData }: FAQSectionProp
         <div className="cta-panel">
           <h3>Still need help?</h3>
           <p>Can't find what you're looking for? Reach out directly and we'll answer any question.</p>
-          <div className="btn-row" style={{ justifyContent: "center", marginTop: "20px" }}>
+          <div className="btn-row" style={{ justifyContent: "center" }}>
             <a
               href={`tel:${phone.replace(/\s+/g, "")}`}
               className="btn btn-secondary"

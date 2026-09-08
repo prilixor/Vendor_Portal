@@ -99,7 +99,7 @@ const TermsAndConditions = () => {
       </header>
 
       <main className="container mx-auto px-4 lg:px-8 py-8 lg:py-12">
-        <div className="flex flex-col gap-10 lg:flex-row lg:items-start">
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
           
           {/* Sidebar TOC - Optimized Sticky Aside */}
           <aside className="hidden lg:block w-64 shrink-0 sticky top-[80px] h-fit self-start">
@@ -154,7 +154,7 @@ const TermsAndConditions = () => {
 
           {/* Content - Increased Width, Improved Spacing */}
           <div className="flex-1 max-w-4xl lg:pl-4">
-            <div className="mb-14 relative">
+            <div className="mb-8 relative">
               <h1 className="text-3xl font-extrabold tracking-tight lg:text-4xl text-foreground mb-4">
                 Terms & Conditions
               </h1>
@@ -170,7 +170,7 @@ const TermsAndConditions = () => {
               </div>
             </div>
 
-            <div className="space-y-16">
+            <div className="space-y-10">
               <section id="introduction" className="scroll-mt-24 group">
                 <h2 className="text-xl font-bold mb-5 flex items-center gap-4 text-foreground group-hover:text-primary transition-colors">
                   <span className="text-primary/40 font-mono text-sm">01.</span>
@@ -368,7 +368,7 @@ const TermsAndConditions = () => {
               </section>
             </div>
             
-            <footer className="mt-24 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 pb-12">
+            <footer className="mt-12 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 pb-8">
               <p className="text-[12px] text-muted-foreground/60">© 2026 BlinksMed Inc. All rights reserved.</p>
               <div className="flex items-center gap-8">
                 <Link to="/privacy-policy" className="text-[12px] font-medium text-muted-foreground/60 hover:text-primary transition-colors">Privacy Policy</Link>

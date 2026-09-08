@@ -86,58 +86,66 @@ export const HeroSection = ({ data }: HeroSectionProps) => {
               </a>
             </div>
           </div>
-          <div className="hero-image flex items-center justify-center p-4 md:p-6" aria-hidden="true">
+          <div className="hero-image" aria-hidden="true">
             {data?.heroImageUrl ? (
-              <div className="relative w-full h-full min-h-[260px] max-h-[520px] flex items-center justify-center overflow-hidden rounded-2xl">
-                <img
-                  src={data.heroImageUrl}
-                  alt="Hero Banner"
-                  className="w-full h-full max-h-[480px] object-contain rounded-2xl shadow-sm border border-black/5 transition-all duration-300"
-                />
-              </div>
+              <img
+                src={data.heroImageUrl}
+                alt=""
+                className="hero-photo"
+              />
             ) : (
-              <svg viewBox="0 0 800 640" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+              <svg className="hero-photo" viewBox="0 0 800 520" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
                 <defs>
-                  <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f3ebe0" />
-                    <stop offset="100%" stopColor="#e9dcc8" />
+                  <linearGradient id="heroNavy" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#012363" />
+                    <stop offset="100%" stopColor="#052a72" />
                   </linearGradient>
-                  <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#e2cfb2" />
-                    <stop offset="100%" stopColor="#d3b98f" />
+                  <linearGradient id="heroGlow" x1="0" y1="1" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#3fa40b" stopOpacity="0.35" />
+                    <stop offset="100%" stopColor="#3fa40b" stopOpacity="0" />
                   </linearGradient>
                 </defs>
-                <rect width="800" height="460" fill="url(#wall)" />
-                <rect y="460" width="800" height="180" fill="url(#floor)" />
-                <rect x="40" y="60" width="220" height="340" rx="6" fill="#f7f2ea" opacity="0.6" />
-                <g transform="translate(120,330)">
-                  <path d="M20 40 Q10 -20 70 -30 Q130 -20 120 40 L120 90 L20 90 Z" fill="#efe6d3" stroke="#cbb894" strokeWidth="3" />
-                  <rect x="20" y="90" width="480" height="70" rx="10" fill="#052a72" />
-                  <rect x="30" y="150" width="470" height="20" rx="6" fill="#d8c6a4" />
+                <rect width="800" height="520" fill="url(#heroNavy)" />
+                <rect width="800" height="520" fill="url(#heroGlow)" />
+                <g fill="none" stroke="#9ad15a" strokeWidth="10" opacity="0.85">
+                  <circle cx="250" cy="250" r="118" />
+                  <circle cx="250" cy="250" r="78" strokeWidth="6" opacity="0.55" />
                 </g>
+                <rect x="430" y="88" width="280" height="168" rx="14" fill="#0a3a8a" stroke="#7ec63a" strokeWidth="2" />
+                <rect x="448" y="108" width="244" height="20" rx="6" fill="#3fa40b" opacity="0.85" />
+                <rect x="448" y="140" width="180" height="10" rx="4" fill="#cfe7b6" opacity="0.7" />
+                <rect x="448" y="160" width="210" height="10" rx="4" fill="#cfe7b6" opacity="0.45" />
+                <rect x="448" y="180" width="140" height="10" rx="4" fill="#cfe7b6" opacity="0.45" />
+                <rect x="448" y="208" width="88" height="24" rx="12" fill="#3fa40b" />
+                <rect x="546" y="208" width="72" height="24" rx="12" fill="#ffffff" opacity="0.18" />
+                <rect x="430" y="280" width="130" height="150" rx="12" fill="#0a3a8a" />
+                <rect x="580" y="280" width="130" height="150" rx="12" fill="#0a3a8a" />
+                <path d="M495 310v80M445 350h100" stroke="#3fa40b" strokeWidth="6" strokeLinecap="round" />
+                <circle cx="645" cy="355" r="28" fill="none" stroke="#9ad15a" strokeWidth="6" />
+                <text x="448" y="126" fill="#ffffff" fontSize="13" fontFamily="Inter, Arial, sans-serif" fontWeight="700">BLINKSMED</text>
               </svg>
             )}
           </div>
         </div>
 
-        <div className="service-grid services-3col" style={{ marginTop: "16px" }}>
+        <div className="service-grid services-3col hero-features">
           {features.map((feat, idx) => (
             <article key={feat.id ?? idx} className="service-card">
               <div className="service-icon">
                 {renderFeatureIcon(feat.iconName, feat.customIconUrl)}
               </div>
-              <h4 style={{ fontSize: "16px", fontWeight: "700", marginTop: "16px", marginBottom: "6px", color: "var(--ink)" }}>
+              <h4>
                 {feat.title}
               </h4>
-              <p style={{ fontSize: "13.5px", color: "var(--gray-600)", lineHeight: "1.5", margin: 0 }}>
+              <p>
                 {feat.subtitle}
               </p>
             </article>
           ))}
         </div>
-      </div>
-      <div className="trust">
-        <div className="trust-label">{trustLabel}</div>
+        <div className="trust">
+          <div className="trust-label">{trustLabel}</div>
+        </div>
       </div>
     </div>
   );

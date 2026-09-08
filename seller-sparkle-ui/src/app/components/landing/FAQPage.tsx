@@ -29,7 +29,7 @@ export const FAQPage = () => {
 
       <LandingHeader activeSection="faqs" settings={data?.settings} />
 
-      <main style={{ paddingTop: "20px" }}>
+      <main>
         <FAQSection faqs={data?.faqs} categoriesData={data?.faqCategories} contactData={data?.contact} />
       </main>
 
