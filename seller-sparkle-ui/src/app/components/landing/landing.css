@@ -696,7 +696,10 @@ h1.display-head .accent {
 
 .trust {
   text-align: center;
-  padding: 24px 0 0;
+  margin-top: 20px;
+  margin-bottom: 20px;
+  padding: 0;
+  line-height: 1;
 }
 
 .trust-label {
@@ -705,11 +708,12 @@ h1.display-head .accent {
   letter-spacing: 1.6px;
   color: var(--gray-400);
   margin: 0;
+  line-height: 1;
 }
 
 /* Sections */
 .section-block {
-  padding: var(--section-y) 0;
+  padding: 20px 0;
 }
 
 .section-inner,
@@ -725,10 +729,6 @@ h1.display-head .accent {
   margin: 0;
   padding-left: 0;
   padding-right: 0;
-}
-
-#home + .section-block {
-  padding-top: 32px;
 }
 
 .section-block.cream {
@@ -764,7 +764,7 @@ h1.display-head .accent {
   justify-content: space-between;
   align-items: flex-end;
   gap: 24px;
-  margin: var(--section-y) 0 var(--block-gap);
+  margin: 20px 0;
   flex-wrap: wrap;
 }
 
@@ -793,6 +793,10 @@ h1.display-head .accent {
   gap: var(--grid-gap);
   align-items: start;
   margin-top: var(--block-gap);
+}
+
+.services-head + .service-grid {
+  margin-top: 0;
 }
 
 .service-card {
@@ -1192,7 +1196,7 @@ h1.display-head .accent {
 }
 
 .cta-panel {
-  margin-top: var(--section-y);
+  margin-top: 20px;
   background: var(--teal-dark);
   color: var(--white);
   border-radius: 18px;
@@ -1553,11 +1557,11 @@ h1.display-head .accent {
   }
 
   .section-block {
-    padding: var(--section-y) 0;
+    padding: 20px 0;
   }
 
   .site-footer {
-    padding: var(--section-y) 0 0;
+    padding: 20px 0 0;
   }
 }
 
@@ -1901,7 +1905,7 @@ h1.display-head .accent {
 .site-footer {
   background: var(--teal-shade);
   color: rgba(255, 255, 255, 0.75);
-  padding: var(--section-y) 0 0;
+  padding: 20px 0 0;
   border-top: 3px solid var(--teal-mid);
   font-size: 13.5px;
 }
@@ -2045,6 +2049,10 @@ h1.display-head .accent {
 .reveal.is-visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+.section-block.reveal {
+  transform: none;
 }
 
 .hero-animate {
