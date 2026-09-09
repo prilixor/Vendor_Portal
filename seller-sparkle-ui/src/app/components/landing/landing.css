@@ -792,7 +792,7 @@ h1.display-head .accent {
   grid-template-columns: repeat(4, 1fr);
   gap: var(--grid-gap);
   align-items: start;
-  margin-top: var(--block-gap);
+  margin-top: 20px;
 }
 
 .services-head + .service-grid {
@@ -920,7 +920,7 @@ h1.display-head .accent {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--grid-gap);
-  margin-top: var(--block-gap);
+  margin-top: 20px;
   align-items: stretch;
 }
 
@@ -959,7 +959,7 @@ h1.display-head .accent {
 .rent-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: var(--block-gap);
+  margin-top: 20px;
   background: var(--white);
   border-radius: 16px;
   overflow: hidden;
@@ -1002,7 +1002,7 @@ h1.display-head .accent {
 
 /* Rent vs Buy Decision Summary Row */
 .rent-decision-row {
-  margin: var(--block-gap) 0 0;
+  margin: 20px 0 0;
   width: 100%;
 }
 
@@ -1187,7 +1187,7 @@ h1.display-head .accent {
 }
 
 .institutional-note {
-  margin: var(--block-gap) auto 0;
+  margin: 20px auto 0;
   max-width: 46rem;
   font-size: 14px;
   color: var(--gray-600);
@@ -1254,7 +1254,7 @@ h1.display-head .accent {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--grid-gap);
-  margin-top: var(--block-gap);
+  margin-top: 20px;
   align-items: stretch;
 }
 
@@ -1579,7 +1579,7 @@ h1.display-head .accent {
 
 .faq-search-wrap {
   max-width: none;
-  margin: var(--block-gap) 0 0;
+  margin: 20px 0 0;
 }
 
 .faq-search-input {
@@ -1702,7 +1702,7 @@ h1.display-head .accent {
   grid-template-columns: 280px 1fr;
   gap: var(--block-gap);
   align-items: start;
-  margin-top: var(--block-gap);
+  margin-top: 20px;
 }
 
 @media (max-width: 860px) {
