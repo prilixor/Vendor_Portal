@@ -489,3 +489,145 @@ img.customer-catalog-media-img {
 .leaflet-bottom {
   z-index: 6 !important;
 }
+
+.legal-editor,
+.legal-editor-content,
+.legal-prose {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.legal-editor .tiptap,
+.legal-editor .ProseMirror,
+.legal-prose {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.legal-editor .ProseMirror {
+  min-height: 320px;
+  padding: 1rem 1.25rem;
+  outline: none;
+}
+
+.legal-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: hsl(var(--muted-foreground));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.legal-editor .ProseMirror h1,
+.legal-editor .ProseMirror h2,
+.legal-editor .ProseMirror h3,
+.legal-editor .ProseMirror h4,
+.legal-editor .ProseMirror p,
+.legal-editor .ProseMirror li,
+.legal-editor .ProseMirror blockquote,
+.legal-prose h1,
+.legal-prose h2,
+.legal-prose h3,
+.legal-prose h4,
+.legal-prose p,
+.legal-prose li,
+.legal-prose blockquote {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.legal-editor .ProseMirror pre,
+.legal-prose pre {
+  white-space: pre-wrap;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.legal-editor .tableWrapper {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.legal-editor .ProseMirror table,
+.legal-prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75rem 0;
+}
+
+.legal-editor .tableWrapper table {
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.legal-editor .ProseMirror th,
+.legal-editor .ProseMirror td,
+.legal-prose th,
+.legal-prose td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.legal-editor .ProseMirror th,
+.legal-prose th {
+  background: hsl(var(--muted));
+  font-weight: 600;
+}
+
+.legal-prose h1,
+.legal-editor .ProseMirror h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 1.25rem 0 0.75rem;
+}
+
+.legal-prose h2,
+.legal-editor .ProseMirror h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 1.1rem 0 0.6rem;
+}
+
+.legal-prose h3,
+.legal-editor .ProseMirror h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem;
+}
+
+.legal-prose p,
+.legal-editor .ProseMirror p {
+  margin: 0.6rem 0;
+  line-height: 1.65;
+}
+
+.legal-prose ul,
+.legal-prose ol,
+.legal-editor .ProseMirror ul,
+.legal-editor .ProseMirror ol {
+  margin: 0.6rem 0 0.6rem 1.25rem;
+}
+
+.legal-prose a,
+.legal-editor .ProseMirror a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+}
+
+.legal-prose img,
+.legal-editor .ProseMirror img {
+  height: auto;
+  max-width: 100%;
+}

@@ -67,6 +67,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteContactContent> WebsiteContactContents => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteContactContent>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksHeader> WebsiteHowItWorksHeaders => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksHeader>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksStep> WebsiteHowItWorksSteps => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksStep>();
+    public DbSet<Prilixor.VendorPortal.Domain.Legal.LegalDocument> LegalDocuments => Set<Prilixor.VendorPortal.Domain.Legal.LegalDocument>();
+    public DbSet<Prilixor.VendorPortal.Domain.Legal.LegalDocumentVersion> LegalDocumentVersions => Set<Prilixor.VendorPortal.Domain.Legal.LegalDocumentVersion>();
+    public DbSet<Prilixor.VendorPortal.Domain.Legal.LegalDocumentPlacement> LegalDocumentPlacements => Set<Prilixor.VendorPortal.Domain.Legal.LegalDocumentPlacement>();
+    public DbSet<Prilixor.VendorPortal.Domain.Legal.LegalAcceptance> LegalAcceptances => Set<Prilixor.VendorPortal.Domain.Legal.LegalAcceptance>();
     public DbSet<RentalDurationIcon> RentalDurationIcons => Set<RentalDurationIcon>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
