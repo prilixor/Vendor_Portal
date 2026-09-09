@@ -49,7 +49,6 @@ export const Home = () => {
   }, []);
 
   useEffect(() => {
-    // Scroll reveal observer
     const revealEls = document.querySelectorAll(".reveal");
     const revealObs = new IntersectionObserver(
       (entries) => {
@@ -60,7 +59,7 @@ export const Home = () => {
           }
         });
       },
-      { threshold: 0.12, rootMargin: "0px 0px -8% 0px" }
+      { threshold: 0.06, rootMargin: "40px 0px -6% 0px" }
     );
     revealEls.forEach((el) => revealObs.observe(el));
 
@@ -116,7 +115,7 @@ export const Home = () => {
         window.clearTimeout(clickTimeoutRef.current);
       }
     };
-  }, [handleSectionClick]);
+  }, [handleSectionClick, isFetched]);
 
   return (
     <div className="bm-landing-body">
