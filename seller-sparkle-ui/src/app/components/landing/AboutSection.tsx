@@ -116,11 +116,11 @@ export const AboutSection = ({ data }: AboutSectionProps) => {
         <div className="compare">
           <div className="compare-card">
             <h4>{missionTitle}</h4>
-            <p style={{ color: "var(--gray-600)", lineHeight: "1.6" }}>{missionText}</p>
+            <p>{missionText}</p>
           </div>
           <div className="compare-card">
             <h4>{visionTitle}</h4>
-            <p style={{ color: "var(--gray-600)", lineHeight: "1.6" }}>{visionText}</p>
+            <p>{visionText}</p>
           </div>
         </div>
 
@@ -132,7 +132,7 @@ export const AboutSection = ({ data }: AboutSectionProps) => {
         </div>
         <div className="service-grid">
           {audiences.map((item, idx) => (
-            <article key={item.id ?? idx} className="service-card">
+            <article key={item.id ?? idx} className="service-card service-card--center">
               <div className="service-icon">{renderAudienceIcon(item.iconName, item.customIconUrl)}</div>
               <h4>{item.title}</h4>
               <p>{item.description}</p>

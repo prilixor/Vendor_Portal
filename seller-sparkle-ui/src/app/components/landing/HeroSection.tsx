@@ -135,7 +135,7 @@ export const HeroSection = ({ data, cmsReady = false }: HeroSectionProps) => {
         <div className="hero hero-animate">
           <div className="hero-copy">
             <h1 className="display-head">
-              {heroTitle}<br />
+              {heroTitle}{" "}
               <span className="accent">{heroAccent}</span>
             </h1>
             <p className="sub">{heroSubtitle}</p>
