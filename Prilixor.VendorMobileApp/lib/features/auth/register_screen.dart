@@ -7,6 +7,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/config/app_urls.dart';
 import '../../core/utils/indian_mobile_phone.dart';
+import '../../core/utils/password_validation.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
@@ -49,6 +50,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim());
   }
 
+  void _syncPasswordPair() {
+    final password = _passwordController.text;
+    final confirm = _confirmController.text;
+    setState(() {
+      _passwordError = PasswordValidation.liveLengthError(
+        password,
+        message: 'Use at least 8 characters',
+      );
+      _confirmError = PasswordValidation.liveConfirmError(password, confirm);
+    });
+  }
+
   bool _validate() {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
@@ -59,8 +72,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     String? nameErr;
     String? emailErr;
     String? phoneErr;
-    String? passwordErr;
-    String? confirmErr;
 
     if (name.length < 2) {
       nameErr = 'Please enter your full name';
@@ -69,12 +80,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       emailErr = 'Enter a valid email';
     }
     phoneErr = IndianMobilePhone.requiredError(phone);
-    if (password.length < 8) {
-      passwordErr = 'Use at least 8 characters';
-    }
-    if (confirm != password) {
-      confirmErr = "Passwords don't match";
-    }
+    final passwordErr = PasswordValidation.submitLengthError(
+      password,
+      message: 'Use at least 8 characters',
+    );
+    final confirmErr = PasswordValidation.submitConfirmError(password, confirm);
 
     setState(() {
       _nameError = nameErr;
@@ -236,11 +246,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 errorText: _passwordError,
                 controller: _passwordController,
                 textInputAction: TextInputAction.next,
-                onChanged: (_) {
-                  if (_passwordError != null) {
-                    setState(() => _passwordError = null);
-                  }
-                },
+                onChanged: (_) => _syncPasswordPair(),
               ),
               const SizedBox(height: 16),
               CustomTextField(
@@ -254,9 +260,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 onSubmitted: (_) {
                   if (!provider.isLoading) _submit();
                 },
-                onChanged: (_) {
-                  if (_confirmError != null) setState(() => _confirmError = null);
-                },
+                onChanged: (_) => _syncPasswordPair(),
               ),
               const SizedBox(height: 16),
               Row(

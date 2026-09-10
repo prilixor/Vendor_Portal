@@ -9,8 +9,13 @@ namespace Prilixor.VendorPortal.Infrastructure.Services;
 
 public class SmtpEmailService(IOptions<Domain.Options.SmtpOptions> smtpOptions) : IEmailService
 {
-    public Task SendEmailAsync(string toEmail, string subject, string body, CancellationToken ct = default) =>
-        SendEmailAsync(toEmail, subject, body, null, null, null, ct);
+    public Task SendEmailAsync(
+        string toEmail,
+        string subject,
+        string body,
+        CancellationToken ct = default,
+        string? fromDisplayName = null) =>
+        SendEmailAsync(toEmail, subject, body, null, null, null, ct, fromDisplayName);
 
     public async Task SendEmailAsync(
         string toEmail,
@@ -19,13 +24,15 @@ public class SmtpEmailService(IOptions<Domain.Options.SmtpOptions> smtpOptions) 
         string? plainTextBody,
         IReadOnlyList<EmailInlineImage>? inlineImages,
         IReadOnlyList<EmailFileAttachment>? attachments,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? fromDisplayName = null)
     {
         var smtp = smtpOptions.Value;
+        var displayName = string.IsNullOrWhiteSpace(fromDisplayName) ? smtp.FromName : fromDisplayName.Trim();
 
         using var mailMessage = SmtpMailMessageFactory.Create(
             smtp.FromEmail,
-            smtp.FromName,
+            displayName,
             toEmail,
             subject,
             htmlBody,

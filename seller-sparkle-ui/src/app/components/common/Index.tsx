@@ -2,20 +2,14 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/app/guards/AuthContext";
 import { getPortalHostKind } from "@/app/helpers/portalHost";
 import Home from "@/app/components/landing/Home";
-import { useQuery } from "@tanstack/react-query";
-import { websiteContentApi } from "@/app/services/websiteContentApi";
+import { usePublicWebsiteContent } from "@/app/hooks/usePublicWebsiteContent";
 import { BrandBootSplash } from "@/app/components/shared/BrandMark";
 
 const Index = () => {
   const { user, isHydrating } = useAuth();
   const portal = getPortalHostKind();
 
-  const { data: publicContent, isLoading } = useQuery({
-    queryKey: ["publicWebsiteContent"],
-    queryFn: () => websiteContentApi.getPublicContent(),
-    staleTime: 1000 * 60 * 5,
-    retry: 1,
-  });
+  const { data: publicContent } = usePublicWebsiteContent();
 
     if (isHydrating && portal !== "customer") return <BrandBootSplash />;
 

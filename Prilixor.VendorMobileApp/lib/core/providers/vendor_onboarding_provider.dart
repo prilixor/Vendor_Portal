@@ -162,7 +162,7 @@ class VendorOnboardingProvider extends ChangeNotifier {
           'originalFileName': file.name,
         },
       );
-      await loadAll(vendorId);
+      await loadAll(vendorId, silent: true);
       return true;
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to upload document.');
@@ -182,7 +182,7 @@ class VendorOnboardingProvider extends ChangeNotifier {
     notifyListeners();
     try {
       await _api.dio.delete('/vendors/$vendorId/documents/$documentId');
-      await loadAll(vendorId);
+      await loadAll(vendorId, silent: true);
       return true;
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to delete document.');
@@ -241,7 +241,7 @@ class VendorOnboardingProvider extends ChangeNotifier {
       } else {
         await _api.dio.post('/vendors/$vendorId/bank-accounts', data: payload);
       }
-      await loadAll(vendorId);
+      await loadAll(vendorId, silent: true);
       return true;
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to save bank account.');
@@ -264,7 +264,7 @@ class VendorOnboardingProvider extends ChangeNotifier {
         '/vendors/$vendorId/verification-requests',
         data: {'vendorId': vendorId},
       );
-      await loadAll(vendorId);
+      await loadAll(vendorId, silent: true);
       return true;
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to submit for verification.');

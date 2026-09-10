@@ -6,6 +6,8 @@ import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/inventory_kpi_strip.dart';
+import '../../shared/widgets/list_pagination.dart';
 import 'edit_chemical_stock_screen.dart';
 import 'edit_equipment_stock_screen.dart';
 import 'listing_assets_screen.dart';
@@ -20,8 +22,11 @@ class InventoryDetailScreen extends StatefulWidget {
 }
 
 class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
+  static const _movementsPerPage = 8;
+
   List<InventoryMovement> _movements = const [];
   bool _movementsLoading = false;
+  int _movementPage = 1;
 
   @override
   void initState() {
@@ -47,6 +52,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     setState(() {
       _movements = rows;
       _movementsLoading = false;
+      _movementPage = 1;
     });
   }
 
@@ -128,6 +134,16 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
     final variants = provider.variantInventoryFor(widget.listingId);
     final pending =
         Provider.of<VendorProfileProvider>(context).isPending;
+    final movementTotalPages = _movements.isEmpty
+        ? 1
+        : ((_movements.length + _movementsPerPage - 1) / _movementsPerPage).ceil();
+    final safeMovementPage = _movementPage.clamp(1, movementTotalPages);
+    final paginatedMovements = _movements.isEmpty
+        ? const <InventoryMovement>[]
+        : _movements.sublist(
+            (safeMovementPage - 1) * _movementsPerPage,
+            (safeMovementPage * _movementsPerPage).clamp(0, _movements.length),
+          );
 
     if (record == null) {
       return Scaffold(
@@ -152,7 +168,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          _StatsGrid(record: record),
+          InventoryKpiStrip.fromRecord(record, context),
           const SizedBox(height: 16),
           if (record.isChemical) ...[
             OutlinedButton.icon(
@@ -323,7 +339,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
               style: TextStyle(color: context.appColors.textMuted),
             )
           else
-            ..._movements.take(25).map(
+            ...paginatedMovements.map(
                   (m) => Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
@@ -366,56 +382,16 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                     ),
                   ),
                 ),
+          if (_movements.isNotEmpty)
+            ListPagination(
+              page: safeMovementPage,
+              pageSize: _movementsPerPage,
+              total: _movements.length,
+              label: 'movements',
+              onPageChange: (page) => setState(() => _movementPage = page),
+            ),
         ],
       ),
-    );
-  }
-}
-
-class _StatsGrid extends StatelessWidget {
-  final InventoryRecord record;
-  const _StatsGrid({required this.record});
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      ('Total', record.total),
-      ('Available', record.available),
-      ('Reserved', record.reserved),
-      if (!record.isChemical) ('Rented', record.rented),
-      ('Blocked', record.blocked),
-    ];
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: items
-          .map(
-            (e) => Container(
-              width: (MediaQuery.of(context).size.width - 48) / 2,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppTheme.card(context),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: context.appColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(e.$1, style: TextStyle(color: context.appColors.textSecondary, fontSize: 12)),
-                  Text(
-                    '${e.$2}',
-                    style: TextStyle(
-                      color: context.appColors.textPrimary,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-          .toList(),
     );
   }
 }

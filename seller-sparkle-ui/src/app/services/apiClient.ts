@@ -37,6 +37,23 @@ function resolveApiBaseUrl(): string {
 
 const API_BASE_URL = resolveApiBaseUrl();
 
+/** Login/register/forgot-password return 401 for bad credentials — not an expired session. */
+function shouldTreat401AsSessionExpiry(endpoint: string): boolean {
+  const path = (endpoint.split("?")[0] ?? "").replace(/\/+$/, "").toLowerCase();
+  if (
+    path.includes("/auth/login") ||
+    path.includes("/auth/forgot-password") ||
+    path.includes("/auth/reset-password") ||
+    path.includes("/auth/verify-email") ||
+    path.includes("/auth/resend-verification") ||
+    path.endsWith("/vendors/register") ||
+    path.endsWith("/customers/register")
+  ) {
+    return false;
+  }
+  return true;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -116,8 +133,8 @@ class ApiClient {
     }
   }
 
-  private async handleResponse<T>(response: Response): Promise<T> {
-    if (response.status === 401) {
+  private async handleResponse<T>(response: Response, endpoint = ""): Promise<T> {
+    if (response.status === 401 && shouldTreat401AsSessionExpiry(endpoint)) {
       window.dispatchEvent(new Event('unauthorized'));
       throw new UnauthorizedRedirectError();
     }
@@ -197,7 +214,7 @@ class ApiClient {
           method: "GET",
           headers: this.getHeaders(false),
         });
-        return this.handleResponse<T>(response);
+        return this.handleResponse<T>(response, endpoint);
       },
       options,
     );
@@ -213,7 +230,7 @@ class ApiClient {
           headers: this.getHeaders(true),
           body: data ? JSON.stringify(data) : undefined,
         });
-        return this.handleResponse<T>(response);
+        return this.handleResponse<T>(response, endpoint);
       },
       options,
     );
@@ -229,7 +246,7 @@ class ApiClient {
           headers: this.getHeaders(true),
           body: data ? JSON.stringify(data) : undefined,
         });
-        return this.handleResponse<T>(response);
+        return this.handleResponse<T>(response, endpoint);
       },
       options,
     );
@@ -246,7 +263,7 @@ class ApiClient {
           headers: this.getHeaders(hasBody),
           body: hasBody ? JSON.stringify(data) : undefined,
         });
-        return this.handleResponse<T>(response);
+        return this.handleResponse<T>(response, endpoint);
       },
       options,
     );
@@ -261,7 +278,7 @@ class ApiClient {
           method: "DELETE",
           headers: this.getHeaders(false),
         });
-        return this.handleResponse<T>(response);
+        return this.handleResponse<T>(response, endpoint);
       },
       options,
     );
@@ -277,7 +294,7 @@ class ApiClient {
           headers: this.getAuthHeaders(),
           body: data,
         });
-        return this.handleResponse<T>(response);
+        return this.handleResponse<T>(response, endpoint);
       },
       options,
     );

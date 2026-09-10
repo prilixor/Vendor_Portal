@@ -1,5 +1,7 @@
 export const BRAND_MARK_SRC = "/branding/blinksmed-mark.png";
-export const BRAND_LOGO_SRC = "/branding/blinksmed-logo.png";
+export const BRAND_LOGO_SRC = "/branding/blinksmed-logo.png?v=20260907";
+/** Live stacked logo tile — login / auth panels only. */
+export const BRAND_LOGO_AUTH_SRC = "/branding/blinksmed-logo-auth.png?v=20260907";
 /** Unique path + version so Chrome does not keep serving the old Lovable /favicon.ico cache. */
 export const FAVICON_HREF = "/bm-icon.png?v=20260825r";
 export const FAVICON_SVG_HREF = "/bm-icon.svg?v=20260825r";

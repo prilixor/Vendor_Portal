@@ -933,6 +933,31 @@ public sealed class VendorOnboardingRepository(
         }
     }
 
+    public async Task ClearRentalDurationIconAssignmentsAsync(Guid iconId, CancellationToken cancellationToken)
+    {
+        await ClearIconAssignmentsAsync(commonDbContext, iconId, cancellationToken);
+        await ClearIconAssignmentsAsync(dbContext, iconId, cancellationToken);
+    }
+
+    private static async Task ClearIconAssignmentsAsync(
+        ApplicationDbContext db,
+        Guid iconId,
+        CancellationToken cancellationToken)
+    {
+        var plans = await db.Set<ProductRentalPricingPlan>()
+            .Where(p => p.RentalDurationIconId == iconId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var plan in plans)
+        {
+            plan.RentalDurationIconId = null;
+            plan.IconUrl = null;
+            plan.IconThumbnailUrl = null;
+            plan.ValueTier = null;
+            plan.IconName = null;
+        }
+    }
+
     private static RentalDurationIcon CloneRentalDurationIcon(RentalDurationIcon source) =>
         new()
         {

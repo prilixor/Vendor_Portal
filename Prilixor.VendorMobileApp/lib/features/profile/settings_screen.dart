@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
+import '../../core/utils/password_validation.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
@@ -236,21 +237,35 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
     super.dispose();
   }
 
+  void _syncPasswordPair() {
+    setState(() {
+      _newErr = PasswordValidation.liveLengthError(
+        _next.text,
+        message: 'New password must be at least 8 characters.',
+      );
+      _confirmErr = PasswordValidation.liveConfirmError(
+        _next.text,
+        _confirm.text,
+        message: 'New password and confirm password must match.',
+      );
+    });
+  }
+
   bool _validate() {
     final currentErr =
         requiredMessage(_current.text, message: 'Current password is required');
     String? newErr =
         requiredMessage(_next.text, message: 'New password is required');
-    if (newErr == null && _next.text.length < 8) {
-      newErr = 'New password must be at least 8 characters.';
-    }
-    String? confirmErr = requiredMessage(
-      _confirm.text,
-      message: 'Confirm password is required',
+    newErr ??= PasswordValidation.submitLengthError(
+      _next.text,
+      message: 'New password must be at least 8 characters.',
     );
-    if (confirmErr == null && _confirm.text != _next.text) {
-      confirmErr = 'New password and confirm password must match.';
-    }
+    final confirmErr = PasswordValidation.submitConfirmError(
+      _next.text,
+      _confirm.text,
+      requiredMessage: 'Confirm password is required',
+      mismatchMessage: 'New password and confirm password must match.',
+    );
     setState(() {
       _currentErr = currentErr;
       _newErr = newErr;
@@ -308,6 +323,9 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
             required: true,
             errorText: _currentErr,
             controller: _current,
+            onChanged: (_) {
+              if (_currentErr != null) setState(() => _currentErr = null);
+            },
           ),
           const SizedBox(height: 12),
           CustomTextField(
@@ -317,6 +335,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
             required: true,
             errorText: _newErr,
             controller: _next,
+            onChanged: (_) => _syncPasswordPair(),
           ),
           const SizedBox(height: 12),
           CustomTextField(
@@ -326,6 +345,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
             required: true,
             errorText: _confirmErr,
             controller: _confirm,
+            onChanged: (_) => _syncPasswordPair(),
           ),
           const SizedBox(height: 24),
           ElevatedButton(

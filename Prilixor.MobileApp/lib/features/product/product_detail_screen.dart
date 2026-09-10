@@ -22,6 +22,7 @@ import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
 import '../../shared/widgets/struck_price.dart';
 import '../../shared/utils/require_auth.dart';
+import '../dashboard/customer_dashboard.dart';
 import 'product_image_viewer_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -135,24 +136,34 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   String? _planIconUrl(RentalPricingPlanModel plan) {
-    // Match web: prefer iconUrl, then thumbnail.
-    return resolveMediaUrl(plan.iconUrl) ?? resolveMediaUrl(plan.iconThumbnailUrl);
+    return resolveRentalIconUrlFromPlan(
+      iconUrl: plan.iconUrl,
+      iconThumbnailUrl: plan.iconThumbnailUrl,
+    );
   }
 
-  /// Match web [RentalPeriodPlanDropdown]: only show catalog icons; blank when unset.
+  /// Match web [RentalPeriodPlanDropdown] legend + trigger icon chips.
   Widget? _planIconAvatar(RentalPricingPlanModel? plan, {double size = 40}) {
     final url = plan == null ? null : _planIconUrl(plan);
     if (url == null || url.isEmpty) return null;
+    final colors = context.appColors;
+    final iconSize = size * 0.72;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: const Color(0xFF334155).withValues(alpha: 0.6),
-        border: Border.all(color: Colors.white12),
+        color: colors.surfaceElevated,
+        border: Border.all(color: colors.border),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: CatalogImage(url: url, width: size, height: size, fit: BoxFit.contain),
+      alignment: Alignment.center,
+      child: CatalogImage(
+        key: ValueKey(url),
+        url: url,
+        width: iconSize,
+        height: iconSize,
+        fit: BoxFit.contain,
+      ),
     );
   }
 
@@ -255,17 +266,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
   List<({String tier, String label, String url})> _tierLegend(List<RentalPricingPlanModel> plans) {
-    const order = ['good', 'better', 'best_value', 'maximum_savings'];
-    final byTier = <String, ({String label, String url})>{};
+    final byIcon = <String, ({String label, String url})>{};
     for (final plan in plans) {
-      final tier = (plan.valueTier ?? '').toLowerCase().replaceAll('-', '_');
       final url = _planIconUrl(plan);
-      if (tier.isEmpty || url == null || url.isEmpty || byTier.containsKey(tier)) continue;
-      byTier[tier] = (label: rentalValueTierLabel(tier), url: url);
+      final key = plan.rentalDurationIconId ?? plan.iconName ?? plan.valueTier ?? '';
+      if (key.isEmpty || url == null || url.isEmpty || byIcon.containsKey(key)) continue;
+      byIcon[key] = (label: rentalIconLabel(plan), url: url);
     }
     return [
-      for (final t in order)
-        if (byTier[t] != null) (tier: t, label: byTier[t]!.label, url: byTier[t]!.url),
+      for (final entry in byIcon.entries)
+        (tier: entry.key, label: entry.value.label, url: entry.value.url),
     ];
   }
 
@@ -943,7 +953,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   border: Border.all(color: borderColor, width: 1.5),
                                                 ),
                                                 child: Row(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment: CrossAxisAlignment.center,
                                                   children: [
                                                     Expanded(
                                                       child: Column(
@@ -1001,8 +1011,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                     const SizedBox(width: 8),
                                                     Row(
                                                       mainAxisSize: MainAxisSize.min,
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      crossAxisAlignment: CrossAxisAlignment.center,
                                                       children: [
+                                                        if (_planIconAvatar(selectedPlan, size: 32)
+                                                            case final icon?) ...[
+                                                          icon,
+                                                          const SizedBox(width: 8),
+                                                        ],
                                                         Column(
                                                           crossAxisAlignment: CrossAxisAlignment.end,
                                                           children: [
@@ -1029,11 +1044,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                             ],
                                                           ],
                                                         ),
-                                                        if (_planIconAvatar(selectedPlan, size: 48)
-                                                            case final icon?) ...[
-                                                          const SizedBox(width: 8),
-                                                          icon,
-                                                        ],
                                                         const SizedBox(width: 2),
                                                         Padding(
                                                           padding: const EdgeInsets.only(top: 2),
@@ -1520,124 +1530,174 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                     ),
       bottomSheet: detail != null
-          ? SafeArea(
-              top: false,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                decoration: BoxDecoration(
-                  color: colors.surface,
-                  border: Border(top: BorderSide(color: colors.border)),
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6C63FF),
-                      disabledBackgroundColor: colors.border,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ? Consumer<CartProvider>(
+              builder: (context, cart, _) {
+                final inCart = cart.hasLine(
+                  detail.id,
+                  productVariantId: _selectedVariantId,
+                );
+                final addBlocked = !canAdd ||
+                    cannotFulfill ||
+                    (actualOrderType == 'rent' &&
+                        (!detail.hasActiveRentalPlans || selectedPlan == null));
+
+                return SafeArea(
+                  top: false,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                    decoration: BoxDecoration(
+                      color: colors.surface,
+                      border: Border(top: BorderSide(color: colors.border)),
                     ),
-                    onPressed: !canAdd ||
-                            cannotFulfill ||
-                            (actualOrderType == 'rent' &&
-                                (!detail.hasActiveRentalPlans || selectedPlan == null))
-                        ? null
-                        : () async {
-                            if (_quantity < 1 ||
-                                (actualOrderType == 'rent' &&
-                                    (!detail.hasActiveRentalPlans || selectedPlan == null))) {
-                              showRequiredFieldsBlocked(
-                                context,
-                                message: detail.hasActiveRentalPlans
-                                    ? 'Please select a rental period and quantity.'
-                                    : 'Rental plans are not configured for this product.',
-                              );
-                              return;
-                            }
-                            if (_quantity > currentQty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Only $currentQty unit(s) available in stock.')),
-                              );
-                              return;
-                            }
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: inCart
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFF6C63FF),
+                          disabledBackgroundColor: colors.border,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: inCart
+                            ? () => CustomerDashboard.openCartTab(context)
+                            : addBlocked
+                                ? null
+                                : () async {
+                                    if (_quantity < 1 ||
+                                        (actualOrderType == 'rent' &&
+                                            (!detail.hasActiveRentalPlans ||
+                                                selectedPlan == null))) {
+                                      showRequiredFieldsBlocked(
+                                        context,
+                                        message: detail.hasActiveRentalPlans
+                                            ? 'Please select a rental period and quantity.'
+                                            : 'Rental plans are not configured for this product.',
+                                      );
+                                      return;
+                                    }
+                                    if (_quantity > currentQty) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Only $currentQty unit(s) available in stock.',
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
 
-                            if (actualOrderType == 'rent') {
-                              final blocked = await _promptRentToBuyIfNeeded(
-                                detail: detail,
-                                unitBuyPrice: unitBuyPrice,
-                              );
-                              if (!mounted || blocked) return;
-                            }
+                                    if (actualOrderType == 'rent') {
+                                      final blocked = await _promptRentToBuyIfNeeded(
+                                        detail: detail,
+                                        unitBuyPrice: unitBuyPrice,
+                                      );
+                                      if (!mounted || blocked) return;
+                                    }
 
-                            final displayTitle = selectedVariant != null
-                                ? '${detail.title} (${selectedVariant.sizeLabel})'
-                                : detail.title;
+                                    final displayTitle = selectedVariant != null
+                                        ? '${detail.title} (${selectedVariant.sizeLabel})'
+                                        : detail.title;
 
-                            final finalType = detail.canRent && detail.canBuy
-                                ? _orderType
-                                : (detail.canBuy ? 'buy' : 'rent');
+                                    final finalType = detail.canRent && detail.canBuy
+                                        ? _orderType
+                                        : (detail.canBuy ? 'buy' : 'rent');
 
-                            Provider.of<CartProvider>(context, listen: false).addLine(
-                              CartLineModel(
-                                listingId: detail.id,
-                                title: displayTitle,
-                                vendorName: detail.vendorName,
-                                primaryImageUrl: detail.primaryImageUrl ??
-                                    resolveItemImageUrl(imageUrls: detail.imageUrls),
-                                dailyRent: detail.dailyRent,
-                                weeklyRent: detail.weeklyRent,
-                                monthlyRent: detail.monthlyRent,
-                                securityDeposit: detail.securityDeposit,
-                                quantity: _quantity,
-                                rentalDays: finalType == 'buy' ? 0 : (selectedPlan?.durationDays ?? 0),
-                                rentalPeriodUnit: rentalUnitDay,
-                                orderType: finalType,
-                                prescriptionRequired: detail.prescriptionRequired,
-                                productVariantId: _selectedVariantId,
-                                buyPrice: unitBuyPrice > 0 ? unitBuyPrice : detail.buyPrice,
-                                isBuyEnabled: detail.canBuy,
-                                isRentEnabled: detail.isRentEnabled,
-                                isChemical: detail.isChemical,
-                                rentalPricingPlanId:
-                                    finalType == 'rent' ? selectedPlan?.id : null,
-                                rentalDurationLabel: finalType == 'rent' && selectedPlan != null
-                                    ? dayPlanTitle(
-                                        selectedPlan.durationDays,
-                                        selectedPlan.durationLabel,
-                                      )
-                                    : null,
-                                rentalDurationDays:
-                                    finalType == 'rent' ? selectedPlan?.durationDays : null,
-                                rentalNormalPrice:
-                                    finalType == 'rent' ? selectedPlan?.normalPrice : null,
-                                rentalDiscountType:
-                                    finalType == 'rent' ? selectedPlan?.discountType : null,
-                                rentalDiscountValue:
-                                    finalType == 'rent' ? selectedPlan?.discountValue : null,
-                                rentalFinalPrice:
-                                    finalType == 'rent' ? selectedPlan?.finalRentalPrice : null,
+                                    cart.addLine(
+                                      CartLineModel(
+                                        listingId: detail.id,
+                                        title: displayTitle,
+                                        vendorName: detail.vendorName,
+                                        primaryImageUrl: detail.primaryImageUrl ??
+                                            resolveItemImageUrl(
+                                              imageUrls: detail.imageUrls,
+                                            ),
+                                        dailyRent: detail.dailyRent,
+                                        weeklyRent: detail.weeklyRent,
+                                        monthlyRent: detail.monthlyRent,
+                                        securityDeposit: detail.securityDeposit,
+                                        quantity: _quantity,
+                                        rentalDays: finalType == 'buy'
+                                            ? 0
+                                            : (selectedPlan?.durationDays ?? 0),
+                                        rentalPeriodUnit: rentalUnitDay,
+                                        orderType: finalType,
+                                        prescriptionRequired: detail.prescriptionRequired,
+                                        productVariantId: _selectedVariantId,
+                                        buyPrice: unitBuyPrice > 0
+                                            ? unitBuyPrice
+                                            : detail.buyPrice,
+                                        isBuyEnabled: detail.canBuy,
+                                        isRentEnabled: detail.isRentEnabled,
+                                        isChemical: detail.isChemical,
+                                        rentalPricingPlanId: finalType == 'rent'
+                                            ? selectedPlan?.id
+                                            : null,
+                                        rentalDurationLabel: finalType == 'rent' &&
+                                                selectedPlan != null
+                                            ? dayPlanTitle(
+                                                selectedPlan.durationDays,
+                                                selectedPlan.durationLabel,
+                                              )
+                                            : null,
+                                        rentalDurationDays: finalType == 'rent'
+                                            ? selectedPlan?.durationDays
+                                            : null,
+                                        rentalNormalPrice: finalType == 'rent'
+                                            ? selectedPlan?.normalPrice
+                                            : null,
+                                        rentalDiscountType: finalType == 'rent'
+                                            ? selectedPlan?.discountType
+                                            : null,
+                                        rentalDiscountValue: finalType == 'rent'
+                                            ? selectedPlan?.discountValue
+                                            : null,
+                                        rentalFinalPrice: finalType == 'rent'
+                                            ? selectedPlan?.finalRentalPrice
+                                            : null,
+                                      ),
+                                    );
+                                  },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              inCart
+                                  ? Icons.shopping_cart_outlined
+                                  : Icons.add_shopping_cart_outlined,
+                              size: 20,
+                              color: canAdd || inCart
+                                  ? Colors.white
+                                  : colors.textSecondary,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              !canAdd
+                                  ? 'Out of stock'
+                                  : inCart
+                                      ? 'Go to cart'
+                                      : (actualOrderType == 'buy'
+                                          ? 'Add to cart \u2014 Buy'
+                                          : 'Add to cart \u2014 Rent'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: canAdd || inCart
+                                    ? Colors.white
+                                    : colors.textSecondary,
                               ),
-                            );
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Added to Cart!'), backgroundColor: Colors.green),
-                            );
-                          },
-                    child: Text(
-                      canAdd
-                          ? (actualOrderType == 'buy'
-                              ? 'Add to cart \u2014 Buy'
-                              : 'Add to cart \u2014 Rent')
-                          : 'Out of stock',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: canAdd ? Colors.white : colors.textSecondary,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             )
           : null,
     );
@@ -1738,7 +1798,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         },
                         borderRadius: BorderRadius.circular(14),
                         child: Container(
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                           decoration: BoxDecoration(
                             color: selected
                                 ? accent.withValues(alpha: plan.isRecommended ? 0.18 : 0.14)
@@ -1756,12 +1816,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             ),
                           ),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Container(
                                 width: 18,
                                 height: 18,
-                                margin: const EdgeInsets.only(top: 2),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: selected ? accent : Colors.transparent,
@@ -1778,6 +1837,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Wrap(
                                       crossAxisAlignment: WrapCrossAlignment.center,
@@ -1799,62 +1859,58 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     const SizedBox(height: 3),
                                     Text(
                                       planListMetaLine(plan),
+                                      style: TextStyle(
+                                        color: context.appColors.textMuted,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    if (savings > 0) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        pct > 0
+                                            ? '$pct% off \u00b7 Save ${formatPlanInr(savings)}'
+                                            : 'Save ${formatPlanInr(savings)}',
                                         style: TextStyle(
-                                          color: context.appColors.textMuted,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w500,
+                                          color: context.isDarkMode
+                                              ? const Color(0xFF34D399)
+                                              : const Color(0xFF15803D),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
                                         ),
                                       ),
-                                      if (savings > 0) ...[
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          pct > 0
-                                              ? '$pct% off \u00b7 Save ${formatPlanInr(savings)}'
-                                              : 'Save ${formatPlanInr(savings)}',
-                                          style: TextStyle(
-                                            color: context.isDarkMode
-                                                ? const Color(0xFF34D399)
-                                                : const Color(0xFF15803D),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ],
-                                      // Web mobile row: price left, catalog icon right.
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  formatPlanInr(plan.finalRentalPrice),
-                                                  style: TextStyle(
-                                                    color: priceColor,
-                                                    fontWeight: FontWeight.w800,
-                                                    fontSize: 15,
-                                                  ),
-                                                ),
-                                                if (savings > 0) ...[
-                                                  const SizedBox(height: 2),
-                                                  StruckPrice(
-                                                    formatPlanInr(plan.normalPrice),
-                                                    style: const TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight: FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                          if (_planIconAvatar(plan, size: 36) case final icon?) icon,
-                                        ],
-                                      ),
+                                    ],
                                   ],
                                 ),
+                              ),
+                              const SizedBox(width: 8),
+                              if (_planIconAvatar(plan, size: 28) case final icon?) ...[
+                                icon,
+                                const SizedBox(width: 6),
+                              ],
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    formatPlanInr(plan.finalRentalPrice),
+                                    style: TextStyle(
+                                      color: priceColor,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  if (savings > 0) ...[
+                                    const SizedBox(height: 2),
+                                    StruckPrice(
+                                      formatPlanInr(plan.normalPrice),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ],
                           ),

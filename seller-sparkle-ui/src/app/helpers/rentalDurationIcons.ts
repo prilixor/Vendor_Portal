@@ -1,15 +1,38 @@
-import type { RentalValueTier } from "@/app/services/adminApi";
-
-export const RENTAL_VALUE_TIERS: { value: RentalValueTier; label: string }[] = [
-  { value: "good", label: "Good" },
-  { value: "better", label: "Better" },
-  { value: "best_value", label: "Best Value" },
-  { value: "maximum_savings", label: "Maximum Savings" },
-];
+export function slugFromName(name?: string | null): string {
+  const slug = (name ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 32)
+    .replace(/_+$/g, "");
+  return slug || "icon";
+}
 
 export function rentalValueTierLabel(tier?: string | null): string {
   const key = (tier ?? "").toLowerCase().replace(/-/g, "_");
-  return RENTAL_VALUE_TIERS.find((t) => t.value === key)?.label ?? "Good";
+  const known: Record<string, string> = {
+    good: "Good",
+    better: "Better",
+    best_value: "Best Value",
+    maximum_savings: "Maximum Savings",
+  };
+  if (known[key]) return known[key];
+  if (!key) return "";
+  return key
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+export function rentalIconLabel(plan?: {
+  iconName?: string | null;
+  valueTier?: string | null;
+} | null): string {
+  const name = plan?.iconName?.trim();
+  if (name) return name;
+  return rentalValueTierLabel(plan?.valueTier);
 }
 
 export function formatBillingCycles(cycles?: number | null): string {
@@ -24,7 +47,7 @@ export function dayPlanTitle(durationDays: number, fallbackLabel?: string): stri
   return fallbackLabel?.trim() || "Rental plan";
 }
 
-const getUploadsOrigin = (): string | null => {
+const getConfiguredApiOrigin = (): string | null => {
   const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
   if (configured && /^https?:\/\//i.test(configured)) {
     try {
@@ -43,41 +66,61 @@ const getUploadsOrigin = (): string | null => {
     }
   }
 
+  return null;
+};
+
+const getDevAssetOrigin = (): string | null => {
   if (typeof window !== "undefined" && import.meta.env.DEV) {
     return window.location.origin;
   }
-
   return null;
 };
 
 /** Resolve stored upload refs / relative paths for rental icons. */
 export function resolveRentalIconUrl(fileUrl?: string | null): string {
   if (!fileUrl) return "";
-  if (fileUrl.startsWith("data:")) return fileUrl;
+  const trimmed = fileUrl.trim();
+  if (!trimmed || trimmed.startsWith("data:")) return trimmed;
 
-  const relative = fileUrl.replace(/^\/+/, "");
-  const path = relative.startsWith("uploads/")
-    ? `/${relative}`
-    : fileUrl.startsWith("/")
-      ? fileUrl
-      : `/${relative}`;
+  const apiOrigin = getConfiguredApiOrigin();
+  const devOrigin = getDevAssetOrigin();
 
-  if (/^https?:\/\//i.test(fileUrl)) {
+  if (/^https?:\/\//i.test(trimmed)) {
     try {
-      const absolute = new URL(fileUrl);
-      if (absolute.pathname.includes("/uploads/")) {
-        const origin = getUploadsOrigin();
-        if (origin && absolute.origin !== origin && import.meta.env.DEV) {
-          return `${origin}${absolute.pathname}${absolute.search}${absolute.hash}`;
-        }
+      const absolute = new URL(trimmed);
+      // Keep presigned S3/CDN and other external hosts untouched (rewriting breaks signatures).
+      if (!apiOrigin || absolute.origin !== apiOrigin) {
+        return trimmed;
       }
-      return fileUrl;
+      // Same API host in dev — route /uploads through the Vite proxy.
+      if (devOrigin && import.meta.env.DEV && absolute.pathname.startsWith("/uploads/")) {
+        return `${devOrigin}${absolute.pathname}${absolute.search}${absolute.hash}`;
+      }
+      return trimmed;
     } catch {
-      return fileUrl;
+      return trimmed;
     }
   }
 
-  const origin = getUploadsOrigin();
+  const relative = trimmed.replace(/^\/+/, "");
+  const path = relative.startsWith("uploads/")
+    ? `/${relative}`
+    : trimmed.startsWith("/")
+      ? trimmed
+      : `/${relative}`;
+
+  const origin = devOrigin ?? apiOrigin;
   if (!origin) return path;
   return `${origin}${path}`;
+}
+
+/** Same order as live: full icon first, thumbnail fallback. */
+export function resolveRentalIconUrlFromPlan(plan?: {
+  iconUrl?: string | null;
+  iconThumbnailUrl?: string | null;
+} | null): string {
+  if (!plan) return "";
+  const primary = resolveRentalIconUrl(plan.iconUrl);
+  if (primary) return primary;
+  return resolveRentalIconUrl(plan.iconThumbnailUrl);
 }

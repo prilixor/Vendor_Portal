@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useQueryTab } from "@/app/helpers/queryTab";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -32,6 +33,7 @@ import { AdminProductMediaStep } from "@/app/components/admin/AdminProductMediaS
 
 const PAGE_SIZE = 10;
 const PRODUCT_FORM_STEPS = ["Basic", "Pricing", "Tax & media"] as const;
+const PRODUCT_TABS = ["equipment", "categories"] as const;
 
 function isAutomaticPricingPlan(plan: ProductRentalPricingPlanDto): boolean {
   return plan.resetToAutomatic === true || (plan.discountType === "none" && plan.isAutomatic !== false);
@@ -56,7 +58,7 @@ const ProductManagement = () => {
   const [rentalDurationMasters, setRentalDurationMasters] = useState<RentalDurationMasterDto[]>([]);
   const [rentalDurationIcons, setRentalDurationIcons] = useState<RentalDurationIconDto[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("categories");
+  const [activeTab, setActiveTab] = useQueryTab(PRODUCT_TABS, "equipment");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -995,15 +997,15 @@ const ProductManagement = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 border-b border-border pb-4">
             <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
-              <TabsTrigger value="categories" className="text-xs sm:text-sm">
-                <FolderTree className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
-                <span className="truncate">Categories</span>
-                <span className="hidden sm:inline ml-1">({categories.filter(c => !c.isChemical).length})</span>
-              </TabsTrigger>
               <TabsTrigger value="equipment" className="text-xs sm:text-sm">
                 <Package className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
                 <span className="truncate">Equipment</span>
                 <span className="hidden sm:inline ml-1">({products.filter((p) => !isChemicalProduct(p)).length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="categories" className="text-xs sm:text-sm">
+                <FolderTree className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate">Categories</span>
+                <span className="hidden sm:inline ml-1">({categories.filter(c => !c.isChemical).length})</span>
               </TabsTrigger>
             </TabsList>
 
@@ -1042,7 +1044,7 @@ const ProductManagement = () => {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={`Search ${activeTab}...`}
+                placeholder={activeTab === "categories" ? "Search categories..." : "Search equipment..."}
                 className="pl-9 w-full"
               />
             </div>

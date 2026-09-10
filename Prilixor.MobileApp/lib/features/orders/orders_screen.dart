@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/providers/order_detail_provider.dart';
 import '../../core/models/order_model.dart';
+import '../../core/utils/order_badges.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/guest_sign_in_prompt.dart';
@@ -18,6 +19,8 @@ class OrdersScreen extends StatefulWidget {
 }
 
 class _OrdersScreenState extends State<OrdersScreen> {
+  static const _statCardsMinGap = 12.0;
+
   final _searchController = TextEditingController();
   String _searchQuery = '';
   String _statusFilter = 'All';
@@ -199,31 +202,38 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                 builder: (context, constraints) {
                                   final narrow = constraints.maxWidth < 360;
                                   final rentalsTotal = provider.activeRentalsTotal;
-                                  return Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: _buildStatCard(
-                                          icon: Icons.inventory_2_outlined,
-                                          title: narrow ? 'Active' : 'Active rentals',
-                                          value: provider.activeRentalsCount.toString(),
-                                          subtitle: narrow
-                                              ? _formatInrCompact(rentalsTotal)
-                                              : '${_formatInr(rentalsTotal)} in flight',
-                                          accent: const Color(0xFF34D399),
+                                  final cardGap = narrow
+                                      ? _statCardsMinGap
+                                      : 14.0;
+                                  return IntrinsicHeight(
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        Expanded(
+                                          child: _buildStatCard(
+                                            icon: Icons.inventory_2_outlined,
+                                            title: narrow ? 'Active' : 'Active rentals',
+                                            value: provider.activeRentalsCount.toString(),
+                                            subtitle: narrow
+                                                ? _formatInrCompact(rentalsTotal)
+                                                : '${_formatInr(rentalsTotal)} in flight',
+                                            accent: const Color(0xFF34D399),
+                                            compact: narrow,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: _buildStatCard(
-                                          icon: Icons.local_shipping_outlined,
-                                          title: narrow ? 'Upcoming' : 'Deliveries',
-                                          value: provider.upcomingDeliveriesCount.toString(),
-                                          subtitle: narrow ? 'Pending / transit' : 'Pending & in transit',
-                                          accent: const Color(0xFF60A5FA),
+                                        SizedBox(width: cardGap),
+                                        Expanded(
+                                          child: _buildStatCard(
+                                            icon: Icons.local_shipping_outlined,
+                                            title: narrow ? 'Upcoming' : 'Deliveries',
+                                            value: provider.upcomingDeliveriesCount.toString(),
+                                            subtitle: narrow ? 'Pending / transit' : 'Pending & in transit',
+                                            accent: const Color(0xFF60A5FA),
+                                            compact: narrow,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   );
                                 },
                               ),
@@ -549,28 +559,31 @@ class _OrdersScreenState extends State<OrdersScreen> {
     required String value,
     required String subtitle,
     required Color accent,
+    bool compact = false,
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      constraints: const BoxConstraints(minHeight: 104),
+      padding: EdgeInsets.fromLTRB(compact ? 12 : 14, 12, compact ? 12 : 14, 12),
       decoration: BoxDecoration(
         color: context.appColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: context.appColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: compact ? 28 : 30,
+                height: compact ? 28 : 30,
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.15),
+                  color: accent.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, size: 15, color: accent),
+                child: Icon(icon, size: compact ? 15 : 16, color: accent),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -578,8 +591,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   title,
                   style: TextStyle(
                     color: context.appColors.textSecondary,
-                    fontSize: 12,
+                    fontSize: compact ? 11.5 : 12,
                     fontWeight: FontWeight.w600,
+                    height: 1.2,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -592,22 +606,23 @@ class _OrdersScreenState extends State<OrdersScreen> {
             value,
             style: TextStyle(
               color: context.appColors.textPrimary,
-              fontSize: 26,
+              fontSize: compact ? 24 : 26,
               fontWeight: FontWeight.w700,
               height: 1,
-              letterSpacing: -0.6,
+              letterSpacing: -0.5,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 5),
           Text(
             subtitle,
             style: TextStyle(
               color: context.appColors.textMuted,
-              fontSize: 11,
+              fontSize: compact ? 10.5 : 11,
               fontWeight: FontWeight.w500,
               height: 1.25,
             ),
-            maxLines: 2,
+            maxLines: compact ? 1 : 2,
             overflow: TextOverflow.ellipsis,
           ),
         ],
@@ -792,7 +807,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         _buildOrderTypeBadge(context, order.orderType),
-                        _buildStatusBadge(context, order.status, compact: compact),
+                        _buildStatusBadge(context, order.status),
                       ],
                     ),
                   ),
@@ -855,7 +870,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         border: Border.all(color: border),
       ),
       child: Text(
-        orderType.toUpperCase(),
+        formatOrderTypeLabel(orderType),
         style: TextStyle(
           color: fg,
           fontSize: 10,
@@ -867,9 +882,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Widget _buildStatusBadge(BuildContext context, String status, {bool compact = false}) {
+  Widget _buildStatusBadge(BuildContext context, String status) {
     final isDark = context.isDarkMode;
-    final label = _statusDisplayLabel(status, compact: compact);
+    final label = formatOrderStatusLabel(status);
     final colorsTuple = _statusColors(context, isDark, status);
 
     return Container(
@@ -892,23 +907,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
         overflow: TextOverflow.ellipsis,
       ),
     );
-  }
-
-  String _statusDisplayLabel(String status, {bool compact = false}) {
-    final s = status.trim().toLowerCase().replaceAll('_', ' ');
-    if (compact) {
-      if (s == 'dispatch failed') return 'Failed';
-      if (s == 'awaiting vendor acceptance') return 'Awaiting';
-      if (s == 'out for delivery' || s.contains('transit')) return 'In transit';
-      if (s == 'bought out') return 'Buyout';
-    }
-    final raw = status.trim().replaceAll('_', ' ');
-    if (raw.isEmpty) return status;
-    return raw
-        .split(' ')
-        .where((w) => w.isNotEmpty)
-        .map((w) => '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
-        .join(' ');
   }
 
   (Color, Color, Color) _statusColors(BuildContext context, bool isDark, String status) {

@@ -5,7 +5,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Switch } from "@/app/components/ui/switch";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { ListPager } from "@/app/components/shared/ListPager";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Notification } from "@/app/models";
 import {
@@ -437,15 +437,13 @@ const Notifications = () => {
             )}
           </ul>
 
-          {filtered.length > PAGE_SIZE && (
-            <ListPager
-              className="border-t border-border/40 pt-6 mt-6"
-              page={page}
-              totalPages={Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))}
-              summary={`Page ${page} of ${Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))} · ${filtered.length} items`}
-              onPageChange={setPage}
-            />
-          )}
+          <TablePagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={filtered.length}
+            onPageChange={setPage}
+            label="items"
+          />
         </Card>
 
         <Card className="border-border/60 p-4 sm:p-6 lg:p-8 h-fit">

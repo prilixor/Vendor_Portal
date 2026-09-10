@@ -31,13 +31,13 @@ export const RentVsBuySection = ({ data }: RentVsBuySectionProps) => {
   const activeCard = cards[activeCardIndex] || cards[0];
 
   return (
-    <section id="rent-or-buy" className="scroll-target section-block cream reveal">
+    <section id="rent-or-buy" className="scroll-target section-block reveal">
       <div className="section-inner">
         <div className="eyebrow">{eyebrow}</div>
         <h2 className="display">
           {title} <span className="accent">{accentText}</span>
         </h2>
-        <p className="sub" style={{ maxWidth: "640px" }}>
+        <p className="sub">
           {subtitle}
         </p>
 
@@ -105,7 +105,7 @@ export const RentVsBuySection = ({ data }: RentVsBuySectionProps) => {
         </div>
 
         {/* Left & Right Q&A Split Layout */}
-        <div className="faq-split-layout" style={{ marginTop: "20px" }}>
+        <div className="faq-split-layout">
           {/* Left Questions Menu */}
           <div className="faq-left-menu">
             {cards.map((card, idx) => {
@@ -129,12 +129,12 @@ export const RentVsBuySection = ({ data }: RentVsBuySectionProps) => {
           {/* Right Q&A Content Panel */}
           <div className="faq-right-content">
             {activeCard && (
-              <div className="faq-qa-card is-open" style={{ padding: "24px 28px" }}>
-                <h3 style={{ fontSize: "20px", fontWeight: 700, color: "var(--ink)", marginBottom: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
-                  <span style={{ width: "8px", height: "24px", background: "var(--teal-mid)", borderRadius: "4px", display: "inline-block" }}></span>
+              <div className="faq-qa-card is-open rent-qa-card">
+                <h3>
+                  <span className="rent-qa-bar"></span>
                   {activeCard.title}
                 </h3>
-                <p style={{ color: "var(--gray-600)", lineHeight: "1.65", fontSize: "15px", margin: 0 }}>
+                <p>
                   {activeCard.description}
                 </p>
               </div>

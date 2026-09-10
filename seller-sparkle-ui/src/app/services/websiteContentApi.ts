@@ -10,6 +10,13 @@ export interface HomeFeatureDto {
   isActive?: boolean;
 }
 
+export interface HomeHeroSlideDto {
+  id?: string;
+  label: string;
+  imageUrl: string;
+  sortOrder?: number;
+}
+
 export interface HomeContentDto {
   id?: string;
   heroTitle: string;
@@ -22,6 +29,7 @@ export interface HomeContentDto {
   trustLabel: string;
   heroImageUrl?: string;
   features: HomeFeatureDto[];
+  heroSlides?: HomeHeroSlideDto[];
 }
 
 export interface AudienceCategoryDto {
@@ -193,8 +201,18 @@ export const websiteContentApi = {
         ...f,
         id: isValidGuid(f.id) ? f.id : undefined,
       })),
+      heroSlides: data.heroSlides?.map((s) => ({
+        ...s,
+        id: isValidGuid(s.id) ? s.id : undefined,
+      })),
     };
     return await apiClient.put<HomeContentDto>('/admin/website-content/home', payload);
+  },
+
+  uploadHomeHeroImage: async (file: File): Promise<{ fileUrl: string }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return await apiClient.postForm<{ fileUrl: string }>("/admin/website-content/home/hero-image", formData);
   },
 
   updateAboutContent: async (data: Partial<AboutContentDto>): Promise<AboutContentDto> => {

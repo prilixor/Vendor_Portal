@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import {
   PhoneCall,
   Mail,
@@ -16,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/app
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { BackLink } from "@/app/components/shared/BackLink";
-import { websiteContentApi } from "@/app/services/websiteContentApi";
+import { usePublicWebsiteContent } from "@/app/hooks/usePublicWebsiteContent";
 import { toast } from "sonner";
 
 const CustomerSupport = () => {
@@ -24,12 +23,7 @@ const CustomerSupport = () => {
   const orderRef = searchParams.get("order")?.trim();
   const [copied, setCopied] = useState(false);
 
-  const { data: publicContent } = useQuery({
-    queryKey: ["publicWebsiteContent"],
-    queryFn: () => websiteContentApi.getPublicContent(),
-    staleTime: 1000 * 60 * 5,
-    retry: 1,
-  });
+  const { data: publicContent } = usePublicWebsiteContent();
 
   const contact = publicContent?.contact;
   const phone = contact?.phone || "+91 8511225390";
@@ -189,7 +183,7 @@ const CustomerSupport = () => {
                 <a
                   href={`mailto:${businessEmail}`}
                   onClick={(e) => handleEmailClick(businessEmail, e)}
-                  className="font-semibold text-primary hover:underline cursor-pointer"
+                  className="cursor-pointer font-semibold text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
                 >
                   {businessEmail}
                 </a>
@@ -199,7 +193,7 @@ const CustomerSupport = () => {
                 <a
                   href={`mailto:${supportEmail}`}
                   onClick={(e) => handleEmailClick(supportEmail, e)}
-                  className="font-semibold text-primary hover:underline cursor-pointer"
+                  className="cursor-pointer font-semibold text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
                 >
                   {supportEmail}
                 </a>

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -10,6 +10,7 @@ import '../../core/models/order_image_model.dart';
 import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/vendor_photo_picker.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/struck_price.dart';
 import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
@@ -237,7 +238,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
   }
 
-  Future<void> _pickAndUploadPhotos() async {
+  Future<void> _pickAndUploadPhotos([VendorPhotoPickSource? source]) async {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     final provider = Provider.of<VendorOrderProvider>(context, listen: false);
@@ -248,14 +249,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       );
       return;
     }
-    final result = await FilePicker.pickFiles(
-      type: FileType.image,
-      allowMultiple: true,
-      withData: true,
+
+    final pickedSource = source ?? await showVendorPhotoSourceSheet(context);
+    if (pickedSource == null || !mounted) return;
+
+    final files = await pickVendorPhotoFiles(
+      source: pickedSource,
+      maxCount: remaining,
     );
-    if (result == null || result.files.isEmpty || !mounted) return;
+    if (files.isEmpty || !mounted) return;
+
     var uploaded = 0;
-    for (final file in result.files.take(remaining)) {
+    for (final file in files) {
       final ok = await provider.uploadOrderImage(
         vendorId: vendorId,
         orderId: _selectedOrderId,
@@ -986,7 +991,7 @@ class _PhotoRequestCard extends StatelessWidget {
   final List<OrderImage> images;
   final bool busy;
   final bool canUpload;
-  final VoidCallback onAdd;
+  final Future<void> Function([VendorPhotoPickSource? source]) onAdd;
   final Future<void> Function(String imageId) onDelete;
 
   const _PhotoRequestCard({
@@ -1040,12 +1045,83 @@ class _PhotoRequestCard extends StatelessWidget {
     );
   }
 
+  Widget _emptyUploadZone(BuildContext context) {
+    final colors = context.appColors;
+    return CustomPaint(
+      painter: _DashedBorderPainter(
+        color: AppTheme.accent.withValues(alpha: 0.55),
+        radius: 14,
+      ),
+      child: Ink(
+        decoration: BoxDecoration(
+          color: AppTheme.accent.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!kIsWeb) ...[
+                SizedBox(
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    onPressed: busy ? null : () => onAdd(VendorPhotoPickSource.camera),
+                    icon: const Icon(Icons.photo_camera_outlined, size: 20),
+                    label: const Text('Take photo'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              SizedBox(
+                height: 46,
+                child: OutlinedButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => onAdd(
+                            kIsWeb ? null : VendorPhotoPickSource.gallery,
+                          ),
+                  icon: const Icon(Icons.photo_library_outlined, size: 20),
+                  label: Text(kIsWeb ? 'Choose photos' : 'Choose from gallery'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colors.textPrimary,
+                    side: BorderSide(color: colors.border),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                busy ? 'Uploading\u2026' : 'Up to $maxImages photos',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colors.textMuted,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _addTile({required bool large, required BuildContext context}) {
     final radius = BorderRadius.circular(large ? 14 : 10);
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: busy ? null : onAdd,
+        onTap: busy ? null : () => onAdd(),
         borderRadius: radius,
         child: CustomPaint(
           painter: _DashedBorderPainter(
@@ -1071,7 +1147,7 @@ class _PhotoRequestCard extends StatelessWidget {
                     ),
                     SizedBox(height: large ? 8 : 4),
                     Text(
-                      busy ? 'Uploading\u2026' : (large ? 'Tap to add photos' : 'Add photo'),
+                      busy ? 'Uploading\u2026' : (large ? 'Add photo' : 'Add'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: context.appColors.textPrimary,
@@ -1082,7 +1158,7 @@ class _PhotoRequestCard extends StatelessWidget {
                     if (large) ...[
                       const SizedBox(height: 4),
                       Text(
-                        'Up to $maxImages photos',
+                        'Camera or gallery',
                         style: TextStyle(
                           color: context.appColors.textMuted,
                           fontSize: 11,
@@ -1235,11 +1311,7 @@ class _PhotoRequestCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (emptyUpload)
-            SizedBox(
-              width: double.infinity,
-              height: 132,
-              child: _addTile(large: true, context: context),
-            )
+            _emptyUploadZone(context)
           else if (images.isEmpty)
             Container(
               width: double.infinity,

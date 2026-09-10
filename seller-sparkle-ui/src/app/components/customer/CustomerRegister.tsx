@@ -11,6 +11,14 @@ import {
   normalizeIndianMobileDigits,
   optionalIndianMobileError,
 } from "@/app/helpers/indianMobilePhone";
+import {
+  PASSWORDS_MATCH_MESSAGE,
+  passwordsMeetConfirm,
+  patchLivePasswordPair,
+  submitConfirmPasswordError,
+  submitPasswordLengthError,
+} from "@/app/helpers/passwordValidation";
+import { cn } from "@/app/helpers/utils";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 
 const CustomerRegister = () => {
@@ -24,6 +32,16 @@ const CustomerRegister = () => {
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const passwordsMatch = passwordsMeetConfirm(password, confirmPassword);
+
+  const syncPasswordPair = (nextPassword: string, nextConfirm: string) => {
+    setErrors((prev) =>
+      patchLivePasswordPair(prev, nextPassword, nextConfirm, {
+        password: "password",
+        confirm: "confirmPassword",
+      }),
+    );
+  };
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -31,9 +49,10 @@ const CustomerRegister = () => {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) e.email = "Valid email required";
     const phoneErr = optionalIndianMobileError(phone);
     if (phoneErr) e.phone = phoneErr;
-    if (password.length < 8) e.password = "At least 8 characters";
-    if (!confirmPassword) e.confirmPassword = "Please confirm your password";
-    else if (confirmPassword !== password) e.confirmPassword = "Passwords don't match";
+    const passwordErr = submitPasswordLengthError(password);
+    if (passwordErr) e.password = passwordErr;
+    const confirmErr = submitConfirmPasswordError(password, confirmPassword);
+    if (confirmErr) e.confirmPassword = confirmErr;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -119,8 +138,13 @@ const CustomerRegister = () => {
               id="password"
               type={showPwd ? "text" : "password"}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setPassword(value);
+                syncPasswordPair(value, confirmPassword);
+              }}
               autoComplete="new-password"
+              aria-invalid={!!errors.password}
               className={errors.password ? "border-destructive pr-10" : "pr-10"}
             />
             <button
@@ -132,7 +156,11 @@ const CustomerRegister = () => {
               {showPwd ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
             </button>
           </div>
-          {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+          {errors.password ? (
+            <p className="text-xs text-destructive">{errors.password}</p>
+          ) : password.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">At least 8 characters.</p>
+          ) : null}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="confirmPassword" required>Confirm password</Label>
@@ -141,9 +169,18 @@ const CustomerRegister = () => {
               id="confirmPassword"
               type={showConfirmPwd ? "text" : "password"}
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setConfirmPassword(value);
+                syncPasswordPair(password, value);
+              }}
               autoComplete="new-password"
-              className={errors.confirmPassword ? "border-destructive pr-10" : "pr-10"}
+              aria-invalid={!!errors.confirmPassword}
+              className={cn(
+                "pr-10",
+                errors.confirmPassword && "border-destructive",
+                passwordsMatch && "border-emerald-500/60",
+              )}
             />
             <button
               type="button"
@@ -154,7 +191,11 @@ const CustomerRegister = () => {
               {showConfirmPwd ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
             </button>
           </div>
-          {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword}</p>}
+          {errors.confirmPassword ? (
+            <p className="text-xs text-destructive">{errors.confirmPassword}</p>
+          ) : passwordsMatch ? (
+            <p className="text-xs text-emerald-600">{PASSWORDS_MATCH_MESSAGE}</p>
+          ) : null}
         </div>
 
         <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>

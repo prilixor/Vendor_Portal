@@ -8,7 +8,7 @@ import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { ListPager } from "@/app/components/shared/ListPager";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 import { adminApi, VendorDto, VendorProfileDto } from "@/app/services/adminApi";
@@ -249,15 +249,13 @@ const Vendors = () => {
             </div>
           )}
 
-          {filtered.length > 0 && (
-            <ListPager
-              className="pt-4"
-              page={safePage}
-              totalPages={totalPages}
-              summary={`Page ${safePage} of ${totalPages} · ${filtered.length} ${filtered.length === 1 ? "vendor" : "vendors"}${search.trim() || statusFilter !== "all" ? " matching" : ""}`}
-              onPageChange={setPage}
-            />
-          )}
+          <TablePagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            total={filtered.length}
+            onPageChange={setPage}
+            label="vendors"
+          />
         </>
       )}
     </div>

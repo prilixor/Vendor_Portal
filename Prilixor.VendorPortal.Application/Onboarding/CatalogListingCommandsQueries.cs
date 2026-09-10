@@ -1987,7 +1987,7 @@ public static class ProductRentalPricingPlanSync
             existing.IconThumbnailUrl = PersistStoredFileRef(dto.IconThumbnailUrl, existing.IconThumbnailUrl);
             existing.ValueTier = string.IsNullOrWhiteSpace(dto.ValueTier)
                 ? null
-                : RentalDurationValueTiers.Normalize(dto.ValueTier);
+                : RentalDurationValueTiers.Normalize(dto.ValueTier, dto.IconName);
             existing.IconName = string.IsNullOrWhiteSpace(dto.IconName) ? null : dto.IconName.Trim();
 
             keepIds.Add(existing.Id);

@@ -753,49 +753,51 @@ class _CartLineCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-          // Web: Rent/Buy + Quantity on one controls row
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          // Keep Rent/Buy (or single-mode chip) and quantity on one row, even on narrow phones.
+          Row(
             children: [
-              if (canRent && canBuy)
-                SizedBox(
-                  width: 168,
-                  child: _SegmentedToggle(
-                    dense: true,
-                    options: const [
-                      (value: 'rent', label: 'Rent'),
-                      (value: 'buy', label: 'Buy'),
-                    ],
-                    selected: line.orderType,
-                    onChanged: (v) async {
-                      if (v == 'rent') {
-                        final blocked = await _promptRentToBuy(context);
-                        if (blocked || !context.mounted) return;
-                      }
-                      cart.updateOrderType(
-                        line.listingId,
-                        v,
-                        productVariantId: line.productVariantId,
-                      );
-                    },
-                  ),
-                )
-              else
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.45)),
-                  ),
-                  child: Text(
-                    canRent ? 'Rent only' : 'Buy only',
-                    style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.w700, fontSize: 12),
-                  ),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: canRent && canBuy
+                      ? ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 168),
+                          child: _SegmentedToggle(
+                            dense: true,
+                            options: const [
+                              (value: 'rent', label: 'Rent'),
+                              (value: 'buy', label: 'Buy'),
+                            ],
+                            selected: line.orderType,
+                            onChanged: (v) async {
+                              if (v == 'rent') {
+                                final blocked = await _promptRentToBuy(context);
+                                if (blocked || !context.mounted) return;
+                              }
+                              cart.updateOrderType(
+                                line.listingId,
+                                v,
+                                productVariantId: line.productVariantId,
+                              );
+                            },
+                          ),
+                        )
+                      : Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.45)),
+                          ),
+                          child: Text(
+                            canRent ? 'Rent only' : 'Buy only',
+                            style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.w700, fontSize: 12),
+                          ),
+                        ),
                 ),
-              _LabeledQtyStepper(
+              ),
+              const SizedBox(width: 8),
+              _CompactQtyStepper(
                 value: line.quantity,
                 min: 1,
                 max: avail ?? 999,
@@ -946,45 +948,3 @@ class _CompactQtyStepper extends StatelessWidget {
   }
 }
 
-/// Web cart quantity control: labeled stepper.
-class _LabeledQtyStepper extends StatelessWidget {
-  final int value;
-  final int min;
-  final int max;
-  final ValueChanged<int> onChanged;
-
-  const _LabeledQtyStepper({
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.appColors;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
-      decoration: BoxDecoration(
-        color: colors.surfaceElevated,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Quantity',
-            style: TextStyle(
-              color: colors.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 8),
-          _CompactQtyStepper(value: value, min: min, max: max, onChanged: onChanged),
-        ],
-      ),
-    );
-  }
-}

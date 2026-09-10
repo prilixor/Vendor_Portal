@@ -166,6 +166,7 @@ export interface AdminCustomerDetailDto {
     createdAt: string;
     placedByAdminId?: string;
   }[];
+  orderCount: number;
 }
 
 export interface AdminOrderableListingDto {
@@ -379,7 +380,7 @@ export interface ProductVariantDto {
 
 export type RentalDiscountType = "none" | "fixed" | "percentage";
 
-export type RentalValueTier = "good" | "better" | "best_value" | "maximum_savings";
+export type RentalValueTier = string;
 
 export interface ProductRentalPricingPlanDto {
   id: string;
@@ -1140,8 +1141,16 @@ export const adminApi = {
     return apiClient.get<AdminCustomerListItemDto[]>(`/admin/customers${q}`);
   },
 
-  async getAdminCustomer(customerId: string): Promise<AdminCustomerDetailDto> {
-    return apiClient.get<AdminCustomerDetailDto>(`/admin/customers/${customerId}`);
+  async getAdminCustomer(
+    customerId: string,
+    ordersPage = 1,
+    ordersPageSize = 10,
+  ): Promise<AdminCustomerDetailDto> {
+    const params = new URLSearchParams({
+      ordersPage: String(ordersPage),
+      ordersPageSize: String(ordersPageSize),
+    });
+    return apiClient.get<AdminCustomerDetailDto>(`/admin/customers/${customerId}?${params.toString()}`);
   },
 
   async searchOrderableListings(search?: string, take = 40, isChemical?: boolean): Promise<AdminOrderableListingDto[]> {

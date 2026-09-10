@@ -837,7 +837,7 @@ class _RequestItemRow extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        type,
+                        type == 'buy' ? 'Buy' : 'Rent',
                         style: TextStyle(
                           color: _typeColor(type),
                           fontSize: 10,

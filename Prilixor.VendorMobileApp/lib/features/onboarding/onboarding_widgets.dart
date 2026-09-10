@@ -26,38 +26,89 @@ class OnboardingStatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final progress = documentsRequired == 0
-        ? 0.0
-        : (documentsUploaded / documentsRequired).clamp(0.0, 1.0);
+    final colors = context.appColors;
+    final isDark = context.isDarkMode;
+    final review = verificationStatus?.trim().toLowerCase() ?? '';
+    final docsDone = documentsUploaded >= documentsRequired;
+    final bankDone = hasBank;
+    final adminDone = review == 'approved';
+    final completedSteps = [docsDone, bankDone, adminDone].where((e) => e).length;
+    const totalSteps = 3;
+    final progress = completedSteps / totalSteps;
+
+    final headline = _headline(
+      review: review,
+      docsDone: docsDone,
+      bankDone: bankDone,
+      adminDone: adminDone,
+      hasVerificationRequest: verificationStatus != null,
+    );
+    final subtitle = _subtitle(
+      review: review,
+      docsDone: docsDone,
+      bankDone: bankDone,
+      adminDone: adminDone,
+      accountStatus: accountStatus,
+    );
+    final icon = adminDone
+        ? Icons.verified_rounded
+        : (review == 'under_review' || review == 'submitted')
+            ? Icons.schedule_rounded
+            : (docsDone && bankDone)
+                ? Icons.outbound_rounded
+                : Icons.assignment_outlined;
+
+    final progressColor = adminDone
+        ? const Color(0xFF10B981)
+        : (completedSteps == totalSteps && !adminDone)
+            ? const Color(0xFFF59E0B)
+            : colors.accent;
+
+    final hint = _hintText(
+      review: review,
+      docsDone: docsDone,
+      bankDone: bankDone,
+      adminDone: adminDone,
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.accent.withValues(alpha: 0.18),
-            AppTheme.card(context),
-          ],
-        ),
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.22)),
+        border: Border.all(
+          color: isDark
+              ? colors.border.withValues(alpha: 0.9)
+              : colors.border,
+        ),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.05),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 42,
-                height: 42,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: AppTheme.accent.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(12),
+                  color: colors.primarySoft,
+                  borderRadius: BorderRadius.circular(13),
+                  border: Border.all(
+                    color: colors.accent.withValues(alpha: isDark ? 0.28 : 0.18),
+                  ),
                 ),
-                child: const Icon(Icons.verified_user_outlined, color: AppTheme.accent),
+                child: Icon(icon, color: colors.accent, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -65,62 +116,152 @@ class OnboardingStatusBanner extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isVerified ? 'Verification complete' : 'Complete your onboarding',
+                      headline,
                       style: TextStyle(
-                        color: context.appColors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
+                        color: colors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        height: 1.25,
+                        letterSpacing: -0.2,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Text(
-                      'Account ┬╖ ${accountStatus.trim().isEmpty ? 'unknown' : accountStatus}',
+                      subtitle,
                       style: TextStyle(
-                        color: context.appColors.textSecondary,
-                        fontSize: 12,
+                        color: colors.textSecondary,
+                        fontSize: 12.5,
+                        height: 1.35,
                       ),
                     ),
                   ],
                 ),
               ),
-              if (verificationStatus != null)
+              if (verificationStatus != null) ...[
+                const SizedBox(width: 8),
                 VerificationStatusChip(status: verificationStatus!),
+              ],
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Text(
+                'Onboarding progress',
+                style: TextStyle(
+                  color: colors.textMuted,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.15,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '$completedSteps of $totalSteps',
+                style: TextStyle(
+                  color: progressColor,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
-              value: isVerified ? 1 : progress,
-              minHeight: 6,
-              backgroundColor: context.appColors.border,
-              color: isVerified ? const Color(0xFF34D399) : AppTheme.accent,
+              value: progress,
+              minHeight: 5,
+              backgroundColor: isDark
+                  ? colors.border.withValues(alpha: 0.65)
+                  : colors.surfaceElevated,
+              color: progressColor,
             ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
+          const SizedBox(height: 14),
+          Row(
             children: [
-              _ChecklistChip(
-                done: documentsUploaded >= documentsRequired,
-                label: 'Documents $documentsUploaded/$documentsRequired',
+              Expanded(
+                child: _OnboardingStepTile(
+                  done: docsDone,
+                  icon: Icons.folder_open_rounded,
+                  label: 'Documents',
+                  detail: '$documentsUploaded/$documentsRequired',
+                ),
               ),
-              _ChecklistChip(done: hasBank, label: 'Bank details'),
-              _ChecklistChip(
-                done: verificationStatus?.toLowerCase() == 'approved',
-                label: 'Admin approval',
+              _OnboardingStepConnector(
+                active: docsDone,
+                colors: colors,
+                isDark: isDark,
+              ),
+              Expanded(
+                child: _OnboardingStepTile(
+                  done: bankDone,
+                  icon: Icons.account_balance_outlined,
+                  label: 'Bank',
+                  detail: bankDone ? 'Saved' : 'Required',
+                ),
+              ),
+              _OnboardingStepConnector(
+                active: bankDone,
+                colors: colors,
+                isDark: isDark,
+              ),
+              Expanded(
+                child: _OnboardingStepTile(
+                  done: adminDone,
+                  icon: Icons.admin_panel_settings_outlined,
+                  label: 'Admin',
+                  detail: adminDone
+                      ? 'Approved'
+                      : (review == 'under_review' || review == 'submitted')
+                          ? 'Reviewing'
+                          : 'Pending',
+                ),
               ),
             ],
           ),
-          if (!isVerified) ...[
-            const SizedBox(height: 10),
-            Text(
-              'Upload all required documents, save bank details, then tap Submit.',
-              style: TextStyle(
-                color: Colors.amber.withValues(alpha: 0.95),
-                fontSize: 12,
-                height: 1.35,
+          if (hint != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFFF59E0B).withValues(alpha: 0.1)
+                    : const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFFF59E0B).withValues(alpha: 0.28)
+                      : const Color(0xFFFDE68A),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 16,
+                    color: isDark
+                        ? const Color(0xFFFBBF24)
+                        : const Color(0xFFB45309),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      hint,
+                      style: TextStyle(
+                        color: isDark
+                            ? const Color(0xFFFDE68A)
+                            : const Color(0xFF92400E),
+                        fontSize: 12,
+                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -128,52 +269,175 @@ class OnboardingStatusBanner extends StatelessWidget {
       ),
     );
   }
+
+  static String _headline({
+    required String review,
+    required bool docsDone,
+    required bool bankDone,
+    required bool adminDone,
+    required bool hasVerificationRequest,
+  }) {
+    if (adminDone) return 'Verification complete';
+    if (review == 'rejected') return 'Verification needs updates';
+    if (review == 'under_review' || review == 'submitted') {
+      return 'Under admin review';
+    }
+    if (docsDone && bankDone && hasVerificationRequest && review == 'pending') {
+      return 'Awaiting admin approval';
+    }
+    if (docsDone && bankDone) return 'Ready to submit';
+    return 'Complete your onboarding';
+  }
+
+  static String _subtitle({
+    required String review,
+    required bool docsDone,
+    required bool bankDone,
+    required bool adminDone,
+    required String accountStatus,
+  }) {
+    if (adminDone) {
+      return 'Your vendor account is fully approved and active.';
+    }
+    if (review == 'under_review' || review == 'submitted') {
+      return 'Our team is reviewing your submission.';
+    }
+    if (docsDone && bankDone) {
+      return 'All requirements met — submit when you are ready.';
+    }
+    final status = accountStatus.trim();
+    final label = status.isEmpty ? 'Unknown' : _titleCase(status);
+    return 'Account · $label';
+  }
+
+  static String? _hintText({
+    required String review,
+    required bool docsDone,
+    required bool bankDone,
+    required bool adminDone,
+  }) {
+    if (adminDone) return null;
+    if (review == 'under_review' || review == 'submitted') {
+      return 'You will receive a notification once the review is complete.';
+    }
+    if (docsDone && bankDone) {
+      return 'Tap Submit in the top bar to send your profile for admin review.';
+    }
+    return 'Upload all required documents, save bank details, then tap Submit.';
+  }
+
+  static String _titleCase(String value) {
+    if (value.isEmpty) return value;
+    return value
+        .split(RegExp(r'[\s_-]+'))
+        .where((part) => part.isNotEmpty)
+        .map((part) => part[0].toUpperCase() + part.substring(1).toLowerCase())
+        .join(' ');
+  }
 }
 
-class _ChecklistChip extends StatelessWidget {
-  final bool done;
-  final String label;
+class _OnboardingStepConnector extends StatelessWidget {
+  final bool active;
+  final AppPalette colors;
+  final bool isDark;
 
-  const _ChecklistChip({required this.done, required this.label});
+  const _OnboardingStepConnector({
+    required this.active,
+    required this.colors,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 18, left: 2, right: 2),
+      child: SizedBox(
+        width: 14,
+        child: Center(
+          child: Container(
+            height: 2,
+            decoration: BoxDecoration(
+              color: active
+                  ? (isDark
+                      ? const Color(0xFF34D399).withValues(alpha: 0.55)
+                      : const Color(0xFF86EFAC))
+                  : colors.border.withValues(alpha: isDark ? 0.75 : 1),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OnboardingStepTile extends StatelessWidget {
+  final bool done;
+  final IconData icon;
+  final String label;
+  final String detail;
+
+  const _OnboardingStepTile({
+    required this.done,
+    required this.icon,
+    required this.label,
+    required this.detail,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
     final isDark = context.isDarkMode;
-    final bgColor = done
-        ? (isDark ? const Color(0xFF34D399).withValues(alpha: 0.14) : const Color(0xFFDCFCE7))
-        : (isDark ? context.appColors.textMuted.withValues(alpha: 0.08) : const Color(0xFFF1F5F9));
-    final borderColor = done
-        ? (isDark ? const Color(0xFF34D399).withValues(alpha: 0.35) : const Color(0xFF86EFAC))
-        : context.appColors.border;
-    final textColor = done
-        ? (isDark ? const Color(0xFF34D399) : const Color(0xFF15803D))
-        : context.appColors.textSecondary;
-    final iconColor = done
-        ? (isDark ? const Color(0xFF34D399) : const Color(0xFF16A34A))
-        : context.appColors.textMuted;
+    const success = Color(0xFF10B981);
+    final successSoft = isDark
+        ? success.withValues(alpha: 0.14)
+        : const Color(0xFFECFDF5);
+    final successBorder = isDark
+        ? success.withValues(alpha: 0.35)
+        : const Color(0xFFA7F3D0);
+    final idleBg = isDark
+        ? colors.surfaceElevated.withValues(alpha: 0.55)
+        : colors.surfaceElevated;
+    final idleBorder = colors.border.withValues(alpha: isDark ? 0.85 : 1);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: borderColor),
+        color: done ? successSoft : idleBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: done ? successBorder : idleBorder),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
         children: [
           Icon(
-            done ? Icons.check_circle : Icons.radio_button_unchecked,
-            size: 14,
-            color: iconColor,
+            done ? Icons.check_circle_rounded : icon,
+            size: 18,
+            color: done ? success : colors.textMuted,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(height: 6),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: textColor,
+              color: done
+                  ? (isDark ? success : const Color(0xFF047857))
+                  : colors.textSecondary,
               fontSize: 11,
               fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            detail,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: done
+                  ? (isDark ? success.withValues(alpha: 0.85) : const Color(0xFF059669))
+                  : colors.textMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -181,6 +445,7 @@ class _ChecklistChip extends StatelessWidget {
     );
   }
 }
+
 class VerificationStatusChip extends StatelessWidget {
   final String status;
 
@@ -708,6 +973,64 @@ IconData documentTypeIcon(String type) {
       return Icons.account_balance_outlined;
     default:
       return Icons.description_outlined;
+  }
+}
+
+/// Scrolls with tab content — each tab builds its own instance (avoids TabBarView reparent flicker).
+class OnboardingTabHeader extends StatelessWidget {
+  final bool showRejected;
+  final List<VendorDocument> rejectedDocuments;
+  final bool rejectedBank;
+  final VoidCallback onRejectedHelp;
+  final String? accountStatus;
+  final String? verificationStatus;
+  final bool isVerified;
+  final int documentsUploaded;
+  final int documentsRequired;
+  final bool hasBank;
+
+  const OnboardingTabHeader({
+    super.key,
+    required this.showRejected,
+    required this.rejectedDocuments,
+    required this.rejectedBank,
+    required this.onRejectedHelp,
+    this.accountStatus,
+    this.verificationStatus,
+    required this.isVerified,
+    required this.documentsUploaded,
+    this.documentsRequired = 5,
+    required this.hasBank,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasStatus = accountStatus != null && accountStatus!.trim().isNotEmpty;
+    if (!showRejected && !hasStatus) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showRejected) ...[
+          OnboardingRejectedHelpBanner(
+            rejectedDocuments: rejectedDocuments,
+            rejectedBank: rejectedBank,
+            onGetHelp: onRejectedHelp,
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (hasStatus)
+          OnboardingStatusBanner(
+            accountStatus: accountStatus!,
+            verificationStatus: verificationStatus,
+            isVerified: isVerified,
+            documentsUploaded: documentsUploaded,
+            documentsRequired: documentsRequired,
+            hasBank: hasBank,
+          ),
+        const SizedBox(height: 16),
+      ],
+    );
   }
 }
 

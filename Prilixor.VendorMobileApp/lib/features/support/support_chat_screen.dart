@@ -250,6 +250,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     return Scaffold(
       backgroundColor: AppTheme.bg(context),
       appBar: AppBar(
+        title: Text(title),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
@@ -259,24 +260,6 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
               Navigator.of(context).maybePop();
             }
           },
-        ),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF6C63FF), Color(0xFF5A52E0)],
-            ),
-          ),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            if (_view != SupportView.tickets)
-              const Text(
-                'We typically reply instantly',
-                style: TextStyle(fontSize: 11, color: Colors.white70),
-              ),
-          ],
         ),
         actions: [
           if (_view == SupportView.welcome)
@@ -964,8 +947,12 @@ class _InputBar extends StatelessWidget {
             ),
           const SizedBox(height: 6),
           Text(
-            'Powered by AI · For urgent issues, admin will respond',
-            style: TextStyle(color: context.appColors.textMuted, fontSize: 10),
+            'Powered by AI · Admin may reply for urgent issues',
+            style: TextStyle(
+              color: context.appColors.textMuted.withValues(alpha: 0.75),
+              fontSize: 10,
+              height: 1.3,
+            ),
             textAlign: TextAlign.center,
           ),
         ],

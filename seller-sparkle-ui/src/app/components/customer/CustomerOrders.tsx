@@ -5,11 +5,11 @@ import { ChevronRight } from "lucide-react";
 import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { ListPager } from "@/app/components/shared/ListPager";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
-import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
 import {
@@ -175,7 +175,10 @@ const CustomerOrders = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ["customer-orders"],
     queryFn: () => customerApi.getOrders(),
+    refetchInterval: 30_000,
   });
+
+  const showInitialLoader = isLoading && !data;
 
   const cancelMut = useMutation({
     mutationFn: (id: string) => customerApi.cancelOrder(id),
@@ -295,7 +298,7 @@ const CustomerOrders = () => {
         <span className="font-medium">Dispatch failed</span> means no replacement supplier was available.
       </p>
 
-      {isLoading ? (
+      {showInitialLoader ? (
         <PageLoaderSlot />
       ) : (
         <>
@@ -361,22 +364,22 @@ const CustomerOrders = () => {
                             <div className="min-w-0 flex-1">
                               <Link
                                 to={`/customer/orders/${encodeURIComponent(o.id)}`}
-                                className="block truncate text-sm font-semibold text-foreground hover:underline"
+                                className="block truncate text-sm font-semibold text-foreground no-underline transition-colors hover:text-[#052A72] hover:no-underline dark:hover:text-[#8BB4FF]"
                               >
                                 {o.listingTitle}
                               </Link>
                               {o.orderType?.toLowerCase() === "buy" ? (
-                                <p className="mt-1 truncate text-xs text-muted-foreground">
-                                  {formatOrderDate(o.startDate)}
-                                  <span className="text-muted-foreground/40"> · </span>
-                                  Qty {o.quantity}
+                                <p className="mt-1 truncate font-sans text-xs font-semibold">
+                                  <span className="text-[#052A72] dark:text-[#8BB4FF]">{formatOrderDate(o.startDate)}</span>
+                                  <span className="text-[#3FA40B]/50 dark:text-[#6BC73A]/50"> · </span>
+                                  <span className="text-[#3FA40B] dark:text-[#6BC73A]">Qty {o.quantity}</span>
                                 </p>
                               ) : (
-                                <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                                  <p className="truncate">
+                                <div className="mt-1 space-y-0.5 font-sans text-xs font-semibold">
+                                  <p className="truncate text-[#052A72] dark:text-[#8BB4FF]">
                                     {formatDateRange(o.startDate, o.endDate)}
                                   </p>
-                                  <p className="truncate">
+                                  <p className="truncate text-[#3FA40B] dark:text-[#6BC73A]">
                                     {durationText ? `${durationText} · ` : null}
                                     Qty {o.quantity}
                                   </p>
@@ -388,7 +391,7 @@ const CustomerOrders = () => {
                           <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1 border-t border-border/20 pt-3 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
                             <div className="flex min-w-0 flex-nowrap items-center gap-1">
                               <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-semibold leading-none sm:px-2", orderTypeBadgeClass(o.orderType))} variant="outline">
-                                {o.orderType.toUpperCase()}
+                                {formatOrderTypeLabel(o.orderType)}
                               </Badge>
                               <Badge
                                 title={formatCustomerOrderStatusTitle(o.status)}
@@ -449,14 +452,13 @@ const CustomerOrders = () => {
             </p>
           )}
 
-          {filtered.length > 0 && (
-            <ListPager
-              page={safePage}
-              totalPages={totalPages}
-              summary={`Page ${safePage} of ${totalPages} · ${filtered.length} order${filtered.length !== 1 ? "s" : ""}`}
-              onPageChange={setPage}
-            />
-          )}
+          <TablePagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            total={filtered.length}
+            onPageChange={setPage}
+            label="orders"
+          />
         </>
       )}
     </div>

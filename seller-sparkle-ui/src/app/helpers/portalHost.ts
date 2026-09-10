@@ -1,6 +1,9 @@
 /** Portal host detection for Option 2 subdomains (blinksmed.com). */
 export type PortalHostKind = "admin" | "vendor" | "customer" | "local";
 
+/** Auth screens (login / forgot / reset) branding + return path. */
+export type AuthPortalType = "admin" | "vendor" | "customer";
+
 export function getPortalHostKind(
   hostname: string = typeof window !== "undefined" ? window.location.hostname : "",
 ): PortalHostKind {
@@ -9,6 +12,37 @@ export function getPortalHostKind(
   if (host.startsWith("vendor.")) return "vendor";
   if (host === "blinksmed.com" || host === "www.blinksmed.com") return "customer";
   return "local";
+}
+
+/** Resolve portal from `?portal=` first, then production host; localhost defaults to vendor. */
+export function resolveAuthPortalType(portalQuery: string | null | undefined): AuthPortalType {
+  const q = (portalQuery ?? "").trim().toLowerCase();
+  if (q === "customer" || q === "vendor" || q === "admin") return q;
+
+  const host = getPortalHostKind();
+  if (host === "customer" || host === "vendor" || host === "admin") return host;
+  return "vendor";
+}
+
+export function authPortalLoginPath(portal: AuthPortalType): string {
+  if (portal === "customer") return "/customer/login";
+  if (portal === "admin") return "/admin/login";
+  return "/login";
+}
+
+export function authPortalSignInLabel(portal: AuthPortalType): string {
+  if (portal === "customer") return "Customer sign in";
+  if (portal === "admin") return "Admin sign in";
+  return "Vendor sign in";
+}
+
+export function forgotPasswordPath(portal: AuthPortalType, email?: string): string {
+  const params = new URLSearchParams({ portal });
+  const trimmed = email?.trim() ?? "";
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmed)) {
+    params.set("email", trimmed);
+  }
+  return `/forgot-password?${params.toString()}`;
 }
 
 function normalizePath(path: string): string {

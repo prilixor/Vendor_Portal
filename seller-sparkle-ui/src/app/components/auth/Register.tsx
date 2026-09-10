@@ -12,6 +12,14 @@ import {
   normalizeIndianMobileDigits,
   requiredIndianMobileError,
 } from "@/app/helpers/indianMobilePhone";
+import {
+  PASSWORDS_MATCH_MESSAGE,
+  passwordsMeetConfirm,
+  patchLivePasswordPair,
+  submitConfirmPasswordError,
+  submitPasswordLengthError,
+} from "@/app/helpers/passwordValidation";
+import { cn } from "@/app/helpers/utils";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 
 const Field = ({ id, label, type, value, onChange, placeholder, error, required }: any) => (
@@ -37,6 +45,8 @@ const PasswordField = ({
   onChange,
   placeholder,
   error,
+  hint,
+  ok,
   required,
   show,
   onToggle,
@@ -47,6 +57,8 @@ const PasswordField = ({
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
   error?: string;
+  hint?: string;
+  ok?: boolean;
   required?: boolean;
   show: boolean;
   onToggle: () => void;
@@ -61,7 +73,11 @@ const PasswordField = ({
         onChange={onChange}
         placeholder={placeholder}
         aria-invalid={!!error}
-        className={error ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
+        className={cn(
+          "pr-10",
+          error && "border-destructive focus-visible:ring-destructive",
+          ok && "border-emerald-500/60",
+        )}
       />
       <button
         type="button"
@@ -72,7 +88,11 @@ const PasswordField = ({
         {show ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
       </button>
     </div>
-    {error && <p className="text-xs text-destructive">{error}</p>}
+    {error ? (
+      <p className="text-xs text-destructive">{error}</p>
+    ) : hint ? (
+      <p className={cn("text-xs", ok ? "text-emerald-600" : "text-muted-foreground")}>{hint}</p>
+    ) : null}
   </div>
 );
 
@@ -89,6 +109,19 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const passwordsMatch = passwordsMeetConfirm(password, confirm);
+
+  const syncPasswordPair = (nextPassword: string, nextConfirm: string) => {
+    setErrors((prev) =>
+      patchLivePasswordPair(
+        prev,
+        nextPassword,
+        nextConfirm,
+        { password: "password", confirm: "confirm" },
+        { length: "Use at least 8 characters" },
+      ),
+    );
+  };
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -96,8 +129,10 @@ const Register = () => {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) e.email = "Enter a valid email";
     const phoneErr = requiredIndianMobileError(phone);
     if (phoneErr) e.phone = phoneErr;
-    if (password.length < 8) e.password = "Use at least 8 characters";
-    if (confirm !== password) e.confirm = "Passwords don't match";
+    const passwordErr = submitPasswordLengthError(password, "Use at least 8 characters");
+    if (passwordErr) e.password = passwordErr;
+    const confirmErr = submitConfirmPasswordError(password, confirm);
+    if (confirmErr) e.confirm = confirmErr;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -157,9 +192,14 @@ const Register = () => {
             id="password"
             label="Password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setPassword(value);
+              syncPasswordPair(value, confirm);
+            }}
             placeholder="••••••••"
             error={errors.password}
+            hint={password.length === 0 ? "At least 8 characters." : undefined}
             required
             show={showPwd}
             onToggle={() => setShowPwd((v) => !v)}
@@ -168,9 +208,15 @@ const Register = () => {
             id="confirm"
             label="Confirm"
             value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setConfirm(value);
+              syncPasswordPair(password, value);
+            }}
             placeholder="••••••••"
             error={errors.confirm}
+            hint={passwordsMatch ? PASSWORDS_MATCH_MESSAGE : undefined}
+            ok={passwordsMatch}
             required
             show={showConfirmPwd}
             onToggle={() => setShowConfirmPwd((v) => !v)}

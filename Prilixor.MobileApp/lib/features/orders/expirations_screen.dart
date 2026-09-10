@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/models/expiring_order_model.dart';
 import '../../core/theme.dart';
+import '../../core/utils/order_badges.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 
@@ -131,7 +132,7 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
                                                   Text(item.listingTitle, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600)),
                                                   const SizedBox(height: 4),
                                                   Text(
-                                                    '${item.orderNumber} · ${item.orderType} · Ends ${_fmt(item.endDate)}',
+                                                    '${item.orderNumber} · ${formatOrderTypeLabel(item.orderType)} · Ends ${_fmt(item.endDate)}',
                                                     style: TextStyle(color: colors.textSecondary, fontSize: 12),
                                                   ),
                                                 ],

@@ -1,9 +1,70 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { HomeContentDto } from "@/app/services/websiteContentApi";
-import { ShieldCheck, CalendarRange, Headphones, Sparkles } from "lucide-react";
+import { cn } from "@/app/helpers/utils";
 
 interface HeroSectionProps {
   data?: HomeContentDto;
+  /** True after the public CMS query has resolved at least once. */
+  cmsReady?: boolean;
+}
+
+const PRODUCT_HERO_SLIDES = [
+  { src: "/branding/blinksmed-hero-equipment.jpg", label: "Hospital equipment" },
+  { src: "/branding/blinksmed-hero-homecare.jpg", label: "Home care rentals" },
+  { src: "/branding/blinksmed-hero-lab.jpg", label: "Laboratory chemicals" },
+] as const;
+
+const HERO_FADE_MS = 1400;
+const HERO_HOLD_MS = 5200;
+
+type HeroSlide = { src: string; label: string };
+
+function HeroProductShowcase({ slides }: { slides: HeroSlide[] }) {
+  const [active, setActive] = useState(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReduceMotion(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion || slides.length < 2) return undefined;
+    const id = window.setInterval(() => {
+      setActive((i) => (i + 1) % slides.length);
+    }, HERO_HOLD_MS + HERO_FADE_MS);
+    return () => window.clearInterval(id);
+  }, [reduceMotion, slides.length]);
+
+  useEffect(() => {
+    slides.forEach((slide) => {
+      const img = new Image();
+      img.src = slide.src;
+    });
+  }, [slides]);
+
+  useEffect(() => {
+    setActive(0);
+  }, [slides]);
+
+  return (
+    <div className="hero-showcase">
+      {slides.map((slide, index) => (
+        <figure
+          key={`${slide.src}-${slide.label}-${index}`}
+          className={cn("hero-showcase-slide", index === active && "is-active")}
+        >
+          <img src={slide.src} alt="" className="hero-photo is-ready" decoding="async" />
+        </figure>
+      ))}
+      <div className="hero-showcase-veil" />
+      <p className="hero-showcase-caption">{slides[active]?.label}</p>
+    </div>
+  );
 }
 
 const renderFeatureIcon = (iconName?: string, customUrl?: string) => {
@@ -40,7 +101,7 @@ const renderFeatureIcon = (iconName?: string, customUrl?: string) => {
   }
 };
 
-export const HeroSection = ({ data }: HeroSectionProps) => {
+export const HeroSection = ({ data, cmsReady = false }: HeroSectionProps) => {
   const heroTitle = data?.heroTitle || "A trusted marketplace for";
   const heroAccent = data?.heroAccent || "medical equipment & supplies.";
   const heroSubtitle =
@@ -60,6 +121,13 @@ export const HeroSection = ({ data }: HeroSectionProps) => {
   ];
 
   const features = data?.features && data.features.length > 0 ? data.features : defaultFeatures;
+  const slides = useMemo(() => {
+    const cmsSlides = (data?.heroSlides ?? [])
+      .filter((s) => s.imageUrl && s.label?.trim())
+      .slice(0, 5)
+      .map((s) => ({ src: s.imageUrl, label: s.label.trim() }));
+    return cmsSlides.length > 0 ? cmsSlides : [...PRODUCT_HERO_SLIDES];
+  }, [data?.heroSlides]);
 
   return (
     <div id="home" className="scroll-target">
@@ -67,7 +135,7 @@ export const HeroSection = ({ data }: HeroSectionProps) => {
         <div className="hero hero-animate">
           <div className="hero-copy">
             <h1 className="display-head">
-              {heroTitle}<br />
+              {heroTitle}{" "}
               <span className="accent">{heroAccent}</span>
             </h1>
             <p className="sub">{heroSubtitle}</p>
@@ -86,58 +154,29 @@ export const HeroSection = ({ data }: HeroSectionProps) => {
               </a>
             </div>
           </div>
-          <div className="hero-image flex items-center justify-center p-4 md:p-6" aria-hidden="true">
-            {data?.heroImageUrl ? (
-              <div className="relative w-full h-full min-h-[260px] max-h-[520px] flex items-center justify-center overflow-hidden rounded-2xl">
-                <img
-                  src={data.heroImageUrl}
-                  alt="Hero Banner"
-                  className="w-full h-full max-h-[480px] object-contain rounded-2xl shadow-sm border border-black/5 transition-all duration-300"
-                />
-              </div>
-            ) : (
-              <svg viewBox="0 0 800 640" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f3ebe0" />
-                    <stop offset="100%" stopColor="#e9dcc8" />
-                  </linearGradient>
-                  <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#e2cfb2" />
-                    <stop offset="100%" stopColor="#d3b98f" />
-                  </linearGradient>
-                </defs>
-                <rect width="800" height="460" fill="url(#wall)" />
-                <rect y="460" width="800" height="180" fill="url(#floor)" />
-                <rect x="40" y="60" width="220" height="340" rx="6" fill="#f7f2ea" opacity="0.6" />
-                <g transform="translate(120,330)">
-                  <path d="M20 40 Q10 -20 70 -30 Q130 -20 120 40 L120 90 L20 90 Z" fill="#efe6d3" stroke="#cbb894" strokeWidth="3" />
-                  <rect x="20" y="90" width="480" height="70" rx="10" fill="#1a6b56" />
-                  <rect x="30" y="150" width="470" height="20" rx="6" fill="#d8c6a4" />
-                </g>
-              </svg>
-            )}
+          <div className="hero-image" aria-hidden="true">
+            <HeroProductShowcase slides={slides} />
           </div>
         </div>
 
-        <div className="service-grid services-3col" style={{ marginTop: "16px" }}>
+        <div className="service-grid services-3col hero-features">
           {features.map((feat, idx) => (
             <article key={feat.id ?? idx} className="service-card">
               <div className="service-icon">
                 {renderFeatureIcon(feat.iconName, feat.customIconUrl)}
               </div>
-              <h4 style={{ fontSize: "16px", fontWeight: "700", marginTop: "16px", marginBottom: "6px", color: "var(--ink)" }}>
+              <h4>
                 {feat.title}
               </h4>
-              <p style={{ fontSize: "13.5px", color: "var(--gray-600)", lineHeight: "1.5", margin: 0 }}>
+              <p>
                 {feat.subtitle}
               </p>
             </article>
           ))}
         </div>
-      </div>
-      <div className="trust">
-        <div className="trust-label">{trustLabel}</div>
+        <div className="trust">
+          <div className="trust-label">{trustLabel}</div>
+        </div>
       </div>
     </div>
   );

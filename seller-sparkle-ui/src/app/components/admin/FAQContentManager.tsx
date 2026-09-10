@@ -21,6 +21,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { HelpCircle, Plus, Pencil, Trash2, Search, CheckCircle, XCircle, FolderPlus } from "lucide-react";
 import { toast } from "sonner";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { TablePagination } from "@/app/components/shared/TablePagination";
+
+const PAGE_SIZE = 8;
 
 export function FAQContentManager() {
   const queryClient = useQueryClient();
@@ -30,6 +33,7 @@ export function FAQContentManager() {
 
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
 
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<FaqItemDto | null>(null);
@@ -154,6 +158,14 @@ export function FAQContentManager() {
     return true;
   });
 
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, selectedCategory]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = filteredItems.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   if (loading) {
     return <PageLoaderSlot />;
   }
@@ -222,51 +234,54 @@ export function FAQContentManager() {
                 No questions match your filter.
               </div>
             ) : (
-              filteredItems.map((item, idx) => (
-                <div key={item.id ?? idx} className="rounded-lg border p-4 space-y-3 bg-card shadow-sm">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-muted-foreground">#{idx + 1}</span>
-                      <Badge variant="secondary" className="text-xs font-normal">
-                        {item.categoryName || categories.find((c) => c.id === item.categoryId)?.name || "General"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                        onClick={() => handleOpenEditItem(item)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                        onClick={() => handleDeleteItem(item.id, item.question)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
+              pageItems.map((item, idx) => {
+                const rowNumber = (safePage - 1) * PAGE_SIZE + idx + 1;
+                return (
+                  <div key={item.id ?? idx} className="rounded-lg border p-4 space-y-3 bg-card shadow-sm">
                     <div className="flex items-start justify-between gap-2">
-                      <h4 className="font-medium text-sm text-foreground">{item.question}</h4>
-                      {item.isPublished ? (
-                        <Badge className="bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 border-emerald-300 gap-1 font-normal shrink-0">
-                          <CheckCircle className="h-3 w-3" /> Published
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-muted-foreground">#{rowNumber}</span>
+                        <Badge variant="secondary" className="text-xs font-normal">
+                          {item.categoryName || categories.find((c) => c.id === item.categoryId)?.name || "General"}
                         </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground gap-1 font-normal shrink-0">
-                          <XCircle className="h-3 w-3" /> Draft
-                        </Badge>
-                      )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          onClick={() => handleOpenEditItem(item)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDeleteItem(item.id, item.question)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{item.answer}</p>
+                    <div className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-medium text-sm text-foreground">{item.question}</h4>
+                        {item.isPublished ? (
+                          <Badge className="bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 border-emerald-300 gap-1 font-normal shrink-0">
+                            <CheckCircle className="h-3 w-3" /> Published
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground gap-1 font-normal shrink-0">
+                            <XCircle className="h-3 w-3" /> Draft
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{item.answer}</p>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
@@ -290,9 +305,9 @@ export function FAQContentManager() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredItems.map((item, idx) => (
+                  pageItems.map((item, idx) => (
                     <TableRow key={item.id ?? idx}>
-                      <TableCell className="font-mono text-xs">{idx + 1}</TableCell>
+                      <TableCell className="font-mono text-xs">{(safePage - 1) * PAGE_SIZE + idx + 1}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="text-xs font-normal">
                           {item.categoryName || categories.find((c) => c.id === item.categoryId)?.name || "General"}
@@ -341,6 +356,13 @@ export function FAQContentManager() {
               </TableBody>
             </Table>
           </div>
+          <TablePagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            total={filteredItems.length}
+            onPageChange={setPage}
+            label="questions"
+          />
         </CardContent>
       </Card>
 

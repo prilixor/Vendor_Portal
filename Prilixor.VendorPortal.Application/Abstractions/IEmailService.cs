@@ -13,7 +13,12 @@ public sealed record EmailFileAttachment(
 
 public interface IEmailService
 {
-    Task SendEmailAsync(string toEmail, string subject, string body, CancellationToken ct = default);
+    Task SendEmailAsync(
+        string toEmail,
+        string subject,
+        string body,
+        CancellationToken ct = default,
+        string? fromDisplayName = null);
 
     Task SendEmailAsync(
         string toEmail,
@@ -22,5 +27,6 @@ public interface IEmailService
         string? plainTextBody,
         IReadOnlyList<EmailInlineImage>? inlineImages,
         IReadOnlyList<EmailFileAttachment>? attachments,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        string? fromDisplayName = null);
 }

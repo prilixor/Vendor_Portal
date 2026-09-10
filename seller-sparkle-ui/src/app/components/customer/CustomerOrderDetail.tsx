@@ -21,7 +21,7 @@ import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea
 import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { toast } from "sonner";
 import { isSameChatDay } from "@/app/helpers/chatDayLabel";
-import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
@@ -73,6 +73,9 @@ function isCustomerOrderCancellable(status: string): boolean {
 }
 
 const MAX_ORDER_IMAGES = 5;
+
+/** Match Customer Mobile order detail polling while the page is open. */
+const CUSTOMER_ORDER_POLL_MS = 15_000;
 
 function orderStatusCompact(status: string): string {
   return status.trim().toLowerCase().replace(/\s+/g, "_");
@@ -385,16 +388,18 @@ const CustomerOrderDetail = () => {
   // Fetch current selected item details
   const currentItemId = selectedItemId || orderId;
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ["customer-order", currentItemId],
     queryFn: () => customerApi.getOrder(currentItemId!),
     enabled: !!currentItemId,
+    refetchInterval: CUSTOMER_ORDER_POLL_MS,
   });
 
   // Fetch all orders to group them locally
   const { data: allOrders } = useQuery({
     queryKey: ["customer-orders"],
     queryFn: () => customerApi.getOrders(),
+    refetchInterval: CUSTOMER_ORDER_POLL_MS,
   });
 
   const cancelMut = useMutation({
@@ -511,10 +516,14 @@ const CustomerOrderDetail = () => {
       queryKey: ["customer-order-image-request", itemId],
       queryFn: () => customerApi.getOrderImageRequest(itemId),
       enabled: groupItemIds.length > 0,
+      refetchInterval: CUSTOMER_ORDER_POLL_MS,
     })),
   });
 
-  const imageRequestLoading = imageRequestQueries.some((q) => q.isLoading || q.isFetching);
+  const imageRequestLoading = imageRequestQueries.some((q) => q.isLoading);
+  const isBackgroundSync =
+    (isFetching && Boolean(data)) ||
+    imageRequestQueries.some((q) => q.isFetching && q.data !== undefined);
   /** True until every item's request status has been fetched at least once (avoid treating "unknown" as eligible). */
   const imageRequestsReady =
     groupItemIds.length === 0 ||
@@ -655,7 +664,7 @@ const CustomerOrderDetail = () => {
     );
   }
 
-  if (isLoading || !data) {
+  if ((isLoading && !data) || !data) {
     return <PageLoaderSlot />;
   }
 
@@ -663,7 +672,14 @@ const CustomerOrderDetail = () => {
 
   return (
     <div className="mx-auto max-w-3xl space-y-2.5 sm:space-y-4">
-      <BackLink to="/customer/orders" label="Back to orders" />
+      <div className="flex items-center justify-between gap-3">
+        <BackLink to="/customer/orders" label="Back to orders" />
+        {isBackgroundSync ? (
+          <span className="text-[11px] font-medium text-muted-foreground" aria-live="polite">
+            Updating…
+          </span>
+        ) : null}
+      </div>
 
       <Card className="overflow-hidden border-border/80 shadow-sm">
         <CardContent className="p-3 sm:p-4">
@@ -773,7 +789,7 @@ const CustomerOrderDetail = () => {
               <DetailRow label="End date">{formatDetailDate(activeItem.endDate)}</DetailRow>
               <DetailRow label="Quantity">{activeItem.quantity}</DetailRow>
               <DetailRow label="Order type">
-                <span className="uppercase">{activeItem.orderType}</span>
+                {formatOrderTypeLabel(activeItem.orderType)}
               </DetailRow>
               <DetailRow label="Rental period" rowStart>
                 {compactDurationLabel(activeItem.rentalDurationLabel) || (
