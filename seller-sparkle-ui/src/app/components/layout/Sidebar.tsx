@@ -105,12 +105,16 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
         >
           <X className="h-4 w-4" />
         </button>
-        <div className="flex items-center gap-2.5 overflow-hidden">
-          <BrandMark />
-          {!collapsed && (
-            <div className="overflow-hidden">
-              <p className="truncate text-sm font-bold leading-tight">{brandHeading ?? "Vendor Portal"}</p>
-              <p className="truncate text-[11px] text-muted-foreground">{brandLabel}</p>
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden">
+          {collapsed ? (
+            <BrandMark variant="mark" size="sm" />
+          ) : (
+            <div className="min-w-0 overflow-hidden">
+              <BrandMark size="sm" />
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                {brandHeading ?? "Vendor Portal"}
+                {brandLabel ? ` · ${brandLabel}` : ""}
+              </p>
             </div>
           )}
         </div>
@@ -231,22 +235,22 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
             )}
           </p>
           <div className="mt-2.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-            <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">Terms</Link>
+            <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary hover:no-underline">Terms</Link>
             <span>•</span>
-            <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">Privacy</Link>
+            <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary hover:no-underline">Privacy</Link>
             <span>•</span>
             {variant === "vendor" ? (
               <button
                 type="button"
                 onClick={() => openSupportPanel()}
-                className="hover:text-primary hover:underline transition-colors cursor-pointer"
+                className="cursor-pointer transition-colors hover:text-primary hover:no-underline"
               >
                 Contact
               </button>
             ) : variant === "customer" ? (
-              <Link to="/customer/support" className="hover:text-primary hover:underline transition-colors">Contact</Link>
+              <Link to="/customer/support" className="transition-colors hover:text-primary hover:no-underline">Contact</Link>
             ) : (
-              <Link to="/admin/support" className="hover:text-primary hover:underline transition-colors">Contact</Link>
+              <Link to="/admin/support" className="transition-colors hover:text-primary hover:no-underline">Contact</Link>
             )}
           </div>
         </div>

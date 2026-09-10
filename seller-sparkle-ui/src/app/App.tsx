@@ -65,6 +65,8 @@ import { AdminNotifications } from "@/app/components/admin/AdminNotifications";
 import AdminSettings from "@/app/components/admin/AdminSettings";
 import AdminSmsSettings from "@/app/components/admin/AdminSmsSettings";
 import WebsiteContentManagement from "@/app/components/admin/WebsiteContentManagement";
+import LegalDocumentsManager from "@/app/components/admin/LegalDocumentsManager";
+import LegalDocumentEditor from "@/app/components/admin/LegalDocumentEditor";
 import ImpersonationConsume from "@/app/components/auth/ImpersonationConsume";
 
 import CustomerBrowse from "@/app/components/customer/CustomerBrowse";
@@ -178,6 +180,8 @@ const App = () => (
               <Route path="website-content/rent-or-buy" element={<WebsiteContentManagement initialTab="rent-or-buy" />} />
               <Route path="website-content/faq" element={<WebsiteContentManagement initialTab="faq" />} />
               <Route path="website-content/contact" element={<WebsiteContentManagement initialTab="contact" />} />
+              <Route path="website-content/legal" element={<LegalDocumentsManager />} />
+              <Route path="website-content/legal/:id" element={<LegalDocumentEditor />} />
               <Route path="website-content/settings" element={<WebsiteContentManagement initialTab="settings" />} />
             </Route>
 

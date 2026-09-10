@@ -10,14 +10,20 @@ public class WebsiteContentRepository(CommonPortalDbContext dbContext) : IWebsit
     {
         return await dbContext.Set<WebsiteHomeContent>()
             .Include(x => x.Features.Where(f => !f.IsDeleted))
+            .Include(x => x.HeroSlides.Where(s => !s.IsDeleted))
             .AsNoTracking()
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task UpdateHomeContentAsync(WebsiteHomeContent home, List<WebsiteHomeFeature> features, CancellationToken ct = default)
+    public async Task UpdateHomeContentAsync(
+        WebsiteHomeContent home,
+        List<WebsiteHomeFeature> features,
+        List<WebsiteHomeHeroSlide>? heroSlides = null,
+        CancellationToken ct = default)
     {
         var existing = await dbContext.Set<WebsiteHomeContent>()
             .Include(x => x.Features)
+            .Include(x => x.HeroSlides)
             .FirstOrDefaultAsync(ct);
 
         if (existing == null)
@@ -56,6 +62,25 @@ public class WebsiteContentRepository(CommonPortalDbContext dbContext) : IWebsit
                     CustomIconUrl = f.CustomIconUrl,
                     SortOrder = sort++,
                     IsActive = true
+                });
+            }
+        }
+
+        if (heroSlides != null)
+        {
+            existing.HeroSlides ??= [];
+            dbContext.Set<WebsiteHomeHeroSlide>().RemoveRange(existing.HeroSlides);
+            existing.HeroSlides.Clear();
+
+            int slideSort = 1;
+            foreach (var slide in heroSlides)
+            {
+                existing.HeroSlides.Add(new WebsiteHomeHeroSlide
+                {
+                    HomeContentId = existing.Id,
+                    Label = slide.Label,
+                    ImageUrl = slide.ImageUrl,
+                    SortOrder = slideSort++
                 });
             }
         }

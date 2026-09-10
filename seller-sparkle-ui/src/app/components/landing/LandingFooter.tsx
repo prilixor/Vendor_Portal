@@ -81,7 +81,7 @@ export const LandingFooter = () => {
         </div>
       </div>
       <div className="footer-bottom">
-        <div>© BlinksMed. Simplified healthcare for everyone.</div>
+        <div>© BlinksMed. Buy | Rent | Care</div>
         <div>Medical equipment rental · Buy medical equipment · Laboratory supplies</div>
       </div>
     </footer>

@@ -1,18 +1,12 @@
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
 import "./landing.css";
 import { LandingHeader } from "./LandingHeader";
 import { LandingFooter } from "./LandingFooter";
 import { AboutSection } from "./AboutSection";
-import { websiteContentApi } from "@/app/services/websiteContentApi";
+import { usePublicWebsiteContent } from "@/app/hooks/usePublicWebsiteContent";
 
 export const AboutPage = () => {
-  const { data } = useQuery({
-    queryKey: ["publicWebsiteContent"],
-    queryFn: () => websiteContentApi.getPublicContent(),
-    staleTime: 1000 * 60 * 5,
-    retry: 1,
-  });
+  const { data } = usePublicWebsiteContent();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -29,7 +23,7 @@ export const AboutPage = () => {
 
       <LandingHeader activeSection="about" settings={data?.settings} />
 
-      <main style={{ paddingTop: "20px" }}>
+      <main>
         <AboutSection data={data?.about} />
       </main>
 

@@ -1312,7 +1312,7 @@ const Verification = () => {
                     <button
                       type="button"
                       onClick={() => void downloadUrl(previewDocument.url)}
-                      className="text-primary hover:underline ml-2"
+                      className="ml-2 text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
                     >
                       Download file
                     </button>

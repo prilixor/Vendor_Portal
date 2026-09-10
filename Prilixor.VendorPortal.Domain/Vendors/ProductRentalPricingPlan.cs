@@ -29,7 +29,7 @@ public class ProductRentalPricingPlan : AuditableEntity<Guid>
     /// <summary>Snapshot of icon image URL at save time.</summary>
     public string? IconUrl { get; set; }
     public string? IconThumbnailUrl { get; set; }
-    /// <summary>good | better | best_value | maximum_savings</summary>
+    /// <summary>Slug of the assigned admin icon, if any.</summary>
     public string? ValueTier { get; set; }
     public string? IconName { get; set; }
 

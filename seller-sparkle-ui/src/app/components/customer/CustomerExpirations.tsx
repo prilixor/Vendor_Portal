@@ -121,7 +121,7 @@ const CustomerExpirations = () => {
                     <div className="min-w-0 w-full sm:flex-1">
                       <Link
                         to={`/customer/orders/${encodeURIComponent(row.orderId)}`}
-                        className="block text-sm font-semibold leading-snug text-foreground hover:underline sm:truncate"
+                        className="block text-sm font-semibold leading-snug text-foreground no-underline transition-colors hover:text-[#052A72] hover:no-underline sm:truncate dark:hover:text-[#8BB4FF]"
                       >
                         {row.listingTitle}
                       </Link>

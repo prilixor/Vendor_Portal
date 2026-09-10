@@ -28,6 +28,10 @@ class OrderDetailScreen extends StatefulWidget {
 }
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindingObserver {
+  static const _cardRadius = 14.0;
+  static const _sectionGap = 12.0;
+  static const _cardPadding = EdgeInsets.fromLTRB(12, 12, 12, 12);
+
   int _extensionDays = 1;
   int _selectedOrderIndex = 0;
   final Set<String> _photoRequestSelection = {};
@@ -341,6 +345,95 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     );
   }
 
+  TextStyle _sectionTitleStyle(AppPalette colors) => TextStyle(
+        color: colors.textPrimary,
+        fontSize: 15,
+        fontWeight: FontWeight.w700,
+        height: 1.2,
+      );
+
+  TextStyle _kickerStyle(AppPalette colors) => TextStyle(
+        color: colors.textMuted,
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.8,
+      );
+
+  BoxDecoration _cardDecoration(AppPalette colors) => BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(_cardRadius),
+        border: Border.all(color: colors.border),
+      );
+
+  Widget _buildGroupSummaryRow(
+    AppPalette colors,
+    String orderNumber,
+    double total,
+    double deposit,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('ORDER GROUP', style: _kickerStyle(colors)),
+              const SizedBox(height: 4),
+              Text(
+                orderNumber,
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                  height: 1.2,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '₹${total.toStringAsFixed(0)}',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                height: 1.15,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '+ ₹${deposit.toStringAsFixed(0)} deposit',
+              style: TextStyle(color: colors.textMuted, fontSize: 11, height: 1.2),
+              textAlign: TextAlign.right,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _detailGridRow(AppPalette colors, List<Widget> cells) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < cells.length; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          Expanded(child: cells[i]),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
@@ -358,513 +451,511 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
         elevation: 0,
         titleSpacing: 0,
       ),
-      body: Column(
-        children: [
-          // Header Card
-          Container(
-            margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            padding: EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: colors.surface, // Match dark mode card
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: colors.border),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
+      body: provider.isLoading && provider.currentOrder == null
+          ? const BrandPageLoader()
+          : provider.currentOrder == null
+              ? Center(
+                  child: Text(
+                    provider.errorMessage ?? 'Order not found',
+                    style: TextStyle(color: colors.textPrimary),
+                  ),
+                )
+              : SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + MediaQuery.paddingOf(context).bottom),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('ORDER GROUP', style: TextStyle(color: colors.textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                      SizedBox(height: 8),
-                      Text(
-                        cleanOrderGroupNumber,
-                        style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold, height: 1.25),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Consolidated purchase overview',
-                        style: TextStyle(color: colors.textMuted, fontSize: 13, height: 1.3),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 120),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          '₹${groupTotal.toStringAsFixed(0)}',
-                          style: TextStyle(color: colors.textPrimary, fontSize: 22, fontWeight: FontWeight.bold, height: 1.2),
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        '+ ₹${groupDeposit.toStringAsFixed(0)} deposit',
-                        style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.3),
-                        textAlign: TextAlign.right,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          Expanded(
-            child: provider.isLoading && provider.currentOrder == null
-                ? const BrandPageLoader()
-                : provider.currentOrder == null
-                    ? Center(child: Text(provider.errorMessage ?? 'Order not found', style: TextStyle(color: colors.textPrimary)))
-                    : SingleChildScrollView(
-                        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
+                      // Order group + items (matches web single card)
+                      Container(
+                        padding: _cardPadding,
+                        decoration: _cardDecoration(colors),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Items in this order
-                            Container(
-                              padding: EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: colors.surface,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: colors.border),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Items in this Order', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 4),
-                                  Text('Select an item below to track its individual timeline and details.', style: TextStyle(color: colors.textMuted, fontSize: 12)),
-                                  const SizedBox(height: 16),
-                                  ...List.generate(_ordersInGroup.length, (index) {
-                                    final order = _ordersInGroup[index];
-                                    final isSelected = _selectedOrderIndex == index;
-                                    final openRequest = provider.imageRequestFor(order.id);
-                                    final photoCount = openRequest?.images.length ?? 0;
-                                    final photoLabel = openRequest == null
-                                        ? null
-                                        : photoCount == 0
-                                            ? 'Photos requested · waiting'
-                                            : '$photoCount photo${photoCount == 1 ? '' : 's'} received';
-                                    return GestureDetector(
-                                      onTap: () {
-                                        setState(() => _selectedOrderIndex = index);
-                                        _fetchCurrentSubOrder();
-                                      },
-                                      child: Container(
-                                        margin: EdgeInsets.only(bottom: 12),
-                                        padding: EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: isSelected ? Colors.white.withValues(alpha: 0.05) : Colors.transparent,
-                                          border: Border.all(color: isSelected ? Color(0xFF6C63FF) : colors.border, width: isSelected ? 2 : 1),
-                                          borderRadius: BorderRadius.circular(12),
+                            _buildGroupSummaryRow(
+                              colors,
+                              cleanOrderGroupNumber,
+                              groupTotal,
+                              groupDeposit,
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              child: Divider(height: 1, color: colors.border.withValues(alpha: 0.65)),
+                            ),
+                            Text('Items in this order', style: _sectionTitleStyle(colors)),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Select an item to track its timeline and details.',
+                              style: TextStyle(color: colors.textMuted, fontSize: 11, height: 1.25),
+                            ),
+                            const SizedBox(height: 10),
+                            ...List.generate(_ordersInGroup.length, (index) {
+                              final order = _ordersInGroup[index];
+                              final isSelected = _selectedOrderIndex == index;
+                              final openRequest = provider.imageRequestFor(order.id);
+                              final photoCount = openRequest?.images.length ?? 0;
+                              final photoLabel = openRequest == null
+                                  ? null
+                                  : photoCount == 0
+                                      ? 'Photos requested · waiting'
+                                      : '$photoCount photo${photoCount == 1 ? '' : 's'} received';
+                              return GestureDetector(
+                                onTap: () {
+                                  setState(() => _selectedOrderIndex = index);
+                                  _fetchCurrentSubOrder();
+                                },
+                                child: Container(
+                                  margin: EdgeInsets.only(bottom: index == _ordersInGroup.length - 1 ? 0 : 8),
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? Colors.white.withValues(alpha: 0.05) : Colors.transparent,
+                                    border: Border.all(
+                                      color: isSelected ? const Color(0xFF6C63FF) : colors.border,
+                                      width: isSelected ? 1.5 : 1,
+                                    ),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: SizedBox(
+                                          width: 40,
+                                          height: 40,
+                                          child: CatalogImage(
+                                            url: order.listingPrimaryImageUrl,
+                                            width: 40,
+                                            height: 40,
+                                            fit: BoxFit.cover,
+                                          ),
                                         ),
-                                        child: Row(
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            ClipRRect(
-                                              borderRadius: BorderRadius.circular(8),
-                                              child: SizedBox(
-                                                width: 44,
-                                                height: 44,
-                                                child: CatalogImage(
-                                                  url: order.listingPrimaryImageUrl,
-                                                  width: 44,
-                                                  height: 44,
-                                                  fit: BoxFit.cover,
-                                                ),
+                                            Text(
+                                              order.listingTitle,
+                                              style: TextStyle(
+                                                color: colors.textPrimary,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                                height: 1.2,
                                               ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                            SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(order.listingTitle, style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
-                                                  const SizedBox(height: 4),
-                                                  Text('Qty: ${order.quantity}', style: TextStyle(color: colors.textMuted, fontSize: 12)),
-                                                  if (photoLabel != null) ...[
-                                                    const SizedBox(height: 4),
-                                                    Row(
-                                                      children: [
-                                                        Icon(
-                                                          Icons.photo_library_outlined,
-                                                          size: 12,
-                                                          color: photoCount == 0
-                                                              ? (context.isDarkMode ? Colors.amber : const Color(0xFFD97706))
-                                                              : (context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669)),
-                                                        ),
-                                                        const SizedBox(width: 4),
-                                                        Expanded(
-                                                          child: Text(
-                                                            photoLabel,
-                                                            style: TextStyle(
-                                                              color: photoCount == 0
-                                                                  ? (context.isDarkMode ? Colors.amber : const Color(0xFFD97706))
-                                                                  : (context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669)),
-                                                              fontSize: 11,
-                                                              fontWeight: FontWeight.w600,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ],
-                                                  const SizedBox(height: 6),
-                                                  Wrap(
-                                                    children: [
-                                                      Container(
-                                                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                        decoration: BoxDecoration(color: _getStatusColor(order.status).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16)),
-                                                        child: Text(
-                                                          formatOrderStatusLabel(order.status),
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: TextStyle(color: _getStatusColor(order.status), fontSize: 10, fontWeight: FontWeight.bold),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            SizedBox(width: 8),
-                                            Column(
-                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                            const SizedBox(height: 3),
+                                            Row(
                                               children: [
-                                                Text('₹${order.totalAmount.toStringAsFixed(0)}', style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                                                Text(
+                                                  'Qty ${order.quantity}',
+                                                  style: TextStyle(color: colors.textMuted, fontSize: 11),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Flexible(
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: _getStatusColor(order.status).withValues(alpha: 0.18),
+                                                      borderRadius: BorderRadius.circular(999),
+                                                    ),
+                                                    child: Text(
+                                                      formatOrderStatusLabel(order.status),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: TextStyle(
+                                                        color: _getStatusColor(order.status),
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
                                               ],
                                             ),
+                                            if (photoLabel != null) ...[
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                photoLabel,
+                                                style: TextStyle(
+                                                  color: photoCount == 0
+                                                      ? (context.isDarkMode ? Colors.amber : const Color(0xFFD97706))
+                                                      : (context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669)),
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
                                           ],
                                         ),
                                       ),
-                                    );
-                                  }),
-                                ],
-                              ),
-                            ),
-                            SizedBox(height: 24),
-
-                            // Order Timeline
-                            Container(
-                              padding: EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: colors.surface,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: colors.border),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          'Order timeline',
-                                          style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '₹${order.totalAmount.toStringAsFixed(0)}',
+                                        style: TextStyle(
+                                          color: colors.textPrimary,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          fontFeatures: const [FontFeature.tabularFigures()],
                                         ),
-                                      ),
-                                      TextButton(
-                                        onPressed: () {
-                                          if (provider.currentOrder != null) {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) => ProductDetailScreen(listingId: provider.currentOrder!.listingId),
-                                              ),
-                                            );
-                                          }
-                                        }, 
-                                        child: Text('View listing', style: TextStyle(color: Color(0xFF6C63FF)))
                                       ),
                                     ],
                                   ),
-                                  Text('Tracking: ${provider.currentOrder!.listingTitle}', style: TextStyle(color: colors.textMuted, fontSize: 12)),
-                                  SizedBox(height: 24),
-                                  _buildTimeline(provider.currentOrder!.status, provider.currentOrder!.orderType),
-                                ],
-                              ),
-                            ),
-                            SizedBox(height: 24),
-
-                            // Rental Details Grid
-                            if (provider.currentOrder!.startDate != null)
-                              Container(
-                                padding: EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: colors.surface,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: colors.border),
                                 ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(provider.currentOrder!.orderType.toLowerCase() == 'buy' ? 'Purchase details' : 'Rental details', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
-                                    SizedBox(height: 16),
-                                    if (provider.currentOrder!.orderType.toLowerCase() == 'buy') ...[
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text('PURCHASE DATE', style: TextStyle(color: colors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                                                SizedBox(height: 4),
-                                                Text(_formatOrderDate(provider.currentOrder!.startDate), style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
-                                              ],
-                                            ),
-                                          ),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text('QUANTITY', style: TextStyle(color: colors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                                                SizedBox(height: 4),
-                                                Text('${provider.currentOrder!.quantity}', style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ] else ...[
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: _labeledValue(
-                                              colors,
-                                              'START DATE',
-                                              _formatOrderDate(provider.currentOrder!.startDate),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: _labeledValue(
-                                              colors,
-                                              'END DATE',
-                                              _formatOrderDate(provider.currentOrder!.endDate),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Expanded(
-                                            child: _labeledValue(
-                                              colors,
-                                              'QUANTITY',
-                                              '${provider.currentOrder!.quantity}',
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: _labeledValue(
-                                              colors,
-                                              'ORDER TYPE',
-                                              formatOrderTypeLabel(provider.currentOrder!.orderType),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 16),
-                                      _labeledValue(
-                                        colors,
-                                        'RENTAL PERIOD',
-                                        _rentalPeriodTitle(provider.currentOrder!),
-                                        extra: _rentalPeriodExtra(colors, provider.currentOrder!),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-
-                            if (provider.currentOrder!.hasMedicalReference) ...[
-                              SizedBox(height: 24),
-                              _MedicalReferenceCard(order: provider.currentOrder!),
-                            ],
-
-                            if (_shouldShowGroupPhotoSection(provider)) ...[
-                              SizedBox(height: 24),
-                              _GroupVendorPhotoRequestCard(
-                                items: _ordersInGroup,
-                                requestsByOrderId: provider.imageRequestsByOrderId,
-                                selectedIds: _photoRequestSelection,
-                                viewingOrderId: _ordersInGroup[_selectedOrderIndex].id,
-                                loading: provider.imageRequestLoading,
-                                busy: provider.isActionLoading,
-                                onToggle: (orderId, selected) {
-                                  setState(() {
-                                    if (selected) {
-                                      _photoRequestSelection.add(orderId);
-                                    } else {
-                                      _photoRequestSelection.remove(orderId);
-                                    }
-                                  });
-                                },
-                                onSelectAll: () {
-                                  setState(() {
-                                    _photoRequestSelection
-                                      ..clear()
-                                      ..addAll(
-                                        _eligiblePhotoItems(provider).map((o) => o.id),
-                                      );
-                                  });
-                                },
-                                onClear: () => setState(_photoRequestSelection.clear),
-                                onRequestAll: () => _requestPhotos(
-                                  provider,
-                                  _eligiblePhotoItems(provider).map((o) => o.id).toList(),
-                                ),
-                                onRequestSelected: () => _requestPhotos(
-                                  provider,
-                                  _photoRequestSelection.toList(),
-                                ),
-                              ),
-                            ],
-                            
-                            SizedBox(height: 24),
-
-                            // Bottom Action Buttons
-                            Builder(
-                              builder: (context) {
-                                final order = provider.currentOrder!;
-                                final status = order.status.trim().toLowerCase();
-                                final canCancel = status == 'pending' || status == 'awaiting vendor acceptance';
-                                final canExtendBuyout = status == 'active' && order.orderType.toLowerCase() == 'rent';
-
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    _fitOutlinedAction(
-                                      colors: colors,
-                                      icon: Icons.support_agent,
-                                      label: 'BlinksMed support',
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => SupportScreen(orderRef: order.orderNumber),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                    const SizedBox(height: 10),
-                                    _fitOutlinedAction(
-                                      colors: colors,
-                                      icon: Icons.chat_bubble_outline,
-                                      label: 'Chat with BlinksMed',
-                                      onPressed: () async {
-                                        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-                                        final sessionId = await chatProvider.createSession(
-                                          order.vendorId,
-                                          order.id,
-                                          subject: 'Chat regarding order ${order.orderNumber}: ${order.listingTitle}',
-                                        );
-                                        if (sessionId != null && context.mounted) {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) => ChatDetailScreen(
-                                                sessionId: sessionId,
-                                                orderNumber: order.orderNumber,
-                                                listingTitle: order.listingTitle,
-                                              ),
-                                            ),
-                                          );
-                                        } else if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not start chat session.')));
-                                        }
-                                      },
-                                    ),
-                                    if (canCancel) ...[
-                                      SizedBox(height: 12),
-                                      OutlinedButton.icon(
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor: Colors.redAccent,
-                                          side: BorderSide(color: Colors.redAccent),
-                                          padding: EdgeInsets.symmetric(vertical: 16),
-                                        ),
-                                        icon: Icon(Icons.cancel_outlined, size: 18),
-                                        label: Text('Cancel item request', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                                        onPressed: provider.isActionLoading
-                                            ? null
-                                            : () async {
-                                                final confirm = await showDialog<bool>(
-                                                  context: context,
-                                                  builder: (ctx) => AlertDialog(
-                                                    backgroundColor: colors.surface,
-                                                    title: Text('Cancel request?', style: TextStyle(color: colors.textPrimary)),
-                                                    content: Text(
-                                                      'This will cancel this item request. This cannot be undone.',
-                                                      style: TextStyle(color: colors.textSecondary),
-                                                    ),
-                                                    actions: [
-                                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Keep', style: TextStyle(color: colors.textMuted))),
-                                                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Cancel request', style: TextStyle(color: Colors.redAccent))),
-                                                    ],
-                                                  ),
-                                                );
-                                                if (confirm != true || !context.mounted) return;
-                                                final ok = await provider.cancelOrder(order.id);
-                                                if (!context.mounted) return;
-                                                if (ok) {
-                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                    SnackBar(content: Text('Order cancelled.'), backgroundColor: Colors.green),
-                                                  );
-                                                  Provider.of<OrderProvider>(context, listen: false).fetchOrders(silent: true);
-                                                } else {
-                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                    SnackBar(content: Text(provider.errorMessage ?? 'Failed to cancel order'), backgroundColor: Colors.redAccent),
-                                                  );
-                                                }
-                                              },
-                                      ),
-                                    ],
-                                    if (canExtendBuyout) ...[
-                                      SizedBox(height: 12),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: ElevatedButton(
-                                              style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF6C63FF), padding: EdgeInsets.symmetric(vertical: 16)),
-                                              onPressed: () => _showExtensionBottomSheet(context, provider),
-                                              child: FittedBox(fit: BoxFit.scaleDown, child: Text('Extend Rental', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold))),
-                                            ),
-                                          ),
-                                          SizedBox(width: 12),
-                                          Expanded(
-                                            child: ElevatedButton(
-                                              style: ElevatedButton.styleFrom(backgroundColor: colors.border, padding: EdgeInsets.symmetric(vertical: 16)),
-                                              onPressed: () => _showBuyoutBottomSheet(context, provider),
-                                              child: FittedBox(fit: BoxFit.scaleDown, child: Text('Buyout Item', style: TextStyle(color: colors.textPrimary))),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ],
-                                );
-                              },
-                            ),
-                            SizedBox(height: 32),
+                              );
+                            }),
                           ],
                         ),
                       ),
-          ),
-        ],
-      ),
+                      const SizedBox(height: _sectionGap),
+
+                      // Order timeline
+                      Container(
+                        padding: _cardPadding,
+                        decoration: _cardDecoration(colors),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text.rich(
+                                    TextSpan(
+                                      children: [
+                                        TextSpan(text: 'Timeline', style: _sectionTitleStyle(colors)),
+                                        TextSpan(
+                                          text: ' · ${provider.currentOrder!.listingTitle}',
+                                          style: TextStyle(
+                                            color: colors.textMuted,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                TextButton(
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  onPressed: () {
+                                    if (provider.currentOrder != null) {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => ProductDetailScreen(
+                                            listingId: provider.currentOrder!.listingId,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  child: const Text(
+                                    'View listing',
+                                    style: TextStyle(color: Color(0xFF6C63FF), fontSize: 12, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            _buildTimeline(provider.currentOrder!.status, provider.currentOrder!.orderType),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: _sectionGap),
+
+                      // Rental / purchase details
+                      if (provider.currentOrder!.startDate != null)
+                        Container(
+                          padding: _cardPadding,
+                          decoration: _cardDecoration(colors),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                provider.currentOrder!.orderType.toLowerCase() == 'buy'
+                                    ? 'Purchase details'
+                                    : 'Rental details',
+                                style: _sectionTitleStyle(colors),
+                              ),
+                              const SizedBox(height: 10),
+                              if (provider.currentOrder!.orderType.toLowerCase() == 'buy') ...[
+                                _detailGridRow(
+                                  colors,
+                                  [
+                                    _labeledValue(
+                                      colors,
+                                      'PURCHASE DATE',
+                                      _formatOrderDate(provider.currentOrder!.startDate),
+                                    ),
+                                    _labeledValue(
+                                      colors,
+                                      'QUANTITY',
+                                      '${provider.currentOrder!.quantity}',
+                                    ),
+                                  ],
+                                ),
+                              ] else ...[
+                                _detailGridRow(
+                                  colors,
+                                  [
+                                    _labeledValue(
+                                      colors,
+                                      'START DATE',
+                                      _formatOrderDate(provider.currentOrder!.startDate),
+                                    ),
+                                    _labeledValue(
+                                      colors,
+                                      'END DATE',
+                                      _formatOrderDate(provider.currentOrder!.endDate),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                _detailGridRow(
+                                  colors,
+                                  [
+                                    _labeledValue(
+                                      colors,
+                                      'QUANTITY',
+                                      '${provider.currentOrder!.quantity}',
+                                    ),
+                                    _labeledValue(
+                                      colors,
+                                      'ORDER TYPE',
+                                      formatOrderTypeLabel(provider.currentOrder!.orderType),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                _labeledValue(
+                                  colors,
+                                  'RENTAL PERIOD',
+                                  _rentalPeriodTitle(provider.currentOrder!),
+                                  subtitleWidget: _buildRentalPeriodMeta(
+                                    colors,
+                                    provider.currentOrder!,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+
+                      if (provider.currentOrder!.hasMedicalReference) ...[
+                        const SizedBox(height: _sectionGap),
+                        _MedicalReferenceCard(order: provider.currentOrder!),
+                      ],
+
+                      if (_shouldShowGroupPhotoSection(provider)) ...[
+                        const SizedBox(height: _sectionGap),
+                        _GroupVendorPhotoRequestCard(
+                          items: _ordersInGroup,
+                          requestsByOrderId: provider.imageRequestsByOrderId,
+                          selectedIds: _photoRequestSelection,
+                          viewingOrderId: _ordersInGroup[_selectedOrderIndex].id,
+                          loading: provider.imageRequestLoading,
+                          busy: provider.isActionLoading,
+                          onToggle: (orderId, selected) {
+                            setState(() {
+                              if (selected) {
+                                _photoRequestSelection.add(orderId);
+                              } else {
+                                _photoRequestSelection.remove(orderId);
+                              }
+                            });
+                          },
+                          onSelectAll: () {
+                            setState(() {
+                              _photoRequestSelection
+                                ..clear()
+                                ..addAll(
+                                  _eligiblePhotoItems(provider).map((o) => o.id),
+                                );
+                            });
+                          },
+                          onClear: () => setState(_photoRequestSelection.clear),
+                          onRequestAll: () => _requestPhotos(
+                            provider,
+                            _eligiblePhotoItems(provider).map((o) => o.id).toList(),
+                          ),
+                          onRequestSelected: () => _requestPhotos(
+                            provider,
+                            _photoRequestSelection.toList(),
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: _sectionGap),
+
+                      // Bottom action buttons
+                      Builder(
+                        builder: (context) {
+                          final order = provider.currentOrder!;
+                          final status = order.status.trim().toLowerCase();
+                          final canCancel = status == 'pending' || status == 'awaiting vendor acceptance';
+                          final canExtendBuyout = status == 'active' && order.orderType.toLowerCase() == 'rent';
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _fitOutlinedAction(
+                                colors: colors,
+                                icon: Icons.support_agent,
+                                label: 'BlinksMed support',
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => SupportScreen(orderRef: order.orderNumber),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              _fitOutlinedAction(
+                                colors: colors,
+                                icon: Icons.chat_bubble_outline,
+                                label: 'Chat with BlinksMed',
+                                onPressed: () async {
+                                  final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+                                  final sessionId = await chatProvider.createSession(
+                                    order.vendorId,
+                                    order.id,
+                                    subject: 'Chat regarding order ${order.orderNumber}: ${order.listingTitle}',
+                                  );
+                                  if (sessionId != null && context.mounted) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => ChatDetailScreen(
+                                          sessionId: sessionId,
+                                          orderNumber: order.orderNumber,
+                                          listingTitle: order.listingTitle,
+                                        ),
+                                      ),
+                                    );
+                                  } else if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Could not start chat session.')),
+                                    );
+                                  }
+                                },
+                              ),
+                              if (canCancel) ...[
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.redAccent,
+                                    side: const BorderSide(color: Colors.redAccent),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    minimumSize: const Size.fromHeight(44),
+                                  ),
+                                  icon: const Icon(Icons.cancel_outlined, size: 18),
+                                  label: const Text(
+                                    'Cancel item request',
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                                  ),
+                                  onPressed: provider.isActionLoading
+                                      ? null
+                                      : () async {
+                                          final confirm = await showDialog<bool>(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              backgroundColor: colors.surface,
+                                              title: Text('Cancel request?', style: TextStyle(color: colors.textPrimary)),
+                                              content: Text(
+                                                'This will cancel this item request. This cannot be undone.',
+                                                style: TextStyle(color: colors.textSecondary),
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(ctx, false),
+                                                  child: Text('Keep', style: TextStyle(color: colors.textMuted)),
+                                                ),
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(ctx, true),
+                                                  child: Text('Cancel request', style: TextStyle(color: Colors.redAccent)),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirm != true || !context.mounted) return;
+                                          final ok = await provider.cancelOrder(order.id);
+                                          if (!context.mounted) return;
+                                          if (ok) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('Order cancelled.'),
+                                                backgroundColor: Colors.green,
+                                              ),
+                                            );
+                                            Provider.of<OrderProvider>(context, listen: false).fetchOrders(silent: true);
+                                          } else {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text(provider.errorMessage ?? 'Failed to cancel order'),
+                                                backgroundColor: Colors.redAccent,
+                                              ),
+                                            );
+                                          }
+                                        },
+                                ),
+                              ],
+                              if (canExtendBuyout) ...[
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF6C63FF),
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          minimumSize: const Size.fromHeight(44),
+                                        ),
+                                        onPressed: () => _showExtensionBottomSheet(context, provider),
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(
+                                            'Extend Rental',
+                                            style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: colors.border,
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          minimumSize: const Size.fromHeight(44),
+                                        ),
+                                        onPressed: () => _showBuyoutBottomSheet(context, provider),
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text('Buyout Item', style: TextStyle(color: colors.textPrimary)),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
     );
   }
 
@@ -881,23 +972,41 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     AppPalette colors,
     String label,
     String value, {
-    Widget? extra,
+    String? subtitle,
+    Widget? subtitleWidget,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           label,
-          style: TextStyle(color: colors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+          style: TextStyle(
+            color: colors.textMuted,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
+          ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 3),
         Text(
           value,
-          style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold, height: 1.35),
+          style: TextStyle(
+            color: colors.textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            height: 1.2,
+          ),
         ),
-        if (extra != null) ...[
-          const SizedBox(height: 6),
-          extra,
+        if (subtitleWidget != null) ...[
+          const SizedBox(height: 2),
+          subtitleWidget,
+        ] else if (subtitle != null && subtitle.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: TextStyle(color: colors.textMuted, fontSize: 11, height: 1.25),
+          ),
         ],
       ],
     );
@@ -910,42 +1019,39 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     return formatRentalDuration(order.rentalDays, order.rentalPeriodUnit);
   }
 
-  Widget? _rentalPeriodExtra(AppPalette colors, OrderModel order) {
+  Widget? _buildRentalPeriodMeta(AppPalette colors, OrderModel order) {
     if (order.orderType.toLowerCase() != 'rent') return null;
+
     final days = order.rentalDurationDays;
     final hasPlanLabel = order.rentalDurationLabel?.trim().isNotEmpty == true;
     final showDays = hasPlanLabel && days != null && days > 0;
     final showPrice = order.rentalFinalPrice != null;
+    final hasDiscount = order.rentalNormalPrice != null &&
+        showPrice &&
+        order.rentalNormalPrice! > order.rentalFinalPrice!;
+
     if (!showDays && !showPrice) return null;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final muted = TextStyle(color: colors.textMuted, fontSize: 11, height: 1.25);
+
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 6,
+      runSpacing: 2,
       children: [
-        if (showDays)
+        if (showDays) Text('$days day${days == 1 ? '' : 's'}', style: muted),
+        if (showDays && (hasDiscount || showPrice))
+          Text('·', style: muted.copyWith(color: colors.textMuted.withValues(alpha: 0.5))),
+        if (hasDiscount)
+          StruckPrice(
+            '₹${order.rentalNormalPrice!.toStringAsFixed(0)}',
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          ),
+        if (showPrice)
           Text(
-            '$days day${days == 1 ? '' : 's'}',
-            style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.3),
+            'Plan price ₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
+            style: muted,
           ),
-        if (showPrice) ...[
-          if (showDays) const SizedBox(height: 6),
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              if (order.rentalNormalPrice != null &&
-                  order.rentalNormalPrice! > order.rentalFinalPrice!)
-                StruckPrice(
-                  '₹${order.rentalNormalPrice!.toStringAsFixed(0)}',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              Text(
-                'Plan price ₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
-                style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.3),
-              ),
-            ],
-          ),
-        ],
       ],
     );
   }
@@ -960,8 +1066,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
       style: OutlinedButton.styleFrom(
         foregroundColor: colors.textPrimary,
         side: BorderSide(color: colors.border),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        minimumSize: const Size.fromHeight(48),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        minimumSize: const Size.fromHeight(44),
       ),
       onPressed: onPressed,
       child: Row(
@@ -1039,89 +1145,241 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
 
   Widget _buildTimeline(String status, String orderType) {
     final colors = context.appColors;
-    final s = status.toLowerCase();
-    final isBuy = orderType.toLowerCase() == 'buy';
-    
-    int currentIndex = 1;
-    if (s == 'confirmed') currentIndex = 2;
-    if (s.contains('transit')) currentIndex = 3;
-    if (s == 'delivered') currentIndex = 4;
-    if (s == 'active') currentIndex = 5;
-    if (s == 'returned' || s == 'bought_out') currentIndex = 6;
+    final progress = _timelineProgress(status, orderType);
 
-    final steps = isBuy ? ['Order Placed', 'Vendor Confirmed', 'Out for Delivery', 'Delivered & Purchased'] 
-                        : ['Order Placed', 'Vendor Confirmed', 'Out for Delivery', 'Delivered', 'Rental Active', 'Returned'];
+    if (progress.cancelled) {
+      return Text(
+        'This order was cancelled — steps shown may have completed before cancellation.',
+        style: TextStyle(color: colors.textMuted, fontSize: 13, height: 1.35),
+      );
+    }
+
+    final steps = _timelineSteps(orderType);
+    final isRentalActiveCurrent = progress.currentIndex != null &&
+        steps[progress.currentIndex!].key == 'active' &&
+        orderType.toLowerCase() != 'buy';
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: List.generate(steps.length, (index) {
-        final isDone = index < currentIndex - 1;
-        final isCurrent = index == currentIndex - 1;
-        
-        Color dotColor;
-        Widget? icon;
-        
-        if (isDone && !isCurrent) {
-          dotColor = colors.textPrimary;
-          icon = Icon(Icons.check, size: 14, color: colors.surface);
-        } else if (isCurrent) {
-          dotColor = Color(0xFF10B981); // Emerald Green
-          icon = Container(width: 8, height: 8, decoration: BoxDecoration(color: colors.textPrimary, shape: BoxShape.circle));
-        } else {
-          dotColor = Colors.transparent;
-        }
+        final step = steps[index];
+        final isDone = index <= progress.completedThrough;
+        final isCurrent = progress.currentIndex == index;
+        final isUpcoming = !isDone && !isCurrent;
+        final isRentalActiveCurrentStep =
+            isRentalActiveCurrent && step.key == 'active';
+        final isLast = index == steps.length - 1;
 
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Column(
-              children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: dotColor,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: isDone || isCurrent ? dotColor : colors.border, width: 2),
-                  ),
-                  child: Center(child: icon),
+        final connectorColor = isDone
+            ? colors.textPrimary.withValues(alpha: 0.35)
+            : colors.border.withValues(alpha: 0.9);
+
+        // Explicit row height — IntrinsicHeight + Expanded fails to paint on Flutter web.
+        final rowHeight = isCurrent ? 48.0 : 34.0;
+        const dotTop = 2.0;
+        const dotSize = 18.0;
+        const lineWidth = 2.0;
+        const lineLeft = (dotSize - lineWidth) / 2;
+        // Extend slightly into the next row so the rail meets the following dot.
+        const lineOverlap = 10.0;
+
+        return SizedBox(
+          height: rowHeight,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              if (!isLast)
+                Positioned(
+                  left: lineLeft,
+                  top: dotTop + dotSize,
+                  width: lineWidth,
+                  height: rowHeight - dotTop - dotSize + lineOverlap,
+                  child: ColoredBox(color: connectorColor),
                 ),
-                if (index < steps.length - 1)
-                  Container(
-                    width: 2,
-                    height: 40,
-                    color: colors.border,
-                  ),
-              ],
-            ),
-            SizedBox(width: 16),
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(top: 2),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      steps[index],
-                      style: TextStyle(
-                        color: isDone || isCurrent ? colors.textPrimary : colors.textMuted,
-                        fontSize: 16,
-                      ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: dotTop),
+                    child: _CustomerOrderTimelineDot(
+                      isDone: isDone,
+                      isCurrent: isCurrent,
+                      isUpcoming: isUpcoming,
                     ),
-                    if (isCurrent && steps[index] == 'Rental Active')
-                      Padding(
-                        padding: EdgeInsets.only(top: 4.0),
-                        child: Text('Rental is currently active', style: TextStyle(color: Color(0xFF10B981), fontSize: 12)),
-                      ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          step.label,
+                          style: TextStyle(
+                            color: isRentalActiveCurrentStep
+                                ? (context.isDarkMode
+                                    ? const Color(0xFF6EE7B7)
+                                    : const Color(0xFF047857))
+                                : isUpcoming
+                                    ? colors.textMuted
+                                    : colors.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            height: 1.25,
+                          ),
+                        ),
+                        if (isCurrent)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              'In progress',
+                              style: TextStyle(
+                                color: colors.textMuted,
+                                fontSize: 11,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+            ],
+          ),
         );
       }),
     );
   }
 
+}
+
+class _TimelineStepData {
+  final String key;
+  final String label;
+
+  const _TimelineStepData({required this.key, required this.label});
+}
+
+class _TimelineProgress {
+  final bool cancelled;
+  final int completedThrough;
+  final int? currentIndex;
+
+  const _TimelineProgress({
+    required this.cancelled,
+    required this.completedThrough,
+    required this.currentIndex,
+  });
+}
+
+List<_TimelineStepData> _timelineSteps(String orderType) {
+  final isBuy = orderType.toLowerCase() == 'buy';
+  if (isBuy) {
+    return const [
+      _TimelineStepData(key: 'placed', label: 'Order Placed'),
+      _TimelineStepData(key: 'confirmed', label: 'Supplier Confirmed'),
+      _TimelineStepData(key: 'out', label: 'Out for Delivery'),
+      _TimelineStepData(key: 'active', label: 'Delivered & Purchased'),
+    ];
+  }
+  return const [
+    _TimelineStepData(key: 'placed', label: 'Order Placed'),
+    _TimelineStepData(key: 'confirmed', label: 'Supplier Confirmed'),
+    _TimelineStepData(key: 'out', label: 'Out for Delivery'),
+    _TimelineStepData(key: 'delivered', label: 'Delivered'),
+    _TimelineStepData(key: 'active', label: 'Rental Active'),
+    _TimelineStepData(key: 'returned', label: 'Returned'),
+  ];
+}
+
+/// Matches web `getTimelineProgress` in CustomerOrderDetail.tsx.
+_TimelineProgress _timelineProgress(String status, String orderType) {
+  final raw = status.toLowerCase().trim();
+  final compact = raw.replaceAll(RegExp(r'\s+'), '_');
+  final isBuy = orderType.toLowerCase() == 'buy';
+
+  if (compact == 'cancelled' || compact == 'canceled') {
+    return const _TimelineProgress(cancelled: true, completedThrough: -1, currentIndex: null);
+  }
+  if (compact == 'dispatch_failed' || raw.contains('dispatch failed')) {
+    return const _TimelineProgress(cancelled: false, completedThrough: 0, currentIndex: null);
+  }
+  if (compact == 'pending') {
+    return const _TimelineProgress(cancelled: false, completedThrough: 0, currentIndex: 1);
+  }
+  if (compact == 'confirmed') {
+    return const _TimelineProgress(cancelled: false, completedThrough: 1, currentIndex: 2);
+  }
+  if (compact == 'in_transit' || raw.contains('transit')) {
+    return const _TimelineProgress(cancelled: false, completedThrough: 2, currentIndex: 3);
+  }
+  if (compact == 'active') {
+    return isBuy
+        ? const _TimelineProgress(cancelled: false, completedThrough: 3, currentIndex: null)
+        : const _TimelineProgress(cancelled: false, completedThrough: 3, currentIndex: 4);
+  }
+  if (compact == 'returned') {
+    return const _TimelineProgress(cancelled: false, completedThrough: 5, currentIndex: null);
+  }
+  return const _TimelineProgress(cancelled: false, completedThrough: 0, currentIndex: 1);
+}
+
+/// Timeline node — completed (dark + check), in-progress (emerald disc), upcoming (muted ring).
+class _CustomerOrderTimelineDot extends StatelessWidget {
+  final bool isDone;
+  final bool isCurrent;
+  final bool isUpcoming;
+
+  const _CustomerOrderTimelineDot({
+    required this.isDone,
+    required this.isCurrent,
+    required this.isUpcoming,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final isDark = context.isDarkMode;
+
+    late final Color borderColor;
+    late final Color fillColor;
+    Widget? center;
+
+    if (isDone) {
+      borderColor = colors.textPrimary;
+      fillColor = colors.textPrimary;
+      center = Icon(Icons.check, size: 10, color: colors.surface);
+    } else if (isCurrent) {
+      // In-progress step: emerald disc (mobile UX; rental-active keeps label tint separately).
+      borderColor = isDark ? const Color(0xFF10B981) : const Color(0xFF059669);
+      fillColor = borderColor;
+      center = Container(
+        width: 6,
+        height: 6,
+        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+      );
+    } else if (isUpcoming) {
+      borderColor = colors.border;
+      fillColor = colors.background;
+      center = null;
+    } else {
+      borderColor = colors.border;
+      fillColor = colors.background;
+      center = null;
+    }
+
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        color: fillColor,
+        shape: BoxShape.circle,
+        border: Border.all(color: borderColor, width: 2),
+      ),
+      alignment: Alignment.center,
+      child: center,
+    );
+  }
 }
 
 class _GroupVendorPhotoRequestCard extends StatelessWidget {

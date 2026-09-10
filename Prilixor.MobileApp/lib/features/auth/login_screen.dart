@@ -104,7 +104,9 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.of(context).pop(true);
       } else {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const CustomerDashboard()),
+          MaterialPageRoute(
+            builder: (_) => CustomerDashboard(key: CustomerDashboard.navigationKey),
+          ),
         );
       }
     }

@@ -9,8 +9,7 @@ import { HowItWorksSection } from "./HowItWorksSection";
 import { RentVsBuySection } from "./RentVsBuySection";
 import { ContactSection } from "./ContactSection";
 import { FAQSection } from "./FAQSection";
-import { useQuery } from "@tanstack/react-query";
-import { websiteContentApi } from "@/app/services/websiteContentApi";
+import { usePublicWebsiteContent } from "@/app/hooks/usePublicWebsiteContent";
 
 const sectionIds = ["home", "about", "services", "how-it-works", "rent-or-buy", "contact"];
 
@@ -19,13 +18,7 @@ export const Home = () => {
   const isClickScrollingRef = useRef(false);
   const clickTimeoutRef = useRef<number | null>(null);
 
-  // Fetch API-driven dynamic public content
-  const { data, isLoading } = useQuery({
-    queryKey: ["publicWebsiteContent"],
-    queryFn: () => websiteContentApi.getPublicContent(),
-    staleTime: 1000 * 60 * 5, // 5 minutes cache
-    retry: 1,
-  });
+  const { data, isFetched } = usePublicWebsiteContent();
 
   const handleSectionClick = useCallback((sectionId: string) => {
     setActiveSection(sectionId);
@@ -56,7 +49,6 @@ export const Home = () => {
   }, []);
 
   useEffect(() => {
-    // Scroll reveal observer
     const revealEls = document.querySelectorAll(".reveal");
     const revealObs = new IntersectionObserver(
       (entries) => {
@@ -67,7 +59,7 @@ export const Home = () => {
           }
         });
       },
-      { threshold: 0.12, rootMargin: "0px 0px -8% 0px" }
+      { threshold: 0.06, rootMargin: "40px 0px -6% 0px" }
     );
     revealEls.forEach((el) => revealObs.observe(el));
 
@@ -123,7 +115,7 @@ export const Home = () => {
         window.clearTimeout(clickTimeoutRef.current);
       }
     };
-  }, [handleSectionClick]);
+  }, [handleSectionClick, isFetched]);
 
   return (
     <div className="bm-landing-body">
@@ -139,7 +131,7 @@ export const Home = () => {
       />
 
       <main>
-        <HeroSection data={data?.home} />
+        <HeroSection data={data?.home} cmsReady={isFetched} />
         {data?.settings?.showAboutSection !== false && <AboutSection data={data?.about} />}
         {data?.settings?.showServicesSection !== false && <ServicesSection data={data?.services} />}
         {data?.settings?.showHowItWorksSection !== false && <HowItWorksSection data={data?.howItWorks} />}

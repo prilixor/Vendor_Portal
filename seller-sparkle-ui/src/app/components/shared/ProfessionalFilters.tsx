@@ -120,7 +120,7 @@ export function ActiveFilterChips({
         <button
           type="button"
           onClick={onClearAll}
-          className="text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          className="text-xs font-medium text-muted-foreground no-underline transition-colors hover:text-foreground hover:no-underline"
         >
           {clearLabel}
         </button>

@@ -318,6 +318,9 @@ function itemPayout(item: VendorOrderApiDto): number {
     : item.totalAmount;
 }
 
+/** Keep photo requests and order status in sync while vendor stays on this page. */
+const VENDOR_ORDER_POLL_MS = 15_000;
+
 const VendorOrderDetail = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -325,6 +328,7 @@ const VendorOrderDetail = () => {
 
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hasLoadedOrder, setHasLoadedOrder] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [order, setOrder] = useState<VendorOrderApiDto | null>(null);
   const [allOrders, setAllOrders] = useState<VendorOrderApiDto[]>([]);
@@ -345,6 +349,7 @@ const VendorOrderDetail = () => {
   const [uploadingOrderImage, setUploadingOrderImage] = useState(false);
   const [deletingOrderImageId, setDeletingOrderImageId] = useState<string | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [isLiveSyncing, setIsLiveSyncing] = useState(false);
   const orderImageInputRef = useRef<HTMLInputElement>(null);
   const MAX_ORDER_IMAGES = 5;
 
@@ -354,11 +359,14 @@ const VendorOrderDetail = () => {
     setSelectedItemId(null);
   }, [orderId]);
 
-  const loadOrder = async (itemId?: string | null) => {
+  const loadOrder = async (
+    itemId?: string | null,
+    options?: { silent?: boolean },
+  ) => {
     const id = itemId ?? currentItemId;
     if (!user || !id) return;
     try {
-      setLoading(true);
+      if (!options?.silent) setLoading(true);
       const row = await vendorOnboardingApi.getVendorOrder(user.id, id);
       setOrder(row);
       try {
@@ -369,10 +377,15 @@ const VendorOrderDetail = () => {
         setContinuations(null);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load order detail.";
-      toast.error(message);
+      if (!options?.silent) {
+        const message = error instanceof Error ? error.message : "Failed to load order detail.";
+        toast.error(message);
+      }
     } finally {
-      setLoading(false);
+      if (!options?.silent) {
+        setLoading(false);
+        setHasLoadedOrder(true);
+      }
     }
   };
 
@@ -387,6 +400,10 @@ const VendorOrderDetail = () => {
   };
 
   useEffect(() => {
+    setHasLoadedOrder(false);
+  }, [orderId]);
+
+  useEffect(() => {
     void loadOrder(currentItemId);
   }, [user?.id, currentItemId]);
 
@@ -394,23 +411,26 @@ const VendorOrderDetail = () => {
     void loadAllOrders();
   }, [user?.id]);
 
-  const loadImageRequest = useCallback(async (itemId?: string | null) => {
-    const id = itemId ?? currentItemId;
-    if (!user?.id || !id) {
-      setImageRequest(null);
-      return;
-    }
-    try {
-      setImageRequestLoading(true);
-      const row = await vendorOnboardingApi.getVendorOrderImageRequest(user.id, id);
-      setImageRequest(row);
-    } catch (error) {
-      console.error("Failed to load order photo request", error);
-      setImageRequest(null);
-    } finally {
-      setImageRequestLoading(false);
-    }
-  }, [user?.id, currentItemId]);
+  const loadImageRequest = useCallback(
+    async (itemId?: string | null, options?: { silent?: boolean }) => {
+      const id = itemId ?? currentItemId;
+      if (!user?.id || !id) {
+        setImageRequest(null);
+        return;
+      }
+      try {
+        if (!options?.silent) setImageRequestLoading(true);
+        const row = await vendorOnboardingApi.getVendorOrderImageRequest(user.id, id);
+        setImageRequest(row);
+      } catch (error) {
+        console.error("Failed to load order photo request", error);
+        setImageRequest(null);
+      } finally {
+        if (!options?.silent) setImageRequestLoading(false);
+      }
+    },
+    [user?.id, currentItemId],
+  );
 
   useEffect(() => {
     void loadImageRequest(currentItemId);
@@ -443,36 +463,69 @@ const VendorOrderDetail = () => {
     [orderGroupItems],
   );
 
-  useEffect(() => {
+  const loadGroupPhotoMeta = useCallback(async () => {
     if (!user?.id || !groupPhotoKey) {
       setGroupPhotoMeta(new Map());
       return;
     }
-    let cancelled = false;
     const ids = groupPhotoKey.split("|").filter(Boolean);
-    void (async () => {
-      const entries = await Promise.all(
-        ids.map(async (id) => {
-          try {
-            const row = await vendorOnboardingApi.getVendorOrderImageRequest(user.id, id);
-            if (!row) return [id, null] as const;
-            return [id, { count: row.images?.length ?? 0 }] as const;
-          } catch {
-            return [id, null] as const;
-          }
-        }),
-      );
-      if (cancelled) return;
-      const map = new Map<string, { count: number }>();
-      for (const [id, meta] of entries) {
-        if (meta) map.set(id, meta);
-      }
-      setGroupPhotoMeta(map);
-    })();
-    return () => {
-      cancelled = true;
+    const entries = await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const row = await vendorOnboardingApi.getVendorOrderImageRequest(user.id, id);
+          if (!row) return [id, null] as const;
+          return [id, { count: row.images?.length ?? 0 }] as const;
+        } catch {
+          return [id, null] as const;
+        }
+      }),
+    );
+    const map = new Map<string, { count: number }>();
+    for (const [id, meta] of entries) {
+      if (meta) map.set(id, meta);
+    }
+    setGroupPhotoMeta(map);
+  }, [user?.id, groupPhotoKey]);
+
+  const refreshLive = useCallback(async () => {
+    if (!user?.id || !currentItemId) return;
+    setIsLiveSyncing(true);
+    try {
+      await Promise.all([
+        loadOrder(currentItemId, { silent: true }),
+        loadAllOrders(),
+        loadImageRequest(currentItemId, { silent: true }),
+        loadGroupPhotoMeta(),
+      ]);
+    } finally {
+      setIsLiveSyncing(false);
+    }
+  }, [user?.id, currentItemId, loadImageRequest, loadGroupPhotoMeta]);
+
+  useEffect(() => {
+    void loadGroupPhotoMeta();
+  }, [loadGroupPhotoMeta, imageRequest?.id, orderImages.length]);
+
+  useEffect(() => {
+    if (!user?.id || !currentItemId) return;
+
+    const interval = window.setInterval(() => {
+      void refreshLive();
+    }, VENDOR_ORDER_POLL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [user?.id, currentItemId, refreshLive]);
+
+  useEffect(() => {
+    if (!user?.id || !currentItemId) return;
+
+    const handleFocus = () => {
+      void refreshLive();
     };
-  }, [user?.id, groupPhotoKey, imageRequest?.id, orderImages.length]);
+
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [user?.id, currentItemId, refreshLive]);
 
   const groupPayoutAmount = useMemo(
     () => orderGroupItems.reduce((sum, item) => sum + itemPayout(item), 0),
@@ -781,10 +834,17 @@ const VendorOrderDetail = () => {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-6">
-      <BackLink to="/vendor/orders" label="Back to orders" />
+      <div className="flex items-center justify-between gap-3">
+        <BackLink to="/vendor/orders" label="Back to orders" />
+        {isLiveSyncing ? (
+          <span className="text-[11px] font-medium text-muted-foreground" aria-live="polite">
+            Updating…
+          </span>
+        ) : null}
+      </div>
 
       <Card className="overflow-hidden border-border/80 shadow-sm">
-        {!order ? (
+        {!order && !hasLoadedOrder ? (
           <CardContent className="p-4 sm:p-6">
             <PageLoaderSlot className="min-h-[8rem] py-0" />
           </CardContent>

@@ -14,8 +14,7 @@ import {
 import {
   dayPlanTitle,
   formatBillingCycles,
-  rentalValueTierLabel,
-  resolveRentalIconUrl,
+  rentalIconLabel,
   resolveRentalIconUrlFromPlan,
 } from "@/app/helpers/rentalDurationIcons";
 
@@ -69,6 +68,61 @@ function planPerDay(plan: RentalPricingPlanDto): number | null {
   return Math.round(price / days);
 }
 
+function PlanPriceCluster({
+  plan,
+  iconUrl,
+  tierLabel,
+  savings,
+  size = "md",
+}: {
+  plan: RentalPricingPlanDto;
+  iconUrl: string | null;
+  tierLabel: string;
+  savings: number;
+  size?: "md" | "lg";
+}) {
+  const large = size === "lg";
+  return (
+    <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+      {iconUrl ? (
+        <div
+          className={cn(
+            "flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border",
+            large ? "h-8 w-8 sm:h-12 sm:w-12" : "h-8 w-8 sm:h-10 sm:w-10",
+          )}
+          title={tierLabel}
+        >
+          <img
+            src={iconUrl}
+            alt={tierLabel}
+            className={cn(
+              "object-contain drop-shadow-sm",
+              large ? "h-6 w-6 sm:h-9 sm:w-9" : "h-6 w-6 sm:h-8 sm:w-8",
+            )}
+            onError={retryOriginalOnImageError}
+          />
+        </div>
+      ) : null}
+      <div className="text-right">
+        <p
+          className={cn(
+            "whitespace-nowrap font-extrabold leading-none tabular-nums",
+            large ? "text-[16px] sm:text-[18px]" : "text-[14px] sm:text-[15px]",
+            plan.isRecommended ? "text-blue-600 dark:text-blue-400" : "text-foreground",
+          )}
+        >
+          {formatPlanInr(plan.finalRentalPrice)}
+        </p>
+        {savings > 0 ? (
+          <StruckPrice className={cn("mt-0.5 block", large ? "text-[11px] sm:text-[12px]" : "text-[10px] sm:text-[11px]")}>
+            {formatPlanInr(plan.normalPrice)}
+          </StruckPrice>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /** Active plans sorted: Most Popular first, then longest → shortest. */
 export function sortActiveRentalPlans(plans: RentalPricingPlanDto[] | null | undefined): RentalPricingPlanDto[] {
   return (plans ?? [])
@@ -96,7 +150,7 @@ function PlanOptionRow({
   const cyclesLabel = formatBillingCycles(planBillingCycles(plan));
   const iconUrl = resolveRentalIconUrlFromPlan(plan);
   const title = dayPlanTitle(plan.durationDays, plan.durationLabel);
-  const tierLabel = rentalValueTierLabel(plan.valueTier);
+  const tierLabel = rentalIconLabel(plan);
   const perDay = planPerDay(plan);
   const meta = [
     `${plan.durationDays} days`,
@@ -113,7 +167,7 @@ function PlanOptionRow({
       aria-checked={isActive}
       onClick={onPick}
       className={cn(
-        "flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all",
+        "flex w-full min-w-0 items-start gap-2 rounded-xl border px-2.5 py-2 text-left transition-all sm:gap-2.5 sm:px-3 sm:py-2.5",
         "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/15",
         isActive
           ? plan.isRecommended
@@ -138,8 +192,8 @@ function PlanOptionRow({
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <p className="truncate text-[13px] font-bold text-foreground">{title}</p>
+        <div className="flex flex-wrap items-center gap-1">
+          <p className="text-[13px] font-bold leading-tight text-foreground">{title}</p>
           {plan.isRecommended ? (
             <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
               Most Popular
@@ -151,69 +205,16 @@ function PlanOptionRow({
             </span>
           ) : null}
         </div>
-        <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">{meta}</p>
+        <p className="mt-0.5 text-[11px] font-medium leading-snug text-muted-foreground">{meta}</p>
         {savings > 0 ? (
           <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
             {pctOff > 0 ? `${pctOff}% off · ` : null}
             Save {formatPlanInr(savings)}
           </span>
         ) : null}
-
-        {/* Price under text on very narrow rows so it never paints over meta */}
-        <div className="mt-1.5 flex items-center justify-between gap-2 sm:hidden">
-          <div>
-            <p
-              className={cn(
-                "text-[15px] font-extrabold tabular-nums",
-                plan.isRecommended ? "text-blue-600 dark:text-blue-400" : "text-foreground",
-              )}
-            >
-              {formatPlanInr(plan.finalRentalPrice)}
-            </p>
-            {savings > 0 ? (
-              <StruckPrice className="mt-0.5 block text-[11px]">
-                {formatPlanInr(plan.normalPrice)}
-              </StruckPrice>
-            ) : null}
-          </div>
-          {iconUrl ? (
-            <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border"
-              title={tierLabel}
-            >
-              <img src={iconUrl} alt={tierLabel} className="h-7 w-7 object-contain drop-shadow-sm" onError={retryOriginalOnImageError} />
-            </div>
-          ) : null}
-        </div>
       </div>
 
-      <div className="hidden shrink-0 items-start gap-2 sm:flex">
-        <div className="text-right">
-          <p
-            className={cn(
-              "text-[15px] font-extrabold tabular-nums",
-              plan.isRecommended ? "text-blue-600 dark:text-blue-400" : "text-foreground",
-            )}
-          >
-            {formatPlanInr(plan.finalRentalPrice)}
-          </p>
-          {savings > 0 ? (
-            <StruckPrice className="mt-1 block text-[11px]">
-              {formatPlanInr(plan.normalPrice)}
-            </StruckPrice>
-          ) : null}
-        </div>
-        {iconUrl ? (
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border"
-            title={tierLabel}
-          >
-            <img src={iconUrl} alt={tierLabel} className="h-8 w-8 object-contain drop-shadow-sm" onError={retryOriginalOnImageError} />
-          </div>
-        ) : (
-          <div className="h-10 w-10 shrink-0" aria-hidden />
-        )}
-      </div>
+      <PlanPriceCluster plan={plan} iconUrl={iconUrl} tierLabel={tierLabel} savings={savings} />
     </button>
   );
 }
@@ -268,22 +269,19 @@ export function RentalPeriodPlanDropdown({
   const selected = plans.find((p) => p.id === selectedPlanId) ?? plans[0] ?? null;
 
   const legend = useMemo(() => {
-    const order = ["good", "better", "best_value", "maximum_savings"];
-    const byTier = new Map<string, { url: string; label: string }>();
+    const byIcon = new Map<string, { url: string; label: string }>();
 
     for (const plan of plans) {
-      const tier = (plan.valueTier || "").toLowerCase().replace(/-/g, "_");
       const url = resolveRentalIconUrlFromPlan(plan);
-      if (!tier || !url || byTier.has(tier)) continue;
-      byTier.set(tier, {
-        label: rentalValueTierLabel(tier),
+      const key = plan.rentalDurationIconId || plan.iconName || plan.valueTier || "";
+      if (!key || !url || byIcon.has(key)) continue;
+      byIcon.set(key, {
+        label: rentalIconLabel(plan),
         url,
       });
     }
 
-    return order
-      .filter((t) => byTier.has(t))
-      .map((tier) => ({ tier, ...byTier.get(tier)! }));
+    return [...byIcon.entries()].map(([tier, item]) => ({ tier, ...item }));
   }, [plans]);
 
   const bestSavingsPlanId = useMemo(() => {
@@ -306,7 +304,7 @@ export function RentalPeriodPlanDropdown({
   const selectedCycles = formatBillingCycles(planBillingCycles(selected));
   const selectedIconUrl = resolveRentalIconUrlFromPlan(selected);
   const selectedTitle = dayPlanTitle(selected.durationDays, selected.durationLabel);
-  const selectedTierLabel = rentalValueTierLabel(selected.valueTier);
+  const selectedTierLabel = rentalIconLabel(selected);
   const selectedPerDay = planPerDay(selected);
   const selectedIsBestDeal = selected.id === bestSavingsPlanId && selectedPctOff > 0;
 
@@ -335,31 +333,31 @@ export function RentalPeriodPlanDropdown({
             : "border-border hover:border-violet-300 dark:hover:border-violet-500",
       )}
     >
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start">
+      <div className="flex min-w-0 items-start gap-2 sm:gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <p className="min-w-0 break-words text-[15px] font-bold tracking-tight text-foreground">
+            <p className="min-w-0 break-words text-[14px] font-bold tracking-tight text-foreground sm:text-[15px]">
               {selectedTitle}
             </p>
             {selected.isRecommended ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white sm:px-2 sm:text-[10px]">
                 <Star className="h-2.5 w-2.5 fill-current" />
                 Most Popular
               </span>
             ) : null}
             {selectedIsBestDeal ? (
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30">
+              <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700 ring-1 ring-inset ring-amber-200 sm:px-2 sm:text-[10px] dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30">
                 Best deal
               </span>
             ) : null}
           </div>
-          <p className="mt-1 text-[12px] font-medium leading-snug text-muted-foreground">
+          <p className="mt-1 text-[11px] font-medium leading-snug text-muted-foreground sm:text-[12px]">
             {selected.durationDays} days
             {selectedCycles ? ` · ${selectedCycles}` : ""}
             {selectedPerDay != null ? ` · ${formatPlanInr(selectedPerDay)}/day` : ""}
           </p>
           {(selectedPctOff > 0 || selectedSavings > 0) && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:mt-2">
               {selectedPctOff > 0 ? (
                 <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/15 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/25">
                   {selectedPctOff}% OFF
@@ -375,45 +373,20 @@ export function RentalPeriodPlanDropdown({
           )}
         </div>
 
-        <div className="flex min-w-0 shrink-0 items-center justify-between gap-2 sm:justify-end">
-          <div className="text-left sm:text-right">
-            <p
-              className={cn(
-                "text-[18px] font-extrabold leading-none tabular-nums",
-                selected.isRecommended
-                  ? "text-blue-600 dark:text-blue-400"
-                  : "text-foreground",
-              )}
-            >
-              {formatPlanInr(selected.finalRentalPrice)}
-            </p>
-            {selectedSavings > 0 ? (
-              <StruckPrice className="mt-1 block text-[12px]">
-                {formatPlanInr(selected.normalPrice)}
-              </StruckPrice>
-            ) : null}
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {selectedIconUrl ? (
-              <div
-                className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border sm:h-12 sm:w-12"
-                title={selectedTierLabel}
-              >
-                <img
-                  src={selectedIconUrl}
-                  alt={selectedTierLabel}
-                  className="h-7 w-7 object-contain drop-shadow-sm sm:h-9 sm:w-9"
-                  onError={retryOriginalOnImageError}
-                />
-              </div>
-            ) : null}
-            <ChevronDown
-              className={cn(
-                "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
-                open && "rotate-180 text-violet-500",
-              )}
-            />
-          </div>
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <PlanPriceCluster
+            plan={selected}
+            iconUrl={selectedIconUrl}
+            tierLabel={selectedTierLabel}
+            savings={selectedSavings}
+            size="lg"
+          />
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 sm:h-5 sm:w-5",
+              open && "rotate-180 text-violet-500",
+            )}
+          />
         </div>
       </div>
     </button>

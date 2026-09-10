@@ -6,6 +6,7 @@ using Prilixor.VendorPortal.API.EndPoints.Support;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Options;
 using Microsoft.AspNetCore.Http.Json;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using System.Security.Claims;
@@ -24,6 +25,7 @@ builder.Services.Configure<Prilixor.VendorPortal.Domain.Options.BootstrapSuperAd
     builder.Configuration.GetSection(Prilixor.VendorPortal.Domain.Options.BootstrapSuperAdminOptions.SectionName));
 builder.Services.AddHostedService<Prilixor.VendorPortal.API.Services.BootstrapSuperAdminHostedService>();
 builder.Services.AddHostedService<Prilixor.VendorPortal.API.Services.CustomerExpirationReminderHostedService>();
+builder.Services.AddHostedService<Prilixor.VendorPortal.API.Services.LegalDocumentSeedHostedService>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpClient();
@@ -101,7 +103,18 @@ builder.Services.AddCors(options =>
 builder.Services.Configure<JsonOptions>(o =>
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 
+// IIS (today) and Nginx on the same VM (Linux) terminate HTTPS and proxy HTTP to Kestrel.
+// Trust loopback only (default) so X-Forwarded-Proto is applied and UseHttpsRedirection
+// does not 307-loop. Must run before HTTPS redirection.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+});
+
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 app.Use(async (context, next) =>
 {

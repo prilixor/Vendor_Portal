@@ -89,14 +89,27 @@ String rentalValueTierLabel(String? tier) {
   switch (key) {
     case 'better':
       return 'Better';
-    case 'best_value':
-      return 'Best Value';
     case 'maximum_savings':
       return 'Maximum Savings';
     case 'good':
-    default:
       return 'Good';
+    case 'best_value':
+      return 'Best Value';
+    case '':
+      return '';
+    default:
+      return key
+          .split('_')
+          .where((part) => part.isNotEmpty)
+          .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+          .join(' ');
   }
+}
+
+String rentalIconLabel(RentalPricingPlanModel plan) {
+  final name = plan.iconName?.trim();
+  if (name != null && name.isNotEmpty) return name;
+  return rentalValueTierLabel(plan.valueTier);
 }
 
 /// Sort like web: Most Popular first, then longest → shortest.

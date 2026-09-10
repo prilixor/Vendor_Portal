@@ -103,36 +103,36 @@ export const AboutSection = ({ data }: AboutSectionProps) => {
 
   return (
     <section id="about" className="scroll-target section-block cream reveal">
-      <div className="page-banner">
-        <div className="eyebrow">ABOUT US</div>
-        <h2>
-          {bannerTitle} <span className="accent">{bannerAccent}</span>
-        </h2>
-        <p className="sub">{bannerSub}</p>
-      </div>
+      <div className="section-inner">
+        <div className="page-banner">
+          <div className="eyebrow">ABOUT US</div>
+          <h2>
+            {bannerTitle} <span className="accent">{bannerAccent}</span>
+          </h2>
+          <p className="sub">{bannerSub}</p>
+        </div>
 
-      <div className="section-inner" style={{ paddingTop: "24px" }}>
         {/* MISSION & VISION */}
         <div className="compare">
           <div className="compare-card">
             <h4>{missionTitle}</h4>
-            <p style={{ color: "var(--gray-600)", lineHeight: "1.6" }}>{missionText}</p>
+            <p>{missionText}</p>
           </div>
           <div className="compare-card">
             <h4>{visionTitle}</h4>
-            <p style={{ color: "var(--gray-600)", lineHeight: "1.6" }}>{visionText}</p>
+            <p>{visionText}</p>
           </div>
         </div>
 
         {/* WHO WE SERVE */}
-        <div className="services-head" style={{ marginTop: "24px" }}>
+        <div className="services-head">
           <h3>
             Who we <span className="accent" style={{ color: "var(--teal-mid)", fontStyle: "italic" }}>serve.</span>
           </h3>
         </div>
         <div className="service-grid">
           {audiences.map((item, idx) => (
-            <article key={item.id ?? idx} className="service-card">
+            <article key={item.id ?? idx} className="service-card service-card--center">
               <div className="service-icon">{renderAudienceIcon(item.iconName, item.customIconUrl)}</div>
               <h4>{item.title}</h4>
               <p>{item.description}</p>

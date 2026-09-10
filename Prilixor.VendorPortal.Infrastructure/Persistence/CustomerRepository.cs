@@ -1617,14 +1617,14 @@ public sealed class CustomerRepository(
     {
         var rows = await commonDb.RentalDurationIcons
             .AsNoTracking()
-            .Where(x => !x.IsDeleted && x.IsActive)
+            .Where(x => !x.IsDeleted)
             .ToListAsync(cancellationToken);
 
         if (rows.Count == 0)
         {
             rows = await vendorDb.RentalDurationIcons
                 .AsNoTracking()
-                .Where(x => !x.IsDeleted && x.IsActive)
+                .Where(x => !x.IsDeleted)
                 .ToListAsync(cancellationToken);
         }
 

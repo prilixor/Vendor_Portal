@@ -266,17 +266,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
   List<({String tier, String label, String url})> _tierLegend(List<RentalPricingPlanModel> plans) {
-    const order = ['good', 'better', 'best_value', 'maximum_savings'];
-    final byTier = <String, ({String label, String url})>{};
+    final byIcon = <String, ({String label, String url})>{};
     for (final plan in plans) {
-      final tier = (plan.valueTier ?? '').toLowerCase().replaceAll('-', '_');
       final url = _planIconUrl(plan);
-      if (tier.isEmpty || url == null || url.isEmpty || byTier.containsKey(tier)) continue;
-      byTier[tier] = (label: rentalValueTierLabel(tier), url: url);
+      final key = plan.rentalDurationIconId ?? plan.iconName ?? plan.valueTier ?? '';
+      if (key.isEmpty || url == null || url.isEmpty || byIcon.containsKey(key)) continue;
+      byIcon[key] = (label: rentalIconLabel(plan), url: url);
     }
     return [
-      for (final t in order)
-        if (byTier[t] != null) (tier: t, label: byTier[t]!.label, url: byTier[t]!.url),
+      for (final entry in byIcon.entries)
+        (tier: entry.key, label: entry.value.label, url: entry.value.url),
     ];
   }
 
@@ -954,7 +953,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   border: Border.all(color: borderColor, width: 1.5),
                                                 ),
                                                 child: Row(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment: CrossAxisAlignment.center,
                                                   children: [
                                                     Expanded(
                                                       child: Column(
@@ -1012,8 +1011,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                     const SizedBox(width: 8),
                                                     Row(
                                                       mainAxisSize: MainAxisSize.min,
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      crossAxisAlignment: CrossAxisAlignment.center,
                                                       children: [
+                                                        if (_planIconAvatar(selectedPlan, size: 32)
+                                                            case final icon?) ...[
+                                                          icon,
+                                                          const SizedBox(width: 8),
+                                                        ],
                                                         Column(
                                                           crossAxisAlignment: CrossAxisAlignment.end,
                                                           children: [
@@ -1040,11 +1044,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                             ],
                                                           ],
                                                         ),
-                                                        if (_planIconAvatar(selectedPlan, size: 48)
-                                                            case final icon?) ...[
-                                                          const SizedBox(width: 8),
-                                                          icon,
-                                                        ],
                                                         const SizedBox(width: 2),
                                                         Padding(
                                                           padding: const EdgeInsets.only(top: 2),
@@ -1799,7 +1798,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         },
                         borderRadius: BorderRadius.circular(14),
                         child: Container(
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                           decoration: BoxDecoration(
                             color: selected
                                 ? accent.withValues(alpha: plan.isRecommended ? 0.18 : 0.14)
@@ -1817,12 +1816,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             ),
                           ),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Container(
                                 width: 18,
                                 height: 18,
-                                margin: const EdgeInsets.only(top: 2),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: selected ? accent : Colors.transparent,
@@ -1839,6 +1837,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Wrap(
                                       crossAxisAlignment: WrapCrossAlignment.center,
@@ -1860,62 +1859,58 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     const SizedBox(height: 3),
                                     Text(
                                       planListMetaLine(plan),
+                                      style: TextStyle(
+                                        color: context.appColors.textMuted,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    if (savings > 0) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        pct > 0
+                                            ? '$pct% off \u00b7 Save ${formatPlanInr(savings)}'
+                                            : 'Save ${formatPlanInr(savings)}',
                                         style: TextStyle(
-                                          color: context.appColors.textMuted,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w500,
+                                          color: context.isDarkMode
+                                              ? const Color(0xFF34D399)
+                                              : const Color(0xFF15803D),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
                                         ),
                                       ),
-                                      if (savings > 0) ...[
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          pct > 0
-                                              ? '$pct% off \u00b7 Save ${formatPlanInr(savings)}'
-                                              : 'Save ${formatPlanInr(savings)}',
-                                          style: TextStyle(
-                                            color: context.isDarkMode
-                                                ? const Color(0xFF34D399)
-                                                : const Color(0xFF15803D),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ],
-                                      // Web mobile row: price left, catalog icon right.
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  formatPlanInr(plan.finalRentalPrice),
-                                                  style: TextStyle(
-                                                    color: priceColor,
-                                                    fontWeight: FontWeight.w800,
-                                                    fontSize: 15,
-                                                  ),
-                                                ),
-                                                if (savings > 0) ...[
-                                                  const SizedBox(height: 2),
-                                                  StruckPrice(
-                                                    formatPlanInr(plan.normalPrice),
-                                                    style: const TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight: FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                          if (_planIconAvatar(plan, size: 36) case final icon?) icon,
-                                        ],
-                                      ),
+                                    ],
                                   ],
                                 ),
+                              ),
+                              const SizedBox(width: 8),
+                              if (_planIconAvatar(plan, size: 28) case final icon?) ...[
+                                icon,
+                                const SizedBox(width: 6),
+                              ],
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    formatPlanInr(plan.finalRentalPrice),
+                                    style: TextStyle(
+                                      color: priceColor,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  if (savings > 0) ...[
+                                    const SizedBox(height: 2),
+                                    StruckPrice(
+                                      formatPlanInr(plan.normalPrice),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ],
                           ),

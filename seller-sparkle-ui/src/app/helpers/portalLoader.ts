@@ -62,6 +62,16 @@ export function isQuietPortalGet(endpoint: string): boolean {
   if (/^\/support\/tickets\/vendor\/[^/]+$/.test(path)) return true;
   if (/^\/admin\/vendors\/[^/]+\/documents$/.test(path)) return true;
 
+  // Order list/detail live sync (15–30s polling) — inline loaders only, never the shell overlay.
+  if (path === "/customers/me/orders") return true;
+  if (/^\/customers\/me\/orders\/[^/]+$/.test(path)) return true;
+  if (/^\/customers\/me\/orders\/[^/]+\/image-request$/.test(path)) return true;
+  if (/^\/vendors\/[^/]+\/orders$/.test(path)) return true;
+  if (/^\/vendors\/[^/]+\/orders\/[^/]+$/.test(path)) return true;
+  if (/^\/vendors\/[^/]+\/orders\/[^/]+\/image-request$/.test(path)) return true;
+  if (/^\/vendors\/[^/]+\/dispatch\/offers$/.test(path)) return true;
+  if (/^\/vendors\/me\/orders\/[^/]+\/continuations$/.test(path)) return true;
+
   if (
     /\/messages$/.test(path) &&
     (path.includes("/chats/") || path.includes("/support/tickets/"))
