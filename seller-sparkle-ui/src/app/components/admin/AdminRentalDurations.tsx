@@ -16,7 +16,7 @@ import {
 } from "@/app/components/ui/dialog";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import {
@@ -309,9 +309,7 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
           </div>
         </div>
 
-        {loading ? (
-          <PageLoaderSlot />
-        ) : filtered.length === 0 ? (
+        <PageContentGate loading={loading}>{filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-300">
               <CalendarRange className="h-6 w-6" />
@@ -482,7 +480,7 @@ const AdminRentalDurations = ({ embedded = false }: AdminRentalDurationsProps) =
               />
             </div>
           </>
-        )}
+        )}</PageContentGate>
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

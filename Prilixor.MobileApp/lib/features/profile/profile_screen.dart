@@ -15,6 +15,7 @@ import 'edit_profile_screen.dart';
 import 'notification_preferences_screen.dart';
 import 'support_screen.dart';
 import 'update_password_screen.dart';
+import '../../shared/widgets/legal_policy_links.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -206,6 +207,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ],
                         ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: ProfileSettingsPolicyLinks(),
                       ),
                       const SizedBox(height: 24),
                       SizedBox(

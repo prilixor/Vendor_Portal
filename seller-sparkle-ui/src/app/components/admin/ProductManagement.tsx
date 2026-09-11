@@ -14,7 +14,7 @@ import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { Textarea } from "@/app/components/ui/textarea";
 import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto, ProductRentalPricingPlanDto, RentalDurationMasterDto, RentalDurationIconDto } from "@/app/services/adminApi";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
@@ -57,7 +57,7 @@ const ProductManagement = () => {
   const [products, setProducts] = useState<ProductDto[]>([]);
   const [rentalDurationMasters, setRentalDurationMasters] = useState<RentalDurationMasterDto[]>([]);
   const [rentalDurationIcons, setRentalDurationIcons] = useState<RentalDurationIconDto[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useQueryTab(PRODUCT_TABS, "equipment");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -879,9 +879,7 @@ const ProductManagement = () => {
   };
 
   const renderProductGrid = () => (
-    loading && products.length === 0 ? (
-      <PageLoaderSlot />
-    ) : (
+    <PageContentGate loading={loading}>
       <>
       <div className="max-w-full overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
@@ -983,7 +981,7 @@ const ProductManagement = () => {
         />
       )}
     </>
-    )
+    </PageContentGate>
   );
 
   return (
@@ -1074,9 +1072,7 @@ const ProductManagement = () => {
           </div>
 
           <TabsContent value="categories" className="mt-4">
-            {loading && categories.length === 0 ? (
-              <PageLoaderSlot />
-            ) : (
+            <PageContentGate loading={loading}>
               <div className="max-w-full overflow-x-auto rounded-lg border border-border">
                 <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
                   <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -1125,7 +1121,7 @@ const ProductManagement = () => {
                   </tbody>
                 </table>
               </div>
-            )}
+            </PageContentGate>
             {!loading && (
               <TablePagination
                 page={categoryPage}

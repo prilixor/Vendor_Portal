@@ -14,6 +14,7 @@ import '../../core/utils/multipart_file_util.dart';
 import '../../core/utils/support_chat_routing.dart';
 import '../../core/theme.dart';
 import '../../shared/widgets/brand_page_loader.dart';
+import '../../shared/widgets/legal_policy_links.dart';
 
 enum SupportView { welcome, chat, tickets }
 
@@ -426,6 +427,8 @@ class _WelcomeView extends StatelessWidget {
               )
               .toList(),
         ),
+        const SizedBox(height: 20),
+        const VendorSupportPolicyLinks(),
       ],
     );
   }

@@ -4,7 +4,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -315,9 +315,8 @@ const VendorOrders = () => {
           </div>
         ) : null}
 
-        {loading ? (
-          <PageLoaderSlot />
-        ) : sortedOrders.length === 0 ? (
+        <PageContentGate loading={loading}>
+        {sortedOrders.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No orders found for this status.</p>
         ) : (
           <div className="space-y-3">
@@ -420,6 +419,7 @@ const VendorOrders = () => {
             />
           </div>
         )}
+        </PageContentGate>
       </Card>
     </div>
   );

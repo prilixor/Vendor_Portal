@@ -258,6 +258,8 @@ class AuthProvider extends ChangeNotifier {
           'email': email.trim(),
           'password': password,
           'supportPhone': supportPhone.trim(),
+          'acceptedLegal': true,
+          'sourceSurface': 'vendor_mobile',
         },
       );
 

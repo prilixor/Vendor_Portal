@@ -18,6 +18,15 @@ public interface ILegalDocumentRepository
     Task<List<LegalDocumentVersion>> ListVersionsAsync(Guid documentId, CancellationToken ct = default);
     Task AddVersionAsync(LegalDocumentVersion version, CancellationToken ct = default);
     Task UpdateVersionAsync(LegalDocumentVersion version, CancellationToken ct = default);
+    Task ArchiveOtherPublishedVersionsAsync(Guid documentId, Guid exceptVersionId, Guid? actorId, CancellationToken ct = default);
+    Task AddAcceptancesAsync(IReadOnlyList<LegalAcceptance> acceptances, CancellationToken ct = default);
+    Task<List<LegalAcceptance>> ListAcceptancesForActorAsync(string actorType, Guid actorId, CancellationToken ct = default);
+    Task<List<LegalAcceptance>> ListAcceptancesForAdminAsync(
+        string? actorType,
+        Guid? documentId,
+        string? screen,
+        int take,
+        CancellationToken ct = default);
 
     Task SaveChangesAsync(CancellationToken ct = default);
 }

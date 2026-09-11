@@ -17,6 +17,7 @@ import { Badge } from "@/app/components/ui/badge";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { usePublicWebsiteContent } from "@/app/hooks/usePublicWebsiteContent";
 import { toast } from "sonner";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
 
 const CustomerSupport = () => {
   const [searchParams] = useSearchParams();
@@ -235,6 +236,13 @@ const CustomerSupport = () => {
           </CardContent>
         </Card>
       </div>
+
+      <LegalPolicyLinks
+        surface="customer_web"
+        screen="support"
+        className="text-xs text-muted-foreground"
+        linkClassName="text-xs"
+      />
 
       {/* Institutional & Bulk Inquiry Banner */}
       <Card className="border-border/80 bg-muted/20">

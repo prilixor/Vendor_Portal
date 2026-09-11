@@ -15,6 +15,7 @@ import { cn } from "@/app/helpers/utils";
 import { shouldUseAiChat } from "@/app/helpers/supportChatRouting";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
 
 interface SupportChatProps {
   vendorId: string;
@@ -999,6 +1000,12 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
                 <p className="text-center text-[10px] leading-relaxed text-muted-foreground/55">
                   Powered by AI · Admin may reply for urgent issues
                 </p>
+                <LegalPolicyLinks
+                  surface="vendor_web"
+                  screen="support"
+                  className="justify-center text-[10px] text-muted-foreground/70"
+                  linkClassName="text-[10px]"
+                />
               </div>
             </>
           )}

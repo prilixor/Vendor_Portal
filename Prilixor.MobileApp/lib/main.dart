@@ -10,6 +10,7 @@ import 'features/dashboard/customer_dashboard.dart';
 import 'features/medical/doctor_public_screen.dart';
 import 'shared/widgets/offline_banner.dart';
 import 'shared/widgets/brand_splash.dart';
+import 'shared/widgets/legal_reconsent_gate.dart';
 
 import 'core/providers/product_provider.dart';
 import 'core/providers/checkout_provider.dart';
@@ -63,7 +64,15 @@ class PrilixorMobileApp extends StatelessWidget {
       themeMode: ThemeMode.system,
       home: const AuthGate(),
       debugShowCheckedModeBanner: false,
-      builder: (context, child) => OfflineAwareAppShell(child: child),
+      builder: (context, child) => OfflineAwareAppShell(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            child ?? const SizedBox.shrink(),
+            const LegalReconsentGate(),
+          ],
+        ),
+      ),
       onGenerateRoute: (settings) {
         final name = settings.name ?? '';
         final uri = Uri.tryParse(name.startsWith('http') ? name : 'app://local$name');

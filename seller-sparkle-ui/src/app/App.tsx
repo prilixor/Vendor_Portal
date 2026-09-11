@@ -21,8 +21,7 @@ import VerifyEmailSent from "@/app/components/auth/VerifyEmailSent";
 import VerifyEmail from "@/app/components/auth/VerifyEmail";
 import ContactUs from "@/app/components/common/ContactUs";
 import DoctorPublicPage from "@/app/components/common/DoctorPublicPage";
-import TermsAndConditions from "@/app/components/legal/TermsAndConditions";
-import PrivacyPolicy from "@/app/components/legal/PrivacyPolicy";
+import LegalDocumentPage from "@/app/components/legal/LegalDocumentPage";
 import AboutPage from "@/app/components/landing/AboutPage";
 import FAQPage from "@/app/components/landing/FAQPage";
 import ContactPage from "@/app/components/landing/ContactPage";
@@ -65,6 +64,7 @@ import { AdminNotifications } from "@/app/components/admin/AdminNotifications";
 import AdminSettings from "@/app/components/admin/AdminSettings";
 import WebsiteContentManagement from "@/app/components/admin/WebsiteContentManagement";
 import LegalDocumentsManager from "@/app/components/admin/LegalDocumentsManager";
+import LegalAcceptances from "@/app/components/admin/LegalAcceptances";
 import LegalDocumentEditor from "@/app/components/admin/LegalDocumentEditor";
 import ImpersonationConsume from "@/app/components/auth/ImpersonationConsume";
 
@@ -115,8 +115,13 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/verify-email-sent" element={<VerifyEmailSent />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
-            <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
-            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms-and-conditions" element={<LegalDocumentPage slug="terms-of-use" />} />
+            <Route path="/privacy-policy" element={<LegalDocumentPage slug="privacy-policy" />} />
+            <Route path="/vendor-seller-policy" element={<LegalDocumentPage slug="vendor-seller-policy" />} />
+            <Route path="/rental-and-purchase-policy" element={<LegalDocumentPage slug="rental-and-purchase-policy" />} />
+            <Route path="/cancellation-refund-policy" element={<LegalDocumentPage slug="cancellation-refund-policy" />} />
+            <Route path="/shipping-delivery-policy" element={<LegalDocumentPage slug="shipping-delivery-policy" />} />
+            <Route path="/grievance-redressal-policy" element={<LegalDocumentPage slug="grievance-redressal-policy" />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/faq" element={<FAQPage />} />
             <Route path="/faqs" element={<Navigate to="/faq" replace />} />
@@ -179,6 +184,7 @@ const App = () => (
               <Route path="website-content/faq" element={<WebsiteContentManagement initialTab="faq" />} />
               <Route path="website-content/contact" element={<WebsiteContentManagement initialTab="contact" />} />
               <Route path="website-content/legal" element={<LegalDocumentsManager />} />
+              <Route path="website-content/legal/acceptances" element={<LegalAcceptances />} />
               <Route path="website-content/legal/:id" element={<LegalDocumentEditor />} />
               <Route path="website-content/settings" element={<WebsiteContentManagement initialTab="settings" />} />
             </Route>

@@ -20,6 +20,7 @@ import {
 } from "@/app/helpers/passwordValidation";
 import { cn } from "@/app/helpers/utils";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
+import { RegisterLegalAgree } from "@/app/components/legal/RegisterLegalAgree";
 
 const CustomerRegister = () => {
   const { registerCustomer, login } = useAuth();
@@ -31,6 +32,7 @@ const CustomerRegister = () => {
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const passwordsMatch = passwordsMeetConfirm(password, confirmPassword);
 
@@ -59,13 +61,13 @@ const CustomerRegister = () => {
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (!validate()) return;
+    if (!validate() || !agreed) return;
     setLoading(true);
     try {
       const phoneNormalized = phone.trim()
         ? normalizeIndianMobileDigits(phone)
         : undefined;
-      await registerCustomer(email.trim(), password, fullName.trim(), phoneNormalized);
+      await registerCustomer(email.trim(), password, fullName.trim(), phoneNormalized, true);
       await login(email.trim(), password, "customer");
       toast.success("Welcome! Your account is ready.");
       window.location.href = "/customer/shop";
@@ -198,7 +200,9 @@ const CustomerRegister = () => {
           ) : null}
         </div>
 
-        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>
+        <RegisterLegalAgree surface="customer_web" agreed={agreed} onAgreedChange={setAgreed} />
+
+        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading || !agreed}>
           {loading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating…

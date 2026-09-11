@@ -6,7 +6,7 @@ import { customerApi, type ExpiringOrderApi } from "@/app/services/customerApi";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent } from "@/app/components/ui/card";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { cn } from "@/app/helpers/utils";
 import { formatOrderTypeLabel } from "@/app/helpers/orderStatus";
@@ -73,10 +73,6 @@ const CustomerExpirations = () => {
     [groups, safePage],
   );
 
-  if (isLoading) {
-    return <PageLoaderSlot />;
-  }
-
   if (error) {
     return (
       <p className="text-sm text-destructive">
@@ -86,6 +82,7 @@ const CustomerExpirations = () => {
   }
 
   return (
+    <PageContentGate loading={isLoading}>
     <div className="space-y-4 sm:space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Rental expirations</h1>
@@ -165,6 +162,7 @@ const CustomerExpirations = () => {
         </div>
       )}
     </div>
+    </PageContentGate>
   );
 };
 

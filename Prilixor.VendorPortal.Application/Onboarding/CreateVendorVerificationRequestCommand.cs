@@ -1,5 +1,6 @@
 using FluentValidation;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Domain.Legal;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
@@ -16,7 +17,9 @@ public sealed class CreateVendorVerificationRequestCommandValidator : AbstractVa
     }
 }
 
-internal sealed class CreateVendorVerificationRequestCommandHandler(IVendorOnboardingRepository repository)
+internal sealed class CreateVendorVerificationRequestCommandHandler(
+    IVendorOnboardingRepository repository,
+    ILegalAcceptanceRecorder legalAcceptances)
     : ICommandHandler<CreateVendorVerificationRequestCommand, VendorVerificationRequestDto>
 {
     public async Task<Result<VendorVerificationRequestDto>> Handle(CreateVendorVerificationRequestCommand request, CancellationToken cancellationToken)
@@ -30,6 +33,20 @@ internal sealed class CreateVendorVerificationRequestCommandHandler(IVendorOnboa
         if (vendor is null)
         {
             return Result.Failure<VendorVerificationRequestDto>(new Error("vendors.not_found", "Vendor not found.", ErrorCategory.NotFound));
+        }
+
+        var signed = await legalAcceptances.HasAcceptedCurrentDocumentAsync(
+            LegalCatalog.ActorTypes.Vendor,
+            vendorId,
+            LegalCatalog.DocumentTypes.VendorSellerPolicy,
+            cancellationToken,
+            requireSignedName: true);
+        if (!signed)
+        {
+            return Result.Failure<VendorVerificationRequestDto>(new Error(
+                "legal.signature_required",
+                "Type your full name to electronically sign the Vendor / Seller Policy before submitting.",
+                ErrorCategory.Validation));
         }
 
         var verificationRequest = new VendorVerificationRequest

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/config/app_urls.dart';
 import '../../core/models/vendor_onboarding_model.dart';
 import '../../core/models/vendor_profile_model.dart';
 import '../../core/providers/vendor_location_provider.dart';
@@ -21,6 +22,7 @@ import '../../core/utils/place_search.dart';
 import 'document_preview_screen.dart';
 import '../../shared/widgets/admin_comment_hint.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
+import '../../shared/widgets/legal_policy_links.dart';
 import 'onboarding_widgets.dart';
 import '../service_areas/service_area_map_picker.dart';
 import '../support/support_chat_screen.dart';
@@ -98,9 +100,66 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final vendorId =
         Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
+    final nameController = TextEditingController();
+    final signedName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Sign Vendor / Seller Policy'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Type your full legal name to electronically sign commission, indemnity, and arbitration terms.',
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => openLegalPolicy(
+                  dialogContext,
+                  AppUrls.vendorSellerPath,
+                  title: 'Vendor / Seller Policy',
+                ),
+                child: const Text('Open agreement'),
+              ),
+              const VendorOnboardingPolicyLinks(),
+              const SizedBox(height: 8),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Full legal name',
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, nameController.text.trim()),
+              child: const Text('Sign and submit'),
+            ),
+          ],
+        );
+      },
+    );
+    nameController.dispose();
+    if (!mounted || signedName == null) return;
+    if (signedName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Type your full name to sign the Vendor / Seller Policy.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
     final provider =
         Provider.of<VendorOnboardingProvider>(context, listen: false);
-    final ok = await provider.submitVerification(vendorId);
+    final ok = await provider.submitVerification(vendorId, signedName: signedName);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

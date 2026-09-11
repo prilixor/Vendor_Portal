@@ -14,6 +14,7 @@ import '../../core/theme.dart';
 import '../../core/utils/vendor_notification_utils.dart';
 import '../../core/utils/vendor_notification_route.dart';
 import '../../shared/widgets/pending_approval_banner.dart';
+import '../../shared/widgets/legal_policy_links.dart';
 import '../inventory/inventory_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../orders/expirations_screen.dart';
@@ -195,6 +196,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     onManage: () => _push(const OnboardingScreen()),
                   ),
                 ],
+                const SizedBox(height: 12),
+                const VendorDashboardPolicyLinks(),
                 const SizedBox(height: 20),
                 _SectionHeader(
                   title: 'Catalog overview',

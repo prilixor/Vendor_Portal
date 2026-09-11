@@ -39,7 +39,8 @@ public sealed class PublicLegalDocumentBySlugEndpoint(IMediator mediator)
         if (string.IsNullOrWhiteSpace(slug))
             return TypedResults.Problem("Slug is required.");
 
-        var result = await mediator.Send(new GetPublicLegalDocumentQuery(slug), ct);
+        var surface = Query<string?>("surface", false);
+        var result = await mediator.Send(new GetPublicLegalDocumentQuery(slug, surface), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

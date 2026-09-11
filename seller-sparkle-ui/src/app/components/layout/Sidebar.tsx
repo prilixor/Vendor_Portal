@@ -13,6 +13,7 @@ import { customerApi } from "@/app/services/customerApi";
 import { useNotificationContext } from "@/app/contexts/NotificationContext";
 import { useSupportChat } from "@/app/contexts/SupportChatContext";
 import { BrandMark } from "@/app/components/shared/BrandMark";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
 
 interface SidebarProps {
   variant?: "vendor" | "admin" | "customer";
@@ -234,10 +235,21 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
               "Check the docs or chat with support."
             )}
           </p>
-          <div className="mt-2.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-            <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary hover:no-underline">Terms</Link>
-            <span>•</span>
-            <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary hover:no-underline">Privacy</Link>
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground/70">
+            {variant === "vendor" || variant === "customer" ? (
+              <LegalPolicyLinks
+                surface={variant === "vendor" ? "vendor_web" : "customer_web"}
+                screen="footer"
+                className="gap-x-1.5"
+                linkClassName="text-[10px] text-muted-foreground/70"
+              />
+            ) : (
+              <>
+                <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary hover:no-underline">Terms</Link>
+                <span>•</span>
+                <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary hover:no-underline">Privacy</Link>
+              </>
+            )}
             <span>•</span>
             {variant === "vendor" ? (
               <button

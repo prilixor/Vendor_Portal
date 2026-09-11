@@ -32,17 +32,62 @@ public sealed class LegalDocumentRepository(
         {
             var documents = await dbContext.LegalDocuments
                 .Include(d => d.Versions)
+                .Include(d => d.Placements)
                 .ToListAsync(ct);
 
-            if (documents.Count == 0)
-                return;
+            var changed = false;
 
-            var missing = documents.Where(d => d.Versions.Count == 0).ToList();
-            if (missing.Count == 0)
-                return;
-
-            foreach (var document in missing)
+            foreach (var spec in LegalCatalog.SeedDocuments)
             {
+                var document = documents.FirstOrDefault(d => d.Id == spec.Id || d.DocumentType == spec.DocumentType);
+                if (document is null)
+                {
+                    document = new LegalDocument
+                    {
+                        Id = spec.Id,
+                        Slug = spec.Slug,
+                        DocumentType = spec.DocumentType,
+                        Title = spec.Title,
+                        Audience = spec.Audience,
+                        Summary = spec.Summary,
+                        PublicPath = spec.PublicPath,
+                        SortOrder = spec.SortOrder,
+                        IsRequiredAcceptance = spec.IsRequiredAcceptance,
+                        CreatedOnUtc = DateTime.UtcNow,
+                        ModifiedOnUtc = DateTime.UtcNow,
+                    };
+                    dbContext.LegalDocuments.Add(document);
+                    documents.Add(document);
+                    changed = true;
+                }
+
+                foreach (var surface in LegalCatalog.Surfaces.All)
+                {
+                    foreach (var screen in LegalCatalog.Screens.All)
+                    {
+                        if (document.Placements.Any(p => p.Surface == surface && p.Screen == screen))
+                            continue;
+
+                        var defaults = LegalCatalog.DefaultPlacement(document.DocumentType, surface, screen);
+                        dbContext.LegalDocumentPlacements.Add(new LegalDocumentPlacement
+                        {
+                            Id = Guid.NewGuid(),
+                            DocumentId = document.Id,
+                            Surface = surface,
+                            Screen = screen,
+                            IsVisible = defaults.IsVisible,
+                            IsRequiredToProceed = defaults.IsRequiredToProceed,
+                            SortOrder = document.SortOrder,
+                            CreatedOnUtc = DateTime.UtcNow,
+                            ModifiedOnUtc = DateTime.UtcNow,
+                        });
+                        changed = true;
+                    }
+                }
+
+                if (document.Versions.Count > 0)
+                    continue;
+
                 if (!SeedResourceByType.TryGetValue(document.DocumentType, out var fileName))
                     continue;
 
@@ -69,9 +114,11 @@ public sealed class LegalDocumentRepository(
                     CreatedOnUtc = DateTime.UtcNow,
                     ModifiedOnUtc = DateTime.UtcNow,
                 });
+                changed = true;
             }
 
-            await dbContext.SaveChangesAsync(ct);
+            if (changed)
+                await dbContext.SaveChangesAsync(ct);
         }
         catch (Exception ex) when (IsMissingLegalTable(ex))
         {
@@ -81,9 +128,9 @@ public sealed class LegalDocumentRepository(
 
     public async Task<List<LegalDocument>> ListDocumentsAsync(CancellationToken ct = default)
     {
-        await EnsureSeededAsync(ct);
         return await dbContext.LegalDocuments
             .AsNoTracking()
+            .AsSplitQuery()
             .Include(d => d.Placements)
             .Include(d => d.Versions)
             .OrderBy(d => d.SortOrder)
@@ -93,8 +140,8 @@ public sealed class LegalDocumentRepository(
 
     public async Task<LegalDocument?> GetDocumentByIdAsync(Guid id, bool includeVersions, CancellationToken ct = default)
     {
-        await EnsureSeededAsync(ct);
         var query = dbContext.LegalDocuments
+            .AsSplitQuery()
             .Include(d => d.Placements)
             .AsQueryable();
 
@@ -109,15 +156,15 @@ public sealed class LegalDocumentRepository(
 
     public async Task<LegalDocument?> GetDocumentBySlugOrPathAsync(string slugOrPath, CancellationToken ct = default)
     {
-        await EnsureSeededAsync(ct);
         var key = NormalizeSlugOrPath(slugOrPath);
         if (string.IsNullOrEmpty(key))
             return null;
 
         return await dbContext.LegalDocuments
             .AsNoTracking()
+            .AsSplitQuery()
             .Include(d => d.Placements)
-            .Include(d => d.Versions)
+            .Include(d => d.Versions.Where(v => v.Status == LegalCatalog.VersionStatuses.Published))
             .FirstOrDefaultAsync(d =>
                 d.Slug == key
                 || d.PublicPath == key
@@ -199,6 +246,75 @@ public sealed class LegalDocumentRepository(
     {
         dbContext.LegalDocumentVersions.Update(version);
         return Task.CompletedTask;
+    }
+
+    public async Task ArchiveOtherPublishedVersionsAsync(Guid documentId, Guid exceptVersionId, Guid? actorId, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        await dbContext.LegalDocumentVersions
+            .Where(v =>
+                v.DocumentId == documentId
+                && v.Id != exceptVersionId
+                && v.Status == LegalCatalog.VersionStatuses.Published)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(v => v.Status, LegalCatalog.VersionStatuses.Archived)
+                .SetProperty(v => v.ModifiedOnUtc, now)
+                .SetProperty(v => v.ModifiedBy, actorId), ct);
+
+        foreach (var entry in dbContext.ChangeTracker.Entries<LegalDocumentVersion>())
+        {
+            if (entry.Entity.DocumentId != documentId
+                || entry.Entity.Id == exceptVersionId
+                || !string.Equals(entry.Entity.Status, LegalCatalog.VersionStatuses.Published, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            entry.Entity.Status = LegalCatalog.VersionStatuses.Archived;
+            entry.Property(v => v.Status).OriginalValue = LegalCatalog.VersionStatuses.Archived;
+            entry.Property(v => v.Status).IsModified = false;
+        }
+    }
+
+    public async Task AddAcceptancesAsync(IReadOnlyList<LegalAcceptance> acceptances, CancellationToken ct = default)
+    {
+        if (acceptances.Count == 0)
+            return;
+        await dbContext.LegalAcceptances.AddRangeAsync(acceptances, ct);
+        await dbContext.SaveChangesAsync(ct);
+    }
+
+    public Task<List<LegalAcceptance>> ListAcceptancesForActorAsync(string actorType, Guid actorId, CancellationToken ct = default) =>
+        dbContext.LegalAcceptances
+            .AsNoTracking()
+            .Where(a => a.ActorType == actorType && a.ActorId == actorId)
+            .OrderByDescending(a => a.AcceptedAt)
+            .ToListAsync(ct);
+
+    public Task<List<LegalAcceptance>> ListAcceptancesForAdminAsync(
+        string? actorType,
+        Guid? documentId,
+        string? screen,
+        int take,
+        CancellationToken ct = default)
+    {
+        var query = dbContext.LegalAcceptances
+            .AsNoTracking()
+            .Include(a => a.Document)
+            .Include(a => a.Version)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(actorType))
+            query = query.Where(a => a.ActorType == actorType.Trim().ToLowerInvariant());
+        if (documentId is { } id && id != Guid.Empty)
+            query = query.Where(a => a.DocumentId == id);
+        if (!string.IsNullOrWhiteSpace(screen))
+            query = query.Where(a => a.SourceScreen == screen.Trim().ToLowerInvariant());
+
+        return query
+            .OrderByDescending(a => a.AcceptedAt)
+            .Take(Math.Clamp(take, 1, 500))
+            .ToListAsync(ct);
     }
 
     public Task SaveChangesAsync(CancellationToken ct = default) =>

@@ -19,7 +19,7 @@ import {
 } from "@/app/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { LegalRichTextEditor } from "@/app/components/admin/LegalRichTextEditor";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import {
   LEGAL_SCREENS,
   LEGAL_SURFACES,
@@ -30,7 +30,7 @@ import {
   type LegalPlacementDto,
 } from "@/app/services/legalDocumentsApi";
 import { toast } from "sonner";
-import { Monitor, Smartphone, Save, Upload } from "lucide-react";
+import { Monitor, Smartphone, Save, Settings2, Upload } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
 
 function toDateInput(value?: string | null) {
@@ -111,7 +111,13 @@ export default function LegalDocumentEditor() {
       setIsRequiredAcceptance(detail.isRequiredAcceptance);
       setHtml(detail.draftContentHtml || detail.contentHtml || "");
       setChangeSummary(detail.changeSummary ?? "");
-      setIsMaterialChange(detail.isMaterialChange);
+      setIsMaterialChange(
+        detail.documentType === "terms-of-use" ||
+          detail.documentType === "privacy-policy" ||
+          detail.documentType === "vendor-seller-policy"
+          ? true
+          : detail.isMaterialChange,
+      );
       setEffectiveFrom(toDateInput(detail.effectiveFrom));
       setPlacements(emptyPlacementGrid(detail.placements ?? []));
       setVersions(versionList);
@@ -147,6 +153,7 @@ export default function LegalDocumentEditor() {
         placements,
       });
       setDoc(updated);
+      setPlacements(emptyPlacementGrid(updated.placements ?? []));
       toast.success("Document settings saved.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save settings.");
@@ -237,15 +244,25 @@ export default function LegalDocumentEditor() {
   if (!id) return null;
 
   return (
+    <PageContentGate loading={loading}>
     <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden pb-12">
-      {(loading || saving || publishing) && <PageLoaderSlot />}
       <PageHeader
         title={title || "Legal document"}
-        description="Format with headings, lists, links, and tables. Public pages still use the current hardcoded Terms/Privacy until a later phase."
+        description="Format with headings, lists, links, and tables. Visibility and required flags control each surface. Live Terms/Privacy pages stay hardcoded until the next phase."
+        breadcrumbs={[
+          { label: "Admin", href: "/admin" },
+          { label: "Website Content", href: "/admin/website-content" },
+          { label: "Legal Documents", href: "/admin/website-content/legal" },
+          { label: title || "Legal document" },
+        ]}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" asChild>
               <Link to="/admin/website-content/legal">Back to list</Link>
+            </Button>
+            <Button variant="secondary" onClick={() => void handleSaveMeta()} disabled={saving || publishing}>
+              <Settings2 className="mr-1.5 h-4 w-4" />
+              Save settings
             </Button>
             <Button variant="outline" onClick={() => void handleSaveDraft()} disabled={saving || publishing}>
               <Save className="mr-1.5 h-4 w-4" />
@@ -322,9 +339,6 @@ export default function LegalDocumentEditor() {
                 </div>
                 <Switch className="shrink-0" checked={isRequiredAcceptance} onCheckedChange={setIsRequiredAcceptance} />
               </div>
-              <Button type="button" variant="secondary" onClick={() => void handleSaveMeta()} disabled={saving}>
-                Save settings
-              </Button>
             </CardContent>
           </Card>
 
@@ -342,7 +356,10 @@ export default function LegalDocumentEditor() {
               <div className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="text-sm font-medium">Material change</div>
-                  <div className="text-pretty break-words text-xs text-muted-foreground">Flag this publish as a material update for later re-acceptance.</div>
+                  <div className="text-pretty break-words text-xs text-muted-foreground">
+                    Terms, Privacy, and Vendor / Seller always ask existing users to re-accept after a new publish.
+                    Use this flag on other policies for the version history.
+                  </div>
                 </div>
                 <Switch className="shrink-0" checked={isMaterialChange} onCheckedChange={setIsMaterialChange} />
               </div>
@@ -385,7 +402,7 @@ export default function LegalDocumentEditor() {
           <Card className="min-w-0 max-w-full">
             <CardHeader className="min-w-0">
               <CardTitle>Placements</CardTitle>
-              <CardDescription className="text-pretty break-words">Visible = show on that surface and screen. Required = must accept or acknowledge to proceed.</CardDescription>
+              <CardDescription className="text-pretty break-words">Visible = show on that surface and screen. Required = must accept or acknowledge to proceed. Use Save settings or Save draft in the header to keep this grid.</CardDescription>
             </CardHeader>
             <CardContent className="min-w-0 max-w-full overflow-x-auto">
               <table className="w-full min-w-[720px] border-collapse text-xs">
@@ -484,6 +501,7 @@ export default function LegalDocumentEditor() {
         </DialogContent>
       </Dialog>
     </div>
+    </PageContentGate>
   );
 }
 

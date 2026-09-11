@@ -4,7 +4,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -24,6 +24,7 @@ import {
   submitPasswordLengthError,
 } from "@/app/helpers/passwordValidation";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
 
 const Settings = () => {
   const { user } = useAuth();
@@ -200,9 +201,7 @@ const Settings = () => {
   return (
     <div>
       <PageHeader title="Settings" description="Manage your account, security, and preferences." />
-      {loading ? (
-        <PageLoaderSlot />
-      ) : (
+      <PageContentGate loading={loading}>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
           <h2 className="mb-1 font-semibold">Account</h2>
@@ -369,8 +368,20 @@ const Settings = () => {
             )}
           </div>
         </Card>
+        <Card className="p-5 sm:p-6">
+          <h2 className="text-sm font-semibold">Policies</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Terms and policies that apply to your vendor account.
+          </p>
+          <LegalPolicyLinks
+            surface="vendor_web"
+            screen="profile_settings"
+            className="mt-4 flex-col items-start gap-2 text-sm"
+            linkClassName="text-primary hover:underline"
+          />
+        </Card>
       </div>
-      )}
+      </PageContentGate>
     </div>
   );
 };

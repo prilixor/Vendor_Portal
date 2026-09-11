@@ -76,7 +76,8 @@ public sealed record VendorOrderDto(
     decimal? RentalNormalPrice = null,
     string? RentalDiscountType = null,
     decimal? RentalDiscountValue = null,
-    decimal? RentalFinalPrice = null);
+    decimal? RentalFinalPrice = null,
+    IReadOnlyList<CustomerPrescriptionFileDto>? PrescriptionFiles = null);
 
 public sealed record GetVendorOrdersQuery(string VendorId, string? Status) : IQuery<List<VendorOrderDto>>;
 

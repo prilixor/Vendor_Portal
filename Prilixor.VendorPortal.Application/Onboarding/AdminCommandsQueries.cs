@@ -1313,7 +1313,8 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
             HospitalId: null,
             HospitalName: null,
             HospitalCity: null,
-            DoctorContactNumber: row.Doctor?.ContactNumber
+            DoctorContactNumber: row.Doctor?.ContactNumber,
+            DoctorUniqueCode: row.Doctor?.UniqueCode
         ));
     }
 }
@@ -1444,7 +1445,7 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
                 ? $"{listing?.ListingTitle ?? "Deleted Product"} ({row.VariantDescription})" 
                 : (listing?.ListingTitle ?? "Deleted Product"),
             o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.VendorSubtotalAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended,
-            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: null, HospitalName: null, HospitalCity: null, DoctorContactNumber: row.Doctor?.ContactNumber
+            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: null, HospitalName: null, HospitalCity: null, DoctorContactNumber: row.Doctor?.ContactNumber, DoctorUniqueCode: row.Doctor?.UniqueCode
         ));
     }
 }
@@ -1504,7 +1505,7 @@ internal sealed class AdminForceCancelRefundOrderCommandHandler(
                 ? $"{listing?.ListingTitle ?? "Deleted Product"} ({row.VariantDescription})" 
                 : (listing?.ListingTitle ?? "Deleted Product"),
             o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.VendorSubtotalAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended,
-            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: null, HospitalName: null, HospitalCity: null, DoctorContactNumber: row.Doctor?.ContactNumber
+            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: null, HospitalName: null, HospitalCity: null, DoctorContactNumber: row.Doctor?.ContactNumber, DoctorUniqueCode: row.Doctor?.UniqueCode
         ));
     }
 }
@@ -1668,7 +1669,7 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
                 ? $"{listing?.ListingTitle ?? "Deleted Product"} ({row.VariantDescription})" 
                 : (listing?.ListingTitle ?? "Deleted Product"),
             o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.VendorSubtotalAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended,
-            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: null, HospitalName: null, HospitalCity: null, DoctorContactNumber: row.Doctor?.ContactNumber
+            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: null, HospitalName: null, HospitalCity: null, DoctorContactNumber: row.Doctor?.ContactNumber, DoctorUniqueCode: row.Doctor?.UniqueCode
         ));
     }
 }

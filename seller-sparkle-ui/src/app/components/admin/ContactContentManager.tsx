@@ -9,7 +9,7 @@ import { websiteContentApi } from "@/app/services/websiteContentApi";
 import { useQueryClient } from "@tanstack/react-query";
 import { Mail, Phone, Clock, FileText, Save, RotateCcw, Send } from "lucide-react";
 import { toast } from "sonner";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import {
   INDIAN_MOBILE_MESSAGE,
   isValidIndianMobile,
@@ -115,11 +115,8 @@ export function ContactContentManager() {
     toast.info("Contact content reset to defaults.");
   };
 
-  if (loading) {
-    return <PageLoaderSlot />;
-  }
-
   return (
+    <PageContentGate loading={loading}>
     <div className="space-y-6">
       {/* Header Banner */}
       <Card>
@@ -283,5 +280,6 @@ export function ContactContentManager() {
         </Button>
       </div>
     </div>
+  </PageContentGate>
   );
 }

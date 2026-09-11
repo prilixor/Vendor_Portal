@@ -842,6 +842,12 @@ export const vendorOnboardingApi = {
     );
   },
 
+  getVendorOrderPrescriptions(vendorId: string, orderId: string) {
+    return apiClient.get<import("./customerApi").CustomerPrescriptionFileApi[]>(
+      `/vendors/${vendorId}/orders/${orderId}/prescriptions`,
+    );
+  },
+
   deleteVendorOrderImage(vendorId: string, orderId: string, imageId: string) {
     return apiClient.delete(
       `/vendors/${vendorId}/orders/${orderId}/images/${encodeURIComponent(imageId)}`,

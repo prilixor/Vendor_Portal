@@ -7,8 +7,8 @@ import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { legalDocumentsApi, type LegalDocumentListItemDto } from "@/app/services/legalDocumentsApi";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
-import { Pencil, Scale } from "lucide-react";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
+import { ClipboardList, Pencil, Scale } from "lucide-react";
 import { toast } from "sonner";
 
 function statusBadge(status: string) {
@@ -23,6 +23,27 @@ function formatStamp(value?: string | null) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "—";
   return format(parsed, "dd MMM yyyy");
+}
+
+function acceptLabel(doc: LegalDocumentListItemDto) {
+  if (doc.requiredAtCustomerRegister && doc.requiredAtVendorRegister) {
+    return "Yes — at register";
+  }
+  if (doc.requiredAtVendorRegister) {
+    return doc.documentType === "vendor-seller-policy"
+      ? "Yes — register and onboarding e-sign"
+      : "Yes — vendor register only";
+  }
+  if (doc.requiredAtCustomerRegister) {
+    return "Yes — customer register only";
+  }
+  if (doc.documentType === "rental-and-purchase-policy") {
+    return "Yes — checkout (customers)";
+  }
+  if (doc.documentType === "cancellation-refund-policy" || doc.documentType === "shipping-delivery-policy") {
+    return "Yes — checkout (customers)";
+  }
+  return "No — display only";
 }
 
 export default function LegalDocumentsManager() {
@@ -46,22 +67,31 @@ export default function LegalDocumentsManager() {
 
   return (
     <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden pb-12">
-      {loading && <PageLoaderSlot />}
       <PageHeader
         title="Legal Documents"
-        description="Platform terms and policies shown to customers and vendors. Draft, format, and publish from here."
+        description="Format, publish, and place each policy. Required checkboxes and e-sign log the exact published version."
+        actions={
+          <Button asChild variant="outline">
+            <Link to="/admin/website-content/legal/acceptances">
+              <ClipboardList className="mr-1.5 h-4 w-4" />
+              View acceptances
+            </Link>
+          </Button>
+        }
       />
 
       <Card className="min-w-0 max-w-full">
         <CardContent className="min-w-0 max-w-full overflow-x-auto pt-6">
+          <PageContentGate loading={loading}>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Document</TableHead>
-                <TableHead>Audience</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Vendor</TableHead>
+                <TableHead>Accept?</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Effective</TableHead>
-                <TableHead>Last updated</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -80,7 +110,11 @@ export default function LegalDocumentsManager() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="capitalize">{doc.audience}</TableCell>
+                  <TableCell>{doc.visibleToCustomer ? "Show" : "Hide"}</TableCell>
+                  <TableCell>{doc.visibleToVendor ? "Show" : "Hide"}</TableCell>
+                  <TableCell className="min-w-[11rem] text-pretty text-xs text-muted-foreground">
+                    {acceptLabel(doc)}
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       {statusBadge(doc.status)}
@@ -90,7 +124,6 @@ export default function LegalDocumentsManager() {
                     </div>
                   </TableCell>
                   <TableCell>{formatStamp(doc.effectiveFrom)}</TableCell>
-                  <TableCell>{formatStamp(doc.lastUpdated)}</TableCell>
                   <TableCell className="text-right">
                     <Button asChild size="sm" variant="outline">
                       <Link to={`/admin/website-content/legal/${doc.id}`}>
@@ -103,13 +136,14 @@ export default function LegalDocumentsManager() {
               ))}
               {!loading && documents.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                    No legal documents yet. Run migration 076, then restart the API to seed the seven policies.
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                    No legal documents yet. Run migrations 076 and 077, then restart the API to seed the seven policies.
                   </TableCell>
                 </TableRow>
               ) : null}
             </TableBody>
           </Table>
+          </PageContentGate>
         </CardContent>
       </Card>
     </div>

@@ -13,6 +13,7 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
+import { OrderPrescriptionFilesCard } from "@/app/components/shared/OrderPrescriptionFilesCard";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import {
@@ -221,6 +222,12 @@ const AdminOrderDetail = () => {
     queryFn: () => adminApi.getAdminOrders({ quiet: true }),
   });
 
+  const { data: prescriptionFiles = [] } = useQuery({
+    queryKey: ["admin-order-prescriptions", currentItemId],
+    queryFn: () => adminApi.getAdminOrderPrescriptions(currentItemId!),
+    enabled: !!currentItemId,
+  });
+
   const selectedOrder = useMemo(() => {
     if (!currentItemId) return null;
     return orders.find((o) => o.orderId === currentItemId) ?? null;
@@ -344,7 +351,7 @@ const AdminOrderDetail = () => {
     );
   }
 
-  if (isLoading) {
+  if (isLoading && !selectedOrder) {
     return <PageLoaderSlot />;
   }
 
@@ -741,10 +748,25 @@ const AdminOrderDetail = () => {
             </CardContent>
           </Card>
 
-          {(selectedOrder.doctorId ||
-            selectedOrder.hospitalId ||
-            selectedOrder.doctorName ||
-            selectedOrder.doctorUniqueCode) && (
+          <OrderPrescriptionFilesCard files={prescriptionFiles} />
+          {prescriptionFiles.length === 0 ? (
+            <Card className="border-border/80 shadow-sm">
+              <CardHeader className="p-3 pb-1 sm:p-4 sm:pb-2">
+                <p className="text-[13px] font-semibold sm:text-base">Prescription</p>
+                <p className="text-xs text-muted-foreground">
+                  Image or PDF. Doctor Unique ID is optional and separate.
+                </p>
+              </CardHeader>
+              <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+                <p className="text-sm text-muted-foreground">No prescription uploaded yet.</p>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {selectedOrder.doctorId ||
+          selectedOrder.hospitalId ||
+          selectedOrder.doctorName ||
+          selectedOrder.doctorUniqueCode ? (
             <OrderMedicalReferenceCard
               doctorName={selectedOrder.doctorName}
               doctorSpecialization={selectedOrder.doctorSpecialization}
@@ -753,6 +775,15 @@ const AdminOrderDetail = () => {
               hospitalName={selectedOrder.hospitalName}
               hospitalCity={selectedOrder.hospitalCity}
             />
+          ) : (
+            <Card className="border-border/80 shadow-sm">
+              <CardHeader className="p-3 pb-1 sm:p-4 sm:pb-2">
+                <p className="text-[13px] font-semibold sm:text-base">Medical reference</p>
+              </CardHeader>
+              <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+                <p className="text-sm text-muted-foreground">No doctor Unique ID attached to this order.</p>
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>

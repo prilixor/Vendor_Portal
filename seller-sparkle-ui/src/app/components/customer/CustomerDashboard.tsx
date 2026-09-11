@@ -4,7 +4,7 @@ import { ArrowRight, Package, Truck, LifeBuoy, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { useAuth } from "@/app/guards/AuthContext";
 import { customerApi, type CustomerCatalogListingApi, type CustomerOrderApi } from "@/app/services/customerApi";
 
@@ -90,9 +90,7 @@ const CustomerDashboard = () => {
         <p className="text-sm text-destructive">{error instanceof Error ? error.message : "Could not load orders."}</p>
       )}
 
-      {isLoading || catalogLoading ? (
-        <PageLoaderSlot />
-      ) : (
+      <PageContentGate loading={isLoading || catalogLoading}>
         <>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard 
@@ -149,7 +147,7 @@ const CustomerDashboard = () => {
         </CardContent>
       </Card>
         </>
-      )}
+      </PageContentGate>
     </div>
   );
 };

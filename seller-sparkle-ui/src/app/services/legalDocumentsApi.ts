@@ -24,6 +24,10 @@ export interface LegalDocumentListItemDto {
   effectiveFrom?: string | null;
   lastUpdated?: string | null;
   updatedBy?: string | null;
+  visibleToCustomer: boolean;
+  visibleToVendor: boolean;
+  requiredAtCustomerRegister: boolean;
+  requiredAtVendorRegister: boolean;
 }
 
 export interface LegalDocumentDetailDto extends LegalDocumentListItemDto {
@@ -78,6 +82,11 @@ export const LEGAL_SCREENS = [
   { id: "legal_hub", label: "Legal hub" },
   { id: "order_confirm", label: "Order confirm" },
   { id: "first_launch", label: "First launch" },
+  { id: "product_detail", label: "Product detail" },
+  { id: "order_cancel", label: "Order cancel" },
+  { id: "prescription", label: "Prescription" },
+  { id: "vendor_dashboard", label: "Vendor dashboard" },
+  { id: "reconsent", label: "Re-consent" },
 ] as const;
 
 export const legalDocumentsApi = {
@@ -114,4 +123,31 @@ export const legalDocumentsApi = {
 
   getVersion: (id: string, versionId: string) =>
     apiClient.get<LegalDocumentVersionDetailDto>(`/admin/legal-documents/${id}/versions/${versionId}`),
+
+  listAcceptances: (params?: { actorType?: string; documentId?: string; screen?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.actorType) query.set("actorType", params.actorType);
+    if (params?.documentId) query.set("documentId", params.documentId);
+    if (params?.screen) query.set("screen", params.screen);
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return apiClient.get<LegalAcceptanceAdminDto[]>(`/admin/legal-documents/acceptances${suffix}`);
+  },
 };
+
+export interface LegalAcceptanceAdminDto {
+  id: string;
+  actorType: string;
+  actorId: string;
+  actorName: string;
+  actorEmail?: string | null;
+  documentId: string;
+  documentTitle: string;
+  documentSlug: string;
+  versionId: string;
+  versionNumber: number;
+  acceptedAt: string;
+  sourceSurface: string;
+  sourceScreen: string;
+  signedName?: string | null;
+  ipAddress?: string | null;
+}

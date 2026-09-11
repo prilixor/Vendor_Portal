@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { MessageCircle, Phone, Mail } from "lucide-react";
+import { LegalFooterStack } from "@/app/components/legal/LegalFooterStack";
 
 export const LandingFooter = () => {
   const handleEmailClick = (email: string, e: React.MouseEvent) => {
@@ -28,8 +29,7 @@ export const LandingFooter = () => {
         <div className="footer-col">
           <h5>Support</h5>
           <Link to="/faq">FAQs</Link>
-          <Link to="/privacy-policy">Privacy Policy</Link>
-          <Link to="/terms-and-conditions">Terms &amp; Conditions</Link>
+          <LegalFooterStack surface="customer_web" screen="footer" />
         </div>
         <div className="footer-col">
           <h5>Portal</h5>

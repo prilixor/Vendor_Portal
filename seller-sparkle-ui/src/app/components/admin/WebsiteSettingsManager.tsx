@@ -23,7 +23,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 
 export function WebsiteSettingsManager() {
   const queryClient = useQueryClient();
@@ -83,11 +83,8 @@ export function WebsiteSettingsManager() {
     }
   };
 
-  if (loading) {
-    return <PageLoaderSlot />;
-  }
-
   return (
+    <PageContentGate loading={loading}>
     <div className="space-y-6">
       {/* Card 1: Landing Page Master Settings */}
       <Card>
@@ -342,5 +339,6 @@ export function WebsiteSettingsManager() {
         </Button>
       </div>
     </div>
+  </PageContentGate>
   );
 }

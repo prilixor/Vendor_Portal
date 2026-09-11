@@ -28,7 +28,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 
 const MAX_HERO_SLIDES = 5;
 const SUGGESTED_HERO_LABELS = [
@@ -251,11 +251,8 @@ export function HomeContentManager() {
     toast.info("Feature block removed.");
   };
 
-  if (loading) {
-    return <PageLoaderSlot />;
-  }
-
   return (
+    <PageContentGate loading={loading}>
     <div className="space-y-6">
       {/* Hero Banner Section */}
       <Card>
@@ -591,5 +588,6 @@ export function HomeContentManager() {
         </Button>
       </div>
     </div>
+  </PageContentGate>
   );
 }

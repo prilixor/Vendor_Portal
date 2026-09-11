@@ -34,6 +34,31 @@ public sealed class PublishLegalDocumentRequest
     public bool IsMaterialChange { get; set; }
 }
 
+public sealed class ListAdminLegalAcceptancesRequest
+{
+    public string? ActorType { get; set; }
+    public Guid? DocumentId { get; set; }
+    public string? Screen { get; set; }
+}
+
+public sealed class ListAdminLegalAcceptancesEndpoint(IMediator mediator)
+    : Endpoint<ListAdminLegalAcceptancesRequest, Results<Ok<IReadOnlyList<LegalAcceptanceAdminDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("legal-documents/acceptances");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<IReadOnlyList<LegalAcceptanceAdminDto>>, ProblemHttpResult>> ExecuteAsync(
+        ListAdminLegalAcceptancesRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new ListAdminLegalAcceptancesQuery(req.ActorType, req.DocumentId, req.Screen), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class ListAdminLegalDocumentsEndpoint(IMediator mediator)
     : EndpointWithoutRequest<Results<Ok<List<LegalDocumentListItemDto>>, ProblemHttpResult>>
 {

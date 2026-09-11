@@ -12,6 +12,8 @@ import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
+import { OrderPrescriptionFilesCard } from "@/app/components/shared/OrderPrescriptionFilesCard";
+import { LegalAgreeCheckbox } from "@/app/components/legal/LegalAgreeCheckbox";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { ZoomableImageStage } from "@/app/components/shared/ZoomableImageStage";
@@ -26,6 +28,8 @@ import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageErro
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
+import { CancelOrderConfirm } from "@/app/components/legal/CancelOrderConfirm";
 
 function orderStatusBadgeClass(status: string): string {
   const s = status.toLowerCase().replace(/_/g, " ");
@@ -85,6 +89,11 @@ function orderStatusCompact(status: string): string {
 function canRequestOrderImages(status: string): boolean {
   const compact = orderStatusCompact(status);
   return compact === "pending" || compact === "confirmed" || compact === "in_transit";
+}
+
+function canUploadPrescription(status: string): boolean {
+  const compact = orderStatusCompact(status);
+  return !["cancelled", "canceled", "dispatch_failed", "active", "completed", "returned"].includes(compact);
 }
 
 function isAwaitingVendorForPhotos(status: string): boolean {
@@ -370,6 +379,7 @@ const CustomerOrderDetail = () => {
   const queryClient = useQueryClient();
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [newMessageText, setNewMessageText] = useState("");
 
@@ -400,6 +410,38 @@ const CustomerOrderDetail = () => {
     queryKey: ["customer-orders"],
     queryFn: () => customerApi.getOrders(),
     refetchInterval: CUSTOMER_ORDER_POLL_MS,
+  });
+
+  const { data: prescriptionFiles = [] } = useQuery({
+    queryKey: ["customer-order-prescriptions", currentItemId],
+    queryFn: () => customerApi.getOrderPrescriptions(currentItemId!),
+    enabled: !!currentItemId,
+  });
+
+  const [acceptedRxLegal, setAcceptedRxLegal] = useState(false);
+
+  const uploadRxMut = useMutation({
+    mutationFn: (file: File) =>
+      customerApi.uploadOrderPrescription(currentItemId!, file, {
+        acceptedPrescriptionLegal: acceptedRxLegal || prescriptionFiles.length > 0 || !!data?.doctorId,
+        uploadSource: "order_detail",
+      }),
+    onSuccess: () => {
+      toast.success("Prescription uploaded.");
+      queryClient.invalidateQueries({ queryKey: ["customer-order-prescriptions", currentItemId] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order", currentItemId] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Unable to upload prescription."),
+  });
+
+  const deleteRxMut = useMutation({
+    mutationFn: (fileId: string) => customerApi.deleteOrderPrescription(currentItemId!, fileId),
+    onSuccess: () => {
+      toast.success("Prescription removed.");
+      queryClient.invalidateQueries({ queryKey: ["customer-order-prescriptions", currentItemId] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order", currentItemId] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Unable to remove prescription."),
   });
 
   const cancelMut = useMutation({
@@ -851,6 +893,35 @@ const CustomerOrderDetail = () => {
         />
       )}
 
+      {(prescriptionFiles.length > 0 || canUploadPrescription(activeItem.status)) && (
+        <div className="space-y-3">
+          <OrderPrescriptionFilesCard
+            files={data?.prescriptionFiles?.length ? data.prescriptionFiles : prescriptionFiles}
+            canEdit={canUploadPrescription(activeItem.status)}
+            uploading={uploadRxMut.isPending}
+            onUpload={(file) => {
+              const needsConsent = prescriptionFiles.length === 0 && !activeItem.doctorId;
+              if (needsConsent && !acceptedRxLegal) {
+                toast.error("Please accept the Privacy Policy before uploading a prescription.");
+                return;
+              }
+              uploadRxMut.mutate(file);
+            }}
+            onDelete={(fileId) => deleteRxMut.mutate(fileId)}
+          />
+          {canUploadPrescription(activeItem.status) && prescriptionFiles.length === 0 && !activeItem.doctorId ? (
+            <LegalAgreeCheckbox
+              surface="customer_web"
+              screen="prescription"
+              agreed={acceptedRxLegal}
+              onAgreedChange={setAcceptedRxLegal}
+              prefix="I consent to the"
+              id="order-detail-privacy-health"
+            />
+          ) : null}
+        </div>
+      )}
+
       {/* Request vendor photos — order-group aware (all items / selected items) */}
       {showPhotosCard && (
         <Card className="border-border/80 shadow-sm">
@@ -1099,6 +1170,13 @@ const CustomerOrderDetail = () => {
         </DialogContent>
       </Dialog>
 
+      <LegalPolicyLinks
+        surface="customer_web"
+        screen="order_confirm"
+        className="text-xs text-muted-foreground"
+        linkClassName="text-xs"
+      />
+
       {/* Support and Cancellation Actions for Selected Item */}
       <div className="grid grid-cols-2 gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:flex sm:flex-wrap sm:gap-3">
         <Button variant="outline" className="w-full justify-center sm:w-auto" asChild>
@@ -1123,7 +1201,7 @@ const CustomerOrderDetail = () => {
             variant="destructive"
             className="col-span-2 w-full sm:col-auto sm:w-auto"
             disabled={cancelMut.isPending}
-            onClick={() => cancelMut.mutate(activeItem.id)}
+            onClick={() => setCancelConfirmOpen(true)}
           >
             Cancel item request
           </Button>
@@ -1386,6 +1464,16 @@ const CustomerOrderDetail = () => {
           )}
         </SheetContent>
       </Sheet>
+
+      <CancelOrderConfirm
+        open={cancelConfirmOpen}
+        onOpenChange={setCancelConfirmOpen}
+        pending={cancelMut.isPending}
+        onConfirm={() => {
+          if (!activeItem) return;
+          cancelMut.mutate(activeItem.id, { onSettled: () => setCancelConfirmOpen(false) });
+        }}
+      />
     </div>
   );
 };

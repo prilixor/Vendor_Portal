@@ -4,6 +4,7 @@ import '../api/api_client.dart';
 import '../models/order_model.dart';
 import '../models/order_action_model.dart';
 import '../models/order_image_request_model.dart';
+import '../utils/platform_file_payload.dart';
 
 class OrderDetailProvider extends ChangeNotifier {
   final ApiClient _apiClient = ApiClient();
@@ -44,6 +45,11 @@ class OrderDetailProvider extends ChangeNotifier {
 
   List<OrderImageModel> get orderImages => imageRequest?.images ?? const [];
 
+  List<PrescriptionFileModel> _prescriptionFiles = [];
+  List<PrescriptionFileModel> get prescriptionFiles => List.unmodifiable(_prescriptionFiles);
+  bool _prescriptionLoading = false;
+  bool get prescriptionLoading => _prescriptionLoading;
+
   Future<void> fetchOrderDetail(String orderId, {bool silent = false}) async {
     final showLoading = !silent || _currentOrder == null;
     if (showLoading) {
@@ -66,6 +72,7 @@ class OrderDetailProvider extends ChangeNotifier {
       if (response.statusCode == 200) {
         _currentOrder = OrderModel.fromJson(response.data);
         await fetchImageRequest(orderId, silent: true);
+        await fetchPrescriptions(orderId, silent: true);
       }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel ||
@@ -300,5 +307,74 @@ class OrderDetailProvider extends ChangeNotifier {
     _extensionQuote = null;
     _buyoutQuote = null;
     notifyListeners();
+  }
+
+  Future<void> fetchPrescriptions(String orderId, {bool silent = false}) async {
+    if (!silent) {
+      _prescriptionLoading = true;
+      notifyListeners();
+    }
+    try {
+      final response = await _apiClient.dio.get('/customers/me/orders/$orderId/prescriptions');
+      final data = response.data;
+      if (data is List) {
+        _prescriptionFiles = data
+            .whereType<Map>()
+            .map((e) => PrescriptionFileModel.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      } else {
+        _prescriptionFiles = [];
+      }
+    } catch (_) {
+      if (!silent) _prescriptionFiles = [];
+    } finally {
+      if (!silent) _prescriptionLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> uploadPrescription({
+    required String orderId,
+    required String fileName,
+    String? path,
+    List<int>? bytes,
+    bool acceptedPrescriptionLegal = false,
+  }) async {
+    try {
+      final multipart = await multipartFromPickedFile(
+        fileName: fileName,
+        path: path,
+        bytes: bytes,
+      );
+      if (multipart == null) return false;
+      final form = FormData.fromMap({
+        'file': multipart,
+        'acceptedPrescriptionLegal': acceptedPrescriptionLegal ? 'true' : 'false',
+        'uploadSource': 'order_detail',
+        'sourceSurface': 'customer_mobile',
+      });
+      final response = await _apiClient.dio.post(
+        '/customers/me/orders/$orderId/prescriptions',
+        data: form,
+      );
+      if (response.statusCode == 200) {
+        await fetchPrescriptions(orderId, silent: true);
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<bool> deletePrescription(String orderId, String fileId) async {
+    try {
+      final response = await _apiClient.dio.delete(
+        '/customers/me/orders/$orderId/prescriptions/$fileId',
+      );
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        await fetchPrescriptions(orderId, silent: true);
+        return true;
+      }
+    } catch (_) {}
+    return false;
   }
 }

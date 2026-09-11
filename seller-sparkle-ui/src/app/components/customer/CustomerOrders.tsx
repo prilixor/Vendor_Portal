@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
+import { CancelOrderConfirm } from "@/app/components/legal/CancelOrderConfirm";
 import {
   ActiveFilterChips,
   FilterPanel,
@@ -136,6 +137,7 @@ const CustomerOrders = () => {
   const [appliedFilter, setAppliedFilter] = useState<StatusFilter>(
     initialStatus && STATUS_FILTERS.includes(initialStatus) ? initialStatus : "All"
   );
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftFilter, setDraftFilter] = useState<StatusFilter>("All");
 
@@ -177,8 +179,6 @@ const CustomerOrders = () => {
     queryFn: () => customerApi.getOrders(),
     refetchInterval: 30_000,
   });
-
-  const showInitialLoader = isLoading && !data;
 
   const cancelMut = useMutation({
     mutationFn: (id: string) => customerApi.cancelOrder(id),
@@ -298,9 +298,7 @@ const CustomerOrders = () => {
         <span className="font-medium">Dispatch failed</span> means no replacement supplier was available.
       </p>
 
-      {showInitialLoader ? (
-        <PageLoaderSlot />
-      ) : (
+      <PageContentGate loading={isLoading}>
         <>
           {filtered.length > 0 ? (
             <div className="space-y-6">
@@ -409,7 +407,7 @@ const CustomerOrders = () => {
                                   size="sm"
                                   className="h-7 shrink-0 px-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:px-2"
                                   disabled={cancelMut.isPending}
-                                  onClick={() => cancelMut.mutate(o.id)}
+                                  onClick={() => setCancelOrderId(o.id)}
                                 >
                                   Cancel
                                 </Button>
@@ -460,7 +458,18 @@ const CustomerOrders = () => {
             label="orders"
           />
         </>
-      )}
+      </PageContentGate>
+      <CancelOrderConfirm
+        open={!!cancelOrderId}
+        onOpenChange={(open) => {
+          if (!open) setCancelOrderId(null);
+        }}
+        pending={cancelMut.isPending}
+        onConfirm={() => {
+          if (!cancelOrderId) return;
+          cancelMut.mutate(cancelOrderId, { onSettled: () => setCancelOrderId(null) });
+        }}
+      />
     </div>
   );
 };

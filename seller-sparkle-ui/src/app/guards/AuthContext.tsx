@@ -18,8 +18,8 @@ interface AuthContextValue {
   user: User | null;
   isHydrating: boolean;
   login: (email: string, password: string, role: Role) => Promise<void>;
-  register: (email: string, password: string, phone: string) => Promise<{ id: string; email: string }>;
-  registerCustomer: (email: string, password: string, fullName: string, phone?: string) => Promise<{ id: string; email: string; fullName: string }>;
+  register: (email: string, password: string, phone: string, acceptedLegal?: boolean) => Promise<{ id: string; email: string }>;
+  registerCustomer: (email: string, password: string, fullName: string, phone?: string, acceptedLegal?: boolean) => Promise<{ id: string; email: string; fullName: string }>;
   logout: () => void;
   switchRole: (role: Role) => void;
   hasPermission: (permission: string) => boolean;
@@ -158,8 +158,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     persist(result.user);
   };
 
-  const register = async (email: string, password: string, phone: string) => {
-    const result = await authApi.registerVendor(email, password, phone);
+  const register = async (email: string, password: string, phone: string, acceptedLegal = true) => {
+    const result = await authApi.registerVendor(email, password, phone, acceptedLegal);
     try {
       await vendorOnboardingApi.upsertVendorNotificationPreference(result.id, {
         vendorId: result.id,
@@ -173,8 +173,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return result;
   };
 
-  const registerCustomer = async (email: string, password: string, fullName: string, phone?: string) => {
-    return authApi.registerCustomer(email, password, fullName, phone);
+  const registerCustomer = async (email: string, password: string, fullName: string, phone?: string, acceptedLegal = true) => {
+    return authApi.registerCustomer(email, password, fullName, phone, acceptedLegal);
   };
 
   const switchRole = (role: Role) => {

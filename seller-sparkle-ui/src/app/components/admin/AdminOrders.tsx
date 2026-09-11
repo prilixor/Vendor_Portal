@@ -6,7 +6,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import {
@@ -383,9 +383,7 @@ export const AdminOrders = () => {
           </FilterSection>
         </FilterPanel>
 
-        {isLoading ? (
-          <PageLoaderSlot />
-        ) : groupedOrders.length === 0 ? (
+        <PageContentGate loading={isLoading}>{groupedOrders.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">No customer orders found matching current criteria.</p>
         ) : (
           <div className="space-y-4">
@@ -471,7 +469,7 @@ export const AdminOrders = () => {
               label="order items"
             />
           </div>
-        )}
+        )}</PageContentGate>
       </Card>
     </div>
   );

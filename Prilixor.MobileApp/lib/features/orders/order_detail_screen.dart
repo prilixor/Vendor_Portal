@@ -1,17 +1,21 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/order_detail_provider.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/models/order_model.dart';
 import '../../core/models/order_image_request_model.dart';
+import '../../core/utils/platform_file_payload.dart';
 import '../../core/utils/rental_period.dart';
 import '../../core/utils/order_badges.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/struck_price.dart';
+import '../../shared/widgets/legal_policy_links.dart';
 import '../product/product_detail_screen.dart';
 import '../../core/providers/chat_provider.dart';
 import '../chat/chat_detail_screen.dart';
@@ -35,6 +39,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   int _extensionDays = 1;
   int _selectedOrderIndex = 0;
   final Set<String> _photoRequestSelection = {};
+  bool _acceptedRxLegal = false;
   late List<OrderModel> _ordersInGroup;
   Timer? _pollTimer;
   bool _refreshInFlight = false;
@@ -754,6 +759,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                         _MedicalReferenceCard(order: provider.currentOrder!),
                       ],
 
+                      if (provider.prescriptionFiles.isNotEmpty ||
+                          _canUploadPrescription(provider.currentOrder!.status)) ...[
+                        const SizedBox(height: _sectionGap),
+                        _OrderPrescriptionCard(
+                          files: provider.prescriptionFiles,
+                          canEdit: _canUploadPrescription(provider.currentOrder!.status),
+                          loading: provider.prescriptionLoading,
+                          needsConsent: provider.prescriptionFiles.isEmpty &&
+                              !provider.currentOrder!.hasMedicalReference,
+                          acceptedLegal: _acceptedRxLegal,
+                          onAcceptedLegal: (value) => setState(() => _acceptedRxLegal = value),
+                          onUpload: () => _uploadPrescription(provider),
+                          onDelete: (fileId) => provider.deletePrescription(
+                            provider.currentOrder!.id,
+                            fileId,
+                          ),
+                        ),
+                      ],
+
                       if (_shouldShowGroupPhotoSection(provider)) ...[
                         const SizedBox(height: _sectionGap),
                         _GroupVendorPhotoRequestCard(
@@ -806,6 +830,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              const OrderConfirmPolicyLinks(),
+                              const SizedBox(height: 10),
                               _fitOutlinedAction(
                                 colors: colors,
                                 icon: Icons.support_agent,
@@ -871,9 +897,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                             builder: (ctx) => AlertDialog(
                                               backgroundColor: colors.surface,
                                               title: Text('Cancel request?', style: TextStyle(color: colors.textPrimary)),
-                                              content: Text(
-                                                'This will cancel this item request. This cannot be undone.',
-                                                style: TextStyle(color: colors.textSecondary),
+                                              content: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'This will cancel this item request. This cannot be undone.',
+                                                    style: TextStyle(color: colors.textSecondary),
+                                                  ),
+                                                  const SizedBox(height: 10),
+                                                  const CancellationPolicyLink(),
+                                                ],
                                               ),
                                               actions: [
                                                 TextButton(
@@ -1085,6 +1119,55 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
           ),
         ],
       ),
+    );
+  }
+
+  bool _canUploadPrescription(String status) {
+    final compact = status.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+    return !{
+      'cancelled',
+      'canceled',
+      'dispatch_failed',
+      'active',
+      'completed',
+      'returned',
+    }.contains(compact);
+  }
+
+  Future<void> _uploadPrescription(OrderDetailProvider provider) async {
+    final order = provider.currentOrder;
+    if (order == null) return;
+    final needsConsent = provider.prescriptionFiles.isEmpty && !order.hasMedicalReference;
+    if (needsConsent && !_acceptedRxLegal) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please accept the Privacy Policy before uploading a prescription.')),
+      );
+      return;
+    }
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.size > 5 * 1024 * 1024) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('File must be at most 5 MB.')),
+      );
+      return;
+    }
+    final ok = await provider.uploadPrescription(
+      orderId: order.id,
+      fileName: file.name,
+      path: safePlatformFilePath(file),
+      bytes: file.bytes,
+      acceptedPrescriptionLegal: _acceptedRxLegal || !needsConsent,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'Prescription uploaded.' : 'Unable to upload prescription.')),
     );
   }
 
@@ -1899,6 +1982,143 @@ class _MedicalReferenceCard extends StatelessWidget {
               TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ],
+    );
+  }
+}
+
+class _OrderPrescriptionCard extends StatelessWidget {
+  final List<PrescriptionFileModel> files;
+  final bool canEdit;
+  final bool loading;
+  final bool needsConsent;
+  final bool acceptedLegal;
+  final ValueChanged<bool> onAcceptedLegal;
+  final VoidCallback onUpload;
+  final Future<bool> Function(String fileId) onDelete;
+
+  const _OrderPrescriptionCard({
+    required this.files,
+    required this.canEdit,
+    required this.loading,
+    required this.needsConsent,
+    required this.acceptedLegal,
+    required this.onAcceptedLegal,
+    required this.onUpload,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Prescription',
+            style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Image or PDF. Doctor Unique ID is optional and separate.',
+            style: TextStyle(color: colors.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else if (files.isEmpty)
+            Text('No prescription uploaded yet.', style: TextStyle(color: colors.textMuted, fontSize: 13))
+          else
+            ...files.map((file) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: colors.background,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  onTap: () {
+                    final uri = Uri.tryParse(file.fileUrl);
+                    if (uri != null) launchUrl(uri, mode: LaunchMode.externalApplication);
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: colors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: file.isImage
+                              ? CatalogImage(
+                                  url: file.fileUrl,
+                                  width: 48,
+                                  height: 48,
+                                  fit: BoxFit.cover,
+                                  borderRadius: BorderRadius.circular(8),
+                                )
+                              : Container(
+                                  width: 48,
+                                  height: 48,
+                                  color: const Color(0xFF2DD4BF).withValues(alpha: 0.12),
+                                  child: const Icon(Icons.picture_as_pdf, color: Color(0xFF2DD4BF)),
+                                ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            file.originalFileName ?? 'Prescription file',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF2DD4BF),
+                              fontWeight: FontWeight.w600,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                        if (canEdit)
+                          IconButton(
+                            onPressed: () => onDelete(file.id),
+                            icon: Icon(Icons.delete_outline, color: colors.textMuted),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            )),
+          if (needsConsent && canEdit) ...[
+            const SizedBox(height: 8),
+            LegalAgreeCheckbox(
+              screen: 'prescription',
+              value: acceptedLegal,
+              onChanged: onAcceptedLegal,
+              prefix: 'I consent to the',
+              activeColor: const Color(0xFF2DD4BF),
+            ),
+          ],
+          if (canEdit && files.length < 3)
+            TextButton(
+              onPressed: onUpload,
+              child: const Text(
+                'Upload image or PDF',
+                style: TextStyle(color: Color(0xFF2DD4BF), fontWeight: FontWeight.bold),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

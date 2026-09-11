@@ -130,16 +130,7 @@ internal sealed class VendorUploadStorageService(
             }
         }
 
-        var folderName = folderType switch
-        {
-            VendorFileFolderType.ProductImages => "product-images",
-            VendorFileFolderType.ProductDocuments => "product-documents",
-            VendorFileFolderType.Support => "support",
-            VendorFileFolderType.RentalIcons => "rental-icons",
-            VendorFileFolderType.OrderImages => "order-images",
-            VendorFileFolderType.WebsiteHero => "website-hero",
-            _ => "documents"
-        };
+        var folderName = VendorStoragePaths.GetFolderName(folderType);
         var uploadsRoot = Path.Combine(
             environment.ContentRootPath,
             "wwwroot",

@@ -7,6 +7,7 @@ import '../models/dispatch_offer_model.dart';
 import '../models/expiring_order_model.dart';
 import '../models/order_continuations_model.dart';
 import '../models/order_image_model.dart';
+import '../models/prescription_file_model.dart';
 import '../models/vendor_order_model.dart';
 import '../utils/multipart_file_util.dart';
 
@@ -51,6 +52,11 @@ class VendorOrderProvider extends ChangeNotifier {
   OrderImageRequest? get imageRequest => _imageRequest;
 
   List<OrderImage> get orderImages => _imageRequest?.images ?? const [];
+
+  List<PrescriptionFileModel> _prescriptionFiles = [];
+  List<PrescriptionFileModel> get prescriptionFiles => List.unmodifiable(_prescriptionFiles);
+  bool _prescriptionLoading = false;
+  bool get prescriptionLoading => _prescriptionLoading;
 
   /// Open photo requests across an order group: orderId -> photo count.
   final Map<String, int> _groupPhotoCounts = {};
@@ -196,6 +202,7 @@ class VendorOrderProvider extends ChangeNotifier {
         await Future.wait([
           fetchContinuations(orderId, silent: true),
           fetchOrderImageRequest(vendorId, orderId, silent: true),
+          fetchOrderPrescriptions(vendorId, orderId, silent: true),
         ]);
         return _selectedOrder;
       }
@@ -228,6 +235,36 @@ class VendorOrderProvider extends ChangeNotifier {
       notifyListeners();
     }
     return null;
+  }
+
+  Future<void> fetchOrderPrescriptions(
+    String vendorId,
+    String orderId, {
+    bool silent = false,
+  }) async {
+    if (vendorId.isEmpty || orderId.isEmpty) return;
+    if (!silent) {
+      _prescriptionLoading = true;
+      notifyListeners();
+    }
+    try {
+      final response = await _api.dio.get(
+        '/vendors/$vendorId/orders/$orderId/prescriptions',
+      );
+      final data = response.data;
+      final list = data is List
+          ? data
+          : (data is Map && data['items'] is List ? data['items'] as List : const []);
+      _prescriptionFiles = list
+          .whereType<Map>()
+          .map((e) => PrescriptionFileModel.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (_) {
+      if (!silent) _prescriptionFiles = [];
+    } finally {
+      _prescriptionLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<OrderImageRequest?> fetchOrderImageRequest(

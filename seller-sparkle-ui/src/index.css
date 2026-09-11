@@ -427,8 +427,7 @@
   }
 }
 
-/* One loader at a time: hide in-page Lucide/CSS spinners under the branded overlay.
-   Overlay internals stay visible. Do not hide animate-pulse (unread badges, etc.). */
+/* Legacy: full-pane portal overlay removed — keep rule inert if any remnant appears. */
 body:has([data-portal-loader="true"]) .animate-spin,
 body:has([data-portal-loader="true"]) .lucide-loader-circle {
   visibility: hidden !important;
@@ -490,6 +489,14 @@ img.customer-catalog-media-img {
   z-index: 6 !important;
 }
 
+.legal-bubble-toolbar {
+  pointer-events: auto;
+}
+
+.legal-bubble-toolbar button {
+  flex-shrink: 0;
+}
+
 .legal-editor,
 .legal-editor-content,
 .legal-prose {
@@ -505,7 +512,6 @@ img.customer-catalog-media-img {
   overflow-wrap: anywhere;
   word-break: break-word;
   word-wrap: break-word;
-  white-space: pre-wrap;
 }
 
 .legal-editor .ProseMirror {
@@ -617,7 +623,41 @@ img.customer-catalog-media-img {
 .legal-prose ol,
 .legal-editor .ProseMirror ul,
 .legal-editor .ProseMirror ol {
-  margin: 0.6rem 0 0.6rem 1.25rem;
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+
+.legal-prose ul,
+.legal-editor .ProseMirror ul {
+  list-style-type: disc;
+  list-style-position: outside;
+}
+
+.legal-prose ol,
+.legal-editor .ProseMirror ol {
+  list-style-type: decimal;
+  list-style-position: outside;
+}
+
+.legal-prose ul ul,
+.legal-editor .ProseMirror ul ul {
+  list-style-type: circle;
+}
+
+.legal-prose ol ol,
+.legal-editor .ProseMirror ol ol {
+  list-style-type: lower-alpha;
+}
+
+.legal-prose li,
+.legal-editor .ProseMirror li {
+  display: list-item;
+  margin: 0.2rem 0;
+}
+
+.legal-prose li p,
+.legal-editor .ProseMirror li p {
+  margin: 0.15rem 0;
 }
 
 .legal-prose a,

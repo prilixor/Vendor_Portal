@@ -9,7 +9,7 @@ import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import {
@@ -395,9 +395,7 @@ export const AdminNotifications = () => {
         </TabsList>
       </Tabs>
 
-      {isLoading ? (
-        <PageLoaderSlot />
-      ) : (
+      <PageContentGate loading={isLoading}>
         <div className="space-y-4">
           {/* TAB: ALL ALERTS */}
           {activeTab === "all" && (
@@ -596,7 +594,7 @@ export const AdminNotifications = () => {
             )
           )}
         </div>
-      )}
+      </PageContentGate>
     </div>
   );
 };

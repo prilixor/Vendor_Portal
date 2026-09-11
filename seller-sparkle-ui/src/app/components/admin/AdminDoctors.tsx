@@ -9,7 +9,7 @@ import { Switch } from "@/app/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { MapPicker } from "@/app/components/shared/MapPicker";
@@ -329,9 +329,8 @@ const AdminDoctors = () => {
       </Card>
 
       <Card className="overflow-hidden">
-        {loading ? (
-          <PageLoaderSlot />
-        ) : filtered.length === 0 ? (
+        <PageContentGate loading={loading}>
+        {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
             <Stethoscope className="h-10 w-10 opacity-40" />
             <p>No doctors yet. Add the first doctor to generate a Unique ID and QR.</p>
@@ -404,6 +403,7 @@ const AdminDoctors = () => {
             </div>
           </div>
         )}
+        </PageContentGate>
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

@@ -4,7 +4,7 @@ import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import {
   AlertDialog,
@@ -317,9 +317,8 @@ const VendorOrderRequests = () => {
           </div>
         </div>
 
-      {initialLoading ? (
-        <PageLoaderSlot />
-      ) : groups.length === 0 ? (
+      <PageContentGate loading={initialLoading}>
+      {groups.length === 0 ? (
         <div className="rounded-xl border border-border/60 bg-muted/20 px-6 py-16 text-center">
           <ClipboardList className="mx-auto h-16 w-16 text-muted-foreground/30" />
           <p className="mt-4 text-base font-semibold text-foreground">
@@ -530,7 +529,7 @@ const VendorOrderRequests = () => {
           />
         </div>
       )}
-      </Card>
+      </PageContentGate>      </Card>
 
       <AlertDialog open={rejectOffer != null} onOpenChange={(open) => !open && setRejectOffer(null)}>
         <AlertDialogContent>

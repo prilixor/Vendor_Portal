@@ -2,6 +2,7 @@ using FluentValidation;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Application.Services;
+using Prilixor.VendorPortal.Domain.Legal;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
@@ -11,7 +12,15 @@ using Prilixor.Shared.Extensions;
 
 namespace Prilixor.VendorPortal.Application.Onboarding;
 
-public sealed record RegisterVendorCommand(string Email, string Password, string SupportPhone) : ICommand<VendorDto>;
+public sealed record RegisterVendorCommand(
+    string Email,
+    string Password,
+    string SupportPhone,
+    bool AcceptedLegal = false,
+    string? SourceSurface = null,
+    IReadOnlyList<string>? AcceptedSlugs = null,
+    string? IpAddress = null,
+    string? UserAgent = null) : ICommand<VendorDto>;
 
 public sealed class RegisterVendorCommandValidator : AbstractValidator<RegisterVendorCommand>
 {
@@ -31,6 +40,7 @@ internal sealed class RegisterVendorCommandHandler(
     IPasswordHasherService passwordHasherService,
     IEmailService emailService,
     IConfiguration configuration,
+    ILegalAcceptanceRecorder legalAcceptances,
     ILogger<RegisterVendorCommandHandler> logger)
     : ICommandHandler<RegisterVendorCommand, VendorDto>
 {
@@ -64,6 +74,18 @@ internal sealed class RegisterVendorCommandHandler(
             return Result.Failure<VendorDto>(new Error("vendors.phone_exists", "A vendor account already exists for this phone number.", ErrorCategory.Validation));
         }
 
+        var acceptanceGate = await legalAcceptances.BuildRegisterAcceptancesAsync(
+            LegalCatalog.ActorTypes.Vendor,
+            Guid.Empty,
+            request.SourceSurface,
+            request.AcceptedLegal,
+            request.AcceptedSlugs,
+            request.IpAddress,
+            request.UserAgent,
+            cancellationToken);
+        if (!acceptanceGate.IsSuccess)
+            return Result.Failure<VendorDto>(acceptanceGate.Errors);
+
         var vendor = new Vendor
         {
             Email = request.Email.Trim().ToLowerInvariant(),
@@ -79,6 +101,22 @@ internal sealed class RegisterVendorCommandHandler(
 
         await repository.AddVendorAsync(vendor, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
+
+        var acceptances = acceptanceGate.Value
+            .Select(row =>
+            {
+                row.ActorId = vendor.Id;
+                return row;
+            })
+            .ToList();
+        try
+        {
+            await legalAcceptances.SaveAcceptancesAsync(acceptances, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to persist legal acceptances for vendor {VendorId}", vendor.Id);
+        }
 
         // Create initial vendor profile with support phone if provided
         if (!string.IsNullOrWhiteSpace(request.SupportPhone))

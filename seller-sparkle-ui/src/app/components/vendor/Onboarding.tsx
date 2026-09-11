@@ -44,6 +44,8 @@ import {
   normalizeIndianMobileDigits,
 } from "@/app/helpers/indianMobilePhone";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
+import { VendorOnboardingEsign } from "@/app/components/legal/VendorOnboardingEsign";
+import { legalAcceptanceApi } from "@/app/services/legalAcceptanceApi";
 
 const steps = [
   { label: "Basic Info", description: "Account" },
@@ -111,6 +113,8 @@ const Onboarding = () => {
   const [verificationTokenExpiryUtc, setVerificationTokenExpiryUtc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRefMobile = useRef<HTMLInputElement>(null);
+  const [onboardingSignedName, setOnboardingSignedName] = useState("");
+  const [esignDialogOpen, setEsignDialogOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -665,16 +669,27 @@ const Onboarding = () => {
     if (!validateBankFields()) return;
     if (!bank.bankName.trim()) { toast.error("Please enter a valid IFSC code to auto-fill bank name"); return; }
     if (!bank.branchName.trim()) { toast.error("Please enter a valid IFSC code to auto-fill branch name"); return; }
+    if (!onboardingSignedName.trim()) {
+      toast.error("Type your full name to electronically sign the Vendor / Seller Policy.");
+      return;
+    }
 
     try {
       setBusy(true);
       await saveProfile();
       await saveBank();
+      await legalAcceptanceApi.acceptVendor(user.id, {
+        screen: "onboarding",
+        acceptedLegal: true,
+        sourceSurface: "vendor_web",
+        signedName: onboardingSignedName.trim(),
+      });
       const verification = await vendorOnboardingApi.createVerificationRequest(user.id);
       setSubmission(mapStatus(verification.reviewStatus));
       setHasSubmittedBefore(true);
       setViewMode("profile");
       await syncVerificationState();
+      setEsignDialogOpen(false);
       toast.success("Application submitted! Our team will review within 24 hours.");
     } catch (error) {
       const message = getUserFriendlyMessage(error);
@@ -787,7 +802,7 @@ const Onboarding = () => {
               { label: "Profile" },
             ]}
             actions={
-              <Button onClick={submit} className="bg-gradient-primary shadow-glow" disabled={busy}>
+              <Button onClick={() => setEsignDialogOpen(true)} className="bg-gradient-primary shadow-glow" disabled={busy}>
                 Submit for Verification
               </Button>
             }
@@ -1445,6 +1460,7 @@ const Onboarding = () => {
               <ShieldCheck className="mr-1.5 inline h-4 w-4" />
               Bank details are encrypted and used only for payouts.
             </div>
+            <VendorOnboardingEsign signedName={onboardingSignedName} onSignedNameChange={setOnboardingSignedName} />
           </div>
         )}
 
@@ -1513,7 +1529,7 @@ const Onboarding = () => {
             <div className="mt-8 flex justify-center gap-2">
               <Button variant="outline" onClick={() => setStep(0)}>Review my info</Button>
               {(accountStatus === "rejected" || accountStatus === "suspended") && (
-                <Button onClick={submit}>Resubmit</Button>
+                <Button onClick={() => setEsignDialogOpen(true)}>Resubmit</Button>
               )}
             </div>
           </div>
@@ -1528,7 +1544,7 @@ const Onboarding = () => {
                 </Button>
                 <p className="text-xs text-muted-foreground text-center sm:text-right">Step {step + 1} of {steps.length}</p>
                 {step === 3 ? (
-                  <Button onClick={submit} className="bg-gradient-primary shadow-glow w-full sm:w-auto" disabled={busy}>
+                  <Button onClick={submit} className="bg-gradient-primary shadow-glow w-full sm:w-auto" disabled={busy || !onboardingSignedName.trim()}>
                     Submit for verification
                   </Button>
                 ) : (
@@ -1541,6 +1557,30 @@ const Onboarding = () => {
           </Card>
         </>
       )}
+
+      <Dialog open={esignDialogOpen} onOpenChange={setEsignDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Sign Vendor / Seller Policy</DialogTitle>
+            <DialogDescription>
+              Type your full legal name to electronically sign before submitting for verification.
+            </DialogDescription>
+          </DialogHeader>
+          <VendorOnboardingEsign signedName={onboardingSignedName} onSignedNameChange={setOnboardingSignedName} />
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEsignDialogOpen(false)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-gradient-primary shadow-glow"
+              disabled={busy || !onboardingSignedName.trim()}
+              onClick={() => void submit()}
+            >
+              Sign and submit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Document Preview Modal */}
       <Dialog open={previewDocument !== null} onOpenChange={(open) => { if (!open) { setPreviewDocument(null); setPdfLoading(false); } }}>

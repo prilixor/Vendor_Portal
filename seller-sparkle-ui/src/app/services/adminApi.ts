@@ -1074,6 +1074,12 @@ export const adminApi = {
     return apiClient.get<AdminOrderDto[]>('/admin/orders', options);
   },
 
+  async getAdminOrderPrescriptions(orderId: string) {
+    return apiClient.get<import("./customerApi").CustomerPrescriptionFileApi[]>(
+      `/admin/orders/${encodeURIComponent(orderId)}/prescriptions`,
+    );
+  },
+
   async getAdminOrderExpirations(withinDays = 7): Promise<AdminExpiringOrderDto[]> {
     return apiClient.get<AdminExpiringOrderDto[]>(`/admin/orders/expirations?withinDays=${withinDays}`);
   },

@@ -9,6 +9,7 @@ import '../../core/utils/order_badges.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/guest_sign_in_prompt.dart';
+import '../../shared/widgets/legal_policy_links.dart';
 import 'order_detail_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -111,9 +112,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: context.appColors.surface,
         title: Text('Cancel request?', style: TextStyle(color: context.appColors.textPrimary)),
-        content: Text(
-          'This will cancel this item request. This cannot be undone.',
-          style: TextStyle(color: context.appColors.textSecondary),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This will cancel this item request. This cannot be undone.',
+              style: TextStyle(color: context.appColors.textSecondary),
+            ),
+            const SizedBox(height: 10),
+            const CancellationPolicyLink(),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Keep', style: TextStyle(color: context.appColors.textSecondary))),

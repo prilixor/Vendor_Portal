@@ -23,6 +23,8 @@ import { toast } from "sonner";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { VendorDoctorLookupDialog } from "@/app/components/vendor/VendorDoctorLookupDialog";
 import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
+import { OrderPrescriptionFilesCard } from "@/app/components/shared/OrderPrescriptionFilesCard";
+import type { CustomerPrescriptionFileApi } from "@/app/services/customerApi";
 
 const filterAssetsForOrder = (
   assets: VendorProductAssetApiDto[],
@@ -348,6 +350,7 @@ const VendorOrderDetail = () => {
   const [groupPhotoMeta, setGroupPhotoMeta] = useState<Map<string, { count: number }>>(new Map());
   const [uploadingOrderImage, setUploadingOrderImage] = useState(false);
   const [deletingOrderImageId, setDeletingOrderImageId] = useState<string | null>(null);
+  const [prescriptionFiles, setPrescriptionFiles] = useState<CustomerPrescriptionFileApi[]>([]);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
   const orderImageInputRef = useRef<HTMLInputElement>(null);
@@ -369,6 +372,11 @@ const VendorOrderDetail = () => {
       if (!options?.silent) setLoading(true);
       const row = await vendorOnboardingApi.getVendorOrder(user.id, id);
       setOrder(row);
+      try {
+        setPrescriptionFiles(await vendorOnboardingApi.getVendorOrderPrescriptions(user.id, id));
+      } catch {
+        setPrescriptionFiles([]);
+      }
       try {
         const conts = await vendorOnboardingApi.getVendorOrderContinuations(id);
         setContinuations(conts);
@@ -1328,6 +1336,8 @@ const VendorOrderDetail = () => {
               </Dialog>
             </>
           )}
+
+          <OrderPrescriptionFilesCard files={prescriptionFiles} />
 
           {/* Medical Reference */}
           {(order.doctorId || order.hospitalId || order.doctorName || order.doctorUniqueCode) && (

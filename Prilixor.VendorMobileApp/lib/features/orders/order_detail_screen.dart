@@ -3,15 +3,20 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/models/order_continuations_model.dart';
 import '../../core/models/order_image_model.dart';
+import '../../core/models/prescription_file_model.dart';
 import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/media_url.dart';
 import '../../core/utils/vendor_photo_picker.dart';
 import '../../shared/widgets/brand_page_loader.dart';
+import '../../shared/widgets/catalog_image.dart';
+import '../../shared/widgets/catalog_image_viewer_screen.dart';
 import '../../shared/widgets/struck_price.dart';
 import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
 import 'dispatch_details_sheet.dart';
@@ -560,6 +565,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                             order: activeItem ?? order,
                             onAddSerials: () => _openAssignSerials(activeItem ?? order),
                           ),
+                          if (provider.prescriptionLoading ||
+                              provider.prescriptionFiles.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            _OrderPrescriptionCard(
+                              files: provider.prescriptionFiles,
+                              loading: provider.prescriptionLoading,
+                            ),
+                          ],
                           if (!provider.orderImagesLoading &&
                               provider.imageRequest != null) ...[
                             const SizedBox(height: 10),
@@ -1429,6 +1442,142 @@ class _DashedBorderPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
       oldDelegate.color != color || oldDelegate.radius != radius;
+}
+
+class _OrderPrescriptionCard extends StatelessWidget {
+  final List<PrescriptionFileModel> files;
+  final bool loading;
+
+  const _OrderPrescriptionCard({required this.files, required this.loading});
+
+  Future<void> _open(BuildContext context, PrescriptionFileModel file) async {
+    if (file.isImage) {
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CatalogImageViewerScreen(
+            imageUrls: [file.fileUrl],
+            title: file.originalFileName ?? 'Prescription',
+          ),
+        ),
+      );
+      return;
+    }
+    final url = resolveMediaUrl(file.fileUrl) ?? file.fileUrl;
+    final uri = Uri.tryParse(url);
+    if (uri != null) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      title: 'Prescription',
+      compact: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Image or PDF. Doctor Unique ID is optional and separate.',
+            style: TextStyle(color: context.appColors.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else if (files.isEmpty)
+            Text(
+              'No prescription uploaded yet.',
+              style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
+            )
+          else
+            ...files.map((file) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _PrescriptionFileTile(
+                fileName: file.originalFileName ?? 'Prescription file',
+                fileUrl: file.fileUrl,
+                isImage: file.isImage,
+                onOpen: () => _open(context, file),
+              ),
+            )),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrescriptionFileTile extends StatelessWidget {
+  final String fileName;
+  final String fileUrl;
+  final bool isImage;
+  final VoidCallback onOpen;
+  final Widget? trailing;
+
+  const _PrescriptionFileTile({
+    required this.fileName,
+    required this.fileUrl,
+    required this.isImage,
+    required this.onOpen,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return Material(
+      color: colors.background,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colors.border),
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: isImage
+                    ? CatalogImage(
+                        url: fileUrl,
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                        borderRadius: BorderRadius.circular(8),
+                      )
+                    : Container(
+                        width: 48,
+                        height: 48,
+                        color: const Color(0xFF2DD4BF).withValues(alpha: 0.12),
+                        child: const Icon(Icons.picture_as_pdf, color: Color(0xFF2DD4BF)),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  fileName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF2DD4BF),
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+              if (trailing != null) trailing!,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ItemDetailsPanel extends StatelessWidget {

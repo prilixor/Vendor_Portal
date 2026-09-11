@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/app/components/ui/card";
 import { PageHeader } from "@/app/components/shared/PageHeader";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { StatCard } from "@/app/components/shared/StatCard";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { Button } from "@/app/components/ui/button";
@@ -17,6 +17,7 @@ import { getVendorRoute, VENDOR_SUPPORT_PANEL_ROUTE } from "@/app/helpers/vendor
 import { notificationDisplayMessage } from "@/app/helpers/adminComment";
 import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
 import { useSupportChat } from "@/app/contexts/SupportChatContext";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
 
 type DashboardNotification = {
   id: string;
@@ -84,7 +85,7 @@ const Dashboard = () => {
 
   const [recentActivity, setRecentActivity] = useState<DashboardNotification[]>([]);
   const [topListings, setTopListings] = useState<TopListingRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -203,11 +204,8 @@ const Dashboard = () => {
 
   const greetingName = useMemo(() => toCamelCase(businessName || user?.name || "Vendor"), [businessName, user?.name]);
 
-  if (loading || statusLoading) {
-    return <PageLoaderSlot className="min-h-[60vh]" />;
-  }
-
   return (
+    <PageContentGate loading={loading || statusLoading} className="min-h-[60vh]">
     <div>
       <PageHeader
         title={`Welcome back, ${greetingName}`}
@@ -237,6 +235,12 @@ const Dashboard = () => {
             </TooltipProvider>
           </>
         }
+      />
+      <LegalPolicyLinks
+        surface="vendor_web"
+        screen="vendor_dashboard"
+        className="mb-6 text-xs text-muted-foreground"
+        linkClassName="text-xs"
       />
 
       {/* Verification banner */}
@@ -437,6 +441,7 @@ const Dashboard = () => {
         </div>
       </Card>
     </div>
+    </PageContentGate>
   );
 };
 

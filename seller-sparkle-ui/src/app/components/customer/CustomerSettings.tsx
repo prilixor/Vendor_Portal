@@ -12,7 +12,7 @@ import { Label } from "@/app/components/ui/label";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -27,6 +27,7 @@ import {
   submitPasswordLengthError,
 } from "@/app/helpers/passwordValidation";
 import { cn } from "@/app/helpers/utils";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
 
 const CustomerSettings = () => {
   const { user } = useAuth();
@@ -209,14 +210,14 @@ const CustomerSettings = () => {
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
+          <TabsTrigger value="policies">Policies</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="mt-4">
           <Card className="max-w-2xl border-border/60">
             <CardContent className="p-5 sm:p-6">
-              {isLoading || !data ? (
-                <PageLoaderSlot className="min-h-[8rem] py-0" />
-              ) : (
+              <PageContentGate loading={isLoading} className="min-h-[8rem] py-0">
+              {!data ? null : (
                 <form onSubmit={saveProfile}>
                   <h2 className="mb-1 text-sm font-semibold">Account</h2>
                   <p className="mb-4 text-xs text-muted-foreground">
@@ -270,6 +271,7 @@ const CustomerSettings = () => {
                   </Button>
                 </form>
               )}
+              </PageContentGate>
             </CardContent>
           </Card>
         </TabsContent>
@@ -390,9 +392,8 @@ const CustomerSettings = () => {
         <TabsContent value="preferences" className="mt-4">
           <Card className="max-w-2xl border-border/60">
             <CardContent className="space-y-3 p-5 sm:p-6">
-              {loadingPrefs || !dbPrefs ? (
-                <PageLoaderSlot className="min-h-[8rem] py-0" />
-              ) : (
+              <PageContentGate loading={loadingPrefs} className="min-h-[8rem] py-0">
+              {!dbPrefs ? null : (
                 <>
                   <PrefRow
                     title="Order Status Updates"
@@ -426,6 +427,24 @@ const CustomerSettings = () => {
                   />
                 </>
               )}
+              </PageContentGate>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="policies" className="mt-4">
+          <Card className="max-w-2xl border-border/60">
+            <CardContent className="p-5 sm:p-6">
+              <h2 className="mb-1 text-sm font-semibold">Policies</h2>
+              <p className="mb-4 text-xs text-muted-foreground">
+                Terms and policies that apply to your customer account.
+              </p>
+              <LegalPolicyLinks
+                surface="customer_web"
+                screen="profile_settings"
+                className="flex-col items-start gap-2 text-sm"
+                linkClassName="text-primary hover:underline"
+              />
             </CardContent>
           </Card>
         </TabsContent>

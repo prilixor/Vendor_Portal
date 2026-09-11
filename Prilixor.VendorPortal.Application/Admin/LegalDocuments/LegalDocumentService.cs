@@ -47,7 +47,7 @@ public record GetLegalDocumentVersionQuery(Guid Id, Guid VersionId) : IRequest<R
 public record ListPublicLegalDocumentsQuery(string? Surface, string? Screen)
     : IRequest<Result<List<PublicLegalDocumentListItemDto>>>;
 
-public record GetPublicLegalDocumentQuery(string Slug) : IRequest<Result<PublicLegalDocumentDetailDto>>;
+public record GetPublicLegalDocumentQuery(string Slug, string? Surface = null) : IRequest<Result<PublicLegalDocumentDetailDto>>;
 
 public sealed class UpdateLegalDocumentCommandValidator : AbstractValidator<UpdateLegalDocumentCommand>
 {
@@ -198,6 +198,7 @@ public sealed class LegalDocumentHandler(
                 ContentMarkdown = string.IsNullOrWhiteSpace(request.ContentMarkdown) ? published?.ContentMarkdown : request.ContentMarkdown,
                 Status = LegalCatalog.VersionStatuses.Draft,
                 ChangeSummary = request.ChangeSummary,
+                IsMaterialChange = LegalCatalog.MaterialReconsentTypes.Contains(doc.DocumentType),
                 EffectiveFrom = published?.EffectiveFrom ?? DateTimeOffset.UtcNow,
                 CreatedBy = request.ActorId,
                 CreatedOnUtc = DateTime.UtcNow,
@@ -255,18 +256,23 @@ public sealed class LegalDocumentHandler(
         if (string.IsNullOrWhiteSpace(htmlSanitizer.Sanitize(toPublish.ContentHtml)))
             return Result.Failure<LegalDocumentDetailDto>(new Error("legal.content_required", "Cannot publish empty content.", ErrorCategory.Validation));
 
-        var previous = CurrentPublished(doc);
+        var previousPublished = doc.Versions
+            .Where(v =>
+                v.Id != toPublish.Id
+                && string.Equals(v.Status, LegalCatalog.VersionStatuses.Published, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => v.VersionNumber)
+            .ToList();
+        var previous = previousPublished.FirstOrDefault();
         var oldSnapshot = previous is null
             ? null
             : new { previous.Id, previous.VersionNumber, previous.Status, previous.EffectiveFrom };
 
-        if (previous is not null && previous.Id != toPublish.Id)
-        {
-            previous.Status = LegalCatalog.VersionStatuses.Archived;
-            previous.StampModified(request.ActorId);
-            await repository.UpdateVersionAsync(previous, ct);
-            await repository.SaveChangesAsync(ct);
-        }
+        // Archive first in SQL. A single SaveChanges can UPDATE the new row to
+        // published before the old one is archived, which trips
+        // uq_legal_document_versions_one_published.
+        await repository.ArchiveOtherPublishedVersionsAsync(doc.Id, toPublish.Id, request.ActorId, ct);
+        foreach (var older in previousPublished)
+            older.Status = LegalCatalog.VersionStatuses.Archived;
 
         toPublish.ContentHtml = htmlSanitizer.Sanitize(toPublish.ContentHtml);
         toPublish.Status = LegalCatalog.VersionStatuses.Published;
@@ -282,7 +288,7 @@ public sealed class LegalDocumentHandler(
         await repository.UpdateVersionAsync(toPublish, ct);
 
         doc.StampModified(request.ActorId);
-        await repository.UpdateDocumentAsync(doc, ct);
+        await repository.SaveChangesAsync(ct);
 
         await vendors.AddAdminAuditLogAsync(new AdminAuditLog
         {
@@ -398,6 +404,17 @@ public sealed class LegalDocumentHandler(
         if (published is null)
             return NotFound<PublicLegalDocumentDetailDto>();
 
+        var surface = request.Surface?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrEmpty(surface))
+        {
+            if (!LegalCatalog.Surfaces.All.Contains(surface))
+                return Result.Failure<PublicLegalDocumentDetailDto>(new Error("legal.invalid_surface", "Unknown surface.", ErrorCategory.Validation));
+
+            var visible = doc.Placements.Any(p => p.Surface == surface && p.IsVisible);
+            if (!visible)
+                return NotFound<PublicLegalDocumentDetailDto>();
+        }
+
         var list = MapPublicListItem(doc, published, null);
         return Result.Success(new PublicLegalDocumentDetailDto
         {
@@ -460,6 +477,12 @@ public sealed class LegalDocumentHandler(
             EffectiveFrom = published?.EffectiveFrom,
             LastUpdated = lastUpdated,
             UpdatedBy = doc.ModifiedBy ?? doc.CreatedBy,
+            VisibleToCustomer = doc.Placements.Any(p => p.IsVisible && LegalCatalog.Surfaces.IsCustomer(p.Surface)),
+            VisibleToVendor = doc.Placements.Any(p => p.IsVisible && LegalCatalog.Surfaces.IsVendor(p.Surface)),
+            RequiredAtCustomerRegister = doc.Placements.Any(p =>
+                p.IsRequiredToProceed && p.Screen == LegalCatalog.Screens.Register && LegalCatalog.Surfaces.IsCustomer(p.Surface)),
+            RequiredAtVendorRegister = doc.Placements.Any(p =>
+                p.IsRequiredToProceed && p.Screen == LegalCatalog.Screens.Register && LegalCatalog.Surfaces.IsVendor(p.Surface)),
         };
     }
 
@@ -485,6 +508,10 @@ public sealed class LegalDocumentHandler(
             EffectiveFrom = list.EffectiveFrom,
             LastUpdated = list.LastUpdated,
             UpdatedBy = list.UpdatedBy,
+            VisibleToCustomer = list.VisibleToCustomer,
+            VisibleToVendor = list.VisibleToVendor,
+            RequiredAtCustomerRegister = list.RequiredAtCustomerRegister,
+            RequiredAtVendorRegister = list.RequiredAtVendorRegister,
             PublishedVersionId = published?.Id,
             DraftVersionId = draft?.Id,
             ContentHtml = published?.ContentHtml,

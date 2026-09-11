@@ -22,6 +22,7 @@ import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
 import '../../shared/widgets/struck_price.dart';
 import '../../shared/utils/require_auth.dart';
+import '../../shared/widgets/listing_delivery_check.dart';
 import '../dashboard/customer_dashboard.dart';
 import 'product_image_viewer_screen.dart';
 
@@ -1454,6 +1455,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                      style: TextStyle(color: colors.textMuted, fontSize: 13),
                                    ),
                                  ],
+                                const SizedBox(height: 16),
+                                ListingDeliveryCheck(
+                                  quoteLine: {
+                                    'listingId': detail.id,
+                                    'quantity': _quantity,
+                                    'rentalDays': actualOrderType == 'buy'
+                                        ? 0
+                                        : (selectedPlan?.durationDays ?? 0),
+                                    'rentalPeriodUnit': rentalUnitDay,
+                                    'orderType': actualOrderType,
+                                    if (_selectedVariantId != null && _selectedVariantId!.isNotEmpty)
+                                      'productVariantId': _selectedVariantId,
+                                    if (actualOrderType == 'rent' && selectedPlan != null)
+                                      'rentalPricingPlanId': selectedPlan.id,
+                                  },
+                                ),
                                 if (_relatedProducts.isNotEmpty) ...[
                                   const SizedBox(height: 24),
                                   Text(
@@ -1544,12 +1561,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 return SafeArea(
                   top: false,
                   child: Container(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
                     decoration: BoxDecoration(
                       color: colors.surface,
                       border: Border(top: BorderSide(color: colors.border)),
                     ),
-                    child: SizedBox(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
@@ -1694,6 +1715,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           ],
                         ),
                       ),
+                    ),
+                      ],
                     ),
                   ),
                 );

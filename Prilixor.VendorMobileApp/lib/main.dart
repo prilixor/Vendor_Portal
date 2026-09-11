@@ -21,6 +21,7 @@ import 'features/auth/register_screen.dart';
 import 'features/dashboard/vendor_dashboard.dart';
 import 'shared/widgets/offline_banner.dart';
 import 'shared/widgets/brand_splash.dart';
+import 'shared/widgets/legal_reconsent_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -83,7 +84,15 @@ class PrilixorVendorApp extends StatelessWidget {
       themeMode: ThemeMode.system,
       home: const AuthGate(),
       debugShowCheckedModeBanner: false,
-      builder: (context, child) => OfflineAwareAppShell(child: child),
+      builder: (context, child) => OfflineAwareAppShell(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            child ?? const SizedBox.shrink(),
+            const LegalReconsentGate(),
+          ],
+        ),
+      ),
     );
   }
 }

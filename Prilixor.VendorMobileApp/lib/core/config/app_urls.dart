@@ -26,4 +26,7 @@ class AppUrls {
 
   static const String termsPath = '/terms-and-conditions';
   static const String privacyPath = '/privacy-policy';
+  static const String vendorSellerPath = '/vendor-seller-policy';
+  static const String rentalPath = '/rental-and-purchase-policy';
+  static const String grievancePath = '/grievance-redressal-policy';
 }

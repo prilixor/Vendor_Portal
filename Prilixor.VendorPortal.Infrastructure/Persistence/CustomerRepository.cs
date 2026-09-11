@@ -868,6 +868,40 @@ public sealed class CustomerRepository(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task AddCustomerOrderPrescriptionFileAsync(CustomerOrderPrescriptionFile file, CancellationToken cancellationToken)
+    {
+        await customerDb.CustomerOrderPrescriptionFiles.AddAsync(file, cancellationToken);
+    }
+
+    public Task<List<CustomerOrderPrescriptionFile>> GetCustomerOrderPrescriptionFilesAsync(Guid customerOrderId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderPrescriptionFiles
+            .Where(x => x.CustomerRentalOrderId == customerOrderId && !x.IsDeleted)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<CustomerOrderPrescriptionFile?> GetCustomerOrderPrescriptionFileByIdAsync(Guid customerOrderId, Guid fileId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderPrescriptionFiles
+            .FirstOrDefaultAsync(
+                x => x.Id == fileId && x.CustomerRentalOrderId == customerOrderId && !x.IsDeleted,
+                cancellationToken);
+    }
+
+    public Task UpdateCustomerOrderPrescriptionFileAsync(CustomerOrderPrescriptionFile file, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerOrderPrescriptionFiles.Update(file);
+        return Task.CompletedTask;
+    }
+
+    public Task<int> CountCustomerOrderPrescriptionFilesAsync(Guid customerOrderId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderPrescriptionFiles
+            .CountAsync(x => x.CustomerRentalOrderId == customerOrderId && !x.IsDeleted, cancellationToken);
+    }
+
     public async Task AddCustomerOrderImageAsync(CustomerOrderImage image, CancellationToken cancellationToken)
     {
         await customerDb.CustomerOrderImages.AddAsync(image, cancellationToken);

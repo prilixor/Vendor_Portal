@@ -116,7 +116,14 @@ CREATE DATABASE customer_portal_db;
 -- 9) Website Content Management
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/068_website_content_management.sql'
 
+-- 10) Platform legal documents CMS (tables + screenshot default placements)
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/076_legal_documents.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/077_legal_placement_screenshot_defaults.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/078_legal_ceo_flow_defaults.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/079_keep_seven_legal_policies.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/080_customer_order_prescriptions.sql'
+
 \echo 'All schemas and migrations applied successfully.'
-\echo 'Coverage: admin/common/vendor/customer, medical, chemicals, variants, assets, favorites, RBAC, order chat, order photo requests, weekly rent, thumbnails, website content.'
+\echo 'Coverage: admin/common/vendor/customer, medical, chemicals, variants, assets, favorites, RBAC, order chat, order photo requests, weekly rent, thumbnails, website content, legal documents.'
 \echo 'Next: enable BootstrapSuperAdmin in appsettings, start the API once, then disable bootstrap.'
 

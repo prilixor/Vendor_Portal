@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
@@ -6,8 +7,10 @@ import '../../core/providers/cart_provider.dart';
 import '../../core/providers/address_provider.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/models/medical_model.dart';
+import '../../core/utils/platform_file_payload.dart';
 import '../../shared/utils/require_auth.dart';
 import '../../shared/widgets/brand_page_loader.dart';
+import '../../shared/widgets/legal_policy_links.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
@@ -30,7 +33,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String? _selectedAddressId;
   String _deliveryOption = 'standard';
   final Map<String, MedicalRefModel> _medicalRefs = {};
+  final Map<String, List<PendingPrescriptionFile>> _prescriptionFiles = {};
   bool _authChecked = false;
+  bool _acceptedLegal = false;
+  bool _acceptedPrescriptionLegal = false;
 
   @override
   void initState() {
@@ -151,6 +157,42 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       setState(() => _medicalRefs[listingId] = result);
       _fetchQuote();
     }
+  }
+
+  bool _lineHasHealth(CartLineModel line) =>
+      (_medicalRefs[line.listingId]?.hasDoctor ?? false) ||
+      (_prescriptionFiles[line.listingId]?.isNotEmpty ?? false);
+
+  Future<void> _pickPrescription(String listingId) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.size > 5 * 1024 * 1024) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('File must be at most 5 MB.')),
+      );
+      return;
+    }
+    final path = safePlatformFilePath(file);
+    final bytes = file.bytes;
+    if ((bytes == null || bytes.isEmpty) && (path == null || path.isEmpty)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not read that file. Try another image or PDF.')),
+      );
+      return;
+    }
+    setState(() {
+      final next = [...(_prescriptionFiles[listingId] ?? const <PendingPrescriptionFile>[])];
+      if (next.length >= 3) return;
+      next.add(PendingPrescriptionFile(name: file.name, path: path, bytes: bytes));
+      _prescriptionFiles[listingId] = next;
+    });
   }
 
   void _applyMedicalRefToAll(String sourceListingId) {
@@ -442,12 +484,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            'Doctor reference (optional)',
+                                            'Doctor or prescription (optional)',
                                             style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold),
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            'Enter a doctor Unique ID from their QR / share page, or skip and place the order without one.',
+                                            'Add a doctor Unique ID and/or upload a prescription image or PDF. You can skip both.',
                                             style: TextStyle(color: colors.textSecondary, fontSize: 13),
                                           ),
                                         ],
@@ -460,78 +502,79 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           ),
                           ...rxLines.map((line) {
                             final ref = _medicalRefs[line.listingId];
-                            final filled = ref?.hasDoctor == true;
+                            final files = _prescriptionFiles[line.listingId] ?? const <PendingPrescriptionFile>[];
+                            final doctorFilled = ref?.hasDoctor == true;
                             return Padding(
                               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                              child: Row(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(line.title, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600)),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          filled
-                                              ? 'Linked · ${ref!.doctorName ?? 'Doctor'} (${ref.uniqueCode})'
-                                              : 'No doctor linked yet',
-                                          style: TextStyle(
-                                            color: filled ? const Color(0xFF34D399) : Colors.amber,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(line.title, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600)),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              doctorFilled
+                                                  ? 'Linked · ${ref!.doctorName ?? 'Doctor'} (${ref.uniqueCode})'
+                                                  : 'No doctor linked yet',
+                                              style: TextStyle(
+                                                color: doctorFilled ? const Color(0xFF34D399) : Colors.amber,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                        if (filled && ref!.hospitals.isNotEmpty) ...[
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            ref.hospitals.length == 1
-                                                ? (ref.hospitals.first.placeLabel != null
-                                                    ? '${ref.hospitals.first.name} · ${ref.hospitals.first.placeLabel}'
-                                                    : ref.hospitals.first.name)
-                                                : '${ref.hospitals.length} affiliated hospitals',
-                                            style: TextStyle(color: colors.textMuted, fontSize: 11),
+                                      ),
+                                      TextButton(
+                                        onPressed: () async {
+                                          await _openMedicalRef(line.listingId, line.title);
+                                        },
+                                        child: Text(
+                                          doctorFilled ? 'Change' : 'Add Unique ID',
+                                          style: TextStyle(color: colors.accent, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (files.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    ...files.asMap().entries.map((entry) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              entry.value.name,
+                                              style: TextStyle(color: colors.textSecondary, fontSize: 12),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          TextButton(
+                                            onPressed: () {
+                                              setState(() {
+                                                final next = [...files]..removeAt(entry.key);
+                                                _prescriptionFiles[line.listingId] = next;
+                                              });
+                                            },
+                                            child: Text('Remove', style: TextStyle(color: colors.textMuted, fontSize: 12)),
                                           ),
                                         ],
-                                      ],
+                                      ),
+                                    )),
+                                  ],
+                                  if (files.length < 3)
+                                    TextButton(
+                                      onPressed: () => _pickPrescription(line.listingId),
+                                      child: Text(
+                                        files.isEmpty ? 'Upload prescription' : 'Add another file',
+                                        style: TextStyle(color: colors.accent, fontWeight: FontWeight.bold),
+                                      ),
                                     ),
-                                  ),
-                                  TextButton(
-                                    onPressed: () async {
-                                      await _openMedicalRef(line.listingId, line.title);
-                                      if (rxLines.length > 1 &&
-                                          _medicalRefs[line.listingId]?.hasDoctor == true &&
-                                          mounted) {
-                                        final apply = await showDialog<bool>(
-                                          context: context,
-                                          builder: (ctx) => AlertDialog(
-                                            backgroundColor: colors.surface,
-                                            title: Text('Apply to all?', style: TextStyle(color: colors.textPrimary)),
-                                            content: Text(
-                                              'Use the same doctor Unique ID for all prescription items?',
-                                              style: TextStyle(color: colors.textSecondary),
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(ctx, false),
-                                                child: Text('No', style: TextStyle(color: colors.textMuted)),
-                                              ),
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(ctx, true),
-                                                child: Text('Yes', style: TextStyle(color: colors.accent)),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                        if (apply == true) {
-                                          _applyMedicalRefToAll(line.listingId);
-                                        }
-                                      }
-                                    },
-                                    child: Text(
-                                      filled ? 'Change' : 'Add Unique ID',
-                                      style: TextStyle(color: colors.accent, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
                                 ],
                               ),
                             );
@@ -682,9 +725,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
       bottomSheet: quote != null
           ? Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
               color: colors.surface,
-              child: SizedBox(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LegalAgreeCheckbox(
+                    screen: 'checkout',
+                    value: _acceptedLegal,
+                    onChanged: (value) => setState(() => _acceptedLegal = value),
+                    prefix: 'I agree to the',
+                  ),
+                  if (cart.lines.any((l) => l.prescriptionRequired && _lineHasHealth(l))) ...[
+                    const SizedBox(height: 8),
+                    LegalAgreeCheckbox(
+                      screen: 'prescription',
+                      value: _acceptedPrescriptionLegal,
+                      onChanged: (value) => setState(() => _acceptedPrescriptionLegal = value),
+                      prefix: 'I consent to the',
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
@@ -694,7 +757,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   onPressed: provider.isPlacingOrder ||
-                          provider.errorMessage != null
+                          provider.errorMessage != null ||
+                          !_acceptedLegal ||
+                          (cart.lines.any((l) => l.prescriptionRequired && _lineHasHealth(l)) &&
+                              !_acceptedPrescriptionLegal)
                       ? null
                       : () async {
                           if (_deliveryOption != 'vendor_pickup' &&
@@ -710,6 +776,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             addressId: _selectedAddressId,
                             deliveryOption: _deliveryOption,
                             medicalRefs: _medicalRefs,
+                            prescriptionFiles: _prescriptionFiles,
+                            acceptedLegal: _acceptedLegal,
+                            acceptedPrescriptionLegal: cart.lines.any((l) =>
+                                    l.prescriptionRequired && _lineHasHealth(l)) &&
+                                _acceptedPrescriptionLegal,
                           );
                           if (success && mounted) {
                             cart.clearCart();
@@ -733,6 +804,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                 ),
+              ),
+                ],
               ),
             )
           : null,
@@ -786,3 +859,4 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 }
+

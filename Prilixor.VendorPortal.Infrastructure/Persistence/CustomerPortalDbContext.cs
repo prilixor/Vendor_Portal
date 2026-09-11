@@ -25,6 +25,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
     public DbSet<CustomerOrderDoctorReference> CustomerOrderDoctorReferences => Set<CustomerOrderDoctorReference>();
     public DbSet<CustomerOrderImage> CustomerOrderImages => Set<CustomerOrderImage>();
     public DbSet<CustomerOrderImageRequest> CustomerOrderImageRequests => Set<CustomerOrderImageRequest>();
+    public DbSet<CustomerOrderPrescriptionFile> CustomerOrderPrescriptionFiles => Set<CustomerOrderPrescriptionFile>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -217,6 +218,33 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.HasOne(x => x.Request)
                 .WithMany(x => x.Images)
                 .HasForeignKey(x => x.RequestId);
+        });
+
+        modelBuilder.Entity<CustomerOrderPrescriptionFile>(entity =>
+        {
+            entity.ToTable("customer_order_prescription_files");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CustomerRentalOrderId).HasColumnName("customer_rental_order_id");
+            entity.Property(x => x.CustomerId).HasColumnName("customer_id");
+            entity.Property(x => x.VendorId).HasColumnName("vendor_id");
+            entity.Property(x => x.StoredReference).HasColumnName("stored_reference");
+            entity.Property(x => x.OriginalFileName).HasColumnName("original_file_name");
+            entity.Property(x => x.ContentType).HasColumnName("content_type");
+            entity.Property(x => x.SortOrder).HasColumnName("sort_order");
+            entity.Property(x => x.UploadSource).HasColumnName("upload_source");
+
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+
+            entity.HasOne(x => x.Order)
+                .WithMany(x => x.PrescriptionFiles)
+                .HasForeignKey(x => x.CustomerRentalOrderId);
         });
 
         modelBuilder.Entity<CustomerRentalOrderExtension>(entity =>

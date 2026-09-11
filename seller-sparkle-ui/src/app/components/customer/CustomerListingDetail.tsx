@@ -32,6 +32,7 @@ import {
 import { evaluateRentVsBuy } from "@/app/helpers/rentalPeriod";
 import { cn } from "@/app/helpers/utils";
 import { lastShopHref, persistShopBrowseMode, shopHrefForListing } from "@/app/helpers/customerShopBrowse";
+import { ListingDeliveryCheck } from "@/app/components/customer/ListingDeliveryCheck";
 
 function availabilityBadge(status: string, qty: number): { label: string; className: string } | null {
   const s = status.trim().toLowerCase();
@@ -181,7 +182,11 @@ const CustomerListingDetail = () => {
     );
   }
 
-  if (isLoading || !data) {
+  if (isLoading && !data) {
+    return <PageLoaderSlot />;
+  }
+
+  if (!data) {
     return <PageLoaderSlot />;
   }
 
@@ -739,47 +744,60 @@ const CustomerListingDetail = () => {
                 </Button>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3.5">
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    type="button"
-                    className="h-9 rounded-lg px-3 font-medium"
-                    onClick={() => {
-                      if (user?.role !== "customer") {
-                        toast.message("Sign in to save favorites");
-                        navigate("/customer/login", {
-                          state: { from: `/customer/shop/${data.id}` },
-                        });
-                        return;
-                      }
-                      const action = isFavorite
-                        ? customerApi.removeFavorite(data.id).then(() => toast.success("Removed from favorites"))
-                        : customerApi.addFavorite(data.id).then(() => toast.success("Added to favorites"));
-                      action
-                        .then(() => queryClient.invalidateQueries({ queryKey: ["customer-favorites"] }))
-                        .catch(() => toast.error(isFavorite ? "Failed to remove favorite" : "Failed to add favorite"));
-                    }}
-                  >
-                    <Heart className={cn("h-4 w-4", isFavorite && "fill-destructive text-destructive")} />
-                    {isFavorite ? "Saved" : "Favorite"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 rounded-lg px-3 font-medium"
-                    asChild
-                  >
-                    <Link to={shopHrefForListing(!!data.isChemical)}>
-                      <LayoutGrid className="h-4 w-4" />
-                      More listings
-                    </Link>
-                  </Button>
+              <div className="space-y-3 border-t border-border/70 pt-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      className="h-9 rounded-lg px-3 font-medium"
+                      onClick={() => {
+                        if (user?.role !== "customer") {
+                          toast.message("Sign in to save favorites");
+                          navigate("/customer/login", {
+                            state: { from: `/customer/shop/${data.id}` },
+                          });
+                          return;
+                        }
+                        const action = isFavorite
+                          ? customerApi.removeFavorite(data.id).then(() => toast.success("Removed from favorites"))
+                          : customerApi.addFavorite(data.id).then(() => toast.success("Added to favorites"));
+                        action
+                          .then(() => queryClient.invalidateQueries({ queryKey: ["customer-favorites"] }))
+                          .catch(() => toast.error(isFavorite ? "Failed to remove favorite" : "Failed to add favorite"));
+                      }}
+                    >
+                      <Heart className={cn("h-4 w-4", isFavorite && "fill-destructive text-destructive")} />
+                      {isFavorite ? "Saved" : "Favorite"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 rounded-lg px-3 font-medium"
+                      asChild
+                    >
+                      <Link to={shopHrefForListing(!!data.isChemical)}>
+                        <LayoutGrid className="h-4 w-4" />
+                        More listings
+                      </Link>
+                    </Button>
+                  </div>
+                  <p className="text-[12px] font-medium text-muted-foreground">
+                    Excludes {actualOrderType === "buy" ? "delivery" : "deposit & delivery"}.
+                  </p>
                 </div>
-                <p className="text-[12px] font-medium text-muted-foreground">
-                  Excludes {actualOrderType === "buy" ? "delivery" : "deposit & delivery"}
-                </p>
+                <ListingDeliveryCheck
+                  line={{
+                    listingId: data.id,
+                    quantity: qty,
+                    rentalDays: actualOrderType === "buy" ? 0 : selectedPlan?.durationDays ?? 1,
+                    rentalPeriodUnit: "day",
+                    orderType: actualOrderType,
+                    productVariantId: resolvedVariantId || undefined,
+                    rentalPricingPlanId: actualOrderType === "rent" ? selectedPlan?.id : undefined,
+                  }}
+                />
               </div>
             </div>
           </div>

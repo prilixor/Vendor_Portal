@@ -251,3 +251,20 @@ public sealed class DeleteVendorOrderImageEndpoint(IMediator mediator)
         return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
     }
 }
+
+public sealed class GetVendorOrderPrescriptionsEndpoint(IMediator mediator)
+    : Endpoint<VendorDispatchOrderRequest, Results<Ok<IReadOnlyList<CustomerPrescriptionFileDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/orders/{orderId}/prescriptions");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<IReadOnlyList<CustomerPrescriptionFileDto>>, ProblemHttpResult>> ExecuteAsync(
+        VendorDispatchOrderRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetVendorOrderPrescriptionsQuery(req.VendorId, req.OrderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}

@@ -8,7 +8,7 @@ import { Badge } from "@/app/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Switch } from "@/app/components/ui/switch";
 import { adminApi, AdminUserDto } from "@/app/services/adminApi";
@@ -401,9 +401,7 @@ const Admins = () => {
           </p>
         </div>
 
-        {loading ? (
-          <PageLoaderSlot />
-        ) : admins.length === 0 ? (
+        <PageContentGate loading={loading}>{admins.length === 0 ? (
           <div className="py-14 text-center space-y-2">
             <Users className="h-8 w-8 mx-auto text-muted-foreground/50" />
             <p className="text-sm font-medium">No admin users yet</p>
@@ -511,7 +509,7 @@ const Admins = () => {
             />
           </div>
           </>
-        )}
+        )}</PageContentGate>
       </Card>
 
       {/* Create */}

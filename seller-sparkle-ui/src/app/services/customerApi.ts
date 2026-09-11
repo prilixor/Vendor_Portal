@@ -213,6 +213,18 @@ export interface CustomerOrderApi {
   rentalDiscountType?: RentalDiscountType | string | null;
   rentalDiscountValue?: number | null;
   rentalFinalPrice?: number | null;
+  prescriptionFiles?: CustomerPrescriptionFileApi[] | null;
+}
+
+export interface CustomerPrescriptionFileApi {
+  id: string;
+  orderId: string;
+  fileUrl: string;
+  originalFileName?: string | null;
+  contentType?: string | null;
+  sortOrder: number;
+  uploadSource?: string;
+  createdAt: string;
 }
 
 export interface CustomerOrderImageApi {
@@ -287,6 +299,7 @@ export interface CartLinePayload {
   productVariantId?: string;
   /** Optional Admin-curated doctor reference (Unique ID lookup). */
   doctorId?: string;
+  hasPrescriptionFile?: boolean;
   rentalPricingPlanId?: string;
   /** ISO date YYYY-MM-DD when using a duration pricing plan. */
   rentalStartDate?: string;
@@ -439,10 +452,16 @@ export const customerApi = {
     customerAddressId?: string | null;
     deliveryOption: string;
     lines: CartLinePayload[];
+    acceptedLegal?: boolean;
+    acceptedPrescriptionLegal?: boolean;
+    sourceSurface?: string;
   }): Promise<PlaceCustomerOrdersResultApi> {
     return apiClient.post<PlaceCustomerOrdersResultApi>("/customers/me/orders", {
       customerAddressId: payload.customerAddressId ?? undefined,
       deliveryOption: payload.deliveryOption,
+      acceptedLegal: payload.acceptedLegal ?? false,
+      acceptedPrescriptionLegal: payload.acceptedPrescriptionLegal ?? false,
+      sourceSurface: payload.sourceSurface ?? "customer_web",
       lines: payload.lines.map((l) => ({
         listingId: l.listingId,
         quantity: l.quantity,
@@ -451,6 +470,7 @@ export const customerApi = {
         orderType: l.orderType ?? "rent",
         productVariantId: l.productVariantId,
         doctorId: l.doctorId || undefined,
+        hasPrescriptionFile: l.hasPrescriptionFile || undefined,
         rentalPricingPlanId: l.rentalPricingPlanId || undefined,
         rentalStartDate: l.rentalStartDate || undefined,
       })),
@@ -569,6 +589,34 @@ export const customerApi = {
 
   removeFavorite(listingId: string): Promise<void> {
     return apiClient.delete(`/customers/me/favorites/${encodeURIComponent(listingId)}`);
+  },
+
+  getOrderPrescriptions(orderId: string): Promise<CustomerPrescriptionFileApi[]> {
+    return apiClient.get<CustomerPrescriptionFileApi[]>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/prescriptions`,
+    );
+  },
+
+  uploadOrderPrescription(
+    orderId: string,
+    file: File,
+    options?: { acceptedPrescriptionLegal?: boolean; uploadSource?: "checkout" | "order_detail" },
+  ): Promise<CustomerPrescriptionFileApi> {
+    const data = new FormData();
+    data.append("file", file);
+    data.append("acceptedPrescriptionLegal", options?.acceptedPrescriptionLegal ? "true" : "false");
+    data.append("uploadSource", options?.uploadSource ?? "order_detail");
+    data.append("sourceSurface", "customer_web");
+    return apiClient.postForm<CustomerPrescriptionFileApi>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/prescriptions`,
+      data,
+    );
+  },
+
+  deleteOrderPrescription(orderId: string, fileId: string): Promise<void> {
+    return apiClient.delete(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/prescriptions/${encodeURIComponent(fileId)}`,
+    );
   },
 };
 
