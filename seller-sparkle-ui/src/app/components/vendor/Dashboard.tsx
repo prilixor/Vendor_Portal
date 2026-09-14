@@ -236,12 +236,6 @@ const Dashboard = () => {
           </>
         }
       />
-      <LegalPolicyLinks
-        surface="vendor_web"
-        screen="vendor_dashboard"
-        className="mb-6 text-xs text-muted-foreground"
-        linkClassName="text-xs"
-      />
 
       {/* Verification banner */}
       <Card className="mb-6 overflow-hidden border-primary/20 bg-gradient-soft">
@@ -439,6 +433,19 @@ const Dashboard = () => {
             </tbody>
           </table>
         </div>
+      </Card>
+
+      <Card className="mt-6 border-border/60 p-4 sm:p-6">
+        <h2 className="mb-1 font-semibold">Legal</h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Agreements for your vendor account.
+        </p>
+        <LegalPolicyLinks
+          surface="vendor_web"
+          screen="vendor_dashboard"
+          layout="quiet"
+          className="max-w-md"
+        />
       </Card>
     </div>
     </PageContentGate>

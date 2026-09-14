@@ -122,6 +122,7 @@ CREATE DATABASE customer_portal_db;
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/078_legal_ceo_flow_defaults.sql'
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/079_keep_seven_legal_policies.sql'
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/080_customer_order_prescriptions.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/081_legal_vidit_pdf_placement_align.sql'
 
 \echo 'All schemas and migrations applied successfully.'
 \echo 'Coverage: admin/common/vendor/customer, medical, chemicals, variants, assets, favorites, RBAC, order chat, order photo requests, weekly rent, thumbnails, website content, legal documents.'

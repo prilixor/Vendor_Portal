@@ -245,7 +245,9 @@ public static class LegalCatalog
 
         if (documentType == DocumentTypes.GrievanceRedressalPolicy)
         {
-            if (isCustomer || isVendor)
+            if (isCustomer)
+                return new(screen is Screens.Support or Screens.Footer or Screens.LegalHub or Screens.ProfileSettings, false);
+            if (isVendor)
                 return new(screen is Screens.Support or Screens.Footer or Screens.LegalHub, false);
             return new(isAdmin && screen == Screens.LegalHub, false);
         }

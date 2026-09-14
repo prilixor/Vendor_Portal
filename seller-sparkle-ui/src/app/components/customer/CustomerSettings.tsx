@@ -433,19 +433,16 @@ const CustomerSettings = () => {
         </TabsContent>
 
         <TabsContent value="policies" className="mt-4">
-          <Card className="max-w-2xl border-border/60">
-            <CardContent className="p-5 sm:p-6">
-              <h2 className="mb-1 text-sm font-semibold">Policies</h2>
-              <p className="mb-4 text-xs text-muted-foreground">
-                Terms and policies that apply to your customer account.
-              </p>
-              <LegalPolicyLinks
-                surface="customer_web"
-                screen="profile_settings"
-                className="flex-col items-start gap-2 text-sm"
-                linkClassName="text-primary hover:underline"
-              />
-            </CardContent>
+          <Card className="max-w-md border-border/60 p-4 sm:p-6">
+            <h2 className="mb-1 font-semibold">Legal</h2>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Agreements for your customer account.
+            </p>
+            <LegalPolicyLinks
+              surface="customer_web"
+              screen="profile_settings"
+              layout="quiet"
+            />
           </Card>
         </TabsContent>
       </Tabs>

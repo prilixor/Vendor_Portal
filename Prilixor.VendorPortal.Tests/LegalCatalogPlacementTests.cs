@@ -67,6 +67,47 @@ public class LegalCatalogPlacementTests
         }
     }
 
+    [Fact]
+    public void Vidit_pdf_customer_settings_shows_terms_privacy_grievance()
+    {
+        foreach (var type in new[]
+                 {
+                     LegalCatalog.DocumentTypes.TermsOfUse,
+                     LegalCatalog.DocumentTypes.PrivacyPolicy,
+                     LegalCatalog.DocumentTypes.GrievanceRedressalPolicy,
+                 })
+        {
+            var p = LegalCatalog.DefaultPlacement(type, LegalCatalog.Surfaces.CustomerWeb, LegalCatalog.Screens.ProfileSettings);
+            Assert.True(p.IsVisible);
+            Assert.False(p.IsRequiredToProceed);
+        }
+    }
+
+    [Fact]
+    public void Vidit_pdf_vendor_dashboard_shows_terms_privacy_seller_and_rental()
+    {
+        foreach (var type in new[]
+                 {
+                     LegalCatalog.DocumentTypes.TermsOfUse,
+                     LegalCatalog.DocumentTypes.PrivacyPolicy,
+                     LegalCatalog.DocumentTypes.VendorSellerPolicy,
+                     LegalCatalog.DocumentTypes.RentalAndPurchasePolicy,
+                 })
+        {
+            var p = LegalCatalog.DefaultPlacement(type, LegalCatalog.Surfaces.VendorWeb, LegalCatalog.Screens.VendorDashboard);
+            Assert.True(p.IsVisible);
+        }
+
+        Assert.False(LegalCatalog.DefaultPlacement(
+            LegalCatalog.DocumentTypes.CancellationRefundPolicy,
+            LegalCatalog.Surfaces.VendorWeb,
+            LegalCatalog.Screens.VendorDashboard).IsVisible);
+        Assert.False(LegalCatalog.DefaultPlacement(
+            LegalCatalog.DocumentTypes.ShippingDeliveryPolicy,
+            LegalCatalog.Surfaces.VendorWeb,
+            LegalCatalog.Screens.VendorDashboard).IsVisible);
+    }
+
     private static bool AnyVisible(string documentType, params string[] surfaces) =>
         surfaces.Any(surface =>
             LegalCatalog.Screens.All.Any(screen =>

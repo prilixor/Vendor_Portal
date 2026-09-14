@@ -362,6 +362,60 @@ WHERE p.document_id = d.id
   AND p.surface IN ('vendor_web', 'vendor_mobile')
   AND p.screen = 'onboarding';
 
+-- ---------- 081_legal_vidit_pdf_placement_align.sql ----------
+UPDATE public.legal_document_placements p
+SET is_visible = true,
+    is_required_to_proceed = false,
+    updated_at = now()
+FROM public.legal_documents d
+WHERE p.document_id = d.id
+  AND p.is_deleted = false
+  AND d.is_deleted = false
+  AND p.updated_by IS NULL
+  AND d.document_type = 'grievance-redressal-policy'
+  AND p.surface IN ('customer_web', 'customer_mobile')
+  AND p.screen = 'profile_settings';
+
+INSERT INTO public.legal_document_placements (
+    id, document_id, surface, screen, is_visible, is_required_to_proceed, sort_order,
+    created_at, updated_at, is_deleted
+)
+SELECT
+    gen_random_uuid(),
+    d.id,
+    s.surface,
+    'profile_settings',
+    true,
+    false,
+    70,
+    now(),
+    now(),
+    false
+FROM public.legal_documents d
+CROSS JOIN (VALUES ('customer_web'), ('customer_mobile')) AS s(surface)
+WHERE d.is_deleted = false
+  AND d.document_type = 'grievance-redressal-policy'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM public.legal_document_placements p
+      WHERE p.document_id = d.id
+        AND p.surface = s.surface
+        AND p.screen = 'profile_settings'
+        AND p.is_deleted = false
+  );
+
+UPDATE public.legal_document_placements p
+SET is_visible = false,
+    is_required_to_proceed = false,
+    updated_at = now()
+FROM public.legal_documents d
+WHERE p.document_id = d.id
+  AND p.is_deleted = false
+  AND d.is_deleted = false
+  AND p.updated_by IS NULL
+  AND d.document_type IN ('cancellation-refund-policy', 'shipping-delivery-policy')
+  AND p.surface IN ('vendor_web', 'vendor_mobile');
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     public.legal_documents,
     public.legal_document_versions,

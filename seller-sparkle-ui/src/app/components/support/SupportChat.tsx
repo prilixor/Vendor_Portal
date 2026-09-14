@@ -1003,8 +1003,9 @@ export const SupportChat = ({ vendorId }: SupportChatProps) => {
                 <LegalPolicyLinks
                   surface="vendor_web"
                   screen="support"
-                  className="justify-center text-[10px] text-muted-foreground/70"
-                  linkClassName="text-[10px]"
+                  layout="menu"
+                  className="flex justify-center"
+                  menuLabel="Legal"
                 />
               </div>
             </>
