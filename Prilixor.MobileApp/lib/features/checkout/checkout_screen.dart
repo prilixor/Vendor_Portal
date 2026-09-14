@@ -285,21 +285,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                     crossAxisAlignment: WrapCrossAlignment.center,
                                     spacing: 6,
                                     children: [
-                                      const Text(
+                                      Text(
                                         'Starts on delivery',
-                                        style: TextStyle(color: Colors.white38, fontSize: 11),
+                                        style: TextStyle(color: colors.textMuted, fontSize: 11),
                                       ),
                                       if (line.rentalNormalPrice != null &&
                                           line.rentalNormalPrice! > (line.rentalFinalPrice ?? 0)) ...[
-                                        const Text('·', style: TextStyle(color: Colors.white24, fontSize: 11)),
+                                        Text('·', style: TextStyle(color: colors.textMuted.withValues(alpha: 0.5))),
                                         StruckPrice(
                                           '₹${line.rentalNormalPrice!.toStringAsFixed(0)}',
                                           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                                         ),
                                         Text(
                                           '₹${(line.rentalFinalPrice ?? 0).toStringAsFixed(0)}',
-                                          style: const TextStyle(
-                                            color: Colors.white70,
+                                          style: TextStyle(
+                                            color: colors.textPrimary,
                                             fontSize: 11,
                                             fontWeight: FontWeight.w700,
                                           ),
