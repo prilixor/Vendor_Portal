@@ -592,19 +592,19 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
                     : widget.profile?.city,
               ),
               if (_resolvingAddress)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     children: [
-                      SizedBox(
+                      const SizedBox(
                         width: 14,
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Text(
                         'Resolving address from pin…',
-                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                        style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
                       ),
                     ],
                   ),
@@ -647,8 +647,8 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
                 label: const Text('Open in Google Maps'),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(44),
-                  foregroundColor: Colors.white70,
-                  side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                  foregroundColor: context.appColors.textPrimary,
+                  side: BorderSide(color: context.appColors.border),
                 ),
               ),
               const SizedBox(height: 12),
@@ -689,7 +689,7 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
                 '• Or open Google Maps → long-press your shop → copy lat/long\n'
                 '• Paste the numbers below, then Save profile',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.45),
+                  color: context.appColors.textMuted,
                   fontSize: 11,
                   height: 1.45,
                 ),
@@ -798,10 +798,10 @@ class _DocumentsTabState extends State<_DocumentsTab> with AutomaticKeepAliveCli
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.card(context),
-        title: const Text('Delete document?', style: TextStyle(color: Colors.white)),
+        title: Text('Delete document?', style: TextStyle(color: ctx.appColors.textPrimary)),
         content: Text(
           'Remove ${doc.documentType}? You can upload a new file after deleting.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
+          style: TextStyle(color: ctx.appColors.textSecondary),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -1453,7 +1453,7 @@ class _BankTabState extends State<_BankTab> with AutomaticKeepAliveClientMixin {
           'Your bank details are encrypted and used only for vendor payouts.',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.38),
+            color: context.appColors.textMuted,
             fontSize: 11,
             height: 1.35,
           ),

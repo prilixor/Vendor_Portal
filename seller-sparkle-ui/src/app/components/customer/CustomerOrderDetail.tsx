@@ -419,6 +419,12 @@ const CustomerOrderDetail = () => {
   });
 
   const [acceptedRxLegal, setAcceptedRxLegal] = useState(false);
+  const [pendingRxFile, setPendingRxFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    setPendingRxFile(null);
+    setAcceptedRxLegal(false);
+  }, [currentItemId]);
 
   const uploadRxMut = useMutation({
     mutationFn: (file: File) =>
@@ -427,6 +433,8 @@ const CustomerOrderDetail = () => {
         uploadSource: "order_detail",
       }),
     onSuccess: () => {
+      setPendingRxFile(null);
+      setAcceptedRxLegal(false);
       toast.success("Prescription uploaded.");
       queryClient.invalidateQueries({ queryKey: ["customer-order-prescriptions", currentItemId] });
       queryClient.invalidateQueries({ queryKey: ["customer-order", currentItemId] });
@@ -894,32 +902,42 @@ const CustomerOrderDetail = () => {
       )}
 
       {(prescriptionFiles.length > 0 || canUploadPrescription(activeItem.status)) && (
-        <div className="space-y-3">
-          <OrderPrescriptionFilesCard
-            files={data?.prescriptionFiles?.length ? data.prescriptionFiles : prescriptionFiles}
-            canEdit={canUploadPrescription(activeItem.status)}
-            uploading={uploadRxMut.isPending}
-            onUpload={(file) => {
-              const needsConsent = prescriptionFiles.length === 0 && !activeItem.doctorId;
-              if (needsConsent && !acceptedRxLegal) {
-                toast.error("Please accept the Privacy Policy before uploading a prescription.");
-                return;
-              }
-              uploadRxMut.mutate(file);
-            }}
-            onDelete={(fileId) => deleteRxMut.mutate(fileId)}
-          />
-          {canUploadPrescription(activeItem.status) && prescriptionFiles.length === 0 && !activeItem.doctorId ? (
-            <LegalAgreeCheckbox
-              surface="customer_web"
-              screen="prescription"
-              agreed={acceptedRxLegal}
-              onAgreedChange={setAcceptedRxLegal}
-              prefix="I consent to the"
-              id="order-detail-privacy-health"
-            />
-          ) : null}
-        </div>
+        <OrderPrescriptionFilesCard
+          files={data?.prescriptionFiles?.length ? data.prescriptionFiles : prescriptionFiles}
+          canEdit={canUploadPrescription(activeItem.status)}
+          uploading={uploadRxMut.isPending}
+          pendingFile={pendingRxFile}
+          onRemovePending={() => {
+            setPendingRxFile(null);
+            setAcceptedRxLegal(false);
+          }}
+          onUpload={(file) => {
+            const needsConsent = prescriptionFiles.length === 0 && !activeItem.doctorId;
+            if (needsConsent && !acceptedRxLegal) {
+              setPendingRxFile(file);
+              return;
+            }
+            uploadRxMut.mutate(file);
+          }}
+          onDelete={(fileId) => deleteRxMut.mutate(fileId)}
+          footer={
+            canUploadPrescription(activeItem.status) && pendingRxFile && prescriptionFiles.length === 0 && !activeItem.doctorId ? (
+              <LegalAgreeCheckbox
+                surface="customer_web"
+                screen="prescription"
+                agreed={acceptedRxLegal}
+                onAgreedChange={(value) => {
+                  setAcceptedRxLegal(value);
+                  if (value && pendingRxFile) {
+                    uploadRxMut.mutate(pendingRxFile);
+                  }
+                }}
+                prefix="I consent to the"
+                id="order-detail-privacy-health"
+              />
+            ) : null
+          }
+        />
       )}
 
       {/* Request vendor photos — order-group aware (all items / selected items) */}

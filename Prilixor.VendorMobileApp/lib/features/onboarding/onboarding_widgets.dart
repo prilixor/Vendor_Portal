@@ -1048,6 +1048,9 @@ class OnboardingRejectedHelpBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final isDark = context.isDarkMode;
+    final danger = isDark ? Colors.redAccent : const Color(0xFFB91C1C);
     final parts = <String>[
       ...rejectedDocuments.map((d) => d.documentType),
       if (rejectedBank) 'Bank account',
@@ -1063,22 +1066,28 @@ class OnboardingRejectedHelpBanner extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.redAccent.withValues(alpha: 0.12),
+        color: isDark
+            ? Colors.redAccent.withValues(alpha: 0.12)
+            : const Color(0xFFFEF2F2),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.35)),
+        border: Border.all(
+          color: isDark
+              ? Colors.redAccent.withValues(alpha: 0.35)
+              : const Color(0xFFFECACA),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
-              SizedBox(width: 8),
+              Icon(Icons.error_outline, color: danger, size: 20),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Verification needs attention',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: isDark ? colors.textPrimary : danger,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1089,7 +1098,7 @@ class OnboardingRejectedHelpBanner extends StatelessWidget {
           Text(
             '$summary Upload corrected files or contact support if you need help.',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.78),
+              color: colors.textSecondary,
               fontSize: 13,
               height: 1.35,
             ),
@@ -1099,7 +1108,7 @@ class OnboardingRejectedHelpBanner extends StatelessWidget {
             Text(
               'Admin comments on rejected documents:',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.72),
+                color: colors.textMuted,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -1121,7 +1130,7 @@ class OnboardingRejectedHelpBanner extends StatelessWidget {
             Text(
               'Bank rejection notes appear in Alerts if the admin left a comment.',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.55),
+                color: colors.textMuted,
                 fontSize: 11,
                 height: 1.35,
               ),
@@ -1135,8 +1144,9 @@ class OnboardingRejectedHelpBanner extends StatelessWidget {
               icon: const Icon(Icons.support_agent_rounded, size: 18),
               label: const Text('Get help'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.24)),
+                foregroundColor: danger,
+                backgroundColor: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
+                side: BorderSide(color: danger.withValues(alpha: isDark ? 0.45 : 0.35)),
                 minimumSize: const Size.fromHeight(42),
               ),
             ),

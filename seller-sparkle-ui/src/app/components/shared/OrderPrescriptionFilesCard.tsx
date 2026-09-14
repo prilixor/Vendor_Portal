@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { FileText, Loader2, Plus, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -17,10 +18,25 @@ type Props = {
   uploading?: boolean;
   onUpload?: (file: File) => void;
   onDelete?: (fileId: string) => void;
+  pendingFile?: File | null;
+  onRemovePending?: () => void;
+  footer?: ReactNode;
 };
 
-export function OrderPrescriptionFilesCard({ files, canEdit, uploading, onUpload, onDelete }: Props) {
+export function OrderPrescriptionFilesCard({
+  files,
+  canEdit,
+  uploading,
+  onUpload,
+  onDelete,
+  pendingFile,
+  onRemovePending,
+  footer,
+}: Props) {
   if (!canEdit && files.length === 0) return null;
+
+  const hasPending = Boolean(pendingFile);
+  const showPicker = canEdit && onUpload && files.length < 3 && !hasPending;
 
   return (
     <Card className="border-border/80 shadow-sm">
@@ -72,11 +88,32 @@ export function OrderPrescriptionFilesCard({ files, canEdit, uploading, onUpload
               </li>
             ))}
           </ul>
-        ) : (
+        ) : hasPending ? null : (
           <p className="text-sm text-muted-foreground">No prescription uploaded yet.</p>
         )}
 
-        {canEdit && onUpload && files.length < 3 ? (
+        {hasPending && pendingFile ? (
+          <ul className="space-y-2">
+            <li className="flex items-center gap-3 rounded-lg border border-teal-200/70 bg-teal-50/60 px-3 py-2 dark:border-teal-500/30 dark:bg-teal-500/10">
+              <FileText className="h-5 w-5 shrink-0 text-teal-700 dark:text-teal-300" />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">{pendingFile.name}</span>
+              {canEdit && onRemovePending && !uploading ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={onRemovePending}
+                  aria-label="Remove selected prescription"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              ) : null}
+            </li>
+          </ul>
+        ) : null}
+
+        {showPicker ? (
           <label className="inline-flex">
             <input
               type="file"
@@ -97,6 +134,8 @@ export function OrderPrescriptionFilesCard({ files, canEdit, uploading, onUpload
             </Button>
           </label>
         ) : null}
+
+        {footer}
       </CardContent>
     </Card>
   );

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/order_detail_provider.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/models/order_model.dart';
+import '../../core/models/medical_model.dart';
 import '../../core/models/order_image_request_model.dart';
 import '../../core/utils/platform_file_payload.dart';
 import '../../core/utils/rental_period.dart';
@@ -40,6 +41,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   int _selectedOrderIndex = 0;
   final Set<String> _photoRequestSelection = {};
   bool _acceptedRxLegal = false;
+  PendingPrescriptionFile? _pendingRxFile;
   late List<OrderModel> _ordersInGroup;
   Timer? _pollTimer;
   bool _refreshInFlight = false;
@@ -506,7 +508,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                       : '$photoCount photo${photoCount == 1 ? '' : 's'} received';
                               return GestureDetector(
                                 onTap: () {
-                                  setState(() => _selectedOrderIndex = index);
+                                  setState(() {
+                                    _selectedOrderIndex = index;
+                                    _pendingRxFile = null;
+                                    _acceptedRxLegal = false;
+                                  });
                                   _fetchCurrentSubOrder();
                                 },
                                 child: Container(
@@ -766,10 +772,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           files: provider.prescriptionFiles,
                           canEdit: _canUploadPrescription(provider.currentOrder!.status),
                           loading: provider.prescriptionLoading,
+                          pendingFileName: _pendingRxFile?.name,
                           needsConsent: provider.prescriptionFiles.isEmpty &&
-                              !provider.currentOrder!.hasMedicalReference,
+                              !provider.currentOrder!.hasMedicalReference &&
+                              _pendingRxFile != null,
                           acceptedLegal: _acceptedRxLegal,
-                          onAcceptedLegal: (value) => setState(() => _acceptedRxLegal = value),
+                          onAcceptedLegal: (value) {
+                            setState(() => _acceptedRxLegal = value);
+                            if (value && _pendingRxFile != null) {
+                              _confirmPendingPrescription(provider);
+                            }
+                          },
+                          onRemovePending: () => setState(() {
+                            _pendingRxFile = null;
+                            _acceptedRxLegal = false;
+                          }),
                           onUpload: () => _uploadPrescription(provider),
                           onDelete: (fileId) => provider.deletePrescription(
                             provider.currentOrder!.id,
@@ -1138,12 +1155,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     final order = provider.currentOrder;
     if (order == null) return;
     final needsConsent = provider.prescriptionFiles.isEmpty && !order.hasMedicalReference;
-    if (needsConsent && !_acceptedRxLegal) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please accept the Privacy Policy before uploading a prescription.')),
-      );
-      return;
-    }
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
@@ -1158,14 +1169,69 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
       );
       return;
     }
-    final ok = await provider.uploadPrescription(
+    final path = safePlatformFilePath(file);
+    final bytes = file.bytes;
+    if ((bytes == null || bytes.isEmpty) && (path == null || path.isEmpty)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not read that file. Try another image or PDF.')),
+      );
+      return;
+    }
+    if (needsConsent && !_acceptedRxLegal) {
+      setState(() {
+        _pendingRxFile = PendingPrescriptionFile(name: file.name, path: path, bytes: bytes);
+      });
+      return;
+    }
+    await _sendPrescription(
+      provider,
       orderId: order.id,
       fileName: file.name,
-      path: safePlatformFilePath(file),
-      bytes: file.bytes,
-      acceptedPrescriptionLegal: _acceptedRxLegal || !needsConsent,
+      path: path,
+      bytes: bytes,
+      acceptedPrescriptionLegal: true,
+    );
+  }
+
+  Future<void> _confirmPendingPrescription(OrderDetailProvider provider) async {
+    final order = provider.currentOrder;
+    final pending = _pendingRxFile;
+    if (order == null || pending == null) return;
+    await _sendPrescription(
+      provider,
+      orderId: order.id,
+      fileName: pending.name,
+      path: pending.path,
+      bytes: pending.bytes,
+      acceptedPrescriptionLegal: true,
+    );
+  }
+
+  Future<void> _sendPrescription(
+    OrderDetailProvider provider, {
+    required String orderId,
+    required String fileName,
+    String? path,
+    List<int>? bytes,
+    required bool acceptedPrescriptionLegal,
+  }) async {
+    final ok = await provider.uploadPrescription(
+      orderId: orderId,
+      fileName: fileName,
+      path: path,
+      bytes: bytes,
+      acceptedPrescriptionLegal: acceptedPrescriptionLegal,
     );
     if (!mounted) return;
+    if (ok) {
+      setState(() {
+        _pendingRxFile = null;
+        _acceptedRxLegal = false;
+      });
+    } else {
+      setState(() => _acceptedRxLegal = false);
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(ok ? 'Prescription uploaded.' : 'Unable to upload prescription.')),
     );
@@ -1990,9 +2056,11 @@ class _OrderPrescriptionCard extends StatelessWidget {
   final List<PrescriptionFileModel> files;
   final bool canEdit;
   final bool loading;
+  final String? pendingFileName;
   final bool needsConsent;
   final bool acceptedLegal;
   final ValueChanged<bool> onAcceptedLegal;
+  final VoidCallback? onRemovePending;
   final VoidCallback onUpload;
   final Future<bool> Function(String fileId) onDelete;
 
@@ -2000,9 +2068,11 @@ class _OrderPrescriptionCard extends StatelessWidget {
     required this.files,
     required this.canEdit,
     required this.loading,
+    this.pendingFileName,
     required this.needsConsent,
     required this.acceptedLegal,
     required this.onAcceptedLegal,
+    this.onRemovePending,
     required this.onUpload,
     required this.onDelete,
   });
@@ -2036,7 +2106,7 @@ class _OrderPrescriptionCard extends StatelessWidget {
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             )
-          else if (files.isEmpty)
+          else if (files.isEmpty && pendingFileName == null)
             Text('No prescription uploaded yet.', style: TextStyle(color: colors.textMuted, fontSize: 13))
           else
             ...files.map((file) => Padding(
@@ -2099,6 +2169,36 @@ class _OrderPrescriptionCard extends StatelessWidget {
                 ),
               ),
             )),
+          if (pendingFileName != null) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2DD4BF).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF2DD4BF).withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.description_outlined, color: Color(0xFF2DD4BF)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      pendingFileName!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  if (canEdit && onRemovePending != null && !loading)
+                    IconButton(
+                      onPressed: onRemovePending,
+                      icon: Icon(Icons.delete_outline, color: colors.textMuted),
+                    ),
+                ],
+              ),
+            ),
+          ],
           if (needsConsent && canEdit) ...[
             const SizedBox(height: 8),
             LegalAgreeCheckbox(
@@ -2109,7 +2209,7 @@ class _OrderPrescriptionCard extends StatelessWidget {
               activeColor: const Color(0xFF2DD4BF),
             ),
           ],
-          if (canEdit && files.length < 3)
+          if (canEdit && files.length < 3 && pendingFileName == null)
             TextButton(
               onPressed: onUpload,
               child: const Text(
