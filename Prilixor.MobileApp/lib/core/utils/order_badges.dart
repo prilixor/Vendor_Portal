@@ -6,7 +6,7 @@ String formatOrderStatusLabel(String status) {
       s == 'awaiting') {
     return 'Awaiting';
   }
-  if (s == 'dispatch failed') return 'Failed';
+  if (s == 'dispatch failed') return 'Cancelled';
   if (s.isEmpty) return status;
   return s
       .split(' ')

@@ -1409,7 +1409,7 @@ const VendorDetails = () => {
               <div>
                 <h3 className="font-semibold">Service areas</h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Review the vendor pin location, then set the coverage radius (e.g. 15, 30, or 100 km).
+                  Review the vendor pin location, then set the coverage radius (1–500 km).
                   Vendor approval stays blocked until every area has an Admin-set radius.
                 </p>
               </div>

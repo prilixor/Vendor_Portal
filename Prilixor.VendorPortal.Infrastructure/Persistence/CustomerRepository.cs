@@ -1087,6 +1087,60 @@ public sealed class CustomerRepository(
         return Task.CompletedTask;
     }
 
+    public async Task<List<Guid>> GetAwaitingOrderIdsWithExpiredPendingOffersAsync(
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var expiredPending = await (
+            from offer in customerDb.CustomerOrderVendorOffers
+            join order in customerDb.CustomerRentalOrders on offer.CustomerRentalOrderId equals order.Id
+            where !offer.IsDeleted
+                  && !order.IsDeleted
+                  && offer.Status == "pending"
+                  && offer.ExpiresAt <= now
+                  && order.Status == "awaiting_vendor_acceptance"
+            select order.Id
+        ).Distinct().ToListAsync(cancellationToken);
+
+        var strandedQueued = await (
+            from order in customerDb.CustomerRentalOrders
+            where !order.IsDeleted
+                  && order.Status == "awaiting_vendor_acceptance"
+                  && customerDb.CustomerOrderVendorOffers.Any(x =>
+                      x.CustomerRentalOrderId == order.Id
+                      && !x.IsDeleted
+                      && x.Status == "queued")
+                  && !customerDb.CustomerOrderVendorOffers.Any(x =>
+                      x.CustomerRentalOrderId == order.Id
+                      && !x.IsDeleted
+                      && x.Status == "pending"
+                      && x.ExpiresAt > now)
+            select order.Id
+        ).Distinct().ToListAsync(cancellationToken);
+
+        return expiredPending.Union(strandedQueued).ToList();
+    }
+
+    public Task<List<CustomerRentalOrder>> GetSiblingCheckoutOrdersAsync(
+        Guid customerId,
+        string orderNumber,
+        Guid exceptOrderId,
+        CancellationToken cancellationToken)
+    {
+        var prefix = SequentialDispatchRules.CheckoutGroupPrefix(orderNumber);
+        if (prefix is null)
+            return Task.FromResult(new List<CustomerRentalOrder>());
+
+        var startsWith = prefix + "-";
+        return customerDb.CustomerRentalOrders
+            .Where(o =>
+                o.CustomerId == customerId
+                && !o.IsDeleted
+                && o.Id != exceptOrderId
+                && o.OrderNumber.StartsWith(startsWith))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForCustomerAsync(
         Guid customerId,
         DateOnly fromDate,

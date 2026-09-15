@@ -1,6 +1,7 @@
 using FluentValidation;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Behaviours;
+using Prilixor.VendorPortal.Application.Customers;
 using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Options;
@@ -30,6 +31,7 @@ namespace Prilixor.VendorPortal.Application
             services.AddHttpContextAccessor();
 
             services.AddScoped<IRentalPricingService, RentalPricingService>();
+            services.AddScoped<ISequentialDispatchService, SequentialDispatchService>();
 
             // Configure SMTP options
             services.Configure<Domain.Options.SmtpOptions>(configuration.GetSection("SmtpOptions"));

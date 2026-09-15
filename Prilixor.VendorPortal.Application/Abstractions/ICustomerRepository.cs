@@ -75,6 +75,8 @@ public interface ICustomerRepository
     Task<CustomerOrderVendorOffer?> GetCustomerOrderVendorOfferAsync(Guid customerOrderId, Guid vendorId, CancellationToken cancellationToken);
     Task<List<CustomerOrderVendorOffer>> GetPendingVendorOffersAsync(Guid vendorId, CancellationToken cancellationToken);
     Task UpdateCustomerOrderVendorOfferAsync(CustomerOrderVendorOffer offer, CancellationToken cancellationToken);
+    Task<List<Guid>> GetAwaitingOrderIdsWithExpiredPendingOffersAsync(DateTimeOffset now, CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrder>> GetSiblingCheckoutOrdersAsync(Guid customerId, string orderNumber, Guid exceptOrderId, CancellationToken cancellationToken);
     Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForCustomerAsync(Guid customerId, DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
     Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForVendorAsync(Guid vendorId, DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
     Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForAdminAsync(DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
