@@ -136,7 +136,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
       final m = min % 60;
       return m == 0 ? '${h}h left' : '${h}h ${m}m left';
     }
-    return '$min min left';
+    return min == 1 ? '1 min left' : '$min mins left';
   }
 
   String _baseOrderNumber(String num) {

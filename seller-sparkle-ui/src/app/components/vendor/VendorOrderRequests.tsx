@@ -76,7 +76,7 @@ function formatExpiresIn(iso: string, now: number): string {
     const m = min % 60;
     return m === 0 ? `${h}h left` : `${h}h ${m}m left`;
   }
-  return `${min} min left`;
+  return min === 1 ? "1 min left" : `${min} mins left`;
 }
 
 function matchesSearch(offer: VendorDispatchOfferApiDto, query: string): boolean {
@@ -288,8 +288,8 @@ const VendorOrderRequests = () => {
           </div>
         </div>
 
-        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative w-full lg:max-w-2xl">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
             <Input
               value={searchQuery}
@@ -298,17 +298,23 @@ const VendorOrderRequests = () => {
               className="h-11 rounded-xl border-border/60 bg-background pl-10 text-sm"
             />
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div
+            className="inline-flex h-11 w-full shrink-0 items-stretch rounded-xl border border-border/60 bg-muted/40 p-1 sm:w-auto"
+            role="tablist"
+            aria-label="Filter by order type"
+          >
             {(["all", "rent", "buy"] as const).map((filter) => (
               <button
                 key={filter}
                 type="button"
+                role="tab"
+                aria-selected={typeFilter === filter}
                 onClick={() => setTypeFilter(filter)}
                 className={cn(
-                  "rounded-full border px-4 py-2 text-sm font-semibold capitalize transition-colors",
+                  "min-w-0 flex-1 whitespace-nowrap rounded-lg px-3 text-sm font-semibold capitalize transition-colors sm:flex-none sm:px-4",
                   typeFilter === filter
-                    ? "border-primary/60 bg-primary/15 text-foreground shadow-sm"
-                    : "border-border/60 bg-background text-muted-foreground hover:bg-accent/40",
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-background/50 hover:text-foreground",
                 )}
               >
                 {filter} ({typeCounts[filter]})
