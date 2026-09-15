@@ -26,6 +26,7 @@ import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { retryOriginalOnImageError } from "@/app/helpers/utils";
 import { AdminCommentHint } from "@/app/components/shared/AdminCommentHint";
+import { sanitizeAdminComment, buildVerificationSupportMessage } from "@/app/helpers/adminComment";
 import { OnboardingRejectedHelpBanner } from "@/app/components/shared/OnboardingRejectedHelpBanner";
 import { RequiredDocumentsChecklist } from "@/app/components/shared/RequiredDocumentsChecklist";
 import { DocumentUploadPanel } from "@/app/components/shared/DocumentUploadPanel";

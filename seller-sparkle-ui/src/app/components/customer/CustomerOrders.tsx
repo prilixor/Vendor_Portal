@@ -9,7 +9,7 @@ import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
-import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatCustomerOrderStatusTitle, formatCustomerOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
 import { CancelOrderConfirm } from "@/app/components/legal/CancelOrderConfirm";
@@ -31,7 +31,6 @@ const STATUS_FILTERS = [
   "In transit",
   "Active",
   "Returned",
-  "Dispatch failed",
   "Cancelled",
   "Bought Out",
 ] as const;
@@ -110,10 +109,7 @@ function matchesStatusFilter(status: string, filter: StatusFilter): boolean {
     return s.includes("transit");
   }
   if (filter === "Cancelled") {
-    return s === "cancelled" || s === "canceled";
-  }
-  if (filter === "Dispatch failed") {
-    return s === "dispatch failed";
+    return s === "cancelled" || s === "canceled" || s === "dispatch failed";
   }
   if (filter === "Bought Out") {
     return s === "bought out";
@@ -293,9 +289,8 @@ const CustomerOrders = () => {
       </FilterPanel>
 
       <p className="text-xs text-muted-foreground">
-        Status note: <span className="font-medium">Cancelled</span> means customer cancelled the request.
-        {" "}
-        <span className="font-medium">Dispatch failed</span> means no replacement supplier was available.
+        Status note: <span className="font-medium">Cancelled</span> includes requests you stopped
+        and orders no supplier accepted.
       </p>
 
       <PageContentGate loading={isLoading}>
@@ -396,7 +391,7 @@ const CustomerOrders = () => {
                                 className={cn("shrink-0", orderStatusBadgeSizeClass, "px-1.5 sm:px-2", orderStatusBadgeClass(o.status))}
                                 variant="outline"
                               >
-                                {formatOrderStatusLabel(o.status)}
+                                {formatCustomerOrderStatusLabel(o.status)}
                               </Badge>
                             </div>
                             <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-3">

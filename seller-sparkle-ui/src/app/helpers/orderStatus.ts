@@ -12,7 +12,20 @@ export function formatOrderStatusTitle(status: string): string {
  * only party a customer deals with. Use this for any status shown to customers.
  */
 export function formatCustomerOrderStatusTitle(status: string): string {
+  const normalized = normalizeOrderStatus(status);
+  if (normalized === "dispatch failed") {
+    return "Cancelled";
+  }
   return formatOrderStatusTitle(status).replace(/\bvendors?\b/gi, "BlinksMed");
+}
+
+/** Compact customer badge — exhausted dispatch looks cancelled, not “Failed”. */
+export function formatCustomerOrderStatusLabel(status: string): string {
+  const normalized = normalizeOrderStatus(status);
+  if (normalized === "dispatch failed") {
+    return "Cancelled";
+  }
+  return formatOrderStatusLabel(status);
 }
 
 /** Compact list/detail badge label so long statuses stay on one line. */

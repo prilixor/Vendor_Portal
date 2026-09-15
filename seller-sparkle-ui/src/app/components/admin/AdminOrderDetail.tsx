@@ -582,14 +582,14 @@ const AdminOrderDetail = () => {
                           </AlertDialogTrigger>
                         </TooltipTrigger>
                         <TooltipContent className="max-w-xs text-center" side="top">
-                          Broadcasts a new dispatch offer to eligible nearby vendors.
+                          Broadcasts a new dispatch offer to the next nearest eligible vendor.
                         </TooltipContent>
                       </Tooltip>
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>Reassign Order?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            The system will broadcast a new offer to eligible vendors in the area.
+                            The system will send a new offer to the nearest eligible vendor, then the next if they do not accept.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

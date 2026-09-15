@@ -794,15 +794,17 @@ internal static class CustomerOrderPricingRules
         decimal customerLng,
         VendorProductListingAggregate aggregate,
         List<VendorServiceArea> vendorServiceAreas,
-        CustomerPricingOptions options)
+        CustomerPricingOptions options,
+        bool enforceServiceRadius = true)
     {
+        var enforce = enforceServiceRadius && options.EnforceVendorServiceRadius;
         var activeAreas = vendorServiceAreas
             .Where(a => a.IsActive && !a.IsDeleted)
             .ToList();
 
         if (activeAreas.Count > 0)
         {
-            var withinAreaDistances = activeAreas
+            var areaDistances = activeAreas
                 .Select(area =>
                 {
                     var distanceKm = CalculateDistanceKm(
@@ -812,7 +814,10 @@ internal static class CustomerOrderPricingRules
                         area.CenterLongitude);
                     return new { distanceKm, area.ServiceRadiusKm };
                 })
-                .Where(x => !options.EnforceVendorServiceRadius || x.distanceKm <= x.ServiceRadiusKm)
+                .ToList();
+
+            var withinAreaDistances = areaDistances
+                .Where(x => !enforce || x.distanceKm <= x.ServiceRadiusKm)
                 .Select(x => x.distanceKm)
                 .OrderBy(x => x)
                 .ToList();
@@ -822,12 +827,14 @@ internal static class CustomerOrderPricingRules
                 return DeliveryDistanceResult.Success(withinAreaDistances[0]);
             }
 
-            if (options.EnforceVendorServiceRadius)
+            if (enforce)
             {
                 return DeliveryDistanceResult.Fail(
                     "customers.out_of_service_area",
                     "This delivery address is outside the vendor's service area. Please choose another address, or remove items that cannot be delivered there.");
             }
+
+            return DeliveryDistanceResult.Success(areaDistances.Min(x => x.distanceKm));
         }
 
         if (aggregate.VendorLatitude.HasValue && aggregate.VendorLongitude.HasValue)
@@ -838,7 +845,7 @@ internal static class CustomerOrderPricingRules
                 aggregate.VendorLatitude.Value,
                 aggregate.VendorLongitude.Value);
 
-            if (options.EnforceVendorServiceRadius && distanceKm > options.DefaultServiceRadiusKm)
+            if (enforce && distanceKm > options.DefaultServiceRadiusKm)
             {
                 return DeliveryDistanceResult.Fail(
                     "customers.out_of_service_area",
@@ -1050,7 +1057,8 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
     IOptions<CustomerPricingOptions> pricingOptions,
-    ILegalAcceptanceRecorder legalAcceptances)
+    ILegalAcceptanceRecorder legalAcceptances,
+    ISequentialDispatchService dispatch)
     : ICommandHandler<PlaceCustomerOrdersCommand, PlaceCustomerOrdersResultDto>
 {
     public async Task<Result<PlaceCustomerOrdersResultDto>> Handle(PlaceCustomerOrdersCommand request, CancellationToken cancellationToken)
@@ -1314,7 +1322,8 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                     address.Longitude!.Value,
                     agg,
                     vendorAreas,
-                    options);
+                    options,
+                    enforceServiceRadius: request.PlacedByAdminId is null);
                 if (!distanceResult.IsSuccess)
                 {
                     failed.Add(new FailedCustomerOrderLineDto(
@@ -1419,78 +1428,25 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
             await customers.AddCustomerRentalOrderAsync(order, cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
 
-            var candidateListings = await customers.GetCandidateListingsByProductIdAsync(agg.ProductId, cancellationToken);
-            var eligibleCandidates = new List<(VendorProductListingAggregate Candidate, decimal DistanceKm)>();
-            foreach (var candidate in candidateListings.Where(c => c.VendorId != Guid.Empty))
+            var placementTitle = trackedListing.ListingTitle;
+            if (order.ProductVariantId.HasValue && agg.Variants != null)
             {
-                var candidateListing = await vendors.GetVendorProductListingByIdAsync(candidate.VendorId, candidate.ListingId, cancellationToken);
-                if (candidateListing is null)
-                    continue;
-
-                if (line.ProductVariantId.HasValue)
+                var variant = agg.Variants.FirstOrDefault(v => string.Equals(v.Id, order.ProductVariantId.Value.ToString(), StringComparison.OrdinalIgnoreCase));
+                if (variant != null)
                 {
-                    var variantInv = await vendors.GetVariantInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
-                    var specificVariant = variantInv.FirstOrDefault(vi => vi.ProductVariantId == line.ProductVariantId.Value);
-                    var varAvailable = specificVariant?.AvailableQuantity ?? 0;
-                    if (varAvailable < line.Quantity)
-                        continue;
+                    placementTitle += $" ({Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(variant.SizeValue, variant.SizeUnit)})";
                 }
-                else
-                {
-                    var candidateInventory = await vendors.GetVendorInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
-                    var candidateAvailable = candidateInventory?.AvailableQuantity ?? candidateListing.AvailableQuantity;
-                    if (candidateAvailable < line.Quantity)
-                        continue;
-                }
-
-                decimal distanceKm = 0m;
-                if (CustomerOrderPricingRules.RequiresAddress(deliveryOption))
-                {
-                    if (!vendorAreasByVendorId.TryGetValue(candidate.VendorId, out var vendorAreas))
-                    {
-                        vendorAreas = await vendors.GetVendorServiceAreasAsync(candidate.VendorId, cancellationToken);
-                        vendorAreasByVendorId[candidate.VendorId] = vendorAreas;
-                    }
-
-                    var candidateDistance = CustomerOrderPricingRules.ResolveDeliveryDistance(
-                        address!.Latitude!.Value,
-                        address.Longitude!.Value,
-                        candidate,
-                        vendorAreas,
-                        options);
-                    if (!candidateDistance.IsSuccess)
-                        continue;
-
-                    distanceKm = candidateDistance.DistanceKm;
-                }
-
-                eligibleCandidates.Add((candidate, distanceKm));
             }
 
-            var ranked = eligibleCandidates
-                .OrderBy(x => x.DistanceKm)
-                .ThenByDescending(x => x.Candidate.InventoryAvailable)
-                .Take(Math.Max(1, options.MaxDispatchVendorsPerLine))
-                .ToList();
+            var started = await dispatch.StartWaveAsync(
+                order,
+                agg.ProductId,
+                excludeVendorIds: [],
+                listingTitle: placementTitle,
+                cancellationToken);
+            await dispatch.PersistAsync(cancellationToken);
 
-            var now = DateTimeOffset.UtcNow;
-            for (var i = 0; i < ranked.Count; i++)
-            {
-                var candidate = ranked[i].Candidate;
-                var offer = new CustomerOrderVendorOffer
-                {
-                    CustomerRentalOrderId = order.Id,
-                    VendorId = candidate.VendorId,
-                    VendorProductListingId = candidate.ListingId,
-                    OfferRank = i + 1,
-                    Status = "pending",
-                    ExpiresAt = now.AddMinutes((double)Math.Max(1m, options.DispatchOfferTtlMinutes)),
-                };
-                await customers.AddCustomerOrderVendorOfferAsync(offer, cancellationToken);
-            }
-            await customers.SaveChangesAsync(cancellationToken);
-
-            if (ranked.Count == 0)
+            if (!started)
             {
                 order.Status = "dispatch_failed";
                 await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
@@ -1519,34 +1475,8 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
 
-            foreach (var r in ranked)
-            {
-                var candidate = r.Candidate;
-                await vendors.AddVendorNotificationAsync(new VendorNotification
-                {
-                    VendorId = candidate.VendorId,
-                    NotificationType = "dispatch_offer",
-                    Title = $"New order request {order.OrderNumber}",
-                    Message = $"You have a new {orderType} request for \"{trackedListing.ListingTitle}\".",
-                    Channel = "in_app",
-                    Status = "sent",
-                    SentAt = DateTimeOffset.UtcNow
-                }, cancellationToken);
-            }
-
-            await vendors.SaveChangesAsync(cancellationToken);
-
             var vendorDisplay = string.IsNullOrWhiteSpace(agg.VendorBusinessName) ? "Vendor" : agg.VendorBusinessName!;
             var primaryImg = agg.ImageUrls.Count > 0 ? agg.ImageUrls[0] : null;
-            var placementTitle = trackedListing.ListingTitle;
-            if (order.ProductVariantId.HasValue && agg.Variants != null)
-            {
-                var variant = agg.Variants.FirstOrDefault(v => string.Equals(v.Id, order.ProductVariantId.Value.ToString(), StringComparison.OrdinalIgnoreCase));
-                if (variant != null)
-                {
-                    placementTitle += $" ({Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(variant.SizeValue, variant.SizeUnit)})";
-                }
-            }
             placed.Add(new CustomerOrderDto(
                 order.Id,
                 order.OrderNumber,
@@ -1642,7 +1572,9 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
 
 public sealed record GetCustomerOrdersQuery(Guid CustomerId) : IQuery<List<CustomerOrderDto>>;
 
-internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customers)
+internal sealed class GetCustomerOrdersQueryHandler(
+    ICustomerRepository customers,
+    ISequentialDispatchService dispatch)
     : IQueryHandler<GetCustomerOrdersQuery, List<CustomerOrderDto>>
 {
     public async Task<Result<List<CustomerOrderDto>>> Handle(GetCustomerOrdersQuery request, CancellationToken cancellationToken)
@@ -1659,13 +1591,13 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
             var changed = false;
             foreach (var row in rows)
             {
-                changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(
-                    customers, row.Order.Id, now, DispatchStateReconciler.SideEffectToken);
+                changed |= await dispatch.ReconcileAwaitingOrderAsync(
+                    row.Order.Id, now, DispatchStateReconciler.SideEffectToken);
             }
 
             if (changed)
             {
-                await customers.SaveChangesAsync(DispatchStateReconciler.SideEffectToken);
+                await dispatch.PersistAsync(DispatchStateReconciler.SideEffectToken);
                 if (!cancellationToken.IsCancellationRequested)
                 {
                     rows = await customers.GetCustomerOrdersAsync(request.CustomerId, cancellationToken);
@@ -1733,7 +1665,8 @@ public sealed record GetCustomerOrderDetailQuery(Guid CustomerId, Guid OrderId) 
 
 internal sealed class GetCustomerOrderDetailQueryHandler(
     ICustomerRepository customers,
-    IVendorFileUrlResolver fileUrlResolver)
+    IVendorFileUrlResolver fileUrlResolver,
+    ISequentialDispatchService dispatch)
     : IQueryHandler<GetCustomerOrderDetailQuery, CustomerOrderDto>
 {
     public async Task<Result<CustomerOrderDto>> Handle(GetCustomerOrderDetailQuery request, CancellationToken cancellationToken)
@@ -1741,10 +1674,10 @@ internal sealed class GetCustomerOrderDetailQueryHandler(
         // See GetCustomerOrdersQueryHandler — reconcile side-effects must not use RequestAborted.
         if (!cancellationToken.IsCancellationRequested)
         {
-            var changed = await DispatchStateReconciler.ReconcileAwaitingOrderAsync(
-                customers, request.OrderId, DateTimeOffset.UtcNow, DispatchStateReconciler.SideEffectToken);
+            var changed = await dispatch.ReconcileAwaitingOrderAsync(
+                request.OrderId, DateTimeOffset.UtcNow, DispatchStateReconciler.SideEffectToken);
             if (changed)
-                await customers.SaveChangesAsync(DispatchStateReconciler.SideEffectToken);
+                await dispatch.PersistAsync(DispatchStateReconciler.SideEffectToken);
         }
 
         cancellationToken.ThrowIfCancellationRequested();

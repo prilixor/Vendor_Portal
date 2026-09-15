@@ -1447,11 +1447,8 @@ _TimelineProgress _timelineProgress(String status, String orderType) {
   final compact = raw.replaceAll(RegExp(r'\s+'), '_');
   final isBuy = orderType.toLowerCase() == 'buy';
 
-  if (compact == 'cancelled' || compact == 'canceled') {
+  if (compact == 'cancelled' || compact == 'canceled' || compact == 'dispatch_failed' || raw.contains('dispatch failed')) {
     return const _TimelineProgress(cancelled: true, completedThrough: -1, currentIndex: null);
-  }
-  if (compact == 'dispatch_failed' || raw.contains('dispatch failed')) {
-    return const _TimelineProgress(cancelled: false, completedThrough: 0, currentIndex: null);
   }
   if (compact == 'pending') {
     return const _TimelineProgress(cancelled: false, completedThrough: 0, currentIndex: 1);

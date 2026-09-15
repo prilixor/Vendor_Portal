@@ -34,7 +34,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
     'Active',
     'Returned',
     'Cancelled',
-    'Dispatch failed',
     'Bought Out',
   ];
 
@@ -80,8 +79,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
       return s == 'pending' || s == 'awaiting vendor acceptance';
     }
     if (filter == 'In transit') return s.contains('transit');
-    if (filter == 'Cancelled') return s == 'cancelled' || s == 'canceled';
-    if (filter == 'Dispatch failed') return s == 'dispatch failed';
+    if (filter == 'Cancelled') {
+      return s == 'cancelled' || s == 'canceled' || s == 'dispatch failed';
+    }
     if (filter == 'Bought Out') return s == 'bought out';
     return s == filter.toLowerCase();
   }

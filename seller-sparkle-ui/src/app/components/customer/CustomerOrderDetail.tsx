@@ -23,7 +23,7 @@ import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea
 import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { toast } from "sonner";
 import { isSameChatDay } from "@/app/helpers/chatDayLabel";
-import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatCustomerOrderStatusTitle, formatCustomerOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
@@ -134,11 +134,8 @@ function getTimelineProgress(status: string, orderType?: string): {
   const compact = raw.replace(/\s+/g, "_");
   const isBuy = orderType?.toLowerCase() === "buy";
 
-  if (compact === "cancelled" || compact === "canceled") {
+  if (compact === "cancelled" || compact === "canceled" || compact === "dispatch_failed" || raw.includes("dispatch failed")) {
     return { cancelled: true, completedThrough: -1, currentIndex: null };
-  }
-  if (compact === "dispatch_failed" || raw.includes("dispatch failed")) {
-    return { cancelled: false, completedThrough: 0, currentIndex: null };
   }
   if (compact === "pending") {
     return { cancelled: false, completedThrough: 0, currentIndex: 1 };
@@ -790,7 +787,7 @@ const CustomerOrderDetail = () => {
                           orderStatusBadgeClass(item.status),
                         )}
                       >
-                        {formatOrderStatusLabel(item.status)}
+                        {formatCustomerOrderStatusLabel(item.status)}
                       </span>
                       {photoLabel ? (
                         <span className="text-[11px] text-muted-foreground">· {photoLabel}</span>
