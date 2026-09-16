@@ -7,6 +7,7 @@ public class CustomerOrderImage : AuditableEntity<Guid>, ISoftDelete
 {
     public Guid CustomerRentalOrderId { get; set; }
     public Guid? RequestId { get; set; }
+    public Guid? OptionId { get; set; }
     public Guid VendorId { get; set; }
     /// <summary>Durable storage key (S3 relative key or local uploads/… path). Never a short-lived presigned URL.</summary>
     public string StoredReference { get; set; } = string.Empty;
@@ -16,6 +17,7 @@ public class CustomerOrderImage : AuditableEntity<Guid>, ISoftDelete
 
     public CustomerRentalOrder Order { get; set; } = null!;
     public CustomerOrderImageRequest? Request { get; set; }
+    public CustomerOrderImageRequestOption? Option { get; set; }
 
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

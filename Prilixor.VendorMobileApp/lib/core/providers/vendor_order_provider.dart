@@ -343,6 +343,7 @@ class VendorOrderProvider extends ChangeNotifier {
   Future<bool> uploadOrderImage({
     required String vendorId,
     required String orderId,
+    required String optionId,
     required PlatformFile file,
   }) async {
     _error = null;
@@ -354,9 +355,12 @@ class VendorOrderProvider extends ChangeNotifier {
         _error = 'Could not read the selected image.';
         return false;
       }
-      final formData = FormData.fromMap({'file': multipart});
+      final formData = FormData.fromMap({
+        'file': multipart,
+        'optionId': optionId,
+      });
       await _api.dio.post(
-        '/vendors/$vendorId/orders/$orderId/images',
+        '/vendors/$vendorId/orders/$orderId/images?optionId=${Uri.encodeComponent(optionId)}',
         data: formData,
         options: Options(
           sendTimeout: const Duration(seconds: 60),
@@ -374,6 +378,37 @@ class VendorOrderProvider extends ChangeNotifier {
     } finally {
       _actionLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<bool> updateOrderImageOptionDescription({
+    required String vendorId,
+    required String orderId,
+    required String optionId,
+    required String description,
+  }) async {
+    _error = null;
+    try {
+      final data = await _api.dio.patch(
+        '/vendors/$vendorId/orders/$orderId/image-options/$optionId',
+        data: {'description': description},
+      );
+      if (data.data is Map) {
+        _imageRequest =
+            OrderImageRequest.fromJson(Map<String, dynamic>.from(data.data as Map));
+      } else {
+        await fetchOrderImageRequest(vendorId, orderId, silent: true);
+      }
+      notifyListeners();
+      return true;
+    } on DioException catch (e) {
+      _error = _dioMessage(e, 'Failed to save description.');
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _error = 'Failed to save description.';
+      notifyListeners();
+      return false;
     }
   }
 

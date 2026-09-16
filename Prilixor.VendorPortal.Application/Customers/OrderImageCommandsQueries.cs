@@ -1,8 +1,10 @@
 using FluentValidation;
+using Microsoft.Extensions.Options;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.Customers;
+using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Domain.Vendors;
 
 namespace Prilixor.VendorPortal.Application.Customers;
@@ -15,7 +17,15 @@ public sealed record CustomerOrderImageDto(
     string? OriginalFileName,
     string? ContentType,
     int SortOrder,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    Guid? OptionId = null);
+
+public sealed record CustomerOrderImageOptionDto(
+    Guid Id,
+    int OptionNumber,
+    string Label,
+    string? Description,
+    List<CustomerOrderImageDto> Images);
 
 public sealed record CustomerOrderImageRequestDto(
     Guid Id,
@@ -24,7 +34,11 @@ public sealed record CustomerOrderImageRequestDto(
     string Status,
     string Message,
     DateTimeOffset RequestedAt,
-    List<CustomerOrderImageDto> Images);
+    List<CustomerOrderImageDto> Images,
+    List<CustomerOrderImageOptionDto>? Options = null,
+    int OptionCount = 3,
+    int MaxImagesPerOption = 1,
+    int MaxDescriptionLength = 500);
 
 public sealed record GetCustomerOrderImageRequestQuery(Guid CustomerId, Guid OrderId)
     : IQuery<CustomerOrderImageRequestDto?>;
@@ -38,12 +52,19 @@ public sealed record GetVendorOrderImageRequestQuery(string VendorId, Guid Order
 public sealed record UploadVendorOrderImageCommand(
     string VendorId,
     Guid OrderId,
+    Guid OptionId,
     string OriginalFileName,
     string? ContentType,
     byte[] FileBytes,
     Uri RequestPublicBaseUri) : ICommand<CustomerOrderImageDto>;
 
 public sealed record DeleteVendorOrderImageCommand(string VendorId, Guid OrderId, Guid ImageId) : ICommand;
+
+public sealed record UpdateVendorOrderImageOptionCommand(
+    string VendorId,
+    Guid OrderId,
+    Guid OptionId,
+    string? Description) : ICommand<CustomerOrderImageRequestDto>;
 
 public sealed class CreateCustomerOrderImageRequestCommandValidator : AbstractValidator<CreateCustomerOrderImageRequestCommand>
 {
@@ -60,6 +81,7 @@ public sealed class UploadVendorOrderImageCommandValidator : AbstractValidator<U
     {
         RuleFor(x => x.VendorId).NotEmpty();
         RuleFor(x => x.OrderId).NotEmpty();
+        RuleFor(x => x.OptionId).NotEmpty();
         RuleFor(x => x.OriginalFileName).NotEmpty().MaximumLength(255);
         RuleFor(x => x.FileBytes).NotEmpty();
         RuleFor(x => x.RequestPublicBaseUri).NotNull();
@@ -68,7 +90,6 @@ public sealed class UploadVendorOrderImageCommandValidator : AbstractValidator<U
 
 internal static class CustomerOrderImageRules
 {
-    public const int MaxImagesPerRequest = 5;
     public const long MaxBytes = 5 * 1024 * 1024;
 
     private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -92,6 +113,15 @@ internal static class CustomerOrderImageRules
     public static bool CanUseImageRequestForStatus(string status) =>
         ActiveRequestStatuses.Contains(status.Trim());
 
+    public static string OptionLabel(int optionNumber) => $"Option {optionNumber}";
+
+    public static string? NormalizeDescription(string? description, int maxLength)
+    {
+        var trimmed = description?.Trim();
+        if (string.IsNullOrEmpty(trimmed)) return null;
+        return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
+    }
+
     public static CustomerOrderImageDto ToDto(CustomerOrderImage image, IVendorFileUrlResolver fileUrlResolver) =>
         new(
             image.Id,
@@ -101,20 +131,82 @@ internal static class CustomerOrderImageRules
             image.OriginalFileName,
             image.ContentType,
             image.SortOrder,
-            new DateTimeOffset(DateTime.SpecifyKind(image.CreatedOnUtc, DateTimeKind.Utc)));
+            new DateTimeOffset(DateTime.SpecifyKind(image.CreatedOnUtc, DateTimeKind.Utc)),
+            image.OptionId);
+
+    public static async Task<List<CustomerOrderImageRequestOption>> EnsureOptionsAsync(
+        ICustomerRepository customers,
+        CustomerOrderImageRequest request,
+        IReadOnlyList<CustomerOrderImage> images,
+        OrderImageRequestOptions settings,
+        CancellationToken cancellationToken)
+    {
+        var options = await customers.GetCustomerOrderImageRequestOptionsAsync(request.Id, cancellationToken);
+        var needed = settings.ResolvedOptionCount;
+        var changed = false;
+
+        for (var n = 1; n <= needed; n++)
+        {
+            if (options.Any(o => o.OptionNumber == n)) continue;
+            var slot = new CustomerOrderImageRequestOption
+            {
+                Id = Guid.NewGuid(),
+                RequestId = request.Id,
+                OptionNumber = n,
+            };
+            await customers.AddCustomerOrderImageRequestOptionAsync(slot, cancellationToken);
+            options.Add(slot);
+            changed = true;
+        }
+
+        var first = options.OrderBy(o => o.OptionNumber).FirstOrDefault();
+        if (first is not null)
+        {
+            foreach (var image in images.Where(i => i.OptionId is null || i.OptionId == Guid.Empty))
+            {
+                image.OptionId = first.Id;
+                await customers.UpdateCustomerOrderImageAsync(image, cancellationToken);
+                changed = true;
+            }
+        }
+
+        if (changed)
+            await customers.SaveChangesAsync(cancellationToken);
+
+        return options.OrderBy(o => o.OptionNumber).ToList();
+    }
 
     public static CustomerOrderImageRequestDto ToRequestDto(
         CustomerOrderImageRequest request,
+        IReadOnlyList<CustomerOrderImageRequestOption> options,
         IReadOnlyList<CustomerOrderImage> images,
-        IVendorFileUrlResolver fileUrlResolver) =>
-        new(
+        IVendorFileUrlResolver fileUrlResolver,
+        OrderImageRequestOptions settings)
+    {
+        var imageDtos = images.Select(i => ToDto(i, fileUrlResolver)).ToList();
+        var optionDtos = options
+            .OrderBy(o => o.OptionNumber)
+            .Select(o => new CustomerOrderImageOptionDto(
+                o.Id,
+                o.OptionNumber,
+                OptionLabel(o.OptionNumber),
+                o.Description,
+                imageDtos.Where(i => i.OptionId == o.Id).OrderBy(i => i.SortOrder).ToList()))
+            .ToList();
+
+        return new CustomerOrderImageRequestDto(
             request.Id,
             request.CustomerRentalOrderId,
             request.VendorId,
             request.Status,
             request.Message,
             request.RequestedAt,
-            images.Select(i => ToDto(i, fileUrlResolver)).ToList());
+            imageDtos,
+            optionDtos,
+            settings.ResolvedOptionCount,
+            OrderImageRequestOptions.ImagesPerOption,
+            settings.ResolvedMaxDescriptionLength);
+    }
 }
 
 /// <summary>
@@ -163,6 +255,16 @@ public static class CustomerOrderImageLifecycle
 
         if (openRequest is not null)
         {
+            var slots = await customers.GetCustomerOrderImageRequestOptionsAsync(openRequest.Id, cancellationToken);
+            foreach (var slot in slots)
+            {
+                slot.IsDeleted = true;
+                slot.DeletedAt = now;
+                slot.DeletedBy = deletedBy;
+                slot.ModifiedOnUtc = now.UtcDateTime;
+                await customers.UpdateCustomerOrderImageRequestOptionAsync(slot, cancellationToken);
+            }
+
             openRequest.Status = CustomerOrderImageRequest.StatusClosed;
             openRequest.ClosedAt = now;
             openRequest.ClosedReason = reason;
@@ -177,7 +279,8 @@ public static class CustomerOrderImageLifecycle
 
 internal sealed class GetCustomerOrderImageRequestQueryHandler(
     ICustomerRepository customers,
-    IVendorFileUrlResolver fileUrlResolver)
+    IVendorFileUrlResolver fileUrlResolver,
+    IOptions<OrderImageRequestOptions> imageRequestOptions)
     : IQueryHandler<GetCustomerOrderImageRequestQuery, CustomerOrderImageRequestDto?>
 {
     public async Task<Result<CustomerOrderImageRequestDto?>> Handle(
@@ -193,15 +296,18 @@ internal sealed class GetCustomerOrderImageRequestQueryHandler(
             return Result.Success<CustomerOrderImageRequestDto?>(null);
 
         var images = await customers.GetCustomerOrderImagesByRequestIdAsync(open.Id, cancellationToken);
+        var settings = imageRequestOptions.Value;
+        var options = await CustomerOrderImageRules.EnsureOptionsAsync(customers, open, images, settings, cancellationToken);
         return Result.Success<CustomerOrderImageRequestDto?>(
-            CustomerOrderImageRules.ToRequestDto(open, images, fileUrlResolver));
+            CustomerOrderImageRules.ToRequestDto(open, options, images, fileUrlResolver, settings));
     }
 }
 
 internal sealed class CreateCustomerOrderImageRequestCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
-    IVendorFileUrlResolver fileUrlResolver)
+    IVendorFileUrlResolver fileUrlResolver,
+    IOptions<OrderImageRequestOptions> imageRequestOptions)
     : ICommandHandler<CreateCustomerOrderImageRequestCommand, CustomerOrderImageRequestDto>
 {
     public async Task<Result<CustomerOrderImageRequestDto>> Handle(
@@ -220,11 +326,13 @@ internal sealed class CreateCustomerOrderImageRequestCommandHandler(
                 ErrorCategory.Validation));
         }
 
+        var settings = imageRequestOptions.Value;
         var existing = await customers.GetOpenCustomerOrderImageRequestAsync(request.OrderId, cancellationToken);
         if (existing is not null)
         {
             var existingImages = await customers.GetCustomerOrderImagesByRequestIdAsync(existing.Id, cancellationToken);
-            return Result.Success(CustomerOrderImageRules.ToRequestDto(existing, existingImages, fileUrlResolver));
+            var existingOptions = await CustomerOrderImageRules.EnsureOptionsAsync(customers, existing, existingImages, settings, cancellationToken);
+            return Result.Success(CustomerOrderImageRules.ToRequestDto(existing, existingOptions, existingImages, fileUrlResolver, settings));
         }
 
         var listing = await customers.GetListingForCustomerAsync(row.Order.VendorProductListingId, cancellationToken);
@@ -259,13 +367,15 @@ internal sealed class CreateCustomerOrderImageRequestCommandHandler(
         await customers.SaveChangesAsync(cancellationToken);
         await vendors.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(CustomerOrderImageRules.ToRequestDto(entity, [], fileUrlResolver));
+        var options = await CustomerOrderImageRules.EnsureOptionsAsync(customers, entity, [], settings, cancellationToken);
+        return Result.Success(CustomerOrderImageRules.ToRequestDto(entity, options, [], fileUrlResolver, settings));
     }
 }
 
 internal sealed class GetVendorOrderImageRequestQueryHandler(
     ICustomerRepository customers,
-    IVendorFileUrlResolver fileUrlResolver)
+    IVendorFileUrlResolver fileUrlResolver,
+    IOptions<OrderImageRequestOptions> imageRequestOptions)
     : IQueryHandler<GetVendorOrderImageRequestQuery, CustomerOrderImageRequestDto?>
 {
     public async Task<Result<CustomerOrderImageRequestDto?>> Handle(
@@ -284,15 +394,18 @@ internal sealed class GetVendorOrderImageRequestQueryHandler(
             return Result.Success<CustomerOrderImageRequestDto?>(null);
 
         var images = await customers.GetCustomerOrderImagesByRequestIdAsync(open.Id, cancellationToken);
+        var settings = imageRequestOptions.Value;
+        var options = await CustomerOrderImageRules.EnsureOptionsAsync(customers, open, images, settings, cancellationToken);
         return Result.Success<CustomerOrderImageRequestDto?>(
-            CustomerOrderImageRules.ToRequestDto(open, images, fileUrlResolver));
+            CustomerOrderImageRules.ToRequestDto(open, options, images, fileUrlResolver, settings));
     }
 }
 
 internal sealed class UploadVendorOrderImageCommandHandler(
     ICustomerRepository customers,
     IVendorUploadStorageService uploadStorage,
-    IVendorFileUrlResolver fileUrlResolver)
+    IVendorFileUrlResolver fileUrlResolver,
+    IOptions<OrderImageRequestOptions> imageRequestOptions)
     : ICommandHandler<UploadVendorOrderImageCommand, CustomerOrderImageDto>
 {
     public async Task<Result<CustomerOrderImageDto>> Handle(
@@ -339,12 +452,24 @@ internal sealed class UploadVendorOrderImageCommandHandler(
                 ErrorCategory.Validation));
         }
 
-        var count = await customers.CountCustomerOrderImagesByRequestIdAsync(open.Id, cancellationToken);
-        if (count >= CustomerOrderImageRules.MaxImagesPerRequest)
+        var settings = imageRequestOptions.Value;
+        var images = await customers.GetCustomerOrderImagesByRequestIdAsync(open.Id, cancellationToken);
+        var slots = await CustomerOrderImageRules.EnsureOptionsAsync(customers, open, images, settings, cancellationToken);
+        var slot = slots.FirstOrDefault(o => o.Id == request.OptionId);
+        if (slot is null)
+        {
+            return Result.Failure<CustomerOrderImageDto>(new Error(
+                "customers.order_images.option_not_found",
+                "That photo option is not available on this request.",
+                ErrorCategory.Validation));
+        }
+
+        var count = await customers.CountCustomerOrderImagesByOptionIdAsync(slot.Id, cancellationToken);
+        if (count >= OrderImageRequestOptions.ImagesPerOption)
         {
             return Result.Failure<CustomerOrderImageDto>(new Error(
                 "customers.order_images.max",
-                $"You can upload at most {CustomerOrderImageRules.MaxImagesPerRequest} images for this request.",
+                $"{CustomerOrderImageRules.OptionLabel(slot.OptionNumber)} already has a photo. Remove it to upload a different one.",
                 ErrorCategory.Validation));
         }
 
@@ -363,6 +488,7 @@ internal sealed class UploadVendorOrderImageCommandHandler(
             Id = Guid.NewGuid(),
             CustomerRentalOrderId = request.OrderId,
             RequestId = open.Id,
+            OptionId = slot.Id,
             VendorId = vendorId,
             StoredReference = persist.StoredReference,
             OriginalFileName = Path.GetFileName(request.OriginalFileName),
@@ -416,5 +542,62 @@ internal sealed class DeleteVendorOrderImageCommandHandler(
         await customers.UpdateCustomerOrderImageAsync(image, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
         return Result.Success();
+    }
+}
+
+internal sealed class UpdateVendorOrderImageOptionCommandHandler(
+    ICustomerRepository customers,
+    IVendorFileUrlResolver fileUrlResolver,
+    IOptions<OrderImageRequestOptions> imageRequestOptions)
+    : ICommandHandler<UpdateVendorOrderImageOptionCommand, CustomerOrderImageRequestDto>
+{
+    public async Task<Result<CustomerOrderImageRequestDto>> Handle(
+        UpdateVendorOrderImageOptionCommand request,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(request.VendorId, out var vendorId))
+            return Result.Failure<CustomerOrderImageRequestDto>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
+
+        var row = await customers.GetVendorOrderAsync(vendorId, request.OrderId, cancellationToken);
+        if (row is null)
+            return Result.Failure<CustomerOrderImageRequestDto>(new Error("vendors.order_not_found", "Order not found for vendor.", ErrorCategory.NotFound));
+
+        if (!CustomerOrderImageRules.CanUseImageRequestForStatus(row.Order.Status))
+        {
+            return Result.Failure<CustomerOrderImageRequestDto>(new Error(
+                "customers.order_images.status_locked",
+                "Option notes can only be edited before the order is delivered or closed.",
+                ErrorCategory.Validation));
+        }
+
+        var open = await customers.GetOpenCustomerOrderImageRequestAsync(request.OrderId, cancellationToken);
+        if (open is null || open.VendorId != vendorId)
+        {
+            return Result.Failure<CustomerOrderImageRequestDto>(new Error(
+                "customers.order_images.request_not_found",
+                "There is no open photo request for this order.",
+                ErrorCategory.Validation));
+        }
+
+        var settings = imageRequestOptions.Value;
+        var images = await customers.GetCustomerOrderImagesByRequestIdAsync(open.Id, cancellationToken);
+        var slots = await CustomerOrderImageRules.EnsureOptionsAsync(customers, open, images, settings, cancellationToken);
+        var slot = slots.FirstOrDefault(o => o.Id == request.OptionId);
+        if (slot is null)
+        {
+            return Result.Failure<CustomerOrderImageRequestDto>(new Error(
+                "customers.order_images.option_not_found",
+                "That photo option is not available on this request.",
+                ErrorCategory.Validation));
+        }
+
+        slot.Description = CustomerOrderImageRules.NormalizeDescription(request.Description, settings.ResolvedMaxDescriptionLength);
+        slot.ModifiedOnUtc = DateTime.UtcNow;
+        await customers.UpdateCustomerOrderImageRequestOptionAsync(slot, cancellationToken);
+        await customers.SaveChangesAsync(cancellationToken);
+
+        var refreshedImages = await customers.GetCustomerOrderImagesByRequestIdAsync(open.Id, cancellationToken);
+        var refreshedSlots = await customers.GetCustomerOrderImageRequestOptionsAsync(open.Id, cancellationToken);
+        return Result.Success(CustomerOrderImageRules.ToRequestDto(open, refreshedSlots, refreshedImages, fileUrlResolver, settings));
     }
 }

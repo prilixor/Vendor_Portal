@@ -68,6 +68,11 @@ public interface ICustomerRepository
     Task UpdateCustomerOrderImageRequestAsync(CustomerOrderImageRequest request, CancellationToken cancellationToken);
     Task<List<CustomerOrderImage>> GetCustomerOrderImagesByRequestIdAsync(Guid requestId, CancellationToken cancellationToken);
     Task<int> CountCustomerOrderImagesByRequestIdAsync(Guid requestId, CancellationToken cancellationToken);
+    Task AddCustomerOrderImageRequestOptionAsync(CustomerOrderImageRequestOption option, CancellationToken cancellationToken);
+    Task<List<CustomerOrderImageRequestOption>> GetCustomerOrderImageRequestOptionsAsync(Guid requestId, CancellationToken cancellationToken);
+    Task<CustomerOrderImageRequestOption?> GetCustomerOrderImageRequestOptionByIdAsync(Guid requestId, Guid optionId, CancellationToken cancellationToken);
+    Task UpdateCustomerOrderImageRequestOptionAsync(CustomerOrderImageRequestOption option, CancellationToken cancellationToken);
+    Task<int> CountCustomerOrderImagesByOptionIdAsync(Guid optionId, CancellationToken cancellationToken);
 
     Task UpdateCustomerRentalOrderAsync(CustomerRentalOrder order, CancellationToken cancellationToken);
     Task AddCustomerOrderVendorOfferAsync(CustomerOrderVendorOffer offer, CancellationToken cancellationToken);

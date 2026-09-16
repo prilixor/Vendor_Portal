@@ -243,14 +243,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
   }
 
-  Future<void> _pickAndUploadPhotos([VendorPhotoPickSource? source]) async {
+  Future<void> _pickAndUploadPhotos(
+    String optionId, [
+    VendorPhotoPickSource? source,
+  ]) async {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     final provider = Provider.of<VendorOrderProvider>(context, listen: false);
-    final remaining = 5 - provider.orderImages.length;
-    if (remaining <= 0) {
+    final matches = provider.imageRequest?.options
+            .where((o) => o.id == optionId)
+            .toList() ??
+        const <OrderImageOption>[];
+    final option = matches.isEmpty ? null : matches.first;
+    if ((option?.images.length ?? 0) >= 1) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You can upload at most 5 photos.')),
+        const SnackBar(content: Text('This option already has a photo. Remove it to upload a different one.')),
       );
       return;
     }
@@ -260,7 +267,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
     final files = await pickVendorPhotoFiles(
       source: pickedSource,
-      maxCount: remaining,
+      maxCount: 1,
     );
     if (files.isEmpty || !mounted) return;
 
@@ -269,6 +276,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       final ok = await provider.uploadOrderImage(
         vendorId: vendorId,
         orderId: _selectedOrderId,
+        optionId: optionId,
         file: file,
       );
       if (!ok) {
@@ -289,10 +297,35 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
   }
 
-  Future<void> _deletePhoto(String imageId) async {
+  Future<void> _saveOptionDescription(String optionId, String description) async {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    final ok = await provider.updateOrderImageOptionDescription(
+      vendorId: vendorId,
+      orderId: _selectedOrderId,
+      optionId: optionId,
+      description: description,
+    );
+    if (!mounted || ok) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(provider.error ?? 'Failed to save description.'),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+  }
+
+  Future<void> _deletePhoto(String imageId, String optionId) async {
+    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null) return;
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    final option = provider.imageRequest?.options
+        .where((o) => o.id == optionId)
+        .toList();
+    final hadDescription =
+        option != null && option.isNotEmpty && (option.first.description ?? '').trim().isNotEmpty;
+    final label = option != null && option.isNotEmpty ? option.first.label : 'this option';
     final ok = await provider.deleteOrderImage(
       vendorId: vendorId,
       orderId: _selectedOrderId,
@@ -305,6 +338,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         backgroundColor: ok ? null : Colors.redAccent,
       ),
     );
+    if (!ok || !hadDescription || !mounted) return;
+
+    final clear = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear the description too?'),
+        content: Text(
+          'You removed the photo from $label. That option still has a description. Do you want to clear it?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep description'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear description'),
+          ),
+        ],
+      ),
+    );
+    if (clear == true && mounted) {
+      await _saveOptionDescription(optionId, '');
+    }
   }
 
   Future<void> _approveExtension(PendingExtension ext) async {
@@ -592,6 +649,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                     s == 'in_transit';
                               }(),
                               onAdd: _pickAndUploadPhotos,
+                              onSaveDescription: _saveOptionDescription,
                               onDelete: _deletePhoto,
                             ),
                           ],
@@ -997,15 +1055,14 @@ class _RequestBox extends StatelessWidget {
 }
 
 class _PhotoRequestCard extends StatelessWidget {
-  static const int maxImages = 5;
-
   final OrderImageRequest request;
   final String listingTitle;
   final List<OrderImage> images;
   final bool busy;
   final bool canUpload;
-  final Future<void> Function([VendorPhotoPickSource? source]) onAdd;
-  final Future<void> Function(String imageId) onDelete;
+  final Future<void> Function(String optionId, [VendorPhotoPickSource? source]) onAdd;
+  final Future<void> Function(String optionId, String description) onSaveDescription;
+  final Future<void> Function(String imageId, String optionId) onDelete;
 
   const _PhotoRequestCard({
     required this.request,
@@ -1014,6 +1071,7 @@ class _PhotoRequestCard extends StatelessWidget {
     required this.busy,
     required this.canUpload,
     required this.onAdd,
+    required this.onSaveDescription,
     required this.onDelete,
   });
 
@@ -1058,7 +1116,7 @@ class _PhotoRequestCard extends StatelessWidget {
     );
   }
 
-  Widget _emptyUploadZone(BuildContext context) {
+  Widget _emptyUploadZone(BuildContext context, String optionId) {
     final colors = context.appColors;
     return CustomPaint(
       painter: _DashedBorderPainter(
@@ -1079,7 +1137,7 @@ class _PhotoRequestCard extends StatelessWidget {
                 SizedBox(
                   height: 46,
                   child: ElevatedButton.icon(
-                    onPressed: busy ? null : () => onAdd(VendorPhotoPickSource.camera),
+                    onPressed: busy ? null : () => onAdd(optionId, VendorPhotoPickSource.camera),
                     icon: const Icon(Icons.photo_camera_outlined, size: 20),
                     label: const Text('Take photo'),
                     style: ElevatedButton.styleFrom(
@@ -1099,10 +1157,11 @@ class _PhotoRequestCard extends StatelessWidget {
                   onPressed: busy
                       ? null
                       : () => onAdd(
+                            optionId,
                             kIsWeb ? null : VendorPhotoPickSource.gallery,
                           ),
                   icon: const Icon(Icons.photo_library_outlined, size: 20),
-                  label: Text(kIsWeb ? 'Choose photos' : 'Choose from gallery'),
+                  label: Text(kIsWeb ? 'Choose photo' : 'Choose from gallery'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: colors.textPrimary,
                     side: BorderSide(color: colors.border),
@@ -1114,7 +1173,7 @@ class _PhotoRequestCard extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                busy ? 'Uploading\u2026' : 'Up to $maxImages photos',
+                busy ? 'Uploading\u2026' : 'One photo',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: colors.textMuted,
@@ -1129,72 +1188,12 @@ class _PhotoRequestCard extends StatelessWidget {
     );
   }
 
-  Widget _addTile({required bool large, required BuildContext context}) {
-    final radius = BorderRadius.circular(large ? 14 : 10);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: busy ? null : () => onAdd(),
-        borderRadius: radius,
-        child: CustomPaint(
-          painter: _DashedBorderPainter(
-            color: AppTheme.accent.withValues(alpha: 0.55),
-            radius: large ? 14 : 10,
-          ),
-          child: Ink(
-            decoration: BoxDecoration(
-              color: AppTheme.accent.withValues(alpha: 0.08),
-              borderRadius: radius,
-            ),
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: large ? 22 : 8, horizontal: 12),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      busy ? Icons.hourglass_top_rounded : Icons.add_photo_alternate_outlined,
-                      color: AppTheme.accent,
-                      size: large ? 32 : 22,
-                    ),
-                    SizedBox(height: large ? 8 : 4),
-                    Text(
-                      busy ? 'Uploading\u2026' : (large ? 'Add photo' : 'Add'),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: context.appColors.textPrimary,
-                        fontSize: large ? 13 : 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (large) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Camera or gallery',
-                        style: TextStyle(
-                          color: context.appColors.textMuted,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final message = request.message.trim().isEmpty
-        ? 'Please upload up to $maxImages photos so we can proceed.'
+        ? 'Please upload one photo under each option.'
         : request.message;
-    final showAdd = canUpload && images.length < maxImages;
-    final emptyUpload = images.isEmpty && showAdd;
+    final options = request.options;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1244,7 +1243,7 @@ class _PhotoRequestCard extends StatelessWidget {
                             border: Border.all(color: context.appColors.border),
                           ),
                           child: Text(
-                            '${images.length}/$maxImages',
+                            '${images.length} photos',
                             style: TextStyle(
                               color: context.appColors.textSecondary,
                               fontSize: 11,
@@ -1323,81 +1322,96 @@ class _PhotoRequestCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          if (emptyUpload)
-            _emptyUploadZone(context)
-          else if (images.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-              decoration: BoxDecoration(
-                color: context.appColors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: context.appColors.border),
-              ),
-              child: Text(
-                'No photos uploaded yet.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
-              ),
-            )
-          else
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: images.length + (showAdd ? 1 : 0),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-              ),
-              itemBuilder: (context, index) {
-                if (showAdd && index == images.length) {
-                  return _addTile(large: false, context: context);
-                }
-
-                final image = images[index];
-                return Stack(
-                  fit: StackFit.expand,
+          ...options.map((option) {
+            final photo = option.images.isEmpty ? null : option.images.first;
+            final showAdd = canUpload && photo == null;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: context.appColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.appColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Material(
-                      color: context.appColors.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () => _preview(context, image),
-                        child: Image.network(
-                          image.fileUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Center(
-                            child: Icon(Icons.broken_image_outlined, color: context.appColors.textMuted),
-                          ),
-                        ),
+                    Text(
+                      option.label,
+                      style: TextStyle(
+                        color: context.appColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13.5,
                       ),
                     ),
-                    if (canUpload)
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: Material(
-                          color: Colors.black.withValues(alpha: 0.65),
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: busy ? null : () => onDelete(image.id),
-                            child: const Padding(
-                              padding: EdgeInsets.all(5),
-                              child: Icon(Icons.close, size: 14, color: Colors.white),
+                    const SizedBox(height: 8),
+                    if (showAdd)
+                      _emptyUploadZone(context, option.id)
+                    else if (photo == null)
+                      Text(
+                        'No photo yet.',
+                        style: TextStyle(color: context.appColors.textMuted, fontSize: 12.5),
+                      )
+                    else
+                      SizedBox(
+                        height: 112,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: Material(
+                                color: context.appColors.surface,
+                                borderRadius: BorderRadius.circular(10),
+                                clipBehavior: Clip.antiAlias,
+                                child: InkWell(
+                                  onTap: () => _preview(context, photo),
+                                  child: Image.network(
+                                    photo.fileUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Center(
+                                      child: Icon(Icons.broken_image_outlined, color: context.appColors.textMuted),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
+                            if (canUpload)
+                              Positioned(
+                                top: 4,
+                                right: 4,
+                                child: Material(
+                                  color: Colors.black.withValues(alpha: 0.65),
+                                  shape: const CircleBorder(),
+                                  child: InkWell(
+                                    customBorder: const CircleBorder(),
+                                    onTap: busy ? null : () => onDelete(photo.id, option.id),
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(5),
+                                      child: Icon(Icons.close, size: 14, color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
+                    const SizedBox(height: 10),
+                    _OptionNoteField(
+                      key: ValueKey('${option.id}-${option.description ?? ''}'),
+                      label: option.label,
+                      initial: option.description ?? '',
+                      maxLength: request.maxDescriptionLength,
+                      enabled: canUpload,
+                      onSave: (value) => onSaveDescription(option.id, value),
+                    ),
                   ],
-                );
-              },
-            ),
-          const SizedBox(height: 10),
+                ),
+              ),
+            );
+          }),
           Text(
-            'JPEG, PNG, or WebP \u00b7 max 5 MB each \u00b7 cleared after delivery, cancel, or dispatch failure',
+            'One photo per option \u00b7 JPEG, PNG, or WebP \u00b7 max 5 MB \u00b7 optional note up to ${request.maxDescriptionLength} characters \u00b7 cleared after delivery, cancel, or dispatch failure',
             style: TextStyle(
               color: context.appColors.textMuted,
               fontSize: 10.5,
@@ -1405,6 +1419,186 @@ class _PhotoRequestCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OptionNoteField extends StatefulWidget {
+  final String label;
+  final String initial;
+  final int maxLength;
+  final bool enabled;
+  final Future<void> Function(String value) onSave;
+
+  const _OptionNoteField({
+    super.key,
+    required this.label,
+    required this.initial,
+    required this.maxLength,
+    required this.enabled,
+    required this.onSave,
+  });
+
+  @override
+  State<_OptionNoteField> createState() => _OptionNoteFieldState();
+}
+
+class _OptionNoteFieldState extends State<_OptionNoteField> {
+  String get _saved => widget.initial.trim();
+
+  Future<void> _edit() async {
+    final controller = TextEditingController(text: widget.initial);
+    final saved = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(_saved.isEmpty ? 'Add description · ${widget.label}' : 'Edit description · ${widget.label}'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: widget.maxLength,
+          minLines: 4,
+          maxLines: 8,
+          decoration: const InputDecoration(
+            hintText: 'e.g. front view, serial plate',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (saved == null || !mounted) return;
+    await widget.onSave(saved);
+  }
+
+  void _view() {
+    final colors = context.appColors;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(widget.label),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            _saved,
+            style: TextStyle(color: colors.textSecondary, fontSize: 14, height: 1.4),
+          ),
+        ),
+        actions: [
+          if (widget.enabled)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _edit();
+              },
+              child: const Text('Edit'),
+            ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showFullScreen();
+            },
+            child: const Text('Read full screen'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFullScreen() {
+    final colors = context.appColors;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: colors.background,
+          appBar: AppBar(
+            backgroundColor: colors.surface,
+            foregroundColor: colors.textPrimary,
+            title: Text(widget.label),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: SelectableText(
+                _saved,
+                style: TextStyle(color: colors.textPrimary, fontSize: 16, height: 1.5),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    if (_saved.isNotEmpty) {
+      return Row(
+        children: [
+          InkWell(
+            onTap: _view,
+            customBorder: const CircleBorder(),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(Icons.info_outline, size: 18, color: colors.textMuted),
+            ),
+          ),
+          if (widget.enabled)
+            TextButton(
+              onPressed: _edit,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Edit', style: TextStyle(fontSize: 12)),
+            )
+          else
+            TextButton(
+              onPressed: _view,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('View description', style: TextStyle(fontSize: 12)),
+            ),
+        ],
+      );
+    }
+
+    if (!widget.enabled) return const SizedBox.shrink();
+
+    return TextButton.icon(
+      onPressed: _edit,
+      style: TextButton.styleFrom(
+        padding: EdgeInsets.zero,
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        alignment: Alignment.centerLeft,
+      ),
+      icon: Icon(Icons.add, size: 16, color: colors.textMuted),
+      label: Text(
+        'Add optional description?',
+        style: TextStyle(color: colors.textMuted, fontSize: 12, fontWeight: FontWeight.w600),
       ),
     );
   }

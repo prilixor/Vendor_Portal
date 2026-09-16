@@ -978,6 +978,37 @@ public sealed class CustomerRepository(
             .CountAsync(x => x.RequestId == requestId && !x.IsDeleted, cancellationToken);
     }
 
+    public async Task AddCustomerOrderImageRequestOptionAsync(CustomerOrderImageRequestOption option, CancellationToken cancellationToken)
+    {
+        await customerDb.CustomerOrderImageRequestOptions.AddAsync(option, cancellationToken);
+    }
+
+    public Task<List<CustomerOrderImageRequestOption>> GetCustomerOrderImageRequestOptionsAsync(Guid requestId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImageRequestOptions
+            .Where(x => x.RequestId == requestId && !x.IsDeleted)
+            .OrderBy(x => x.OptionNumber)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<CustomerOrderImageRequestOption?> GetCustomerOrderImageRequestOptionByIdAsync(Guid requestId, Guid optionId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImageRequestOptions
+            .FirstOrDefaultAsync(x => x.Id == optionId && x.RequestId == requestId && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task UpdateCustomerOrderImageRequestOptionAsync(CustomerOrderImageRequestOption option, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerOrderImageRequestOptions.Update(option);
+        return Task.CompletedTask;
+    }
+
+    public Task<int> CountCustomerOrderImagesByOptionIdAsync(Guid optionId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImages
+            .CountAsync(x => x.OptionId == optionId && !x.IsDeleted, cancellationToken);
+    }
+
     public async Task<IReadOnlyDictionary<Guid, List<string>>> GetCustomerOrderAssetTagsByOrderIdsAsync(
         IEnumerable<Guid> orderIds,
         CancellationToken cancellationToken)

@@ -500,11 +500,20 @@ export interface VendorOrderImageApiDto {
   id: string;
   orderId: string;
   requestId?: string | null;
+  optionId?: string | null;
   fileUrl: string;
   originalFileName?: string | null;
   contentType?: string | null;
   sortOrder: number;
   createdAt: string;
+}
+
+export interface VendorOrderImageOptionApiDto {
+  id: string;
+  optionNumber: number;
+  label: string;
+  description?: string | null;
+  images: VendorOrderImageApiDto[];
 }
 
 export interface VendorOrderImageRequestApiDto {
@@ -515,6 +524,10 @@ export interface VendorOrderImageRequestApiDto {
   message: string;
   requestedAt: string;
   images: VendorOrderImageApiDto[];
+  options?: VendorOrderImageOptionApiDto[];
+  optionCount?: number;
+  maxImagesPerOption?: number;
+  maxDescriptionLength?: number;
 }
 
 export interface VendorOrderApiDto {
@@ -833,12 +846,25 @@ export const vendorOnboardingApi = {
     return row ?? null;
   },
 
-  uploadVendorOrderImage(vendorId: string, orderId: string, file: File) {
+  uploadVendorOrderImage(vendorId: string, orderId: string, file: File, optionId: string) {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("optionId", optionId);
     return apiClient.postForm<VendorOrderImageApiDto>(
-      `/vendors/${vendorId}/orders/${orderId}/images`,
+      `/vendors/${vendorId}/orders/${orderId}/images?optionId=${encodeURIComponent(optionId)}`,
       formData,
+    );
+  },
+
+  updateVendorOrderImageOption(
+    vendorId: string,
+    orderId: string,
+    optionId: string,
+    description: string,
+  ) {
+    return apiClient.patch<VendorOrderImageRequestApiDto>(
+      `/vendors/${vendorId}/orders/${orderId}/image-options/${encodeURIComponent(optionId)}`,
+      { description },
     );
   },
 

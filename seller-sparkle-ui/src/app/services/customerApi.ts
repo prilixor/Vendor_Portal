@@ -231,11 +231,20 @@ export interface CustomerOrderImageApi {
   id: string;
   orderId: string;
   requestId?: string | null;
+  optionId?: string | null;
   fileUrl: string;
   originalFileName?: string | null;
   contentType?: string | null;
   sortOrder: number;
   createdAt: string;
+}
+
+export interface CustomerOrderImageOptionApi {
+  id: string;
+  optionNumber: number;
+  label: string;
+  description?: string | null;
+  images: CustomerOrderImageApi[];
 }
 
 export interface CustomerOrderImageRequestApi {
@@ -246,6 +255,10 @@ export interface CustomerOrderImageRequestApi {
   message: string;
   requestedAt: string;
   images: CustomerOrderImageApi[];
+  options?: CustomerOrderImageOptionApi[];
+  optionCount?: number;
+  maxImagesPerOption?: number;
+  maxDescriptionLength?: number;
 }
 
 export interface ExtensionQuoteApi {

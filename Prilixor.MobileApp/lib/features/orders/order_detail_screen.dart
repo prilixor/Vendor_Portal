@@ -1612,6 +1612,69 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
     );
   }
 
+  void _showOptionDescriptionFullScreen(BuildContext context, String label, String description) {
+    final colors = context.appColors;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: colors.background,
+          appBar: AppBar(
+            backgroundColor: colors.surface,
+            foregroundColor: colors.textPrimary,
+            title: Text(label),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: SelectableText(
+                description,
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: 16,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showOptionDescription(BuildContext context, String label, String description) {
+    final colors = context.appColors;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(label),
+        content: SingleChildScrollView(
+          child: Text(
+            description,
+            style: TextStyle(color: colors.textSecondary, fontSize: 14, height: 1.4),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showOptionDescriptionFullScreen(context, label, description);
+            },
+            child: const Text('Read full screen'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _preview(BuildContext context, OrderImageModel image) {
     final colors = context.appColors;
     showDialog<void>(
@@ -1685,8 +1748,8 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               multi
-                  ? 'Sent to each product’s supplier (vendor) — not BlinksMed support. Choose products or request all. Up to 5 photos per item.'
-                  : 'Sent to the supplier for this product — not BlinksMed support chat below. Up to 5 photos.',
+                  ? 'Sent to each product’s supplier (vendor) — not BlinksMed support. Choose products or request all. The supplier uploads one photo under Option 1, Option 2, and so on.'
+                  : 'Sent to the supplier for this product — not BlinksMed support chat below. They upload one photo under Option 1, Option 2, and so on.',
               style: TextStyle(
                 color: colors.textSecondary,
                 fontSize: 13,
@@ -1823,7 +1886,9 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
               ),
               SizedBox(height: 10),
               ...withRequest.map((item) {
-                final images = requestsByOrderId[item.id]?.images ?? const <OrderImageModel>[];
+                final request = requestsByOrderId[item.id];
+                final images = request?.images ?? const <OrderImageModel>[];
+                final options = request?.options ?? const <OrderImageOptionModel>[];
                 final waiting = images.isEmpty;
                 final viewing = item.id == viewingOrderId;
                 final isDark = context.isDarkMode;
@@ -1888,7 +1953,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                             child: Text(
                               waiting
                                   ? 'Waiting for supplier photos'
-                                  : '${images.length}/5 received',
+                                  : '${images.length} received',
                               style: TextStyle(
                                 color: waiting ? waitingTextColor : successTextColor,
                                 fontSize: 10,
@@ -1907,6 +1972,90 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                             fontSize: 12,
                             height: 1.35,
                           ),
+                        )
+                      else if (options.isNotEmpty)
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: options.length,
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            mainAxisSpacing: 8,
+                            crossAxisSpacing: 8,
+                            childAspectRatio: 0.72,
+                          ),
+                          itemBuilder: (context, index) {
+                            final option = options[index];
+                            final note = (option.description ?? '').trim();
+                            final photo = option.images.isEmpty ? null : option.images.first;
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        option.label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: colors.textPrimary,
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                    if (note.isNotEmpty)
+                                      InkWell(
+                                        onTap: () => _showOptionDescription(context, option.label, note),
+                                        customBorder: const CircleBorder(),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(2),
+                                          child: Icon(
+                                            Icons.info_outline,
+                                            size: 16,
+                                            color: isDark ? const Color(0xFFCBD5E1) : colors.textMuted,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Expanded(
+                                  child: photo == null
+                                      ? Container(
+                                          alignment: Alignment.center,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(color: colors.border),
+                                          ),
+                                          child: Text(
+                                            'No photo',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(color: colors.textMuted, fontSize: 10.5),
+                                          ),
+                                        )
+                                      : Material(
+                                          color: Colors.white.withValues(alpha: 0.06),
+                                          borderRadius: BorderRadius.circular(10),
+                                          clipBehavior: Clip.antiAlias,
+                                          child: InkWell(
+                                            onTap: () => _preview(context, photo),
+                                            child: Image.network(
+                                              photo.fileUrl,
+                                              fit: BoxFit.cover,
+                                              width: double.infinity,
+                                              height: double.infinity,
+                                              errorBuilder: (_, __, ___) => const Center(
+                                                child: Icon(Icons.broken_image_outlined, color: Colors.white38),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                              ],
+                            );
+                          },
                         )
                       else
                         GridView.builder(

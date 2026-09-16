@@ -1,7 +1,8 @@
 import { useParams, Link } from "react-router-dom";
 import { useState, useMemo, useRef, useEffect, type ReactNode } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckSquare, Headset, Images, Loader2, MessageCircle, Package } from "lucide-react";
+import { Check, CheckSquare, Headset, Images, Info, Loader2, Maximize2, MessageCircle, Package } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import {
   customerApi,
   type CustomerOrderImageApi,
@@ -75,8 +76,6 @@ function isCustomerOrderCancellable(status: string): boolean {
   const s = status.trim().toLowerCase();
   return s === "pending" || s === "awaiting vendor acceptance";
 }
-
-const MAX_ORDER_IMAGES = 5;
 
 /** Match Customer Mobile order detail polling while the page is open. */
 const CUSTOMER_ORDER_POLL_MS = 15_000;
@@ -389,6 +388,8 @@ const CustomerOrderDetail = () => {
   const [buyoutDialogOpen, setBuyoutDialogOpen] = useState(false);
   const [buyoutQuote, setBuyoutQuote] = useState<BuyoutQuoteApi | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [optionNotePreview, setOptionNotePreview] = useState<{ label: string; description: string } | null>(null);
+  const [openOptionInfoId, setOpenOptionInfoId] = useState<string | null>(null);
   const [photoRequestSelection, setPhotoRequestSelection] = useState<string[]>([]);
   const [photoSelectionInitialized, setPhotoSelectionInitialized] = useState(false);
 
@@ -944,8 +945,8 @@ const CustomerOrderDetail = () => {
             <p className="text-[13px] font-semibold sm:text-base">Request photos from your supplier</p>
             <p className="text-xs text-muted-foreground">
               {orderGroupItems.length > 1
-                ? `Photos come from each product’s supplier. Up to ${MAX_ORDER_IMAGES} per item.`
-                : `Photos come from this product’s supplier. Up to ${MAX_ORDER_IMAGES} photos.`}
+                ? `Photos come from each product’s supplier — one photo under Option 1, Option 2, and so on.`
+                : `Photos come from this product’s supplier — one photo under Option 1, Option 2, and so on.`}
             </p>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -1096,9 +1097,10 @@ const CustomerOrderDetail = () => {
                       </p>
                     </div>
                     <div className="space-y-3">
-                      {groupPhotoSections.map(({ item, images }) => {
+                      {groupPhotoSections.map(({ item, request, images }) => {
                         const waiting = images.length === 0;
                         const isActiveItem = item.id === activeItem.id;
+                        const options = request?.options?.length ? request.options : null;
                         return (
                           <div
                             key={item.id}
@@ -1131,13 +1133,104 @@ const CustomerOrderDetail = () => {
                                 <Images className="h-3 w-3" />
                                 {waiting
                                   ? "Waiting for supplier photos"
-                                  : `${images.length}/${MAX_ORDER_IMAGES} received`}
+                                  : `${images.length} received`}
                               </span>
                             </div>
                             {waiting ? (
                               <p className="text-xs text-muted-foreground">
                                 Request already sent for this product — supplier has not uploaded photos yet.
                               </p>
+                            ) : options ? (
+                              <div className="grid grid-cols-3 gap-3">
+                                {options.map((option) => {
+                                  const photo = option.images[0];
+                                  const note = option.description?.trim() ?? "";
+                                  return (
+                                  <div key={option.id} className="min-w-0 space-y-1.5">
+                                    <div className="flex min-h-6 items-center gap-0.5">
+                                      <p className="min-w-0 truncate text-xs font-semibold text-foreground">
+                                        {option.label}
+                                      </p>
+                                      {note ? (
+                                        <Popover
+                                          open={openOptionInfoId === option.id}
+                                          onOpenChange={(open) => setOpenOptionInfoId(open ? option.id : null)}
+                                        >
+                                          <PopoverTrigger asChild>
+                                            <button
+                                              type="button"
+                                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                              aria-label={`View description for ${option.label}`}
+                                            >
+                                              <Info className="h-3.5 w-3.5" />
+                                            </button>
+                                          </PopoverTrigger>
+                                          <PopoverContent
+                                            align="start"
+                                            className="w-80 max-w-[calc(100vw-2rem)] p-3"
+                                          >
+                                            <div className="mb-1 flex items-start justify-between gap-2">
+                                              <p className="text-xs font-semibold text-foreground">
+                                                {option.label}
+                                              </p>
+                                              <button
+                                                type="button"
+                                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                                aria-label={`Read ${option.label} description full screen`}
+                                                onClick={() => {
+                                                  setOpenOptionInfoId(null);
+                                                  setOptionNotePreview({
+                                                    label: option.label,
+                                                    description: note,
+                                                  });
+                                                }}
+                                              >
+                                                <Maximize2 className="h-3.5 w-3.5" />
+                                              </button>
+                                            </div>
+                                            <p className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                                              {note}
+                                            </p>
+                                            <button
+                                              type="button"
+                                              className="mt-2 text-xs font-medium text-primary hover:underline"
+                                              onClick={() => {
+                                                setOpenOptionInfoId(null);
+                                                setOptionNotePreview({
+                                                  label: option.label,
+                                                  description: note,
+                                                });
+                                              }}
+                                            >
+                                              Read full screen
+                                            </button>
+                                          </PopoverContent>
+                                        </Popover>
+                                      ) : null}
+                                    </div>
+                                    {photo ? (
+                                      <button
+                                        type="button"
+                                        className="aspect-square w-full overflow-hidden rounded-lg border border-border bg-muted"
+                                        onClick={() => setPreviewImageUrl(photo.fileUrl)}
+                                        aria-label={`Preview ${option.label} for ${item.listingTitle}`}
+                                      >
+                                        <img
+                                          src={photo.fileUrl}
+                                          alt={photo.originalFileName || option.label}
+                                          className="h-full w-full object-cover"
+                                          onError={retryOriginalOnImageError}
+                                        />
+                                      </button>
+                                    ) : (
+                                      <div className="flex aspect-square items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 px-1 text-center text-[11px] text-muted-foreground">
+                                        No photo yet
+                                      </div>
+                                    )}
+                                  </div>
+                                  );
+                                })}
+                              </div>
                             ) : (
                               <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
                                 {images.map((img: CustomerOrderImageApi) => (
@@ -1182,6 +1275,21 @@ const CustomerOrderDetail = () => {
               resetKey={previewImageUrl}
             />
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!optionNotePreview} onOpenChange={(open) => !open && setOptionNotePreview(null)}>
+        <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[100dvh] sm:max-w-none sm:p-0">
+          <DialogHeader className="border-b border-border px-4 py-3 pr-12">
+            <DialogTitle className="text-base font-semibold">
+              {optionNotePreview?.label ?? "Option description"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-8 sm:py-6">
+            <p className="whitespace-pre-wrap break-words text-base leading-relaxed text-foreground">
+              {optionNotePreview?.description}
+            </p>
+          </div>
         </DialogContent>
       </Dialog>
 

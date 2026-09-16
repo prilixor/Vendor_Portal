@@ -13,7 +13,7 @@ public class CustomerOrderImageRequest : AuditableEntity<Guid>, ISoftDelete
 
     /// <summary>Fixed copy shown to customer and vendor (not free-form chat).</summary>
     public const string SystemRequestMessage =
-        "Customer requested photos for this product. Please upload up to 5 photos so we can proceed.";
+        "Customer requested photos for this product. Please upload one photo under each option.";
 
     public Guid CustomerRentalOrderId { get; set; }
     public Guid CustomerId { get; set; }
@@ -28,6 +28,7 @@ public class CustomerOrderImageRequest : AuditableEntity<Guid>, ISoftDelete
 
     public CustomerRentalOrder Order { get; set; } = null!;
     public ICollection<CustomerOrderImage> Images { get; set; } = [];
+    public ICollection<CustomerOrderImageRequestOption> Options { get; set; } = [];
 
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
