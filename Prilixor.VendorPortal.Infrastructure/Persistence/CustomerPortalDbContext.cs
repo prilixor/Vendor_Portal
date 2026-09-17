@@ -229,6 +229,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.OptionId).HasColumnName("option_id");
             entity.Property(x => x.VendorId).HasColumnName("vendor_id");
             entity.Property(x => x.StoredReference).HasColumnName("stored_reference");
+            entity.Property(x => x.ThumbnailStoredReference).HasColumnName("thumbnail_stored_reference");
             entity.Property(x => x.OriginalFileName).HasColumnName("original_file_name");
             entity.Property(x => x.ContentType).HasColumnName("content_type");
             entity.Property(x => x.SortOrder).HasColumnName("sort_order");

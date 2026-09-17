@@ -32,7 +32,7 @@ class CatalogImage extends StatelessWidget {
     );
     final child = resolved == null
         ? placeholder
-        : _catalogNetworkImage(
+        : _CatalogNetworkImage(
             url: resolved,
             width: width,
             height: height,
@@ -47,52 +47,102 @@ class CatalogImage extends StatelessWidget {
   }
 }
 
-Widget _catalogNetworkImage({
-  required String url,
-  required double? width,
-  required double? height,
-  required BoxFit fit,
-  required Widget errorChild,
-  bool allowOriginalFallback = true,
-}) {
-  return Image.network(
-    url,
-    key: ValueKey(url),
-    width: width,
-    height: height,
-    fit: fit,
-    webHtmlElementStrategy: kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
-    errorBuilder: (_, _, _) {
-      if (allowOriginalFallback) {
-        final original = originalUrlFromThumb(url);
-        if (original != null && original != url) {
-          return _catalogNetworkImage(
-            url: original,
-            width: width,
-            height: height,
-            fit: fit,
-            errorChild: errorChild,
-            allowOriginalFallback: false,
-          );
+/// Loads a catalog URL, then the non-thumb original on 404.
+/// On web we keep the HTML <img> mounted (no spinner swap) so Flutter does not
+/// paint a disposed EngineFlutterView after failed loads or hot restart.
+class _CatalogNetworkImage extends StatefulWidget {
+  final String url;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final Widget errorChild;
+
+  const _CatalogNetworkImage({
+    required this.url,
+    required this.width,
+    required this.height,
+    required this.fit,
+    required this.errorChild,
+  });
+
+  @override
+  State<_CatalogNetworkImage> createState() => _CatalogNetworkImageState();
+}
+
+class _CatalogNetworkImageState extends State<_CatalogNetworkImage> {
+  late String _url;
+  var _triedOriginal = false;
+  var _fallbackQueued = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _url = widget.url;
+  }
+
+  @override
+  void didUpdateWidget(covariant _CatalogNetworkImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _url = widget.url;
+      _triedOriginal = false;
+      _fallbackQueued = false;
+    }
+  }
+
+  void _queueOriginalFallback() {
+    if (_triedOriginal || _fallbackQueued) return;
+    final original = originalUrlFromThumb(_url);
+    if (original == null || original == _url) return;
+    _fallbackQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _triedOriginal = true;
+        _fallbackQueued = false;
+        _url = original;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.network(
+      _url,
+      key: ValueKey(_url),
+      width: widget.width,
+      height: widget.height,
+      fit: widget.fit,
+      gaplessPlayback: true,
+      webHtmlElementStrategy: kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
+      errorBuilder: (_, _, _) {
+        if (!_triedOriginal) {
+          final original = originalUrlFromThumb(_url);
+          if (original != null && original != _url) {
+            _queueOriginalFallback();
+            return ColoredBox(color: context.appColors.surfaceElevated);
+          }
         }
-      }
-      return errorChild;
-    },
-    loadingBuilder: (context, child, progress) {
-      if (progress == null) return child;
-      return Container(
-        width: width,
-        height: height,
-        color: context.appColors.surfaceElevated,
-        alignment: Alignment.center,
-        child: const SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
-        ),
-      );
-    },
-  );
+        return widget.errorChild;
+      },
+      loadingBuilder: kIsWeb
+          ? null
+          : (context, child, progress) {
+              if (progress == null) return child;
+              return Container(
+                width: widget.width,
+                height: widget.height,
+                color: context.appColors.surfaceElevated,
+                alignment: Alignment.center,
+                child: const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
+                ),
+              );
+            },
+    );
+  }
 }
 
 class _CatalogImagePlaceholder extends StatelessWidget {

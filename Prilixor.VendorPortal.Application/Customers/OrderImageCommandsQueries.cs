@@ -18,7 +18,8 @@ public sealed record CustomerOrderImageDto(
     string? ContentType,
     int SortOrder,
     DateTimeOffset CreatedAt,
-    Guid? OptionId = null);
+    Guid? OptionId = null,
+    string? ThumbnailUrl = null);
 
 public sealed record CustomerOrderImageOptionDto(
     Guid Id,
@@ -175,7 +176,65 @@ internal static class CustomerOrderImageRules
             image.ContentType,
             image.SortOrder,
             new DateTimeOffset(DateTime.SpecifyKind(image.CreatedOnUtc, DateTimeKind.Utc)),
-            image.OptionId);
+            image.OptionId,
+            ResolveThumbnailUrl(image, fileUrlResolver));
+
+    public static string? ResolveThumbnailUrl(CustomerOrderImage image, IVendorFileUrlResolver fileUrlResolver)
+    {
+        if (string.IsNullOrWhiteSpace(image.ThumbnailStoredReference)) return null;
+        var url = fileUrlResolver.Resolve(image.ThumbnailStoredReference);
+        return string.IsNullOrWhiteSpace(url) ? null : url;
+    }
+
+    public static async Task EnsureThumbnailsAsync(
+        ICustomerRepository customers,
+        IVendorUploadStorageService uploadStorage,
+        IReadOnlyList<CustomerOrderImage> images,
+        CancellationToken cancellationToken)
+    {
+        var changed = false;
+        foreach (var image in images)
+        {
+            if (!string.IsNullOrWhiteSpace(image.ThumbnailStoredReference) || string.IsNullOrWhiteSpace(image.StoredReference))
+                continue;
+            try
+            {
+                var thumb = await uploadStorage.CreateThumbnailForExistingImageAsync(image.StoredReference, cancellationToken);
+                if (string.IsNullOrWhiteSpace(thumb)) continue;
+                image.ThumbnailStoredReference = thumb;
+                await customers.UpdateCustomerOrderImageAsync(image, cancellationToken);
+                changed = true;
+            }
+            catch
+            {
+                // Tiles fall back to the original until a later request succeeds.
+            }
+        }
+
+        if (changed)
+            await customers.SaveChangesAsync(cancellationToken);
+    }
+
+    public static async Task DeleteStoredBlobsAsync(
+        IVendorUploadStorageService uploadStorage,
+        CustomerOrderImage image,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(image.ThumbnailStoredReference))
+        {
+            try
+            {
+                await uploadStorage.DeleteStoredFileAsync(image.ThumbnailStoredReference, cancellationToken);
+            }
+            catch
+            {
+                // Best-effort companion thumb delete.
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(image.StoredReference))
+            await uploadStorage.DeleteStoredFileAsync(image.StoredReference, cancellationToken);
+    }
 
     public static async Task<List<CustomerOrderImageRequestOption>> EnsureOptionsAsync(
         ICustomerRepository customers,
@@ -283,7 +342,7 @@ public static class CustomerOrderImageLifecycle
         {
             try
             {
-                await uploadStorage.DeleteStoredFileAsync(image.StoredReference, cancellationToken);
+                await CustomerOrderImageRules.DeleteStoredBlobsAsync(uploadStorage, image, cancellationToken);
             }
             catch
             {
@@ -324,6 +383,7 @@ public static class CustomerOrderImageLifecycle
 internal sealed class GetCustomerOrderImageRequestQueryHandler(
     ICustomerRepository customers,
     IVendorFileUrlResolver fileUrlResolver,
+    IVendorUploadStorageService uploadStorage,
     IOptions<OrderImageRequestOptions> imageRequestOptions)
     : IQueryHandler<GetCustomerOrderImageRequestQuery, CustomerOrderImageRequestDto?>
 {
@@ -342,6 +402,7 @@ internal sealed class GetCustomerOrderImageRequestQueryHandler(
         var images = await customers.GetCustomerOrderImagesByRequestIdAsync(open.Id, cancellationToken);
         var settings = imageRequestOptions.Value;
         var options = await CustomerOrderImageRules.EnsureOptionsAsync(customers, open, images, settings, cancellationToken);
+        await CustomerOrderImageRules.EnsureThumbnailsAsync(customers, uploadStorage, images, cancellationToken);
         return Result.Success<CustomerOrderImageRequestDto?>(
             CustomerOrderImageRules.ToRequestDto(open, options, images, fileUrlResolver, settings));
     }
@@ -419,6 +480,7 @@ internal sealed class CreateCustomerOrderImageRequestCommandHandler(
 internal sealed class GetVendorOrderImageRequestQueryHandler(
     ICustomerRepository customers,
     IVendorFileUrlResolver fileUrlResolver,
+    IVendorUploadStorageService uploadStorage,
     IOptions<OrderImageRequestOptions> imageRequestOptions)
     : IQueryHandler<GetVendorOrderImageRequestQuery, CustomerOrderImageRequestDto?>
 {
@@ -440,6 +502,7 @@ internal sealed class GetVendorOrderImageRequestQueryHandler(
         var images = await customers.GetCustomerOrderImagesByRequestIdAsync(open.Id, cancellationToken);
         var settings = imageRequestOptions.Value;
         var options = await CustomerOrderImageRules.EnsureOptionsAsync(customers, open, images, settings, cancellationToken);
+        await CustomerOrderImageRules.EnsureThumbnailsAsync(customers, uploadStorage, images, cancellationToken);
         return Result.Success<CustomerOrderImageRequestDto?>(
             CustomerOrderImageRules.ToRequestDto(open, options, images, fileUrlResolver, settings));
     }
@@ -540,6 +603,7 @@ internal sealed class UploadVendorOrderImageCommandHandler(
             OptionId = option.Id,
             VendorId = vendorId,
             StoredReference = persist.StoredReference,
+            ThumbnailStoredReference = persist.ThumbnailStoredReference,
             OriginalFileName = Path.GetFileName(request.OriginalFileName),
             ContentType = request.ContentType?.Trim(),
             SortOrder = slotResult.Value,
@@ -576,7 +640,7 @@ internal sealed class DeleteVendorOrderImageCommandHandler(
 
         try
         {
-            await uploadStorage.DeleteStoredFileAsync(image.StoredReference, cancellationToken);
+            await CustomerOrderImageRules.DeleteStoredBlobsAsync(uploadStorage, image, cancellationToken);
         }
         catch
         {

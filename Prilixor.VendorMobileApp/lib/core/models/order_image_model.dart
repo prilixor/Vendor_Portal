@@ -4,6 +4,7 @@ class OrderImage {
   final String? requestId;
   final String? optionId;
   final String fileUrl;
+  final String? thumbnailUrl;
   final String? originalFileName;
   final String? contentType;
   final int sortOrder;
@@ -15,11 +16,18 @@ class OrderImage {
     this.requestId,
     this.optionId,
     required this.fileUrl,
+    this.thumbnailUrl,
     this.originalFileName,
     this.contentType,
     this.sortOrder = 0,
     this.createdAt,
   });
+
+  String get tileUrl {
+    final thumb = thumbnailUrl?.trim();
+    if (thumb != null && thumb.isNotEmpty) return thumb;
+    return fileUrl;
+  }
 
   factory OrderImage.fromJson(Map<String, dynamic> json) {
     DateTime? created;
@@ -33,6 +41,7 @@ class OrderImage {
       requestId: (json['requestId'] ?? json['RequestId'])?.toString(),
       optionId: (json['optionId'] ?? json['OptionId'])?.toString(),
       fileUrl: (json['fileUrl'] ?? json['FileUrl'] ?? '').toString(),
+      thumbnailUrl: (json['thumbnailUrl'] ?? json['ThumbnailUrl'])?.toString(),
       originalFileName:
           (json['originalFileName'] ?? json['OriginalFileName'])?.toString(),
       contentType: (json['contentType'] ?? json['ContentType'])?.toString(),
@@ -41,13 +50,14 @@ class OrderImage {
     );
   }
 
-  OrderImage copyWith({String? fileUrl}) {
+  OrderImage copyWith({String? fileUrl, String? thumbnailUrl}) {
     return OrderImage(
       id: id,
       orderId: orderId,
       requestId: requestId,
       optionId: optionId,
       fileUrl: fileUrl ?? this.fileUrl,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       originalFileName: originalFileName,
       contentType: contentType,
       sortOrder: sortOrder,
@@ -171,17 +181,28 @@ class OrderImageRequest {
 }
 
 OrderImageRequest reuseOrderImageUrls(OrderImageRequest previous, OrderImageRequest next) {
-  final urls = <String, String>{
+  final files = <String, String>{
     for (final photo in previous.images) photo.id: photo.fileUrl,
+  };
+  final thumbs = <String, String>{
+    for (final photo in previous.images)
+      if ((photo.thumbnailUrl ?? '').trim().isNotEmpty) photo.id: photo.thumbnailUrl!.trim(),
   };
   for (final option in previous.options) {
     for (final photo in option.images) {
-      urls.putIfAbsent(photo.id, () => photo.fileUrl);
+      files.putIfAbsent(photo.id, () => photo.fileUrl);
+      final thumb = photo.thumbnailUrl?.trim();
+      if (thumb != null && thumb.isNotEmpty) thumbs.putIfAbsent(photo.id, () => thumb);
     }
   }
   List<OrderImage> keep(List<OrderImage> photos) => [
         for (final photo in photos)
-          urls.containsKey(photo.id) ? photo.copyWith(fileUrl: urls[photo.id]) : photo,
+          files.containsKey(photo.id)
+              ? photo.copyWith(
+                  fileUrl: files[photo.id],
+                  thumbnailUrl: thumbs[photo.id] ?? photo.thumbnailUrl,
+                )
+              : photo,
       ];
   return OrderImageRequest(
     id: next.id,

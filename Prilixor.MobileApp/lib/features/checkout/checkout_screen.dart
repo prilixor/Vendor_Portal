@@ -522,7 +522,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                                   ? 'Linked · ${ref!.doctorName ?? 'Doctor'} (${ref.uniqueCode})'
                                                   : 'No doctor linked yet',
                                               style: TextStyle(
-                                                color: doctorFilled ? const Color(0xFF34D399) : Colors.amber,
+                                                color: doctorFilled
+                                                    ? (context.isDarkMode
+                                                        ? const Color(0xFF34D399)
+                                                        : const Color(0xFF0F766E))
+                                                    : (context.isDarkMode
+                                                        ? Colors.amber
+                                                        : const Color(0xFFB45309)),
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w600,
                                               ),

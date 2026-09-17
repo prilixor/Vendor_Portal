@@ -1779,7 +1779,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
       child: InkWell(
         onTap: () => _preview(context, photos, index),
         child: CatalogImage(
-          url: photo.fileUrl,
+          url: photo.tileUrl,
           fit: BoxFit.cover,
           width: double.infinity,
           height: double.infinity,
@@ -2212,7 +2212,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                               child: InkWell(
                                 onTap: () => _preview(context, images, index),
                                 child: CatalogImage(
-                                  url: image.fileUrl,
+                                  url: image.tileUrl,
                                   fit: BoxFit.cover,
                                 ),
                               ),
@@ -2230,6 +2230,14 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _orderActionColor(BuildContext context) {
+  return context.isDarkMode ? const Color(0xFF5EEAD4) : AppTheme.accent;
+}
+
+Color _uniqueIdColor(BuildContext context) {
+  return context.isDarkMode ? const Color(0xFF5EEAD4) : const Color(0xFF0F766E);
 }
 
 class _MedicalReferenceCard extends StatelessWidget {
@@ -2285,11 +2293,11 @@ class _MedicalReferenceCard extends StatelessWidget {
               'Unique ID',
               uniqueCode,
               valueStyle: TextStyle(
-                color: Color(0xFF2DD4BF),
+                color: _uniqueIdColor(context),
                 fontSize: 14,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
                 fontFamily: 'monospace',
-                letterSpacing: 1.2,
+                letterSpacing: 1.0,
               ),
             ),
           ],
@@ -2420,8 +2428,8 @@ class _OrderPrescriptionCard extends StatelessWidget {
                               : Container(
                                   width: 48,
                                   height: 48,
-                                  color: const Color(0xFF2DD4BF).withValues(alpha: 0.12),
-                                  child: const Icon(Icons.picture_as_pdf, color: Color(0xFF2DD4BF)),
+                                  color: _orderActionColor(context).withValues(alpha: 0.12),
+                                  child: Icon(Icons.picture_as_pdf, color: _orderActionColor(context)),
                                 ),
                         ),
                         const SizedBox(width: 12),
@@ -2430,10 +2438,12 @@ class _OrderPrescriptionCard extends StatelessWidget {
                             file.originalFileName ?? 'Prescription file',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF2DD4BF),
-                              fontWeight: FontWeight.w600,
+                            style: TextStyle(
+                              color: _orderActionColor(context),
+                              fontWeight: FontWeight.w700,
+                              height: 1.3,
                               decoration: TextDecoration.underline,
+                              decorationColor: _orderActionColor(context),
                             ),
                           ),
                         ),
@@ -2453,13 +2463,13 @@ class _OrderPrescriptionCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFF2DD4BF).withValues(alpha: 0.08),
+                color: _orderActionColor(context).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF2DD4BF).withValues(alpha: 0.35)),
+                border: Border.all(color: _orderActionColor(context).withValues(alpha: 0.35)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.description_outlined, color: Color(0xFF2DD4BF)),
+                  Icon(Icons.description_outlined, color: _orderActionColor(context)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -2485,15 +2495,15 @@ class _OrderPrescriptionCard extends StatelessWidget {
               value: acceptedLegal,
               onChanged: onAcceptedLegal,
               prefix: 'I consent to the',
-              activeColor: const Color(0xFF2DD4BF),
+              activeColor: _orderActionColor(context),
             ),
           ],
           if (canEdit && files.length < 3 && pendingFileName == null)
             TextButton(
               onPressed: onUpload,
-              child: const Text(
+              child: Text(
                 'Upload image or PDF',
-                style: TextStyle(color: Color(0xFF2DD4BF), fontWeight: FontWeight.bold),
+                style: TextStyle(color: _orderActionColor(context), fontWeight: FontWeight.w800),
               ),
             ),
         ],

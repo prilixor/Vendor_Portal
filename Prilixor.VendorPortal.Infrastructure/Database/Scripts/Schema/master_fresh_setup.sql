@@ -125,6 +125,7 @@ CREATE DATABASE customer_portal_db;
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/081_legal_vidit_pdf_placement_align.sql'
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/082_order_image_request_options.sql'
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/083_order_image_option_gallery_and_selection.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/084_order_image_thumbnails.sql'
 
 \echo 'All schemas and migrations applied successfully.'
 \echo 'Coverage: admin/common/vendor/customer, medical, chemicals, variants, assets, favorites, RBAC, order chat, order photo requests, weekly rent, thumbnails, website content, legal documents.'

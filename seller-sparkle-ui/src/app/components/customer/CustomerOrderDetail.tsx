@@ -26,7 +26,7 @@ import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { toast } from "sonner";
 import { isSameChatDay } from "@/app/helpers/chatDayLabel";
 import { formatCustomerOrderStatusTitle, formatCustomerOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
-import { cn, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, orderPhotoTileUrl, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
@@ -123,6 +123,8 @@ function OrderOptionPhotoThumb({
       <img
         src={src}
         alt=""
+        loading="lazy"
+        decoding="async"
         className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
         onError={retryOriginalOnImageError}
       />
@@ -1316,7 +1318,7 @@ const CustomerOrderDetail = () => {
                                         return (
                                           <OrderOptionPhotoThumb
                                             key={photo.id}
-                                            src={photo.fileUrl}
+                                            src={orderPhotoTileUrl(photo)}
                                             alt={`Preview ${option.label} for ${item.listingTitle}`}
                                             onPreview={() => setPreviewImageUrl(photo.fileUrl)}
                                           />
@@ -1341,8 +1343,10 @@ const CustomerOrderDetail = () => {
                                     aria-label={`Preview photo for ${item.listingTitle}`}
                                   >
                                     <img
-                                      src={img.fileUrl}
+                                      src={orderPhotoTileUrl(img)}
                                       alt={img.originalFileName || item.listingTitle}
+                                      loading="lazy"
+                                      decoding="async"
                                       className="h-full w-full object-cover"
                                       onError={retryOriginalOnImageError}
                                     />

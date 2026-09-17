@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Check, Barcode, CheckCircle2, ImageOff, ImagePlus, Images, Info, Loader2, Pencil, Plus, Stethoscope, X } from "lucide-react";
 import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
-import { cn, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, orderPhotoTileUrl, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
@@ -337,10 +337,15 @@ function reuseImageUrls(
   next: VendorOrderImageApiDto[],
 ): VendorOrderImageApiDto[] {
   if (!previous?.length) return next;
-  const urls = new Map(previous.map((photo) => [photo.id, photo.fileUrl]));
+  const prior = new Map(previous.map((photo) => [photo.id, photo]));
   return next.map((photo) => {
-    const kept = urls.get(photo.id);
-    return kept ? { ...photo, fileUrl: kept } : photo;
+    const kept = prior.get(photo.id);
+    if (!kept) return photo;
+    return {
+      ...photo,
+      fileUrl: kept.fileUrl || photo.fileUrl,
+      thumbnailUrl: kept.thumbnailUrl || photo.thumbnailUrl,
+    };
   });
 }
 
@@ -1641,8 +1646,10 @@ const VendorOrderDetail = () => {
                                     aria-label={photo.originalFileName || option.label}
                                   >
                                     <img
-                                      src={photo.fileUrl}
+                                      src={orderPhotoTileUrl(photo)}
                                       alt={photo.originalFileName || option.label}
+                                      loading="lazy"
+                                      decoding="async"
                                       className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
                                       onError={retryOriginalOnImageError}
                                     />

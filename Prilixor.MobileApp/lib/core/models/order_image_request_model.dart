@@ -4,6 +4,7 @@ class OrderImageModel {
   final String? requestId;
   final String? optionId;
   final String fileUrl;
+  final String? thumbnailUrl;
   final String? originalFileName;
   final String? contentType;
   final int sortOrder;
@@ -14,10 +15,17 @@ class OrderImageModel {
     this.requestId,
     this.optionId,
     required this.fileUrl,
+    this.thumbnailUrl,
     this.originalFileName,
     this.contentType,
     this.sortOrder = 0,
   });
+
+  String get tileUrl {
+    final thumb = thumbnailUrl?.trim();
+    if (thumb != null && thumb.isNotEmpty) return thumb;
+    return fileUrl;
+  }
 
   factory OrderImageModel.fromJson(Map<String, dynamic> json) {
     return OrderImageModel(
@@ -26,6 +34,7 @@ class OrderImageModel {
       requestId: (json['requestId'] ?? json['RequestId'])?.toString(),
       optionId: (json['optionId'] ?? json['OptionId'])?.toString(),
       fileUrl: (json['fileUrl'] ?? json['FileUrl'] ?? '').toString(),
+      thumbnailUrl: (json['thumbnailUrl'] ?? json['ThumbnailUrl'])?.toString(),
       originalFileName:
           (json['originalFileName'] ?? json['OriginalFileName'])?.toString(),
       contentType: (json['contentType'] ?? json['ContentType'])?.toString(),

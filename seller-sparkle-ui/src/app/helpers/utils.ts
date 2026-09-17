@@ -107,3 +107,8 @@ export function photoAtSlot<T extends { sortOrder?: number | null }>(
   if (!photos?.length) return undefined;
   return photos.find((photo) => photo.sortOrder === slot);
 }
+
+/** Option tiles use the small JPEG; click/preview still uses the original fileUrl. */
+export function orderPhotoTileUrl(photo: { fileUrl?: string | null; thumbnailUrl?: string | null }): string {
+  return photo.thumbnailUrl?.trim() || photo.fileUrl?.trim() || "";
+}

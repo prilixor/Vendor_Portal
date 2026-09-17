@@ -502,6 +502,7 @@ export interface VendorOrderImageApiDto {
   requestId?: string | null;
   optionId?: string | null;
   fileUrl: string;
+  thumbnailUrl?: string | null;
   originalFileName?: string | null;
   contentType?: string | null;
   sortOrder: number;

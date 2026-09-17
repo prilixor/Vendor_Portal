@@ -75,7 +75,9 @@ internal sealed class VendorUploadStorageService(
 
         byte[]? thumbnailBytes = null;
         string? thumbnailFileName = null;
-        if ((folderType == VendorFileFolderType.ProductImages || folderType == VendorFileFolderType.RentalIcons)
+        if ((folderType == VendorFileFolderType.ProductImages
+                || folderType == VendorFileFolderType.RentalIcons
+                || folderType == VendorFileFolderType.OrderImages)
             && LooksLikeImage(contentType, extension))
         {
             thumbnailBytes = TryCreateThumbnailJpeg(sourceMs, sourceMs.Length);

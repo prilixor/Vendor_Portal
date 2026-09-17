@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1108,6 +1109,123 @@ class _PhotoRequestCard extends StatelessWidget {
     );
   }
 
+  ButtonStyle _compactFillStyle() {
+    return ElevatedButton.styleFrom(
+      elevation: 0,
+      backgroundColor: AppTheme.accent,
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      minimumSize: const Size(0, 44),
+      maximumSize: const Size(double.infinity, 44),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+  }
+
+  ButtonStyle _compactOutlineStyle(Color foreground, Color border) {
+    return OutlinedButton.styleFrom(
+      foregroundColor: foreground,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      minimumSize: const Size(0, 44),
+      maximumSize: const Size(double.infinity, 44),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      side: BorderSide(color: border),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+  }
+
+  Widget _capturePad(BuildContext context, String optionId) {
+    final colors = context.appColors;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppTheme.accent.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.28)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: 44,
+              child: ElevatedButton(
+                onPressed: busy
+                    ? null
+                    : () => onAdd(
+                          optionId,
+                          source: VendorPhotoPickSource.camera,
+                          slotIndex: 0,
+                        ),
+                style: _compactFillStyle(),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.photo_camera_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Take photo',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 44,
+              child: OutlinedButton(
+                onPressed: busy
+                    ? null
+                    : () => onAdd(
+                          optionId,
+                          source: VendorPhotoPickSource.gallery,
+                          slotIndex: 0,
+                        ),
+                style: _compactOutlineStyle(colors.textPrimary, colors.border),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.photo_library_outlined, size: 18, color: colors.textPrimary),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Choose from gallery',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              busy ? 'Uploading\u2026' : 'Up to ${request.maxImagesPerOption} photos',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: colors.textMuted,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final options = request.options;
@@ -1313,6 +1431,9 @@ class _PhotoRequestCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
+                    if (canUpload && photos.isEmpty && !kIsWeb)
+                      _capturePad(context, option.id)
+                    else
                     GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -1341,7 +1462,7 @@ class _PhotoRequestCard extends StatelessWidget {
                                       title: option.label,
                                     ),
                                     child: CatalogImage(
-                                      url: photo.fileUrl,
+                                      url: photo.tileUrl,
                                       fit: BoxFit.cover,
                                       width: double.infinity,
                                       height: double.infinity,
