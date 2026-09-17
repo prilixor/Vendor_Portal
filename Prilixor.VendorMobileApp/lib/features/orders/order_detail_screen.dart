@@ -243,9 +243,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   }
 
   Future<void> _pickAndUploadPhotos(
-    String optionId, [
+    String optionId, {
     VendorPhotoPickSource? source,
-  ]) async {
+    int? slotIndex,
+  }) async {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     final provider = Provider.of<VendorOrderProvider>(context, listen: false);
@@ -255,8 +256,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         const <OrderImageOption>[];
     final option = matches.isEmpty ? null : matches.first;
     final maxPerOption = provider.imageRequest?.maxImagesPerOption ?? 3;
-    final remaining = maxPerOption - (option?.images.length ?? 0);
-    if (remaining <= 0) {
+    final occupied = {
+      for (final photo in option?.images ?? const <OrderImage>[]) photo.sortOrder,
+    };
+    final emptySlots = [
+      for (var slot = 0; slot < maxPerOption; slot++)
+        if (!occupied.contains(slot)) slot,
+    ];
+    final startSlot = slotIndex ?? 0;
+    final orderedSlots = [
+      ...emptySlots.where((slot) => slot >= startSlot),
+      ...emptySlots.where((slot) => slot < startSlot),
+    ];
+    if (orderedSlots.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('This option already has $maxPerOption photos. Remove one to upload a different photo.')),
       );
@@ -268,17 +280,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
     final files = await pickVendorPhotoFiles(
       source: pickedSource,
-      maxCount: remaining,
+      maxCount: orderedSlots.length,
     );
     if (files.isEmpty || !mounted) return;
 
     var uploaded = 0;
-    for (final file in files) {
+    for (var i = 0; i < files.length; i++) {
       final ok = await provider.uploadOrderImage(
         vendorId: vendorId,
         orderId: _selectedOrderId,
         optionId: optionId,
-        file: file,
+        file: files[i],
+        slotIndex: orderedSlots[i],
       );
       if (!ok) {
         if (!mounted) return;
@@ -632,8 +645,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                               loading: provider.prescriptionLoading,
                             ),
                           ],
-                          if (!provider.orderImagesLoading &&
-                              provider.imageRequest != null) ...[
+                          if (provider.imageRequest != null) ...[
                             const SizedBox(height: 10),
                             _PhotoRequestCard(
                               request: provider.imageRequest!,
@@ -1062,7 +1074,11 @@ class _PhotoRequestCard extends StatelessWidget {
   final List<OrderImage> images;
   final bool busy;
   final bool canUpload;
-  final Future<void> Function(String optionId, [VendorPhotoPickSource? source]) onAdd;
+  final Future<void> Function(
+    String optionId, {
+    VendorPhotoPickSource? source,
+    int? slotIndex,
+  }) onAdd;
   final Future<void> Function(String optionId, String description) onSaveDescription;
   final Future<void> Function(String imageId, String optionId) onDelete;
 
@@ -1307,8 +1323,9 @@ class _PhotoRequestCard extends StatelessWidget {
                         crossAxisSpacing: 8,
                       ),
                       itemBuilder: (context, i) {
-                        if (i < photos.length) {
-                          final photo = photos[i];
+                        final photo = imageAtSlot(photos, i);
+                        if (photo != null) {
+                          final previewIndex = photos.indexOf(photo);
                           return Stack(
                             children: [
                               Positioned.fill(
@@ -1320,7 +1337,7 @@ class _PhotoRequestCard extends StatelessWidget {
                                     onTap: () => _preview(
                                       context,
                                       photos,
-                                      i,
+                                      previewIndex < 0 ? 0 : previewIndex,
                                       title: option.label,
                                     ),
                                     child: CatalogImage(
@@ -1358,7 +1375,7 @@ class _PhotoRequestCard extends StatelessWidget {
                             color: context.appColors.surfaceElevated,
                             borderRadius: BorderRadius.circular(12),
                             child: InkWell(
-                              onTap: busy ? null : () => onAdd(option.id),
+                              onTap: busy ? null : () => onAdd(option.id, slotIndex: i),
                               borderRadius: BorderRadius.circular(12),
                               child: DecoratedBox(
                                 decoration: BoxDecoration(

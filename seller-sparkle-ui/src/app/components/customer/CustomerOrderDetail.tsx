@@ -26,7 +26,7 @@ import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { toast } from "sonner";
 import { isSameChatDay } from "@/app/helpers/chatDayLabel";
 import { formatCustomerOrderStatusTitle, formatCustomerOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
-import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
@@ -1311,7 +1311,7 @@ const CustomerOrderDetail = () => {
                                     </div>
                                     <div className="grid grid-cols-3 gap-2">
                                     {Array.from({ length: request?.maxImagesPerOption ?? 3 }).map((_, slot) => {
-                                      const photo = photos[slot];
+                                      const photo = photoAtSlot(photos, slot);
                                       if (photo) {
                                         return (
                                           <OrderOptionPhotoThumb

@@ -60,7 +60,8 @@ public sealed record UploadVendorOrderImageCommand(
     string OriginalFileName,
     string? ContentType,
     byte[] FileBytes,
-    Uri RequestPublicBaseUri) : ICommand<CustomerOrderImageDto>;
+    Uri RequestPublicBaseUri,
+    int? SlotIndex = null) : ICommand<CustomerOrderImageDto>;
 
 public sealed record DeleteVendorOrderImageCommand(string VendorId, Guid OrderId, Guid ImageId) : ICommand;
 
@@ -118,6 +119,44 @@ internal static class CustomerOrderImageRules
         ActiveRequestStatuses.Contains(status.Trim());
 
     public static string OptionLabel(int optionNumber) => $"Option {optionNumber}";
+
+    public static Result<int> ResolveSlotIndex(
+        IReadOnlyList<CustomerOrderImage> optionImages,
+        int maxPerOption,
+        int? requestedSlot)
+    {
+        var occupied = optionImages.Select(i => i.SortOrder).ToHashSet();
+        if (requestedSlot is int slot)
+        {
+            if (slot < 0 || slot >= maxPerOption)
+            {
+                return Result.Failure<int>(new Error(
+                    "customers.order_images.invalid_slot",
+                    $"Photo slot must be between 1 and {maxPerOption}.",
+                    ErrorCategory.Validation));
+            }
+
+            if (occupied.Contains(slot))
+            {
+                return Result.Failure<int>(new Error(
+                    "customers.order_images.slot_taken",
+                    "That photo slot already has an image. Remove it to replace it.",
+                    ErrorCategory.Validation));
+            }
+
+            return Result.Success(slot);
+        }
+
+        for (var i = 0; i < maxPerOption; i++)
+        {
+            if (!occupied.Contains(i)) return Result.Success(i);
+        }
+
+        return Result.Failure<int>(new Error(
+            "customers.order_images.max",
+            $"This option already has {maxPerOption} photo{(maxPerOption == 1 ? "" : "s")}. Remove one to upload a different photo.",
+            ErrorCategory.Validation));
+    }
 
     public static string? NormalizeDescription(string? description, int maxLength)
     {
@@ -459,9 +498,9 @@ internal sealed class UploadVendorOrderImageCommandHandler(
 
         var settings = imageRequestOptions.Value;
         var images = await customers.GetCustomerOrderImagesByRequestIdAsync(open.Id, cancellationToken);
-        var slots = await CustomerOrderImageRules.EnsureOptionsAsync(customers, open, images, settings, cancellationToken);
-        var slot = slots.FirstOrDefault(o => o.Id == request.OptionId);
-        if (slot is null)
+        var optionRows = await CustomerOrderImageRules.EnsureOptionsAsync(customers, open, images, settings, cancellationToken);
+        var option = optionRows.FirstOrDefault(o => o.Id == request.OptionId);
+        if (option is null)
         {
             return Result.Failure<CustomerOrderImageDto>(new Error(
                 "customers.order_images.option_not_found",
@@ -469,15 +508,19 @@ internal sealed class UploadVendorOrderImageCommandHandler(
                 ErrorCategory.Validation));
         }
 
-        var count = await customers.CountCustomerOrderImagesByOptionIdAsync(slot.Id, cancellationToken);
+        var optionImages = images.Where(i => i.OptionId == option.Id).ToList();
         var maxPerOption = settings.ResolvedImagesPerOption;
-        if (count >= maxPerOption)
+        if (optionImages.Count >= maxPerOption)
         {
             return Result.Failure<CustomerOrderImageDto>(new Error(
                 "customers.order_images.max",
-                $"{CustomerOrderImageRules.OptionLabel(slot.OptionNumber)} already has {maxPerOption} photo{(maxPerOption == 1 ? "" : "s")}. Remove one to upload a different photo.",
+                $"{CustomerOrderImageRules.OptionLabel(option.OptionNumber)} already has {maxPerOption} photo{(maxPerOption == 1 ? "" : "s")}. Remove one to upload a different photo.",
                 ErrorCategory.Validation));
         }
+
+        var slotResult = CustomerOrderImageRules.ResolveSlotIndex(optionImages, maxPerOption, request.SlotIndex);
+        if (!slotResult.IsSuccess)
+            return Result.Failure<CustomerOrderImageDto>(slotResult.Errors);
 
         await using var stream = new MemoryStream(request.FileBytes, writable: false);
         var persist = await uploadStorage.PersistVendorUploadAsync(
@@ -494,12 +537,12 @@ internal sealed class UploadVendorOrderImageCommandHandler(
             Id = Guid.NewGuid(),
             CustomerRentalOrderId = request.OrderId,
             RequestId = open.Id,
-            OptionId = slot.Id,
+            OptionId = option.Id,
             VendorId = vendorId,
             StoredReference = persist.StoredReference,
             OriginalFileName = Path.GetFileName(request.OriginalFileName),
             ContentType = request.ContentType?.Trim(),
-            SortOrder = count,
+            SortOrder = slotResult.Value,
         };
 
         await customers.AddCustomerOrderImageAsync(image, cancellationToken);

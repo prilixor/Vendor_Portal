@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Check, Barcode, CheckCircle2, ImageOff, ImagePlus, Images, Info, Loader2, Pencil, Plus, Stethoscope, X } from "lucide-react";
 import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
-import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
@@ -26,6 +26,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import {
   vendorOnboardingApi,
   type VendorOrderApiDto,
+  type VendorOrderImageApiDto,
   type VendorOrderImageRequestApiDto,
   type VendorProductAssetApiDto,
   type OrderContinuationsDto,
@@ -331,6 +332,64 @@ function itemPayout(item: VendorOrderApiDto): number {
     : item.totalAmount;
 }
 
+function reuseImageUrls(
+  previous: VendorOrderImageApiDto[] | undefined,
+  next: VendorOrderImageApiDto[],
+): VendorOrderImageApiDto[] {
+  if (!previous?.length) return next;
+  const urls = new Map(previous.map((photo) => [photo.id, photo.fileUrl]));
+  return next.map((photo) => {
+    const kept = urls.get(photo.id);
+    return kept ? { ...photo, fileUrl: kept } : photo;
+  });
+}
+
+function mergeImageRequest(
+  previous: VendorOrderImageRequestApiDto | null,
+  next: VendorOrderImageRequestApiDto | null,
+): VendorOrderImageRequestApiDto | null {
+  if (!next || !previous) return next;
+  return {
+    ...next,
+    images: reuseImageUrls(previous.images, next.images),
+    options: next.options?.map((option) => {
+      const prior = previous.options?.find((row) => row.id === option.id);
+      return { ...option, images: reuseImageUrls(prior?.images, option.images) };
+    }),
+  };
+}
+
+function addImageToRequest(
+  previous: VendorOrderImageRequestApiDto,
+  uploaded: VendorOrderImageApiDto,
+  optionId: string,
+): VendorOrderImageRequestApiDto {
+  const images = [...previous.images.filter((photo) => photo.id !== uploaded.id), uploaded];
+  return {
+    ...previous,
+    images,
+    options: previous.options?.map((option) =>
+      option.id === optionId
+        ? { ...option, images: [...option.images.filter((photo) => photo.id !== uploaded.id), uploaded] }
+        : option,
+    ),
+  };
+}
+
+function removeImageFromRequest(
+  previous: VendorOrderImageRequestApiDto,
+  imageId: string,
+): VendorOrderImageRequestApiDto {
+  return {
+    ...previous,
+    images: previous.images.filter((photo) => photo.id !== imageId),
+    options: previous.options?.map((option) => ({
+      ...option,
+      images: option.images.filter((photo) => photo.id !== imageId),
+    })),
+  };
+}
+
 function VendorOptionEmptySlot() {
   return (
     <div
@@ -531,16 +590,19 @@ const VendorOrderDetail = () => {
   const [groupPhotoMeta, setGroupPhotoMeta] = useState<Map<string, { count: number }>>(new Map());
   const [uploadingOrderImage, setUploadingOrderImage] = useState(false);
   const [uploadOptionId, setUploadOptionId] = useState<string | null>(null);
+  const [uploadSlotIndex, setUploadSlotIndex] = useState<number | null>(null);
   const [savingOptionId, setSavingOptionId] = useState<string | null>(null);
   const [deletingOrderImageId, setDeletingOrderImageId] = useState<string | null>(null);
   const [prescriptionFiles, setPrescriptionFiles] = useState<CustomerPrescriptionFileApi[]>([]);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [pendingSlotPreviews, setPendingSlotPreviews] = useState<Record<string, string>>({});
   const [clearDescriptionPrompt, setClearDescriptionPrompt] = useState<{
     optionId: string;
     label: string;
   } | null>(null);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
   const orderImageInputRef = useRef<HTMLInputElement>(null);
+  const orderImageUploadTargetRef = useRef<{ optionId: string; slotIndex: number } | null>(null);
 
   const currentItemId = selectedItemId || orderId;
 
@@ -615,7 +677,7 @@ const VendorOrderDetail = () => {
       try {
         if (!options?.silent) setImageRequestLoading(true);
         const row = await vendorOnboardingApi.getVendorOrderImageRequest(user.id, id);
-        setImageRequest(row);
+        setImageRequest((prev) => mergeImageRequest(prev, row));
       } catch (error) {
         console.error("Failed to load order photo request", error);
         setImageRequest(null);
@@ -909,18 +971,36 @@ const VendorOrderDetail = () => {
   };
 
   const handleOrderImagePick = async (files: FileList | null) => {
-    const optionId = uploadOptionId;
+    const target = orderImageUploadTargetRef.current;
+    const optionId = target?.optionId ?? uploadOptionId;
+    const startSlot = target?.slotIndex ?? 0;
     if (!files?.length || !user?.id || !currentItemId || !imageRequest || !optionId) return;
     const option = photoOptions.find((o) => o.id === optionId);
-    const remaining = Math.max(0, maxImagesPerOption - (option?.images.length ?? 0));
-    if (remaining <= 0) {
+    const occupied = new Set((option?.images ?? []).map((photo) => photo.sortOrder));
+    const emptySlots = Array.from({ length: maxImagesPerOption }, (_, slot) => slot).filter(
+      (slot) => !occupied.has(slot),
+    );
+    const orderedSlots = [
+      ...emptySlots.filter((slot) => slot >= startSlot),
+      ...emptySlots.filter((slot) => slot < startSlot),
+    ];
+    if (orderedSlots.length === 0) {
       toast.error(`This option already has ${maxImagesPerOption} photos. Remove one to upload a different photo.`);
       return;
     }
-    const picked = Array.from(files).slice(0, remaining);
+    const picked = Array.from(files).slice(0, orderedSlots.length);
+    const objectUrls: string[] = [];
     try {
       setUploadingOrderImage(true);
-      for (const file of picked) {
+      const nextPending: Record<string, string> = {};
+      for (let i = 0; i < picked.length; i++) {
+        const previewUrl = URL.createObjectURL(picked[i]);
+        objectUrls.push(previewUrl);
+        nextPending[`${optionId}:${orderedSlots[i]}`] = previewUrl;
+      }
+      setPendingSlotPreviews((current) => ({ ...current, ...nextPending }));
+      for (let i = 0; i < picked.length; i++) {
+        const file = picked[i];
         if (!file.type.startsWith("image/")) {
           toast.error("Only image files are allowed.");
           return;
@@ -929,16 +1009,27 @@ const VendorOrderDetail = () => {
           toast.error(`${file.name} is larger than 5 MB.`);
           return;
         }
-        await vendorOnboardingApi.uploadVendorOrderImage(user.id, currentItemId, file, optionId);
+        const uploaded = await vendorOnboardingApi.uploadVendorOrderImage(
+          user.id,
+          currentItemId,
+          file,
+          optionId,
+          orderedSlots[i],
+        );
+        setImageRequest((prev) => (prev ? addImageToRequest(prev, uploaded, optionId) : prev));
       }
       toast.success(picked.length === 1 ? "Photo uploaded." : `${picked.length} photos uploaded.`);
-      await loadImageRequest(currentItemId);
+      await loadImageRequest(currentItemId, { silent: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to upload photo.";
       toast.error(message);
     } finally {
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+      setPendingSlotPreviews({});
       setUploadingOrderImage(false);
       setUploadOptionId(null);
+      setUploadSlotIndex(null);
+      orderImageUploadTargetRef.current = null;
       if (orderImageInputRef.current) orderImageInputRef.current.value = "";
     }
   };
@@ -972,8 +1063,9 @@ const VendorOrderDetail = () => {
     try {
       setDeletingOrderImageId(imageId);
       await vendorOnboardingApi.deleteVendorOrderImage(user.id, currentItemId, imageId);
+      setImageRequest((prev) => (prev ? removeImageFromRequest(prev, imageId) : prev));
       toast.success("Photo removed.");
-      await loadImageRequest(currentItemId);
+      await loadImageRequest(currentItemId, { silent: true });
       if (hadDescription && (option?.images.length ?? 1) <= 1) {
         setClearDescriptionPrompt({ optionId, label });
       }
@@ -1448,7 +1540,14 @@ const VendorOrderDetail = () => {
           ) : null}
 
           {/* Customer photo request — vendor uploads (hidden when no open request) */}
-          {!imageRequestLoading && imageRequest && (
+          {imageRequestLoading && !imageRequest ? (
+            <Card className="border-border/80 shadow-sm">
+              <CardContent className="p-4">
+                <PageLoaderSlot className="min-h-[8rem] py-0" />
+              </CardContent>
+            </Card>
+          ) : null}
+          {imageRequest && (
             <>
               <Card className="border-border/80 shadow-sm border-amber-200/70 dark:border-amber-500/30">
                 <CardHeader className="pb-3">
@@ -1527,7 +1626,8 @@ const VendorOrderDetail = () => {
                         </div>
                         <div className="grid grid-cols-3 gap-2">
                           {Array.from({ length: maxImagesPerOption }).map((_, slot) => {
-                            const photo = photos[slot];
+                            const photo = photoAtSlot(photos, slot);
+                            const pendingUrl = pendingSlotPreviews[`${option.id}:${slot}`];
                             if (photo) {
                               return (
                                 <div
@@ -1565,14 +1665,29 @@ const VendorOrderDetail = () => {
                                 </div>
                               );
                             }
+                            if (pendingUrl) {
+                              return (
+                                <div
+                                  key={`${option.id}-pending-${slot}`}
+                                  className="relative aspect-square w-full overflow-hidden rounded-xl bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10"
+                                >
+                                  <img src={pendingUrl} alt="" className="h-full w-full object-cover" />
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                    <Loader2 className="h-5 w-5 animate-spin text-white" />
+                                  </div>
+                                </div>
+                              );
+                            }
                             if (canUploadOrderImages) {
                               return (
                                 <VendorOptionAddSlot
                                   key={`${option.id}-add-${slot}`}
-                                  busy={optionBusy}
+                                  busy={optionBusy && uploadSlotIndex === slot}
                                   disabled={uploadingOrderImage}
                                   onAdd={() => {
+                                    orderImageUploadTargetRef.current = { optionId: option.id, slotIndex: slot };
                                     setUploadOptionId(option.id);
+                                    setUploadSlotIndex(slot);
                                     orderImageInputRef.current?.click();
                                   }}
                                 />

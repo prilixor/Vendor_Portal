@@ -2171,12 +2171,13 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                                                 crossAxisSpacing: 8,
                                               ),
                                               itemBuilder: (context, index) {
-                                                if (index < photos.length) {
+                                                final photo = imageAtSlot(photos, index);
+                                                if (photo != null) {
                                                   return _photoTile(
                                                     context: context,
-                                                    photo: photos[index],
+                                                    photo: photo,
                                                     photos: photos,
-                                                    index: index,
+                                                    index: photos.indexOf(photo).clamp(0, photos.length - 1),
                                                   );
                                                 }
                                                 return _noImageSlot(context);

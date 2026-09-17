@@ -98,3 +98,12 @@ export function resolveCatalogProductImageUrl(
     thumbnailUrl: primary.thumbnailUrl,
   });
 }
+
+/** Place a photo in the gallery cell that matches its saved slot, not array order. */
+export function photoAtSlot<T extends { sortOrder?: number | null }>(
+  photos: T[] | null | undefined,
+  slot: number,
+): T | undefined {
+  if (!photos?.length) return undefined;
+  return photos.find((photo) => photo.sortOrder === slot);
+}

@@ -34,6 +34,13 @@ class OrderImageModel {
   }
 }
 
+OrderImageModel? imageAtSlot(List<OrderImageModel> photos, int slot) {
+  for (final photo in photos) {
+    if (photo.sortOrder == slot) return photo;
+  }
+  return null;
+}
+
 class OrderImageOptionModel {
   final String id;
   final int optionNumber;

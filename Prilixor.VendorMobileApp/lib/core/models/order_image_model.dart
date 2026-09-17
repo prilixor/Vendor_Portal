@@ -40,6 +40,27 @@ class OrderImage {
       createdAt: created,
     );
   }
+
+  OrderImage copyWith({String? fileUrl}) {
+    return OrderImage(
+      id: id,
+      orderId: orderId,
+      requestId: requestId,
+      optionId: optionId,
+      fileUrl: fileUrl ?? this.fileUrl,
+      originalFileName: originalFileName,
+      contentType: contentType,
+      sortOrder: sortOrder,
+      createdAt: createdAt,
+    );
+  }
+}
+
+OrderImage? imageAtSlot(List<OrderImage> photos, int slot) {
+  for (final photo in photos) {
+    if (photo.sortOrder == slot) return photo;
+  }
+  return null;
 }
 
 class OrderImageOption {
@@ -147,4 +168,42 @@ class OrderImageRequest {
       selectedOptionId: (json['selectedOptionId'] ?? json['SelectedOptionId'])?.toString(),
     );
   }
+}
+
+OrderImageRequest reuseOrderImageUrls(OrderImageRequest previous, OrderImageRequest next) {
+  final urls = <String, String>{
+    for (final photo in previous.images) photo.id: photo.fileUrl,
+  };
+  for (final option in previous.options) {
+    for (final photo in option.images) {
+      urls.putIfAbsent(photo.id, () => photo.fileUrl);
+    }
+  }
+  List<OrderImage> keep(List<OrderImage> photos) => [
+        for (final photo in photos)
+          urls.containsKey(photo.id) ? photo.copyWith(fileUrl: urls[photo.id]) : photo,
+      ];
+  return OrderImageRequest(
+    id: next.id,
+    orderId: next.orderId,
+    vendorId: next.vendorId,
+    status: next.status,
+    message: next.message,
+    requestedAt: next.requestedAt,
+    images: keep(next.images),
+    options: [
+      for (final option in next.options)
+        OrderImageOption(
+          id: option.id,
+          optionNumber: option.optionNumber,
+          label: option.label,
+          description: option.description,
+          images: keep(option.images),
+        ),
+    ],
+    optionCount: next.optionCount,
+    maxImagesPerOption: next.maxImagesPerOption,
+    maxDescriptionLength: next.maxDescriptionLength,
+    selectedOptionId: next.selectedOptionId,
+  );
 }
