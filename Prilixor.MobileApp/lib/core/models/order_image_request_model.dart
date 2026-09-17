@@ -78,6 +78,8 @@ class OrderImageRequestModel {
   final String message;
   final List<OrderImageModel> images;
   final List<OrderImageOptionModel> options;
+  final int maxImagesPerOption;
+  final String? selectedOptionId;
 
   const OrderImageRequestModel({
     required this.id,
@@ -87,6 +89,8 @@ class OrderImageRequestModel {
     required this.message,
     this.images = const [],
     this.options = const [],
+    this.maxImagesPerOption = 3,
+    this.selectedOptionId,
   });
 
   factory OrderImageRequestModel.fromJson(Map<String, dynamic> json) {
@@ -115,6 +119,9 @@ class OrderImageRequestModel {
       message: (json['message'] ?? json['Message'] ?? '').toString(),
       images: images,
       options: options,
+      maxImagesPerOption:
+          ((json['maxImagesPerOption'] ?? json['MaxImagesPerOption']) as num?)?.toInt() ?? 3,
+      selectedOptionId: (json['selectedOptionId'] ?? json['SelectedOptionId'])?.toString(),
     );
   }
 }

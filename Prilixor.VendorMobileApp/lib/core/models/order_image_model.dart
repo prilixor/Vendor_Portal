@@ -90,6 +90,7 @@ class OrderImageRequest {
   final int optionCount;
   final int maxImagesPerOption;
   final int maxDescriptionLength;
+  final String? selectedOptionId;
 
   const OrderImageRequest({
     required this.id,
@@ -101,8 +102,9 @@ class OrderImageRequest {
     this.images = const [],
     this.options = const [],
     this.optionCount = 3,
-    this.maxImagesPerOption = 1,
+    this.maxImagesPerOption = 3,
     this.maxDescriptionLength = 500,
+    this.selectedOptionId,
   });
 
   factory OrderImageRequest.fromJson(Map<String, dynamic> json) {
@@ -139,9 +141,10 @@ class OrderImageRequest {
       options: options,
       optionCount: ((json['optionCount'] ?? json['OptionCount']) as num?)?.toInt() ?? 3,
       maxImagesPerOption:
-          ((json['maxImagesPerOption'] ?? json['MaxImagesPerOption']) as num?)?.toInt() ?? 1,
+          ((json['maxImagesPerOption'] ?? json['MaxImagesPerOption']) as num?)?.toInt() ?? 3,
       maxDescriptionLength:
           ((json['maxDescriptionLength'] ?? json['MaxDescriptionLength']) as num?)?.toInt() ?? 500,
+      selectedOptionId: (json['selectedOptionId'] ?? json['SelectedOptionId'])?.toString(),
     );
   }
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Barcode, CheckCircle2, ImagePlus, Images, Info, Loader2, Pencil, Plus, Stethoscope, X } from "lucide-react";
+import { Check, Barcode, CheckCircle2, ImageOff, ImagePlus, Images, Info, Loader2, Pencil, Plus, Stethoscope, X } from "lucide-react";
 import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
@@ -331,6 +331,46 @@ function itemPayout(item: VendorOrderApiDto): number {
     : item.totalAmount;
 }
 
+function VendorOptionEmptySlot() {
+  return (
+    <div
+      className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-xl bg-muted/55 px-1 ring-1 ring-inset ring-border/70 dark:bg-muted/25"
+      aria-label="No image"
+    >
+      <ImageOff className="h-5 w-5 text-muted-foreground/55" />
+      <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
+        Empty
+      </span>
+    </div>
+  );
+}
+
+function VendorOptionAddSlot({
+  busy,
+  disabled,
+  onAdd,
+}: {
+  busy: boolean;
+  disabled: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onAdd}
+      disabled={disabled}
+      className="flex aspect-square w-full flex-col items-center justify-center gap-1.5 rounded-xl bg-muted/40 text-muted-foreground ring-1 ring-inset ring-border/70 transition-colors hover:bg-primary/5 hover:text-primary hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-60"
+    >
+      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-background shadow-sm ring-1 ring-border/60">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+      </span>
+      <span className="text-[9px] font-semibold uppercase tracking-[0.08em]">
+        {busy ? "Uploading" : "Add"}
+      </span>
+    </button>
+  );
+}
+
 function OptionNoteField({
   initial,
   maxLength,
@@ -593,6 +633,8 @@ const VendorOrderDetail = () => {
   const orderImages = imageRequest?.images ?? [];
   const photoOptions = imageRequest?.options?.length ? imageRequest.options : [];
   const maxDescriptionLength = imageRequest?.maxDescriptionLength ?? 500;
+  const maxImagesPerOption = imageRequest?.maxImagesPerOption ?? 3;
+  const selectedPhotoOption = photoOptions.find((o) => o.id === imageRequest?.selectedOptionId);
   const canUploadOrderImages = Boolean(imageRequest) && (
     (order?.status.trim().toLowerCase() === "confirmed") ||
     (order?.status.trim().toLowerCase().replace(/\s+/g, "_") === "in_transit") ||
@@ -870,23 +912,26 @@ const VendorOrderDetail = () => {
     const optionId = uploadOptionId;
     if (!files?.length || !user?.id || !currentItemId || !imageRequest || !optionId) return;
     const option = photoOptions.find((o) => o.id === optionId);
-    if ((option?.images.length ?? 0) >= 1) {
-      toast.error("This option already has a photo. Remove it to upload a different one.");
+    const remaining = Math.max(0, maxImagesPerOption - (option?.images.length ?? 0));
+    if (remaining <= 0) {
+      toast.error(`This option already has ${maxImagesPerOption} photos. Remove one to upload a different photo.`);
       return;
     }
-    const file = files[0];
+    const picked = Array.from(files).slice(0, remaining);
     try {
       setUploadingOrderImage(true);
-      if (!file.type.startsWith("image/")) {
-        toast.error("Only image files are allowed.");
-        return;
+      for (const file of picked) {
+        if (!file.type.startsWith("image/")) {
+          toast.error("Only image files are allowed.");
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error(`${file.name} is larger than 5 MB.`);
+          return;
+        }
+        await vendorOnboardingApi.uploadVendorOrderImage(user.id, currentItemId, file, optionId);
       }
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error(`${file.name} is larger than 5 MB.`);
-        return;
-      }
-      await vendorOnboardingApi.uploadVendorOrderImage(user.id, currentItemId, file, optionId);
-      toast.success("Photo uploaded.");
+      toast.success(picked.length === 1 ? "Photo uploaded." : `${picked.length} photos uploaded.`);
       await loadImageRequest(currentItemId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to upload photo.";
@@ -929,7 +974,7 @@ const VendorOrderDetail = () => {
       await vendorOnboardingApi.deleteVendorOrderImage(user.id, currentItemId, imageId);
       toast.success("Photo removed.");
       await loadImageRequest(currentItemId);
-      if (hadDescription) {
+      if (hadDescription && (option?.images.length ?? 1) <= 1) {
         setClearDescriptionPrompt({ optionId, label });
       }
     } catch (error) {
@@ -1427,9 +1472,9 @@ const VendorOrderDetail = () => {
                       <p className="mt-1 text-sm font-semibold text-foreground">
                         {order.listingTitle}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        From the customer for this product only — upload here (not Admin chat).{" "}
-                        {imageRequest.message}
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        Upload up to {maxImagesPerOption} photos per option. The customer will select one option.
+                        Add photos here — not in Admin chat.
                       </p>
                     </div>
                   </div>
@@ -1439,75 +1484,103 @@ const VendorOrderDetail = () => {
                     ref={orderImageInputRef}
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
+                    multiple
                     className="hidden"
                     onChange={(e) => void handleOrderImagePick(e.target.files)}
                   />
+                  {selectedPhotoOption ? (
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
+                      Customer selected{" "}
+                      <span className="font-semibold text-foreground">{selectedPhotoOption.label}</span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Waiting for the customer to select an option.
+                    </p>
+                  )}
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {photoOptions.map((option) => {
-                    const photo = (option.images ?? [])[0];
-                    const showAdd = canUploadOrderImages && !photo;
+                    const photos = option.images ?? [];
                     const optionBusy = uploadingOrderImage && uploadOptionId === option.id;
+                    const chosen = imageRequest.selectedOptionId === option.id;
                     return (
                       <div
                         key={option.id}
-                        className="space-y-2 rounded-xl border border-border/70 bg-muted/20 p-3"
-                      >
-                        <p className="text-sm font-semibold text-foreground">{option.label}</p>
-                        {photo ? (
-                          <div className="group relative aspect-square w-full overflow-hidden rounded-lg border border-border bg-muted">
-                            <button
-                              type="button"
-                              className="h-full w-full"
-                              onClick={() => setPreviewImageUrl(photo.fileUrl)}
-                              aria-label={photo.originalFileName || option.label}
-                            >
-                              <img
-                                src={photo.fileUrl}
-                                alt={photo.originalFileName || option.label}
-                                className="h-full w-full object-cover"
-                                onError={retryOriginalOnImageError}
-                              />
-                            </button>
-                            {canUploadOrderImages && (
-                              <button
-                                type="button"
-                                className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white"
-                                disabled={deletingOrderImageId === photo.id}
-                                onClick={() => void handleDeleteOrderImage(photo.id, option.id)}
-                                aria-label="Remove photo"
-                              >
-                                {deletingOrderImageId === photo.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <X className="h-3.5 w-3.5" />
-                                )}
-                              </button>
-                            )}
-                          </div>
-                        ) : showAdd ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setUploadOptionId(option.id);
-                              orderImageInputRef.current?.click();
-                            }}
-                            disabled={uploadingOrderImage}
-                            className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-muted/40 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
-                          >
-                            {optionBusy ? (
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : (
-                              <ImagePlus className="h-5 w-5" />
-                            )}
-                            <span className="text-[11px] font-medium">
-                              {optionBusy ? "Uploading…" : "Add photo"}
-                            </span>
-                          </button>
-                        ) : (
-                          <div className="flex aspect-square w-full items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 text-[11px] text-muted-foreground">
-                            No photo
-                          </div>
+                        className={cn(
+                          "space-y-2.5 rounded-xl border bg-card p-3 shadow-sm",
+                          chosen
+                            ? "border-primary/35 ring-1 ring-primary/15"
+                            : "border-border/70",
                         )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{option.label}</p>
+                          {chosen ? (
+                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                              Chosen
+                            </span>
+                          ) : null}
+                          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                            {photos.length} of {maxImagesPerOption}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {Array.from({ length: maxImagesPerOption }).map((_, slot) => {
+                            const photo = photos[slot];
+                            if (photo) {
+                              return (
+                                <div
+                                  key={photo.id}
+                                  className="group relative aspect-square w-full overflow-hidden rounded-xl bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10"
+                                >
+                                  <button
+                                    type="button"
+                                    className="h-full w-full"
+                                    onClick={() => setPreviewImageUrl(photo.fileUrl)}
+                                    aria-label={photo.originalFileName || option.label}
+                                  >
+                                    <img
+                                      src={photo.fileUrl}
+                                      alt={photo.originalFileName || option.label}
+                                      className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+                                      onError={retryOriginalOnImageError}
+                                    />
+                                  </button>
+                                  {canUploadOrderImages && (
+                                    <button
+                                      type="button"
+                                      className="absolute right-1.5 top-1.5 rounded-full bg-black/65 p-1 text-white shadow-sm backdrop-blur-sm"
+                                      disabled={deletingOrderImageId === photo.id}
+                                      onClick={() => void handleDeleteOrderImage(photo.id, option.id)}
+                                      aria-label="Remove photo"
+                                    >
+                                      {deletingOrderImageId === photo.id ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      ) : (
+                                        <X className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            }
+                            if (canUploadOrderImages) {
+                              return (
+                                <VendorOptionAddSlot
+                                  key={`${option.id}-add-${slot}`}
+                                  busy={optionBusy}
+                                  disabled={uploadingOrderImage}
+                                  onAdd={() => {
+                                    setUploadOptionId(option.id);
+                                    orderImageInputRef.current?.click();
+                                  }}
+                                />
+                              );
+                            }
+                            return <VendorOptionEmptySlot key={`${option.id}-empty-${slot}`} />;
+                          })}
+                        </div>
                         <OptionNoteField
                           optionLabel={option.label}
                           initial={option.description ?? ""}
@@ -1521,7 +1594,7 @@ const VendorOrderDetail = () => {
                   })}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    One photo per option · JPEG, PNG, or WebP · max 5 MB · optional note up to {maxDescriptionLength} characters ·
+                    Up to {maxImagesPerOption} photos per option · JPEG, PNG, or WebP · max 5 MB · optional note up to {maxDescriptionLength} characters ·
                     cleared after delivery, cancel, or dispatch failure
                   </p>
                 </CardContent>

@@ -1110,6 +1110,43 @@ public sealed class CreateCustomerOrderImageRequestEndpoint(IMediator mediator)
     }
 }
 
+public sealed class CustomerSelectOrderImageOptionRequest
+{
+    public string OrderId { get; set; } = string.Empty;
+    public Guid OptionId { get; set; }
+}
+
+public sealed class SelectCustomerOrderImageOptionEndpoint(IMediator mediator)
+    : Endpoint<CustomerSelectOrderImageOptionRequest, Results<Ok<CustomerOrderImageRequestDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("me/orders/{OrderId}/image-request/selection");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerOrderImageRequestDto>, ProblemHttpResult>> ExecuteAsync(
+        CustomerSelectOrderImageOptionRequest req,
+        CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
+
+        if (req.OptionId == Guid.Empty)
+            return TypedResults.Problem(title: "customers.order_images.option_required", detail: "optionId is required.", statusCode: 400);
+
+        var result = await mediator.Send(new SelectCustomerOrderImageOptionCommand(customerId, orderId, req.OptionId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetCustomerLegalReconsentEndpoint(IMediator mediator)
     : EndpointWithoutRequest<Results<Ok<IReadOnlyList<PendingLegalReconsentDto>>, ProblemHttpResult>>
 {

@@ -831,6 +831,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                             provider,
                             _photoRequestSelection.toList(),
                           ),
+                          onSelectOption: (orderId, optionId) async {
+                            final ok = await provider.selectImageOption(orderId, optionId);
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  ok
+                                      ? 'Option selected.'
+                                      : (provider.errorMessage ?? 'Failed to select option.'),
+                                ),
+                                backgroundColor: ok ? null : Colors.redAccent,
+                              ),
+                            );
+                          },
                         ),
                       ],
 
@@ -1540,6 +1554,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
   final VoidCallback onClear;
   final Future<void> Function() onRequestAll;
   final Future<void> Function() onRequestSelected;
+  final Future<void> Function(String orderId, String optionId) onSelectOption;
 
   const _GroupVendorPhotoRequestCard({
     required this.items,
@@ -1553,6 +1568,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
     required this.onClear,
     required this.onRequestAll,
     required this.onRequestSelected,
+    required this.onSelectOption,
   });
 
   bool _canRequest(String status) {
@@ -1675,28 +1691,25 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
     );
   }
 
-  void _preview(BuildContext context, OrderImageModel image) {
-    final colors = context.appColors;
+  void _preview(BuildContext context, List<OrderImageModel> photos, int index) {
+    if (photos.isEmpty) return;
+    final safeIndex = index.clamp(0, photos.length - 1);
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.black,
-        insetPadding: EdgeInsets.all(16),
+        insetPadding: const EdgeInsets.all(16),
         child: Stack(
           children: [
             InteractiveViewer(
               child: AspectRatio(
                 aspectRatio: 1,
-                child: Image.network(
-                  image.fileUrl,
+                child: CatalogImage(
+                  url: photos[safeIndex].fileUrl,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => Center(
-                    child: Icon(Icons.broken_image_outlined, color: colors.textMuted, size: 48),
-                  ),
                 ),
               ),
             ),
-            // Dark chip so the close control stays visible on light images too.
             Positioned(
               top: 8,
               right: 8,
@@ -1713,6 +1726,64 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _noImageSlot(BuildContext context) {
+    final colors = context.appColors;
+    final mutedIcon = context.isDarkMode
+        ? Colors.white.withValues(alpha: 0.35)
+        : colors.textMuted.withValues(alpha: 0.65);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceElevated,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: context.isDarkMode
+              ? Colors.white.withValues(alpha: 0.06)
+              : colors.border.withValues(alpha: 0.85),
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.image_not_supported_outlined, size: 20, color: mutedIcon),
+          const SizedBox(height: 4),
+          Text(
+            'EMPTY',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colors.textMuted,
+              fontSize: 8.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.7,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _photoTile({
+    required BuildContext context,
+    required OrderImageModel photo,
+    required List<OrderImageModel> photos,
+    required int index,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _preview(context, photos, index),
+        child: CatalogImage(
+          url: photo.fileUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          borderRadius: BorderRadius.circular(12),
         ),
       ),
     );
@@ -1748,8 +1819,8 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               multi
-                  ? 'Sent to each product’s supplier (vendor) — not BlinksMed support. Choose products or request all. The supplier uploads one photo under Option 1, Option 2, and so on.'
-                  : 'Sent to the supplier for this product — not BlinksMed support chat below. They upload one photo under Option 1, Option 2, and so on.',
+                  ? 'Sent to each product’s supplier (vendor) — not BlinksMed support. Choose products or request all. The supplier uploads up to 3 photos under Option 1, Option 2, and so on. Then choose one option.'
+                  : 'Sent to the supplier for this product — not BlinksMed support chat below. They upload up to 3 photos under Option 1, Option 2, and so on. Then choose one option.',
               style: TextStyle(
                 color: colors.textSecondary,
                 fontSize: 13,
@@ -1924,11 +1995,13 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  item.listingTitle,
+                                  item.listingTitle.trim().isEmpty
+                                      ? 'Product'
+                                      : item.listingTitle,
                                   style: TextStyle(
                                     color: colors.textPrimary,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -1974,88 +2047,150 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                           ),
                         )
                       else if (options.isNotEmpty)
-                        GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: options.length,
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            mainAxisSpacing: 8,
-                            crossAxisSpacing: 8,
-                            childAspectRatio: 0.72,
-                          ),
-                          itemBuilder: (context, index) {
-                            final option = options[index];
-                            final note = (option.description ?? '').trim();
-                            final photo = option.images.isEmpty ? null : option.images.first;
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        option.label,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: colors.textPrimary,
-                                          fontSize: 11.5,
-                                          fontWeight: FontWeight.w800,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              request?.selectedOptionId != null
+                                  ? 'Your selection: ${options.where((o) => o.id == request!.selectedOptionId).isEmpty ? 'an option' : options.firstWhere((o) => o.id == request!.selectedOptionId).label}'
+                                  : 'Tap an option to choose it for your supplier.',
+                              style: TextStyle(
+                                color: isDark ? const Color(0xFFE2E8F0) : colors.textMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            ...options.map((option) {
+                              final note = (option.description ?? '').trim();
+                              final photos = option.images;
+                              final chosen = request?.selectedOptionId == option.id;
+                              final canChoose = photos.isNotEmpty && !busy;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Material(
+                                  color: colors.surface,
+                                  borderRadius: BorderRadius.circular(14),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: InkWell(
+                                    onTap: canChoose && !chosen
+                                        ? () => onSelectOption(item.id, option.id)
+                                        : null,
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: chosen
+                                              ? const Color(0xFF6C63FF).withValues(alpha: 0.45)
+                                              : colors.border,
+                                          width: chosen ? 1.4 : 1,
                                         ),
                                       ),
-                                    ),
-                                    if (note.isNotEmpty)
-                                      InkWell(
-                                        onTap: () => _showOptionDescription(context, option.label, note),
-                                        customBorder: const CircleBorder(),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(2),
-                                          child: Icon(
-                                            Icons.info_outline,
-                                            size: 16,
-                                            color: isDark ? const Color(0xFFCBD5E1) : colors.textMuted,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Expanded(
-                                  child: photo == null
-                                      ? Container(
-                                          alignment: Alignment.center,
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(10),
-                                            border: Border.all(color: colors.border),
-                                          ),
-                                          child: Text(
-                                            'No photo',
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(color: colors.textMuted, fontSize: 10.5),
-                                          ),
-                                        )
-                                      : Material(
-                                          color: Colors.white.withValues(alpha: 0.06),
-                                          borderRadius: BorderRadius.circular(10),
-                                          clipBehavior: Clip.antiAlias,
-                                          child: InkWell(
-                                            onTap: () => _preview(context, photo),
-                                            child: Image.network(
-                                              photo.fileUrl,
-                                              fit: BoxFit.cover,
-                                              width: double.infinity,
-                                              height: double.infinity,
-                                              errorBuilder: (_, __, ___) => const Center(
-                                                child: Icon(Icons.broken_image_outlined, color: Colors.white38),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                chosen
+                                                    ? Icons.check_circle_rounded
+                                                    : Icons.circle_outlined,
+                                                size: 20,
+                                                color: chosen
+                                                    ? const Color(0xFF6C63FF)
+                                                    : colors.textMuted,
                                               ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  option.label,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    color: colors.textPrimary,
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                                ),
+                                              ),
+                                              if (chosen)
+                                                Container(
+                                                  margin: const EdgeInsets.only(right: 6),
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 3,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF6C63FF).withValues(alpha: isDark ? 0.18 : 0.12),
+                                                    borderRadius: BorderRadius.circular(999),
+                                                  ),
+                                                  child: Text(
+                                                    'Selected',
+                                                    style: TextStyle(
+                                                      color: isDark
+                                                          ? const Color(0xFFC4B5FD)
+                                                          : const Color(0xFF4F46E5),
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ),
+                                              if (note.isNotEmpty)
+                                                InkWell(
+                                                  onTap: () => _showOptionDescription(
+                                                    context,
+                                                    option.label,
+                                                    note,
+                                                  ),
+                                                  customBorder: const CircleBorder(),
+                                                  child: Padding(
+                                                    padding: const EdgeInsets.all(4),
+                                                    child: Icon(
+                                                      Icons.info_outline,
+                                                      size: 18,
+                                                      color: isDark
+                                                          ? const Color(0xFFCBD5E1)
+                                                          : colors.textMuted,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 10),
+                                            child: GridView.builder(
+                                              shrinkWrap: true,
+                                              physics: const NeverScrollableScrollPhysics(),
+                                              itemCount: request?.maxImagesPerOption ?? 3,
+                                              gridDelegate:
+                                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount: 3,
+                                                mainAxisSpacing: 8,
+                                                crossAxisSpacing: 8,
+                                              ),
+                                              itemBuilder: (context, index) {
+                                                if (index < photos.length) {
+                                                  return _photoTile(
+                                                    context: context,
+                                                    photo: photos[index],
+                                                    photos: photos,
+                                                    index: index,
+                                                  );
+                                                }
+                                                return _noImageSlot(context);
+                                              },
                                             ),
                                           ),
-                                        ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ],
-                            );
-                          },
+                              );
+                            }),
+                          ],
                         )
                       else
                         GridView.builder(
@@ -2074,13 +2209,10 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                               borderRadius: BorderRadius.circular(10),
                               clipBehavior: Clip.antiAlias,
                               child: InkWell(
-                                onTap: () => _preview(context, image),
-                                child: Image.network(
-                                  image.fileUrl,
+                                onTap: () => _preview(context, images, index),
+                                child: CatalogImage(
+                                  url: image.fileUrl,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Center(
-                                    child: Icon(Icons.broken_image_outlined, color: Colors.white38),
-                                  ),
                                 ),
                               ),
                             );

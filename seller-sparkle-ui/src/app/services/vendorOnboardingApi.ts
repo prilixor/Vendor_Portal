@@ -528,6 +528,7 @@ export interface VendorOrderImageRequestApiDto {
   optionCount?: number;
   maxImagesPerOption?: number;
   maxDescriptionLength?: number;
+  selectedOptionId?: string | null;
 }
 
 export interface VendorOrderApiDto {

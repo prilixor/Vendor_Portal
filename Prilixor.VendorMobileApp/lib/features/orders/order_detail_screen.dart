@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -255,9 +254,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
             .toList() ??
         const <OrderImageOption>[];
     final option = matches.isEmpty ? null : matches.first;
-    if ((option?.images.length ?? 0) >= 1) {
+    final maxPerOption = provider.imageRequest?.maxImagesPerOption ?? 3;
+    final remaining = maxPerOption - (option?.images.length ?? 0);
+    if (remaining <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This option already has a photo. Remove it to upload a different one.')),
+        SnackBar(content: Text('This option already has $maxPerOption photos. Remove one to upload a different photo.')),
       );
       return;
     }
@@ -267,7 +268,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
     final files = await pickVendorPhotoFiles(
       source: pickedSource,
-      maxCount: 1,
+      maxCount: remaining,
     );
     if (files.isEmpty || !mounted) return;
 
@@ -325,6 +326,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         .toList();
     final hadDescription =
         option != null && option.isNotEmpty && (option.first.description ?? '').trim().isNotEmpty;
+    final isLastPhoto = option != null && option.isNotEmpty && option.first.images.length <= 1;
     final label = option != null && option.isNotEmpty ? option.first.label : 'this option';
     final ok = await provider.deleteOrderImage(
       vendorId: vendorId,
@@ -338,7 +340,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         backgroundColor: ok ? null : Colors.redAccent,
       ),
     );
-    if (!ok || !hadDescription || !mounted) return;
+    if (!ok || !hadDescription || !isLastPhoto || !mounted) return;
 
     final clear = await showDialog<bool>(
       context: context,
@@ -1075,114 +1077,16 @@ class _PhotoRequestCard extends StatelessWidget {
     required this.onDelete,
   });
 
-  void _preview(BuildContext context, OrderImage image) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: const EdgeInsets.all(16),
-        child: Stack(
-          children: [
-            InteractiveViewer(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Image.network(
-                  image.fileUrl,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Center(
-                    child: Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Material(
-                color: Colors.black.withValues(alpha: 0.62),
-                shape: const CircleBorder(),
-                elevation: 2,
-                child: IconButton(
-                  tooltip: 'Close',
-                  onPressed: () => Navigator.pop(ctx),
-                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _emptyUploadZone(BuildContext context, String optionId) {
-    final colors = context.appColors;
-    return CustomPaint(
-      painter: _DashedBorderPainter(
-        color: AppTheme.accent.withValues(alpha: 0.55),
-        radius: 14,
-      ),
-      child: Ink(
-        decoration: BoxDecoration(
-          color: AppTheme.accent.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (!kIsWeb) ...[
-                SizedBox(
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    onPressed: busy ? null : () => onAdd(optionId, VendorPhotoPickSource.camera),
-                    icon: const Icon(Icons.photo_camera_outlined, size: 20),
-                    label: const Text('Take photo'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-              SizedBox(
-                height: 46,
-                child: OutlinedButton.icon(
-                  onPressed: busy
-                      ? null
-                      : () => onAdd(
-                            optionId,
-                            kIsWeb ? null : VendorPhotoPickSource.gallery,
-                          ),
-                  icon: const Icon(Icons.photo_library_outlined, size: 20),
-                  label: Text(kIsWeb ? 'Choose photo' : 'Choose from gallery'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: colors.textPrimary,
-                    side: BorderSide(color: colors.border),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                busy ? 'Uploading\u2026' : 'One photo',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: colors.textMuted,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+  void _preview(BuildContext context, List<OrderImage> photos, int index, {String title = 'Photo preview'}) {
+    if (photos.isEmpty) return;
+    final urls = photos.map((p) => p.fileUrl).where((u) => u.trim().isNotEmpty).toList();
+    if (urls.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CatalogImageViewerScreen(
+          imageUrls: urls,
+          initialIndex: index.clamp(0, urls.length - 1),
+          title: title,
         ),
       ),
     );
@@ -1190,9 +1094,6 @@ class _PhotoRequestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final message = request.message.trim().isEmpty
-        ? 'Please upload one photo under each option.'
-        : request.message;
     final options = request.options;
 
     return Container(
@@ -1290,7 +1191,7 @@ class _PhotoRequestCard extends StatelessWidget {
                     ],
                     const SizedBox(height: 4),
                     Text(
-                      'From the customer for this product only \u2014 upload here (not Admin chat).',
+                      'Upload up to ${request.maxImagesPerOption} photos per option. The customer will select one option. Add photos here \u2014 not in Admin chat.',
                       style: TextStyle(
                         color: context.appColors.textMuted,
                         fontSize: 11.5,
@@ -1303,28 +1204,38 @@ class _PhotoRequestCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: context.appColors.surface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: context.appColors.border),
-            ),
-            child: Text(
-              message,
-              style: TextStyle(
-                color: context.appColors.textSecondary,
-                fontSize: 12.5,
-                height: 1.4,
-                fontWeight: FontWeight.w500,
+          if (request.selectedOptionId != null &&
+              options.any((o) => o.id == request.selectedOptionId))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, size: 16, color: AppTheme.accent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Customer selected ${options.firstWhere((o) => o.id == request.selectedOptionId).label}',
+                      style: TextStyle(
+                        color: context.appColors.textSecondary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Waiting for the customer to select an option.',
+                style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
           ...options.map((option) {
-            final photo = option.images.isEmpty ? null : option.images.first;
-            final showAdd = canUpload && photo == null;
+            final photos = option.images;
+            final chosen = request.selectedOptionId == option.id;
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Container(
@@ -1332,70 +1243,200 @@ class _PhotoRequestCard extends StatelessWidget {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: context.appColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: context.appColors.border),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: chosen
+                        ? AppTheme.accent.withValues(alpha: 0.45)
+                        : context.appColors.border,
+                    width: chosen ? 1.4 : 1,
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      option.label,
-                      style: TextStyle(
-                        color: context.appColors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13.5,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            option.label,
+                            style: TextStyle(
+                              color: context.appColors.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                        ),
+                        if (chosen)
+                          Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accent.withValues(alpha: context.isDarkMode ? 0.18 : 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              'Chosen',
+                              style: TextStyle(
+                                color: context.isDarkMode
+                                    ? const Color(0xFFC4B5FD)
+                                    : AppTheme.accent,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                        Text(
+                          '${photos.length} of ${request.maxImagesPerOption}',
+                          style: TextStyle(
+                            color: context.appColors.textMuted,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
-                    if (showAdd)
-                      _emptyUploadZone(context, option.id)
-                    else if (photo == null)
-                      Text(
-                        'No photo yet.',
-                        style: TextStyle(color: context.appColors.textMuted, fontSize: 12.5),
-                      )
-                    else
-                      SizedBox(
-                        height: 112,
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: Material(
-                                color: context.appColors.surface,
-                                borderRadius: BorderRadius.circular(10),
-                                clipBehavior: Clip.antiAlias,
-                                child: InkWell(
-                                  onTap: () => _preview(context, photo),
-                                  child: Image.network(
-                                    photo.fileUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Center(
-                                      child: Icon(Icons.broken_image_outlined, color: context.appColors.textMuted),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: request.maxImagesPerOption,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: 8,
+                      ),
+                      itemBuilder: (context, i) {
+                        if (i < photos.length) {
+                          final photo = photos[i];
+                          return Stack(
+                            children: [
+                              Positioned.fill(
+                                child: Material(
+                                  color: context.appColors.surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: InkWell(
+                                    onTap: () => _preview(
+                                      context,
+                                      photos,
+                                      i,
+                                      title: option.label,
+                                    ),
+                                    child: CatalogImage(
+                                      url: photo.fileUrl,
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                   ),
+                                ),
+                              ),
+                              if (canUpload)
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: Material(
+                                    color: Colors.black.withValues(alpha: 0.65),
+                                    shape: const CircleBorder(),
+                                    child: InkWell(
+                                      customBorder: const CircleBorder(),
+                                      onTap: busy ? null : () => onDelete(photo.id, option.id),
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(5),
+                                        child: Icon(Icons.close, size: 14, color: Colors.white),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        }
+                        if (canUpload) {
+                          return Material(
+                            color: context.appColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              onTap: busy ? null : () => onAdd(option.id),
+                              borderRadius: BorderRadius.circular(12),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: context.isDarkMode
+                                        ? Colors.white.withValues(alpha: 0.06)
+                                        : context.appColors.border.withValues(alpha: 0.85),
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      width: 28,
+                                      height: 28,
+                                      decoration: BoxDecoration(
+                                        color: context.appColors.surface,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: context.appColors.border),
+                                      ),
+                                      child: Icon(
+                                        busy ? Icons.hourglass_top_rounded : Icons.add,
+                                        size: 16,
+                                        color: context.appColors.textMuted,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      busy ? 'UPLOADING' : 'ADD',
+                                      style: TextStyle(
+                                        color: context.appColors.textMuted,
+                                        fontSize: 8.5,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.7,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                            if (canUpload)
-                              Positioned(
-                                top: 4,
-                                right: 4,
-                                child: Material(
-                                  color: Colors.black.withValues(alpha: 0.65),
-                                  shape: const CircleBorder(),
-                                  child: InkWell(
-                                    customBorder: const CircleBorder(),
-                                    onTap: busy ? null : () => onDelete(photo.id, option.id),
-                                    child: const Padding(
-                                      padding: EdgeInsets.all(5),
-                                      child: Icon(Icons.close, size: 14, color: Colors.white),
-                                    ),
-                                  ),
+                          );
+                        }
+                        return DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: context.appColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: context.isDarkMode
+                                  ? Colors.white.withValues(alpha: 0.06)
+                                  : context.appColors.border.withValues(alpha: 0.85),
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.image_not_supported_outlined,
+                                size: 20,
+                                color: context.isDarkMode
+                                    ? Colors.white.withValues(alpha: 0.35)
+                                    : context.appColors.textMuted.withValues(alpha: 0.65),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'EMPTY',
+                                style: TextStyle(
+                                  color: context.appColors.textMuted,
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.7,
                                 ),
                               ),
-                          ],
-                        ),
-                      ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                     const SizedBox(height: 10),
                     _OptionNoteField(
                       key: ValueKey('${option.id}-${option.description ?? ''}'),
@@ -1411,7 +1452,7 @@ class _PhotoRequestCard extends StatelessWidget {
             );
           }),
           Text(
-            'One photo per option \u00b7 JPEG, PNG, or WebP \u00b7 max 5 MB \u00b7 optional note up to ${request.maxDescriptionLength} characters \u00b7 cleared after delivery, cancel, or dispatch failure',
+            'Up to ${request.maxImagesPerOption} photos per option \u00b7 JPEG, PNG, or WebP \u00b7 max 5 MB \u00b7 optional note up to ${request.maxDescriptionLength} characters \u00b7 cleared after delivery, cancel, or dispatch failure',
             style: TextStyle(
               color: context.appColors.textMuted,
               fontSize: 10.5,
@@ -1602,40 +1643,6 @@ class _OptionNoteFieldState extends State<_OptionNoteField> {
       ),
     );
   }
-}
-
-class _DashedBorderPainter extends CustomPainter {
-  final Color color;
-  final double radius;
-
-  _DashedBorderPainter({required this.color, required this.radius});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rrect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0.75, 0.75, size.width - 1.5, size.height - 1.5),
-      Radius.circular(radius),
-    );
-    final path = Path()..addRRect(rrect);
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4;
-    const dash = 5.0;
-    const gap = 3.5;
-    for (final metric in path.computeMetrics()) {
-      var distance = 0.0;
-      while (distance < metric.length) {
-        final next = (distance + dash).clamp(0.0, metric.length);
-        canvas.drawPath(metric.extractPath(distance, next), paint);
-        distance = next + gap;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.radius != radius;
 }
 
 class _OrderPrescriptionCard extends StatelessWidget {
