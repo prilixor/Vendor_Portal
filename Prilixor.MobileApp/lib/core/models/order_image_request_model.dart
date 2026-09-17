@@ -4,6 +4,7 @@ class OrderImageModel {
   final String? requestId;
   final String? optionId;
   final String fileUrl;
+  final String? thumbnailUrl;
   final String? originalFileName;
   final String? contentType;
   final int sortOrder;
@@ -14,10 +15,17 @@ class OrderImageModel {
     this.requestId,
     this.optionId,
     required this.fileUrl,
+    this.thumbnailUrl,
     this.originalFileName,
     this.contentType,
     this.sortOrder = 0,
   });
+
+  String get tileUrl {
+    final thumb = thumbnailUrl?.trim();
+    if (thumb != null && thumb.isNotEmpty) return thumb;
+    return fileUrl;
+  }
 
   factory OrderImageModel.fromJson(Map<String, dynamic> json) {
     return OrderImageModel(
@@ -26,12 +34,20 @@ class OrderImageModel {
       requestId: (json['requestId'] ?? json['RequestId'])?.toString(),
       optionId: (json['optionId'] ?? json['OptionId'])?.toString(),
       fileUrl: (json['fileUrl'] ?? json['FileUrl'] ?? '').toString(),
+      thumbnailUrl: (json['thumbnailUrl'] ?? json['ThumbnailUrl'])?.toString(),
       originalFileName:
           (json['originalFileName'] ?? json['OriginalFileName'])?.toString(),
       contentType: (json['contentType'] ?? json['ContentType'])?.toString(),
       sortOrder: ((json['sortOrder'] ?? json['SortOrder']) as num?)?.toInt() ?? 0,
     );
   }
+}
+
+OrderImageModel? imageAtSlot(List<OrderImageModel> photos, int slot) {
+  for (final photo in photos) {
+    if (photo.sortOrder == slot) return photo;
+  }
+  return null;
 }
 
 class OrderImageOptionModel {
@@ -78,6 +94,8 @@ class OrderImageRequestModel {
   final String message;
   final List<OrderImageModel> images;
   final List<OrderImageOptionModel> options;
+  final int maxImagesPerOption;
+  final String? selectedOptionId;
 
   const OrderImageRequestModel({
     required this.id,
@@ -87,6 +105,8 @@ class OrderImageRequestModel {
     required this.message,
     this.images = const [],
     this.options = const [],
+    this.maxImagesPerOption = 3,
+    this.selectedOptionId,
   });
 
   factory OrderImageRequestModel.fromJson(Map<String, dynamic> json) {
@@ -115,6 +135,9 @@ class OrderImageRequestModel {
       message: (json['message'] ?? json['Message'] ?? '').toString(),
       images: images,
       options: options,
+      maxImagesPerOption:
+          ((json['maxImagesPerOption'] ?? json['MaxImagesPerOption']) as num?)?.toInt() ?? 3,
+      selectedOptionId: (json['selectedOptionId'] ?? json['SelectedOptionId'])?.toString(),
     );
   }
 }

@@ -177,6 +177,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.RequestedAt).HasColumnName("requested_at");
             entity.Property(x => x.ClosedAt).HasColumnName("closed_at");
             entity.Property(x => x.ClosedReason).HasColumnName("closed_reason");
+            entity.Property(x => x.SelectedOptionId).HasColumnName("selected_option_id");
 
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
@@ -189,6 +190,11 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.HasOne(x => x.Order)
                 .WithMany()
                 .HasForeignKey(x => x.CustomerRentalOrderId);
+
+            entity.HasOne<CustomerOrderImageRequestOption>()
+                .WithMany()
+                .HasForeignKey(x => x.SelectedOptionId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<CustomerOrderImageRequestOption>(entity =>
@@ -223,6 +229,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.OptionId).HasColumnName("option_id");
             entity.Property(x => x.VendorId).HasColumnName("vendor_id");
             entity.Property(x => x.StoredReference).HasColumnName("stored_reference");
+            entity.Property(x => x.ThumbnailStoredReference).HasColumnName("thumbnail_stored_reference");
             entity.Property(x => x.OriginalFileName).HasColumnName("original_file_name");
             entity.Property(x => x.ContentType).HasColumnName("content_type");
             entity.Property(x => x.SortOrder).HasColumnName("sort_order");

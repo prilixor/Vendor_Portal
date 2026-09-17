@@ -4,6 +4,45 @@ import '../../core/models/medical_model.dart';
 import '../../core/providers/medical_provider.dart';
 import '../../core/theme.dart';
 
+/// Teal linked-doctor card — matches Customer Web `CustomerMedicalReference`.
+class _DoctorLinkPalette {
+  const _DoctorLinkPalette(this.dark);
+  final bool dark;
+
+  Color get cardBg =>
+      dark ? const Color(0xFF2DD4BF).withValues(alpha: 0.10) : const Color(0xFFF0FDFA);
+  Color get cardBorder =>
+      dark ? const Color(0xFF2DD4BF).withValues(alpha: 0.30) : const Color(0xFF99F6E4);
+  Color get iconBg => dark ? const Color(0xFF14B8A6) : const Color(0xFF0D9488);
+  Color get label => dark ? const Color(0xFF5EEAD4) : const Color(0xFF0F766E);
+  Color get title => dark ? const Color(0xFFF0FDFA) : const Color(0xFF042F2E);
+  Color get subtitle =>
+      dark ? const Color(0xFF99F6E4).withValues(alpha: 0.85) : const Color(0xFF115E59);
+  Color get codeFg => dark ? const Color(0xFFCCFBF1) : const Color(0xFF134E4A);
+  Color get codeBg =>
+      dark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.90);
+  Color get codeBorder =>
+      dark ? const Color(0xFF2DD4BF).withValues(alpha: 0.30) : const Color(0xFF99F6E4);
+  Color get close => dark ? Colors.white70 : const Color(0xFF0F766E);
+  Color get hospitalsBg =>
+      dark ? const Color(0xFF0F172A).withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.55);
+  Color get hospitalsBorder =>
+      dark ? const Color(0xFF2DD4BF).withValues(alpha: 0.20) : const Color(0xFF99F6E4).withValues(alpha: 0.70);
+  Color get countBg =>
+      dark ? const Color(0xFF2DD4BF).withValues(alpha: 0.20) : const Color(0xFFCCFBF1);
+  Color get countFg => dark ? const Color(0xFF99F6E4) : const Color(0xFF115E59);
+  Color get pin => dark ? const Color(0xFF2DD4BF) : const Color(0xFF0D9488);
+  Color get emptyText => dark ? Colors.white60 : const Color(0xFF115E59);
+  Color get action => dark ? const Color(0xFF5EEAD4) : const Color(0xFF0F766E);
+  Color get findBg => dark ? const Color(0xFF0F766E) : const Color(0xFF0D9488);
+  Color get errorBg =>
+      dark ? const Color(0xFF7F1D1D).withValues(alpha: 0.35) : const Color(0xFFFEF2F2);
+  Color get errorBorder =>
+      dark ? const Color(0xFFF87171).withValues(alpha: 0.45) : const Color(0xFFFECACA);
+  Color get errorFg => dark ? const Color(0xFFFECACA) : const Color(0xFF991B1B);
+  Color get errorIcon => dark ? const Color(0xFFFCA5A5) : const Color(0xFFDC2626);
+}
+
 /// Doctor Unique ID lookup — mirrors React CustomerMedicalReference (with hospitals).
 class MedicalReferenceScreen extends StatefulWidget {
   final String title;
@@ -87,53 +126,58 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final medical = Provider.of<MedicalProvider>(context);
-    final error = _localError ?? medical.errorMessage;
     final colors = context.appColors;
+    final medical = context.watch<MedicalProvider>();
+    final linked = _ref.hasDoctor;
+    final hospitals = _ref.hospitals;
+    final error = _localError ?? medical.errorMessage;
+    final teal = _DoctorLinkPalette(context.isDarkMode);
 
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
+        title: Text(widget.title, style: TextStyle(color: colors.textPrimary, fontSize: 18)),
         backgroundColor: colors.background,
         elevation: 0,
-        iconTheme: IconThemeData(color: colors.textPrimary),
-        title: Text(
-          'Doctor Unique ID',
-          style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: colors.textPrimary),
+          onPressed: () => Navigator.pop(context, _ref),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, _ref),
-            child: const Text('Done', style: TextStyle(color: Color(0xFF2DD4BF), fontWeight: FontWeight.bold)),
+            child: Text(
+              'Done',
+              style: TextStyle(color: teal.action, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
           Text(
             widget.title,
-            style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: colors.textPrimary),
           ),
           const SizedBox(height: 8),
           Text(
             'Enter the Unique ID from your doctor (or from their QR / share page). This is optional.',
-            style: TextStyle(color: colors.textSecondary, fontSize: 13, height: 1.4),
+            style: TextStyle(fontSize: 13, height: 1.45, color: colors.textMuted),
           ),
-          const SizedBox(height: 24),
-          if (_ref.hasDoctor)
+          const SizedBox(height: 20),
+          if (linked) ...[
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF134E4A).withValues(alpha: 0.45),
+                color: teal.cardBg,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF2DD4BF).withValues(alpha: 0.35)),
+                border: Border.all(color: teal.cardBorder),
               ),
-              clipBehavior: Clip.antiAlias,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
+                    padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -141,50 +185,57 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
                           width: 42,
                           height: 42,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0F766E),
+                            color: teal.iconBg,
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.medical_services_outlined, color: Colors.white, size: 22),
+                          child: const Icon(Icons.medical_services_outlined, color: Colors.white, size: 20),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'DOCTOR LINKED',
                                 style: TextStyle(
-                                  color: Color(0xFF5EEAD4),
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.6,
+                                  color: teal.label,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                _ref.doctorName ?? 'Doctor',
-                                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                                _ref.doctorName ?? '',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: teal.title,
+                                ),
                               ),
-                              if (_ref.specialization != null && _ref.specialization!.isNotEmpty) ...[
+                              if ((_ref.specialization ?? '').isNotEmpty) ...[
                                 const SizedBox(height: 2),
-                                Text(_ref.specialization!, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                Text(
+                                  _ref.specialization!,
+                                  style: TextStyle(fontSize: 12, color: teal.subtitle),
+                                ),
                               ],
                               const SizedBox(height: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
+                                  color: teal.codeBg,
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFF2DD4BF).withValues(alpha: 0.35)),
+                                  border: Border.all(color: teal.codeBorder),
                                 ),
                                 child: Text(
                                   _ref.uniqueCode,
-                                  style: const TextStyle(
-                                    color: Color(0xFF99F6E4),
-                                    fontSize: 14,
+                                  style: TextStyle(
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w800,
-                                    letterSpacing: 1.2,
+                                    letterSpacing: 0.8,
                                     fontFamily: 'monospace',
+                                    color: teal.codeFg,
                                   ),
                                 ),
                               ),
@@ -193,80 +244,69 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
                         ),
                         IconButton(
                           onPressed: _clear,
-                          icon: const Icon(Icons.close, color: Colors.white70),
+                          icon: Icon(Icons.close, size: 18, color: teal.close),
+                          visualDensity: VisualDensity.compact,
                         ),
                       ],
                     ),
                   ),
                   Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A).withValues(alpha: 0.35),
-                      border: Border(
-                        top: BorderSide(color: const Color(0xFF2DD4BF).withValues(alpha: 0.25)),
-                      ),
+                      color: teal.hospitalsBg,
+                      border: Border(top: BorderSide(color: teal.hospitalsBorder)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.local_hospital_outlined, size: 16, color: Color(0xFF5EEAD4)),
+                            Icon(Icons.local_hospital_outlined, size: 14, color: teal.label),
                             const SizedBox(width: 6),
-                            const Text(
+                            Text(
                               'HOSPITALS',
                               style: TextStyle(
-                                color: Color(0xFF5EEAD4),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 0.8,
+                                color: teal.label,
                               ),
                             ),
-                            if (_ref.hospitals.isNotEmpty) ...[
-                              const Spacer(),
+                            const Spacer(),
+                            if (hospitals.isNotEmpty)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF0F766E).withValues(alpha: 0.5),
-                                  borderRadius: BorderRadius.circular(999),
+                                  color: teal.countBg,
+                                  borderRadius: BorderRadius.circular(99),
                                 ),
                                 child: Text(
-                                  '${_ref.hospitals.length}',
-                                  style: const TextStyle(
-                                    color: Color(0xFF99F6E4),
+                                  '${hospitals.length}',
+                                  style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w800,
+                                    color: teal.countFg,
                                   ),
                                 ),
                               ),
-                            ],
                           ],
                         ),
                         const SizedBox(height: 10),
-                        if (_ref.hospitals.isEmpty)
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: const Color(0xFF2DD4BF).withValues(alpha: 0.25),
-                                style: BorderStyle.solid,
-                              ),
-                            ),
-                            child: const Text(
-                              'No affiliated hospitals on file for this doctor.',
-                              style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.35),
+                        if (hospitals.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Text(
+                              'No hospitals listed for this doctor yet.',
+                              style: TextStyle(fontSize: 13, color: teal.emptyText),
                             ),
                           )
                         else
-                          ..._ref.hospitals.map((h) {
-                            final detail = h.detailLabel;
+                          ...hospitals.map((h) {
+                            final detail = _hospitalDetail(h);
                             return Container(
                               width: double.infinity,
                               margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               decoration: BoxDecoration(
                                 color: colors.surface,
                                 borderRadius: BorderRadius.circular(10),
@@ -278,25 +318,25 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
                                   Text(
                                     h.name,
                                     style: TextStyle(
-                                      color: colors.textPrimary,
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
+                                      color: colors.textPrimary,
                                     ),
                                   ),
-                                  if (detail != null) ...[
+                                  if (detail.isNotEmpty) ...[
                                     const SizedBox(height: 4),
                                     Row(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Padding(
-                                          padding: EdgeInsets.only(top: 1),
-                                          child: Icon(Icons.place_outlined, size: 14, color: Color(0xFF2DD4BF)),
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 1),
+                                          child: Icon(Icons.location_on_outlined, size: 14, color: teal.pin),
                                         ),
                                         const SizedBox(width: 4),
                                         Expanded(
                                           child: Text(
                                             detail,
-                                            style: TextStyle(color: colors.textSecondary, fontSize: 12, height: 1.35),
+                                            style: TextStyle(fontSize: 12, height: 1.35, color: colors.textSecondary),
                                           ),
                                         ),
                                       ],
@@ -311,110 +351,93 @@ class _MedicalReferenceScreenState extends State<MedicalReferenceScreen> {
                   ),
                 ],
               ),
-            )
-          else ...[
-            Text(
-              'Doctor Unique ID',
-              style: TextStyle(color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _codeController,
-                    textCapitalization: TextCapitalization.characters,
-                    style: TextStyle(
-                      color: colors.textPrimary,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.1,
-                      fontFamily: 'monospace',
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'e.g. DRDS26001',
-                      hintStyle: TextStyle(color: colors.textMuted, letterSpacing: 0.5),
-                      filled: true,
-                      fillColor: colors.surface,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context, _ref),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Use this doctor', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ] else ...[
+            TextField(
+              controller: _codeController,
+              textCapitalization: TextCapitalization.characters,
+              style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+              decoration: InputDecoration(
+                hintText: 'e.g. DRAB12345',
+                hintStyle: TextStyle(color: colors.textMuted, letterSpacing: 0),
+                filled: true,
+                fillColor: colors.surface,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: colors.border)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: colors.border)),
+                suffixIcon: medical.isLookingUp
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                      )
+                    : TextButton(
+                        onPressed: medical.isLookingUp ? null : _lookup,
+                        child: Text('Find', style: TextStyle(color: teal.action, fontWeight: FontWeight.w700)),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                    ),
-                    onChanged: (_) {
-                      if (_localError != null) setState(() => _localError = null);
-                    },
-                    onSubmitted: (_) => _lookup(),
-                  ),
+              ),
+              onSubmitted: (_) => _lookup(),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: medical.isLookingUp ? null : _lookup,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: teal.findBg,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: medical.isLookingUp ? null : _lookup,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F766E),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: medical.isLookingUp
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Text('Find'),
-                  ),
-                ),
-              ],
+                child: medical.isLookingUp
+                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Find doctor', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
             ),
             if (error != null) ...[
               const SizedBox(height: 12),
               Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF7F1D1D).withValues(alpha: 0.35),
+                  color: teal.errorBg,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFF87171).withValues(alpha: 0.45)),
+                  border: Border.all(color: teal.errorBorder),
                 ),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.info_outline, size: 18, color: Color(0xFFFCA5A5)),
+                    Icon(Icons.error_outline, color: teal.errorIcon, size: 18),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        error,
-                        style: const TextStyle(color: Color(0xFFFECACA), fontSize: 13, height: 1.35),
-                      ),
+                      child: Text(error, style: TextStyle(fontSize: 13, color: teal.errorFg)),
                     ),
                   ],
                 ),
               ),
             ],
-            const SizedBox(height: 12),
-            const Text(
-              'Ask your doctor for their BlinksMed Unique ID, or scan their QR code to open the share page and copy it.',
-              style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.4),
-            ),
           ],
-          const SizedBox(height: 28),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              onPressed: () => Navigator.pop(context, _ref),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C63FF),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: Text(_ref.hasDoctor ? 'Use this doctor' : 'Continue without doctor'),
-            ),
+          const SizedBox(height: 16),
+          Text(
+            'Ask your doctor for their Unique ID, or scan the QR on their share page.',
+            style: TextStyle(fontSize: 12, color: colors.textMuted),
           ),
         ],
       ),
     );
   }
+
+  String _hospitalDetail(HospitalModel h) => h.detailLabel ?? '';
 }

@@ -286,8 +286,10 @@ class VendorOrderProvider extends ChangeNotifier {
           .get('/vendors/$vendorId/orders/$orderId/image-request');
       final data = response.data;
       if (data is Map) {
-        _imageRequest =
+        final parsed =
             OrderImageRequest.fromJson(Map<String, dynamic>.from(data));
+        final previous = _imageRequest;
+        _imageRequest = previous == null ? parsed : reuseOrderImageUrls(previous, parsed);
         _groupPhotoCounts[orderId] = _imageRequest!.images.length;
       } else {
         _imageRequest = null;
@@ -345,6 +347,7 @@ class VendorOrderProvider extends ChangeNotifier {
     required String orderId,
     required String optionId,
     required PlatformFile file,
+    int? slotIndex,
   }) async {
     _error = null;
     _actionLoading = true;
@@ -355,12 +358,15 @@ class VendorOrderProvider extends ChangeNotifier {
         _error = 'Could not read the selected image.';
         return false;
       }
+      final query = StringBuffer('optionId=${Uri.encodeComponent(optionId)}');
+      if (slotIndex != null) query.write('&slotIndex=$slotIndex');
       final formData = FormData.fromMap({
         'file': multipart,
         'optionId': optionId,
+        if (slotIndex != null) 'slotIndex': slotIndex,
       });
       await _api.dio.post(
-        '/vendors/$vendorId/orders/$orderId/images?optionId=${Uri.encodeComponent(optionId)}',
+        '/vendors/$vendorId/orders/$orderId/images?$query',
         data: formData,
         options: Options(
           sendTimeout: const Duration(seconds: 60),

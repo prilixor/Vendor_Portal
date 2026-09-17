@@ -4,6 +4,7 @@ class OrderImage {
   final String? requestId;
   final String? optionId;
   final String fileUrl;
+  final String? thumbnailUrl;
   final String? originalFileName;
   final String? contentType;
   final int sortOrder;
@@ -15,11 +16,18 @@ class OrderImage {
     this.requestId,
     this.optionId,
     required this.fileUrl,
+    this.thumbnailUrl,
     this.originalFileName,
     this.contentType,
     this.sortOrder = 0,
     this.createdAt,
   });
+
+  String get tileUrl {
+    final thumb = thumbnailUrl?.trim();
+    if (thumb != null && thumb.isNotEmpty) return thumb;
+    return fileUrl;
+  }
 
   factory OrderImage.fromJson(Map<String, dynamic> json) {
     DateTime? created;
@@ -33,6 +41,7 @@ class OrderImage {
       requestId: (json['requestId'] ?? json['RequestId'])?.toString(),
       optionId: (json['optionId'] ?? json['OptionId'])?.toString(),
       fileUrl: (json['fileUrl'] ?? json['FileUrl'] ?? '').toString(),
+      thumbnailUrl: (json['thumbnailUrl'] ?? json['ThumbnailUrl'])?.toString(),
       originalFileName:
           (json['originalFileName'] ?? json['OriginalFileName'])?.toString(),
       contentType: (json['contentType'] ?? json['ContentType'])?.toString(),
@@ -40,6 +49,28 @@ class OrderImage {
       createdAt: created,
     );
   }
+
+  OrderImage copyWith({String? fileUrl, String? thumbnailUrl}) {
+    return OrderImage(
+      id: id,
+      orderId: orderId,
+      requestId: requestId,
+      optionId: optionId,
+      fileUrl: fileUrl ?? this.fileUrl,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      originalFileName: originalFileName,
+      contentType: contentType,
+      sortOrder: sortOrder,
+      createdAt: createdAt,
+    );
+  }
+}
+
+OrderImage? imageAtSlot(List<OrderImage> photos, int slot) {
+  for (final photo in photos) {
+    if (photo.sortOrder == slot) return photo;
+  }
+  return null;
 }
 
 class OrderImageOption {
@@ -90,6 +121,7 @@ class OrderImageRequest {
   final int optionCount;
   final int maxImagesPerOption;
   final int maxDescriptionLength;
+  final String? selectedOptionId;
 
   const OrderImageRequest({
     required this.id,
@@ -101,8 +133,9 @@ class OrderImageRequest {
     this.images = const [],
     this.options = const [],
     this.optionCount = 3,
-    this.maxImagesPerOption = 1,
+    this.maxImagesPerOption = 3,
     this.maxDescriptionLength = 500,
+    this.selectedOptionId,
   });
 
   factory OrderImageRequest.fromJson(Map<String, dynamic> json) {
@@ -139,9 +172,59 @@ class OrderImageRequest {
       options: options,
       optionCount: ((json['optionCount'] ?? json['OptionCount']) as num?)?.toInt() ?? 3,
       maxImagesPerOption:
-          ((json['maxImagesPerOption'] ?? json['MaxImagesPerOption']) as num?)?.toInt() ?? 1,
+          ((json['maxImagesPerOption'] ?? json['MaxImagesPerOption']) as num?)?.toInt() ?? 3,
       maxDescriptionLength:
           ((json['maxDescriptionLength'] ?? json['MaxDescriptionLength']) as num?)?.toInt() ?? 500,
+      selectedOptionId: (json['selectedOptionId'] ?? json['SelectedOptionId'])?.toString(),
     );
   }
+}
+
+OrderImageRequest reuseOrderImageUrls(OrderImageRequest previous, OrderImageRequest next) {
+  final files = <String, String>{
+    for (final photo in previous.images) photo.id: photo.fileUrl,
+  };
+  final thumbs = <String, String>{
+    for (final photo in previous.images)
+      if ((photo.thumbnailUrl ?? '').trim().isNotEmpty) photo.id: photo.thumbnailUrl!.trim(),
+  };
+  for (final option in previous.options) {
+    for (final photo in option.images) {
+      files.putIfAbsent(photo.id, () => photo.fileUrl);
+      final thumb = photo.thumbnailUrl?.trim();
+      if (thumb != null && thumb.isNotEmpty) thumbs.putIfAbsent(photo.id, () => thumb);
+    }
+  }
+  List<OrderImage> keep(List<OrderImage> photos) => [
+        for (final photo in photos)
+          files.containsKey(photo.id)
+              ? photo.copyWith(
+                  fileUrl: files[photo.id],
+                  thumbnailUrl: thumbs[photo.id] ?? photo.thumbnailUrl,
+                )
+              : photo,
+      ];
+  return OrderImageRequest(
+    id: next.id,
+    orderId: next.orderId,
+    vendorId: next.vendorId,
+    status: next.status,
+    message: next.message,
+    requestedAt: next.requestedAt,
+    images: keep(next.images),
+    options: [
+      for (final option in next.options)
+        OrderImageOption(
+          id: option.id,
+          optionNumber: option.optionNumber,
+          label: option.label,
+          description: option.description,
+          images: keep(option.images),
+        ),
+    ],
+    optionCount: next.optionCount,
+    maxImagesPerOption: next.maxImagesPerOption,
+    maxDescriptionLength: next.maxDescriptionLength,
+    selectedOptionId: next.selectedOptionId,
+  );
 }

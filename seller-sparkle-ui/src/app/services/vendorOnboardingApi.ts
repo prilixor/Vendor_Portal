@@ -502,6 +502,7 @@ export interface VendorOrderImageApiDto {
   requestId?: string | null;
   optionId?: string | null;
   fileUrl: string;
+  thumbnailUrl?: string | null;
   originalFileName?: string | null;
   contentType?: string | null;
   sortOrder: number;
@@ -528,6 +529,7 @@ export interface VendorOrderImageRequestApiDto {
   optionCount?: number;
   maxImagesPerOption?: number;
   maxDescriptionLength?: number;
+  selectedOptionId?: string | null;
 }
 
 export interface VendorOrderApiDto {
@@ -846,12 +848,17 @@ export const vendorOnboardingApi = {
     return row ?? null;
   },
 
-  uploadVendorOrderImage(vendorId: string, orderId: string, file: File, optionId: string) {
+  uploadVendorOrderImage(vendorId: string, orderId: string, file: File, optionId: string, slotIndex?: number) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("optionId", optionId);
+    const params = new URLSearchParams({ optionId });
+    if (slotIndex != null && Number.isInteger(slotIndex)) {
+      formData.append("slotIndex", String(slotIndex));
+      params.set("slotIndex", String(slotIndex));
+    }
     return apiClient.postForm<VendorOrderImageApiDto>(
-      `/vendors/${vendorId}/orders/${orderId}/images?optionId=${encodeURIComponent(optionId)}`,
+      `/vendors/${vendorId}/orders/${orderId}/images?${params.toString()}`,
       formData,
     );
   },

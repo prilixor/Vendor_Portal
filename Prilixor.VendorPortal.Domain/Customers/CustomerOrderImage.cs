@@ -11,6 +11,8 @@ public class CustomerOrderImage : AuditableEntity<Guid>, ISoftDelete
     public Guid VendorId { get; set; }
     /// <summary>Durable storage key (S3 relative key or local uploads/… path). Never a short-lived presigned URL.</summary>
     public string StoredReference { get; set; } = string.Empty;
+    /// <summary>~400px JPEG beside the original, used for option tiles. Null when the original is already small.</summary>
+    public string? ThumbnailStoredReference { get; set; }
     public string? OriginalFileName { get; set; }
     public string? ContentType { get; set; }
     public int SortOrder { get; set; }

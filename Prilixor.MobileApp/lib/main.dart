@@ -10,6 +10,7 @@ import 'features/dashboard/customer_dashboard.dart';
 import 'features/medical/doctor_public_screen.dart';
 import 'shared/widgets/offline_banner.dart';
 import 'shared/widgets/brand_splash.dart';
+import 'shared/widgets/brand_page_loader.dart';
 import 'shared/widgets/legal_reconsent_gate.dart';
 
 import 'core/providers/product_provider.dart';
@@ -168,23 +169,7 @@ class WelcomeScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: ColoredBox(
-                      color: Colors.white,
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Image.asset(
-                          'assets/branding/logo.png',
-                          width: 80,
-                          height: 80,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                const Center(child: BrandMarkTile()),
                 const SizedBox(height: 32),
                 Text(
                   'BlinksMed',

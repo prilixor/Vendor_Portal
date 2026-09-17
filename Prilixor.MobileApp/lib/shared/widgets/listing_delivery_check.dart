@@ -138,18 +138,33 @@ class _ListingDeliveryCheckState extends State<ListingDeliveryCheck> {
                   decoration: const InputDecoration(
                     hintText: '6-digit pincode',
                     isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
-              SizedBox(
-                height: 40,
-                child: ElevatedButton(
-                  onPressed: _checking ? null : _check,
-                  child: _checking
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Check'),
+              ElevatedButton(
+                onPressed: _checking ? null : _check,
+                style: ElevatedButton.styleFrom(
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  minimumSize: const Size(72, 40),
+                  maximumSize: const Size(120, 40),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
                 ),
+                child: _checking
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text(
+                        'Check',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                      ),
               ),
             ],
           ),

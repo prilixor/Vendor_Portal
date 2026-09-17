@@ -196,6 +196,42 @@ class OrderDetailProvider extends ChangeNotifier {
     return (succeeded: succeeded, failed: failed);
   }
 
+  Future<bool> selectImageOption(String orderId, String optionId) async {
+    if (orderId.isEmpty || optionId.isEmpty) return false;
+    _isActionLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.dio.patch(
+        '/customers/me/orders/$orderId/image-request/selection',
+        data: {'optionId': optionId},
+        options: Options(contentType: Headers.jsonContentType),
+      );
+      if (response.statusCode == 200 && response.data is Map) {
+        _imageRequestsByOrderId[orderId] = OrderImageRequestModel.fromJson(
+          Map<String, dynamic>.from(response.data as Map),
+        );
+        return true;
+      }
+      _errorMessage = 'Failed to select option.';
+      return false;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map) {
+        _errorMessage = (data['detail'] ?? data['title'] ?? 'Failed to select option.').toString();
+      } else {
+        _errorMessage = 'Failed to select option.';
+      }
+      return false;
+    } catch (_) {
+      _errorMessage = 'Failed to select option.';
+      return false;
+    } finally {
+      _isActionLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> cancelOrder(String orderId) async {
     _isActionLoading = true;
     notifyListeners();

@@ -233,6 +233,7 @@ export interface CustomerOrderImageApi {
   requestId?: string | null;
   optionId?: string | null;
   fileUrl: string;
+  thumbnailUrl?: string | null;
   originalFileName?: string | null;
   contentType?: string | null;
   sortOrder: number;
@@ -259,6 +260,7 @@ export interface CustomerOrderImageRequestApi {
   optionCount?: number;
   maxImagesPerOption?: number;
   maxDescriptionLength?: number;
+  selectedOptionId?: string | null;
 }
 
 export interface ExtensionQuoteApi {
@@ -527,6 +529,13 @@ export const customerApi = {
     return apiClient.post<CustomerOrderImageRequestApi>(
       `/customers/me/orders/${encodeURIComponent(orderId)}/image-request`,
       {},
+    );
+  },
+
+  selectOrderImageOption(orderId: string, optionId: string): Promise<CustomerOrderImageRequestApi> {
+    return apiClient.patch<CustomerOrderImageRequestApi>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/image-request/selection`,
+      { optionId },
     );
   },
 

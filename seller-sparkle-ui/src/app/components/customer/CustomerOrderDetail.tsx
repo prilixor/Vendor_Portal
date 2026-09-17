@@ -1,8 +1,9 @@
 import { useParams, Link } from "react-router-dom";
 import { useState, useMemo, useRef, useEffect, type ReactNode } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckSquare, Headset, Images, Info, Loader2, Maximize2, MessageCircle, Package } from "lucide-react";
+import { Check, CheckSquare, Headset, ImageOff, Images, Info, Loader2, Maximize2, MessageCircle, Package } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
+import { RadioGroup, RadioGroupItem } from "@/app/components/ui/radio-group";
 import {
   customerApi,
   type CustomerOrderImageApi,
@@ -25,7 +26,7 @@ import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { toast } from "sonner";
 import { isSameChatDay } from "@/app/helpers/chatDayLabel";
 import { formatCustomerOrderStatusTitle, formatCustomerOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
-import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, orderPhotoTileUrl, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
@@ -100,6 +101,48 @@ function isAwaitingVendorForPhotos(status: string): boolean {
   return (
     compact === "awaiting_vendor_acceptance" ||
     compact === "pending_vendor_acceptance"
+  );
+}
+
+function OrderOptionPhotoThumb({
+  src,
+  alt,
+  onPreview,
+}: {
+  src: string;
+  alt: string;
+  onPreview: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="group relative aspect-square w-full overflow-hidden rounded-xl bg-muted ring-1 ring-inset ring-black/[0.06] transition-transform hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:ring-white/10"
+      onClick={onPreview}
+      aria-label={alt}
+    >
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+        onError={retryOriginalOnImageError}
+      />
+    </button>
+  );
+}
+
+function OrderOptionEmptySlot() {
+  return (
+    <div
+      className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-xl bg-muted/55 px-1 ring-1 ring-inset ring-border/70 dark:bg-muted/25"
+      aria-label="No image"
+    >
+      <ImageOff className="h-5 w-5 text-muted-foreground/55" />
+      <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
+        Empty
+      </span>
+    </div>
   );
 }
 
@@ -685,6 +728,16 @@ const CustomerOrderDetail = () => {
     onError: (err: Error) => toast.error(err.message || "Failed to request photos."),
   });
 
+  const selectImageOptionMut = useMutation({
+    mutationFn: ({ orderId: itemOrderId, optionId }: { orderId: string; optionId: string }) =>
+      customerApi.selectOrderImageOption(itemOrderId, optionId),
+    onSuccess: (_row, vars) => {
+      toast.success("Option selected.");
+      queryClient.invalidateQueries({ queryKey: ["customer-order-image-request", vars.orderId] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to select option."),
+  });
+
   // Combined totals for the order group
   const groupTotalAmount = useMemo(() => {
     return orderGroupItems.reduce((sum, item) => sum + (item?.totalAmount ?? 0), 0);
@@ -945,8 +998,8 @@ const CustomerOrderDetail = () => {
             <p className="text-[13px] font-semibold sm:text-base">Request photos from your supplier</p>
             <p className="text-xs text-muted-foreground">
               {orderGroupItems.length > 1
-                ? `Photos come from each product’s supplier — one photo under Option 1, Option 2, and so on.`
-                : `Photos come from this product’s supplier — one photo under Option 1, Option 2, and so on.`}
+                ? `Photos come from each product’s supplier — up to 3 photos under Option 1, Option 2, and so on. Choose one option.`
+                : `Photos come from this product’s supplier — up to 3 photos under Option 1, Option 2, and so on. Choose one option.`}
             </p>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -1141,16 +1194,66 @@ const CustomerOrderDetail = () => {
                                 Request already sent for this product — supplier has not uploaded photos yet.
                               </p>
                             ) : options ? (
-                              <div className="grid grid-cols-3 gap-3">
+                              <div className="space-y-3">
+                                {request?.selectedOptionId ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    Your selection:{" "}
+                                    <span className="font-semibold text-foreground">
+                                      {options.find((o) => o.id === request.selectedOptionId)?.label ?? "an option"}
+                                    </span>
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">
+                                    Select one option for your supplier.
+                                  </p>
+                                )}
+                                <RadioGroup
+                                  value={request?.selectedOptionId ?? ""}
+                                  onValueChange={(optionId) => {
+                                    if (!optionId || optionId === request?.selectedOptionId) return;
+                                    const target = options.find((o) => o.id === optionId);
+                                    if (!target?.images.length) {
+                                      toast.error("Choose an option that already has photos.");
+                                      return;
+                                    }
+                                    selectImageOptionMut.mutate({ orderId: item.id, optionId });
+                                  }}
+                                  className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+                                  disabled={selectImageOptionMut.isPending}
+                                >
                                 {options.map((option) => {
-                                  const photo = option.images[0];
+                                  const photos = option.images ?? [];
                                   const note = option.description?.trim() ?? "";
+                                  const chosen = request?.selectedOptionId === option.id;
+                                  const canChoose = photos.length > 0;
                                   return (
-                                  <div key={option.id} className="min-w-0 space-y-1.5">
-                                    <div className="flex min-h-6 items-center gap-0.5">
-                                      <p className="min-w-0 truncate text-xs font-semibold text-foreground">
+                                  <div
+                                    key={option.id}
+                                    className={cn(
+                                      "min-w-0 space-y-2.5 rounded-xl border bg-card p-3 shadow-sm",
+                                      chosen
+                                        ? "border-primary/35 ring-1 ring-primary/15"
+                                        : "border-border/70",
+                                    )}
+                                  >
+                                    <div className="flex min-h-6 items-center gap-2">
+                                      <RadioGroupItem
+                                        value={option.id}
+                                        id={`photo-option-${item.id}-${option.id}`}
+                                        disabled={!canChoose || selectImageOptionMut.isPending}
+                                        className="shrink-0"
+                                      />
+                                      <label
+                                        htmlFor={`photo-option-${item.id}-${option.id}`}
+                                        className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground"
+                                      >
                                         {option.label}
-                                      </p>
+                                      </label>
+                                      {chosen ? (
+                                        <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                          Selected
+                                        </span>
+                                      ) : null}
                                       {note ? (
                                         <Popover
                                           open={openOptionInfoId === option.id}
@@ -1208,28 +1311,26 @@ const CustomerOrderDetail = () => {
                                         </Popover>
                                       ) : null}
                                     </div>
-                                    {photo ? (
-                                      <button
-                                        type="button"
-                                        className="aspect-square w-full overflow-hidden rounded-lg border border-border bg-muted"
-                                        onClick={() => setPreviewImageUrl(photo.fileUrl)}
-                                        aria-label={`Preview ${option.label} for ${item.listingTitle}`}
-                                      >
-                                        <img
-                                          src={photo.fileUrl}
-                                          alt={photo.originalFileName || option.label}
-                                          className="h-full w-full object-cover"
-                                          onError={retryOriginalOnImageError}
-                                        />
-                                      </button>
-                                    ) : (
-                                      <div className="flex aspect-square items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 px-1 text-center text-[11px] text-muted-foreground">
-                                        No photo yet
-                                      </div>
-                                    )}
+                                    <div className="grid grid-cols-3 gap-2">
+                                    {Array.from({ length: request?.maxImagesPerOption ?? 3 }).map((_, slot) => {
+                                      const photo = photoAtSlot(photos, slot);
+                                      if (photo) {
+                                        return (
+                                          <OrderOptionPhotoThumb
+                                            key={photo.id}
+                                            src={orderPhotoTileUrl(photo)}
+                                            alt={`Preview ${option.label} for ${item.listingTitle}`}
+                                            onPreview={() => setPreviewImageUrl(photo.fileUrl)}
+                                          />
+                                        );
+                                      }
+                                      return <OrderOptionEmptySlot key={`${option.id}-empty-${slot}`} />;
+                                    })}
+                                    </div>
                                   </div>
                                   );
                                 })}
+                                </RadioGroup>
                               </div>
                             ) : (
                               <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
@@ -1242,8 +1343,10 @@ const CustomerOrderDetail = () => {
                                     aria-label={`Preview photo for ${item.listingTitle}`}
                                   >
                                     <img
-                                      src={img.fileUrl}
+                                      src={orderPhotoTileUrl(img)}
                                       alt={img.originalFileName || item.listingTitle}
+                                      loading="lazy"
+                                      decoding="async"
                                       className="h-full w-full object-cover"
                                       onError={retryOriginalOnImageError}
                                     />

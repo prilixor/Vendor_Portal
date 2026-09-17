@@ -182,6 +182,7 @@ public sealed class VendorUploadOrderImageRequest : VendorIdRequest
 {
     public Guid OrderId { get; set; }
     public Guid OptionId { get; set; }
+    public int? SlotIndex { get; set; }
 }
 
 public sealed class VendorOrderImageIdRequest : VendorIdRequest
@@ -242,6 +243,14 @@ public sealed class UploadVendorOrderImageEndpoint(IMediator mediator)
         if (req.OptionId == Guid.Empty)
             return TypedResults.Problem(title: "customers.order_images.option_required", detail: "optionId is required.", statusCode: 400);
 
+        if (req.SlotIndex is null
+            && int.TryParse(HttpContext.Request.Query["slotIndex"], out var querySlot))
+            req.SlotIndex = querySlot;
+
+        if (req.SlotIndex is null
+            && int.TryParse(HttpContext.Request.Form["slotIndex"], out var formSlot))
+            req.SlotIndex = formSlot;
+
         await using var ms = new MemoryStream();
         await file.CopyToAsync(ms, ct);
         var publicBase = new Uri($"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}");
@@ -254,7 +263,8 @@ public sealed class UploadVendorOrderImageEndpoint(IMediator mediator)
                 file.FileName,
                 file.ContentType,
                 ms.ToArray(),
-                publicBase),
+                publicBase,
+                req.SlotIndex),
             ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
