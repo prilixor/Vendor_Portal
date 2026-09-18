@@ -9,35 +9,44 @@ import '../../core/utils/media_url.dart';
 /// so S3/presigned images render without CORS decode failures.
 class CatalogImage extends StatelessWidget {
   final String? url;
+  final String? fallbackUrl;
   final BoxFit fit;
   final double? width;
   final double? height;
   final BorderRadius? borderRadius;
+  final bool showLoadingIndicator;
 
   const CatalogImage({
     super.key,
     required this.url,
+    this.fallbackUrl,
     this.fit = BoxFit.cover,
     this.width,
     this.height,
     this.borderRadius,
+    this.showLoadingIndicator = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final resolved = resolveMediaUrl(url);
+    final resolvedFallback = resolveMediaUrl(fallbackUrl);
     final placeholder = _CatalogImagePlaceholder(
       message: resolved == null ? 'Image will be updated soon' : 'Image currently unavailable',
       borderRadius: borderRadius,
     );
+    final quietLoad = !showLoadingIndicator ||
+        ((width ?? double.infinity) <= 48 && (height ?? double.infinity) <= 48);
     final child = resolved == null
         ? placeholder
         : _CatalogNetworkImage(
             url: resolved,
+            fallbackUrl: resolvedFallback,
             width: width,
             height: height,
             fit: fit,
             errorChild: placeholder,
+            showLoadingIndicator: !quietLoad,
           );
 
     if (borderRadius != null) {
@@ -52,17 +61,21 @@ class CatalogImage extends StatelessWidget {
 /// paint a disposed EngineFlutterView after failed loads or hot restart.
 class _CatalogNetworkImage extends StatefulWidget {
   final String url;
+  final String? fallbackUrl;
   final double? width;
   final double? height;
   final BoxFit fit;
   final Widget errorChild;
+  final bool showLoadingIndicator;
 
   const _CatalogNetworkImage({
     required this.url,
+    this.fallbackUrl,
     required this.width,
     required this.height,
     required this.fit,
     required this.errorChild,
+    required this.showLoadingIndicator,
   });
 
   @override
@@ -83,16 +96,22 @@ class _CatalogNetworkImageState extends State<_CatalogNetworkImage> {
   @override
   void didUpdateWidget(covariant _CatalogNetworkImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.url != widget.url) {
+    if (oldWidget.url != widget.url || oldWidget.fallbackUrl != widget.fallbackUrl) {
       _url = widget.url;
       _triedOriginal = false;
       _fallbackQueued = false;
     }
   }
 
+  String? _fallbackCandidate() {
+    final stored = widget.fallbackUrl?.trim();
+    if (stored != null && stored.isNotEmpty && stored != _url) return stored;
+    return originalUrlFromThumb(_url);
+  }
+
   void _queueOriginalFallback() {
     if (_triedOriginal || _fallbackQueued) return;
-    final original = originalUrlFromThumb(_url);
+    final original = _fallbackCandidate();
     if (original == null || original == _url) return;
     _fallbackQueued = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -107,17 +126,22 @@ class _CatalogNetworkImageState extends State<_CatalogNetworkImage> {
 
   @override
   Widget build(BuildContext context) {
+    final dpr = MediaQuery.maybeOf(context)?.devicePixelRatio ?? 2;
+    final decodeW = !kIsWeb && widget.width != null && widget.width! <= 64
+        ? (widget.width! * dpr).round().clamp(32, 256).toInt()
+        : null;
     return Image.network(
       _url,
       key: ValueKey(_url),
       width: widget.width,
       height: widget.height,
+      cacheWidth: decodeW,
       fit: widget.fit,
       gaplessPlayback: true,
       webHtmlElementStrategy: kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
       errorBuilder: (_, _, _) {
         if (!_triedOriginal) {
-          final original = originalUrlFromThumb(_url);
+          final original = _fallbackCandidate();
           if (original != null && original != _url) {
             _queueOriginalFallback();
             return ColoredBox(color: context.appColors.surfaceElevated);
@@ -125,7 +149,7 @@ class _CatalogNetworkImageState extends State<_CatalogNetworkImage> {
         }
         return widget.errorChild;
       },
-      loadingBuilder: kIsWeb
+      loadingBuilder: kIsWeb || !widget.showLoadingIndicator
           ? null
           : (context, child, progress) {
               if (progress == null) return child;

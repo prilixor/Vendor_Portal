@@ -90,6 +90,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     });
     checkout.fetchProductDetailModel(widget.listingId).then((detail) {
       if (!mounted) return;
+      if (detail != null) {
+        _precacheRentalPlanIcons(detail);
+      }
       setState(() {
         _localDetail = detail;
         _loadingDetail = false;
@@ -143,12 +146,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  void _precacheRentalPlanIcons(ProductDetailModel detail) {
+    for (final plan in detail.activeRentalPlans) {
+      final url = _planIconUrl(plan);
+      if (url == null || url.isEmpty) continue;
+      precacheImage(NetworkImage(url), context);
+    }
+  }
+
   /// Match web [RentalPeriodPlanDropdown] legend + trigger icon chips.
   Widget? _planIconAvatar(RentalPricingPlanModel? plan, {double size = 40}) {
     final url = plan == null ? null : _planIconUrl(plan);
     if (url == null || url.isEmpty) return null;
     final colors = context.appColors;
     final iconSize = size * 0.72;
+    final original = plan == null ? null : resolveRentalIconUrl(plan.iconUrl);
+    final thumb = plan == null ? null : resolveRentalIconUrl(plan.iconThumbnailUrl);
     return Container(
       width: size,
       height: size,
@@ -161,9 +174,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       child: CatalogImage(
         key: ValueKey(url),
         url: url,
+        fallbackUrl: thumb != original ? thumb : null,
         width: iconSize,
         height: iconSize,
         fit: BoxFit.contain,
+        showLoadingIndicator: false,
       ),
     );
   }
@@ -917,6 +932,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                               width: 18,
                                                               height: 18,
                                                               fit: BoxFit.contain,
+                                                              showLoadingIndicator: false,
                                                             ),
                                                             const SizedBox(width: 5),
                                                             Text(

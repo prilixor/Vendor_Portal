@@ -29,7 +29,7 @@ import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
 import {
   rentalValueTierLabel,
-  resolveRentalIconUrl,
+  resolveRentalIconUrlFromPlan,
   slugFromName,
 } from "@/app/helpers/rentalDurationIcons";
 
@@ -281,8 +281,11 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
     size = "md",
   ) => {
     const box = size === "lg" ? "h-14 w-14" : "h-11 w-11";
-    // API already resolves to browser URL (presigned S3); resolveRentalIconUrl handles legacy local paths.
-    const src = resolveRentalIconUrl(row.thumbnailUrl || row.imageUrl);
+    // Same original PNG as Customer chips (JPEG thumbs flatten transparency).
+    const src = resolveRentalIconUrlFromPlan({
+      iconUrl: row.imageUrl,
+      iconThumbnailUrl: row.thumbnailUrl,
+    });
     return (
       <div
         className={cn(
@@ -554,9 +557,10 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
                   <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-background">
                     {form.previewUrl || form.imageUrl ? (
                       <img
-                        src={resolveRentalIconUrl(
-                          form.previewThumbnailUrl || form.previewUrl || form.thumbnailUrl || form.imageUrl,
-                        )}
+                        src={resolveRentalIconUrlFromPlan({
+                          iconUrl: form.previewUrl || form.imageUrl,
+                          iconThumbnailUrl: form.previewThumbnailUrl || form.thumbnailUrl,
+                        })}
                         alt=""
                         className="h-full w-full object-contain p-1.5"
                         onError={retryOriginalOnImageError}

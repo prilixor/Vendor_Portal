@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Star, Tag } from "lucide-react";
 import type { RentalPricingPlanDto } from "@/app/services/customerApi";
 import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
@@ -14,6 +14,7 @@ import {
 import {
   dayPlanTitle,
   formatBillingCycles,
+  prefetchRentalIconUrls,
   rentalIconLabel,
   resolveRentalIconUrlFromPlan,
 } from "@/app/helpers/rentalDurationIcons";
@@ -267,6 +268,10 @@ export function RentalPeriodPlanDropdown({
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const selected = plans.find((p) => p.id === selectedPlanId) ?? plans[0] ?? null;
+
+  useEffect(() => {
+    prefetchRentalIconUrls(plans.map((plan) => resolveRentalIconUrlFromPlan(plan)));
+  }, [plans]);
 
   const legend = useMemo(() => {
     const byIcon = new Map<string, { url: string; label: string }>();

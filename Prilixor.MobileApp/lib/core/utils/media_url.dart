@@ -50,6 +50,7 @@ String? resolveRentalIconUrl(String? raw) {
   return resolveMediaUrl(url);
 }
 
+/// Same look as web: original PNG/JPG first so trophy/crown transparency is kept.
 String? resolveRentalIconUrlFromPlan({
   String? iconUrl,
   String? iconThumbnailUrl,
