@@ -589,14 +589,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                         Icon(
                                                           Icons.photo_library_outlined,
                                                           size: 12,
-                                                          color: context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669),
+                                                          color: context.appColors.success,
                                                         ),
                                                         const SizedBox(width: 4),
                                                         Expanded(
                                                           child: Text(
                                                             '$photoCount/5 customer photos uploaded',
                                                             style: TextStyle(
-                                                              color: context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669),
+                                                              color: context.appColors.success,
                                                               fontSize: 10.5,
                                                               fontWeight: FontWeight.w700,
                                                             ),
@@ -912,20 +912,13 @@ class _PendingContinuationsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF78350F).withValues(alpha: 0.35)
-            : const Color(0xFFFFFBEB),
+        color: context.appColors.warningSoft,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark
-              ? Colors.amber.withValues(alpha: 0.45)
-              : const Color(0xFFFDE68A),
-        ),
+        border: Border.all(color: context.appColors.warningBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -933,7 +926,7 @@ class _PendingContinuationsCard extends StatelessWidget {
           Text(
             'Pending customer requests',
             style: TextStyle(
-              color: isDark ? const Color(0xFFFBBF24) : const Color(0xFF92400E),
+              color: context.appColors.warning,
               fontWeight: FontWeight.w800,
               fontSize: 16,
             ),
@@ -1001,18 +994,13 @@ class _RequestBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: context.appColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark
-              ? Colors.amber.withValues(alpha: 0.25)
-              : const Color(0xFFFDE68A),
-        ),
+        border: Border.all(color: context.appColors.warningBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1291,19 +1279,17 @@ class _PhotoRequestCard extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: context.isDarkMode ? Colors.amber.withValues(alpha: 0.2) : const Color(0xFFFEF3C7),
+                              color: context.appColors.warningSoft,
                               borderRadius: BorderRadius.circular(999),
                               border: Border.all(
-                                color: context.isDarkMode
-                                    ? Colors.amber.withValues(alpha: 0.35)
-                                    : const Color(0xFFFDE68A),
+                                color: context.appColors.warningBorder,
                                 width: 1,
                               ),
                             ),
                             child: Text(
                               'Action needed',
                               style: TextStyle(
-                                color: context.isDarkMode ? Colors.amber.shade200 : const Color(0xFF92400E),
+                                color: context.appColors.warning,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -1893,8 +1879,8 @@ class _PrescriptionFileTile extends StatelessWidget {
                     : Container(
                         width: 48,
                         height: 48,
-                        color: const Color(0xFF2DD4BF).withValues(alpha: 0.12),
-                        child: const Icon(Icons.picture_as_pdf, color: Color(0xFF2DD4BF)),
+                        color: context.appColors.successSoft,
+                        child: Icon(Icons.picture_as_pdf, color: context.appColors.success),
                       ),
               ),
               const SizedBox(width: 12),
@@ -1903,10 +1889,11 @@ class _PrescriptionFileTile extends StatelessWidget {
                   fileName,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF2DD4BF),
+                  style: TextStyle(
+                    color: colors.success,
                     fontWeight: FontWeight.w600,
                     decoration: TextDecoration.underline,
+                    decorationColor: colors.success,
                   ),
                 ),
               ),
@@ -2040,8 +2027,8 @@ class _ItemDetailsPanel extends StatelessWidget {
                     context,
                     initialCode: order.doctorUniqueCode,
                   ),
-                  icon: const Icon(Icons.medical_services_outlined, size: 16, color: Color(0xFF2DD4BF)),
-                  label: const Text('View doctor profile', style: TextStyle(color: Color(0xFF2DD4BF))),
+                  icon: Icon(Icons.medical_services_outlined, size: 16, color: context.appColors.success),
+                  label: Text('View doctor profile', style: TextStyle(color: context.appColors.success)),
                 ),
               ),
             ],
@@ -2218,9 +2205,7 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
                     ),
                     Icon(
                       Icons.check_circle_rounded,
-                      color: context.isDarkMode
-                          ? Colors.greenAccent.withValues(alpha: 0.85)
-                          : const Color(0xFF059669),
+                      color: context.appColors.success,
                       size: 18,
                     ),
                   ],

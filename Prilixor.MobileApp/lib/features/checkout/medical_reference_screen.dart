@@ -9,38 +9,30 @@ class _DoctorLinkPalette {
   const _DoctorLinkPalette(this.dark);
   final bool dark;
 
-  Color get cardBg =>
-      dark ? const Color(0xFF2DD4BF).withValues(alpha: 0.10) : const Color(0xFFF0FDFA);
-  Color get cardBorder =>
-      dark ? const Color(0xFF2DD4BF).withValues(alpha: 0.30) : const Color(0xFF99F6E4);
-  Color get iconBg => dark ? const Color(0xFF14B8A6) : const Color(0xFF0D9488);
-  Color get label => dark ? const Color(0xFF5EEAD4) : const Color(0xFF0F766E);
-  Color get title => dark ? const Color(0xFFF0FDFA) : const Color(0xFF042F2E);
-  Color get subtitle =>
-      dark ? const Color(0xFF99F6E4).withValues(alpha: 0.85) : const Color(0xFF115E59);
-  Color get codeFg => dark ? const Color(0xFFCCFBF1) : const Color(0xFF134E4A);
-  Color get codeBg =>
-      dark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.90);
-  Color get codeBorder =>
-      dark ? const Color(0xFF2DD4BF).withValues(alpha: 0.30) : const Color(0xFF99F6E4);
-  Color get close => dark ? Colors.white70 : const Color(0xFF0F766E);
-  Color get hospitalsBg =>
-      dark ? const Color(0xFF0F172A).withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.55);
-  Color get hospitalsBorder =>
-      dark ? const Color(0xFF2DD4BF).withValues(alpha: 0.20) : const Color(0xFF99F6E4).withValues(alpha: 0.70);
-  Color get countBg =>
-      dark ? const Color(0xFF2DD4BF).withValues(alpha: 0.20) : const Color(0xFFCCFBF1);
-  Color get countFg => dark ? const Color(0xFF99F6E4) : const Color(0xFF115E59);
-  Color get pin => dark ? const Color(0xFF2DD4BF) : const Color(0xFF0D9488);
-  Color get emptyText => dark ? Colors.white60 : const Color(0xFF115E59);
-  Color get action => dark ? const Color(0xFF5EEAD4) : const Color(0xFF0F766E);
-  Color get findBg => dark ? const Color(0xFF0F766E) : const Color(0xFF0D9488);
-  Color get errorBg =>
-      dark ? const Color(0xFF7F1D1D).withValues(alpha: 0.35) : const Color(0xFFFEF2F2);
-  Color get errorBorder =>
-      dark ? const Color(0xFFF87171).withValues(alpha: 0.45) : const Color(0xFFFECACA);
-  Color get errorFg => dark ? const Color(0xFFFECACA) : const Color(0xFF991B1B);
-  Color get errorIcon => dark ? const Color(0xFFFCA5A5) : const Color(0xFFDC2626);
+  AppPalette get _p => dark ? AppPalette.dark : AppPalette.light;
+
+  Color get cardBg => _p.successSoft;
+  Color get cardBorder => _p.successBorder;
+  Color get iconBg => _p.success;
+  Color get label => _p.success;
+  Color get title => _p.textPrimary;
+  Color get subtitle => _p.textSecondary;
+  Color get codeFg => _p.textPrimary;
+  Color get codeBg => dark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.90);
+  Color get codeBorder => _p.successBorder;
+  Color get close => _p.success;
+  Color get hospitalsBg => dark ? const Color(0xFF0F172A).withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.55);
+  Color get hospitalsBorder => _p.successBorder;
+  Color get countBg => _p.successSoft;
+  Color get countFg => _p.success;
+  Color get pin => _p.success;
+  Color get emptyText => _p.textSecondary;
+  Color get action => _p.success;
+  Color get findBg => _p.success;
+  Color get errorBg => _p.dangerSoft;
+  Color get errorBorder => _p.dangerBorder;
+  Color get errorFg => _p.danger;
+  Color get errorIcon => _p.danger;
 }
 
 /// Doctor Unique ID lookup — mirrors React CustomerMedicalReference (with hospitals).

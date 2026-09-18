@@ -226,7 +226,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                             subtitle: narrow
                                                 ? _formatInrCompact(rentalsTotal)
                                                 : '${_formatInr(rentalsTotal)} in flight',
-                                            accent: const Color(0xFF34D399),
+                                            accent: context.appColors.success,
+                                            wellColor: context.appColors.successSoft,
                                             compact: narrow,
                                           ),
                                         ),
@@ -237,7 +238,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                             title: narrow ? 'Upcoming' : 'Deliveries',
                                             value: provider.upcomingDeliveriesCount.toString(),
                                             subtitle: narrow ? 'Pending / transit' : 'Pending & in transit',
-                                            accent: const Color(0xFF60A5FA),
+                                            accent: context.appColors.info,
+                                            wellColor: context.appColors.infoSoft,
                                             compact: narrow,
                                           ),
                                         ),
@@ -568,6 +570,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     required String value,
     required String subtitle,
     required Color accent,
+    Color? wellColor,
     bool compact = false,
   }) {
     return Container(
@@ -589,7 +592,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 width: compact ? 28 : 30,
                 height: compact ? 28 : 30,
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.14),
+                  color: wellColor ??
+                      accent.withValues(alpha: context.isDarkMode ? 0.14 : 0.16),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, size: compact ? 15 : 16, color: accent),

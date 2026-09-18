@@ -680,8 +680,8 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Text(
                       'Pin set: ${_latitude.toStringAsFixed(4)}, ${_longitude.toStringAsFixed(4)}',
-                      style: const TextStyle(
-                        color: Color(0xFF34D399),
+                      style: TextStyle(
+                        color: context.appColors.success,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),

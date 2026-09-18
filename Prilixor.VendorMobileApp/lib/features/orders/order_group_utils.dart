@@ -88,9 +88,9 @@ String formatOrderStatusLabel(String status) {
 Color orderStatusColor(String status) {
   final s = status.toLowerCase().replaceAll('_', ' ');
   if (s.contains('awaiting') || s == 'pending') return Colors.amber;
-  if (s == 'confirmed') return const Color(0xFF60A5FA);
+  if (s == 'confirmed') return AppPalette.dark.info;
   if (s.contains('transit')) return Colors.purpleAccent;
-  if (s == 'active') return const Color(0xFF34D399);
+  if (s == 'active') return AppPalette.successDark;
   if (s == 'returned') return Colors.blueGrey;
   if (s.contains('cancel')) return Colors.grey;
   if (s.contains('dispatch failed')) return Colors.redAccent;
@@ -101,7 +101,7 @@ Color orderStatusColor(String status) {
 Color orderTypeColor(String type) {
   return type.toLowerCase() == 'buy'
       ? const Color(0xFF818CF8)
-      : const Color(0xFF34D399);
+      : AppPalette.successDark;
 }
 
 String orderTypeLabel(String type) {
@@ -162,6 +162,7 @@ class OrderStatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
+    final colors = context.appColors;
     final s = status.toLowerCase().trim().replaceAll('_', ' ');
     final isStatusActive = s == 'active';
     final isStatusPending = s.contains('awaiting') || s.contains('pending');
@@ -178,25 +179,25 @@ class OrderStatusChip extends StatelessWidget {
 
     if (!isDark) {
       if (isStatusActive) {
-        color = const Color(0xFF047857);
-        bgColor = const Color(0xFFECFDF5);
-        borderColor = const Color(0xFFA7F3D0);
+        color = colors.success;
+        bgColor = colors.successSoft;
+        borderColor = colors.successBorder;
       } else if (isStatusPending) {
-        color = const Color(0xFF92400E);
-        bgColor = const Color(0xFFFEF3C7);
-        borderColor = const Color(0xFFFDE68A);
+        color = colors.warning;
+        bgColor = colors.warningSoft;
+        borderColor = colors.warningBorder;
       } else if (isStatusConfirmed) {
-        color = const Color(0xFF1D4ED8);
-        bgColor = const Color(0xFFEFF6FF);
-        borderColor = const Color(0xFFBFDBFE);
+        color = colors.info;
+        bgColor = colors.infoSoft;
+        borderColor = colors.infoBorder;
       } else if (isStatusTransit) {
         color = const Color(0xFF6D28D9);
         bgColor = const Color(0xFFF5F3FF);
         borderColor = const Color(0xFFDDD6FE);
       } else if (isStatusFailed) {
-        color = const Color(0xFFB91C1C);
-        bgColor = const Color(0xFFFEF2F2);
-        borderColor = const Color(0xFFFECACA);
+        color = colors.danger;
+        bgColor = colors.dangerSoft;
+        borderColor = colors.dangerBorder;
       } else if (isStatusBought) {
         color = const Color(0xFFBE185D);
         bgColor = const Color(0xFFFDF2F8);
@@ -251,6 +252,7 @@ class OrderTypeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
+    final colors = context.appColors;
     final isBuy = orderType.toLowerCase() == 'buy';
 
     Color color;
@@ -263,9 +265,9 @@ class OrderTypeChip extends StatelessWidget {
         bgColor = const Color(0xFFEEF2FF);
         borderColor = const Color(0xFFC7D2FE);
       } else {
-        color = const Color(0xFF047857);
-        bgColor = const Color(0xFFECFDF5);
-        borderColor = const Color(0xFFA7F3D0);
+        color = colors.success;
+        bgColor = colors.successSoft;
+        borderColor = colors.successBorder;
       }
     } else {
       final base = orderTypeColor(orderType);

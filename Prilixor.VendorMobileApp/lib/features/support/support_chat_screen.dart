@@ -814,32 +814,34 @@ class _StatusChip extends StatelessWidget {
   final String status;
   const _StatusChip({required this.status});
 
-  Color get _color {
+  Color _color(BuildContext context) {
+    final colors = context.appColors;
     switch (status.toLowerCase()) {
       case 'open':
-        return Colors.green;
+        return colors.success;
       case 'in progress':
-        return Colors.orange;
+        return colors.warning;
       case 'resolved':
-        return Colors.blue;
+        return colors.info;
       case 'closed':
-        return Colors.grey;
+        return colors.textMuted;
       default:
-        return Colors.grey;
+        return colors.textMuted;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final color = _color(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: _color.withValues(alpha: 0.15),
+        color: color.withValues(alpha: context.isDarkMode ? 0.18 : 0.14),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         status,
-        style: TextStyle(color: _color, fontSize: 10, fontWeight: FontWeight.bold),
+        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
       ),
     );
   }

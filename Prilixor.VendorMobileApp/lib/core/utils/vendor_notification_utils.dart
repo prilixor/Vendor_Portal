@@ -123,30 +123,31 @@ IconData iconForVisualType(VendorNotificationVisualType type) {
   }
 }
 
-Color colorForVisualType(VendorNotificationVisualType type) {
+Color colorForVisualType(BuildContext context, VendorNotificationVisualType type) {
+  final colors = context.appColors;
   switch (type) {
     case VendorNotificationVisualType.photoRequest:
-      return const Color(0xFF0EA5E9); // Sky blue
+      return colors.info;
     case VendorNotificationVisualType.orderRequest:
-      return const Color(0xFF6366F1); // Indigo
+      return colors.accent;
     case VendorNotificationVisualType.dispatch:
-      return const Color(0xFF3B82F6); // Blue
+      return colors.info;
     case VendorNotificationVisualType.payout:
-      return const Color(0xFF10B981); // Emerald
+      return colors.success;
     case VendorNotificationVisualType.success:
-      return const Color(0xFF10B981); // Emerald
+      return colors.success;
     case VendorNotificationVisualType.warning:
-      return const Color(0xFFF59E0B); // Amber
+      return colors.warning;
     case VendorNotificationVisualType.error:
-      return const Color(0xFFEF4444); // Rose
+      return colors.danger;
     case VendorNotificationVisualType.support:
-      return const Color(0xFF8B5CF6); // Purple
+      return colors.accent;
     case VendorNotificationVisualType.product:
-      return const Color(0xFF14B8A6); // Teal
+      return colors.success;
     case VendorNotificationVisualType.document:
-      return const Color(0xFFF97316); // Orange
+      return colors.warning;
     case VendorNotificationVisualType.info:
-      return AppTheme.accent;
+      return colors.accent;
   }
 }
 

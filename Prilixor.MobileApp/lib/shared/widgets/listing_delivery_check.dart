@@ -178,7 +178,7 @@ class _ListingDeliveryCheckState extends State<ListingDeliveryCheck> {
                 Text(
                   _message!,
                   style: TextStyle(
-                    color: _ok ? const Color(0xFF059669) : colors.textSecondary,
+                    color: _ok ? colors.success : colors.textSecondary,
                     fontSize: 12,
                     height: 1.35,
                   ),

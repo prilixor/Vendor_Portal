@@ -167,6 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isInitialLoad = home.showInitialSkeleton;
     final shellBannerVisible =
         PendingApprovalBanner.isVisible(profile, onboarding);
+    final colors = context.appColors;
 
     return RefreshIndicator(
       color: AppTheme.accent,
@@ -218,7 +219,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: 'Active listings',
                       value: home.activeListings,
                       icon: Icons.check_circle_outline,
-                      accent: const Color(0xFF34D399),
+                      accent: colors.success,
+                      wellColor: colors.successSoft,
                       onTap: () => _push(
                         const ProductsScreen(initialStatusFilter: 'active'),
                       ),
@@ -227,14 +229,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: 'Inventory units',
                       value: home.inventoryUnits,
                       icon: Icons.warehouse_outlined,
-                      accent: const Color(0xFF38BDF8),
+                      accent: colors.info,
+                      wellColor: colors.infoSoft,
                       onTap: () => _push(const InventoryScreen()),
                     ),
                     _StatTile(
                       label: 'Unread alerts',
                       value: unreadAlerts,
                       icon: Icons.notifications_active_outlined,
-                      accent: const Color(0xFFFBBF24),
+                      accent: colors.warning,
+                      wellColor: colors.warningSoft,
                       onTap: () => widget.onNavigateTab?.call(3),
                     ),
                   ],
@@ -252,14 +256,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: 'Pending requests',
                       value: pendingRequests,
                       icon: Icons.assignment_outlined,
-                      accent: const Color(0xFFF59E0B),
+                      accent: colors.warning,
+                      wellColor: colors.warningSoft,
                       onTap: () => widget.onNavigateTab?.call(1),
                     ),
                     _StatTile(
                       label: 'Confirmed',
                       value: home.confirmedOrders,
                       icon: Icons.shopping_bag_outlined,
-                      accent: const Color(0xFF34D399),
+                      accent: colors.success,
+                      wellColor: colors.successSoft,
                       onTap: () => widget.onNavigateTab?.call(
                         2,
                         ordersStatusFilter: 'confirmed',
@@ -269,7 +275,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: 'In transit',
                       value: home.inTransitOrders,
                       icon: Icons.local_shipping_outlined,
-                      accent: const Color(0xFF60A5FA),
+                      accent: colors.info,
+                      wellColor: colors.infoSoft,
                       onTap: () => widget.onNavigateTab?.call(
                         2,
                         ordersStatusFilter: 'in_transit',
@@ -279,7 +286,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: 'Due in 7 days',
                       value: home.dueReturns,
                       icon: Icons.timer_outlined,
-                      accent: const Color(0xFFFB7185),
+                      accent: colors.danger,
+                      wellColor: colors.dangerSoft,
                       onTap: () => _push(const ExpirationsScreen()),
                     ),
                   ],
@@ -304,21 +312,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: 'Inventory',
                       subtitle: 'Stock & serials',
                       icon: Icons.qr_code_2_outlined,
-                      color: const Color(0xFF38BDF8),
+                      color: colors.info,
+                      wellColor: colors.infoSoft,
                       onTap: () => _push(const InventoryScreen()),
                     ),
                     _QuickAction(
                       label: 'Service areas',
                       subtitle: 'Coverage zones',
                       icon: Icons.map_outlined,
-                      color: const Color(0xFF34D399),
+                      color: colors.success,
+                      wellColor: colors.successSoft,
                       onTap: () => _push(const ServiceAreasScreen()),
                     ),
                     _QuickAction(
                       label: 'Onboarding',
                       subtitle: 'Verify account',
                       icon: Icons.verified_user_outlined,
-                      color: const Color(0xFFFBBF24),
+                      color: colors.warning,
+                      wellColor: colors.warningSoft,
                       onTap: () => _push(const OnboardingScreen()),
                     ),
                   ],
@@ -506,14 +517,20 @@ class _VerificationBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final color = isVerified ? const Color(0xFF34D399) : const Color(0xFFFBBF24);
+    final color = isVerified ? colors.success : colors.warning;
+    final fill = isVerified ? colors.successSoft : colors.warningSoft;
+    final border = isVerified ? colors.successBorder : colors.warningBorder;
+    final well = Color.alphaBlend(
+      color.withValues(alpha: context.isDarkMode ? 0.18 : 0.16),
+      fill,
+    );
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
+        color: fill,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.28)),
+        border: Border.all(color: border),
       ),
       child: Row(
         children: [
@@ -521,7 +538,7 @@ class _VerificationBanner extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
+              color: well,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -647,6 +664,7 @@ class _StatTile extends StatelessWidget {
   final int value;
   final IconData icon;
   final Color accent;
+  final Color? wellColor;
   final VoidCallback onTap;
 
   const _StatTile({
@@ -654,6 +672,7 @@ class _StatTile extends StatelessWidget {
     required this.value,
     required this.icon,
     required this.accent,
+    this.wellColor,
     required this.onTap,
   });
 
@@ -682,7 +701,10 @@ class _StatTile extends StatelessWidget {
                     width: 34,
                     height: 34,
                     decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.14),
+                      color: wellColor ??
+                          accent.withValues(
+                            alpha: context.isDarkMode ? 0.14 : 0.16,
+                          ),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(icon, color: accent, size: 19),
@@ -729,6 +751,7 @@ class _QuickAction {
   final String subtitle;
   final IconData icon;
   final Color color;
+  final Color? wellColor;
   final VoidCallback onTap;
 
   const _QuickAction({
@@ -736,6 +759,7 @@ class _QuickAction {
     required this.subtitle,
     required this.icon,
     required this.color,
+    this.wellColor,
     required this.onTap,
   });
 }
@@ -783,7 +807,10 @@ class _QuickActionsPanel extends StatelessWidget {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: action.color.withValues(alpha: 0.14),
+                          color: action.wellColor ??
+                              action.color.withValues(
+                                alpha: context.isDarkMode ? 0.14 : 0.16,
+                              ),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(action.icon, color: action.color, size: 20),
@@ -900,7 +927,7 @@ class _ActivityTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final style = _activityStyle(notification.notificationType);
+    final style = _activityStyle(context, notification.notificationType);
     final headline = _activityHeadline(notification);
     final meta = _activityMeta(notification);
 
@@ -1231,19 +1258,20 @@ class _ActivityVisual {
   const _ActivityVisual(this.icon, this.color);
 }
 
-_ActivityVisual _activityStyle(String type) {
+_ActivityVisual _activityStyle(BuildContext context, String type) {
+  final colors = context.appColors;
   final t = type.toLowerCase();
   if (t.contains('order') || t.contains('dispatch')) {
-    return const _ActivityVisual(Icons.shopping_bag_outlined, Color(0xFF60A5FA));
+    return _ActivityVisual(Icons.shopping_bag_outlined, colors.info);
   }
   if (t.contains('stock') || t.contains('inventory')) {
-    return const _ActivityVisual(Icons.inventory_2_outlined, Color(0xFFFBBF24));
+    return _ActivityVisual(Icons.inventory_2_outlined, colors.warning);
   }
   if (t.contains('document') || t.contains('bank') || t.contains('vendor_')) {
-    return const _ActivityVisual(Icons.verified_user_outlined, Color(0xFF34D399));
+    return _ActivityVisual(Icons.verified_user_outlined, colors.success);
   }
   if (t.contains('expir') || t.contains('return')) {
-    return const _ActivityVisual(Icons.timer_outlined, Color(0xFFFB7185));
+    return _ActivityVisual(Icons.timer_outlined, colors.danger);
   }
   return const _ActivityVisual(Icons.notifications_outlined, AppTheme.accent);
 }

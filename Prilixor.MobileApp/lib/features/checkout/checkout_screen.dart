@@ -523,12 +523,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                                   : 'No doctor linked yet',
                                               style: TextStyle(
                                                 color: doctorFilled
-                                                    ? (context.isDarkMode
-                                                        ? const Color(0xFF34D399)
-                                                        : const Color(0xFF0F766E))
-                                                    : (context.isDarkMode
-                                                        ? Colors.amber
-                                                        : const Color(0xFFB45309)),
+                                                    ? context.appColors.success
+                                                    : context.appColors.warning,
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w600,
                                               ),

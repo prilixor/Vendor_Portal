@@ -229,7 +229,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           SizedBox(height: 8),
                           Text(
                             'New End Date: ${provider.extensionQuote!.newEndDate.split('T')[0]}',
-                            style: TextStyle(color: Colors.greenAccent, fontSize: 12),
+                            style: TextStyle(
+                              color: context.appColors.success,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -299,7 +302,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                         children: [
                           _buildQuoteRow(context, 'Base Price', provider.buyoutQuote!.baseBuyoutAmount),
                           SizedBox(height: 8),
-                          _buildQuoteRow(context, 'Rental Deduction', -provider.buyoutQuote!.rentDeductionAmount, color: Colors.greenAccent),
+                          _buildQuoteRow(context, 'Rental Deduction', -provider.buyoutQuote!.rentDeductionAmount, color: context.appColors.success),
                           // Service fee UI hidden — keep for future re-enable
                           if (false) ...[
                             SizedBox(height: 8),
@@ -593,7 +596,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                 style: TextStyle(
                                                   color: photoCount == 0
                                                       ? (context.isDarkMode ? Colors.amber : const Color(0xFFD97706))
-                                                      : (context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669)),
+                                                      : context.appColors.success,
                                                   fontSize: 10,
                                                   fontWeight: FontWeight.w600,
                                                 ),
@@ -1297,7 +1300,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     final colors = context.appColors;
     final isDark = context.isDarkMode;
     final s = status.toLowerCase().replaceAll('_', ' ');
-    if (s == 'active') return isDark ? Colors.greenAccent : const Color(0xFF059669);
+    if (s == 'active') return colors.success;
     if (s == 'pending' || s.contains('awaiting') || s == 'confirmed' || s.contains('transit')) {
       return isDark ? Colors.orangeAccent : const Color(0xFFD97706);
     }
@@ -1379,9 +1382,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           step.label,
                           style: TextStyle(
                             color: isRentalActiveCurrentStep
-                                ? (context.isDarkMode
-                                    ? const Color(0xFF6EE7B7)
-                                    : const Color(0xFF047857))
+                                ? context.appColors.success
                                 : isUpcoming
                                     ? colors.textMuted
                                     : colors.textPrimary,
@@ -1499,7 +1500,6 @@ class _CustomerOrderTimelineDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final isDark = context.isDarkMode;
 
     late final Color borderColor;
     late final Color fillColor;
@@ -1511,7 +1511,7 @@ class _CustomerOrderTimelineDot extends StatelessWidget {
       center = Icon(Icons.check, size: 10, color: colors.surface);
     } else if (isCurrent) {
       // In-progress step: emerald disc (mobile UX; rental-active keeps label tint separately).
-      borderColor = isDark ? const Color(0xFF10B981) : const Color(0xFF059669);
+      borderColor = colors.success;
       fillColor = borderColor;
       center = Container(
         width: 6,
@@ -1967,8 +1967,8 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                 final waitingBorderColor = isDark ? Colors.amber.withValues(alpha: 0.35) : const Color(0xFFFDE68A);
                 final waitingBgColor = isDark ? Colors.amber.withValues(alpha: 0.08) : const Color(0xFFFFFBEB);
                 final waitingBadgeBg = isDark ? Colors.amber.withValues(alpha: 0.2) : const Color(0xFFFEF3C7);
-                final successTextColor = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
-                final successBadgeBg = isDark ? const Color(0xFF34D399).withValues(alpha: 0.18) : const Color(0xFFD1FAE5);
+                final successTextColor = colors.success;
+                final successBadgeBg = colors.successSoft;
                 return Container(
                   width: double.infinity,
                   margin: const EdgeInsets.only(bottom: 10),

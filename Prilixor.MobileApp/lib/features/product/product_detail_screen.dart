@@ -222,24 +222,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _pctOffBadge(int pct) {
-    final isDark = context.isDarkMode;
+    final colors = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF10B981).withValues(alpha: 0.14)
-            : const Color(0xFFDCFCE7),
+        color: colors.successSoft,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: isDark
-              ? const Color(0xFF10B981).withValues(alpha: 0.3)
-              : const Color(0xFF86EFAC),
-        ),
+        border: Border.all(color: colors.successBorder),
       ),
       child: Text(
         '$pct% OFF',
         style: TextStyle(
-          color: isDark ? const Color(0xFF34D399) : const Color(0xFF15803D),
+          color: colors.success,
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
@@ -248,8 +242,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _saveAmountLabel(double amount) {
-    final isDark = context.isDarkMode;
-    final color = isDark ? const Color(0xFF34D399) : const Color(0xFF15803D);
+    final color = context.appColors.success;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -680,7 +673,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                 ),
                                                 Text(
                                                   formatPlanInr(selectedVariant?.buyPrice ?? 0),
-                                                  style: const TextStyle(color: Color(0xFF34D399), fontSize: 18, fontWeight: FontWeight.bold),
+                                                  style: TextStyle(
+                                                    color: colors.success,
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
                                                 ),
                                               ],
                                             ),
@@ -1201,10 +1198,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                             ),
                                                             child: Row(
                                                               children: [
-                                                                const Icon(
+                                                                Icon(
                                                                   Icons.verified_user_outlined,
                                                                   size: 18,
-                                                                  color: Color(0xFF34D399),
+                                                                  color: colors.success,
                                                                 ),
                                                                 const SizedBox(width: 8),
                                                                 Expanded(
@@ -1576,7 +1573,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: inCart
-                              ? const Color(0xFF10B981)
+                              ? colors.success
                               : const Color(0xFF6C63FF),
                           disabledBackgroundColor: colors.border,
                           elevation: 0,
@@ -1895,9 +1892,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                             ? '$pct% off \u00b7 Save ${formatPlanInr(savings)}'
                                             : 'Save ${formatPlanInr(savings)}',
                                         style: TextStyle(
-                                          color: context.isDarkMode
-                                              ? const Color(0xFF34D399)
-                                              : const Color(0xFF15803D),
+                                          color: context.appColors.success,
                                           fontSize: 12,
                                           fontWeight: FontWeight.w800,
                                         ),
@@ -2150,7 +2145,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           Text(
             value,
             style: TextStyle(
-              color: highlight ? const Color(0xFF10B981) : colors.textPrimary,
+              color: highlight ? colors.success : colors.textPrimary,
               fontWeight: FontWeight.bold,
             ),
           ),

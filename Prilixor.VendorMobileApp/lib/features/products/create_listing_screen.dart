@@ -182,8 +182,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         .where((v) => v.isActive && (v.id ?? '').isNotEmpty)
         .isNotEmpty;
 
-    final typeColor =
-        widget.isChemical ? const Color(0xFF34D399) : const Color(0xFF60A5FA);
+    final colors = context.appColors;
+    final typeColor = widget.isChemical ? colors.success : colors.info;
     final modes = <String>[
       if (selectedProduct?.isRentEnabled == true) 'Rent',
       if (selectedProduct?.isBuyEnabled == true) 'Buy',
@@ -903,7 +903,7 @@ class _EquipmentPricingInfo extends StatelessWidget {
             Expanded(
               child: _PricingPanel(
                 title: 'Customer',
-                accent: const Color(0xFF60A5FA),
+                accent: context.appColors.info,
                 children: [
                   _MetricTile(label: 'Daily rate', value: _money(product.dailyRent)),
                   _MetricTile(label: 'Deposit', value: _money(product.securityDeposit)),

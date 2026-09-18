@@ -1348,23 +1348,15 @@ class _BankTabState extends State<_BankTab> with AutomaticKeepAliveClientMixin {
                   margin: const EdgeInsets.only(bottom: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: context.isDarkMode
-                        ? const Color(0xFF34D399).withValues(alpha: 0.1)
-                        : const Color(0xFFECFDF5),
+                    color: context.appColors.successSoft,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: context.isDarkMode
-                          ? const Color(0xFF34D399).withValues(alpha: 0.25)
-                          : const Color(0xFFA7F3D0),
-                    ),
+                    border: Border.all(color: context.appColors.successBorder),
                   ),
                   child: Row(
                     children: [
                       Icon(
                         Icons.check_circle_rounded,
-                        color: context.isDarkMode
-                            ? const Color(0xFF34D399)
-                            : const Color(0xFF047857),
+                        color: context.appColors.success,
                         size: 18,
                       ),
                       const SizedBox(width: 8),
@@ -1372,9 +1364,7 @@ class _BankTabState extends State<_BankTab> with AutomaticKeepAliveClientMixin {
                         child: Text(
                           'Account numbers match.',
                           style: TextStyle(
-                            color: context.isDarkMode
-                                ? const Color(0xFF34D399)
-                                : const Color(0xFF047857),
+                            color: context.appColors.success,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
