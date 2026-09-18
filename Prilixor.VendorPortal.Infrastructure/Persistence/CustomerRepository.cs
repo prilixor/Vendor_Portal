@@ -1756,10 +1756,10 @@ public sealed class CustomerRepository(
         List<VariantInventoryItem>? marketplaceVariantInventory = null)
     {
         var inv = listing.Inventory;
-        var imgs = ResolveOrderedDistinctListingImageUrls(listing.Images);
-        if (imgs.Count == 0)
+        var resolved = ResolveOrderedDistinctListingImages(listing.Images);
+        if (resolved.Count == 0)
         {
-            imgs = ResolveOrderedDistinctProductImageUrls(product.ProductImages);
+            resolved = ResolveOrderedDistinctProductImages(product.ProductImages);
         }
         var desc = string.IsNullOrWhiteSpace(product.LongDescription)
             ? product.ShortDescription ?? string.Empty
@@ -1803,7 +1803,8 @@ public sealed class CustomerRepository(
             CategoryDepositRequired = product.Category?.DepositRequired ?? false,
             CategoryName = product.Category?.CategoryName ?? "General",
             Description = desc,
-            ImageUrls = imgs,
+            ImageUrls = resolved.Select(x => x.Url).ToList(),
+            ImageThumbnailUrls = resolved.Select(x => x.ThumbnailUrl ?? "").ToList(),
             InventoryId = inv?.Id,
             InventoryAvailable = listingAvailable,
             ProductTotalAvailableQuantity = productTotalAvailableQuantity ?? listingAvailable,
@@ -1844,52 +1845,47 @@ public sealed class CustomerRepository(
         };
     }
 
-    private List<string> ResolveOrderedDistinctListingImageUrls(IEnumerable<VendorProductImage> images)
+    private readonly record struct ResolvedCatalogImage(string Url, string? ThumbnailUrl);
 
+    private List<ResolvedCatalogImage> ResolveOrderedDistinctListingImages(IEnumerable<VendorProductImage> images)
     {
-
         var ordered = images.Where(i => !i.IsDeleted)
-
             .OrderByDescending(i => i.IsPrimary)
-
             .ThenBy(i => i.DisplayOrder);
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        var list = new List<string>();
-
+        var list = new List<ResolvedCatalogImage>();
         foreach (var im in ordered)
-
         {
-
             var key = (im.ImageUrl ?? string.Empty).Trim();
-
             if (string.IsNullOrEmpty(key)) continue;
-
             if (!seen.Add(key)) continue;
-
-            list.Add(fileUrlResolver.Resolve(im.ImageUrl));
-
+            var thumb = im.ThumbnailUrl?.Trim();
+            list.Add(new ResolvedCatalogImage(
+                fileUrlResolver.Resolve(key),
+                string.IsNullOrEmpty(thumb) ? null : fileUrlResolver.Resolve(thumb)));
         }
 
         return list;
-
     }
 
-    private List<string> ResolveOrderedDistinctProductImageUrls(IEnumerable<ProductImage> images)
+    private List<ResolvedCatalogImage> ResolveOrderedDistinctProductImages(IEnumerable<ProductImage> images)
     {
         var ordered = images.Where(i => !i.IsDeleted)
             .OrderByDescending(i => i.IsPrimary)
             .ThenBy(i => i.DisplayOrder);
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var list = new List<string>();
+        var list = new List<ResolvedCatalogImage>();
         foreach (var im in ordered)
         {
             var key = (im.ImageUrl ?? string.Empty).Trim();
             if (string.IsNullOrEmpty(key)) continue;
             if (!seen.Add(key)) continue;
-            list.Add(fileUrlResolver.Resolve(im.ImageUrl));
+            var thumb = im.ThumbnailUrl?.Trim();
+            list.Add(new ResolvedCatalogImage(
+                fileUrlResolver.Resolve(key),
+                string.IsNullOrEmpty(thumb) ? null : fileUrlResolver.Resolve(thumb)));
         }
 
         return list;

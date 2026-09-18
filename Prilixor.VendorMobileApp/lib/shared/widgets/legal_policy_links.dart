@@ -43,7 +43,13 @@ class LegalPolicyLinkRow extends StatelessWidget {
       children.add(
         TextSpan(
           text: link.label,
-          style: TextStyle(color: colors.accent, fontSize: 12, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: colors.accent,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            decoration: TextDecoration.underline,
+            decorationColor: colors.accent,
+          ),
           recognizer: TapGestureRecognizer()..onTap = () => openLegalPolicy(context, link.path, title: link.label),
         ),
       );
@@ -182,7 +188,7 @@ class _LegalAgreeCheckboxState extends State<LegalAgreeCheckbox> {
                 style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.35),
                 children: [
                   TextSpan(text: '${widget.prefix} '),
-                  ..._joinedTitleSpans(context, _docs, const Color(0xFF6C63FF)),
+                  ..._joinedTitleSpans(context, _docs, colors.accent),
                   const TextSpan(text: '.'),
                 ],
               ),

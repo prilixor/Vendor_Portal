@@ -33,7 +33,7 @@ export function CancelOrderConfirm({
         <LegalPolicyLinks
           surface="customer_web"
           screen="order_cancel"
-          className="text-xs text-muted-foreground"
+          className="text-xs"
           linkClassName="text-xs"
         />
         <AlertDialogFooter>

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/auth/auth_provider.dart';
@@ -60,6 +61,7 @@ class PrilixorMobileApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'BlinksMed',
+      scrollBehavior: const _AppScrollBehavior(),
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
@@ -225,4 +227,16 @@ class WelcomeScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AppScrollBehavior extends MaterialScrollBehavior {
+  const _AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+      };
 }

@@ -56,7 +56,7 @@ function joinTitles(docs: PublicLegalDocumentListItem[]) {
         to={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-primary font-medium hover:underline"
+        className="!text-primary font-medium hover:underline"
         onMouseEnter={() => publicLegalApi.prefetch(doc.slug, surface)}
         onFocus={() => publicLegalApi.prefetch(doc.slug, surface)}
       >

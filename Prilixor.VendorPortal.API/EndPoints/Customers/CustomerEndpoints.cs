@@ -194,6 +194,8 @@ public sealed class CustomerListingDetailResponse
     public string AvailabilityStatus { get; set; } = "available";
     public string Description { get; set; } = string.Empty;
     public List<string> ImageUrls { get; set; } = [];
+    /// <summary>Same order as <see cref="ImageUrls"/>; empty when that gallery slot has no thumb.</summary>
+    public List<string> ImageThumbnailUrls { get; set; } = [];
     public bool IsRentEnabled { get; set; } = true;
     public bool IsBuyEnabled { get; set; }
     /// <summary>True when this listing is a chemical (drives buy-only + chemical spec display on the customer UI).</summary>
@@ -304,6 +306,7 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
             AvailabilityStatus = availabilityStatus,
             Description = agg.Description,
             ImageUrls = agg.ImageUrls.Count > 0 ? agg.ImageUrls : [],
+            ImageThumbnailUrls = agg.ImageThumbnailUrls.Count > 0 ? agg.ImageThumbnailUrls : [],
             IsRentEnabled = agg.IsRentEnabled,
             IsBuyEnabled = agg.IsBuyEnabled,
             IsChemical = agg.IsChemical,

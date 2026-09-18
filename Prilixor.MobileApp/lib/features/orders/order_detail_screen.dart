@@ -666,6 +666,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                         MaterialPageRoute(
                                           builder: (context) => ProductDetailScreen(
                                             listingId: provider.currentOrder!.listingId,
+                                            previewImageUrl: provider.currentOrder!.listingPrimaryImageUrl,
                                           ),
                                         ),
                                       );

@@ -50,6 +50,37 @@ String? resolveRentalIconUrl(String? raw) {
   return resolveMediaUrl(url);
 }
 
+List<String> parseMediaUrlList(dynamic raw) {
+  if (raw is! List) return const [];
+  final out = <String>[];
+  for (final u in raw) {
+    final resolved = resolveMediaUrl(u?.toString());
+    if (resolved != null) out.add(resolved);
+  }
+  return out;
+}
+
+/// Thumbnail for a gallery slot. Original stays the zoom/source of truth.
+String? galleryPreviewUrl({
+  required int index,
+  required List<String> originals,
+  List<String> thumbnails = const [],
+  String? placeholder,
+}) {
+  if (index >= 0 && index < thumbnails.length) {
+    final t = thumbnails[index].trim();
+    final original = index < originals.length ? originals[index] : '';
+    if (t.isNotEmpty && t != original) return resolveMediaUrl(t) ?? t;
+  }
+  if (index == 0) {
+    final p = placeholder?.trim() ?? '';
+    if (p.isNotEmpty && (originals.isEmpty || p != originals.first)) {
+      return resolveMediaUrl(p) ?? p;
+    }
+  }
+  return null;
+}
+
 /// Same look as web: original PNG/JPG first so trophy/crown transparency is kept.
 String? resolveRentalIconUrlFromPlan({
   String? iconUrl,

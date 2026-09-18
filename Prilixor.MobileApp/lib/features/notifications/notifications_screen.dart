@@ -179,9 +179,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               
               await productProvider.fetchProducts(search: productName);
               if (productProvider.products.isNotEmpty && context.mounted) {
+                final product = productProvider.products.first;
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => ProductDetailScreen(listingId: productProvider.products.first.id)),
+                  MaterialPageRoute(
+                    builder: (_) => ProductDetailScreen(
+                      listingId: product.id,
+                      previewImageUrl: product.primaryImageUrl,
+                    ),
+                  ),
                 );
               }
             }

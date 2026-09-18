@@ -43,7 +43,13 @@ class LegalPolicyLinkRow extends StatelessWidget {
       children.add(
         TextSpan(
           text: link.label,
-          style: TextStyle(color: colors.accent, fontSize: 12, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: colors.accent,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            decoration: TextDecoration.underline,
+            decorationColor: colors.accent,
+          ),
           recognizer: TapGestureRecognizer()..onTap = () => openLegalPolicy(context, link.path, title: link.label),
         ),
       );

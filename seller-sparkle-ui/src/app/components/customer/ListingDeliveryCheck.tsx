@@ -138,7 +138,7 @@ export function ListingDeliveryCheck({ line }: { line: CartLinePayload }) {
       <LegalPolicyLinks
         surface="customer_web"
         screen="product_detail"
-        className="text-[11px] text-muted-foreground"
+        className="text-[11px]"
         linkClassName="text-[11px]"
         fallback={PRODUCT_DETAIL_FALLBACK}
       />

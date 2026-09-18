@@ -54,7 +54,7 @@ export function VendorOnboardingEsign({
       <LegalPolicyLinks
         surface="vendor_web"
         screen="onboarding"
-        className="text-xs text-muted-foreground"
+        className="text-xs"
         linkClassName="text-xs"
       />
       <div className="space-y-1.5">

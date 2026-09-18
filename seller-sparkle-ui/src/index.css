@@ -502,6 +502,7 @@ img.customer-catalog-media-img {
 .legal-prose {
   min-width: 0;
   max-width: 100%;
+  color: hsl(var(--foreground));
 }
 
 .legal-editor .tiptap,
@@ -593,6 +594,17 @@ img.customer-catalog-media-img {
 }
 
 .legal-prose h1,
+.legal-prose h2,
+.legal-prose h3,
+.legal-prose h4,
+.legal-editor .ProseMirror h1,
+.legal-editor .ProseMirror h2,
+.legal-editor .ProseMirror h3,
+.legal-editor .ProseMirror h4 {
+  color: hsl(var(--foreground));
+}
+
+.legal-prose h1,
 .legal-editor .ProseMirror h1 {
   font-size: 1.75rem;
   font-weight: 700;
@@ -662,7 +674,7 @@ img.customer-catalog-media-img {
 
 .legal-prose a,
 .legal-editor .ProseMirror a {
-  color: hsl(var(--primary));
+  color: hsl(var(--primary)) !important;
   text-decoration: underline;
 }
 

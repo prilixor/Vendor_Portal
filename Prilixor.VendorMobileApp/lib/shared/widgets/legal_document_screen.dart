@@ -175,16 +175,19 @@ class _DocumentBody extends StatelessWidget {
             textStyle: TextStyle(color: colors.textPrimary, fontSize: 15, height: 1.55),
             onTapUrl: onTapUrl,
             customStylesBuilder: (element) {
+              final accent = _cssHex(colors.accent);
               switch (element.localName) {
                 case 'a':
-                  return {'color': '#6C63FF', 'text-decoration': 'underline'};
+                  return {'color': accent, 'text-decoration': 'underline'};
                 case 'h1':
                 case 'h2':
                 case 'h3':
-                  return {'font-weight': '700'};
-                case 'li':
+                  return {'color': _cssHex(colors.textPrimary), 'font-weight': '700'};
                 case 'p':
-                  return {'margin-bottom': '10px'};
+                case 'li':
+                case 'td':
+                case 'th':
+                  return {'color': _cssHex(colors.textPrimary), 'margin-bottom': '10px'};
                 default:
                   return null;
               }
@@ -268,4 +271,9 @@ String _formatStamp(DateTime value) {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   final local = value.toLocal();
   return '${local.day.toString().padLeft(2, '0')} ${months[local.month - 1]} ${local.year}';
+}
+
+String _cssHex(Color color) {
+  final hex = color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2);
+  return '#$hex';
 }

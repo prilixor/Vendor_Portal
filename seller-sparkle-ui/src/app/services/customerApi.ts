@@ -114,6 +114,8 @@ export interface CustomerListingDetailApi {
   availabilityStatus: "available" | "low_stock" | "out_of_stock" | string;
   description: string;
   imageUrls: string[];
+  /** Same order as imageUrls; empty string when that slot has no generated thumb. */
+  imageThumbnailUrls?: string[];
   buyPrice?: number;
   isRentEnabled?: boolean;
   isBuyEnabled?: boolean;

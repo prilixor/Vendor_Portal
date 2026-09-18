@@ -1399,7 +1399,7 @@ const CustomerOrderDetail = () => {
       <LegalPolicyLinks
         surface="customer_web"
         screen="order_confirm"
-        className="text-xs text-muted-foreground"
+        className="text-xs"
         linkClassName="text-xs"
       />
 

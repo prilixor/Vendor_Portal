@@ -12,6 +12,10 @@ type LegalPolicyLinksLayout = "inline" | "quiet" | "menu";
 /** @deprecated mapped to quiet / menu */
 type LegacyLayout = "list" | "stack" | "rows" | "grid";
 
+/** Brand primary on every surface — matches LegalAgreeCheckbox and mobile `colors.accent`. */
+const policyLinkClass =
+  "!text-primary font-medium underline-offset-2 transition-colors hover:!text-primary/80 hover:underline";
+
 function PolicyQuiet({
   docs,
   className,
@@ -30,7 +34,8 @@ function PolicyQuiet({
             target="_blank"
             rel="noopener noreferrer"
             className={cn(
-              "group flex items-center justify-between gap-3 py-2.5 text-sm text-foreground/90 transition-colors hover:text-primary hover:no-underline",
+              "group flex items-center justify-between gap-3 py-2.5 text-sm no-underline",
+              policyLinkClass,
               index < docs.length - 1 && "border-b border-border/60",
               linkClassName,
             )}
@@ -66,7 +71,8 @@ function PolicyMenuList({
             target="_blank"
             rel="noopener noreferrer"
             className={cn(
-              "flex items-center justify-between gap-3 rounded-md px-2 py-2 text-[13px] text-foreground transition-colors hover:bg-muted hover:no-underline",
+              "flex items-center justify-between gap-3 rounded-md px-2 py-2 text-[13px] no-underline hover:bg-muted",
+              policyLinkClass,
               linkClassName,
             )}
           >
@@ -172,7 +178,8 @@ export function LegalPolicyLinks({
             target="_blank"
             rel="noopener noreferrer"
             className={cn(
-              "max-w-full truncate text-muted-foreground transition-colors hover:text-foreground hover:no-underline",
+              "max-w-full truncate underline",
+              policyLinkClass,
               linkClassName,
             )}
           >

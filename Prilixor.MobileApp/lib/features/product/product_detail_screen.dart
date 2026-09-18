@@ -23,13 +23,19 @@ import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
 import '../../shared/widgets/struck_price.dart';
 import '../../shared/utils/require_auth.dart';
 import '../../shared/widgets/listing_delivery_check.dart';
+import '../../shared/widgets/gallery_thumb_strip.dart';
 import '../dashboard/customer_dashboard.dart';
 import 'product_image_viewer_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final String listingId;
+  final String? previewImageUrl;
 
-  const ProductDetailScreen({super.key, required this.listingId});
+  const ProductDetailScreen({
+    super.key,
+    required this.listingId,
+    this.previewImageUrl,
+  });
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -92,6 +98,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       if (!mounted) return;
       if (detail != null) {
         _precacheRentalPlanIcons(detail);
+        _precacheProductImages(detail);
       }
       setState(() {
         _localDetail = detail;
@@ -152,6 +159,28 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       if (url == null || url.isEmpty) continue;
       precacheImage(NetworkImage(url), context);
     }
+  }
+
+  void _precacheProductImages(ProductDetailModel detail) {
+    for (var i = 0; i < detail.imageUrls.length; i++) {
+      final preview = _galleryPreview(detail, i);
+      if (preview != null && preview.isNotEmpty) {
+        precacheImage(NetworkImage(preview), context);
+      }
+    }
+    for (final url in detail.imageUrls) {
+      if (url.isEmpty) continue;
+      precacheImage(NetworkImage(url), context);
+    }
+  }
+
+  String? _galleryPreview(ProductDetailModel detail, int index) {
+    return galleryPreviewUrl(
+      index: index,
+      originals: detail.imageUrls,
+      thumbnails: detail.imageThumbnailUrls,
+      placeholder: widget.previewImageUrl,
+    );
   }
 
   /// Match web [RentalPeriodPlanDropdown] legend + trigger icon chips.
@@ -457,6 +486,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   MaterialPageRoute(
                                                     builder: (_) => ProductImageViewerScreen(
                                                       imageUrls: detail.imageUrls,
+                                                      thumbnails: detail.imageThumbnailUrls,
+                                                      placeholder: widget.previewImageUrl,
                                                       initialIndex: _imageIndex,
                                                       title: detail.title,
                                                     ),
@@ -471,7 +502,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   padding: const EdgeInsets.all(16),
                                                   child: CatalogImage(
                                                     url: detail.imageUrls[i],
+                                                    previewUrl: _galleryPreview(detail, i),
                                                     fit: BoxFit.contain,
+                                                    showLoadingIndicator: false,
                                                   ),
                                                 ),
                                               ),
@@ -492,7 +525,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                 children: [
                                                   Icon(Icons.zoom_in_rounded, color: Colors.white, size: 14),
                                                   SizedBox(width: 4),
-                                                  const Text(
+                                                  Text(
                                                     'View & zoom',
                                                     style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                                                   ),
@@ -529,43 +562,41 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 if (detail.imageUrls.length > 1)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 12),
-                                    child: SizedBox(
-                                      height: 68,
-                                      child: ListView.separated(
-                                        scrollDirection: Axis.horizontal,
-                                        itemCount: detail.imageUrls.length,
-                                        separatorBuilder: (_, __) => const SizedBox(width: 10),
-                                        itemBuilder: (_, i) {
-                                          final selected = i == _imageIndex;
-                                          return GestureDetector(
-                                            onTap: () {
-                                              setState(() => _imageIndex = i);
-                                              _imagePageController.animateToPage(
-                                                i,
-                                                duration: const Duration(milliseconds: 220),
-                                                curve: Curves.easeOut,
-                                              );
-                                            },
-                                            child: AnimatedContainer(
-                                              duration: const Duration(milliseconds: 180),
-                                              width: 68,
-                                              decoration: BoxDecoration(
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: selected ? const Color(0xFF6C63FF) : colors.border,
-                                                  width: selected ? 2 : 1,
-                                                ),
-                                                color: colors.surface,
-                                              ),
-                                              clipBehavior: Clip.antiAlias,
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(6),
-                                                child: CatalogImage(url: detail.imageUrls[i], fit: BoxFit.contain),
-                                              ),
+                                    child: GalleryThumbStrip(
+                                      itemCount: detail.imageUrls.length,
+                                      selectedIndex: _imageIndex,
+                                      fadeColor: colors.background,
+                                      itemBuilder: (_, i) {
+                                        final selected = i == _imageIndex;
+                                        return AnimatedContainer(
+                                          duration: const Duration(milliseconds: 180),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(
+                                              color: selected ? const Color(0xFF6C63FF) : colors.border,
+                                              width: selected ? 2 : 1,
                                             ),
-                                          );
-                                        },
-                                      ),
+                                            color: colors.surface,
+                                          ),
+                                          clipBehavior: Clip.antiAlias,
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(6),
+                                            child: CatalogImage(
+                                              url: _galleryPreview(detail, i) ?? detail.imageUrls[i],
+                                              fit: BoxFit.contain,
+                                              showLoadingIndicator: false,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      onSelected: (i) {
+                                        setState(() => _imageIndex = i);
+                                        _imagePageController.animateToPage(
+                                          i,
+                                          duration: const Duration(milliseconds: 220),
+                                          curve: Curves.easeOut,
+                                        );
+                                      },
                                     ),
                                   ),
                               ],
@@ -1515,7 +1546,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                           Navigator.push(
                                             context,
                                             MaterialPageRoute(
-                                              builder: (_) => ProductDetailScreen(listingId: product.id),
+                                              builder: (_) => ProductDetailScreen(
+                                                listingId: product.id,
+                                                previewImageUrl: product.primaryImageUrl,
+                                              ),
                                             ),
                                           );
                                         },

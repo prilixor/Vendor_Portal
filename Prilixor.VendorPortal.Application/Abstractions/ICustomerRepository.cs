@@ -230,6 +230,8 @@ public sealed class VendorProductListingAggregate
     public string CategoryName { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
     public List<string> ImageUrls { get; init; } = [];
+    /// <summary>Same order as <see cref="ImageUrls"/>; empty string when that slot has no generated thumb.</summary>
+    public List<string> ImageThumbnailUrls { get; init; } = [];
     public List<Prilixor.VendorPortal.Application.Onboarding.ProductVariantDto> Variants { get; init; } = [];
     public List<Prilixor.VendorPortal.Application.Onboarding.ProductRentalPricingPlanDto> RentalPricingPlans { get; init; } = [];
     public Guid? InventoryId { get; init; }

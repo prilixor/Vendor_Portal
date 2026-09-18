@@ -1,4 +1,4 @@
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import { customerApi, type CustomerListingDetailApi, type RentalPricingPlanDto } from "@/app/services/customerApi";
@@ -92,6 +92,11 @@ function resolveCustomerAvailableQuantity(
 const CustomerListingDetail = () => {
   const { listingId } = useParams<{ listingId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const previewImage =
+    typeof (location.state as { previewImage?: unknown } | null)?.previewImage === "string"
+      ? (location.state as { previewImage: string }).previewImage
+      : "";
   const { user } = useAuth();
   const { addLine } = useCart();
   const [qty, setQty] = useState(1);
@@ -359,7 +364,12 @@ const CustomerListingDetail = () => {
 
       <div className="relative grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] xl:gap-10">
         <div className="min-w-0 lg:sticky lg:top-20">
-          <ProductImageGallery images={images} alt={data.title} />
+          <ProductImageGallery
+            images={images}
+            thumbnails={data.imageThumbnailUrls}
+            placeholder={previewImage}
+            alt={data.title}
+          />
         </div>
 
         <div className="min-w-0 space-y-5">

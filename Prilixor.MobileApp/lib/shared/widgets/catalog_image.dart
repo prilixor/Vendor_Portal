@@ -10,6 +10,8 @@ import '../../core/utils/media_url.dart';
 class CatalogImage extends StatelessWidget {
   final String? url;
   final String? fallbackUrl;
+  /// Shown under [url] until the original paints. Never used for pinch/zoom.
+  final String? previewUrl;
   final BoxFit fit;
   final double? width;
   final double? height;
@@ -20,6 +22,7 @@ class CatalogImage extends StatelessWidget {
     super.key,
     required this.url,
     this.fallbackUrl,
+    this.previewUrl,
     this.fit = BoxFit.cover,
     this.width,
     this.height,
@@ -31,13 +34,16 @@ class CatalogImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final resolved = resolveMediaUrl(url);
     final resolvedFallback = resolveMediaUrl(fallbackUrl);
+    final resolvedPreview = resolveMediaUrl(previewUrl);
     final placeholder = _CatalogImagePlaceholder(
       message: resolved == null ? 'Image will be updated soon' : 'Image currently unavailable',
       borderRadius: borderRadius,
     );
+    final hasPreview = resolvedPreview != null && resolvedPreview != resolved;
     final quietLoad = !showLoadingIndicator ||
+        hasPreview ||
         ((width ?? double.infinity) <= 48 && (height ?? double.infinity) <= 48);
-    final child = resolved == null
+    Widget child = resolved == null
         ? placeholder
         : _CatalogNetworkImage(
             url: resolved,
@@ -48,6 +54,25 @@ class CatalogImage extends StatelessWidget {
             errorChild: placeholder,
             showLoadingIndicator: !quietLoad,
           );
+
+    if (hasPreview && resolved != null) {
+      child = Stack(
+        fit: StackFit.expand,
+        alignment: Alignment.center,
+        children: [
+          Image.network(
+            resolvedPreview,
+            width: width,
+            height: height,
+            fit: fit,
+            gaplessPlayback: true,
+            webHtmlElementStrategy: kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          ),
+          child,
+        ],
+      );
+    }
 
     if (borderRadius != null) {
       return ClipRRect(borderRadius: borderRadius!, child: child);
