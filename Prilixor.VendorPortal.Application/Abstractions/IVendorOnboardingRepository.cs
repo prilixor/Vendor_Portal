@@ -1,6 +1,7 @@
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.VendorPortal.Domain.Auth;
 using Prilixor.VendorPortal.Domain.Support;
+using Prilixor.VendorPortal.Application.Onboarding;
 
 namespace Prilixor.VendorPortal.Application.Abstractions;
 
@@ -55,6 +56,7 @@ public interface IVendorOnboardingRepository
     Task UpdateProductAsync(Product product, CancellationToken cancellationToken);
     Task DeleteProductAsync(Guid productId, CancellationToken cancellationToken);
     Task<List<Product>> GetProductsAsync(Guid? categoryId, CancellationToken cancellationToken);
+    Task<ProductListResult> SearchProductSummariesAsync(ProductListQuerySpec spec, CancellationToken cancellationToken);
     Task AddProductImageAsync(ProductImage image, CancellationToken cancellationToken);
     Task<ProductImage?> GetProductImageByIdAsync(Guid productId, Guid imageId, CancellationToken cancellationToken);
     Task UpdateProductImageAsync(ProductImage image, CancellationToken cancellationToken);

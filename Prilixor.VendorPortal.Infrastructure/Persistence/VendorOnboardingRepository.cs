@@ -329,6 +329,7 @@ public sealed class VendorOnboardingRepository(
             .Include(x => x.ProductDocuments)
             .Include(x => x.Variants)
             .Include(x => x.RentalPricingPlans)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
         if (product is not null)
         {
@@ -341,6 +342,7 @@ public sealed class VendorOnboardingRepository(
             .Include(x => x.ProductDocuments)
             .Include(x => x.Variants)
             .Include(x => x.RentalPricingPlans)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
     }
 
@@ -613,6 +615,7 @@ public sealed class VendorOnboardingRepository(
             query = query.Where(x => x.CategoryId == categoryId.Value);
         }
 
+        query = query.AsSplitQuery();
         var products = await query.OrderBy(x => x.ProductName).ToListAsync(cancellationToken);
         if (products.Count > 0)
         {
@@ -632,7 +635,142 @@ public sealed class VendorOnboardingRepository(
             legacyQuery = legacyQuery.Where(x => x.CategoryId == categoryId.Value);
         }
 
-        return await legacyQuery.OrderBy(x => x.ProductName).ToListAsync(cancellationToken);
+        return await legacyQuery.AsSplitQuery().OrderBy(x => x.ProductName).ToListAsync(cancellationToken);
+    }
+
+    public async Task<ProductListResult> SearchProductSummariesAsync(ProductListQuerySpec spec, CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 100);
+        var hasCommon = await commonDbContext.Products.AsNoTracking().AnyAsync(x => !x.IsDeleted, cancellationToken);
+        var catalog = hasCommon ? (ApplicationDbContext)commonDbContext : dbContext;
+        return await SearchProductSummariesInStoreAsync(catalog, spec, page, pageSize, cancellationToken);
+    }
+
+    private static async Task<ProductListResult> SearchProductSummariesInStoreAsync(
+        ApplicationDbContext catalog,
+        ProductListQuerySpec spec,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = catalog.Products.AsNoTracking().Where(x => !x.IsDeleted);
+
+        if (spec.CategoryId.HasValue)
+        {
+            query = query.Where(x => x.CategoryId == spec.CategoryId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(spec.Search))
+        {
+            var term = spec.Search.Trim().ToLower();
+            query = query.Where(x =>
+                x.ProductName.ToLower().Contains(term)
+                || (x.BrandName != null && x.BrandName.ToLower().Contains(term))
+                || (x.ModelName != null && x.ModelName.ToLower().Contains(term)));
+        }
+
+        if (spec.IsActive.HasValue)
+        {
+            query = query.Where(x => x.IsActive == spec.IsActive.Value);
+        }
+
+        if (spec.IsChemical == true)
+        {
+            query = query.Where(x => x.Category.IsChemical || x.ChemicalProperty != null);
+        }
+        else if (spec.IsChemical == false)
+        {
+            query = query.Where(x => !x.Category.IsChemical && x.ChemicalProperty == null);
+        }
+
+        if (spec.ProductIds is { Count: > 0 })
+        {
+            var ids = spec.ProductIds.ToList();
+            query = query.Where(x => ids.Contains(x.Id));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        if (totalCount == 0)
+        {
+            return new ProductListResult { Items = [], TotalCount = 0 };
+        }
+
+        var items = await query
+            .OrderBy(x => x.ProductName)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new ProductListRow
+            {
+                Id = x.Id,
+                CategoryId = x.CategoryId,
+                ProductName = x.ProductName,
+                BrandName = x.BrandName,
+                ModelName = x.ModelName,
+                DailyRent = x.DailyRent,
+                WeeklyRent = x.WeeklyRent,
+                MonthlyRent = x.MonthlyRent,
+                SecurityDeposit = x.SecurityDeposit,
+                BuyPrice = x.BuyPrice,
+                VendorDailyRent = x.VendorDailyRent,
+                VendorWeeklyRent = x.VendorWeeklyRent,
+                VendorMonthlyRent = x.VendorMonthlyRent,
+                VendorSecurityDeposit = x.VendorSecurityDeposit,
+                VendorBuyPrice = x.VendorBuyPrice,
+                GstPercent = x.GstPercent,
+                IsRentEnabled = x.IsRentEnabled,
+                IsBuyEnabled = x.IsBuyEnabled,
+                IsActive = x.IsActive,
+                CasNumber = x.ChemicalProperty != null ? x.ChemicalProperty.CasNumber : null,
+                ChemicalFormula = x.ChemicalProperty != null ? x.ChemicalProperty.ChemicalFormula : null,
+                PurityPercentage = x.ChemicalProperty != null ? x.ChemicalProperty.PurityPercentage : null,
+                MolecularWeight = x.ChemicalProperty != null ? x.ChemicalProperty.MolecularWeight : null,
+                BaseUnit = x.ChemicalProperty != null ? x.ChemicalProperty.BaseUnit : null,
+                PrimaryImageId = x.ProductImages
+                    .Where(i => !i.IsDeleted)
+                    .OrderByDescending(i => i.IsPrimary)
+                    .ThenBy(i => i.DisplayOrder)
+                    .Select(i => (Guid?)i.Id)
+                    .FirstOrDefault(),
+                PrimaryImageUrl = x.ProductImages
+                    .Where(i => !i.IsDeleted)
+                    .OrderByDescending(i => i.IsPrimary)
+                    .ThenBy(i => i.DisplayOrder)
+                    .Select(i => i.ImageUrl)
+                    .FirstOrDefault(),
+                PrimaryThumbnailUrl = x.ProductImages
+                    .Where(i => !i.IsDeleted)
+                    .OrderByDescending(i => i.IsPrimary)
+                    .ThenBy(i => i.DisplayOrder)
+                    .Select(i => i.ThumbnailUrl)
+                    .FirstOrDefault(),
+                PrimaryImageDisplayOrder = x.ProductImages
+                    .Where(i => !i.IsDeleted)
+                    .OrderByDescending(i => i.IsPrimary)
+                    .ThenBy(i => i.DisplayOrder)
+                    .Select(i => i.DisplayOrder)
+                    .FirstOrDefault(),
+                PrimaryImageIsPrimary = x.ProductImages
+                    .Where(i => !i.IsDeleted)
+                    .OrderByDescending(i => i.IsPrimary)
+                    .ThenBy(i => i.DisplayOrder)
+                    .Select(i => i.IsPrimary)
+                    .FirstOrDefault(),
+                Variants = x.Variants.Select(v => new ProductListVariantRow
+                {
+                    Id = v.Id,
+                    ProductId = v.ProductId,
+                    Sku = v.Sku,
+                    SizeValue = v.SizeValue,
+                    SizeUnit = v.SizeUnit,
+                    VendorPrice = v.VendorPrice,
+                    BuyPrice = v.BuyPrice,
+                    IsActive = v.IsActive
+                }).ToList()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new ProductListResult { Items = items, TotalCount = totalCount };
     }
 
     public async Task AddProductImageAsync(ProductImage image, CancellationToken cancellationToken)

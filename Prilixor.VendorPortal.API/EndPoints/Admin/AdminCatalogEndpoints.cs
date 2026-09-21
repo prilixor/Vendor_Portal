@@ -1,6 +1,7 @@
 using FastEndpoints;
 using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Prilixor.Shared.Models;
 using Prilixor.VendorPortal.API.Extensions;
 using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.API.EndPoints.Vendors;
@@ -235,6 +236,22 @@ public sealed class GetProductsRequest
     public string? CategoryId { get; set; }
 }
 
+public sealed class GetProductSummariesRequest
+{
+    public string? Search { get; set; }
+    public string? CategoryId { get; set; }
+    public string? Status { get; set; }
+    public bool FavoritesOnly { get; set; }
+    public bool? IsChemical { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
+}
+
+public sealed class GetProductByIdRequest
+{
+    public string Id { get; set; } = string.Empty;
+}
+
 public sealed class GetProductsEndpoint(IMediator mediator)
     : Endpoint<GetProductsRequest, Results<Ok<List<ProductDto>>, ProblemHttpResult>>
 {
@@ -248,6 +265,54 @@ public sealed class GetProductsEndpoint(IMediator mediator)
     public override async Task<Results<Ok<List<ProductDto>>, ProblemHttpResult>> ExecuteAsync(GetProductsRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new GetProductsQuery(req.CategoryId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetProductSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetProductSummariesRequest, Results<Ok<PagedResult<ProductDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/product-summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<PagedResult<ProductDto>>, ProblemHttpResult>> ExecuteAsync(
+        GetProductSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 10 : req.PageSize;
+        var result = await mediator.Send(new GetProductListQuery(
+            req.Search,
+            req.CategoryId,
+            req.Status,
+            req.FavoritesOnly,
+            req.IsChemical,
+            page,
+            pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetProductByIdEndpoint(IMediator mediator)
+    : Endpoint<GetProductByIdRequest, Results<Ok<ProductDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/products/{id}");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<ProductDto>, ProblemHttpResult>> ExecuteAsync(
+        GetProductByIdRequest req,
+        CancellationToken ct)
+    {
+        req.Id = Route<string>("id") ?? req.Id;
+        var result = await mediator.Send(new GetProductQuery(req.Id), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

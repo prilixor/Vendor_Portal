@@ -126,6 +126,7 @@ public interface ICustomerRepository
     Task<List<Guid>> GetCustomersByFavoriteListingAsync(Guid vendorProductListingId, CancellationToken cancellationToken);
     Task<Dictionary<Guid, int>> GetFavoriteCountsByListingsAsync(List<Guid> listingIds, CancellationToken cancellationToken);
     Task<Dictionary<Guid, int>> GetFavoriteCountsByProductsAsync(CancellationToken cancellationToken);
+    Task<Dictionary<Guid, int>> GetFavoriteCountsForProductIdsAsync(IReadOnlyCollection<Guid> productIds, CancellationToken cancellationToken);
 
     Task<List<AdminCustomerListItemDto>> SearchCustomersForAdminAsync(string? search, int page, int pageSize, CancellationToken cancellationToken);
     Task<AdminCustomerDetailDto?> GetCustomerDetailForAdminAsync(Guid customerId, int ordersPage, int ordersPageSize, CancellationToken cancellationToken);

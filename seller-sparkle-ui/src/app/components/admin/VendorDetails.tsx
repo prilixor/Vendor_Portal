@@ -552,7 +552,7 @@ const VendorDetails = () => {
       // Load catalog products (with per-size variants) so chemical listings can show pricing.
       let productsById: Record<string, ProductDto> = {};
       try {
-        const productsData = await adminApi.getProducts();
+        const productsData = await adminApi.getAllProductSummaries();
         const map: Record<string, ProductDto> = {};
         productsData.forEach((prod) => { map[prod.id] = prod; });
         productsById = map;

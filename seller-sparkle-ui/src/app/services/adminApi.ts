@@ -454,6 +454,13 @@ export interface UpdateRentalDurationIconRequest extends CreateRentalDurationIco
   id: string;
 }
 
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface ProductDto {
   id: string;
   categoryId: string;
@@ -960,6 +967,49 @@ export const adminApi = {
   async getProducts(categoryId?: string): Promise<ProductDto[]> {
     const url = categoryId ? `/admin/catalog/products?categoryId=${categoryId}` : '/admin/catalog/products';
     return apiClient.get<ProductDto[]>(url);
+  },
+
+  async getProductSummaries(params: {
+    search?: string;
+    categoryId?: string;
+    status?: "all" | "active" | "inactive";
+    favoritesOnly?: boolean;
+    isChemical?: boolean;
+    page?: number;
+    pageSize?: number;
+  } = {}): Promise<PagedResult<ProductDto>> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.categoryId) qs.set("categoryId", params.categoryId);
+    if (params.status && params.status !== "all") qs.set("status", params.status);
+    if (params.favoritesOnly) qs.set("favoritesOnly", "true");
+    if (typeof params.isChemical === "boolean") qs.set("isChemical", String(params.isChemical));
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 10));
+    return apiClient.get<PagedResult<ProductDto>>(`/admin/catalog/product-summaries?${qs.toString()}`);
+  },
+
+  async getProduct(id: string): Promise<ProductDto> {
+    return apiClient.get<ProductDto>(`/admin/catalog/products/${id}`);
+  },
+
+  async getAllProductSummaries(params: {
+    search?: string;
+    categoryId?: string;
+    status?: "all" | "active" | "inactive";
+    favoritesOnly?: boolean;
+    isChemical?: boolean;
+  } = {}): Promise<ProductDto[]> {
+    const pageSize = 100;
+    const first = await this.getProductSummaries({ ...params, page: 1, pageSize });
+    const items = [...first.items];
+    const totalPages = Math.max(1, Math.ceil(first.totalCount / pageSize));
+    for (let page = 2; page <= totalPages; page++) {
+      const next = await this.getProductSummaries({ ...params, page, pageSize });
+      items.push(...next.items);
+    }
+    return items;
   },
 
   async previewRentalPricing(data: {

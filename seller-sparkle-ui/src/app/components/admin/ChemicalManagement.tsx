@@ -182,6 +182,7 @@ const ChemPriceDisclosure = ({ label, count, sizes }: { label: string; count: nu
 const ChemicalManagement = () => {
   const [categories, setCategories] = useState<ProductCategoryDto[]>([]);
   const [products, setProducts] = useState<ProductDto[]>([]);
+  const [productTotalCount, setProductTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useQueryTab(CHEMICAL_TABS, "chemical");
   const [search, setSearch] = useState("");
@@ -255,18 +256,36 @@ const ChemicalManagement = () => {
   const [categoryDeleteConfirmId, setCategoryDeleteConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadData();
+    void loadLookups();
   }, []);
 
-  const loadData = async () => {
+  const loadLookups = async () => {
+    try {
+      const categoriesRes = await adminApi.getProductCategories();
+      setCategories(categoriesRes);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load catalog data.";
+      toast.error(message);
+    }
+  };
+
+  const loadProducts = async () => {
+    const result = await adminApi.getProductSummaries({
+      search: search.trim() || undefined,
+      status: statusFilter,
+      favoritesOnly: showFavoritesOnly,
+      isChemical: true,
+      page: productPage,
+      pageSize: PAGE_SIZE,
+    });
+    setProducts(result.items);
+    setProductTotalCount(result.totalCount);
+  };
+
+  const refreshPage = async () => {
     setLoading(true);
     try {
-      const [categoriesRes, productsRes] = await Promise.all([
-        adminApi.getProductCategories(),
-        adminApi.getProducts(),
-      ]);
-      setCategories(categoriesRes);
-      setProducts(productsRes);
+      await Promise.all([loadLookups(), loadProducts()]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load catalog data.";
       toast.error(message);
@@ -284,39 +303,48 @@ const ChemicalManagement = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const chemicalCategoryIds = new Set(categories.filter((c) => c.isChemical).map((c) => c.id));
-  const isChemicalProduct = (p: ProductDto) =>
-    chemicalCategoryIds.has(p.categoryId) ||
-    !!p.baseUnit ||
-    !!p.casNumber ||
-    !!p.chemicalFormula;
-
-  const filteredProducts = products.filter((p) => {
-    if (!isChemicalProduct(p)) return false;
-
-    const matchesSearch = !search || 
-      p.productName.toLowerCase().includes(search.toLowerCase()) ||
-      p.brandName?.toLowerCase().includes(search.toLowerCase()) ||
-      p.modelName?.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? p.isActive : !p.isActive);
-    const matchesFavorites = !showFavoritesOnly || p.favoriteCount > 0;
-    return matchesSearch && matchesStatus && matchesFavorites;
-  });
-
   useEffect(() => {
     setCategoryPage(1);
     setProductPage(1);
   }, [search, statusFilter, showFavoritesOnly, activeTab]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const delay = search.trim() ? 300 : 0;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        setLoading(true);
+        try {
+          const result = await adminApi.getProductSummaries({
+            search: search.trim() || undefined,
+            status: statusFilter,
+            favoritesOnly: showFavoritesOnly,
+            isChemical: true,
+            page: productPage,
+            pageSize: PAGE_SIZE,
+          });
+          if (cancelled) return;
+          setProducts(result.items);
+          setProductTotalCount(result.totalCount);
+        } catch (error) {
+          if (cancelled) return;
+          const message = error instanceof Error ? error.message : "Failed to load catalog data.";
+          toast.error(message);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+    }, delay);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [search, statusFilter, showFavoritesOnly, productPage]);
+
   const paginatedCategories = useMemo(() => {
     const start = (categoryPage - 1) * PAGE_SIZE;
     return filteredCategories.slice(start, start + PAGE_SIZE);
   }, [filteredCategories, categoryPage]);
-
-  const paginatedProducts = useMemo(() => {
-    const start = (productPage - 1) * PAGE_SIZE;
-    return filteredProducts.slice(start, start + PAGE_SIZE);
-  }, [filteredProducts, productPage]);
 
   const clearFieldError = (key: string) => {
     setFieldErrors((prev) => {
@@ -409,11 +437,9 @@ const ChemicalManagement = () => {
   };
 
   const confirmStatusChange = async (id: string, action: 'activate' | 'deactivate') => {
-    const product = products.find((p) => p.id === id);
-    if (!product) return;
-
     try {
       setLoading(true);
+      const product = await adminApi.getProduct(id);
       const updated = await adminApi.updateProduct(id, {
         id,
         categoryId: product.categoryId,
@@ -423,6 +449,7 @@ const ChemicalManagement = () => {
         shortDescription: product.shortDescription,
         longDescription: product.longDescription,
         dailyRent: product.dailyRent,
+        weeklyRent: product.weeklyRent ?? 0,
         monthlyRent: product.monthlyRent,
         securityDeposit: product.securityDeposit,
         buyPrice: product.buyPrice,
@@ -444,7 +471,7 @@ const ChemicalManagement = () => {
         variants: product.variants || [],
       });
 
-      setProducts(products.map((p) => (p.id === id ? { ...product, ...updated } : p)));
+      setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...updated, images: updated.images?.slice(0, 1) ?? p.images } : p)));
       toast.success(`Product ${action}d successfully`);
       setStatusConfirmId(null);
       setStatusConfirmAction(null);
@@ -512,7 +539,7 @@ const ChemicalManagement = () => {
         toast.success("Category created");
       }
       setCategoryDialogOpen(false);
-      await loadData();
+      await refreshPage();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save category.";
       toast.error(message);
@@ -534,7 +561,7 @@ const ChemicalManagement = () => {
       setLoading(true);
       await adminApi.deleteProductCategory(id);
       toast.success("Category deleted");
-      await loadData();
+      await refreshPage();
       setCategoryDeleteConfirmId(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to delete category.";
@@ -587,44 +614,54 @@ const ChemicalManagement = () => {
     return true;
   };
 
-  const openProductDialog = (product?: ProductDto) => {
+  const openProductDialog = async (product?: ProductDto) => {
     setFieldErrors({});
     setProductFormStep(0);
     if (product) {
-      setEditingProduct(product);
-      setProductForm({
-        categoryId: product.categoryId,
-        productName: product.productName,
-        brandName: product.brandName || "",
-        modelName: product.modelName || "",
-        shortDescription: product.shortDescription || "",
-        longDescription: product.longDescription || "",
-        dailyRent: product.dailyRent,
-        monthlyRent: product.monthlyRent,
-        securityDeposit: product.securityDeposit,
-        buyPrice: product.buyPrice,
-        vendorDailyRent: product.vendorDailyRent || 0,
-        vendorMonthlyRent: product.vendorMonthlyRent || 0,
-        vendorSecurityDeposit: product.vendorSecurityDeposit || 0,
-        vendorBuyPrice: product.vendorBuyPrice,
-        gstPercent: product.gstPercent,
-        isRentEnabled: product.isRentEnabled,
-        isBuyEnabled: product.isBuyEnabled,
-        isActive: product.isActive,
-        casNumber: product.casNumber || "",
-        chemicalFormula: product.chemicalFormula || "",
-        purityPercentage: product.purityPercentage,
-        molecularWeight: product.molecularWeight,
-        baseUnit: product.baseUnit || "Kg",
-        sdsDocumentUrl: product.sdsDocumentUrl || "",
-        coaDocumentUrl: product.coaDocumentUrl || "",
-        variants: bindChemicalVariants(product.variants, product.productName),
-      });
-      setProductImages(product.images || []);
-      setNewImageUrl("");
-      setNewImageIsPrimary(false);
-      setIsChemical(true);
-      void loadProductImages(product.id, { silent: true });
+      setLoading(true);
+      try {
+        const full = await adminApi.getProduct(product.id);
+        setEditingProduct(full);
+        setProductForm({
+          categoryId: full.categoryId,
+          productName: full.productName,
+          brandName: full.brandName || "",
+          modelName: full.modelName || "",
+          shortDescription: full.shortDescription || "",
+          longDescription: full.longDescription || "",
+          dailyRent: full.dailyRent,
+          monthlyRent: full.monthlyRent,
+          securityDeposit: full.securityDeposit,
+          buyPrice: full.buyPrice,
+          vendorDailyRent: full.vendorDailyRent || 0,
+          vendorMonthlyRent: full.vendorMonthlyRent || 0,
+          vendorSecurityDeposit: full.vendorSecurityDeposit || 0,
+          vendorBuyPrice: full.vendorBuyPrice,
+          gstPercent: full.gstPercent,
+          isRentEnabled: full.isRentEnabled,
+          isBuyEnabled: full.isBuyEnabled,
+          isActive: full.isActive,
+          casNumber: full.casNumber || "",
+          chemicalFormula: full.chemicalFormula || "",
+          purityPercentage: full.purityPercentage,
+          molecularWeight: full.molecularWeight,
+          baseUnit: full.baseUnit || "Kg",
+          sdsDocumentUrl: full.sdsDocumentUrl || "",
+          coaDocumentUrl: full.coaDocumentUrl || "",
+          variants: bindChemicalVariants(full.variants, full.productName),
+        });
+        setProductImages(full.images || []);
+        setNewImageUrl("");
+        setNewImageIsPrimary(false);
+        setIsChemical(true);
+        void loadProductImages(full.id, { silent: true });
+        setProductDialogOpen(true);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load product.";
+        toast.error(message);
+      } finally {
+        setLoading(false);
+      }
     } else {
       setEditingProduct(null);
       setProductForm({
@@ -661,8 +698,8 @@ const ChemicalManagement = () => {
       setProductImages([]);
       setNewImageUrl("");
       setNewImageIsPrimary(false);
+      setProductDialogOpen(true);
     }
-    setProductDialogOpen(true);
   };
 
   const addProductImageFromValue = async (imageRef: string, thumbnailRef?: string | null) => {
@@ -848,7 +885,7 @@ const ChemicalManagement = () => {
           coaDocumentUrl: updated.coaDocumentUrl || "",
           variants: bindChemicalVariants(updated.variants || productForm.variants, updated.productName || productForm.productName),
         });
-        await loadData();
+        await refreshPage();
       } else {
         const created = await adminApi.createProduct(payload);
         toast.success("Chemical created. You can now add images.");
@@ -884,7 +921,7 @@ const ChemicalManagement = () => {
         });
         setProductImages(created.images || []);
         setProductFormStep(3);
-        await loadData();
+        await refreshPage();
         await loadProductImages(created.id, { silent: true });
       }
     } catch (error) {
@@ -905,7 +942,7 @@ const ChemicalManagement = () => {
         setLoading(true);
         await adminApi.deleteProduct(id);
         toast.success("Product deleted");
-        await loadData();
+        await refreshPage();
         setDeleteConfirmId(null);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to delete product.";
@@ -924,7 +961,7 @@ const ChemicalManagement = () => {
       setLoading(true);
       await adminApi.deleteProduct(id);
       toast.success("Product deleted");
-      await loadData();
+      await refreshPage();
       setDeleteConfirmId(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to delete product.";
@@ -941,7 +978,7 @@ const ChemicalManagement = () => {
       const result = await adminApi.uploadCatalogExcel(file, true);
 
       if (result.categoriesCreated > 0 || result.productsCreated > 0) {
-        await loadData();
+        await refreshPage();
       }
 
       if (result.success) {
@@ -1043,7 +1080,7 @@ const ChemicalManagement = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {paginatedProducts.map((p) => (
+            {products.map((p) => (
               <tr key={p.id} className="hover:bg-muted/20">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -1100,7 +1137,7 @@ const ChemicalManagement = () => {
                 </td>
               </tr>
             ))}
-            {filteredProducts.length === 0 && (
+            {products.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
                   No chemicals found.
@@ -1114,7 +1151,7 @@ const ChemicalManagement = () => {
         <TablePagination
           page={productPage}
           pageSize={PAGE_SIZE}
-          total={filteredProducts.length}
+          total={productTotalCount}
           onPageChange={setProductPage}
           label="chemicals"
         />
@@ -1137,7 +1174,7 @@ const ChemicalManagement = () => {
               <TabsTrigger value="chemical" className="text-xs sm:text-sm">
                 <FlaskConical className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
                 <span className="truncate">Chemicals</span>
-                <span className="hidden sm:inline ml-1">({products.filter(isChemicalProduct).length})</span>
+                <span className="hidden sm:inline ml-1">({productTotalCount})</span>
               </TabsTrigger>
               <TabsTrigger value="categories" className="text-xs sm:text-sm">
                 <FolderTree className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
@@ -1492,7 +1529,7 @@ const ChemicalManagement = () => {
                 <div className="p-3 bg-muted/50 rounded-md">
                   <p className="font-medium text-sm">{category.categoryName}</p>
                   <p className="text-xs text-muted-foreground">
-                    {products.filter(p => p.categoryId === category.id).length} products will be deleted
+                    Products in this category must be removed before it can be deleted.
                   </p>
                 </div>
               </div>

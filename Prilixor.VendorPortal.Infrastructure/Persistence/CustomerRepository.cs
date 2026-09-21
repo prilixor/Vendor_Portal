@@ -2167,6 +2167,34 @@ public sealed class CustomerRepository(
         return result;
     }
 
+    public async Task<Dictionary<Guid, int>> GetFavoriteCountsForProductIdsAsync(
+        IReadOnlyCollection<Guid> productIds,
+        CancellationToken cancellationToken)
+    {
+        if (productIds.Count == 0) return [];
+
+        var ids = productIds.Distinct().ToList();
+        var listings = await vendorDb.VendorProductListings
+            .AsNoTracking()
+            .Where(l => ids.Contains(l.ProductId))
+            .Select(l => new { l.Id, l.ProductId })
+            .ToListAsync(cancellationToken);
+
+        if (listings.Count == 0) return [];
+
+        var listingIds = listings.Select(l => l.Id).ToList();
+        var listingCounts = await GetFavoriteCountsByListingsAsync(listingIds, cancellationToken);
+
+        var result = new Dictionary<Guid, int>();
+        foreach (var listing in listings)
+        {
+            if (!listingCounts.TryGetValue(listing.Id, out var count) || count <= 0) continue;
+            result[listing.ProductId] = result.GetValueOrDefault(listing.ProductId) + count;
+        }
+
+        return result;
+    }
+
     public async Task<List<AdminCustomerListItemDto>> SearchCustomersForAdminAsync(string? search, int page, int pageSize, CancellationToken cancellationToken)
     {
         page = Math.Max(1, page);
