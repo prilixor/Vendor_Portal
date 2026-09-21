@@ -75,7 +75,9 @@ internal sealed class VendorUploadStorageService(
 
         byte[]? thumbnailBytes = null;
         string? thumbnailFileName = null;
-        if ((folderType == VendorFileFolderType.ProductImages || folderType == VendorFileFolderType.RentalIcons)
+        if ((folderType == VendorFileFolderType.ProductImages
+                || folderType == VendorFileFolderType.RentalIcons
+                || folderType == VendorFileFolderType.OrderImages)
             && LooksLikeImage(contentType, extension))
         {
             thumbnailBytes = TryCreateThumbnailJpeg(sourceMs, sourceMs.Length);
@@ -130,16 +132,7 @@ internal sealed class VendorUploadStorageService(
             }
         }
 
-        var folderName = folderType switch
-        {
-            VendorFileFolderType.ProductImages => "product-images",
-            VendorFileFolderType.ProductDocuments => "product-documents",
-            VendorFileFolderType.Support => "support",
-            VendorFileFolderType.RentalIcons => "rental-icons",
-            VendorFileFolderType.OrderImages => "order-images",
-            VendorFileFolderType.WebsiteHero => "website-hero",
-            _ => "documents"
-        };
+        var folderName = VendorStoragePaths.GetFolderName(folderType);
         var uploadsRoot = Path.Combine(
             environment.ContentRootPath,
             "wwwroot",

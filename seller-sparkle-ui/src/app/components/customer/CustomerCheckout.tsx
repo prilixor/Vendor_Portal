@@ -29,6 +29,7 @@ import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
 import { formatRentalDuration } from "@/app/helpers/rentalPeriod";
 import { lastShopHref } from "@/app/helpers/customerShopBrowse";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { LegalAgreeCheckbox } from "@/app/components/legal/LegalAgreeCheckbox";
 
 type DeliveryChoice = "standard" | "express" | "vendor_pickup";
 
@@ -44,6 +45,15 @@ function formatCheckoutInr(value: number): string {
   return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
+function hasHealthData(ref?: DoctorRefSelection | null, files?: File[]) {
+  return Boolean(ref?.doctorId) || (files?.length ?? 0) > 0;
+}
+
+function healthPayload(ref?: DoctorRefSelection | null) {
+  if (!ref?.doctorId) return {};
+  return { doctorId: ref.doctorId };
+}
+
 const CustomerCheckout = () => {
   const navigate = useNavigate();
   const { user, isHydrating } = useAuth();
@@ -55,6 +65,9 @@ const CustomerCheckout = () => {
   const [applyToAll, setApplyToAll] = useState(false);
   const [failedLines, setFailedLines] = useState<PlaceCustomerOrdersResultApi["failedLines"]>([]);
   const [medicalRefs, setMedicalRefs] = useState<Record<string, DoctorRefSelection | null>>({});
+  const [prescriptionFiles, setPrescriptionFiles] = useState<Record<string, File[]>>({});
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const [acceptedPrescriptionLegal, setAcceptedPrescriptionLegal] = useState(false);
   const [rentToBuyOpen, setRentToBuyOpen] = useState(false);
   const [rentToBuySuggestion, setRentToBuySuggestion] = useState<{
     listingId: string;
@@ -91,6 +104,25 @@ const CustomerCheckout = () => {
   };
 
   const needsPrescription = lines.some((l) => l.prescriptionRequired);
+  const sharingHealthData = lines.some(
+    (l) => l.prescriptionRequired && hasHealthData(medicalRefs[l.listingId], prescriptionFiles[l.listingId]),
+  );
+
+  const addPrescriptionFiles = (listingId: string, incoming: FileList | File[]) => {
+    const next = Array.from(incoming).filter((f) => f.size <= 5 * 1024 * 1024);
+    if (next.length === 0) return;
+    setPrescriptionFiles((prev) => {
+      const merged = [...(prev[listingId] || []), ...next].slice(0, 3);
+      return { ...prev, [listingId]: merged };
+    });
+  };
+
+  const removePrescriptionFile = (listingId: string, index: number) => {
+    setPrescriptionFiles((prev) => ({
+      ...prev,
+      [listingId]: (prev[listingId] || []).filter((_, i) => i !== index),
+    }));
+  };
 
   const { data: addresses } = useQuery({
     queryKey: ["customer-addresses"],
@@ -129,16 +161,17 @@ const CustomerCheckout = () => {
               rentalPricingPlanId: l.rentalPricingPlanId,
             }
           : {}),
-        ...(l.prescriptionRequired && medicalRefs[l.listingId]?.doctorId
-          ? { doctorId: medicalRefs[l.listingId]!.doctorId }
+        ...(l.prescriptionRequired ? healthPayload(medicalRefs[l.listingId]) : {}),
+        ...(l.prescriptionRequired && (prescriptionFiles[l.listingId]?.length ?? 0) > 0
+          ? { hasPrescriptionFile: true }
           : {}),
       })),
     }),
-    [addressId, deliveryChoice, lines, medicalRefs],
+    [addressId, deliveryChoice, lines, medicalRefs, prescriptionFiles],
   );
 
   const { data: quote, isFetching: quoteLoading, error: quoteError } = useQuery({
-    queryKey: ["customer-order-quote", addressId, deliveryChoice, lines],
+    queryKey: ["customer-order-quote", addressId, deliveryChoice, lines, medicalRefs],
     queryFn: () => customerApi.quoteOrders(quotePayload),
     enabled: user?.role === "customer" && lines.length > 0,
     retry: false,
@@ -151,10 +184,13 @@ const CustomerCheckout = () => {
   const grandTotal = quote?.totalAmount ?? (totalEstimatedRent + totalDeposit + serviceFee + gstAmount);
 
   const placeMutation = useMutation({
-    mutationFn: () =>
-      customerApi.placeOrders({
+    mutationFn: async () => {
+      const result = await customerApi.placeOrders({
         deliveryOption: deliveryChoice,
         customerAddressId: addressId || undefined,
+        acceptedLegal,
+        acceptedPrescriptionLegal: sharingHealthData ? acceptedPrescriptionLegal : false,
+        sourceSurface: "customer_web",
         lines: lines.map((l) => ({
           listingId: l.listingId,
           quantity: l.quantity,
@@ -167,12 +203,30 @@ const CustomerCheckout = () => {
                 rentalPricingPlanId: l.rentalPricingPlanId,
               }
             : {}),
-          ...(l.prescriptionRequired && medicalRefs[l.listingId]?.doctorId
-            ? { doctorId: medicalRefs[l.listingId]!.doctorId }
+          ...(l.prescriptionRequired ? healthPayload(medicalRefs[l.listingId]) : {}),
+          ...(l.prescriptionRequired && (prescriptionFiles[l.listingId]?.length ?? 0) > 0
+            ? { hasPrescriptionFile: true }
             : {}),
         })),
-      }),
-    onSuccess: (result) => {
+      });
+
+      const uploadErrors: string[] = [];
+      for (const order of result.placedOrders) {
+        const files = prescriptionFiles[order.listingId] || [];
+        for (const file of files) {
+          try {
+            await customerApi.uploadOrderPrescription(order.id, file, {
+              acceptedPrescriptionLegal,
+              uploadSource: "checkout",
+            });
+          } catch {
+            uploadErrors.push(order.orderNumber);
+          }
+        }
+      }
+      return { result, uploadErrors };
+    },
+    onSuccess: ({ result, uploadErrors }) => {
       const placedCount = result.placedOrders.length;
       const failedCount = result.failedLines.length;
       setFailedLines(failedCount > 0 ? result.failedLines : []);
@@ -184,6 +238,11 @@ const CustomerCheckout = () => {
       } else {
         const failedDetails = result.failedLines.map((l) => l.message).join(", ");
         toast.error(`No orders placed. Reason: ${failedDetails}`);
+      }
+      if (uploadErrors.length > 0) {
+        toast.error(
+          `Order placed, but the prescription could not be uploaded for ${[...new Set(uploadErrors)].join(", ")}. You can add it from the order page.`,
+        );
       }
 
       if (placedCount > 0) {
@@ -408,10 +467,9 @@ const CustomerCheckout = () => {
               <div className="flex items-start gap-3 border-b border-teal-100/70 bg-teal-50/70 px-5 py-4 dark:border-teal-500/20 dark:bg-teal-500/10">
                 <FileText className="mt-0.5 h-5 w-5 shrink-0 text-teal-700 dark:text-teal-300" />
                 <div>
-                  <h3 className="font-semibold text-teal-950 dark:text-teal-50">Doctor reference (optional)</h3>
+                  <h3 className="font-semibold text-teal-950 dark:text-teal-50">Doctor or prescription (optional)</h3>
                   <p className="mt-0.5 text-sm leading-relaxed text-teal-800/80 dark:text-teal-200/80">
-                    Some items can include a doctor reference. Enter the Unique ID from your doctor or their QR share page.
-                    You can also skip this and place the order without one.
+                    Add a doctor Unique ID and/or upload a prescription image or PDF. You can skip both and still place the order.
                   </p>
                 </div>
               </div>
@@ -419,29 +477,31 @@ const CustomerCheckout = () => {
                 {lines.map((l) => {
                   if (!l.prescriptionRequired) return null;
                   const mRef = medicalRefs[l.listingId];
-                  const hasFilled = !!mRef?.doctorId;
+                  const files = prescriptionFiles[l.listingId] || [];
+                  const hasFilled = hasHealthData(mRef, files);
                   const hasOthers = lines.filter((x) => x.prescriptionRequired).length > 1;
 
                   return (
-                    <div key={l.listingId} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div key={l.listingId} className="px-5 py-4 flex flex-col gap-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
                         <p className="font-medium">{l.title}</p>
-                        {hasFilled ? (
+                        {mRef?.doctorId ? (
                           <div className="mt-2 space-y-1">
                             <div className="flex w-fit items-center gap-1.5 rounded-md border border-green-200/60 bg-green-50/80 px-2.5 py-1 text-[13px] font-medium text-green-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
                               <CheckCircle2 className="h-3.5 w-3.5" />
                               <span>
-                                {mRef!.doctorName}
-                                <span className="ml-1 font-mono text-xs tracking-wide">({mRef!.uniqueCode})</span>
+                                {mRef.doctorName}
+                                <span className="ml-1 font-mono text-xs tracking-wide">({mRef.uniqueCode})</span>
                               </span>
                             </div>
-                            {(mRef!.hospitals?.length ?? 0) > 0 && (
+                            {(mRef.hospitals?.length ?? 0) > 0 && (
                               <p className="text-[12px] text-muted-foreground pl-0.5">
-                                {(mRef!.hospitals!.length === 1
-                                  ? mRef!.hospitals![0].name
-                                  : `${mRef!.hospitals!.length} affiliated hospitals`)}
-                                {mRef!.hospitals!.length === 1 && mRef!.hospitals![0].city
-                                  ? ` · ${mRef!.hospitals![0].city}`
+                                {(mRef.hospitals!.length === 1
+                                  ? mRef.hospitals![0].name
+                                  : `${mRef.hospitals!.length} affiliated hospitals`)}
+                                {mRef.hospitals!.length === 1 && mRef.hospitals![0].city
+                                  ? ` · ${mRef.hospitals![0].city}`
                                   : ""}
                               </p>
                             )}
@@ -505,6 +565,51 @@ const CustomerCheckout = () => {
                             </div>
                           </DialogContent>
                         </Dialog>
+                      </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        {files.length > 0 && (
+                          <ul className="space-y-1.5">
+                            {files.map((file, index) => (
+                              <li
+                                key={`${file.name}-${file.size}-${index}`}
+                                className="flex items-center justify-between gap-2 rounded-md border border-teal-200/70 bg-teal-50/60 px-2.5 py-1.5 text-[13px] dark:border-teal-500/30 dark:bg-teal-500/10"
+                              >
+                                <span className="min-w-0 truncate">{file.name}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2"
+                                  onClick={() => removePrescriptionFile(l.listingId, index)}
+                                >
+                                  Remove
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {files.length < 3 && (
+                          <label className="inline-flex">
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp,application/pdf,.pdf,.jpg,.jpeg,.png,.webp"
+                              className="sr-only"
+                              multiple
+                              onChange={(e) => {
+                                if (e.target.files?.length) addPrescriptionFiles(l.listingId, e.target.files);
+                                e.target.value = "";
+                              }}
+                            />
+                            <Button type="button" variant="outline" size="sm" className="h-8" asChild>
+                              <span>
+                                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                {files.length > 0 ? "Add another file" : "Upload prescription"}
+                              </span>
+                            </Button>
+                          </label>
+                        )}
                       </div>
                     </div>
                   );
@@ -634,10 +739,37 @@ const CustomerCheckout = () => {
                 ) : null}
             </div>
 
+            <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+              <LegalAgreeCheckbox
+                surface="customer_web"
+                screen="checkout"
+                agreed={acceptedLegal}
+                onAgreedChange={setAcceptedLegal}
+                prefix="I agree to the"
+                id="checkout-legal-agree"
+              />
+              {sharingHealthData ? (
+                <LegalAgreeCheckbox
+                  surface="customer_web"
+                  screen="prescription"
+                  agreed={acceptedPrescriptionLegal}
+                  onAgreedChange={setAcceptedPrescriptionLegal}
+                  prefix="I consent to the"
+                  id="checkout-privacy-health"
+                />
+              ) : null}
+            </div>
+
             <Button
               className="w-full bg-gradient-primary font-semibold text-primary-foreground shadow-glow hover:opacity-95"
               size="lg"
-              disabled={placeMutation.isPending || !!quoteError || quoteLoading}
+              disabled={
+                placeMutation.isPending
+                || !!quoteError
+                || quoteLoading
+                || !acceptedLegal
+                || (sharingHealthData && !acceptedPrescriptionLegal)
+              }
               onClick={() => {
                 placeMutation.mutate();
               }}

@@ -114,7 +114,7 @@ export function resolveRentalIconUrl(fileUrl?: string | null): string {
   return `${origin}${path}`;
 }
 
-/** Same order as live: full icon first, thumbnail fallback. */
+/** Same look as live: original PNG/JPG first so trophy/crown transparency is kept. */
 export function resolveRentalIconUrlFromPlan(plan?: {
   iconUrl?: string | null;
   iconThumbnailUrl?: string | null;
@@ -123,4 +123,18 @@ export function resolveRentalIconUrlFromPlan(plan?: {
   const primary = resolveRentalIconUrl(plan.iconUrl);
   if (primary) return primary;
   return resolveRentalIconUrl(plan.iconThumbnailUrl);
+}
+
+/** Warm the browser cache so chips start downloading as soon as plans arrive. */
+export function prefetchRentalIconUrls(urls: Array<string | null | undefined>): void {
+  if (typeof document === "undefined") return;
+  const seen = new Set<string>();
+  for (const raw of urls) {
+    const url = (raw ?? "").trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    const img = new Image();
+    img.decoding = "async";
+    img.src = url;
+  }
 }

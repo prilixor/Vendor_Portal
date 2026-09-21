@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Role, User } from "@/app/models";
-import { authApi } from "@/app/services/authApi";
+import { authApi, RegisterCustomerResponse } from "@/app/services/authApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import {
   ADMIN_USER_KEY,
@@ -19,8 +19,14 @@ interface AuthContextValue {
   isHydrating: boolean;
   login: (email: string, password: string, role: Role) => Promise<void>;
   loginWithCustomerPhoneOtp: (phone: string, code: string) => Promise<void>;
-  register: (email: string, password: string, phone: string) => Promise<{ id: string; email: string }>;
-  registerCustomer: (email: string, password: string, fullName: string, phone?: string) => Promise<{ id: string; email: string; fullName: string }>;
+  register: (email: string, password: string, phone: string, acceptedLegal?: boolean) => Promise<{ id: string; email: string }>;
+  registerCustomer: (
+    email: string | null | undefined,
+    password: string,
+    fullName: string,
+    phone?: string | null,
+    acceptedLegal?: boolean,
+  ) => Promise<RegisterCustomerResponse>;
   logout: () => void;
   switchRole: (role: Role) => void;
   hasPermission: (permission: string) => boolean;
@@ -165,8 +171,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     persist(result.user);
   };
 
-  const register = async (email: string, password: string, phone: string) => {
-    const result = await authApi.registerVendor(email, password, phone);
+  const register = async (email: string, password: string, phone: string, acceptedLegal = true) => {
+    const result = await authApi.registerVendor(email, password, phone, acceptedLegal);
     try {
       await vendorOnboardingApi.upsertVendorNotificationPreference(result.id, {
         vendorId: result.id,
@@ -180,8 +186,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return result;
   };
 
-  const registerCustomer = async (email: string, password: string, fullName: string, phone?: string) => {
-    return authApi.registerCustomer(email, password, fullName, phone);
+  const registerCustomer = async (
+    email: string | null | undefined,
+    password: string,
+    fullName: string,
+    phone?: string | null,
+    acceptedLegal = true,
+  ) => {
+    return authApi.registerCustomer(email, password, fullName, phone, acceptedLegal);
   };
 
   const switchRole = (role: Role) => {

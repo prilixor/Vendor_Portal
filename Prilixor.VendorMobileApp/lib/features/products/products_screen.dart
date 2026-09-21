@@ -411,24 +411,22 @@ class _ProductCard extends StatelessWidget {
   });
 
   Color _statusBg(ListingUiStatus status, BuildContext context) {
-    final isDark = context.isDarkMode;
     switch (status) {
       case ListingUiStatus.active:
-        return isDark ? const Color(0xFF064E3B).withValues(alpha: 0.35) : const Color(0xFFECFDF5);
+        return context.appColors.successSoft;
       case ListingUiStatus.inactive:
-        return isDark ? const Color(0xFF78350F).withValues(alpha: 0.3) : const Color(0xFFFEF3C7);
+        return context.appColors.warningSoft;
       case ListingUiStatus.draft:
-        return isDark ? context.appColors.surfaceElevated : const Color(0xFFF1F5F9);
+        return context.appColors.surfaceElevated;
     }
   }
 
   Color _statusFg(ListingUiStatus status, BuildContext context) {
-    final isDark = context.isDarkMode;
     switch (status) {
       case ListingUiStatus.active:
-        return isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857);
+        return context.appColors.success;
       case ListingUiStatus.inactive:
-        return isDark ? const Color(0xFFFCD34D) : const Color(0xFF92400E);
+        return context.appColors.warning;
       case ListingUiStatus.draft:
         return context.appColors.textSecondary;
     }

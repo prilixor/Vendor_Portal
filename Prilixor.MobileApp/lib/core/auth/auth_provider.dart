@@ -190,6 +190,8 @@ class AuthProvider extends ChangeNotifier {
           'password': password,
           'fullName': fullName,
           if (phone != null && phone.isNotEmpty) 'phone': phone,
+          'acceptedLegal': true,
+          'sourceSurface': 'customer_mobile',
         },
       );
       if (response.statusCode == 200 || response.statusCode == 201) {

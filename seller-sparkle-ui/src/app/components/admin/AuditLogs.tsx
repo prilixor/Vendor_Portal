@@ -3,7 +3,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { adminApi, AdminAuditLogDto, AdminUserDto } from "@/app/services/adminApi";
 import { Search, ArrowRight } from "lucide-react";
@@ -75,9 +75,7 @@ const AuditLogs = () => {
       <PageHeader title="Audit logs" description="Track every important action taken by admins and the system." />
 
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
-        {loading ? (
-          <PageLoaderSlot />
-        ) : (
+        <PageContentGate loading={loading}>
           <>
             <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center">
               <div className="relative w-full sm:max-w-xs">
@@ -130,7 +128,7 @@ const AuditLogs = () => {
               </>
             )}
           </>
-        )}
+        </PageContentGate>
       </Card>
     </div>
   );

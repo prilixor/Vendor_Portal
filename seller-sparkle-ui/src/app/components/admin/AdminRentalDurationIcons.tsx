@@ -16,7 +16,7 @@ import {
 } from "@/app/components/ui/dialog";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import {
   adminApi,
@@ -29,7 +29,7 @@ import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
 import {
   rentalValueTierLabel,
-  resolveRentalIconUrl,
+  resolveRentalIconUrlFromPlan,
   slugFromName,
 } from "@/app/helpers/rentalDurationIcons";
 
@@ -281,8 +281,11 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
     size = "md",
   ) => {
     const box = size === "lg" ? "h-14 w-14" : "h-11 w-11";
-    // API already resolves to browser URL (presigned S3); resolveRentalIconUrl handles legacy local paths.
-    const src = resolveRentalIconUrl(row.thumbnailUrl || row.imageUrl);
+    // Same original PNG as Customer chips (JPEG thumbs flatten transparency).
+    const src = resolveRentalIconUrlFromPlan({
+      iconUrl: row.imageUrl,
+      iconThumbnailUrl: row.thumbnailUrl,
+    });
     return (
       <div
         className={cn(
@@ -354,9 +357,7 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
           </div>
         </div>
 
-        {loading ? (
-          <PageLoaderSlot />
-        ) : filtered.length === 0 ? (
+        <PageContentGate loading={loading}>{filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-300">
               <ImagePlus className="h-6 w-6" />
@@ -519,7 +520,7 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
               ))}
             </div>
           </>
-        )}
+        )}</PageContentGate>
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -556,9 +557,10 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
                   <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-background">
                     {form.previewUrl || form.imageUrl ? (
                       <img
-                        src={resolveRentalIconUrl(
-                          form.previewThumbnailUrl || form.previewUrl || form.thumbnailUrl || form.imageUrl,
-                        )}
+                        src={resolveRentalIconUrlFromPlan({
+                          iconUrl: form.previewUrl || form.imageUrl,
+                          iconThumbnailUrl: form.previewThumbnailUrl || form.thumbnailUrl,
+                        })}
                         alt=""
                         className="h-full w-full object-contain p-1.5"
                         onError={retryOriginalOnImageError}

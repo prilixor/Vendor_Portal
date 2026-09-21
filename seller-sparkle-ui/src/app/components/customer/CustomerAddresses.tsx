@@ -15,7 +15,7 @@ import {
 } from "@/app/components/ui/select";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { FieldError } from "@/app/components/shared/FieldError";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
 import { toast } from "sonner";
 import { Trash2, Edit2 } from "lucide-react";
@@ -184,10 +184,10 @@ const CustomerAddresses = () => {
             <p className="font-medium">Saved</p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {isLoading && <PageLoaderSlot className="min-h-[6rem] py-0" />}
-            {!isLoading && data?.length === 0 && (
+            <PageContentGate loading={isLoading} className="min-h-[6rem] py-0">
+            {!data?.length ? (
               <p className="text-sm text-muted-foreground">No addresses yet.</p>
-            )}
+            ) : null}
             {(data ?? []).map((a) => (
               <div key={a.id} className="flex items-start justify-between gap-3 rounded-lg border p-3">
                 <div className="text-sm">
@@ -232,7 +232,7 @@ const CustomerAddresses = () => {
                 </div>
               </div>
             ))}
-          </CardContent>
+            </PageContentGate>          </CardContent>
         </Card>
 
         <Card>

@@ -52,6 +52,7 @@ import { VendorVerificationBanner } from "@/app/components/vendor/VendorVerifica
 import { SupportChat } from "@/app/components/support/SupportChat";
 import { BrandBootSplash } from "@/app/components/shared/BrandMark";
 import { PortalGlobalLoader } from "@/app/components/shared/PortalGlobalLoader";
+import { LegalReconsentGate } from "@/app/components/legal/LegalReconsentGate";
 
 
 
@@ -530,6 +531,10 @@ export const AppShell = ({ variant }: AppShellProps) => {
         )}
 
       </SupportChatProvider>
+
+      {variant !== "admin" && user && !user.impersonation ? (
+        <LegalReconsentGate role={variant === "vendor" ? "vendor" : "customer"} userId={user.id} />
+      ) : null}
 
       </VendorDispatchOffersProvider>
 

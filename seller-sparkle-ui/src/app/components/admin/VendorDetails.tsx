@@ -6,7 +6,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 
 import { Card } from "@/app/components/ui/card";
 
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 
 import { Button } from "@/app/components/ui/button";
@@ -393,7 +393,7 @@ const VendorDetails = () => {
 
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const [approving, setApproving] = useState(false);
 
@@ -684,14 +684,7 @@ const VendorDetails = () => {
 
 
 
-  if (loading) {
-    return <PageLoaderSlot />;
-  }
-
-
-
-
-
+  
   const queryTab = searchParams.get("tab");
 
   const activeTab: VendorTab = vendorTabs.includes((queryTab ?? "") as VendorTab) ? (queryTab as VendorTab) : "profile";
@@ -957,7 +950,7 @@ const VendorDetails = () => {
 
 
   return (
-
+    <PageContentGate loading={loading}>
     <div>
 
       <PageHeader
@@ -1416,7 +1409,7 @@ const VendorDetails = () => {
               <div>
                 <h3 className="font-semibold">Service areas</h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Review the vendor pin location, then set the coverage radius (e.g. 15, 30, or 100 km).
+                  Review the vendor pin location, then set the coverage radius (1–500 km).
                   Vendor approval stays blocked until every area has an Admin-set radius.
                 </p>
               </div>
@@ -1850,7 +1843,7 @@ const VendorDetails = () => {
       </Dialog>
 
     </div>
-
+    </PageContentGate>
   );
 
 };

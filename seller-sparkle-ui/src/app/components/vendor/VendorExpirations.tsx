@@ -6,7 +6,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Input } from "@/app/components/ui/input";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorExpiringOrderApiDto } from "@/app/services/vendorOnboardingApi";
@@ -135,9 +135,7 @@ const VendorExpirations = () => {
           </div>
         </div>
 
-        {loading ? (
-          <PageLoaderSlot />
-        ) : rows.length === 0 ? (
+        <PageContentGate loading={loading}>{rows.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No expiring orders in selected window.</p>
         ) : groups.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
@@ -195,7 +193,7 @@ const VendorExpirations = () => {
               label="orders"
             />
           </div>
-        )}
+        )}</PageContentGate>
       </Card>
     </div>
   );

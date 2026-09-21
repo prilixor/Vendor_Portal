@@ -266,7 +266,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                     icon: const Icon(Icons.add),
                     label: const Text('Stock in'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.green,
+                      foregroundColor: context.appColors.success,
                       side: BorderSide(color: context.appColors.border),
                     ),
                   ),
@@ -280,7 +280,7 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
                     icon: const Icon(Icons.remove),
                     label: const Text('Stock out'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.orange,
+                      foregroundColor: context.appColors.warning,
                       side: BorderSide(color: context.appColors.border),
                     ),
                   ),

@@ -8,7 +8,8 @@ public enum VendorFileFolderType
     Support,
     RentalIcons,
     OrderImages,
-    WebsiteHero
+    WebsiteHero,
+    Prescriptions
 }
 
 public sealed record VendorFilePersistResult(

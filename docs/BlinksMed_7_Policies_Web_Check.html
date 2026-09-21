@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BlinksMed — 7 Policies Web Check</title>
+  <style>
+    @page { size: A4; margin: 14mm 14mm 16mm 14mm; }
+    * { box-sizing: border-box; }
+    body { font-family: Calibri, Arial, sans-serif; color: #333; font-size: 10pt; line-height: 1.35; }
+    h1 { color: #0F2C59; font-size: 20pt; text-align: center; margin: 0; }
+    .subtitle { color: #0D6E6E; font-size: 13pt; text-align: center; font-weight: bold; margin: 4px 0 0; }
+    .meta { color: #666; font-size: 9.5pt; text-align: center; font-style: italic; margin: 4px 0 12px; }
+    h2 { color: #0F2C59; font-size: 12.5pt; border-bottom: 1px solid #C5CDD6; padding-bottom: 2px; margin: 14px 0 8px; }
+    p { margin: 6px 0; }
+    table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; }
+    th { background: #0F2C59; color: #fff; text-align: left; padding: 5px 7px; font-size: 9pt; }
+    td { border: 1px solid #C5CDD6; padding: 4px 7px; font-size: 9pt; vertical-align: top; }
+    tr:nth-child(even) td { background: #F4F7FB; }
+    .box { background: #F4F7FB; border: 1px solid #C5CDD6; padding: 8px 10px; margin: 8px 0; }
+    .ok { color: #0D6E6E; font-weight: bold; }
+    .note { color: #555; font-style: italic; }
+    ul.check { list-style: none; margin: 4px 0 8px 0; padding: 0; }
+    ul.check li { margin: 3px 0; padding-left: 0; }
+    .col2 { display: table; width: 100%; }
+    .col2 > div { display: table-cell; width: 50%; vertical-align: top; padding-right: 10px; }
+    .col2 > div + div { padding-right: 0; padding-left: 10px; }
+    .footer { text-align: center; color: #888; font-size: 8.5pt; margin-top: 10px; }
+    a { color: #0D6E6E; }
+    .keep { page-break-inside: avoid; }
+  </style>
+</head>
+<body>
+  <h1>BlinksMed</h1>
+  <p class="subtitle">7 Policies — Admin / Customer / Vendor Web Check</p>
+  <p class="meta">Walkthrough for Vidit and seniors &nbsp;·&nbsp; 11 September 2026 &nbsp;·&nbsp; Websites only (not mobile apps)</p>
+
+  <div class="box">
+    <p style="margin:0"><b>Live sites</b> &nbsp;
+      Admin <a href="https://admin.blinksmed.com">admin.blinksmed.com</a> &nbsp;·&nbsp;
+      Customer <a href="https://www.blinksmed.com">www.blinksmed.com</a> &nbsp;·&nbsp;
+      Vendor <a href="https://vendor.blinksmed.com">vendor.blinksmed.com</a>
+    </p>
+    <p style="margin:6px 0 0"><span class="ok">Only 7 policies.</span> No 8th “Vendor Onboarding Agreement.” Vendor e-sign uses <b>Vendor / Seller Policy</b>. CMS text is the source of truth. Each accept logs the <b>exact published version</b>.</p>
+  </div>
+
+  <h2>1. The 7 policies</h2>
+  <table>
+    <tr>
+      <th>#</th>
+      <th>Policy</th>
+      <th>Open this URL</th>
+      <th>Customer</th>
+      <th>Vendor</th>
+      <th>Must accept?</th>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>Terms of Use</td>
+      <td>/terms-and-conditions</td>
+      <td>Show</td>
+      <td>Show</td>
+      <td><b>Yes — register</b></td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>Privacy Policy</td>
+      <td>/privacy-policy</td>
+      <td>Show</td>
+      <td>Show</td>
+      <td><b>Yes — register.</b> Extra tick if Unique ID <b>or</b> Rx file is attached</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>Vendor / Seller Policy</td>
+      <td>/vendor-seller-policy</td>
+      <td>Hide</td>
+      <td>Show</td>
+      <td><b>Yes — vendor register + onboarding typed-name e-sign</b></td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>Rental &amp; Purchase</td>
+      <td>/rental-and-purchase-policy</td>
+      <td>Show</td>
+      <td>Can view (Settings / dashboard)</td>
+      <td><b>Yes — customer checkout</b> (one bundle tick)</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>Cancellation &amp; Refund</td>
+      <td>/cancellation-refund-policy</td>
+      <td>Show</td>
+      <td>Hide</td>
+      <td><b>Yes — same checkout tick.</b> Also on order / cancel</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>Shipping &amp; Delivery</td>
+      <td>/shipping-delivery-policy</td>
+      <td>Show</td>
+      <td>Hide</td>
+      <td><b>Yes — same checkout tick.</b> Also on product (pincode)</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td>Grievance Redressal</td>
+      <td>/grievance-redressal-policy</td>
+      <td>Show</td>
+      <td>Show</td>
+      <td><b>No — display only</b> (footer + Help)</td>
+    </tr>
+  </table>
+  <p class="note">Each URL should open title, version, date, and full CMS text — not “Page not found.” Use Ctrl+F5 if you see an old page.</p>
+
+  <h2>2. Admin — manage and proof</h2>
+  <ul class="check">
+    <li>☐ <b>Legal Documents</b> — https://admin.blinksmed.com/admin/website-content/legal — all 7 <b>Published</b></li>
+    <li>☐ Open any policy → edit / draft / publish. Placement grid = where it shows and whether a tick is required</li>
+    <li>☐ <b>Legal Acceptances</b> — https://admin.blinksmed.com/admin/website-content/legal/acceptances</li>
+    <li>☐ After a test accept, a row shows: who, policy, <b>version</b>, screen (register / checkout / onboarding / reconsent), site (customer_web / vendor_web), IP, and <b>signed name</b> for vendor e-sign</li>
+  </ul>
+  <p class="note">Admin place-order for a customer skips customer legal ticks (admin is acting for them).</p>
+
+  <div class="col2 keep">
+    <div>
+      <h2>3. Customer web</h2>
+      <table>
+        <tr><th>Page</th><th>See</th><th>Accept?</th></tr>
+        <tr><td>Register</td><td>Terms + Privacy (tappable)</td><td><b>Tick required</b></td></tr>
+        <tr><td>Login</td><td>No mandatory tick</td><td>—</td></tr>
+        <tr><td>Footer / Settings</td><td>Terms, Privacy, Grievance</td><td>Display</td></tr>
+        <tr><td>Product (pincode card)</td><td>Rental + Shipping</td><td>Display</td></tr>
+        <tr><td>Checkout</td><td>Rental + Cancel + Shipping</td><td><b>One bundle tick</b></td></tr>
+        <tr><td>Checkout + Unique ID or Rx</td><td>Extra Privacy tick</td><td><b>Required only then</b></td></tr>
+        <tr><td>Skip ID and Rx</td><td>—</td><td>Place Order still allowed</td></tr>
+        <tr><td>Order detail / Cancel</td><td>Cancellation (+ Shipping)</td><td>Display</td></tr>
+        <tr><td>Help / Support</td><td>Grievance</td><td>Display</td></tr>
+        <tr><td>After Terms/Privacy republish</td><td>Re-consent popup</td><td><b>Must accept</b></td></tr>
+      </table>
+      <p class="note">Rx file stays on the phone/PC until Place Order. Leave checkout without ordering → file is discarded.</p>
+    </div>
+    <div>
+      <h2>4. Vendor web</h2>
+      <table>
+        <tr><th>Page</th><th>See</th><th>Accept?</th></tr>
+        <tr><td>Register</td><td>Terms + Privacy + Vendor / Seller</td><td><b>Tick required</b></td></tr>
+        <tr><td>Onboarding e-sign</td><td>Vendor / Seller + type full name</td><td><b>Name required</b></td></tr>
+        <tr><td>Dashboard / Settings / Footer</td><td>Terms, Privacy, Vendor / Seller, Rental (view)</td><td>Display</td></tr>
+        <tr><td>Help / Support</td><td>Grievance</td><td>Display</td></tr>
+        <tr><td>Cancellation / Shipping</td><td>Not on vendor</td><td>—</td></tr>
+        <tr><td>After Terms / Privacy / Vendor Seller republish</td><td>Re-consent popup</td><td><b>Must accept</b></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h2>5. 15-minute walkthrough — tick as you go</h2>
+  <div class="col2">
+    <div>
+      <p><b>Admin</b></p>
+      <ul class="check">
+        <li>☐ 7 published policies</li>
+        <li>☐ Open Shipping → full text</li>
+        <li>☐ Legal Acceptances page opens</li>
+      </ul>
+      <p><b>Customer</b> (www / blinksmed.com)</p>
+      <ul class="check">
+        <li>☐ Register blocked until Terms + Privacy</li>
+        <li>☐ /shipping-delivery-policy opens (no 404)</li>
+        <li>☐ Product page shows Rental + Shipping</li>
+        <li>☐ Checkout blocked until bundle tick</li>
+        <li>☐ Add Unique ID or Rx → extra Privacy tick</li>
+        <li>☐ Skip Unique ID and Rx → can still Place Order</li>
+        <li>☐ Cancel / Help show the right links</li>
+      </ul>
+    </div>
+    <div>
+      <p><b>Vendor</b></p>
+      <ul class="check">
+        <li>☐ Register blocked until Terms + Privacy + Vendor / Seller</li>
+        <li>☐ Onboarding needs typed name on Vendor / Seller</li>
+        <li>☐ Settings shows Terms / Privacy / Vendor / Seller / Rental</li>
+        <li>☐ No Cancellation / Shipping on vendor</li>
+      </ul>
+      <p><b>Proof in Admin</b></p>
+      <ul class="check">
+        <li>☐ One customer register</li>
+        <li>☐ One vendor e-sign (typed name)</li>
+        <li>☐ One customer checkout</li>
+        <li>☐ Legal Acceptances shows those 3 rows with version + screen</li>
+      </ul>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -22,13 +22,20 @@ import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
 import '../../shared/widgets/struck_price.dart';
 import '../../shared/utils/require_auth.dart';
+import '../../shared/widgets/listing_delivery_check.dart';
+import '../../shared/widgets/gallery_thumb_strip.dart';
 import '../dashboard/customer_dashboard.dart';
 import 'product_image_viewer_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final String listingId;
+  final String? previewImageUrl;
 
-  const ProductDetailScreen({super.key, required this.listingId});
+  const ProductDetailScreen({
+    super.key,
+    required this.listingId,
+    this.previewImageUrl,
+  });
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -89,6 +96,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     });
     checkout.fetchProductDetailModel(widget.listingId).then((detail) {
       if (!mounted) return;
+      if (detail != null) {
+        _precacheRentalPlanIcons(detail);
+        _precacheProductImages(detail);
+      }
       setState(() {
         _localDetail = detail;
         _loadingDetail = false;
@@ -142,12 +153,44 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  void _precacheRentalPlanIcons(ProductDetailModel detail) {
+    for (final plan in detail.activeRentalPlans) {
+      final url = _planIconUrl(plan);
+      if (url == null || url.isEmpty) continue;
+      precacheImage(NetworkImage(url), context);
+    }
+  }
+
+  void _precacheProductImages(ProductDetailModel detail) {
+    for (var i = 0; i < detail.imageUrls.length; i++) {
+      final preview = _galleryPreview(detail, i);
+      if (preview != null && preview.isNotEmpty) {
+        precacheImage(NetworkImage(preview), context);
+      }
+    }
+    for (final url in detail.imageUrls) {
+      if (url.isEmpty) continue;
+      precacheImage(NetworkImage(url), context);
+    }
+  }
+
+  String? _galleryPreview(ProductDetailModel detail, int index) {
+    return galleryPreviewUrl(
+      index: index,
+      originals: detail.imageUrls,
+      thumbnails: detail.imageThumbnailUrls,
+      placeholder: widget.previewImageUrl,
+    );
+  }
+
   /// Match web [RentalPeriodPlanDropdown] legend + trigger icon chips.
   Widget? _planIconAvatar(RentalPricingPlanModel? plan, {double size = 40}) {
     final url = plan == null ? null : _planIconUrl(plan);
     if (url == null || url.isEmpty) return null;
     final colors = context.appColors;
     final iconSize = size * 0.72;
+    final original = plan == null ? null : resolveRentalIconUrl(plan.iconUrl);
+    final thumb = plan == null ? null : resolveRentalIconUrl(plan.iconThumbnailUrl);
     return Container(
       width: size,
       height: size,
@@ -160,9 +203,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       child: CatalogImage(
         key: ValueKey(url),
         url: url,
+        fallbackUrl: thumb != original ? thumb : null,
         width: iconSize,
         height: iconSize,
         fit: BoxFit.contain,
+        showLoadingIndicator: false,
       ),
     );
   }
@@ -221,24 +266,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _pctOffBadge(int pct) {
-    final isDark = context.isDarkMode;
+    final colors = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF10B981).withValues(alpha: 0.14)
-            : const Color(0xFFDCFCE7),
+        color: colors.successSoft,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: isDark
-              ? const Color(0xFF10B981).withValues(alpha: 0.3)
-              : const Color(0xFF86EFAC),
-        ),
+        border: Border.all(color: colors.successBorder),
       ),
       child: Text(
         '$pct% OFF',
         style: TextStyle(
-          color: isDark ? const Color(0xFF34D399) : const Color(0xFF15803D),
+          color: colors.success,
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
@@ -247,8 +286,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _saveAmountLabel(double amount) {
-    final isDark = context.isDarkMode;
-    final color = isDark ? const Color(0xFF34D399) : const Color(0xFF15803D);
+    final color = context.appColors.success;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -448,6 +486,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   MaterialPageRoute(
                                                     builder: (_) => ProductImageViewerScreen(
                                                       imageUrls: detail.imageUrls,
+                                                      thumbnails: detail.imageThumbnailUrls,
+                                                      placeholder: widget.previewImageUrl,
                                                       initialIndex: _imageIndex,
                                                       title: detail.title,
                                                     ),
@@ -462,7 +502,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   padding: const EdgeInsets.all(16),
                                                   child: CatalogImage(
                                                     url: detail.imageUrls[i],
+                                                    previewUrl: _galleryPreview(detail, i),
                                                     fit: BoxFit.contain,
+                                                    showLoadingIndicator: false,
                                                   ),
                                                 ),
                                               ),
@@ -483,7 +525,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                 children: [
                                                   Icon(Icons.zoom_in_rounded, color: Colors.white, size: 14),
                                                   SizedBox(width: 4),
-                                                  const Text(
+                                                  Text(
                                                     'View & zoom',
                                                     style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                                                   ),
@@ -520,43 +562,41 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 if (detail.imageUrls.length > 1)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 12),
-                                    child: SizedBox(
-                                      height: 68,
-                                      child: ListView.separated(
-                                        scrollDirection: Axis.horizontal,
-                                        itemCount: detail.imageUrls.length,
-                                        separatorBuilder: (_, __) => const SizedBox(width: 10),
-                                        itemBuilder: (_, i) {
-                                          final selected = i == _imageIndex;
-                                          return GestureDetector(
-                                            onTap: () {
-                                              setState(() => _imageIndex = i);
-                                              _imagePageController.animateToPage(
-                                                i,
-                                                duration: const Duration(milliseconds: 220),
-                                                curve: Curves.easeOut,
-                                              );
-                                            },
-                                            child: AnimatedContainer(
-                                              duration: const Duration(milliseconds: 180),
-                                              width: 68,
-                                              decoration: BoxDecoration(
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: selected ? const Color(0xFF6C63FF) : colors.border,
-                                                  width: selected ? 2 : 1,
-                                                ),
-                                                color: colors.surface,
-                                              ),
-                                              clipBehavior: Clip.antiAlias,
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(6),
-                                                child: CatalogImage(url: detail.imageUrls[i], fit: BoxFit.contain),
-                                              ),
+                                    child: GalleryThumbStrip(
+                                      itemCount: detail.imageUrls.length,
+                                      selectedIndex: _imageIndex,
+                                      fadeColor: colors.background,
+                                      itemBuilder: (_, i) {
+                                        final selected = i == _imageIndex;
+                                        return AnimatedContainer(
+                                          duration: const Duration(milliseconds: 180),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(
+                                              color: selected ? const Color(0xFF6C63FF) : colors.border,
+                                              width: selected ? 2 : 1,
                                             ),
-                                          );
-                                        },
-                                      ),
+                                            color: colors.surface,
+                                          ),
+                                          clipBehavior: Clip.antiAlias,
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(6),
+                                            child: CatalogImage(
+                                              url: _galleryPreview(detail, i) ?? detail.imageUrls[i],
+                                              fit: BoxFit.contain,
+                                              showLoadingIndicator: false,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      onSelected: (i) {
+                                        setState(() => _imageIndex = i);
+                                        _imagePageController.animateToPage(
+                                          i,
+                                          duration: const Duration(milliseconds: 220),
+                                          curve: Curves.easeOut,
+                                        );
+                                      },
                                     ),
                                   ),
                               ],
@@ -679,7 +719,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                 ),
                                                 Text(
                                                   formatPlanInr(selectedVariant?.buyPrice ?? 0),
-                                                  style: const TextStyle(color: Color(0xFF34D399), fontSize: 18, fontWeight: FontWeight.bold),
+                                                  style: TextStyle(
+                                                    color: colors.success,
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
                                                 ),
                                               ],
                                             ),
@@ -919,6 +963,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                               width: 18,
                                                               height: 18,
                                                               fit: BoxFit.contain,
+                                                              showLoadingIndicator: false,
                                                             ),
                                                             const SizedBox(width: 5),
                                                             Text(
@@ -1200,10 +1245,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                             ),
                                                             child: Row(
                                                               children: [
-                                                                const Icon(
+                                                                Icon(
                                                                   Icons.verified_user_outlined,
                                                                   size: 18,
-                                                                  color: Color(0xFF34D399),
+                                                                  color: colors.success,
                                                                 ),
                                                                 const SizedBox(width: 8),
                                                                 Expanded(
@@ -1454,6 +1499,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                      style: TextStyle(color: colors.textMuted, fontSize: 13),
                                    ),
                                  ],
+                                const SizedBox(height: 16),
+                                ListingDeliveryCheck(
+                                  quoteLine: {
+                                    'listingId': detail.id,
+                                    'quantity': _quantity,
+                                    'rentalDays': actualOrderType == 'buy'
+                                        ? 0
+                                        : (selectedPlan?.durationDays ?? 0),
+                                    'rentalPeriodUnit': rentalUnitDay,
+                                    'orderType': actualOrderType,
+                                    if (_selectedVariantId != null && _selectedVariantId!.isNotEmpty)
+                                      'productVariantId': _selectedVariantId,
+                                    if (actualOrderType == 'rent' && selectedPlan != null)
+                                      'rentalPricingPlanId': selectedPlan.id,
+                                  },
+                                ),
                                 if (_relatedProducts.isNotEmpty) ...[
                                   const SizedBox(height: 24),
                                   Text(
@@ -1485,7 +1546,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                           Navigator.push(
                                             context,
                                             MaterialPageRoute(
-                                              builder: (_) => ProductDetailScreen(listingId: product.id),
+                                              builder: (_) => ProductDetailScreen(
+                                                listingId: product.id,
+                                                previewImageUrl: product.primaryImageUrl,
+                                              ),
                                             ),
                                           );
                                         },
@@ -1544,18 +1608,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 return SafeArea(
                   top: false,
                   child: Container(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
                     decoration: BoxDecoration(
                       color: colors.surface,
                       border: Border(top: BorderSide(color: colors.border)),
                     ),
-                    child: SizedBox(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: inCart
-                              ? const Color(0xFF10B981)
+                              ? colors.success
                               : const Color(0xFF6C63FF),
                           disabledBackgroundColor: colors.border,
                           elevation: 0,
@@ -1694,6 +1762,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           ],
                         ),
                       ),
+                    ),
+                      ],
                     ),
                   ),
                 );
@@ -1872,9 +1942,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                             ? '$pct% off \u00b7 Save ${formatPlanInr(savings)}'
                                             : 'Save ${formatPlanInr(savings)}',
                                         style: TextStyle(
-                                          color: context.isDarkMode
-                                              ? const Color(0xFF34D399)
-                                              : const Color(0xFF15803D),
+                                          color: context.appColors.success,
                                           fontSize: 12,
                                           fontWeight: FontWeight.w800,
                                         ),
@@ -2127,7 +2195,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           Text(
             value,
             style: TextStyle(
-              color: highlight ? const Color(0xFF10B981) : colors.textPrimary,
+              color: highlight ? colors.success : colors.textPrimary,
               fontWeight: FontWeight.bold,
             ),
           ),

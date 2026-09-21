@@ -895,6 +895,40 @@ public sealed class CustomerRepository(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task AddCustomerOrderPrescriptionFileAsync(CustomerOrderPrescriptionFile file, CancellationToken cancellationToken)
+    {
+        await customerDb.CustomerOrderPrescriptionFiles.AddAsync(file, cancellationToken);
+    }
+
+    public Task<List<CustomerOrderPrescriptionFile>> GetCustomerOrderPrescriptionFilesAsync(Guid customerOrderId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderPrescriptionFiles
+            .Where(x => x.CustomerRentalOrderId == customerOrderId && !x.IsDeleted)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<CustomerOrderPrescriptionFile?> GetCustomerOrderPrescriptionFileByIdAsync(Guid customerOrderId, Guid fileId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderPrescriptionFiles
+            .FirstOrDefaultAsync(
+                x => x.Id == fileId && x.CustomerRentalOrderId == customerOrderId && !x.IsDeleted,
+                cancellationToken);
+    }
+
+    public Task UpdateCustomerOrderPrescriptionFileAsync(CustomerOrderPrescriptionFile file, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerOrderPrescriptionFiles.Update(file);
+        return Task.CompletedTask;
+    }
+
+    public Task<int> CountCustomerOrderPrescriptionFilesAsync(Guid customerOrderId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderPrescriptionFiles
+            .CountAsync(x => x.CustomerRentalOrderId == customerOrderId && !x.IsDeleted, cancellationToken);
+    }
+
     public async Task AddCustomerOrderImageAsync(CustomerOrderImage image, CancellationToken cancellationToken)
     {
         await customerDb.CustomerOrderImages.AddAsync(image, cancellationToken);
@@ -969,6 +1003,37 @@ public sealed class CustomerRepository(
     {
         return customerDb.CustomerOrderImages
             .CountAsync(x => x.RequestId == requestId && !x.IsDeleted, cancellationToken);
+    }
+
+    public async Task AddCustomerOrderImageRequestOptionAsync(CustomerOrderImageRequestOption option, CancellationToken cancellationToken)
+    {
+        await customerDb.CustomerOrderImageRequestOptions.AddAsync(option, cancellationToken);
+    }
+
+    public Task<List<CustomerOrderImageRequestOption>> GetCustomerOrderImageRequestOptionsAsync(Guid requestId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImageRequestOptions
+            .Where(x => x.RequestId == requestId && !x.IsDeleted)
+            .OrderBy(x => x.OptionNumber)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<CustomerOrderImageRequestOption?> GetCustomerOrderImageRequestOptionByIdAsync(Guid requestId, Guid optionId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImageRequestOptions
+            .FirstOrDefaultAsync(x => x.Id == optionId && x.RequestId == requestId && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task UpdateCustomerOrderImageRequestOptionAsync(CustomerOrderImageRequestOption option, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerOrderImageRequestOptions.Update(option);
+        return Task.CompletedTask;
+    }
+
+    public Task<int> CountCustomerOrderImagesByOptionIdAsync(Guid optionId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderImages
+            .CountAsync(x => x.OptionId == optionId && !x.IsDeleted, cancellationToken);
     }
 
     public async Task<IReadOnlyDictionary<Guid, List<string>>> GetCustomerOrderAssetTagsByOrderIdsAsync(
@@ -1078,6 +1143,60 @@ public sealed class CustomerRepository(
     {
         customerDb.CustomerOrderVendorOffers.Update(offer);
         return Task.CompletedTask;
+    }
+
+    public async Task<List<Guid>> GetAwaitingOrderIdsWithExpiredPendingOffersAsync(
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var expiredPending = await (
+            from offer in customerDb.CustomerOrderVendorOffers
+            join order in customerDb.CustomerRentalOrders on offer.CustomerRentalOrderId equals order.Id
+            where !offer.IsDeleted
+                  && !order.IsDeleted
+                  && offer.Status == "pending"
+                  && offer.ExpiresAt <= now
+                  && order.Status == "awaiting_vendor_acceptance"
+            select order.Id
+        ).Distinct().ToListAsync(cancellationToken);
+
+        var strandedQueued = await (
+            from order in customerDb.CustomerRentalOrders
+            where !order.IsDeleted
+                  && order.Status == "awaiting_vendor_acceptance"
+                  && customerDb.CustomerOrderVendorOffers.Any(x =>
+                      x.CustomerRentalOrderId == order.Id
+                      && !x.IsDeleted
+                      && x.Status == "queued")
+                  && !customerDb.CustomerOrderVendorOffers.Any(x =>
+                      x.CustomerRentalOrderId == order.Id
+                      && !x.IsDeleted
+                      && x.Status == "pending"
+                      && x.ExpiresAt > now)
+            select order.Id
+        ).Distinct().ToListAsync(cancellationToken);
+
+        return expiredPending.Union(strandedQueued).ToList();
+    }
+
+    public Task<List<CustomerRentalOrder>> GetSiblingCheckoutOrdersAsync(
+        Guid customerId,
+        string orderNumber,
+        Guid exceptOrderId,
+        CancellationToken cancellationToken)
+    {
+        var prefix = SequentialDispatchRules.CheckoutGroupPrefix(orderNumber);
+        if (prefix is null)
+            return Task.FromResult(new List<CustomerRentalOrder>());
+
+        var startsWith = prefix + "-";
+        return customerDb.CustomerRentalOrders
+            .Where(o =>
+                o.CustomerId == customerId
+                && !o.IsDeleted
+                && o.Id != exceptOrderId
+                && o.OrderNumber.StartsWith(startsWith))
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForCustomerAsync(
@@ -1664,10 +1783,10 @@ public sealed class CustomerRepository(
         List<VariantInventoryItem>? marketplaceVariantInventory = null)
     {
         var inv = listing.Inventory;
-        var imgs = ResolveOrderedDistinctListingImageUrls(listing.Images);
-        if (imgs.Count == 0)
+        var resolved = ResolveOrderedDistinctListingImages(listing.Images);
+        if (resolved.Count == 0)
         {
-            imgs = ResolveOrderedDistinctProductImageUrls(product.ProductImages);
+            resolved = ResolveOrderedDistinctProductImages(product.ProductImages);
         }
         var desc = string.IsNullOrWhiteSpace(product.LongDescription)
             ? product.ShortDescription ?? string.Empty
@@ -1711,7 +1830,8 @@ public sealed class CustomerRepository(
             CategoryDepositRequired = product.Category?.DepositRequired ?? false,
             CategoryName = product.Category?.CategoryName ?? "General",
             Description = desc,
-            ImageUrls = imgs,
+            ImageUrls = resolved.Select(x => x.Url).ToList(),
+            ImageThumbnailUrls = resolved.Select(x => x.ThumbnailUrl ?? "").ToList(),
             InventoryId = inv?.Id,
             InventoryAvailable = listingAvailable,
             ProductTotalAvailableQuantity = productTotalAvailableQuantity ?? listingAvailable,
@@ -1752,52 +1872,47 @@ public sealed class CustomerRepository(
         };
     }
 
-    private List<string> ResolveOrderedDistinctListingImageUrls(IEnumerable<VendorProductImage> images)
+    private readonly record struct ResolvedCatalogImage(string Url, string? ThumbnailUrl);
 
+    private List<ResolvedCatalogImage> ResolveOrderedDistinctListingImages(IEnumerable<VendorProductImage> images)
     {
-
         var ordered = images.Where(i => !i.IsDeleted)
-
             .OrderByDescending(i => i.IsPrimary)
-
             .ThenBy(i => i.DisplayOrder);
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        var list = new List<string>();
-
+        var list = new List<ResolvedCatalogImage>();
         foreach (var im in ordered)
-
         {
-
             var key = (im.ImageUrl ?? string.Empty).Trim();
-
             if (string.IsNullOrEmpty(key)) continue;
-
             if (!seen.Add(key)) continue;
-
-            list.Add(fileUrlResolver.Resolve(im.ImageUrl));
-
+            var thumb = im.ThumbnailUrl?.Trim();
+            list.Add(new ResolvedCatalogImage(
+                fileUrlResolver.Resolve(key),
+                string.IsNullOrEmpty(thumb) ? null : fileUrlResolver.Resolve(thumb)));
         }
 
         return list;
-
     }
 
-    private List<string> ResolveOrderedDistinctProductImageUrls(IEnumerable<ProductImage> images)
+    private List<ResolvedCatalogImage> ResolveOrderedDistinctProductImages(IEnumerable<ProductImage> images)
     {
         var ordered = images.Where(i => !i.IsDeleted)
             .OrderByDescending(i => i.IsPrimary)
             .ThenBy(i => i.DisplayOrder);
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var list = new List<string>();
+        var list = new List<ResolvedCatalogImage>();
         foreach (var im in ordered)
         {
             var key = (im.ImageUrl ?? string.Empty).Trim();
             if (string.IsNullOrEmpty(key)) continue;
             if (!seen.Add(key)) continue;
-            list.Add(fileUrlResolver.Resolve(im.ImageUrl));
+            var thumb = im.ThumbnailUrl?.Trim();
+            list.Add(new ResolvedCatalogImage(
+                fileUrlResolver.Resolve(key),
+                string.IsNullOrEmpty(thumb) ? null : fileUrlResolver.Resolve(thumb)));
         }
 
         return list;

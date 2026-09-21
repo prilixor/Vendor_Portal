@@ -858,20 +858,20 @@ class _StatusChip extends StatelessWidget {
 
   const _StatusChip({required this.status, required this.label});
 
-  Color _tone() {
+  Color _tone(BuildContext context) {
     switch (status) {
       case ListingUiStatus.active:
-        return const Color(0xFF22C55E);
+        return context.appColors.success;
       case ListingUiStatus.inactive:
-        return const Color(0xFF94A3B8);
+        return context.appColors.textMuted;
       case ListingUiStatus.draft:
-        return const Color(0xFFF59E0B);
+        return context.appColors.warning;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final tone = _tone();
+    final tone = _tone(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(

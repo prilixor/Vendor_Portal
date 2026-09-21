@@ -121,8 +121,10 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
                             Expanded(
                               child: Text(
                                 'Unique ID: ${doctor.uniqueCode}',
-                                style: const TextStyle(
-                                  color: Color(0xFFA5B4FC),
+                                style: TextStyle(
+                                  color: context.isDarkMode
+                                      ? const Color(0xFF5EEAD4)
+                                      : const Color(0xFF0F766E),
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),

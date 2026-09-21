@@ -7,7 +7,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
@@ -148,9 +148,7 @@ const Vendors = () => {
         </Tabs>
       </div>
 
-      {loading ? (
-        <PageLoaderSlot />
-      ) : (
+      <PageContentGate loading={loading}>
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
             {pageVendors.map((v) => {
@@ -257,7 +255,7 @@ const Vendors = () => {
             label="vendors"
           />
         </>
-      )}
+      </PageContentGate>
     </div>
   );
 };

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthLayout } from "@/app/components/layout/AuthLayout";
 import { Button } from "@/app/components/ui/button";
-import { Checkbox } from "@/app/components/ui/checkbox";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -23,6 +22,7 @@ import { cn } from "@/app/helpers/utils";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
 import { clearImpersonationSession, clearPortalSession } from "@/app/helpers/authSession";
+import { RegisterLegalAgree } from "@/app/components/legal/RegisterLegalAgree";
 
 const Field = ({ id, label, type, value, onChange, placeholder, error, required }: any) => (
   <div className="space-y-1.5">
@@ -163,8 +163,9 @@ const Register = () => {
     if (!validate()) return;
     setLoading(true);
     try {
+      if (!agreed) return;
       const phoneNormalized = normalizeIndianMobileDigits(phone);
-      await register(email, password, phoneNormalized);
+      await register(email, password, phoneNormalized, true);
       setPendingPhone(phoneNormalized);
       setOtpOpen(true);
     } catch (error) {
@@ -244,23 +245,7 @@ const Register = () => {
           />
         </div>
 
-        <div className="flex items-start space-x-2">
-          <Checkbox 
-            id="terms" 
-            checked={agreed} 
-            onCheckedChange={(checked) => setAgreed(checked === true)} 
-            className="mt-0.5"
-          />
-          <Label
-            htmlFor="terms"
-            className="text-xs text-muted-foreground leading-normal font-normal cursor-pointer"
-          >
-            By creating an account, you agree to our{" "}
-            <Link to="/terms-and-conditions" target="_blank" className="text-primary font-medium hover:underline">Terms & Conditions</Link>
-            {" "}and{" "}
-            <Link to="/privacy-policy" target="_blank" className="text-primary font-medium hover:underline">Privacy Policy</Link>.
-          </Label>
-        </div>
+        <RegisterLegalAgree surface="vendor_web" agreed={agreed} onAgreedChange={setAgreed} />
 
         <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading || !agreed || otpOpen}>
           {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating account…</> : "Create account"}

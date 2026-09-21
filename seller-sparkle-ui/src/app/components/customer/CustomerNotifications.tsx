@@ -23,7 +23,7 @@ import {
 } from "@/app/services/customerNotificationTypes";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { cn } from "@/app/helpers/utils";
 import { customerNotificationCopy } from "@/app/helpers/customerNotificationCopy";
@@ -296,9 +296,7 @@ const CustomerNotifications = () => {
       ) : null}
 
       <Card className="-mx-3 overflow-hidden rounded-none border-x-0 border-border/80 shadow-sm sm:mx-0 sm:rounded-lg sm:border">
-        {isLoading ? (
-          <PageLoaderSlot className="min-h-[8rem] py-0" />
-        ) : (
+        <PageContentGate loading={isLoading}>
           <ul className="divide-y divide-border/70">
             {sortedNotifications.length === 0 ? (
               <li className="flex flex-col items-center gap-2 px-4 py-14 text-center">
@@ -404,7 +402,7 @@ const CustomerNotifications = () => {
               })
             )}
           </ul>
-        )}
+        </PageContentGate>
       </Card>
 
       <TablePagination

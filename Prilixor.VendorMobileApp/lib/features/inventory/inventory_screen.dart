@@ -301,7 +301,7 @@ class _KpiStrip extends StatelessWidget {
         value: totals.available,
         equipment: equipment.available,
         chemical: chemical.available,
-        color: const Color(0xFF10B981),
+        color: context.appColors.success,
       ),
       (
         label: 'Reserved',
@@ -309,7 +309,7 @@ class _KpiStrip extends StatelessWidget {
         value: totals.reserved,
         equipment: equipment.reserved,
         chemical: chemical.reserved,
-        color: const Color(0xFFF59E0B),
+        color: context.appColors.warning,
       ),
       (
         label: 'Rented',
@@ -317,7 +317,7 @@ class _KpiStrip extends StatelessWidget {
         value: totals.rented,
         equipment: equipment.rented,
         chemical: chemical.rented,
-        color: const Color(0xFF3B82F6),
+        color: context.appColors.info,
       ),
       (
         label: 'Blocked',
@@ -325,7 +325,7 @@ class _KpiStrip extends StatelessWidget {
         value: totals.blocked,
         equipment: equipment.blocked,
         chemical: chemical.blocked,
-        color: const Color(0xFFEF4444),
+        color: context.appColors.danger,
       ),
     ];
 
@@ -413,26 +413,26 @@ class _InventoryCard extends StatelessWidget {
         label: 'Available',
         semantics: 'Available ${record.available}',
         value: record.available,
-        color: const Color(0xFF10B981),
+        color: context.appColors.success,
       ),
       if (!record.isChemical)
         (
           label: 'Rented',
           semantics: 'Rented ${record.rented}',
           value: record.rented,
-          color: const Color(0xFF3B82F6),
+          color: context.appColors.info,
         ),
       (
         label: 'Reserved',
         semantics: 'Reserved ${record.reserved} — held for pending orders',
         value: record.reserved,
-        color: const Color(0xFFF59E0B),
+        color: context.appColors.warning,
       ),
       (
         label: 'Blocked',
         semantics: 'Blocked ${record.blocked}',
         value: record.blocked,
-        color: const Color(0xFFEF4444),
+        color: context.appColors.danger,
       ),
     ];
 

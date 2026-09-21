@@ -48,7 +48,8 @@ internal sealed class GetMobileAdminAllOrdersQueryHandler(
                 HospitalId: null,
                 HospitalName: null,
                 HospitalCity: null,
-                DoctorContactNumber: r.Doctor?.ContactNumber
+                DoctorContactNumber: r.Doctor?.ContactNumber,
+                DoctorUniqueCode: r.Doctor?.UniqueCode
             )).ToList();
 
         var result = new PagedResult<AdminOrderDto>(pagedRows, totalCount, request.Page, request.PageSize);

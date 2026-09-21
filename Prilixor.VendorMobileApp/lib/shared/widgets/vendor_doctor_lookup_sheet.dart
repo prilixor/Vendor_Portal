@@ -195,7 +195,7 @@ class _VendorDoctorLookupSheetState extends State<_VendorDoctorLookupSheet> {
             const SizedBox(height: 16),
             Row(
               children: [
-                const Icon(Icons.medical_services_outlined, color: Color(0xFF2DD4BF)),
+                Icon(Icons.medical_services_outlined, color: context.appColors.success),
                 const SizedBox(width: 8),
                 Text(
                   'Find doctor by Unique ID',
@@ -406,7 +406,7 @@ class _VendorDoctorLookupSheetState extends State<_VendorDoctorLookupSheet> {
                   onPressed: () => _openSharePage(_doctor!['publicPageUrl']?.toString()),
                   icon: const Icon(Icons.open_in_new, size: 16),
                   label: const Text('Open share page'),
-                  style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF2DD4BF)),
+                  style: OutlinedButton.styleFrom(foregroundColor: context.appColors.success),
                 ),
               ],
             ],

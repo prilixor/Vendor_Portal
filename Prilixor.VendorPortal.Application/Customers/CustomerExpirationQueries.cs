@@ -186,7 +186,8 @@ public sealed record AdminOrderDto(
     Guid? HospitalId = null,
     string? HospitalName = null,
     string? HospitalCity = null,
-    string? DoctorContactNumber = null);
+    string? DoctorContactNumber = null,
+    string? DoctorUniqueCode = null);
 
 public sealed record GetAdminAllOrdersQuery() : IQuery<List<AdminOrderDto>>;
 
@@ -228,7 +229,8 @@ internal sealed class GetAdminAllOrdersQueryHandler(
             HospitalId: null,
             HospitalName: null,
             HospitalCity: null,
-            DoctorContactNumber: r.Doctor?.ContactNumber
+            DoctorContactNumber: r.Doctor?.ContactNumber,
+            DoctorUniqueCode: r.Doctor?.UniqueCode
         )).ToList();
 
         return Result.Success(list);

@@ -6,6 +6,7 @@ import '../models/product_detail_model.dart';
 import '../models/order_quote_model.dart';
 import '../models/cart_model.dart';
 import '../models/medical_model.dart';
+import '../utils/platform_file_payload.dart';
 import '../utils/user_friendly_error.dart';
 
 class CheckoutProvider extends ChangeNotifier {
@@ -120,6 +121,58 @@ class CheckoutProvider extends ChangeNotifier {
     return payload;
   }
 
+  Future<bool> uploadPrescription({
+    required String orderId,
+    required PendingPrescriptionFile file,
+    bool acceptedPrescriptionLegal = false,
+    String uploadSource = 'checkout',
+  }) async {
+    try {
+      final multipart = await multipartFromPickedFile(
+        fileName: file.name,
+        path: file.path,
+        bytes: file.bytes,
+      );
+      if (multipart == null) return false;
+      final form = FormData.fromMap({
+        'file': multipart,
+        'acceptedPrescriptionLegal': acceptedPrescriptionLegal ? 'true' : 'false',
+        'uploadSource': uploadSource,
+        'sourceSurface': 'customer_mobile',
+      });
+      final response = await _apiClient.dio.post(
+        '/customers/me/orders/$orderId/prescriptions',
+        data: form,
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// PDP pincode check. Does not overwrite the checkout quote.
+  Future<String?> checkServiceArea({
+    required String addressId,
+    required Map<String, dynamic> line,
+  }) async {
+    try {
+      await _apiClient.dio.post('/customers/me/orders/quote', data: {
+        'customerAddressId': addressId,
+        'deliveryOption': 'standard',
+        'lines': [line],
+      });
+      return null;
+    } on DioException catch (e) {
+      return userFriendlyDioMessage(
+        e.response?.data,
+        e.message,
+        'This pincode is outside the vendor service area.',
+      );
+    } catch (_) {
+      return 'This pincode is outside the vendor service area.';
+    }
+  }
+
   Future<void> getQuote(
     List<CartLineModel> cartLines, {
     String? addressId,
@@ -162,11 +215,17 @@ class CheckoutProvider extends ChangeNotifier {
     }
   }
 
+  List<Map<String, dynamic>> _lastPlacedOrders = [];
+  List<Map<String, dynamic>> get lastPlacedOrders => _lastPlacedOrders;
+
   Future<bool> placeOrder(
     List<CartLineModel> cartLines, {
     String? addressId,
     String deliveryOption = 'standard',
     Map<String, MedicalRefModel>? medicalRefs,
+    Map<String, List<PendingPrescriptionFile>>? prescriptionFiles,
+    bool acceptedLegal = false,
+    bool acceptedPrescriptionLegal = false,
   }) async {
     _isPlacingOrder = true;
     _errorMessage = null;
@@ -177,18 +236,30 @@ class CheckoutProvider extends ChangeNotifier {
       final data = {
         if (addressId != null && addressId.isNotEmpty) 'customerAddressId': addressId,
         'deliveryOption': deliveryOption,
-        'lines': cartLines
-            .map((line) => _buildLinePayload(
-                  line,
-                  medicalRef: medicalRefs?[line.listingId],
-                ))
-            .toList(),
+        'acceptedLegal': acceptedLegal,
+        'acceptedPrescriptionLegal': acceptedPrescriptionLegal,
+        'sourceSurface': 'customer_mobile',
+        'lines': cartLines.map((line) {
+          final payload = _buildLinePayload(
+            line,
+            medicalRef: medicalRefs?[line.listingId],
+          );
+          if (line.prescriptionRequired &&
+              (prescriptionFiles?[line.listingId]?.isNotEmpty ?? false)) {
+            payload['hasPrescriptionFile'] = true;
+          }
+          return payload;
+        }).toList(),
       };
 
       final response = await _apiClient.dio.post('/customers/me/orders', data: data);
       if (response.statusCode == 200) {
         final resData = response.data;
         final placedOrders = resData['placedOrders'] as List<dynamic>? ?? [];
+        _lastPlacedOrders = placedOrders
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
         final failed = resData['failedLines'] as List<dynamic>? ?? [];
         _failedLines = failed.map((e) {
           final map = Map<String, dynamic>.from(e as Map);
@@ -205,6 +276,20 @@ class CheckoutProvider extends ChangeNotifier {
         }).toList();
 
         if (placedOrders.isNotEmpty) {
+          for (final order in _lastPlacedOrders) {
+            final listingId = order['listingId']?.toString() ?? '';
+            final orderId = order['id']?.toString() ?? '';
+            if (listingId.isEmpty || orderId.isEmpty) continue;
+            final files = prescriptionFiles?[listingId] ?? const <PendingPrescriptionFile>[];
+            for (final file in files) {
+              await uploadPrescription(
+                orderId: orderId,
+                file: file,
+                acceptedPrescriptionLegal: acceptedPrescriptionLegal,
+                uploadSource: 'checkout',
+              );
+            }
+          }
           return true;
         }
 

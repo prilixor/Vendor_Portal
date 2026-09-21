@@ -561,6 +561,7 @@ const CustomerBrowse = () => {
           filteredData.map((item) => {
             const ls = item.listingStatus.trim().toLowerCase();
             const isBrowsable = ls === "active" || ls === "approved";
+            const shopState = { previewImage: item.primaryImageUrl ?? "" };
             const isChem = !!item.isChemical;
             const showRent = !isChem && (item.isRentEnabled ?? true);
             const showBuy = isChem || !!item.isBuyEnabled;
@@ -603,6 +604,7 @@ const CustomerBrowse = () => {
                   {isBrowsable ? (
                     <Link
                       to={`/customer/shop/${item.id}`}
+                      state={shopState}
                       className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
@@ -639,6 +641,7 @@ const CustomerBrowse = () => {
                   {isBrowsable ? (
                     <Link
                       to={`/customer/shop/${item.id}`}
+                      state={shopState}
                       className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <p className="line-clamp-2 min-h-[2.5rem] text-[15px] font-semibold leading-snug tracking-tight group-hover:text-primary">
@@ -688,7 +691,7 @@ const CustomerBrowse = () => {
                 <CardFooter className="mt-auto border-t border-border/70 bg-muted/20 px-4 py-3">
                   {isBrowsable ? (
                     <Button size="sm" className="w-full bg-gradient-primary shadow-glow hover:opacity-95" asChild>
-                      <Link to={`/customer/shop/${item.id}`}>View details</Link>
+                      <Link to={`/customer/shop/${item.id}`} state={shopState}>View details</Link>
                     </Button>
                   ) : (
                     <Button variant="outline" size="sm" className="w-full" disabled>

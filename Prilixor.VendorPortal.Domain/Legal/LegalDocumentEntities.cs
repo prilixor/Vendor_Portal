@@ -86,6 +86,7 @@ public class LegalAcceptance : AuditableEntity<Guid>, ISoftDelete
     public string SourceScreen { get; set; } = string.Empty;
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }
+    public string? SignedName { get; set; }
 
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

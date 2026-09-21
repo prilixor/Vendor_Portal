@@ -10,6 +10,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { normalizeIndianMobileDigits, requiredIndianMobileError } from "@/app/helpers/indianMobilePhone";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
+import { RegisterLegalAgree } from "@/app/components/legal/RegisterLegalAgree";
 import { cn } from "@/app/helpers/utils";
 import { clearImpersonationSession, clearPortalSession } from "@/app/helpers/authSession";
 
@@ -29,6 +30,7 @@ const CustomerRegister = () => {
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [touched, setTouched] = useState<Partial<Record<FieldKey, boolean>>>({});
   const [otpOpen, setOtpOpen] = useState(false);
@@ -157,6 +159,7 @@ const CustomerRegister = () => {
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
+    if (!agreed) return;
     if (!validateAll()) {
       toast.error("Please fill in the required fields correctly.");
       return;
@@ -164,24 +167,19 @@ const CustomerRegister = () => {
     setLoading(true);
     try {
       const phoneNormalized = normalizeIndianMobileDigits(phone);
-      const res = await registerCustomer({
-        fullName: fullName.trim(),
-        email: email.trim() || undefined,
-        phone: phoneNormalized,
+      const res = await registerCustomer(
+        email.trim() || null,
         password,
-      });
+        fullName.trim(),
+        phoneNormalized,
+        true,
+      );
 
       setPendingPhone(phoneNormalized);
-      setPendingLoginId(res.loginIdentifier || phoneNormalized);
+      setPendingLoginId(res.email?.trim() || phoneNormalized);
 
-      if (res.requiresPhoneVerification) {
+      if (res.requiresPhoneOtp) {
         setOtpOpen(true);
-        return;
-      }
-
-      if (res.token) {
-        toast.success("Welcome!");
-        goToShop();
         return;
       }
 
@@ -323,7 +321,9 @@ const CustomerRegister = () => {
           ) : null}
         </div>
 
-        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11 text-white font-semibold" disabled={loading}>
+        <RegisterLegalAgree surface="customer_web" agreed={agreed} onAgreedChange={setAgreed} />
+
+        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11 text-white font-semibold" disabled={loading || !agreed}>
           {loading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating…

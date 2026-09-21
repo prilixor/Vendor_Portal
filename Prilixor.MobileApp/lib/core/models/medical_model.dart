@@ -95,6 +95,18 @@ class DoctorModel {
   }
 }
 
+class PendingPrescriptionFile {
+  final String name;
+  final String? path;
+  final List<int>? bytes;
+
+  const PendingPrescriptionFile({
+    required this.name,
+    this.path,
+    this.bytes,
+  });
+}
+
 /// Optional doctor Unique ID reference attached to a cart line at checkout.
 class MedicalRefModel {
   final String doctorId;
@@ -112,6 +124,9 @@ class MedicalRefModel {
   });
 
   bool get hasDoctor => doctorId.isNotEmpty;
+
+  bool hasHealthData([List<PendingPrescriptionFile> files = const []]) =>
+      hasDoctor || files.isNotEmpty;
 
   MedicalRefModel copyWith({
     String? doctorId,

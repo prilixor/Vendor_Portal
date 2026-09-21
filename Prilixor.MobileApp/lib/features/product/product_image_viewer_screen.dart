@@ -4,18 +4,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/utils/media_url.dart';
 import '../../shared/widgets/catalog_image.dart';
+import '../../shared/widgets/gallery_thumb_strip.dart';
 
 /// Product gallery viewer.
 /// - Android/iOS: ExtendedImage free finger pinch (marketplace-style)
 /// - Flutter web: CatalogImage (HTML img) + InteractiveViewer (avoids CORS decode failures)
 class ProductImageViewerScreen extends StatefulWidget {
   final List<String> imageUrls;
+  final List<String> thumbnails;
+  final String? placeholder;
   final int initialIndex;
   final String title;
 
   const ProductImageViewerScreen({
     super.key,
     required this.imageUrls,
+    this.thumbnails = const [],
+    this.placeholder,
     this.initialIndex = 0,
     this.title = 'Product',
   });
@@ -29,6 +34,9 @@ class _ProductImageViewerScreenState extends State<ProductImageViewerScreen> {
   late final ExtendedPageController _nativePageController;
   late int _index;
   final Map<int, TransformationController> _webTransforms = {};
+  final Map<int, bool> _originalReady = {};
+  final Map<int, ImageStream> _originalStreams = {};
+  final Map<int, ImageStreamListener> _originalListeners = {};
   bool _webZoomed = false;
 
   @override
@@ -48,10 +56,66 @@ class _ProductImageViewerScreenState extends State<ProductImageViewerScreen> {
     for (final c in _webTransforms.values) {
       c.dispose();
     }
+    for (final entry in _originalListeners.entries) {
+      _originalStreams[entry.key]?.removeListener(entry.value);
+    }
     super.dispose();
   }
 
   String? _resolved(int i) => resolveMediaUrl(widget.imageUrls[i]);
+
+  String? _preview(int i) => galleryPreviewUrl(
+        index: i,
+        originals: widget.imageUrls,
+        thumbnails: widget.thumbnails,
+        placeholder: widget.placeholder,
+      );
+
+  bool _canZoom(int i) => _preview(i) == null || _originalReady[i] == true;
+
+  void _watchOriginal(int index) {
+    if (_originalReady[index] == true || _originalListeners.containsKey(index)) return;
+    if (_preview(index) == null) {
+      _originalReady[index] = true;
+      return;
+    }
+    final url = _resolved(index);
+    if (url == null) {
+      _originalReady[index] = true;
+      return;
+    }
+    final stream = NetworkImage(url).resolve(ImageConfiguration.empty);
+    late final ImageStreamListener listener;
+    listener = ImageStreamListener(
+      (info, sync) {
+        stream.removeListener(listener);
+        _originalListeners.remove(index);
+        _originalStreams.remove(index);
+        void markReady() {
+          if (!mounted) return;
+          setState(() => _originalReady[index] = true);
+        }
+        if (sync) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => markReady());
+        } else {
+          markReady();
+        }
+      },
+      onError: (_, _) {
+        stream.removeListener(listener);
+        _originalListeners.remove(index);
+        _originalStreams.remove(index);
+        if (!mounted) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() => _originalReady[index] = true);
+        });
+      },
+    );
+    _originalStreams[index] = stream;
+    _originalListeners[index] = listener;
+    stream.addListener(listener);
+  }
 
   TransformationController _webController(int i) {
     return _webTransforms.putIfAbsent(i, TransformationController.new);
@@ -186,36 +250,34 @@ class _ProductImageViewerScreenState extends State<ProductImageViewerScreen> {
                 ),
               ),
               child: count > 1
-                  ? SizedBox(
+                  ? GalleryThumbStrip(
+                      itemCount: count,
+                      selectedIndex: _index,
+                      itemExtent: 54,
+                      separator: 8,
                       height: 58,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: count,
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
-                        itemBuilder: (_, i) {
-                          final selected = i == _index;
-                          return GestureDetector(
-                            onTap: () => _goTo(i),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 160),
-                              width: 54,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: selected ? const Color(0xFF6C63FF) : Colors.white24,
-                                  width: selected ? 2.2 : 1,
-                                ),
-                                color: const Color(0xFF1E293B),
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: CatalogImage(
-                                url: widget.imageUrls[i],
-                                fit: BoxFit.contain,
-                              ),
+                      fadeColor: Colors.black,
+                      itemBuilder: (_, i) {
+                        final selected = i == _index;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: selected ? const Color(0xFF6C63FF) : Colors.white24,
+                              width: selected ? 2.2 : 1,
                             ),
-                          );
-                        },
-                      ),
+                            color: const Color(0xFF1E293B),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: CatalogImage(
+                            url: _preview(i) ?? widget.imageUrls[i],
+                            fit: BoxFit.contain,
+                            showLoadingIndicator: false,
+                          ),
+                        );
+                      },
+                      onSelected: _goTo,
                     )
                   : const SizedBox.shrink(),
             ),
@@ -236,11 +298,24 @@ class _ProductImageViewerScreenState extends State<ProductImageViewerScreen> {
       },
       onPageChanged: (i) => setState(() => _index = i),
       itemBuilder: (context, index) {
+        _watchOriginal(index);
         final url = _resolved(index);
         if (url == null) {
           return const ColoredBox(
             color: Colors.black,
             child: Center(child: Text('Image unavailable', style: TextStyle(color: Colors.white54))),
+          );
+        }
+
+        final preview = _preview(index);
+        if (!_canZoom(index) && preview != null) {
+          return ColoredBox(
+            color: Colors.black,
+            child: Image.network(
+              preview,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            ),
           );
         }
 
@@ -319,15 +394,19 @@ class _ProductImageViewerScreenState extends State<ProductImageViewerScreen> {
       },
       itemCount: count,
       itemBuilder: (context, index) {
+        _watchOriginal(index);
         final controller = _webController(index);
+        final canZoom = _canZoom(index);
         return LayoutBuilder(
           builder: (context, constraints) {
             return GestureDetector(
-              onDoubleTapDown: (d) => _webDoubleTap(index, d, constraints),
+              onDoubleTapDown: canZoom ? (d) => _webDoubleTap(index, d, constraints) : null,
               child: InteractiveViewer(
                 transformationController: controller,
                 minScale: 1,
                 maxScale: 4,
+                panEnabled: canZoom,
+                scaleEnabled: canZoom,
                 boundaryMargin: const EdgeInsets.all(64),
                 clipBehavior: Clip.hardEdge,
                 onInteractionUpdate: (_) {
@@ -351,9 +430,11 @@ class _ProductImageViewerScreenState extends State<ProductImageViewerScreen> {
                     padding: const EdgeInsets.fromLTRB(12, 72, 12, 120),
                     child: CatalogImage(
                       url: widget.imageUrls[index],
+                      previewUrl: _preview(index),
                       fit: BoxFit.contain,
                       width: constraints.maxWidth - 24,
                       height: constraints.maxHeight - 192,
+                      showLoadingIndicator: false,
                     ),
                   ),
                 ),

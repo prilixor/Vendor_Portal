@@ -49,4 +49,5 @@ public class CustomerRentalOrder : AuditableEntity<Guid>, ISoftDelete
     public CustomerAddress? CustomerAddress { get; set; }
     public CustomerOrderDoctorReference? DoctorReference { get; set; }
     public ICollection<CustomerOrderImage> Images { get; set; } = [];
+    public ICollection<CustomerOrderPrescriptionFile> PrescriptionFiles { get; set; } = [];
 }

@@ -28,7 +28,7 @@ import type {
 } from "../../services/adminApi";
 import {
   dayPlanTitle,
-  resolveRentalIconUrl,
+  resolveRentalIconUrlFromPlan,
 } from "@/app/helpers/rentalDurationIcons";
 import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
 
@@ -145,9 +145,12 @@ export function RentalDurationPricingEditor({
   }) => {
     const fromCatalog = activeIcons.find((i) => i.id === plan.rentalDurationIconId);
     if (fromCatalog) {
-      return resolveRentalIconUrl(fromCatalog.thumbnailUrl || fromCatalog.imageUrl);
+      return resolveRentalIconUrlFromPlan({
+        iconUrl: fromCatalog.imageUrl,
+        iconThumbnailUrl: fromCatalog.thumbnailUrl,
+      });
     }
-    return resolveRentalIconUrl(plan.iconThumbnailUrl || plan.iconUrl);
+    return resolveRentalIconUrlFromPlan(plan);
   };
 
   const updatePlan = (
@@ -579,7 +582,10 @@ export function RentalDurationPricingEditor({
                                     <span className="text-muted-foreground">No icon</span>
                                   </SelectItem>
                                   {activeIcons.map((icon) => {
-                                    const src = resolveRentalIconUrl(icon.thumbnailUrl || icon.imageUrl);
+                                    const src = resolveRentalIconUrlFromPlan({
+                                      iconUrl: icon.imageUrl,
+                                      iconThumbnailUrl: icon.thumbnailUrl,
+                                    });
                                     return (
                                       <SelectItem key={icon.id} value={icon.id}>
                                         <div className="flex items-center gap-2">
@@ -760,7 +766,10 @@ export function RentalDurationPricingEditor({
                               <SelectItem key={icon.id} value={icon.id}>
                                 <div className="flex items-center gap-2">
                                   {renderIconThumb(
-                                    resolveRentalIconUrl(icon.thumbnailUrl || icon.imageUrl),
+                                    resolveRentalIconUrlFromPlan({
+                                      iconUrl: icon.imageUrl,
+                                      iconThumbnailUrl: icon.thumbnailUrl,
+                                    }),
                                     icon.name,
                                     "md",
                                   )}

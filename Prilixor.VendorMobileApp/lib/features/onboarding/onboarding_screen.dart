@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/config/app_urls.dart';
 import '../../core/models/vendor_onboarding_model.dart';
 import '../../core/models/vendor_profile_model.dart';
 import '../../core/providers/vendor_location_provider.dart';
@@ -21,6 +22,7 @@ import '../../core/utils/place_search.dart';
 import 'document_preview_screen.dart';
 import '../../shared/widgets/admin_comment_hint.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
+import '../../shared/widgets/legal_policy_links.dart';
 import '../../shared/widgets/phone_otp_dialog.dart';
 import 'onboarding_widgets.dart';
 import '../service_areas/service_area_map_picker.dart';
@@ -99,9 +101,66 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final vendorId =
         Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
+    final nameController = TextEditingController();
+    final signedName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Sign Vendor / Seller Policy'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Type your full legal name to electronically sign commission, indemnity, and arbitration terms.',
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => openLegalPolicy(
+                  dialogContext,
+                  AppUrls.vendorSellerPath,
+                  title: 'Vendor / Seller Policy',
+                ),
+                child: const Text('Open agreement'),
+              ),
+              const VendorOnboardingPolicyLinks(),
+              const SizedBox(height: 8),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Full legal name',
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, nameController.text.trim()),
+              child: const Text('Sign and submit'),
+            ),
+          ],
+        );
+      },
+    );
+    nameController.dispose();
+    if (!mounted || signedName == null) return;
+    if (signedName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Type your full name to sign the Vendor / Seller Policy.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
     final provider =
         Provider.of<VendorOnboardingProvider>(context, listen: false);
-    final ok = await provider.submitVerification(vendorId);
+    final ok = await provider.submitVerification(vendorId, signedName: signedName);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -638,19 +697,19 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
                     : widget.profile?.city,
               ),
               if (_resolvingAddress)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     children: [
-                      SizedBox(
+                      const SizedBox(
                         width: 14,
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Text(
                         'Resolving address from pin…',
-                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                        style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
                       ),
                     ],
                   ),
@@ -693,8 +752,8 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
                 label: const Text('Open in Google Maps'),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(44),
-                  foregroundColor: Colors.white70,
-                  side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                  foregroundColor: context.appColors.textPrimary,
+                  side: BorderSide(color: context.appColors.border),
                 ),
               ),
               const SizedBox(height: 12),
@@ -735,7 +794,7 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
                 '• Or open Google Maps → long-press your shop → copy lat/long\n'
                 '• Paste the numbers below, then Save profile',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.45),
+                  color: context.appColors.textMuted,
                   fontSize: 11,
                   height: 1.45,
                 ),
@@ -844,10 +903,10 @@ class _DocumentsTabState extends State<_DocumentsTab> with AutomaticKeepAliveCli
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.card(context),
-        title: const Text('Delete document?', style: TextStyle(color: Colors.white)),
+        title: Text('Delete document?', style: TextStyle(color: ctx.appColors.textPrimary)),
         content: Text(
           'Remove ${doc.documentType}? You can upload a new file after deleting.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
+          style: TextStyle(color: ctx.appColors.textSecondary),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -1394,23 +1453,15 @@ class _BankTabState extends State<_BankTab> with AutomaticKeepAliveClientMixin {
                   margin: const EdgeInsets.only(bottom: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: context.isDarkMode
-                        ? const Color(0xFF34D399).withValues(alpha: 0.1)
-                        : const Color(0xFFECFDF5),
+                    color: context.appColors.successSoft,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: context.isDarkMode
-                          ? const Color(0xFF34D399).withValues(alpha: 0.25)
-                          : const Color(0xFFA7F3D0),
-                    ),
+                    border: Border.all(color: context.appColors.successBorder),
                   ),
                   child: Row(
                     children: [
                       Icon(
                         Icons.check_circle_rounded,
-                        color: context.isDarkMode
-                            ? const Color(0xFF34D399)
-                            : const Color(0xFF047857),
+                        color: context.appColors.success,
                         size: 18,
                       ),
                       const SizedBox(width: 8),
@@ -1418,9 +1469,7 @@ class _BankTabState extends State<_BankTab> with AutomaticKeepAliveClientMixin {
                         child: Text(
                           'Account numbers match.',
                           style: TextStyle(
-                            color: context.isDarkMode
-                                ? const Color(0xFF34D399)
-                                : const Color(0xFF047857),
+                            color: context.appColors.success,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1499,7 +1548,7 @@ class _BankTabState extends State<_BankTab> with AutomaticKeepAliveClientMixin {
           'Your bank details are encrypted and used only for vendor payouts.',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.38),
+            color: context.appColors.textMuted,
             fontSize: 11,
             height: 1.35,
           ),

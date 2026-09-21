@@ -14,12 +14,13 @@ import { FieldError } from "@/app/components/shared/FieldError";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { useAuth } from "@/app/guards/AuthContext";
 import { authApi } from "@/app/services/authApi";
 import { customerApi, type CustomerNotificationPreferenceApi } from "@/app/services/customerApi";
+import { toast } from "sonner";
 import {
   PASSWORDS_MATCH_MESSAGE,
   passwordsMeetConfirm,
@@ -28,6 +29,7 @@ import {
   submitPasswordLengthError,
 } from "@/app/helpers/passwordValidation";
 import { cn } from "@/app/helpers/utils";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
 
 const CustomerSettings = () => {
   const { user, setSessionUser } = useAuth();
@@ -274,22 +276,14 @@ const CustomerSettings = () => {
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
+          <TabsTrigger value="policies">Policies</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="mt-4">
           <Card className="max-w-2xl border-border/60">
             <CardContent className="p-5 sm:p-6">
-              {isLoading || !data ? (
-                <div className="space-y-4">
-                  <Skeleton className="h-5 w-28" />
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                  </div>
-                  <Skeleton className="h-10 w-28" />
-                </div>
-              ) : (
+              <PageContentGate loading={isLoading} className="min-h-[8rem] py-0">
+              {!data ? null : (
                 <form onSubmit={saveProfile}>
                   <h2 className="mb-1 text-sm font-semibold">Account</h2>
                   <p className="mb-4 text-xs text-muted-foreground">
@@ -395,6 +389,7 @@ const CustomerSettings = () => {
                   </Button>
                 </form>
               )}
+              </PageContentGate>
             </CardContent>
           </Card>
         </TabsContent>
@@ -515,15 +510,8 @@ const CustomerSettings = () => {
         <TabsContent value="preferences" className="mt-4">
           <Card className="max-w-2xl border-border/60">
             <CardContent className="space-y-3 p-5 sm:p-6">
-              {loadingPrefs || !dbPrefs ? (
-                <div className="space-y-4">
-                  <Skeleton className="h-14 w-full" />
-                  <Skeleton className="h-14 w-full" />
-                  <Skeleton className="h-14 w-full" />
-                  <Skeleton className="h-14 w-full" />
-                  <Skeleton className="h-14 w-full" />
-                </div>
-              ) : (
+              <PageContentGate loading={loadingPrefs} className="min-h-[8rem] py-0">
+              {!dbPrefs ? null : (
                 <>
                   <PrefRow
                     title="Order Status Updates"
@@ -580,7 +568,22 @@ const CustomerSettings = () => {
                   />
                 </>
               )}
+              </PageContentGate>
             </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="policies" className="mt-4">
+          <Card className="max-w-md border-border/60 p-4 sm:p-6">
+            <h2 className="mb-1 font-semibold">Legal</h2>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Agreements for your customer account.
+            </p>
+            <LegalPolicyLinks
+              surface="customer_web"
+              screen="profile_settings"
+              layout="quiet"
+            />
           </Card>
         </TabsContent>
       </Tabs>

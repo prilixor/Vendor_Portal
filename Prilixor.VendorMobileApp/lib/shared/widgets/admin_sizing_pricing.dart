@@ -52,8 +52,7 @@ class _VariantPriceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final payoutColor =
-        context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF047857);
+    final payoutColor = colors.success;
 
     return Opacity(
       opacity: variant.isActive ? 1 : 0.5,

@@ -115,11 +115,18 @@ export const authApi = {
     };
   },
 
-  async registerVendor(email: string, password: string, supportPhone: string): Promise<RegisterVendorResponse> {
+  async registerVendor(
+    email: string,
+    password: string,
+    supportPhone: string,
+    acceptedLegal = true,
+  ): Promise<RegisterVendorResponse> {
     return apiClient.post<RegisterVendorResponse>('/vendors/register', {
       email,
       password,
       supportPhone,
+      acceptedLegal,
+      sourceSurface: "vendor_web",
     });
   },
 
@@ -128,12 +135,15 @@ export const authApi = {
     password: string,
     fullName: string,
     phone: string | null | undefined,
+    acceptedLegal = true,
   ): Promise<RegisterCustomerResponse> {
     return apiClient.post<RegisterCustomerResponse>('/customers/register', {
       email: email?.trim() || null,
       password,
       fullName,
       phone: phone?.trim() || null,
+      acceptedLegal,
+      sourceSurface: "customer_web",
     });
   },
 

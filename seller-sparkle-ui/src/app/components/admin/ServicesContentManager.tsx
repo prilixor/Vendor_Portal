@@ -35,7 +35,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 
 const PRESET_SERVICE_ICONS = [
   { value: "Stethoscope", label: "Stethoscope (Medical Equipment)" },
@@ -210,11 +210,8 @@ export function ServicesContentManager() {
     );
   };
 
-  if (loading) {
-    return <PageLoaderSlot />;
-  }
-
   return (
+    <PageContentGate loading={loading}>
     <div className="space-y-6">
       {/* Header Settings */}
       <Card>
@@ -511,5 +508,6 @@ export function ServicesContentManager() {
         </DialogContent>
       </Dialog>
     </div>
+  </PageContentGate>
   );
 }

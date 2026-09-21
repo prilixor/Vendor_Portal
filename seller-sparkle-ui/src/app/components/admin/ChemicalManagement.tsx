@@ -15,7 +15,7 @@ import { FieldError } from "@/app/components/shared/FieldError";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { AdminProductMediaStep } from "@/app/components/admin/AdminProductMediaStep";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { Textarea } from "@/app/components/ui/textarea";
 import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, ProductVariantDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto } from "@/app/services/adminApi";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
@@ -182,7 +182,7 @@ const ChemPriceDisclosure = ({ label, count, sizes }: { label: string; count: nu
 const ChemicalManagement = () => {
   const [categories, setCategories] = useState<ProductCategoryDto[]>([]);
   const [products, setProducts] = useState<ProductDto[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useQueryTab(CHEMICAL_TABS, "chemical");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -1026,9 +1026,7 @@ const ChemicalManagement = () => {
   };
 
   const renderProductGrid = () => (
-    loading && products.length === 0 ? (
-      <PageLoaderSlot />
-    ) : (
+    <PageContentGate loading={loading}>
       <>
       <div className="max-w-full overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
@@ -1122,7 +1120,7 @@ const ChemicalManagement = () => {
         />
       )}
       </>
-    )
+    </PageContentGate>
   );
 
   return (
@@ -1213,9 +1211,7 @@ const ChemicalManagement = () => {
           </div>
 
           <TabsContent value="categories" className="mt-4">
-            {loading && categories.length === 0 ? (
-              <PageLoaderSlot />
-            ) : (
+            <PageContentGate loading={loading}>
               <div className="max-w-full overflow-x-auto rounded-lg border border-border">
                 <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
                   <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -1264,7 +1260,7 @@ const ChemicalManagement = () => {
                   </tbody>
                 </table>
               </div>
-            )}
+            </PageContentGate>
             {!loading && (
               <TablePagination
                 page={categoryPage}

@@ -4,7 +4,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Skeleton } from "@/app/components/ui/skeleton";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -25,7 +25,7 @@ import {
 } from "@/app/helpers/passwordValidation";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
-import { cn } from "@/app/helpers/utils";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
 
 const Settings = () => {
   const { user } = useAuth();
@@ -212,56 +212,9 @@ const Settings = () => {
   return (
     <div>
       <PageHeader title="Settings" description="Manage your account, security, and preferences." />
-      {loading ? (
-        <div className="space-y-6">
-          {/* Settings Skeleton */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="p-6">
-                <Skeleton className="h-6 w-24 mb-4" />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="space-y-2">
-                      <Skeleton className="h-3 w-20" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ))}
-                </div>
-                <Skeleton className="h-10 w-32 mt-5" />
-              </Card>
-
-              <Card className="p-6">
-                <Skeleton className="h-6 w-32 mb-4" />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="space-y-2">
-                      <Skeleton className="h-3 w-24" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ))}
-                </div>
-                <Skeleton className="h-10 w-32 mt-5" />
-              </Card>
-            </div>
-
-            <div className="space-y-4">
-              <Card className="p-6">
-                <Skeleton className="h-6 w-32 mb-4" />
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="space-y-2">
-                      <Skeleton className="h-3 w-16" />
-                      <Skeleton className="h-4 w-48" />
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
-          </div>
-        </div>
-      ) : (
+      <PageContentGate loading={loading}>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
+        <Card className="border-border/60 p-4 sm:p-6 lg:col-span-2 lg:p-8">
           <h2 className="mb-1 font-semibold">Account</h2>
           <p className="text-xs text-muted-foreground mb-4">
             Fields marked <span className="text-destructive">*</span> are required.
@@ -332,6 +285,7 @@ const Settings = () => {
             <Save className="mr-2 h-4 w-4" /> Save changes
           </Button>
         </Card>
+        <div className="flex flex-col gap-6">
         <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
           <h2 className="mb-1 font-semibold">Security</h2>
           <p className="text-xs text-muted-foreground mb-4">
@@ -442,8 +396,20 @@ const Settings = () => {
             )}
           </div>
         </Card>
+        <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
+          <h2 className="mb-1 font-semibold">Legal</h2>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Agreements for your vendor account.
+          </p>
+          <LegalPolicyLinks
+            surface="vendor_web"
+            screen="profile_settings"
+            layout="quiet"
+          />
+        </Card>
+        </div>
       </div>
-      )}
+      </PageContentGate>
       <PhoneOtpDialog
         open={otpOpen}
         onOpenChange={setOtpOpen}
