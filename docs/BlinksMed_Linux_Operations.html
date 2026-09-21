@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BlinksMed — Linux Server Operations (how we continue)</title>
+  <style>
+    body { font-family: Calibri, Arial, sans-serif; color: #333; font-size: 11pt; }
+    h1 { color: #0F2C59; font-size: 22pt; text-align: center; margin-bottom: 0; }
+    .subtitle { color: #0D6E6E; font-size: 14pt; text-align: center; font-weight: bold; margin-top: 4px; }
+    .meta { color: #666; font-size: 10pt; text-align: center; font-style: italic; margin-bottom: 16px; }
+    h2 { color: #0F2C59; font-size: 14pt; border-bottom: 1px solid #C5CDD6; padding-bottom: 3px; margin-top: 18px; }
+    h3 { color: #0D6E6E; font-size: 12pt; margin-top: 12px; }
+    p { margin: 8px 0; }
+    ol, ul { margin: 6px 0 10px 22px; }
+    li { margin: 4px 0; }
+    table { border-collapse: collapse; width: 100%; margin: 8px 0 14px 0; }
+    th { background: #0F2C59; color: #fff; text-align: left; padding: 6px 8px; font-size: 10pt; }
+    td { border: 1px solid #C5CDD6; padding: 5px 8px; font-size: 10pt; vertical-align: top; }
+    tr:nth-child(even) td { background: #F4F7FB; }
+    td:first-child { font-weight: bold; width: 32%; }
+    table.wide td:first-child { font-weight: normal; width: auto; }
+    pre { background: #F4F7FB; border: 1px solid #C5CDD6; padding: 10px 12px; font-family: Consolas, monospace; font-size: 9pt; color: #0F2C59; white-space: pre-wrap; }
+    .note { color: #555; font-style: italic; }
+    .ok { color: #0D6E6E; font-weight: bold; }
+    .warn { color: #8A5A00; font-weight: bold; }
+    .stop { color: #A32020; font-weight: bold; }
+    .footer { text-align: center; color: #888; font-size: 9pt; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <h1>BlinksMed</h1>
+  <p class="subtitle">Linux Server Operations — How We Continue After Cutover</p>
+  <p class="meta">Internal runbook &nbsp;·&nbsp; 3 September 2026 &nbsp;·&nbsp; Companion to BlinksMed_Linux_Production.pdf</p>
+
+  <h2>1. Purpose</h2>
+  <p>Live BlinksMed now runs on <b>Linux</b>. This document is how the team <b>continues</b> day to day: log in, deploy API, deploy UI, check health, backups, and rollback. It is not a new migration plan.</p>
+  <p class="ok">Windows IIS is no longer used for live deploys.</p>
+
+  <h2>2. Rules that never change</h2>
+  <table>
+    <tr><th>Rule</th><th>Why</th></tr>
+    <tr><td>Region must be <b>Europe (Stockholm) eu-north-1</b></td><td>Wrong region looks like the server disappeared</td></tr>
+    <tr><td>Work on instance <b>blinksmed-linux</b> (<code>i-09b9d3e07e4c6d99b</code>)</td><td>That is live</td></tr>
+    <tr><td>Do <b>not</b> move or release Elastic IP <code>13.63.29.186</code></td><td>All domains use this IP</td></tr>
+    <tr><td>Do <b>not</b> Terminate blinksmed-linux</td><td>That would take the site down</td></tr>
+    <tr><td>Do <b>not</b> overwrite <code>/var/www/api/appsettings.Production.json</code> blindly</td><td>Live database password is only there</td></tr>
+    <tr><td>Do <b>not</b> put passwords in Git, Teams, or email</td><td>appsettings.Production.json is gitignored</td></tr>
+    <tr><td>Do <b>not</b> expect RDP on <code>13.63.29.186</code></td><td>That IP is Linux (no Remote Desktop)</td></tr>
+    <tr><td>Do <b>not</b> deploy Windows / IIS publish output</td><td>Server is ARM Linux</td></tr>
+  </table>
+
+  <h2>3. How to open the Linux server</h2>
+  <p>There is <b>no RDP</b>. Use AWS Session Manager every time.</p>
+  <ol>
+    <li>AWS Console → region <b>Stockholm (eu-north-1)</b></li>
+    <li>EC2 → Instances → <b>blinksmed-linux</b></li>
+    <li>Connect → <b>Session Manager</b> → Connect</li>
+    <li>Type <code>sudo -i</code> so the prompt is <code>root@ip-172-31-18-209</code></li>
+  </ol>
+  <p>If you are already root, do not type <code>sudo</code> again (it can fail with “permission denied”).</p>
+  <p class="note">Session Manager does not need the public IP. It still works if someone is confused about RDP.</p>
+
+  <h2>4. Daily / weekly health check</h2>
+  <p>On Linux (root), paste:</p>
+<pre>systemctl is-active blinksmed-api nginx postgresql
+curl -sS -o /dev/null -w "API local %{http_code}\n" http://127.0.0.1:5000/api/customers/catalog/categories
+curl -sS -o /dev/null -w "WEB local %{http_code}\n" -H "Host: vendor.blinksmed.com" http://127.0.0.1/
+df -h /
+</pre>
+  <p>In a browser (from your PC):</p>
+  <ul>
+    <li>https://www.blinksmed.com</li>
+    <li>https://vendor.blinksmed.com</li>
+    <li>https://admin.blinksmed.com</li>
+    <li>https://api.blinksmed.com/api/customers/catalog/categories</li>
+  </ul>
+  <p>Success: services say <b>active</b>, curls show <b>200</b>, sites open with a valid lock (HTTPS).</p>
+  <p>Once a week: S3 → <code>blinksmed-backups</code> → <code>daily/</code> → confirm a new date folder with four <code>.dump</code> files.</p>
+
+  <h2>5. Continue with API code changes</h2>
+  <p>Do this whenever the .NET API changes. Publish must be <b>linux-arm64</b>.</p>
+  <h3>5.1 On the developer PC (PowerShell, folder Prilixor.VendorPortal)</h3>
+<pre>dotnet publish Prilixor.VendorPortal.API\Prilixor.VendorPortal.API.csproj -c Release -r linux-arm64 --self-contained false -o C:\Deploy\publish_api_linux
+
+if (Test-Path C:\Deploy\api-linux.zip) { Remove-Item C:\Deploy\api-linux.zip }
+Compress-Archive -Path C:\Deploy\publish_api_linux\* -DestinationPath C:\Deploy\api-linux.zip
+</pre>
+  <p>Upload <code>C:\Deploy\api-linux.zip</code> to S3 bucket <b>blinksmed-backups</b> → folder <b>migration</b> (overwrite the old zip).</p>
+  <h3>5.1b One time — make the PC JSON the live Linux file</h3>
+  <p>Do this <b>once</b> before full replace. Today’s PC file still has local DB/SMTP/JWT values. Replacing with that would take the API down.</p>
+  <p>On Linux SSM:</p>
+<pre>aws s3 cp /var/www/api/appsettings.Production.json s3://blinksmed-backups/migration/appsettings.Production.linux.json
+</pre>
+  <p>On the PC: S3 → <b>blinksmed-backups</b> → <b>migration</b> → download <code>appsettings.Production.linux.json</code>. Save it as the local gitignored <code>appsettings.Production.json</code> (overwrite the PC copy). Do not commit it. Do not paste it in chat. After that, edit JSON only on that file.</p>
+  <h3>5.2 On Linux SSM (root) — full replace JSON from the zip</h3>
+  <p>Backup live JSON to <code>/root</code>, copy API files, then replace the entire Production JSON from the zip <b>only if</b> DB/JWT/SMTP/keys in the zip match live Linux. If they do not match, the script keeps the live file and prints REFUSED.</p>
+<pre>systemctl stop blinksmed-api
+cp -a /var/www/api/appsettings.Production.json /root/appsettings.Production.json.bak
+
+cd /tmp/migration
+aws s3 cp s3://blinksmed-backups/migration/api-linux.zip .
+rm -rf /tmp/api-unpack
+mkdir -p /tmp/api-unpack
+unzip -o api-linux.zip -d /tmp/api-unpack
+DLL=$(find /tmp/api-unpack -name 'Prilixor.VendorPortal.API.dll' | head -1)
+DIR=$(dirname "$DLL")
+cp -a "$DIR"/. /var/www/api/
+cp -a /root/appsettings.Production.json.bak /var/www/api/appsettings.Production.json
+
+python3 - <<'PY'
+import json, glob, sys
+live_path = "/var/www/api/appsettings.Production.json"
+cands = glob.glob("/tmp/api-unpack/**/appsettings.Production.json", recursive=True)
+if not cands:
+    raise SystemExit("zip JSON not found")
+zip_cfg = json.load(open(cands[0]))
+live = json.load(open(live_path))
+
+def get(d, path):
+    cur = d
+    for p in path:
+        if not isinstance(cur, dict) or p not in cur:
+            return None
+        cur = cur[p]
+    return cur
+
+secret_paths = [
+    ("ConnectionStrings",),
+    ("JwtOptions", "SigningKey"),
+    ("SmtpOptions",),
+    ("BootstrapSuperAdmin", "Password"),
+    ("Twilio",),
+    ("WebPush", "PrivateKey"),
+    ("WebPush", "PublicKey"),
+    ("Groq", "ApiKey"),
+    ("CountryStateCity", "ApiKey"),
+]
+bad = [".".join(p) for p in secret_paths if get(zip_cfg, p) != get(live, p)]
+if bad:
+    print("REFUSED full replace — zip secrets do not match live Linux:")
+    for name in bad:
+        print(" ", name)
+    print("Keep live JSON. Run 5.1b (copy Linux JSON to PC), then publish again.")
+    sys.exit(1)
+json.dump(zip_cfg, open(live_path, "w"), indent=2)
+print("FULL REPLACE OK — entire JSON from zip is now live")
+print("DispatchOfferTtlMinutes", zip_cfg.get("CustomerPricing", {}).get("DispatchOfferTtlMinutes"))
+print("MaxDispatchVendorsPerLine", zip_cfg.get("CustomerPricing", {}).get("MaxDispatchVendorsPerLine"))
+print("OrderImageRequest", zip_cfg.get("OrderImageRequest"))
+PY
+
+chown -R www-data:www-data /var/www/api
+chmod 640 /var/www/api/appsettings.Production.json
+systemctl start blinksmed-api
+sleep 8
+systemctl is-active blinksmed-api
+curl -sS -o /dev/null -w "API %{http_code}\n" http://127.0.0.1:5000/api/customers/catalog/categories
+</pre>
+  <p>Must print <b>FULL REPLACE OK</b>, then <b>active</b> and <b>API 200</b>. If it prints <b>REFUSED</b>, the live JSON was not changed — finish 5.1b first. Rollback: <code>cp -a /root/appsettings.Production.json.bak /var/www/api/appsettings.Production.json</code> then restart the API.</p>
+
+  <h3>5.3 JSON-only (no API code change)</h3>
+  <p>Edit the PC file that came from 5.1b, publish + upload a new zip, then run <b>5.2</b>. That replaces the entire live JSON from the zip.</p>
+
+  <h2>6. Continue with UI (web) code changes</h2>
+  <p>Customer, Vendor and Admin are one React app: <code>seller-sparkle-ui</code>.</p>
+  <h3>6.1 On the developer PC (PowerShell, folder Prilixor.VendorPortal)</h3>
+<pre>cd seller-sparkle-ui
+npm run build
+
+if (Test-Path C:\Deploy\web-frontend.zip) { Remove-Item C:\Deploy\web-frontend.zip }
+Compress-Archive -Path dist\* -DestinationPath C:\Deploy\web-frontend.zip
+</pre>
+  <p>Upload <code>C:\Deploy\web-frontend.zip</code> to S3 <b>blinksmed-backups</b> → folder <b>migration</b> (overwrite the old zip).</p>
+  <p>Production API URL in <code>.env.production</code> must stay <code>https://api.blinksmed.com/api</code>.</p>
+  <h3>6.2 On Linux SSM (root)</h3>
+<pre>cd /tmp/migration
+aws s3 cp s3://blinksmed-backups/migration/web-frontend.zip .
+rm -rf /tmp/web-unpack /var/www/web
+mkdir -p /tmp/web-unpack /var/www/web
+unzip -o web-frontend.zip -d /tmp/web-unpack
+HTML=$(find /tmp/web-unpack -name 'index.html' | head -1)
+DIR=$(dirname "$HTML")
+cp -a "$DIR"/. /var/www/web/
+chown -R www-data:www-data /var/www/web
+curl -sS -o /dev/null -w "WEB %{http_code}\n" -H "Host: vendor.blinksmed.com" http://127.0.0.1/
+</pre>
+  <p>Must print <b>WEB 200</b>. Then hard-refresh https://vendor.blinksmed.com (Ctrl+F5).</p>
+  <p>A Windows zip may show “backslashes as path separators”. That warning is normal.</p>
+
+  <h2>6b. Database SQL (only when a script is required)</h2>
+  <p>PostgreSQL is on the same VM. Four databases: <code>admin_portal_db</code>, <code>vendor_portal_db</code>, <code>customer_portal_db</code>, <code>common_portal_db</code>. Do not restore a dump over live data. Do not paste the DB password into chat.</p>
+  <ol>
+    <li>Confirm which SQL file and which database (read the script header).</li>
+    <li>On Linux, take a backup first (site stays up).</li>
+    <li>Copy the <code>.sql</code> to the server (S3 <code>migration/</code> or paste via SSM).</li>
+    <li>Apply as local postgres (no app password needed).</li>
+    <li>Restart the API only if the feature needs it.</li>
+  </ol>
+<pre># 1) Backup first
+/usr/local/bin/blinksmed-backup.sh
+
+# 2) Copy SQL from S3 (example name — use the real file)
+mkdir -p /tmp/migration
+cd /tmp/migration
+aws s3 cp s3://blinksmed-backups/migration/change.sql .
+
+# 3) Apply to the correct database (change the -d name)
+sudo -u postgres psql -d vendor_portal_db -v ON_ERROR_STOP=1 -f /tmp/migration/change.sql
+
+# 4) If the API must pick up schema
+systemctl restart blinksmed-api
+sleep 8
+curl -sS -o /dev/null -w "API %{http_code}\n" http://127.0.0.1:5000/api/customers/catalog/categories
+</pre>
+  <p>Use <code>customer_portal_db</code>, <code>admin_portal_db</code>, or <code>common_portal_db</code> when the script says so. A file that touches two databases must be run twice (once per database), or use the matching <code>apply_*.sh</code> in <code>Database/Scripts/Deploy</code>.</p>
+  <p>Mobile APKs are <b>not</b> deployed to this server. Customer/Vendor APKs are built on the PC and given to testers/stores.</p>
+
+  <h2>7. Restart / logs (when something is stuck)</h2>
+<pre># API
+systemctl restart blinksmed-api
+systemctl status blinksmed-api --no-pager
+journalctl -u blinksmed-api -n 80 --no-pager
+
+# Nginx
+nginx -t
+systemctl reload nginx
+journalctl -u nginx -n 40 --no-pager
+
+# Database
+systemctl status postgresql --no-pager
+</pre>
+  <p class="stop">Do not reboot the VM as a first step.</p> Reboot only if systemd and Nginx are confirmed healthy and the instance is still broken. After reboot, confirm Elastic IP is still <code>13.63.29.186</code>.
+
+  <h2>8. Backups (already running)</h2>
+  <table>
+    <tr><th>Item</th><th>Value</th></tr>
+    <tr><td>Automatic</td><td>Every day 02:00 via /etc/cron.d/blinksmed-backup</td></tr>
+    <tr><td>Script</td><td>/usr/local/bin/blinksmed-backup.sh</td></tr>
+    <tr><td>S3 path</td><td>s3://blinksmed-backups/daily/YYYY-MM-DD/</td></tr>
+    <tr><td>Files</td><td>Four .dump files (admin, vendor, customer, common)</td></tr>
+  </table>
+  <p>Run a backup now (does not stop the site):</p>
+<pre>/usr/local/bin/blinksmed-backup.sh
+aws s3 ls s3://blinksmed-backups/daily/ --recursive | tail
+</pre>
+  <p>Restore is emergency-only. Ask before restoring over live databases.</p>
+
+  <h2>9. HTTPS certificate</h2>
+  <p>Let’s Encrypt was issued 3 Sep 2026, expires <b>2 Dec 2026</b>. Ubuntu certbot renews it automatically. To check:</p>
+<pre>certbot certificates
+systemctl list-timers | grep certbot
+</pre>
+  <p>If HTTPS fails after a long time, do not move the IP. Check that ports 80 and 443 are still open on security group <b>blinksmed-web</b>, then run <code>certbot renew</code> only if a senior confirms.</p>
+
+  <h2>10. S3 files (photos / documents)</h2>
+  <p>Live files stay in bucket <b>rentalmedicalequipments</b>. The API uses the instance IAM role <b>blinksmed-server-role</b>. Do not add AccessKeyId to appsettings on Linux.</p>
+<pre>aws s3 ls s3://rentalmedicalequipments/ | head
+</pre>
+  <p>If this fails, the IAM role is missing or wrong — that is an AWS IAM fix, not a code zip.</p>
+
+  <h2>11. Windows server (only rollback / cost)</h2>
+  <p>Instance <b>Vendor-Server</b> (<code>i-0298c27264a67af16</code>) is not live. Stopping it does <b>not</b> stop the website.</p>
+  <table>
+    <tr><th>Action</th><th>Use when</th></tr>
+    <tr><td>Stop instance</td><td>Linux is stable 2–3 days — saves Windows cost. Disk is kept</td></tr>
+    <tr><td>Start instance</td><td>Need old files or rollback</td></tr>
+    <tr><td>Terminate</td><td><span class="stop">Do not</span> until CEO agrees the Windows copy can be deleted forever</td></tr>
+  </table>
+  <p>RDP to <code>13.63.29.186</code> will fail. If Windows must be opened later: Start it, copy its <b>new</b> Public IPv4 from the EC2 page, RDP to that new IP (security group must allow 3389).</p>
+  <h3>11.1 Emergency rollback to Windows</h3>
+  <ol>
+    <li>Start Vendor-Server if it is Stopped</li>
+    <li>EC2 → Elastic IPs → 13.63.29.186 → Associate to Vendor-Server (allow reassociation)</li>
+    <li>Confirm Public IP on Windows is 13.63.29.186</li>
+    <li>Test https://vendor.blinksmed.com</li>
+  </ol>
+  <p class="warn">Rollback moves live traffic back to Windows. Only with CEO approval.</p>
+
+  <h2>12. Quick troubleshooting</h2>
+  <table class="wide">
+    <tr><th>Symptom</th><th>Likely cause</th><th>What to do</th></tr>
+    <tr><td>RDP error to Vendor-Server</td><td>RDP file still uses 13.63.29.186 (Linux)</td><td>Use Session Manager for Linux. Do not “fix” by moving the IP</td></tr>
+    <tr><td>Site HTTPS error / timeout</td><td>Nginx down, or Elastic IP not on Linux</td><td>Check instance Public IPv4 is 13.63.29.186; systemctl status nginx</td></tr>
+    <tr><td>Website OK, API 502</td><td>blinksmed-api stopped</td><td>systemctl start blinksmed-api; read journalctl</td></tr>
+    <tr><td>API 500 after deploy</td><td>appsettings overwritten (wrong DB password)</td><td>Restore /root/appsettings.Production.json.bak (or /root/appsettings.Production.merge.bak); Username=blinksmed must stay</td></tr>
+    <tr><td>curl -I to API returns 405</td><td>HEAD not allowed; GET is fine</td><td>Use GET without -I</td></tr>
+    <tr><td>Old UI after deploy</td><td>Browser cache</td><td>Ctrl+F5</td></tr>
+    <tr><td>S3 photos fail</td><td>IAM role / bucket</td><td>aws s3 ls from the instance; do not paste keys into JSON</td></tr>
+  </table>
+
+  <h2>13. Who does what going forward</h2>
+  <table>
+    <tr><th>Task</th><th>Where</th></tr>
+    <tr><td>Write / commit code</td><td>Git — develop (HTTPS Nginx fix already merged locally)</td></tr>
+    <tr><td>Build API for Linux</td><td>Developer PC — linux-arm64 publish</td></tr>
+    <tr><td>Build UI</td><td>Developer PC — npm run build</td></tr>
+    <tr><td>Copy zip to server</td><td>S3 blinksmed-backups/migration then SSM unzip</td></tr>
+    <tr><td>Restart API / Nginx</td><td>Linux Session Manager only</td></tr>
+    <tr><td>Database password / production JSON</td><td>Only on Linux /var/www/api/appsettings.Production.json</td></tr>
+    <tr><td>CEO as-built inventory</td><td>BlinksMed_Linux_Production.pdf</td></tr>
+  </table>
+
+  <h2>14. One-page checklist before every live deploy</h2>
+  <ol>
+    <li>You are in region Stockholm.</li>
+    <li>You will touch blinksmed-linux, not Vendor-Server.</li>
+    <li>API publish is linux-arm64 (not win-x64).</li>
+    <li>You backed up appsettings.Production.json to /root before copying API files.</li>
+    <li>PC Production.json is the Linux copy (5.1b). 5.2 printed FULL REPLACE OK (not REFUSED).</li>
+    <li>If SQL changed, you ran blinksmed-backup.sh first, then applied SQL to the correct database.</li>
+    <li>Local curl to port 5000 is 200.</li>
+    <li>https://vendor.blinksmed.com and API URL still work in the browser.</li>
+    <li>You did not change Elastic IP, DNS, or security group 80/443.</li>
+  </ol>
+
+  <h2>15. Summary</h2>
+  <p>Continuing on Linux means: <b>Session Manager + S3 zip deploys + systemd API + Nginx static UI</b>. Nightly DB backups already run. Windows is optional rollback only. The live IP and domains stay as they are.</p>
+
+  <p class="footer">Internal runbook · 3 September 2026 · No passwords in this file<br />
+  Pair with BlinksMed_Linux_Production.pdf (as-built). Open HTML in Chrome → Print → Save as PDF if needed.</p>
+</body>
+</html>
