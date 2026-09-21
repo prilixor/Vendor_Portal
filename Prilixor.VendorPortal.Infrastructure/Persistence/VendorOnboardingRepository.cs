@@ -329,7 +329,6 @@ public sealed class VendorOnboardingRepository(
             .Include(x => x.ProductDocuments)
             .Include(x => x.Variants)
             .Include(x => x.RentalPricingPlans)
-            .AsSplitQuery()
             .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
         if (product is not null)
         {
@@ -342,7 +341,6 @@ public sealed class VendorOnboardingRepository(
             .Include(x => x.ProductDocuments)
             .Include(x => x.Variants)
             .Include(x => x.RentalPricingPlans)
-            .AsSplitQuery()
             .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
     }
 
@@ -615,7 +613,6 @@ public sealed class VendorOnboardingRepository(
             query = query.Where(x => x.CategoryId == categoryId.Value);
         }
 
-        query = query.AsSplitQuery();
         var products = await query.OrderBy(x => x.ProductName).ToListAsync(cancellationToken);
         if (products.Count > 0)
         {
@@ -635,7 +632,7 @@ public sealed class VendorOnboardingRepository(
             legacyQuery = legacyQuery.Where(x => x.CategoryId == categoryId.Value);
         }
 
-        return await legacyQuery.AsSplitQuery().OrderBy(x => x.ProductName).ToListAsync(cancellationToken);
+        return await legacyQuery.OrderBy(x => x.ProductName).ToListAsync(cancellationToken);
     }
 
     public async Task<ProductListResult> SearchProductSummariesAsync(ProductListQuerySpec spec, CancellationToken cancellationToken)
