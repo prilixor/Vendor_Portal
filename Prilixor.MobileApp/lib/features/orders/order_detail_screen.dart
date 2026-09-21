@@ -1,17 +1,22 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/order_detail_provider.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/models/order_model.dart';
+import '../../core/models/medical_model.dart';
 import '../../core/models/order_image_request_model.dart';
+import '../../core/utils/platform_file_payload.dart';
 import '../../core/utils/rental_period.dart';
 import '../../core/utils/order_badges.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/struck_price.dart';
+import '../../shared/widgets/legal_policy_links.dart';
 import '../product/product_detail_screen.dart';
 import '../../core/providers/chat_provider.dart';
 import '../chat/chat_detail_screen.dart';
@@ -35,6 +40,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   int _extensionDays = 1;
   int _selectedOrderIndex = 0;
   final Set<String> _photoRequestSelection = {};
+  bool _acceptedRxLegal = false;
+  PendingPrescriptionFile? _pendingRxFile;
   late List<OrderModel> _ordersInGroup;
   Timer? _pollTimer;
   bool _refreshInFlight = false;
@@ -222,7 +229,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           SizedBox(height: 8),
                           Text(
                             'New End Date: ${provider.extensionQuote!.newEndDate.split('T')[0]}',
-                            style: TextStyle(color: Colors.greenAccent, fontSize: 12),
+                            style: TextStyle(
+                              color: context.appColors.success,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -292,7 +302,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                         children: [
                           _buildQuoteRow(context, 'Base Price', provider.buyoutQuote!.baseBuyoutAmount),
                           SizedBox(height: 8),
-                          _buildQuoteRow(context, 'Rental Deduction', -provider.buyoutQuote!.rentDeductionAmount, color: Colors.greenAccent),
+                          _buildQuoteRow(context, 'Rental Deduction', -provider.buyoutQuote!.rentDeductionAmount, color: context.appColors.success),
                           // Service fee UI hidden — keep for future re-enable
                           if (false) ...[
                             SizedBox(height: 8),
@@ -501,7 +511,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                       : '$photoCount photo${photoCount == 1 ? '' : 's'} received';
                               return GestureDetector(
                                 onTap: () {
-                                  setState(() => _selectedOrderIndex = index);
+                                  setState(() {
+                                    _selectedOrderIndex = index;
+                                    _pendingRxFile = null;
+                                    _acceptedRxLegal = false;
+                                  });
                                   _fetchCurrentSubOrder();
                                 },
                                 child: Container(
@@ -582,7 +596,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                 style: TextStyle(
                                                   color: photoCount == 0
                                                       ? (context.isDarkMode ? Colors.amber : const Color(0xFFD97706))
-                                                      : (context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669)),
+                                                      : context.appColors.success,
                                                   fontSize: 10,
                                                   fontWeight: FontWeight.w600,
                                                 ),
@@ -652,6 +666,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                         MaterialPageRoute(
                                           builder: (context) => ProductDetailScreen(
                                             listingId: provider.currentOrder!.listingId,
+                                            previewImageUrl: provider.currentOrder!.listingPrimaryImageUrl,
                                           ),
                                         ),
                                       );
@@ -754,6 +769,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                         _MedicalReferenceCard(order: provider.currentOrder!),
                       ],
 
+                      if (provider.prescriptionFiles.isNotEmpty ||
+                          _canUploadPrescription(provider.currentOrder!.status)) ...[
+                        const SizedBox(height: _sectionGap),
+                        _OrderPrescriptionCard(
+                          files: provider.prescriptionFiles,
+                          canEdit: _canUploadPrescription(provider.currentOrder!.status),
+                          loading: provider.prescriptionLoading,
+                          pendingFileName: _pendingRxFile?.name,
+                          needsConsent: provider.prescriptionFiles.isEmpty &&
+                              !provider.currentOrder!.hasMedicalReference &&
+                              _pendingRxFile != null,
+                          acceptedLegal: _acceptedRxLegal,
+                          onAcceptedLegal: (value) {
+                            setState(() => _acceptedRxLegal = value);
+                            if (value && _pendingRxFile != null) {
+                              _confirmPendingPrescription(provider);
+                            }
+                          },
+                          onRemovePending: () => setState(() {
+                            _pendingRxFile = null;
+                            _acceptedRxLegal = false;
+                          }),
+                          onUpload: () => _uploadPrescription(provider),
+                          onDelete: (fileId) => provider.deletePrescription(
+                            provider.currentOrder!.id,
+                            fileId,
+                          ),
+                        ),
+                      ],
+
                       if (_shouldShowGroupPhotoSection(provider)) ...[
                         const SizedBox(height: _sectionGap),
                         _GroupVendorPhotoRequestCard(
@@ -790,6 +835,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                             provider,
                             _photoRequestSelection.toList(),
                           ),
+                          onSelectOption: (orderId, optionId) async {
+                            final ok = await provider.selectImageOption(orderId, optionId);
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  ok
+                                      ? 'Option selected.'
+                                      : (provider.errorMessage ?? 'Failed to select option.'),
+                                ),
+                                backgroundColor: ok ? null : Colors.redAccent,
+                              ),
+                            );
+                          },
                         ),
                       ],
 
@@ -806,6 +865,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              const OrderConfirmPolicyLinks(),
+                              const SizedBox(height: 10),
                               _fitOutlinedAction(
                                 colors: colors,
                                 icon: Icons.support_agent,
@@ -871,9 +932,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                             builder: (ctx) => AlertDialog(
                                               backgroundColor: colors.surface,
                                               title: Text('Cancel request?', style: TextStyle(color: colors.textPrimary)),
-                                              content: Text(
-                                                'This will cancel this item request. This cannot be undone.',
-                                                style: TextStyle(color: colors.textSecondary),
+                                              content: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'This will cancel this item request. This cannot be undone.',
+                                                    style: TextStyle(color: colors.textSecondary),
+                                                  ),
+                                                  const SizedBox(height: 10),
+                                                  const CancellationPolicyLink(),
+                                                ],
                                               ),
                                               actions: [
                                                 TextButton(
@@ -1088,6 +1157,104 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     );
   }
 
+  bool _canUploadPrescription(String status) {
+    final compact = status.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+    return !{
+      'cancelled',
+      'canceled',
+      'dispatch_failed',
+      'active',
+      'completed',
+      'returned',
+    }.contains(compact);
+  }
+
+  Future<void> _uploadPrescription(OrderDetailProvider provider) async {
+    final order = provider.currentOrder;
+    if (order == null) return;
+    final needsConsent = provider.prescriptionFiles.isEmpty && !order.hasMedicalReference;
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.size > 5 * 1024 * 1024) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('File must be at most 5 MB.')),
+      );
+      return;
+    }
+    final path = safePlatformFilePath(file);
+    final bytes = file.bytes;
+    if ((bytes == null || bytes.isEmpty) && (path == null || path.isEmpty)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not read that file. Try another image or PDF.')),
+      );
+      return;
+    }
+    if (needsConsent && !_acceptedRxLegal) {
+      setState(() {
+        _pendingRxFile = PendingPrescriptionFile(name: file.name, path: path, bytes: bytes);
+      });
+      return;
+    }
+    await _sendPrescription(
+      provider,
+      orderId: order.id,
+      fileName: file.name,
+      path: path,
+      bytes: bytes,
+      acceptedPrescriptionLegal: true,
+    );
+  }
+
+  Future<void> _confirmPendingPrescription(OrderDetailProvider provider) async {
+    final order = provider.currentOrder;
+    final pending = _pendingRxFile;
+    if (order == null || pending == null) return;
+    await _sendPrescription(
+      provider,
+      orderId: order.id,
+      fileName: pending.name,
+      path: pending.path,
+      bytes: pending.bytes,
+      acceptedPrescriptionLegal: true,
+    );
+  }
+
+  Future<void> _sendPrescription(
+    OrderDetailProvider provider, {
+    required String orderId,
+    required String fileName,
+    String? path,
+    List<int>? bytes,
+    required bool acceptedPrescriptionLegal,
+  }) async {
+    final ok = await provider.uploadPrescription(
+      orderId: orderId,
+      fileName: fileName,
+      path: path,
+      bytes: bytes,
+      acceptedPrescriptionLegal: acceptedPrescriptionLegal,
+    );
+    if (!mounted) return;
+    if (ok) {
+      setState(() {
+        _pendingRxFile = null;
+        _acceptedRxLegal = false;
+      });
+    } else {
+      setState(() => _acceptedRxLegal = false);
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'Prescription uploaded.' : 'Unable to upload prescription.')),
+    );
+  }
+
   bool _shouldShowGroupPhotoSection(OrderDetailProvider provider) {
     if (provider.imageRequestsByOrderId.isNotEmpty) return true;
     return _ordersInGroup.any((o) {
@@ -1134,7 +1301,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     final colors = context.appColors;
     final isDark = context.isDarkMode;
     final s = status.toLowerCase().replaceAll('_', ' ');
-    if (s == 'active') return isDark ? Colors.greenAccent : const Color(0xFF059669);
+    if (s == 'active') return colors.success;
     if (s == 'pending' || s.contains('awaiting') || s == 'confirmed' || s.contains('transit')) {
       return isDark ? Colors.orangeAccent : const Color(0xFFD97706);
     }
@@ -1216,9 +1383,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           step.label,
                           style: TextStyle(
                             color: isRentalActiveCurrentStep
-                                ? (context.isDarkMode
-                                    ? const Color(0xFF6EE7B7)
-                                    : const Color(0xFF047857))
+                                ? context.appColors.success
                                 : isUpcoming
                                     ? colors.textMuted
                                     : colors.textPrimary,
@@ -1298,11 +1463,8 @@ _TimelineProgress _timelineProgress(String status, String orderType) {
   final compact = raw.replaceAll(RegExp(r'\s+'), '_');
   final isBuy = orderType.toLowerCase() == 'buy';
 
-  if (compact == 'cancelled' || compact == 'canceled') {
+  if (compact == 'cancelled' || compact == 'canceled' || compact == 'dispatch_failed' || raw.contains('dispatch failed')) {
     return const _TimelineProgress(cancelled: true, completedThrough: -1, currentIndex: null);
-  }
-  if (compact == 'dispatch_failed' || raw.contains('dispatch failed')) {
-    return const _TimelineProgress(cancelled: false, completedThrough: 0, currentIndex: null);
   }
   if (compact == 'pending') {
     return const _TimelineProgress(cancelled: false, completedThrough: 0, currentIndex: 1);
@@ -1339,7 +1501,6 @@ class _CustomerOrderTimelineDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final isDark = context.isDarkMode;
 
     late final Color borderColor;
     late final Color fillColor;
@@ -1351,7 +1512,7 @@ class _CustomerOrderTimelineDot extends StatelessWidget {
       center = Icon(Icons.check, size: 10, color: colors.surface);
     } else if (isCurrent) {
       // In-progress step: emerald disc (mobile UX; rental-active keeps label tint separately).
-      borderColor = isDark ? const Color(0xFF10B981) : const Color(0xFF059669);
+      borderColor = colors.success;
       fillColor = borderColor;
       center = Container(
         width: 6,
@@ -1394,6 +1555,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
   final VoidCallback onClear;
   final Future<void> Function() onRequestAll;
   final Future<void> Function() onRequestSelected;
+  final Future<void> Function(String orderId, String optionId) onSelectOption;
 
   const _GroupVendorPhotoRequestCard({
     required this.items,
@@ -1407,6 +1569,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
     required this.onClear,
     required this.onRequestAll,
     required this.onRequestSelected,
+    required this.onSelectOption,
   });
 
   bool _canRequest(String status) {
@@ -1466,28 +1629,88 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
     );
   }
 
-  void _preview(BuildContext context, OrderImageModel image) {
+  void _showOptionDescriptionFullScreen(BuildContext context, String label, String description) {
     final colors = context.appColors;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: colors.background,
+          appBar: AppBar(
+            backgroundColor: colors.surface,
+            foregroundColor: colors.textPrimary,
+            title: Text(label),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: SelectableText(
+                description,
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: 16,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showOptionDescription(BuildContext context, String label, String description) {
+    final colors = context.appColors;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(label),
+        content: SingleChildScrollView(
+          child: Text(
+            description,
+            style: TextStyle(color: colors.textSecondary, fontSize: 14, height: 1.4),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showOptionDescriptionFullScreen(context, label, description);
+            },
+            child: const Text('Read full screen'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _preview(BuildContext context, List<OrderImageModel> photos, int index) {
+    if (photos.isEmpty) return;
+    final safeIndex = index.clamp(0, photos.length - 1);
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.black,
-        insetPadding: EdgeInsets.all(16),
+        insetPadding: const EdgeInsets.all(16),
         child: Stack(
           children: [
             InteractiveViewer(
               child: AspectRatio(
                 aspectRatio: 1,
-                child: Image.network(
-                  image.fileUrl,
+                child: CatalogImage(
+                  url: photos[safeIndex].fileUrl,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => Center(
-                    child: Icon(Icons.broken_image_outlined, color: colors.textMuted, size: 48),
-                  ),
                 ),
               ),
             ),
-            // Dark chip so the close control stays visible on light images too.
             Positioned(
               top: 8,
               right: 8,
@@ -1504,6 +1727,64 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _noImageSlot(BuildContext context) {
+    final colors = context.appColors;
+    final mutedIcon = context.isDarkMode
+        ? Colors.white.withValues(alpha: 0.35)
+        : colors.textMuted.withValues(alpha: 0.65);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceElevated,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: context.isDarkMode
+              ? Colors.white.withValues(alpha: 0.06)
+              : colors.border.withValues(alpha: 0.85),
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.image_not_supported_outlined, size: 20, color: mutedIcon),
+          const SizedBox(height: 4),
+          Text(
+            'EMPTY',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colors.textMuted,
+              fontSize: 8.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.7,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _photoTile({
+    required BuildContext context,
+    required OrderImageModel photo,
+    required List<OrderImageModel> photos,
+    required int index,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _preview(context, photos, index),
+        child: CatalogImage(
+          url: photo.tileUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          borderRadius: BorderRadius.circular(12),
         ),
       ),
     );
@@ -1539,8 +1820,8 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               multi
-                  ? 'Sent to each product’s supplier (vendor) — not BlinksMed support. Choose products or request all. Up to 5 photos per item.'
-                  : 'Sent to the supplier for this product — not BlinksMed support chat below. Up to 5 photos.',
+                  ? 'Sent to each product’s supplier (vendor) — not BlinksMed support. Choose products or request all. The supplier uploads up to 3 photos under Option 1, Option 2, and so on. Then choose one option.'
+                  : 'Sent to the supplier for this product — not BlinksMed support chat below. They upload up to 3 photos under Option 1, Option 2, and so on. Then choose one option.',
               style: TextStyle(
                 color: colors.textSecondary,
                 fontSize: 13,
@@ -1677,7 +1958,9 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
               ),
               SizedBox(height: 10),
               ...withRequest.map((item) {
-                final images = requestsByOrderId[item.id]?.images ?? const <OrderImageModel>[];
+                final request = requestsByOrderId[item.id];
+                final images = request?.images ?? const <OrderImageModel>[];
+                final options = request?.options ?? const <OrderImageOptionModel>[];
                 final waiting = images.isEmpty;
                 final viewing = item.id == viewingOrderId;
                 final isDark = context.isDarkMode;
@@ -1685,8 +1968,8 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                 final waitingBorderColor = isDark ? Colors.amber.withValues(alpha: 0.35) : const Color(0xFFFDE68A);
                 final waitingBgColor = isDark ? Colors.amber.withValues(alpha: 0.08) : const Color(0xFFFFFBEB);
                 final waitingBadgeBg = isDark ? Colors.amber.withValues(alpha: 0.2) : const Color(0xFFFEF3C7);
-                final successTextColor = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
-                final successBadgeBg = isDark ? const Color(0xFF34D399).withValues(alpha: 0.18) : const Color(0xFFD1FAE5);
+                final successTextColor = colors.success;
+                final successBadgeBg = colors.successSoft;
                 return Container(
                   width: double.infinity,
                   margin: const EdgeInsets.only(bottom: 10),
@@ -1713,11 +1996,13 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  item.listingTitle,
+                                  item.listingTitle.trim().isEmpty
+                                      ? 'Product'
+                                      : item.listingTitle,
                                   style: TextStyle(
                                     color: colors.textPrimary,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -1742,7 +2027,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                             child: Text(
                               waiting
                                   ? 'Waiting for supplier photos'
-                                  : '${images.length}/5 received',
+                                  : '${images.length} received',
                               style: TextStyle(
                                 color: waiting ? waitingTextColor : successTextColor,
                                 fontSize: 10,
@@ -1762,6 +2047,153 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                             height: 1.35,
                           ),
                         )
+                      else if (options.isNotEmpty)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              request?.selectedOptionId != null
+                                  ? 'Your selection: ${options.where((o) => o.id == request!.selectedOptionId).isEmpty ? 'an option' : options.firstWhere((o) => o.id == request!.selectedOptionId).label}'
+                                  : 'Tap an option to choose it for your supplier.',
+                              style: TextStyle(
+                                color: isDark ? const Color(0xFFE2E8F0) : colors.textMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            ...options.map((option) {
+                              final note = (option.description ?? '').trim();
+                              final photos = option.images;
+                              final chosen = request?.selectedOptionId == option.id;
+                              final canChoose = photos.isNotEmpty && !busy;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Material(
+                                  color: colors.surface,
+                                  borderRadius: BorderRadius.circular(14),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: InkWell(
+                                    onTap: canChoose && !chosen
+                                        ? () => onSelectOption(item.id, option.id)
+                                        : null,
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: chosen
+                                              ? const Color(0xFF6C63FF).withValues(alpha: 0.45)
+                                              : colors.border,
+                                          width: chosen ? 1.4 : 1,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                chosen
+                                                    ? Icons.check_circle_rounded
+                                                    : Icons.circle_outlined,
+                                                size: 20,
+                                                color: chosen
+                                                    ? const Color(0xFF6C63FF)
+                                                    : colors.textMuted,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  option.label,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    color: colors.textPrimary,
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                                ),
+                                              ),
+                                              if (chosen)
+                                                Container(
+                                                  margin: const EdgeInsets.only(right: 6),
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 3,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF6C63FF).withValues(alpha: isDark ? 0.18 : 0.12),
+                                                    borderRadius: BorderRadius.circular(999),
+                                                  ),
+                                                  child: Text(
+                                                    'Selected',
+                                                    style: TextStyle(
+                                                      color: isDark
+                                                          ? const Color(0xFFC4B5FD)
+                                                          : const Color(0xFF4F46E5),
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ),
+                                              if (note.isNotEmpty)
+                                                InkWell(
+                                                  onTap: () => _showOptionDescription(
+                                                    context,
+                                                    option.label,
+                                                    note,
+                                                  ),
+                                                  customBorder: const CircleBorder(),
+                                                  child: Padding(
+                                                    padding: const EdgeInsets.all(4),
+                                                    child: Icon(
+                                                      Icons.info_outline,
+                                                      size: 18,
+                                                      color: isDark
+                                                          ? const Color(0xFFCBD5E1)
+                                                          : colors.textMuted,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 10),
+                                            child: GridView.builder(
+                                              shrinkWrap: true,
+                                              physics: const NeverScrollableScrollPhysics(),
+                                              itemCount: request?.maxImagesPerOption ?? 3,
+                                              gridDelegate:
+                                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount: 3,
+                                                mainAxisSpacing: 8,
+                                                crossAxisSpacing: 8,
+                                              ),
+                                              itemBuilder: (context, index) {
+                                                final photo = imageAtSlot(photos, index);
+                                                if (photo != null) {
+                                                  return _photoTile(
+                                                    context: context,
+                                                    photo: photo,
+                                                    photos: photos,
+                                                    index: photos.indexOf(photo).clamp(0, photos.length - 1),
+                                                  );
+                                                }
+                                                return _noImageSlot(context);
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        )
                       else
                         GridView.builder(
                           shrinkWrap: true,
@@ -1779,13 +2211,10 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                               borderRadius: BorderRadius.circular(10),
                               clipBehavior: Clip.antiAlias,
                               child: InkWell(
-                                onTap: () => _preview(context, image),
-                                child: Image.network(
-                                  image.fileUrl,
+                                onTap: () => _preview(context, images, index),
+                                child: CatalogImage(
+                                  url: image.tileUrl,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Center(
-                                    child: Icon(Icons.broken_image_outlined, color: Colors.white38),
-                                  ),
                                 ),
                               ),
                             );
@@ -1802,6 +2231,14 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _orderActionColor(BuildContext context) {
+  return context.isDarkMode ? const Color(0xFF5EEAD4) : AppTheme.accent;
+}
+
+Color _uniqueIdColor(BuildContext context) {
+  return context.isDarkMode ? const Color(0xFF5EEAD4) : const Color(0xFF0F766E);
 }
 
 class _MedicalReferenceCard extends StatelessWidget {
@@ -1857,11 +2294,11 @@ class _MedicalReferenceCard extends StatelessWidget {
               'Unique ID',
               uniqueCode,
               valueStyle: TextStyle(
-                color: Color(0xFF2DD4BF),
+                color: _uniqueIdColor(context),
                 fontSize: 14,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
                 fontFamily: 'monospace',
-                letterSpacing: 1.2,
+                letterSpacing: 1.0,
               ),
             ),
           ],
@@ -1899,6 +2336,179 @@ class _MedicalReferenceCard extends StatelessWidget {
               TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ],
+    );
+  }
+}
+
+class _OrderPrescriptionCard extends StatelessWidget {
+  final List<PrescriptionFileModel> files;
+  final bool canEdit;
+  final bool loading;
+  final String? pendingFileName;
+  final bool needsConsent;
+  final bool acceptedLegal;
+  final ValueChanged<bool> onAcceptedLegal;
+  final VoidCallback? onRemovePending;
+  final VoidCallback onUpload;
+  final Future<bool> Function(String fileId) onDelete;
+
+  const _OrderPrescriptionCard({
+    required this.files,
+    required this.canEdit,
+    required this.loading,
+    this.pendingFileName,
+    required this.needsConsent,
+    required this.acceptedLegal,
+    required this.onAcceptedLegal,
+    this.onRemovePending,
+    required this.onUpload,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Prescription',
+            style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Image or PDF. Doctor Unique ID is optional and separate.',
+            style: TextStyle(color: colors.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else if (files.isEmpty && pendingFileName == null)
+            Text('No prescription uploaded yet.', style: TextStyle(color: colors.textMuted, fontSize: 13))
+          else
+            ...files.map((file) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: colors.background,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  onTap: () {
+                    final uri = Uri.tryParse(file.fileUrl);
+                    if (uri != null) launchUrl(uri, mode: LaunchMode.externalApplication);
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: colors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: file.isImage
+                              ? CatalogImage(
+                                  url: file.fileUrl,
+                                  width: 48,
+                                  height: 48,
+                                  fit: BoxFit.cover,
+                                  borderRadius: BorderRadius.circular(8),
+                                )
+                              : Container(
+                                  width: 48,
+                                  height: 48,
+                                  color: _orderActionColor(context).withValues(alpha: 0.12),
+                                  child: Icon(Icons.picture_as_pdf, color: _orderActionColor(context)),
+                                ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            file.originalFileName ?? 'Prescription file',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _orderActionColor(context),
+                              fontWeight: FontWeight.w700,
+                              height: 1.3,
+                              decoration: TextDecoration.underline,
+                              decorationColor: _orderActionColor(context),
+                            ),
+                          ),
+                        ),
+                        if (canEdit)
+                          IconButton(
+                            onPressed: () => onDelete(file.id),
+                            icon: Icon(Icons.delete_outline, color: colors.textMuted),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            )),
+          if (pendingFileName != null) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: _orderActionColor(context).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _orderActionColor(context).withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.description_outlined, color: _orderActionColor(context)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      pendingFileName!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  if (canEdit && onRemovePending != null && !loading)
+                    IconButton(
+                      onPressed: onRemovePending,
+                      icon: Icon(Icons.delete_outline, color: colors.textMuted),
+                    ),
+                ],
+              ),
+            ),
+          ],
+          if (needsConsent && canEdit) ...[
+            const SizedBox(height: 8),
+            LegalAgreeCheckbox(
+              screen: 'prescription',
+              value: acceptedLegal,
+              onChanged: onAcceptedLegal,
+              prefix: 'I consent to the',
+              activeColor: _orderActionColor(context),
+            ),
+          ],
+          if (canEdit && files.length < 3 && pendingFileName == null)
+            TextButton(
+              onPressed: onUpload,
+              child: Text(
+                'Upload image or PDF',
+                style: TextStyle(color: _orderActionColor(context), fontWeight: FontWeight.w800),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

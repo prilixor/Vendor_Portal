@@ -1,20 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Barcode, CheckCircle2, ImagePlus, Images, Loader2, Plus, Stethoscope, X } from "lucide-react";
+import { Check, Barcode, CheckCircle2, ImageOff, ImagePlus, Images, Info, Loader2, Pencil, Plus, Stethoscope, X } from "lucide-react";
 import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
-import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, orderPhotoTileUrl, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { ZoomableImageStage } from "@/app/components/shared/ZoomableImageStage";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/app/components/ui/alert-dialog";
 import { Label } from "@/app/components/ui/label";
 import { Input } from "@/app/components/ui/input";
+import { Textarea } from "@/app/components/ui/textarea";
 import { useAuth } from "@/app/guards/AuthContext";
 import {
   vendorOnboardingApi,
   type VendorOrderApiDto,
+  type VendorOrderImageApiDto,
   type VendorOrderImageRequestApiDto,
   type VendorProductAssetApiDto,
   type OrderContinuationsDto,
@@ -23,6 +35,8 @@ import { toast } from "sonner";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { VendorDoctorLookupDialog } from "@/app/components/vendor/VendorDoctorLookupDialog";
 import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
+import { OrderPrescriptionFilesCard } from "@/app/components/shared/OrderPrescriptionFilesCard";
+import type { CustomerPrescriptionFileApi } from "@/app/services/customerApi";
 
 const filterAssetsForOrder = (
   assets: VendorProductAssetApiDto[],
@@ -318,6 +332,239 @@ function itemPayout(item: VendorOrderApiDto): number {
     : item.totalAmount;
 }
 
+function reuseImageUrls(
+  previous: VendorOrderImageApiDto[] | undefined,
+  next: VendorOrderImageApiDto[],
+): VendorOrderImageApiDto[] {
+  if (!previous?.length) return next;
+  const prior = new Map(previous.map((photo) => [photo.id, photo]));
+  return next.map((photo) => {
+    const kept = prior.get(photo.id);
+    if (!kept) return photo;
+    return {
+      ...photo,
+      fileUrl: kept.fileUrl || photo.fileUrl,
+      thumbnailUrl: kept.thumbnailUrl || photo.thumbnailUrl,
+    };
+  });
+}
+
+function mergeImageRequest(
+  previous: VendorOrderImageRequestApiDto | null,
+  next: VendorOrderImageRequestApiDto | null,
+): VendorOrderImageRequestApiDto | null {
+  if (!next || !previous) return next;
+  return {
+    ...next,
+    images: reuseImageUrls(previous.images, next.images),
+    options: next.options?.map((option) => {
+      const prior = previous.options?.find((row) => row.id === option.id);
+      return { ...option, images: reuseImageUrls(prior?.images, option.images) };
+    }),
+  };
+}
+
+function addImageToRequest(
+  previous: VendorOrderImageRequestApiDto,
+  uploaded: VendorOrderImageApiDto,
+  optionId: string,
+): VendorOrderImageRequestApiDto {
+  const images = [...previous.images.filter((photo) => photo.id !== uploaded.id), uploaded];
+  return {
+    ...previous,
+    images,
+    options: previous.options?.map((option) =>
+      option.id === optionId
+        ? { ...option, images: [...option.images.filter((photo) => photo.id !== uploaded.id), uploaded] }
+        : option,
+    ),
+  };
+}
+
+function removeImageFromRequest(
+  previous: VendorOrderImageRequestApiDto,
+  imageId: string,
+): VendorOrderImageRequestApiDto {
+  return {
+    ...previous,
+    images: previous.images.filter((photo) => photo.id !== imageId),
+    options: previous.options?.map((option) => ({
+      ...option,
+      images: option.images.filter((photo) => photo.id !== imageId),
+    })),
+  };
+}
+
+function VendorOptionEmptySlot() {
+  return (
+    <div
+      className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-xl bg-muted/55 px-1 ring-1 ring-inset ring-border/70 dark:bg-muted/25"
+      aria-label="No image"
+    >
+      <ImageOff className="h-5 w-5 text-muted-foreground/55" />
+      <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
+        Empty
+      </span>
+    </div>
+  );
+}
+
+function VendorOptionAddSlot({
+  busy,
+  disabled,
+  onAdd,
+}: {
+  busy: boolean;
+  disabled: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onAdd}
+      disabled={disabled}
+      className="flex aspect-square w-full flex-col items-center justify-center gap-1.5 rounded-xl bg-muted/40 text-muted-foreground ring-1 ring-inset ring-border/70 transition-colors hover:bg-primary/5 hover:text-primary hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-60"
+    >
+      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-background shadow-sm ring-1 ring-border/60">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+      </span>
+      <span className="text-[9px] font-semibold uppercase tracking-[0.08em]">
+        {busy ? "Uploading" : "Add"}
+      </span>
+    </button>
+  );
+}
+
+function OptionNoteField({
+  initial,
+  maxLength,
+  disabled,
+  saving,
+  optionLabel,
+  onSave,
+}: {
+  initial: string;
+  maxLength: number;
+  disabled: boolean;
+  saving: boolean;
+  optionLabel: string;
+  onSave: (value: string) => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
+
+  useEffect(() => {
+    setValue(initial);
+  }, [initial]);
+
+  const saved = initial.trim();
+
+  const openEditor = () => {
+    setValue(initial);
+    setViewOpen(false);
+    setEditorOpen(true);
+  };
+
+  const saveAndClose = () => {
+    onSave(value.trim());
+    setEditorOpen(false);
+  };
+
+  return (
+    <>
+      {saved ? (
+        <div className="flex flex-wrap items-center gap-1">
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label={`View description for ${optionLabel}`}
+            onClick={() => setViewOpen(true)}
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+          {disabled ? (
+            <button
+              type="button"
+              className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+              onClick={() => setViewOpen(true)}
+            >
+              View description
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-primary hover:underline"
+              onClick={openEditor}
+            >
+              <Pencil className="h-3 w-3" />
+              Edit
+            </button>
+          )}
+        </div>
+      ) : disabled ? null : (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          onClick={openEditor}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add optional description?
+        </button>
+      )}
+
+      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{saved ? "Edit description" : "Add description"} · {optionLabel}</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            autoFocus
+            value={value}
+            maxLength={maxLength}
+            placeholder="e.g. front view, serial plate"
+            className="min-h-[140px] text-sm"
+            onChange={(e) => setValue(e.target.value)}
+          />
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] tabular-nums text-muted-foreground">
+              {saving ? "Saving…" : `${value.length}/${maxLength}`}
+            </p>
+            <DialogFooter className="mt-0">
+              <Button type="button" variant="ghost" onClick={() => setEditorOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={saveAndClose} disabled={saving}>
+                Save
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+        <DialogContent className="flex max-h-[min(92dvh,720px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="border-b border-border px-4 py-3 pr-12">
+            <DialogTitle className="text-base font-semibold">{optionLabel}</DialogTitle>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+              {saved}
+            </p>
+          </div>
+          {!disabled ? (
+            <DialogFooter className="border-t border-border px-4 py-3">
+              <Button type="button" variant="secondary" onClick={openEditor}>
+                Edit
+              </Button>
+            </DialogFooter>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 /** Keep photo requests and order status in sync while vendor stays on this page. */
 const VENDOR_ORDER_POLL_MS = 15_000;
 
@@ -347,11 +594,20 @@ const VendorOrderDetail = () => {
   /** Open photo requests across the order group — for item-list badges. */
   const [groupPhotoMeta, setGroupPhotoMeta] = useState<Map<string, { count: number }>>(new Map());
   const [uploadingOrderImage, setUploadingOrderImage] = useState(false);
+  const [uploadOptionId, setUploadOptionId] = useState<string | null>(null);
+  const [uploadSlotIndex, setUploadSlotIndex] = useState<number | null>(null);
+  const [savingOptionId, setSavingOptionId] = useState<string | null>(null);
   const [deletingOrderImageId, setDeletingOrderImageId] = useState<string | null>(null);
+  const [prescriptionFiles, setPrescriptionFiles] = useState<CustomerPrescriptionFileApi[]>([]);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [pendingSlotPreviews, setPendingSlotPreviews] = useState<Record<string, string>>({});
+  const [clearDescriptionPrompt, setClearDescriptionPrompt] = useState<{
+    optionId: string;
+    label: string;
+  } | null>(null);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
   const orderImageInputRef = useRef<HTMLInputElement>(null);
-  const MAX_ORDER_IMAGES = 5;
+  const orderImageUploadTargetRef = useRef<{ optionId: string; slotIndex: number } | null>(null);
 
   const currentItemId = selectedItemId || orderId;
 
@@ -369,6 +625,11 @@ const VendorOrderDetail = () => {
       if (!options?.silent) setLoading(true);
       const row = await vendorOnboardingApi.getVendorOrder(user.id, id);
       setOrder(row);
+      try {
+        setPrescriptionFiles(await vendorOnboardingApi.getVendorOrderPrescriptions(user.id, id));
+      } catch {
+        setPrescriptionFiles([]);
+      }
       try {
         const conts = await vendorOnboardingApi.getVendorOrderContinuations(id);
         setContinuations(conts);
@@ -421,7 +682,7 @@ const VendorOrderDetail = () => {
       try {
         if (!options?.silent) setImageRequestLoading(true);
         const row = await vendorOnboardingApi.getVendorOrderImageRequest(user.id, id);
-        setImageRequest(row);
+        setImageRequest((prev) => mergeImageRequest(prev, row));
       } catch (error) {
         console.error("Failed to load order photo request", error);
         setImageRequest(null);
@@ -437,6 +698,10 @@ const VendorOrderDetail = () => {
   }, [loadImageRequest, currentItemId]);
 
   const orderImages = imageRequest?.images ?? [];
+  const photoOptions = imageRequest?.options?.length ? imageRequest.options : [];
+  const maxDescriptionLength = imageRequest?.maxDescriptionLength ?? 500;
+  const maxImagesPerOption = imageRequest?.maxImagesPerOption ?? 3;
+  const selectedPhotoOption = photoOptions.find((o) => o.id === imageRequest?.selectedOptionId);
   const canUploadOrderImages = Boolean(imageRequest) && (
     (order?.status.trim().toLowerCase() === "confirmed") ||
     (order?.status.trim().toLowerCase().replace(/\s+/g, "_") === "in_transit") ||
@@ -711,50 +976,117 @@ const VendorOrderDetail = () => {
   };
 
   const handleOrderImagePick = async (files: FileList | null) => {
-    if (!files?.length || !user?.id || !currentItemId || !imageRequest) return;
-    const remaining = MAX_ORDER_IMAGES - orderImages.length;
-    if (remaining <= 0) {
-      toast.error(`You can upload at most ${MAX_ORDER_IMAGES} photos for this request.`);
+    const target = orderImageUploadTargetRef.current;
+    const optionId = target?.optionId ?? uploadOptionId;
+    const startSlot = target?.slotIndex ?? 0;
+    if (!files?.length || !user?.id || !currentItemId || !imageRequest || !optionId) return;
+    const option = photoOptions.find((o) => o.id === optionId);
+    const occupied = new Set((option?.images ?? []).map((photo) => photo.sortOrder));
+    const emptySlots = Array.from({ length: maxImagesPerOption }, (_, slot) => slot).filter(
+      (slot) => !occupied.has(slot),
+    );
+    const orderedSlots = [
+      ...emptySlots.filter((slot) => slot >= startSlot),
+      ...emptySlots.filter((slot) => slot < startSlot),
+    ];
+    if (orderedSlots.length === 0) {
+      toast.error(`This option already has ${maxImagesPerOption} photos. Remove one to upload a different photo.`);
       return;
     }
-    const selected = Array.from(files).slice(0, remaining);
+    const picked = Array.from(files).slice(0, orderedSlots.length);
+    const objectUrls: string[] = [];
     try {
       setUploadingOrderImage(true);
-      for (const file of selected) {
+      const nextPending: Record<string, string> = {};
+      for (let i = 0; i < picked.length; i++) {
+        const previewUrl = URL.createObjectURL(picked[i]);
+        objectUrls.push(previewUrl);
+        nextPending[`${optionId}:${orderedSlots[i]}`] = previewUrl;
+      }
+      setPendingSlotPreviews((current) => ({ ...current, ...nextPending }));
+      for (let i = 0; i < picked.length; i++) {
+        const file = picked[i];
         if (!file.type.startsWith("image/")) {
           toast.error("Only image files are allowed.");
-          continue;
+          return;
         }
         if (file.size > 5 * 1024 * 1024) {
           toast.error(`${file.name} is larger than 5 MB.`);
-          continue;
+          return;
         }
-        await vendorOnboardingApi.uploadVendorOrderImage(user.id, currentItemId, file);
+        const uploaded = await vendorOnboardingApi.uploadVendorOrderImage(
+          user.id,
+          currentItemId,
+          file,
+          optionId,
+          orderedSlots[i],
+        );
+        setImageRequest((prev) => (prev ? addImageToRequest(prev, uploaded, optionId) : prev));
       }
-      toast.success("Photo uploaded.");
-      await loadImageRequest(currentItemId);
+      toast.success(picked.length === 1 ? "Photo uploaded." : `${picked.length} photos uploaded.`);
+      await loadImageRequest(currentItemId, { silent: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to upload photo.";
       toast.error(message);
     } finally {
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+      setPendingSlotPreviews({});
       setUploadingOrderImage(false);
+      setUploadOptionId(null);
+      setUploadSlotIndex(null);
+      orderImageUploadTargetRef.current = null;
       if (orderImageInputRef.current) orderImageInputRef.current.value = "";
     }
   };
 
-  const handleDeleteOrderImage = async (imageId: string) => {
+  const handleSaveOptionDescription = async (optionId: string, description: string) => {
     if (!user?.id || !currentItemId) return;
+    const option = photoOptions.find((o) => o.id === optionId);
+    if ((option?.description ?? "") === description) return;
+    try {
+      setSavingOptionId(optionId);
+      const row = await vendorOnboardingApi.updateVendorOrderImageOption(
+        user.id,
+        currentItemId,
+        optionId,
+        description,
+      );
+      setImageRequest(row);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save description.";
+      toast.error(message);
+    } finally {
+      setSavingOptionId(null);
+    }
+  };
+
+  const handleDeleteOrderImage = async (imageId: string, optionId: string) => {
+    if (!user?.id || !currentItemId) return;
+    const option = photoOptions.find((o) => o.id === optionId);
+    const hadDescription = Boolean(option?.description?.trim());
+    const label = option?.label ?? "this option";
     try {
       setDeletingOrderImageId(imageId);
       await vendorOnboardingApi.deleteVendorOrderImage(user.id, currentItemId, imageId);
+      setImageRequest((prev) => (prev ? removeImageFromRequest(prev, imageId) : prev));
       toast.success("Photo removed.");
-      await loadImageRequest(currentItemId);
+      await loadImageRequest(currentItemId, { silent: true });
+      if (hadDescription && (option?.images.length ?? 1) <= 1) {
+        setClearDescriptionPrompt({ optionId, label });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to remove photo.";
       toast.error(message);
     } finally {
       setDeletingOrderImageId(null);
     }
+  };
+
+  const handleClearOptionDescription = async () => {
+    const prompt = clearDescriptionPrompt;
+    if (!prompt) return;
+    setClearDescriptionPrompt(null);
+    await handleSaveOptionDescription(prompt.optionId, "");
   };
 
   const hasPendingRequests = Boolean(continuations && (continuations.pendingExtensions.length > 0 || continuations.pendingBuyouts.length > 0));
@@ -934,7 +1266,7 @@ const VendorOrderDetail = () => {
                       {photoReceived ? (
                         <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                           <Images className="h-3 w-3" />
-                          {photoMeta.count}/{MAX_ORDER_IMAGES} customer photos uploaded
+                          {photoMeta.count} customer photo{photoMeta.count === 1 ? "" : "s"} uploaded
                         </p>
                       ) : null}
                     </div>
@@ -1213,7 +1545,14 @@ const VendorOrderDetail = () => {
           ) : null}
 
           {/* Customer photo request — vendor uploads (hidden when no open request) */}
-          {!imageRequestLoading && imageRequest && (
+          {imageRequestLoading && !imageRequest ? (
+            <Card className="border-border/80 shadow-sm">
+              <CardContent className="p-4">
+                <PageLoaderSlot className="min-h-[8rem] py-0" />
+              </CardContent>
+            </Card>
+          ) : null}
+          {imageRequest && (
             <>
               <Card className="border-border/80 shadow-sm border-amber-200/70 dark:border-amber-500/30">
                 <CardHeader className="pb-3">
@@ -1225,7 +1564,8 @@ const VendorOrderDetail = () => {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-lg font-semibold leading-tight">Customer photo request</p>
                         <Badge variant="secondary" className="font-normal tabular-nums">
-                          {orderImages.length}/{MAX_ORDER_IMAGES}
+                          {orderImages.length} photo{orderImages.length === 1 ? "" : "s"}
+                          {photoOptions.length ? ` · ${photoOptions.length} options` : ""}
                         </Badge>
                         {orderImages.length === 0 ? (
                           <Badge className="border-0 bg-amber-100 text-amber-900 hover:bg-amber-100 dark:bg-amber-950/50 dark:text-amber-200">
@@ -1236,9 +1576,9 @@ const VendorOrderDetail = () => {
                       <p className="mt-1 text-sm font-semibold text-foreground">
                         {order.listingTitle}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        From the customer for this product only — upload here (not Admin chat).{" "}
-                        {imageRequest.message}
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        Upload up to {maxImagesPerOption} photos per option. The customer will select one option.
+                        Add photos here — not in Admin chat.
                       </p>
                     </div>
                   </div>
@@ -1252,62 +1592,132 @@ const VendorOrderDetail = () => {
                     className="hidden"
                     onChange={(e) => void handleOrderImagePick(e.target.files)}
                   />
-                  <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-                    {orderImages.map((img) => (
+                  {selectedPhotoOption ? (
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
+                      Customer selected{" "}
+                      <span className="font-semibold text-foreground">{selectedPhotoOption.label}</span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Waiting for the customer to select an option.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {photoOptions.map((option) => {
+                    const photos = option.images ?? [];
+                    const optionBusy = uploadingOrderImage && uploadOptionId === option.id;
+                    const chosen = imageRequest.selectedOptionId === option.id;
+                    return (
                       <div
-                        key={img.id}
-                        className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted"
-                      >
-                        <button
-                          type="button"
-                          className="h-full w-full"
-                          onClick={() => setPreviewImageUrl(img.fileUrl)}
-                          aria-label={img.originalFileName || "Order photo"}
-                        >
-                          <img
-                            src={img.fileUrl}
-                            alt={img.originalFileName || "Order photo"}
-                            className="h-full w-full object-cover"
-                            onError={retryOriginalOnImageError}
-                          />
-                        </button>
-                        {canUploadOrderImages && (
-                          <button
-                            type="button"
-                            className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                            disabled={deletingOrderImageId === img.id}
-                            onClick={() => void handleDeleteOrderImage(img.id)}
-                            aria-label="Remove photo"
-                          >
-                            {deletingOrderImageId === img.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <X className="h-3.5 w-3.5" />
-                            )}
-                          </button>
+                        key={option.id}
+                        className={cn(
+                          "space-y-2.5 rounded-xl border bg-card p-3 shadow-sm",
+                          chosen
+                            ? "border-primary/35 ring-1 ring-primary/15"
+                            : "border-border/70",
                         )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{option.label}</p>
+                          {chosen ? (
+                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                              Chosen
+                            </span>
+                          ) : null}
+                          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                            {photos.length} of {maxImagesPerOption}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {Array.from({ length: maxImagesPerOption }).map((_, slot) => {
+                            const photo = photoAtSlot(photos, slot);
+                            const pendingUrl = pendingSlotPreviews[`${option.id}:${slot}`];
+                            if (photo) {
+                              return (
+                                <div
+                                  key={photo.id}
+                                  className="group relative aspect-square w-full overflow-hidden rounded-xl bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10"
+                                >
+                                  <button
+                                    type="button"
+                                    className="h-full w-full"
+                                    onClick={() => setPreviewImageUrl(photo.fileUrl)}
+                                    aria-label={photo.originalFileName || option.label}
+                                  >
+                                    <img
+                                      src={orderPhotoTileUrl(photo)}
+                                      alt={photo.originalFileName || option.label}
+                                      loading="lazy"
+                                      decoding="async"
+                                      className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+                                      onError={retryOriginalOnImageError}
+                                    />
+                                  </button>
+                                  {canUploadOrderImages && (
+                                    <button
+                                      type="button"
+                                      className="absolute right-1.5 top-1.5 rounded-full bg-black/65 p-1 text-white shadow-sm backdrop-blur-sm"
+                                      disabled={deletingOrderImageId === photo.id}
+                                      onClick={() => void handleDeleteOrderImage(photo.id, option.id)}
+                                      aria-label="Remove photo"
+                                    >
+                                      {deletingOrderImageId === photo.id ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      ) : (
+                                        <X className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            }
+                            if (pendingUrl) {
+                              return (
+                                <div
+                                  key={`${option.id}-pending-${slot}`}
+                                  className="relative aspect-square w-full overflow-hidden rounded-xl bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10"
+                                >
+                                  <img src={pendingUrl} alt="" className="h-full w-full object-cover" />
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                    <Loader2 className="h-5 w-5 animate-spin text-white" />
+                                  </div>
+                                </div>
+                              );
+                            }
+                            if (canUploadOrderImages) {
+                              return (
+                                <VendorOptionAddSlot
+                                  key={`${option.id}-add-${slot}`}
+                                  busy={optionBusy && uploadSlotIndex === slot}
+                                  disabled={uploadingOrderImage}
+                                  onAdd={() => {
+                                    orderImageUploadTargetRef.current = { optionId: option.id, slotIndex: slot };
+                                    setUploadOptionId(option.id);
+                                    setUploadSlotIndex(slot);
+                                    orderImageInputRef.current?.click();
+                                  }}
+                                />
+                              );
+                            }
+                            return <VendorOptionEmptySlot key={`${option.id}-empty-${slot}`} />;
+                          })}
+                        </div>
+                        <OptionNoteField
+                          optionLabel={option.label}
+                          initial={option.description ?? ""}
+                          maxLength={maxDescriptionLength}
+                          disabled={!canUploadOrderImages}
+                          saving={savingOptionId === option.id}
+                          onSave={(value) => void handleSaveOptionDescription(option.id, value)}
+                        />
                       </div>
-                    ))}
-                    {canUploadOrderImages && orderImages.length < MAX_ORDER_IMAGES && (
-                      <button
-                        type="button"
-                        onClick={() => orderImageInputRef.current?.click()}
-                        disabled={uploadingOrderImage}
-                        className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-muted/40 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
-                      >
-                        {uploadingOrderImage ? (
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                        ) : (
-                          <ImagePlus className="h-5 w-5" />
-                        )}
-                        <span className="text-[11px] font-medium">
-                          {uploadingOrderImage ? "Uploading…" : "Add photo"}
-                        </span>
-                      </button>
-                    )}
+                    );
+                  })}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    JPEG, PNG, or WebP · max 5 MB each · cleared after delivery, cancel, or dispatch failure
+                    Up to {maxImagesPerOption} photos per option · JPEG, PNG, or WebP · max 5 MB · optional note up to {maxDescriptionLength} characters ·
+                    cleared after delivery, cancel, or dispatch failure
                   </p>
                 </CardContent>
               </Card>
@@ -1326,8 +1736,31 @@ const VendorOrderDetail = () => {
                   ) : null}
                 </DialogContent>
               </Dialog>
+
+              <AlertDialog
+                open={!!clearDescriptionPrompt}
+                onOpenChange={(open) => !open && setClearDescriptionPrompt(null)}
+              >
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Clear the description too?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      You removed the photo from {clearDescriptionPrompt?.label ?? "this option"}.
+                      That option still has a description. Do you want to clear it?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep description</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => void handleClearOptionDescription()}>
+                      Clear description
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </>
           )}
+
+          <OrderPrescriptionFilesCard files={prescriptionFiles} />
 
           {/* Medical Reference */}
           {(order.doctorId || order.hospitalId || order.doctorName || order.doctorUniqueCode) && (

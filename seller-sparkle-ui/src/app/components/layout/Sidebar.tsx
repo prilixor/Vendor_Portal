@@ -13,6 +13,7 @@ import { customerApi } from "@/app/services/customerApi";
 import { useNotificationContext } from "@/app/contexts/NotificationContext";
 import { useSupportChat } from "@/app/contexts/SupportChatContext";
 import { BrandMark } from "@/app/components/shared/BrandMark";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
 
 interface SidebarProps {
   variant?: "vendor" | "admin" | "customer";
@@ -234,23 +235,48 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
               "Check the docs or chat with support."
             )}
           </p>
-          <div className="mt-2.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-            <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary hover:no-underline">Terms</Link>
-            <span>•</span>
-            <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary hover:no-underline">Privacy</Link>
-            <span>•</span>
+          <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
+            {variant === "vendor" || variant === "customer" ? (
+              <LegalPolicyLinks
+                surface={variant === "vendor" ? "vendor_web" : "customer_web"}
+                screen="footer"
+                layout="menu"
+                menuLabel="Legal"
+              />
+            ) : (
+              <LegalPolicyLinks
+                surface="customer_web"
+                screen="footer"
+                layout="menu"
+                menuLabel="Legal"
+                fallback={[
+                  { slug: "terms-of-use", documentType: "terms-of-use", title: "Terms of Use", publicPath: "/terms-and-conditions", sortOrder: 1, versionNumber: 1, effectiveFrom: "", lastUpdated: "", isRequiredToProceed: false },
+                  { slug: "privacy-policy", documentType: "privacy-policy", title: "Privacy Policy", publicPath: "/privacy-policy", sortOrder: 2, versionNumber: 1, effectiveFrom: "", lastUpdated: "", isRequiredToProceed: false },
+                ]}
+              />
+            )}
             {variant === "vendor" ? (
               <button
                 type="button"
                 onClick={() => openSupportPanel()}
-                className="cursor-pointer transition-colors hover:text-primary hover:no-underline"
+                className="block w-full cursor-pointer truncate text-left text-[11px] font-medium leading-snug text-muted-foreground transition-colors hover:text-primary hover:no-underline"
               >
-                Contact
+                Contact support
               </button>
             ) : variant === "customer" ? (
-              <Link to="/customer/support" className="transition-colors hover:text-primary hover:no-underline">Contact</Link>
+              <Link
+                to="/customer/support"
+                className="block truncate text-[11px] font-medium leading-snug text-muted-foreground transition-colors hover:text-primary hover:no-underline"
+              >
+                Contact support
+              </Link>
             ) : (
-              <Link to="/admin/support" className="transition-colors hover:text-primary hover:no-underline">Contact</Link>
+              <Link
+                to="/admin/support"
+                className="block truncate text-[11px] font-medium leading-snug text-muted-foreground transition-colors hover:text-primary hover:no-underline"
+              >
+                Contact support
+              </Link>
             )}
           </div>
         </div>

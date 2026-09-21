@@ -371,7 +371,7 @@ const TermsAndConditions = () => {
             <footer className="mt-12 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 pb-8">
               <p className="text-[12px] text-muted-foreground/60">© 2026 BlinksMed Inc. All rights reserved.</p>
               <div className="flex items-center gap-8">
-                <Link to="/privacy-policy" className="text-[12px] font-medium text-muted-foreground/60 hover:text-primary transition-colors">Privacy Policy</Link>
+                <Link to="/privacy-policy" className="text-[12px] font-medium !text-primary underline-offset-2 hover:underline">Privacy Policy</Link>
               </div>
             </footer>
           </div>

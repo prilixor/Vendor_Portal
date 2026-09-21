@@ -376,7 +376,7 @@ class _NotificationCard extends StatelessWidget {
     final colors = context.appColors;
     final isDark = context.isDarkMode;
     final visual = visualTypeFor(notification);
-    final color = colorForVisualType(visual);
+    final color = colorForVisualType(context, visual);
     final isRejection = isVerificationRejectionNotification(
       notification.notificationType,
     );

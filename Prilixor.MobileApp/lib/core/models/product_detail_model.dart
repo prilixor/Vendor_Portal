@@ -77,6 +77,15 @@ String catalogDocumentListLabel(
   return n > 0 ? '${doc.label} $n' : doc.label;
 }
 
+List<String> _alignedThumbnails(dynamic raw, int length) {
+  if (length <= 0) return const [];
+  final source = raw is List ? raw : const [];
+  return List<String>.generate(length, (i) {
+    if (i >= source.length) return '';
+    return resolveMediaUrl(source[i]?.toString()) ?? '';
+  });
+}
+
 class ProductDetailModel {
   final String id;
   final String title;
@@ -97,6 +106,8 @@ class ProductDetailModel {
   final String availabilityStatus;
   final String description;
   final List<String> imageUrls;
+  /// Same order as [imageUrls]; empty string when that slot has no generated thumb.
+  final List<String> imageThumbnailUrls;
   final String? primaryImageUrl;
   final double? buyPrice;
   final bool isRentEnabled;
@@ -133,6 +144,7 @@ class ProductDetailModel {
     required this.availabilityStatus,
     required this.description,
     required this.imageUrls,
+    this.imageThumbnailUrls = const [],
     this.primaryImageUrl,
     this.buyPrice,
     this.isRentEnabled = true,
@@ -204,6 +216,7 @@ class ProductDetailModel {
     final variantsJson = json['variants'] as List<dynamic>? ?? [];
     final invJson = json['variantInventory'] as List<dynamic>? ?? [];
     final plansJson = json['rentalPricingPlans'] as List<dynamic>? ?? [];
+    final images = parseMediaUrlList(json['imageUrls'] ?? json['ImageUrls']);
 
     return ProductDetailModel(
       id: json['id'] ?? '',
@@ -224,10 +237,8 @@ class ProductDetailModel {
           json['productTotalAvailableQuantity'] ?? json['availableQuantity'] ?? 0,
       availabilityStatus: json['availabilityStatus'] ?? '',
       description: json['description'] ?? '',
-      imageUrls: List<String>.from(json['imageUrls'] ?? [])
-          .map((u) => resolveMediaUrl(u))
-          .whereType<String>()
-          .toList(),
+      imageUrls: images,
+      imageThumbnailUrls: _alignedThumbnails(json['imageThumbnailUrls'] ?? json['ImageThumbnailUrls'], images.length),
       primaryImageUrl: resolveItemImageUrl(json: json),
       buyPrice: json['buyPrice'] != null ? (json['buyPrice'] as num).toDouble() : null,
       isRentEnabled: json['isRentEnabled'] ?? true,

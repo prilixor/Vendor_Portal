@@ -4,14 +4,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
-import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatCustomerOrderStatusTitle, formatCustomerOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
+import { CancelOrderConfirm } from "@/app/components/legal/CancelOrderConfirm";
 import {
   ActiveFilterChips,
   FilterPanel,
@@ -30,7 +31,6 @@ const STATUS_FILTERS = [
   "In transit",
   "Active",
   "Returned",
-  "Dispatch failed",
   "Cancelled",
   "Bought Out",
 ] as const;
@@ -109,10 +109,7 @@ function matchesStatusFilter(status: string, filter: StatusFilter): boolean {
     return s.includes("transit");
   }
   if (filter === "Cancelled") {
-    return s === "cancelled" || s === "canceled";
-  }
-  if (filter === "Dispatch failed") {
-    return s === "dispatch failed";
+    return s === "cancelled" || s === "canceled" || s === "dispatch failed";
   }
   if (filter === "Bought Out") {
     return s === "bought out";
@@ -136,6 +133,7 @@ const CustomerOrders = () => {
   const [appliedFilter, setAppliedFilter] = useState<StatusFilter>(
     initialStatus && STATUS_FILTERS.includes(initialStatus) ? initialStatus : "All"
   );
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftFilter, setDraftFilter] = useState<StatusFilter>("All");
 
@@ -177,8 +175,6 @@ const CustomerOrders = () => {
     queryFn: () => customerApi.getOrders(),
     refetchInterval: 30_000,
   });
-
-  const showInitialLoader = isLoading && !data;
 
   const cancelMut = useMutation({
     mutationFn: (id: string) => customerApi.cancelOrder(id),
@@ -293,14 +289,11 @@ const CustomerOrders = () => {
       </FilterPanel>
 
       <p className="text-xs text-muted-foreground">
-        Status note: <span className="font-medium">Cancelled</span> means customer cancelled the request.
-        {" "}
-        <span className="font-medium">Dispatch failed</span> means no replacement supplier was available.
+        Status note: <span className="font-medium">Cancelled</span> includes requests you stopped
+        and orders no supplier accepted.
       </p>
 
-      {showInitialLoader ? (
-        <PageLoaderSlot />
-      ) : (
+      <PageContentGate loading={isLoading}>
         <>
           {filtered.length > 0 ? (
             <div className="space-y-6">
@@ -398,7 +391,7 @@ const CustomerOrders = () => {
                                 className={cn("shrink-0", orderStatusBadgeSizeClass, "px-1.5 sm:px-2", orderStatusBadgeClass(o.status))}
                                 variant="outline"
                               >
-                                {formatOrderStatusLabel(o.status)}
+                                {formatCustomerOrderStatusLabel(o.status)}
                               </Badge>
                             </div>
                             <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-3">
@@ -409,7 +402,7 @@ const CustomerOrders = () => {
                                   size="sm"
                                   className="h-7 shrink-0 px-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:px-2"
                                   disabled={cancelMut.isPending}
-                                  onClick={() => cancelMut.mutate(o.id)}
+                                  onClick={() => setCancelOrderId(o.id)}
                                 >
                                   Cancel
                                 </Button>
@@ -460,7 +453,18 @@ const CustomerOrders = () => {
             label="orders"
           />
         </>
-      )}
+      </PageContentGate>
+      <CancelOrderConfirm
+        open={!!cancelOrderId}
+        onOpenChange={(open) => {
+          if (!open) setCancelOrderId(null);
+        }}
+        pending={cancelMut.isPending}
+        onConfirm={() => {
+          if (!cancelOrderId) return;
+          cancelMut.mutate(cancelOrderId, { onSettled: () => setCancelOrderId(null) });
+        }}
+      />
     </div>
   );
 };

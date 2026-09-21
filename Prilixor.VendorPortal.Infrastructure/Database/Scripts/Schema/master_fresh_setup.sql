@@ -116,7 +116,18 @@ CREATE DATABASE customer_portal_db;
 -- 9) Website Content Management
 \i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/068_website_content_management.sql'
 
+-- 10) Platform legal documents CMS (tables + screenshot default placements)
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/076_legal_documents.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/077_legal_placement_screenshot_defaults.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/078_legal_ceo_flow_defaults.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/079_keep_seven_legal_policies.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/080_customer_order_prescriptions.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/081_legal_vidit_pdf_placement_align.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/082_order_image_request_options.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/083_order_image_option_gallery_and_selection.sql'
+\i './Prilixor.VendorPortal.Infrastructure/Database/Scripts/Migrations/084_order_image_thumbnails.sql'
+
 \echo 'All schemas and migrations applied successfully.'
-\echo 'Coverage: admin/common/vendor/customer, medical, chemicals, variants, assets, favorites, RBAC, order chat, order photo requests, weekly rent, thumbnails, website content.'
+\echo 'Coverage: admin/common/vendor/customer, medical, chemicals, variants, assets, favorites, RBAC, order chat, order photo requests, weekly rent, thumbnails, website content, legal documents.'
 \echo 'Next: enable BootstrapSuperAdmin in appsettings, start the API once, then disable bootstrap.'
 

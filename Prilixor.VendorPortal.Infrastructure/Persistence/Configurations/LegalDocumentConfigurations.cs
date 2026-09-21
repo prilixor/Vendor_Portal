@@ -119,6 +119,7 @@ public class LegalAcceptanceConfiguration : IEntityTypeConfiguration<LegalAccept
         builder.Property(x => x.SourceScreen).HasColumnName("source_screen").HasMaxLength(40).IsRequired();
         builder.Property(x => x.IpAddress).HasColumnName("ip_address").HasMaxLength(64);
         builder.Property(x => x.UserAgent).HasColumnName("user_agent");
+        builder.Property(x => x.SignedName).HasColumnName("signed_name").HasMaxLength(200);
 
         builder.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
         builder.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");

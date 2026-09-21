@@ -3,7 +3,7 @@ import { PageHeader } from "@/app/components/shared/PageHeader";
 import { StatCard } from "@/app/components/shared/StatCard";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { adminApi, AdminAuditLogDto, VendorDto } from "@/app/services/adminApi";
 import { Building2, Clock, CheckCircle2, ScrollText, ArrowUpRight, TimerReset } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -56,9 +56,7 @@ const AdminDashboard = () => {
     <div>
       <PageHeader title="Admin overview" description="Monitor platform health, vendor verification queue, and recent activity." />
 
-      {loading ? (
-        <PageLoaderSlot />
-      ) : (
+      <PageContentGate loading={loading}>
       <>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard 
@@ -154,7 +152,7 @@ const AdminDashboard = () => {
         </Card>
       </div>
       </>
-      )}
+      </PageContentGate>
     </div>
   );
 };

@@ -50,6 +50,12 @@ public interface ICustomerRepository
     Task RemoveCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetActiveCustomerOrderForAssetAsync(Guid assetId, CancellationToken cancellationToken);
 
+    Task AddCustomerOrderPrescriptionFileAsync(CustomerOrderPrescriptionFile file, CancellationToken cancellationToken);
+    Task<List<CustomerOrderPrescriptionFile>> GetCustomerOrderPrescriptionFilesAsync(Guid customerOrderId, CancellationToken cancellationToken);
+    Task<CustomerOrderPrescriptionFile?> GetCustomerOrderPrescriptionFileByIdAsync(Guid customerOrderId, Guid fileId, CancellationToken cancellationToken);
+    Task UpdateCustomerOrderPrescriptionFileAsync(CustomerOrderPrescriptionFile file, CancellationToken cancellationToken);
+    Task<int> CountCustomerOrderPrescriptionFilesAsync(Guid customerOrderId, CancellationToken cancellationToken);
+
     Task AddCustomerOrderImageAsync(CustomerOrderImage image, CancellationToken cancellationToken);
     Task<List<CustomerOrderImage>> GetCustomerOrderImagesAsync(Guid customerOrderId, CancellationToken cancellationToken);
     Task<CustomerOrderImage?> GetCustomerOrderImageByIdAsync(Guid customerOrderId, Guid imageId, CancellationToken cancellationToken);
@@ -62,6 +68,11 @@ public interface ICustomerRepository
     Task UpdateCustomerOrderImageRequestAsync(CustomerOrderImageRequest request, CancellationToken cancellationToken);
     Task<List<CustomerOrderImage>> GetCustomerOrderImagesByRequestIdAsync(Guid requestId, CancellationToken cancellationToken);
     Task<int> CountCustomerOrderImagesByRequestIdAsync(Guid requestId, CancellationToken cancellationToken);
+    Task AddCustomerOrderImageRequestOptionAsync(CustomerOrderImageRequestOption option, CancellationToken cancellationToken);
+    Task<List<CustomerOrderImageRequestOption>> GetCustomerOrderImageRequestOptionsAsync(Guid requestId, CancellationToken cancellationToken);
+    Task<CustomerOrderImageRequestOption?> GetCustomerOrderImageRequestOptionByIdAsync(Guid requestId, Guid optionId, CancellationToken cancellationToken);
+    Task UpdateCustomerOrderImageRequestOptionAsync(CustomerOrderImageRequestOption option, CancellationToken cancellationToken);
+    Task<int> CountCustomerOrderImagesByOptionIdAsync(Guid optionId, CancellationToken cancellationToken);
 
     Task UpdateCustomerRentalOrderAsync(CustomerRentalOrder order, CancellationToken cancellationToken);
     Task AddCustomerOrderVendorOfferAsync(CustomerOrderVendorOffer offer, CancellationToken cancellationToken);
@@ -69,6 +80,8 @@ public interface ICustomerRepository
     Task<CustomerOrderVendorOffer?> GetCustomerOrderVendorOfferAsync(Guid customerOrderId, Guid vendorId, CancellationToken cancellationToken);
     Task<List<CustomerOrderVendorOffer>> GetPendingVendorOffersAsync(Guid vendorId, CancellationToken cancellationToken);
     Task UpdateCustomerOrderVendorOfferAsync(CustomerOrderVendorOffer offer, CancellationToken cancellationToken);
+    Task<List<Guid>> GetAwaitingOrderIdsWithExpiredPendingOffersAsync(DateTimeOffset now, CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrder>> GetSiblingCheckoutOrdersAsync(Guid customerId, string orderNumber, Guid exceptOrderId, CancellationToken cancellationToken);
     Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForCustomerAsync(Guid customerId, DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
     Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForVendorAsync(Guid vendorId, DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
     Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForAdminAsync(DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
@@ -225,6 +238,8 @@ public sealed class VendorProductListingAggregate
     public string CategoryName { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
     public List<string> ImageUrls { get; init; } = [];
+    /// <summary>Same order as <see cref="ImageUrls"/>; empty string when that slot has no generated thumb.</summary>
+    public List<string> ImageThumbnailUrls { get; init; } = [];
     public List<Prilixor.VendorPortal.Application.Onboarding.ProductVariantDto> Variants { get; init; } = [];
     public List<Prilixor.VendorPortal.Application.Onboarding.ProductRentalPricingPlanDto> RentalPricingPlans { get; init; } = [];
     public Guid? InventoryId { get; init; }

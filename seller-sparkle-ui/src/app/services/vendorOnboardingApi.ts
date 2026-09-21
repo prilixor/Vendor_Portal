@@ -500,11 +500,21 @@ export interface VendorOrderImageApiDto {
   id: string;
   orderId: string;
   requestId?: string | null;
+  optionId?: string | null;
   fileUrl: string;
+  thumbnailUrl?: string | null;
   originalFileName?: string | null;
   contentType?: string | null;
   sortOrder: number;
   createdAt: string;
+}
+
+export interface VendorOrderImageOptionApiDto {
+  id: string;
+  optionNumber: number;
+  label: string;
+  description?: string | null;
+  images: VendorOrderImageApiDto[];
 }
 
 export interface VendorOrderImageRequestApiDto {
@@ -515,6 +525,11 @@ export interface VendorOrderImageRequestApiDto {
   message: string;
   requestedAt: string;
   images: VendorOrderImageApiDto[];
+  options?: VendorOrderImageOptionApiDto[];
+  optionCount?: number;
+  maxImagesPerOption?: number;
+  maxDescriptionLength?: number;
+  selectedOptionId?: string | null;
 }
 
 export interface VendorOrderApiDto {
@@ -833,12 +848,36 @@ export const vendorOnboardingApi = {
     return row ?? null;
   },
 
-  uploadVendorOrderImage(vendorId: string, orderId: string, file: File) {
+  uploadVendorOrderImage(vendorId: string, orderId: string, file: File, optionId: string, slotIndex?: number) {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("optionId", optionId);
+    const params = new URLSearchParams({ optionId });
+    if (slotIndex != null && Number.isInteger(slotIndex)) {
+      formData.append("slotIndex", String(slotIndex));
+      params.set("slotIndex", String(slotIndex));
+    }
     return apiClient.postForm<VendorOrderImageApiDto>(
-      `/vendors/${vendorId}/orders/${orderId}/images`,
+      `/vendors/${vendorId}/orders/${orderId}/images?${params.toString()}`,
       formData,
+    );
+  },
+
+  updateVendorOrderImageOption(
+    vendorId: string,
+    orderId: string,
+    optionId: string,
+    description: string,
+  ) {
+    return apiClient.patch<VendorOrderImageRequestApiDto>(
+      `/vendors/${vendorId}/orders/${orderId}/image-options/${encodeURIComponent(optionId)}`,
+      { description },
+    );
+  },
+
+  getVendorOrderPrescriptions(vendorId: string, orderId: string) {
+    return apiClient.get<import("./customerApi").CustomerPrescriptionFileApi[]>(
+      `/vendors/${vendorId}/orders/${orderId}/prescriptions`,
     );
   },
 

@@ -26,6 +26,10 @@ public class LegalDocumentListItemDto
     public DateTimeOffset? EffectiveFrom { get; set; }
     public DateTimeOffset? LastUpdated { get; set; }
     public Guid? UpdatedBy { get; set; }
+    public bool VisibleToCustomer { get; set; }
+    public bool VisibleToVendor { get; set; }
+    public bool RequiredAtCustomerRegister { get; set; }
+    public bool RequiredAtVendorRegister { get; set; }
 }
 
 public class LegalDocumentDetailDto : LegalDocumentListItemDto
@@ -80,4 +84,23 @@ public class PublicLegalDocumentListItemDto
 public class PublicLegalDocumentDetailDto : PublicLegalDocumentListItemDto
 {
     public string ContentHtml { get; set; } = string.Empty;
+}
+
+public class LegalAcceptanceAdminDto
+{
+    public Guid Id { get; set; }
+    public string ActorType { get; set; } = string.Empty;
+    public Guid ActorId { get; set; }
+    public string ActorName { get; set; } = string.Empty;
+    public string? ActorEmail { get; set; }
+    public Guid DocumentId { get; set; }
+    public string DocumentTitle { get; set; } = string.Empty;
+    public string DocumentSlug { get; set; } = string.Empty;
+    public Guid VersionId { get; set; }
+    public int VersionNumber { get; set; }
+    public DateTimeOffset AcceptedAt { get; set; }
+    public string SourceSurface { get; set; } = string.Empty;
+    public string SourceScreen { get; set; } = string.Empty;
+    public string? SignedName { get; set; }
+    public string? IpAddress { get; set; }
 }

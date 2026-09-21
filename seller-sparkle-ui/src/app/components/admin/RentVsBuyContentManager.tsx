@@ -29,7 +29,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 
 export function RentVsBuyContentManager() {
   const queryClient = useQueryClient();
@@ -212,11 +212,8 @@ export function RentVsBuyContentManager() {
     }
   };
 
-  if (loading) {
-    return <PageLoaderSlot />;
-  }
-
   return (
+    <PageContentGate loading={loading}>
     <div className="space-y-6">
       <Tabs defaultValue="header" className="w-full">
         <div className="w-full max-w-full">
@@ -647,5 +644,6 @@ export function RentVsBuyContentManager() {
         </DialogContent>
       </Dialog>
     </div>
+  </PageContentGate>
   );
 }

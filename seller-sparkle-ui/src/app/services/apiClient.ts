@@ -9,7 +9,6 @@ import {
 import {
   beginPortalRequest,
   endPortalRequest,
-  isQuietPortalGet,
   UnauthorizedRedirectError,
 } from "@/app/helpers/portalLoader";
 
@@ -107,10 +106,11 @@ class ApiClient {
     };
   }
 
-  private shouldTrack(method: string, endpoint: string, options?: ApiClientOptions) {
-    if (options?.quiet) return false;
-    if (method === "GET" && isQuietPortalGet(endpoint)) return false;
-    return true;
+  private shouldTrack(_method: string, _endpoint: string, _options?: ApiClientOptions) {
+    // Never drive a full-pane loader from apiClient. That overlay caused
+    // project-wide fade/vibrate on search, filter, save, and navigation.
+    // Pages use PageLoaderSlot / button spinners for their own feedback.
+    return false;
   }
 
   private async track<T>(

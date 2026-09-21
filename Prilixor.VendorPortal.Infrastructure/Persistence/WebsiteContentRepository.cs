@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.WebsiteContent;
 
@@ -8,11 +9,41 @@ public class WebsiteContentRepository(CommonPortalDbContext dbContext) : IWebsit
 {
     public async Task<WebsiteHomeContent?> GetHomeContentAsync(CancellationToken ct = default)
     {
-        return await dbContext.Set<WebsiteHomeContent>()
+        var home = await dbContext.Set<WebsiteHomeContent>()
             .Include(x => x.Features.Where(f => !f.IsDeleted))
-            .Include(x => x.HeroSlides.Where(s => !s.IsDeleted))
             .AsNoTracking()
             .FirstOrDefaultAsync(ct);
+
+        if (home is null)
+            return null;
+
+        try
+        {
+            home.HeroSlides = await dbContext.Set<WebsiteHomeHeroSlide>()
+                .AsNoTracking()
+                .Where(s => s.HomeContentId == home.Id && !s.IsDeleted)
+                .OrderBy(s => s.SortOrder)
+                .ToListAsync(ct);
+        }
+        catch (Exception ex) when (IsMissingHeroSlidesTable(ex))
+        {
+            home.HeroSlides = [];
+        }
+
+        return home;
+    }
+
+    private static bool IsMissingHeroSlidesTable(Exception ex)
+    {
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            if (e is PostgresException pg && pg.SqlState == PostgresErrorCodes.UndefinedTable)
+                return true;
+            if (e.Message.Contains("website_home_hero_slides", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     public async Task UpdateHomeContentAsync(

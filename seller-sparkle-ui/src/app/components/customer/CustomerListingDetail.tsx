@@ -1,4 +1,4 @@
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import { customerApi, type CustomerListingDetailApi, type RentalPricingPlanDto } from "@/app/services/customerApi";
@@ -32,6 +32,7 @@ import {
 import { evaluateRentVsBuy } from "@/app/helpers/rentalPeriod";
 import { cn } from "@/app/helpers/utils";
 import { lastShopHref, persistShopBrowseMode, shopHrefForListing } from "@/app/helpers/customerShopBrowse";
+import { ListingDeliveryCheck } from "@/app/components/customer/ListingDeliveryCheck";
 
 function availabilityBadge(status: string, qty: number): { label: string; className: string } | null {
   const s = status.trim().toLowerCase();
@@ -91,6 +92,11 @@ function resolveCustomerAvailableQuantity(
 const CustomerListingDetail = () => {
   const { listingId } = useParams<{ listingId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const previewImage =
+    typeof (location.state as { previewImage?: unknown } | null)?.previewImage === "string"
+      ? (location.state as { previewImage: string }).previewImage
+      : "";
   const { user } = useAuth();
   const { addLine } = useCart();
   const [qty, setQty] = useState(1);
@@ -181,7 +187,11 @@ const CustomerListingDetail = () => {
     );
   }
 
-  if (isLoading || !data) {
+  if (isLoading && !data) {
+    return <PageLoaderSlot />;
+  }
+
+  if (!data) {
     return <PageLoaderSlot />;
   }
 
@@ -354,7 +364,12 @@ const CustomerListingDetail = () => {
 
       <div className="relative grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] xl:gap-10">
         <div className="min-w-0 lg:sticky lg:top-20">
-          <ProductImageGallery images={images} alt={data.title} />
+          <ProductImageGallery
+            images={images}
+            thumbnails={data.imageThumbnailUrls}
+            placeholder={previewImage}
+            alt={data.title}
+          />
         </div>
 
         <div className="min-w-0 space-y-5">
@@ -739,47 +754,60 @@ const CustomerListingDetail = () => {
                 </Button>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3.5">
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    type="button"
-                    className="h-9 rounded-lg px-3 font-medium"
-                    onClick={() => {
-                      if (user?.role !== "customer") {
-                        toast.message("Sign in to save favorites");
-                        navigate("/customer/login", {
-                          state: { from: `/customer/shop/${data.id}` },
-                        });
-                        return;
-                      }
-                      const action = isFavorite
-                        ? customerApi.removeFavorite(data.id).then(() => toast.success("Removed from favorites"))
-                        : customerApi.addFavorite(data.id).then(() => toast.success("Added to favorites"));
-                      action
-                        .then(() => queryClient.invalidateQueries({ queryKey: ["customer-favorites"] }))
-                        .catch(() => toast.error(isFavorite ? "Failed to remove favorite" : "Failed to add favorite"));
-                    }}
-                  >
-                    <Heart className={cn("h-4 w-4", isFavorite && "fill-destructive text-destructive")} />
-                    {isFavorite ? "Saved" : "Favorite"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 rounded-lg px-3 font-medium"
-                    asChild
-                  >
-                    <Link to={shopHrefForListing(!!data.isChemical)}>
-                      <LayoutGrid className="h-4 w-4" />
-                      More listings
-                    </Link>
-                  </Button>
+              <div className="space-y-3 border-t border-border/70 pt-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      className="h-9 rounded-lg px-3 font-medium"
+                      onClick={() => {
+                        if (user?.role !== "customer") {
+                          toast.message("Sign in to save favorites");
+                          navigate("/customer/login", {
+                            state: { from: `/customer/shop/${data.id}` },
+                          });
+                          return;
+                        }
+                        const action = isFavorite
+                          ? customerApi.removeFavorite(data.id).then(() => toast.success("Removed from favorites"))
+                          : customerApi.addFavorite(data.id).then(() => toast.success("Added to favorites"));
+                        action
+                          .then(() => queryClient.invalidateQueries({ queryKey: ["customer-favorites"] }))
+                          .catch(() => toast.error(isFavorite ? "Failed to remove favorite" : "Failed to add favorite"));
+                      }}
+                    >
+                      <Heart className={cn("h-4 w-4", isFavorite && "fill-destructive text-destructive")} />
+                      {isFavorite ? "Saved" : "Favorite"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 rounded-lg px-3 font-medium"
+                      asChild
+                    >
+                      <Link to={shopHrefForListing(!!data.isChemical)}>
+                        <LayoutGrid className="h-4 w-4" />
+                        More listings
+                      </Link>
+                    </Button>
+                  </div>
+                  <p className="text-[12px] font-medium text-muted-foreground">
+                    Excludes {actualOrderType === "buy" ? "delivery" : "deposit & delivery"}.
+                  </p>
                 </div>
-                <p className="text-[12px] font-medium text-muted-foreground">
-                  Excludes {actualOrderType === "buy" ? "delivery" : "deposit & delivery"}
-                </p>
+                <ListingDeliveryCheck
+                  line={{
+                    listingId: data.id,
+                    quantity: qty,
+                    rentalDays: actualOrderType === "buy" ? 0 : selectedPlan?.durationDays ?? 1,
+                    rentalPeriodUnit: "day",
+                    orderType: actualOrderType,
+                    productVariantId: resolvedVariantId || undefined,
+                    rentalPricingPlanId: actualOrderType === "rent" ? selectedPlan?.id : undefined,
+                  }}
+                />
               </div>
             </div>
           </div>

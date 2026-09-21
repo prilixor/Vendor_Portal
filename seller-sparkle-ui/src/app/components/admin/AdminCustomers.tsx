@@ -7,7 +7,7 @@ import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
 import { adminApi, AdminCustomerDetailDto, AdminCustomerListItemDto } from "@/app/services/adminApi";
 import { AdminPlaceCustomerOrderDialog } from "@/app/components/admin/AdminPlaceCustomerOrderDialog";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Loader2, LogIn, Mail, MapPin, Phone, Search, ShoppingCart, ChevronRight, UserRound } from "lucide-react";
 import { toast } from "sonner";
@@ -122,9 +122,7 @@ export const AdminCustomers = () => {
           </Button>
         </div>
       </div>
-      {loading ? (
-        <PageLoaderSlot className="min-h-[8rem] py-0" />
-      ) : (
+      <PageContentGate loading={loading} className="min-h-[8rem] py-0">
         <div className="space-y-2">
           {pageRows.map((c) => {
             const initials = c.fullName
@@ -195,7 +193,7 @@ export const AdminCustomers = () => {
             label="customers"
           />
         </div>
-      )}
+      </PageContentGate>
       {!hasPermission(ADMIN_PERMISSIONS.customersView) && (
         <p className="text-sm text-destructive">You may not have customers.view permission.</p>
       )}
@@ -248,11 +246,9 @@ export const AdminCustomerDetail = () => {
     }
   };
 
-  if (loading || !detail) {
-    return <PageLoaderSlot />;
-  }
-
   return (
+    <PageContentGate loading={loading}>
+    {!detail ? null : (
     <div className="space-y-6">
       <PageHeader
         title={detail.fullName}
@@ -433,6 +429,8 @@ export const AdminCustomerDetail = () => {
         />
       )}
     </div>
+    )}
+    </PageContentGate>
   );
 };
 

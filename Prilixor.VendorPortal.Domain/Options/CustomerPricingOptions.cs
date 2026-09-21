@@ -11,7 +11,7 @@ public sealed class CustomerPricingOptions
     public decimal GstPercent { get; set; } = 18m;
     public decimal BuyPriceMultiplierFromDailyRent { get; set; } = 30m;
     public decimal DispatchOfferTtlMinutes { get; set; } = 2m;
-    public int MaxDispatchVendorsPerLine { get; set; } = 3;
+    public int MaxDispatchVendorsPerLine { get; set; } = 5;
 
     public decimal BuyoutRentDeductionPercentage { get; set; } = 50m;
     public decimal ExtensionServiceFee { get; set; } = 5m;

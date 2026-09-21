@@ -28,7 +28,11 @@ public sealed record CreateCustomerCheckoutCommand(
     string DeliveryOption,
     IReadOnlyList<CartLineRequest> Lines,
     string Source,
-    Guid? PlacedByAdminId = null) : ICommand<CustomerCheckoutDto>;
+    Guid? PlacedByAdminId = null,
+    bool AcceptedLegal = false,
+    bool AcceptedPrescriptionLegal = false,
+    string? IpAddress = null,
+    string? UserAgent = null) : ICommand<CustomerCheckoutDto>;
 
 public sealed class CreateCustomerCheckoutCommandValidator : AbstractValidator<CreateCustomerCheckoutCommand>
 {
@@ -64,6 +68,11 @@ internal sealed class CreateCustomerCheckoutCommandHandler(
             request.DeliveryOption,
             request.Lines,
             request.PlacedByAdminId,
+            request.AcceptedLegal,
+            request.AcceptedPrescriptionLegal,
+            request.Source,
+            request.IpAddress,
+            request.UserAgent,
             AwaitPayment: true), cancellationToken);
 
         if (!placeResult.IsSuccess)
@@ -245,9 +254,8 @@ public sealed record VerifyCustomerCheckoutCommand(
 
 internal sealed class VerifyCustomerCheckoutCommandHandler(
     ICustomerRepository customers,
-    IVendorOnboardingRepository vendors,
     IRazorpayPaymentService razorpay,
-    IOptions<CustomerPricingOptions> pricingOptions) : ICommandHandler<VerifyCustomerCheckoutCommand, CustomerCheckoutDto>
+    ISequentialDispatchService dispatch) : ICommandHandler<VerifyCustomerCheckoutCommand, CustomerCheckoutDto>
 {
     public async Task<Result<CustomerCheckoutDto>> Handle(VerifyCustomerCheckoutCommand request, CancellationToken cancellationToken)
     {
@@ -268,8 +276,7 @@ internal sealed class VerifyCustomerCheckoutCommandHandler(
 
         await CheckoutPaymentActivator.MarkPaidAndDispatchAsync(
             customers,
-            vendors,
-            pricingOptions.Value,
+            dispatch,
             session,
             request.RazorpayPaymentId,
             cancellationToken);
@@ -345,10 +352,9 @@ public sealed record ProcessRazorpayWebhookCommand(string RawBody, string Signat
 
 internal sealed class ProcessRazorpayWebhookCommandHandler(
     ICustomerRepository customers,
-    IVendorOnboardingRepository vendors,
+    ISequentialDispatchService dispatch,
     IRazorpayPaymentService razorpay,
     IOptions<RazorpayOptions> razorpayOptions,
-    IOptions<CustomerPricingOptions> pricingOptions,
     ILogger<ProcessRazorpayWebhookCommandHandler> logger) : ICommandHandler<ProcessRazorpayWebhookCommand, bool>
 {
     public async Task<Result<bool>> Handle(ProcessRazorpayWebhookCommand request, CancellationToken cancellationToken)
@@ -413,7 +419,7 @@ internal sealed class ProcessRazorpayWebhookCommandHandler(
             return;
 
         await CheckoutPaymentActivator.MarkPaidAndDispatchAsync(
-            customers, vendors, pricingOptions.Value, session, paymentId, cancellationToken);
+            customers, dispatch, session, paymentId, cancellationToken);
     }
 
     private async Task TryActivateFromPaymentLink(JsonElement root, CancellationToken cancellationToken)
@@ -444,7 +450,7 @@ internal sealed class ProcessRazorpayWebhookCommandHandler(
             session.RazorpayOrderId = orderId;
 
         await CheckoutPaymentActivator.MarkPaidAndDispatchAsync(
-            customers, vendors, pricingOptions.Value, session, paymentId, cancellationToken);
+            customers, dispatch, session, paymentId, cancellationToken);
     }
 }
 
@@ -452,8 +458,7 @@ internal static class CheckoutPaymentActivator
 {
     public static async Task MarkPaidAndDispatchAsync(
         ICustomerRepository customers,
-        IVendorOnboardingRepository vendors,
-        CustomerPricingOptions options,
+        ISequentialDispatchService dispatch,
         CustomerCheckoutSession session,
         string? razorpayPaymentId,
         CancellationToken cancellationToken)
@@ -472,8 +477,48 @@ internal static class CheckoutPaymentActivator
         var orders = await customers.GetOrdersByCheckoutSessionIdAsync(session.Id, cancellationToken);
         foreach (var order in orders)
         {
-            await CustomerOrderDispatchStarter.ActivatePaidOrderAsync(
-                customers, vendors, options, order, cancellationToken);
+            if (!string.Equals(order.Status, "awaiting_payment", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var agg = await customers.GetListingForCustomerAsync(order.VendorProductListingId, cancellationToken);
+            if (agg is null)
+            {
+                order.Status = "dispatch_failed";
+                await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+                await customers.SaveChangesAsync(cancellationToken);
+                continue;
+            }
+
+            var placementTitle = string.IsNullOrWhiteSpace(agg.ListingTitle) ? "item" : agg.ListingTitle;
+            order.Status = "awaiting_vendor_acceptance";
+            await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+            await customers.SaveChangesAsync(cancellationToken);
+
+            var started = await dispatch.StartWaveAsync(
+                order,
+                agg.ProductId,
+                [],
+                placementTitle,
+                cancellationToken);
+            await dispatch.PersistAsync(cancellationToken);
+
+            if (!started)
+            {
+                order.Status = "dispatch_failed";
+                await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+                await customers.AddCustomerNotificationAsync(
+                    new CustomerNotification
+                    {
+                        Id = Guid.NewGuid(),
+                        CustomerId = order.CustomerId,
+                        Title = $"Order {order.OrderNumber} dispatch failed",
+                        Body = "Payment received, but no eligible vendor is available right now. Support will follow up.",
+                        NotificationType = "order_dispatch_failed",
+                        RelatedOrderId = order.Id,
+                    },
+                    cancellationToken);
+                await customers.SaveChangesAsync(cancellationToken);
+            }
         }
     }
 }

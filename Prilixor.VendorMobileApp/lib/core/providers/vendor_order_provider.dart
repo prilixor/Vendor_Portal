@@ -7,6 +7,7 @@ import '../models/dispatch_offer_model.dart';
 import '../models/expiring_order_model.dart';
 import '../models/order_continuations_model.dart';
 import '../models/order_image_model.dart';
+import '../models/prescription_file_model.dart';
 import '../models/vendor_order_model.dart';
 import '../utils/multipart_file_util.dart';
 
@@ -51,6 +52,11 @@ class VendorOrderProvider extends ChangeNotifier {
   OrderImageRequest? get imageRequest => _imageRequest;
 
   List<OrderImage> get orderImages => _imageRequest?.images ?? const [];
+
+  List<PrescriptionFileModel> _prescriptionFiles = [];
+  List<PrescriptionFileModel> get prescriptionFiles => List.unmodifiable(_prescriptionFiles);
+  bool _prescriptionLoading = false;
+  bool get prescriptionLoading => _prescriptionLoading;
 
   /// Open photo requests across an order group: orderId -> photo count.
   final Map<String, int> _groupPhotoCounts = {};
@@ -196,6 +202,7 @@ class VendorOrderProvider extends ChangeNotifier {
         await Future.wait([
           fetchContinuations(orderId, silent: true),
           fetchOrderImageRequest(vendorId, orderId, silent: true),
+          fetchOrderPrescriptions(vendorId, orderId, silent: true),
         ]);
         return _selectedOrder;
       }
@@ -230,6 +237,36 @@ class VendorOrderProvider extends ChangeNotifier {
     return null;
   }
 
+  Future<void> fetchOrderPrescriptions(
+    String vendorId,
+    String orderId, {
+    bool silent = false,
+  }) async {
+    if (vendorId.isEmpty || orderId.isEmpty) return;
+    if (!silent) {
+      _prescriptionLoading = true;
+      notifyListeners();
+    }
+    try {
+      final response = await _api.dio.get(
+        '/vendors/$vendorId/orders/$orderId/prescriptions',
+      );
+      final data = response.data;
+      final list = data is List
+          ? data
+          : (data is Map && data['items'] is List ? data['items'] as List : const []);
+      _prescriptionFiles = list
+          .whereType<Map>()
+          .map((e) => PrescriptionFileModel.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (_) {
+      if (!silent) _prescriptionFiles = [];
+    } finally {
+      _prescriptionLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<OrderImageRequest?> fetchOrderImageRequest(
     String vendorId,
     String orderId, {
@@ -249,8 +286,10 @@ class VendorOrderProvider extends ChangeNotifier {
           .get('/vendors/$vendorId/orders/$orderId/image-request');
       final data = response.data;
       if (data is Map) {
-        _imageRequest =
+        final parsed =
             OrderImageRequest.fromJson(Map<String, dynamic>.from(data));
+        final previous = _imageRequest;
+        _imageRequest = previous == null ? parsed : reuseOrderImageUrls(previous, parsed);
         _groupPhotoCounts[orderId] = _imageRequest!.images.length;
       } else {
         _imageRequest = null;
@@ -306,7 +345,9 @@ class VendorOrderProvider extends ChangeNotifier {
   Future<bool> uploadOrderImage({
     required String vendorId,
     required String orderId,
+    required String optionId,
     required PlatformFile file,
+    int? slotIndex,
   }) async {
     _error = null;
     _actionLoading = true;
@@ -317,9 +358,15 @@ class VendorOrderProvider extends ChangeNotifier {
         _error = 'Could not read the selected image.';
         return false;
       }
-      final formData = FormData.fromMap({'file': multipart});
+      final query = StringBuffer('optionId=${Uri.encodeComponent(optionId)}');
+      if (slotIndex != null) query.write('&slotIndex=$slotIndex');
+      final formData = FormData.fromMap({
+        'file': multipart,
+        'optionId': optionId,
+        if (slotIndex != null) 'slotIndex': slotIndex,
+      });
       await _api.dio.post(
-        '/vendors/$vendorId/orders/$orderId/images',
+        '/vendors/$vendorId/orders/$orderId/images?$query',
         data: formData,
         options: Options(
           sendTimeout: const Duration(seconds: 60),
@@ -337,6 +384,37 @@ class VendorOrderProvider extends ChangeNotifier {
     } finally {
       _actionLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<bool> updateOrderImageOptionDescription({
+    required String vendorId,
+    required String orderId,
+    required String optionId,
+    required String description,
+  }) async {
+    _error = null;
+    try {
+      final data = await _api.dio.patch(
+        '/vendors/$vendorId/orders/$orderId/image-options/$optionId',
+        data: {'description': description},
+      );
+      if (data.data is Map) {
+        _imageRequest =
+            OrderImageRequest.fromJson(Map<String, dynamic>.from(data.data as Map));
+      } else {
+        await fetchOrderImageRequest(vendorId, orderId, silent: true);
+      }
+      notifyListeners();
+      return true;
+    } on DioException catch (e) {
+      _error = _dioMessage(e, 'Failed to save description.');
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _error = 'Failed to save description.';
+      notifyListeners();
+      return false;
     }
   }
 

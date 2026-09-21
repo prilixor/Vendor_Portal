@@ -5,7 +5,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate, PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw, FileText, Eye, Building, AlertCircle, Calendar, MapPin, ExternalLink } from "lucide-react";
@@ -659,9 +659,7 @@ const Verification = () => {
             </TabsList>
           </Tabs>
         </div>
-        {loading ? (
-          <PageLoaderSlot />
-        ) : (
+        <PageContentGate loading={loading}>
           <>
           <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full min-w-[700px] text-sm">
@@ -710,7 +708,7 @@ const Verification = () => {
             label="vendors"
           />
           </>
-        )}
+        </PageContentGate>
       </Card>
 
       {/* Vendor detail */}

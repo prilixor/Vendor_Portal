@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config/app_urls.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/legal_policy_links.dart';
 
 class SupportScreen extends StatelessWidget {
   final String? orderRef;
@@ -166,6 +167,8 @@ class SupportScreen extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          const SupportPolicyLinks(),
         ],
       ),
     );

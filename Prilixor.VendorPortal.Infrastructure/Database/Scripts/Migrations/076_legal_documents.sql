@@ -220,12 +220,10 @@ BEGIN
                         vis := true;
                     END IF;
                 ELSIF rec.document_type IN ('cancellation-refund-policy', 'shipping-delivery-policy') THEN
+                    -- Display at checkout only — no register/checkout acceptance.
                     IF is_customer THEN
                         IF scr IN ('checkout', 'footer', 'legal_hub', 'order_confirm') THEN
                             vis := true;
-                        END IF;
-                        IF scr = 'checkout' THEN
-                            req := true;
                         END IF;
                     ELSIF is_admin AND scr = 'legal_hub' THEN
                         vis := true;

@@ -7,6 +7,34 @@ enum BrandPageLoaderSize { sm, md, lg }
 /// Cropped BlinksMed mark only — never the wordmark lockup (`logo.png`).
 const String kBrandLoaderMarkAsset = 'assets/branding/loader_mark.png';
 
+/// White rounded tile with the BlinksMed “B” mark (no wordmark).
+class BrandMarkTile extends StatelessWidget {
+  const BrandMarkTile({super.key, this.size = 80, this.padding = 8});
+
+  final double size;
+  final double padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: ColoredBox(
+        color: Colors.white,
+        child: Padding(
+          padding: EdgeInsets.all(padding),
+          child: Image.asset(
+            kBrandLoaderMarkAsset,
+            width: size,
+            height: size,
+            fit: BoxFit.contain,
+            semanticLabel: 'BlinksMed',
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 const Color _kLoaderGlow = Color(0xFF8B85FF);
 const Color _kLoaderGreen = Color(0xFF31C473);
 

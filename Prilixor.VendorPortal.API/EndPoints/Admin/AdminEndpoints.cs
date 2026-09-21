@@ -565,6 +565,30 @@ public sealed class GetAdminOrdersEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminOrderPrescriptionsRequest
+{
+    public Guid OrderId { get; set; }
+}
+
+public sealed class GetAdminOrderPrescriptionsEndpoint(IMediator mediator)
+    : Endpoint<GetAdminOrderPrescriptionsRequest, Results<Ok<IReadOnlyList<CustomerPrescriptionFileDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("orders/{orderId}/prescriptions");
+        Group<AdminApiGroup>();
+        Policies("Perm:orders.view");
+    }
+
+    public override async Task<Results<Ok<IReadOnlyList<CustomerPrescriptionFileDto>>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminOrderPrescriptionsRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetAdminOrderPrescriptionsQuery(req.OrderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class UpdateAdminOrderStatusRequest : AdminUserIdRequest
 {
     public Guid OrderId { get; set; }

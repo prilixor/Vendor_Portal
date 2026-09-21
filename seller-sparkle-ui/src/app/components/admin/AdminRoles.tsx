@@ -6,7 +6,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
 import { Checkbox } from "@/app/components/ui/checkbox";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { adminApi, AdminPermissionDto, AdminRoleDto } from "@/app/services/adminApi";
@@ -333,9 +333,7 @@ const AdminRoles = () => {
           </div>
         </div>
 
-        {loading ? (
-          <PageLoaderSlot />
-        ) : filteredRoles.length === 0 ? (
+        <PageContentGate loading={loading}>{filteredRoles.length === 0 ? (
           <div className="py-16 text-center space-y-2">
             <Shield className="mx-auto h-8 w-8 text-muted-foreground/40" />
             <p className="text-sm font-medium">No roles match your search</p>
@@ -483,7 +481,7 @@ const AdminRoles = () => {
             />
           </div>
           </>
-        )}
+        )}</PageContentGate>
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>

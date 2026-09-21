@@ -22,6 +22,7 @@ import {
   PhoneCall,
   Wrench,
   Scale,
+  ClipboardList,
 } from "lucide-react";
 import type { NavSection } from "@/app/helpers/navigation";
 
@@ -90,6 +91,7 @@ const adminNavBase: { title: string; items: AdminNavItem[] }[] = [
       { label: "FAQ Management", to: "/admin/website-content/faq", icon: HelpCircle, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Contact Details", to: "/admin/website-content/contact", icon: PhoneCall, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Legal Documents", to: "/admin/website-content/legal", icon: Scale, permission: ADMIN_PERMISSIONS.catalogManage },
+      { label: "Legal Acceptances", to: "/admin/website-content/legal/acceptances", icon: ClipboardList, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Portal Settings", to: "/admin/website-content/settings", icon: Settings, permission: ADMIN_PERMISSIONS.catalogManage },
     ],
   },

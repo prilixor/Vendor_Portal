@@ -1,4 +1,12 @@
-import { useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { brandArtSrc, isBrandArtReady, subscribeBrandArt } from "@/app/helpers/brandArt";
 import { cn } from "@/app/helpers/utils";
 
@@ -212,7 +220,31 @@ function LoaderBrandPlate({ artwork, size }: { artwork: "mark" | "logo"; size: n
   );
 }
 
-/** Empty slot while the global branded overlay is showing — avoids a second spinner. */
+/** In-flow branded loader for a page's first paint (no full-pane dim/overlay). */
 export function PageLoaderSlot({ className }: { className?: string }) {
-  return <div className={cn("min-h-[16rem]", className)} aria-busy="true" aria-label="Loading" />;
+  return <PageLoader className={cn("min-h-[16rem] py-10", className)} size="md" />;
+}
+
+/**
+ * Show a full in-flow loader only until the first successful load.
+ * Later refetches (search/filter/save refresh) keep existing content mounted
+ * so the page does not blank/fade on every operation.
+ */
+export function PageContentGate({
+  loading,
+  children,
+  className,
+}: {
+  loading: boolean;
+  children: ReactNode;
+  className?: string;
+}) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!loading) setReady(true);
+  }, [loading]);
+
+  if (!ready) return <PageLoaderSlot className={className} />;
+  return <>{children}</>;
 }

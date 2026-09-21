@@ -136,7 +136,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
       final m = min % 60;
       return m == 0 ? '${h}h left' : '${h}h ${m}m left';
     }
-    return '$min min left';
+    return min == 1 ? '1 min left' : '$min mins left';
   }
 
   String _baseOrderNumber(String num) {
@@ -775,10 +775,10 @@ class _RequestItemRow extends StatelessWidget {
     required this.onReject,
   });
 
-  Color _typeColor(String type) {
+  Color _typeColor(BuildContext context, String type) {
     return type.toLowerCase() == 'buy'
-        ? const Color(0xFF818CF8)
-        : const Color(0xFF34D399);
+        ? (context.isDarkMode ? const Color(0xFF818CF8) : const Color(0xFF4338CA))
+        : context.appColors.success;
   }
 
   @override
@@ -786,6 +786,8 @@ class _RequestItemRow extends StatelessWidget {
     final colors = context.appColors;
     final type = offer.orderType.toLowerCase();
     final disabled = working || expired;
+    final typeColor = _typeColor(context, type);
+    final isRent = type != 'buy';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
@@ -830,16 +832,20 @@ class _RequestItemRow extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                       decoration: BoxDecoration(
-                        color: _typeColor(type).withValues(alpha: 0.14),
+                        color: isRent
+                            ? colors.successSoft
+                            : typeColor.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: _typeColor(type).withValues(alpha: 0.35),
+                          color: isRent
+                              ? colors.successBorder
+                              : typeColor.withValues(alpha: 0.35),
                         ),
                       ),
                       child: Text(
                         type == 'buy' ? 'Buy' : 'Rent',
                         style: TextStyle(
-                          color: _typeColor(type),
+                          color: typeColor,
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                         ),
@@ -943,7 +949,8 @@ class _RequestItemRow extends StatelessWidget {
             children: [
               _ActionIconButton(
                 icon: Icons.check_rounded,
-                color: const Color(0xFF34D399),
+                color: colors.success,
+                fillColor: colors.successSoft,
                 tooltip: 'Accept',
                 disabled: disabled,
                 loading: working,
@@ -998,6 +1005,7 @@ class _MetaChip extends StatelessWidget {
 class _ActionIconButton extends StatelessWidget {
   final IconData icon;
   final Color color;
+  final Color? fillColor;
   final String tooltip;
   final bool disabled;
   final bool loading;
@@ -1006,6 +1014,7 @@ class _ActionIconButton extends StatelessWidget {
   const _ActionIconButton({
     required this.icon,
     required this.color,
+    this.fillColor,
     required this.tooltip,
     required this.disabled,
     required this.loading,
@@ -1014,10 +1023,14 @@ class _ActionIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final well = disabled
+        ? color.withValues(alpha: 0.08)
+        : (fillColor ??
+            color.withValues(alpha: context.isDarkMode ? 0.16 : 0.18));
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: color.withValues(alpha: disabled ? 0.08 : 0.16),
+        color: well,
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           onTap: disabled ? null : onPressed,

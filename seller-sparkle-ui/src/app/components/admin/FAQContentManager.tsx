@@ -20,7 +20,7 @@ import { websiteContentApi, FaqCategoryDto, FaqItemDto } from "@/app/services/we
 import { useQueryClient } from "@tanstack/react-query";
 import { HelpCircle, Plus, Pencil, Trash2, Search, CheckCircle, XCircle, FolderPlus } from "lucide-react";
 import { toast } from "sonner";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 
 const PAGE_SIZE = 8;
@@ -166,11 +166,8 @@ export function FAQContentManager() {
   const safePage = Math.min(page, totalPages);
   const pageItems = filteredItems.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  if (loading) {
-    return <PageLoaderSlot />;
-  }
-
   return (
+    <PageContentGate loading={loading}>
     <div className="space-y-6">
       {/* Category & Search Header */}
       <Card>
@@ -467,5 +464,6 @@ export function FAQContentManager() {
         </DialogContent>
       </Dialog>
     </div>
+  </PageContentGate>
   );
 }

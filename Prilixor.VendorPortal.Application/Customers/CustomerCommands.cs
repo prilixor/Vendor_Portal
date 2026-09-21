@@ -3,18 +3,29 @@ using Microsoft.Extensions.Options;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Application.Onboarding;
+using Prilixor.VendorPortal.Domain.Legal;
 using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Customers;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Prilixor.VendorPortal.Application.Customers;
 
 public sealed record CustomerRegisteredDto(Guid Id, string Email, string FullName);
 
-public sealed record RegisterCustomerCommand(string Email, string Password, string FullName, string? Phone)
+public sealed record RegisterCustomerCommand(
+    string Email,
+    string Password,
+    string FullName,
+    string? Phone,
+    bool AcceptedLegal = false,
+    string? SourceSurface = null,
+    IReadOnlyList<string>? AcceptedSlugs = null,
+    string? IpAddress = null,
+    string? UserAgent = null)
     : ICommand<CustomerRegisteredDto>;
 
 public sealed class RegisterCustomerCommandValidator : AbstractValidator<RegisterCustomerCommand>
@@ -32,7 +43,9 @@ public sealed class RegisterCustomerCommandValidator : AbstractValidator<Registe
 
 internal sealed class RegisterCustomerCommandHandler(
     ICustomerRepository customers,
-    IPasswordHasherService passwordHasher)
+    IPasswordHasherService passwordHasher,
+    ILegalAcceptanceRecorder legalAcceptances,
+    ILogger<RegisterCustomerCommandHandler> logger)
     : ICommandHandler<RegisterCustomerCommand, CustomerRegisteredDto>
 {
     public async Task<Result<CustomerRegisteredDto>> Handle(RegisterCustomerCommand request, CancellationToken cancellationToken)
@@ -45,6 +58,18 @@ internal sealed class RegisterCustomerCommandHandler(
                 "An account already exists for this email.",
                 ErrorCategory.Validation));
         }
+
+        var acceptanceGate = await legalAcceptances.BuildRegisterAcceptancesAsync(
+            LegalCatalog.ActorTypes.Customer,
+            Guid.Empty,
+            request.SourceSurface,
+            request.AcceptedLegal,
+            request.AcceptedSlugs,
+            request.IpAddress,
+            request.UserAgent,
+            cancellationToken);
+        if (!acceptanceGate.IsSuccess)
+            return Result.Failure<CustomerRegisteredDto>(acceptanceGate.Errors);
 
         var entity = new Customer
         {
@@ -70,6 +95,22 @@ internal sealed class RegisterCustomerCommandHandler(
 
         await customers.AddCustomerAsync(entity, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
+
+        var acceptances = acceptanceGate.Value
+            .Select(row =>
+            {
+                row.ActorId = entity.Id;
+                return row;
+            })
+            .ToList();
+        try
+        {
+            await legalAcceptances.SaveAcceptancesAsync(acceptances, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to persist legal acceptances for customer {CustomerId}", entity.Id);
+        }
 
         await customers.AddCustomerNotificationAsync(
             new CustomerNotification
@@ -431,7 +472,8 @@ public sealed record CartLineRequest(
     string? ContactNumber = null,
     string? ReferenceNumber = null,
     Guid? RentalPricingPlanId = null,
-    DateOnly? RentalStartDate = null);
+    DateOnly? RentalStartDate = null,
+    bool HasPrescriptionFile = false);
 
 public sealed record CustomerOrderQuoteDto(
     decimal SubtotalAmount,
@@ -462,6 +504,11 @@ public sealed record PlaceCustomerOrdersCommand(
     string DeliveryOption,
     IReadOnlyList<CartLineRequest> Lines,
     Guid? PlacedByAdminId = null,
+    bool AcceptedLegal = false,
+    bool AcceptedPrescriptionLegal = false,
+    string? SourceSurface = null,
+    string? IpAddress = null,
+    string? UserAgent = null,
     /// <summary>When true, create draft orders (awaiting_payment) without vendor dispatch offers.</summary>
     bool AwaitPayment = false) : ICommand<PlaceCustomerOrdersResultDto>;
 
@@ -544,7 +591,9 @@ public sealed record CustomerOrderDto(
     decimal? RentalNormalPrice = null,
     string? RentalDiscountType = null,
     decimal? RentalDiscountValue = null,
-    decimal? RentalFinalPrice = null);
+    decimal? RentalFinalPrice = null,
+    IReadOnlyList<CustomerPrescriptionFileDto>? PrescriptionFiles = null);
+
 internal static class CustomerOrderPricingRules
 {
     public static string NormalizeDeliveryOption(string? option) =>
@@ -747,15 +796,17 @@ internal static class CustomerOrderPricingRules
         decimal customerLng,
         VendorProductListingAggregate aggregate,
         List<VendorServiceArea> vendorServiceAreas,
-        CustomerPricingOptions options)
+        CustomerPricingOptions options,
+        bool enforceServiceRadius = true)
     {
+        var enforce = enforceServiceRadius && options.EnforceVendorServiceRadius;
         var activeAreas = vendorServiceAreas
             .Where(a => a.IsActive && !a.IsDeleted)
             .ToList();
 
         if (activeAreas.Count > 0)
         {
-            var withinAreaDistances = activeAreas
+            var areaDistances = activeAreas
                 .Select(area =>
                 {
                     var distanceKm = CalculateDistanceKm(
@@ -765,7 +816,10 @@ internal static class CustomerOrderPricingRules
                         area.CenterLongitude);
                     return new { distanceKm, area.ServiceRadiusKm };
                 })
-                .Where(x => !options.EnforceVendorServiceRadius || x.distanceKm <= x.ServiceRadiusKm)
+                .ToList();
+
+            var withinAreaDistances = areaDistances
+                .Where(x => !enforce || x.distanceKm <= x.ServiceRadiusKm)
                 .Select(x => x.distanceKm)
                 .OrderBy(x => x)
                 .ToList();
@@ -775,12 +829,14 @@ internal static class CustomerOrderPricingRules
                 return DeliveryDistanceResult.Success(withinAreaDistances[0]);
             }
 
-            if (options.EnforceVendorServiceRadius)
+            if (enforce)
             {
                 return DeliveryDistanceResult.Fail(
                     "customers.out_of_service_area",
                     "This delivery address is outside the vendor's service area. Please choose another address, or remove items that cannot be delivered there.");
             }
+
+            return DeliveryDistanceResult.Success(areaDistances.Min(x => x.distanceKm));
         }
 
         if (aggregate.VendorLatitude.HasValue && aggregate.VendorLongitude.HasValue)
@@ -791,7 +847,7 @@ internal static class CustomerOrderPricingRules
                 aggregate.VendorLatitude.Value,
                 aggregate.VendorLongitude.Value);
 
-            if (options.EnforceVendorServiceRadius && distanceKm > options.DefaultServiceRadiusKm)
+            if (enforce && distanceKm > options.DefaultServiceRadiusKm)
             {
                 return DeliveryDistanceResult.Fail(
                     "customers.out_of_service_area",
@@ -1002,7 +1058,9 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
 internal sealed class PlaceCustomerOrdersCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
-    IOptions<CustomerPricingOptions> pricingOptions)
+    IOptions<CustomerPricingOptions> pricingOptions,
+    ILegalAcceptanceRecorder legalAcceptances,
+    ISequentialDispatchService dispatch)
     : ICommandHandler<PlaceCustomerOrdersCommand, PlaceCustomerOrdersResultDto>
 {
     public async Task<Result<PlaceCustomerOrdersResultDto>> Handle(PlaceCustomerOrdersCommand request, CancellationToken cancellationToken)
@@ -1010,6 +1068,59 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
         var customer = await customers.GetCustomerByIdAsync(request.CustomerId, cancellationToken);
         if (customer is null || customer.IsDeleted)
             return Result.Failure<PlaceCustomerOrdersResultDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
+
+        if (request.PlacedByAdminId is null)
+        {
+            var checkoutGate = await legalAcceptances.BuildScreenAcceptancesAsync(
+                LegalCatalog.ActorTypes.Customer,
+                request.CustomerId,
+                request.SourceSurface,
+                LegalCatalog.Screens.Checkout,
+                request.AcceptedLegal,
+                null,
+                request.IpAddress,
+                request.UserAgent,
+                null,
+                cancellationToken);
+            if (!checkoutGate.IsSuccess)
+                return Result.Failure<PlaceCustomerOrdersResultDto>(checkoutGate.Errors);
+
+            var needsPrescription = request.Lines.Any(l =>
+                l.DoctorId.HasValue
+                || l.HasPrescriptionFile
+                || !string.IsNullOrWhiteSpace(l.ReferenceNumber));
+            IReadOnlyList<LegalAcceptance> prescriptionRows = [];
+            if (needsPrescription)
+            {
+                var rxGate = await legalAcceptances.BuildScreenAcceptancesAsync(
+                    LegalCatalog.ActorTypes.Customer,
+                    request.CustomerId,
+                    request.SourceSurface,
+                    LegalCatalog.Screens.Prescription,
+                    request.AcceptedPrescriptionLegal,
+                    null,
+                    request.IpAddress,
+                    request.UserAgent,
+                    null,
+                    cancellationToken);
+                if (!rxGate.IsSuccess)
+                    return Result.Failure<PlaceCustomerOrdersResultDto>(rxGate.Errors);
+                prescriptionRows = rxGate.Value;
+            }
+
+            try
+            {
+                await legalAcceptances.SaveAcceptancesAsync(prescriptionRows, cancellationToken);
+                await legalAcceptances.SaveAcceptancesAsync(checkoutGate.Value, cancellationToken);
+            }
+            catch
+            {
+                return Result.Failure<PlaceCustomerOrdersResultDto>(new Error(
+                    "legal.acceptance_save_failed",
+                    "Could not record policy acceptance. Please try again.",
+                    ErrorCategory.Validation));
+            }
+        }
 
         var deliveryOption = CustomerOrderPricingRules.NormalizeDeliveryOption(request.DeliveryOption);
         CustomerAddress? address = null;
@@ -1213,7 +1324,8 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                     address.Longitude!.Value,
                     agg,
                     vendorAreas,
-                    options);
+                    options,
+                    enforceServiceRadius: request.PlacedByAdminId is null);
                 if (!distanceResult.IsSuccess)
                 {
                     failed.Add(new FailedCustomerOrderLineDto(
@@ -1318,31 +1430,14 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
             await customers.AddCustomerRentalOrderAsync(order, cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
 
-            var ranked = await CustomerOrderDispatchStarter.RankEligibleVendorsAsync(
-                customers,
-                vendors,
-                options,
-                order,
-                agg.ProductId,
-                line.ProductVariantId,
-                address,
-                vendorAreasByVendorId,
-                cancellationToken);
-
-            if (ranked.Count == 0)
+            var placementTitle = trackedListing.ListingTitle;
+            if (order.ProductVariantId.HasValue && agg.Variants != null)
             {
-                order.Status = "dispatch_failed";
-                await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
-                await customers.SaveChangesAsync(cancellationToken);
-
-                failed.Add(new FailedCustomerOrderLineDto(
-                    line.ListingId,
-                    line.Quantity,
-                    line.RentalDays,
-                    orderType,
-                    "customers.dispatch_no_vendor",
-                    "No eligible vendor available right now."));
-                continue;
+                var variant = agg.Variants.FirstOrDefault(v => string.Equals(v.Id, order.ProductVariantId.Value.ToString(), StringComparison.OrdinalIgnoreCase));
+                if (variant != null)
+                {
+                    placementTitle += $" ({Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(variant.SizeValue, variant.SizeUnit)})";
+                }
             }
 
             if (request.AwaitPayment)
@@ -1362,28 +1457,46 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
             }
             else
             {
-                await CustomerOrderDispatchStarter.CreateOffersAndNotifyAsync(
-                    customers,
-                    vendors,
-                    options,
+                var started = await dispatch.StartWaveAsync(
                     order,
-                    trackedListing.ListingTitle,
-                    orderType,
-                    ranked,
+                    agg.ProductId,
+                    excludeVendorIds: [],
+                    listingTitle: placementTitle,
                     cancellationToken);
+                await dispatch.PersistAsync(cancellationToken);
+
+                if (!started)
+                {
+                    order.Status = "dispatch_failed";
+                    await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+                    await customers.SaveChangesAsync(cancellationToken);
+
+                    failed.Add(new FailedCustomerOrderLineDto(
+                        line.ListingId,
+                        line.Quantity,
+                        line.RentalDays,
+                        orderType,
+                        "customers.dispatch_no_vendor",
+                        "No eligible vendor available right now."));
+                    continue;
+                }
+
+                await customers.AddCustomerNotificationAsync(
+                    new CustomerNotification
+                    {
+                        Id = Guid.NewGuid(),
+                        CustomerId = request.CustomerId,
+                        Title = $"Order {order.OrderNumber} submitted",
+                        Body = $"Your {orderType} request for \"{trackedListing.ListingTitle}\" is awaiting vendor acceptance.",
+                        NotificationType = "order_pending",
+                        RelatedOrderId = order.Id,
+                    },
+                    cancellationToken);
+                await customers.SaveChangesAsync(cancellationToken);
             }
 
             var vendorDisplay = string.IsNullOrWhiteSpace(agg.VendorBusinessName) ? "Vendor" : agg.VendorBusinessName!;
             var primaryImg = agg.ImageUrls.Count > 0 ? agg.ImageUrls[0] : null;
-            var placementTitle = trackedListing.ListingTitle;
-            if (order.ProductVariantId.HasValue && agg.Variants != null)
-            {
-                var variant = agg.Variants.FirstOrDefault(v => string.Equals(v.Id, order.ProductVariantId.Value.ToString(), StringComparison.OrdinalIgnoreCase));
-                if (variant != null)
-                {
-                    placementTitle += $" ({Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(variant.SizeValue, variant.SizeUnit)})";
-                }
-            }
             placed.Add(new CustomerOrderDto(
                 order.Id,
                 order.OrderNumber,
@@ -1479,7 +1592,9 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
 
 public sealed record GetCustomerOrdersQuery(Guid CustomerId) : IQuery<List<CustomerOrderDto>>;
 
-internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customers)
+internal sealed class GetCustomerOrdersQueryHandler(
+    ICustomerRepository customers,
+    ISequentialDispatchService dispatch)
     : IQueryHandler<GetCustomerOrdersQuery, List<CustomerOrderDto>>
 {
     public async Task<Result<List<CustomerOrderDto>>> Handle(GetCustomerOrdersQuery request, CancellationToken cancellationToken)
@@ -1496,13 +1611,13 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
             var changed = false;
             foreach (var row in rows)
             {
-                changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(
-                    customers, row.Order.Id, now, DispatchStateReconciler.SideEffectToken);
+                changed |= await dispatch.ReconcileAwaitingOrderAsync(
+                    row.Order.Id, now, DispatchStateReconciler.SideEffectToken);
             }
 
             if (changed)
             {
-                await customers.SaveChangesAsync(DispatchStateReconciler.SideEffectToken);
+                await dispatch.PersistAsync(DispatchStateReconciler.SideEffectToken);
                 if (!cancellationToken.IsCancellationRequested)
                 {
                     rows = await customers.GetCustomerOrdersAsync(request.CustomerId, cancellationToken);
@@ -1568,7 +1683,10 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
 
 public sealed record GetCustomerOrderDetailQuery(Guid CustomerId, Guid OrderId) : IQuery<CustomerOrderDto>;
 
-internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository customers)
+internal sealed class GetCustomerOrderDetailQueryHandler(
+    ICustomerRepository customers,
+    IVendorFileUrlResolver fileUrlResolver,
+    ISequentialDispatchService dispatch)
     : IQueryHandler<GetCustomerOrderDetailQuery, CustomerOrderDto>
 {
     public async Task<Result<CustomerOrderDto>> Handle(GetCustomerOrderDetailQuery request, CancellationToken cancellationToken)
@@ -1576,10 +1694,10 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
         // See GetCustomerOrdersQueryHandler — reconcile side-effects must not use RequestAborted.
         if (!cancellationToken.IsCancellationRequested)
         {
-            var changed = await DispatchStateReconciler.ReconcileAwaitingOrderAsync(
-                customers, request.OrderId, DateTimeOffset.UtcNow, DispatchStateReconciler.SideEffectToken);
+            var changed = await dispatch.ReconcileAwaitingOrderAsync(
+                request.OrderId, DateTimeOffset.UtcNow, DispatchStateReconciler.SideEffectToken);
             if (changed)
-                await customers.SaveChangesAsync(DispatchStateReconciler.SideEffectToken);
+                await dispatch.PersistAsync(DispatchStateReconciler.SideEffectToken);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -1596,6 +1714,7 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
         {
             title += $" ({row.VariantDescription})";
         }
+        var files = await customers.GetCustomerOrderPrescriptionFilesAsync(o.Id, cancellationToken);
         return Result.Success(new CustomerOrderDto(
             o.Id,
             o.OrderNumber,
@@ -1632,7 +1751,8 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
             RentalNormalPrice: o.RentalNormalPrice,
             RentalDiscountType: o.RentalDiscountType,
             RentalDiscountValue: o.RentalDiscountValue,
-            RentalFinalPrice: o.RentalFinalPrice));
+            RentalFinalPrice: o.RentalFinalPrice,
+            PrescriptionFiles: files.Select(f => CustomerPrescriptionRules.ToDto(f, fileUrlResolver)).ToList()));
     }
 }
 

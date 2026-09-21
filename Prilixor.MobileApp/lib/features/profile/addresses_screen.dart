@@ -200,15 +200,23 @@ class _AddressesScreenState extends State<AddressesScreen> {
                         padding: const EdgeInsets.only(top: 10.0),
                         child: Text(
                           'Pin set: ${latitude!.toStringAsFixed(4)}, ${longitude!.toStringAsFixed(4)}',
-                          style: const TextStyle(color: Color(0xFF34D399), fontSize: 12, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: context.appColors.success,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       )
                     else
-                      const Padding(
-                        padding: EdgeInsets.only(top: 10.0),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10.0),
                         child: Text(
                           'Map pin required — use Find on map to continue.',
-                          style: TextStyle(color: Color(0xFFFBBF24), fontSize: 12, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: context.appColors.warning,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     if (locationError != null)

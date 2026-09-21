@@ -104,16 +104,16 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: (_success! ? Colors.green : Colors.amber).withValues(alpha: 0.12),
+                color: (_success! ? colors.successSoft : colors.warningSoft),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: (_success! ? Colors.green : Colors.amber).withValues(alpha: 0.4),
+                  color: _success! ? colors.successBorder : colors.warningBorder,
                 ),
               ),
               child: Text(
                 _message ?? '',
                 style: TextStyle(
-                  color: _success! ? Colors.greenAccent : Colors.amber,
+                  color: _success! ? colors.success : colors.warning,
                   fontWeight: FontWeight.w600,
                 ),
               ),
