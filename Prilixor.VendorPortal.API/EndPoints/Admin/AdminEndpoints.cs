@@ -306,6 +306,35 @@ public sealed class GetAdminVendorSummariesEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminVerificationSummariesRequest
+{
+    public string? Search { get; set; }
+    public string? Status { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetAdminVerificationSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminVerificationSummariesRequest, Results<Ok<AdminVerificationListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("vendors/verification-summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:vendors.view");
+    }
+
+    public override async Task<Results<Ok<AdminVerificationListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminVerificationSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(new GetAdminVerificationListQuery(req.Search, req.Status, page, pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class AddAdminAuditLogEndpoint(IMediator mediator)
     : Endpoint<AddAdminAuditLogRequest, Results<Ok<AdminAuditLogDto>, ProblemHttpResult>>
 {

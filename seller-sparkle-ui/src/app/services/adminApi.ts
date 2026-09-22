@@ -30,6 +30,22 @@ export interface AdminVendorListResult {
   pageSize: number;
 }
 
+export interface AdminVerificationListRow {
+  id: string;
+  email: string;
+  accountStatus: string;
+  registrationStage: string;
+  isEmailVerified: boolean;
+  businessName?: string | null;
+}
+
+export interface AdminVerificationListResult {
+  items: AdminVerificationListRow[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface VendorProfileDto {
   id: string;
   vendorId: string;
@@ -815,6 +831,21 @@ export const adminApi = {
     qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
     qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 9));
     return apiClient.get<AdminVendorListResult>(`/admin/vendors/summaries?${qs.toString()}`, options);
+  },
+
+  async getVendorVerificationSummaries(params: {
+    search?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminVerificationListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.status && params.status !== "all") qs.set("status", params.status);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminVerificationListResult>(`/admin/vendors/verification-summaries?${qs.toString()}`, options);
   },
 
   async getVendorProfile(vendorId: string): Promise<VendorProfileDto> {

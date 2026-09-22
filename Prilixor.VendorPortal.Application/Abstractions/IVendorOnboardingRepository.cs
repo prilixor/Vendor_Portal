@@ -13,6 +13,7 @@ public interface IVendorOnboardingRepository
     Task<Vendor?> GetVendorByEmailVerificationTokenAsync(string token, CancellationToken cancellationToken);
     Task<List<Vendor>> GetVendorsAsync(CancellationToken cancellationToken);
     Task<AdminVendorListResult> SearchVendorSummariesAsync(AdminVendorListQuerySpec spec, CancellationToken cancellationToken);
+    Task<AdminVerificationListResult> SearchVendorVerificationSummariesAsync(AdminVerificationListQuerySpec spec, CancellationToken cancellationToken);
     Task AddVendorAsync(Vendor vendor, CancellationToken cancellationToken);
     Task UpdateVendorAsync(Vendor vendor, CancellationToken cancellationToken);
 

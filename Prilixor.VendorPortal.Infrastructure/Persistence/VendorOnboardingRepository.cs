@@ -108,6 +108,58 @@ public sealed class VendorOnboardingRepository(
         };
     }
 
+    public async Task<AdminVerificationListResult> SearchVendorVerificationSummariesAsync(
+        AdminVerificationListQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 100);
+        var search = spec.Search?.Trim() ?? string.Empty;
+        var status = (spec.Status ?? "all").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(status)) status = "all";
+
+        var query = dbContext.Vendors
+            .AsNoTracking()
+            .Where(v => !v.IsDeleted)
+            .Where(v => v.Profile != null && !v.Profile.IsDeleted)
+            .Where(v => v.RegistrationStage != "email_registered" && v.RegistrationStage != "profile_pending");
+
+        if (status != "all")
+        {
+            query = query.Where(v => v.AccountStatus.ToLower() == status);
+        }
+
+        if (!string.IsNullOrEmpty(search))
+        {
+            var s = search.ToLower();
+            query = query.Where(v =>
+                v.Email.ToLower().Contains(s) ||
+                (v.Profile != null && !v.Profile.IsDeleted && v.Profile.BusinessName.ToLower().Contains(s)));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var rows = await query
+            .OrderByDescending(v => v.CreatedOnUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(v => new AdminVerificationListRow(
+                v.Id.ToString(),
+                v.Email,
+                v.AccountStatus,
+                v.RegistrationStage,
+                v.IsEmailVerified,
+                v.Profile != null && !v.Profile.IsDeleted ? v.Profile.BusinessName : null))
+            .ToListAsync(cancellationToken);
+
+        return new AdminVerificationListResult
+        {
+            Items = rows,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
     public async Task AddVendorAsync(Vendor vendor, CancellationToken cancellationToken)
     {
         await dbContext.Vendors.AddAsync(vendor, cancellationToken);
