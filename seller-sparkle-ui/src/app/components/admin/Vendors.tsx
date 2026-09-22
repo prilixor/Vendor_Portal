@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Building2, FileText, Package, Search } from "lucide-react";
-import { toast } from "sonner";
 
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
@@ -11,7 +11,7 @@ import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
-import { adminApi, VendorDto, VendorProfileDto } from "@/app/services/adminApi";
+import { adminApi } from "@/app/services/adminApi";
 import type { AccountStatus } from "@/app/models";
 
 const PAGE_SIZE = 9;
@@ -19,7 +19,7 @@ const PAGE_SIZE = 9;
 const STATUS_FILTERS = ["all", "pending", "active", "rejected", "suspended", "banned"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
-function vendorInitials(businessName?: string, email?: string) {
+function vendorInitials(businessName?: string | null, email?: string) {
   const source = (businessName || email || "?").trim();
   const parts = source.split(/[\s._@-]+/).filter(Boolean);
   if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
@@ -28,95 +28,39 @@ function vendorInitials(businessName?: string, email?: string) {
 
 const Vendors = () => {
   const navigate = useNavigate();
-  const [vendors, setVendors] = useState<VendorDto[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [documentCounts, setDocumentCounts] = useState<Record<string, number>>({});
-  const [listingCounts, setListingCounts] = useState<Record<string, number>>({});
-  const [vendorProfiles, setVendorProfiles] = useState<Map<string, VendorProfileDto>>(new Map());
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    loadVendors();
-  }, []);
-
-  const loadVendors = async () => {
-    setLoading(true);
-    try {
-      const data = await adminApi.getVendors();
-      setVendors(data);
-      setLoading(false);
-
-      const docCounts: Record<string, number> = {};
-      const listCounts: Record<string, number> = {};
-      const profilesMap = new Map<string, VendorProfileDto>();
-
-      await Promise.all(
-        data.map(async (v) => {
-          try {
-            const docs = await adminApi.getVendorDocuments(v.id);
-            docCounts[v.id] = docs.length;
-          } catch {
-            docCounts[v.id] = 0;
-          }
-
-          try {
-            const listings = await adminApi.getVendorProductListings(v.id);
-            listCounts[v.id] = listings.length;
-          } catch {
-            listCounts[v.id] = 0;
-          }
-
-          try {
-            const profile = await adminApi.getVendorProfile(v.id);
-            profilesMap.set(v.id, profile);
-          } catch {
-            // Profile not found — vendor has not submitted a profile yet.
-          }
-        }),
-      );
-
-      setDocumentCounts(docCounts);
-      setListingCounts(listCounts);
-      setVendorProfiles(profilesMap);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load vendors.";
-      toast.error(message);
-      setLoading(false);
-    }
-  };
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return vendors
-      .filter((v) => {
-        if (statusFilter !== "all" && v.accountStatus !== statusFilter) return false;
-        if (!q) return true;
-        const profile = vendorProfiles.get(v.id);
-        const hay = [v.email, profile?.businessName, profile?.ownerName, profile?.city]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return hay.includes(q);
-      })
-      .sort((a, b) => {
-        const nameA = vendorProfiles.get(a.id)?.businessName || a.email;
-        const nameB = vendorProfiles.get(b.id)?.businessName || b.email;
-        return nameA.localeCompare(nameB, undefined, { sensitivity: "base" });
-      });
-  }, [vendors, vendorProfiles, search, statusFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageVendors = useMemo(
-    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filtered, safePage],
-  );
+    const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter]);
+  }, [debouncedSearch, statusFilter]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-vendor-summaries", page, debouncedSearch, statusFilter],
+    queryFn: () =>
+      adminApi.getVendorSummaries({
+        search: debouncedSearch,
+        status: statusFilter,
+        page,
+        pageSize: PAGE_SIZE,
+      }),
+  });
+
+  const vendors = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
     <div>
@@ -129,8 +73,8 @@ const Vendors = () => {
         <div className="relative w-full sm:max-w-xs">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search vendors"
             className="h-11 rounded-xl pl-9"
             aria-label="Search vendors"
@@ -148,15 +92,12 @@ const Vendors = () => {
         </Tabs>
       </div>
 
-      <PageContentGate loading={loading}>
+      <PageContentGate loading={isLoading}>
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-            {pageVendors.map((v) => {
-              const profile = vendorProfiles.get(v.id);
-              const name = profile?.businessName || v.email;
-              const initials = vendorInitials(profile?.businessName, v.email);
-              const docs = documentCounts[v.id];
-              const listings = listingCounts[v.id];
+            {vendors.map((v) => {
+              const name = v.businessName || v.email;
+              const initials = vendorInitials(v.businessName, v.email);
 
               return (
                 <div
@@ -179,8 +120,8 @@ const Vendors = () => {
                             className="shrink-0 px-2 py-0.5 text-[10px]"
                           />
                         </div>
-                        {profile?.ownerName ? (
-                          <p className="mt-0.5 truncate text-xs text-muted-foreground">{profile.ownerName}</p>
+                        {v.ownerName ? (
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">{v.ownerName}</p>
                         ) : null}
                         <CopyableEmail
                           email={v.email}
@@ -204,7 +145,7 @@ const Vendors = () => {
                           <FileText className="h-4 w-4" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold tabular-nums">{docs ?? "—"}</p>
+                          <p className="text-sm font-semibold tabular-nums">{v.documentCount}</p>
                           <p className="text-[11px] text-muted-foreground">Documents</p>
                         </div>
                       </button>
@@ -220,7 +161,7 @@ const Vendors = () => {
                           <Package className="h-4 w-4" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold tabular-nums">{listings ?? "—"}</p>
+                          <p className="text-sm font-semibold tabular-nums">{v.listingCount}</p>
                           <p className="text-[11px] text-muted-foreground">Listings</p>
                         </div>
                       </button>
@@ -235,12 +176,12 @@ const Vendors = () => {
             })}
           </div>
 
-          {filtered.length === 0 && (
+          {totalCount === 0 && (
             <div className="rounded-xl border border-dashed border-border py-14 text-center">
               <Building2 className="mx-auto h-8 w-8 text-muted-foreground/50" />
               <p className="mt-2 text-sm font-medium text-foreground">No vendors found</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {search.trim() || statusFilter !== "all"
+                {debouncedSearch || statusFilter !== "all"
                   ? "Try a different name, email, or status."
                   : "No vendors have been onboarded yet."}
               </p>
@@ -250,7 +191,7 @@ const Vendors = () => {
           <TablePagination
             page={safePage}
             pageSize={PAGE_SIZE}
-            total={filtered.length}
+            total={totalCount}
             onPageChange={setPage}
             label="vendors"
           />

@@ -277,6 +277,35 @@ public sealed class GetVendorsEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminVendorSummariesRequest
+{
+    public string? Search { get; set; }
+    public string? Status { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 9;
+}
+
+public sealed class GetAdminVendorSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminVendorSummariesRequest, Results<Ok<AdminVendorListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("vendors/summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:vendors.view");
+    }
+
+    public override async Task<Results<Ok<AdminVendorListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminVendorSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 9 : req.PageSize;
+        var result = await mediator.Send(new GetAdminVendorListQuery(req.Search, req.Status, page, pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class AddAdminAuditLogEndpoint(IMediator mediator)
     : Endpoint<AddAdminAuditLogRequest, Results<Ok<AdminAuditLogDto>, ProblemHttpResult>>
 {

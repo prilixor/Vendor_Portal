@@ -269,7 +269,10 @@ const AdminOrderDetail = () => {
       });
   }, [selectedOrder?.orderId]);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-order-summaries"] });
+  };
 
   const updateStatusMutation = useMutation({
     mutationFn: (newStatus: string) =>
