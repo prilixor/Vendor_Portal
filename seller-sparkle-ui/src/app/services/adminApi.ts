@@ -726,6 +726,23 @@ export interface AdminOrderDto {
   doctorContactNumber?: string;
 }
 
+export interface AdminOrderListStats {
+  totalCount: number;
+  revenue: number;
+  active: number;
+  returned: number;
+  failed: number;
+}
+
+export interface AdminOrderListResult {
+  items: AdminOrderDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  stats: AdminOrderListStats;
+  statusCounts: Record<string, number>;
+}
+
 export interface AdminExpiringOrderDto {
   orderId: string;
   orderNumber: string;
@@ -1072,6 +1089,21 @@ export const adminApi = {
 
   async getAdminOrders(options?: ApiClientOptions): Promise<AdminOrderDto[]> {
     return apiClient.get<AdminOrderDto[]>('/admin/orders', options);
+  },
+
+  async getAdminOrderSummaries(params: {
+    search?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminOrderListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.status && params.status !== "all") qs.set("status", params.status);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminOrderListResult>(`/admin/orders/summaries?${qs.toString()}`, options);
   },
 
   async getAdminOrderPrescriptions(orderId: string) {
