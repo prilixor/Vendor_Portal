@@ -14,6 +14,7 @@ public sealed class PlatformSmsSettingsService(
     ApplicationDbContext db,
     ISmsService sms,
     IOptions<TwilioOptions> twilioOptions,
+    IOptions<TwoFactorOptions> twoFactorOptions,
     IMemoryCache cache,
     ILogger<PlatformSmsSettingsService> logger) : IPlatformSmsSettingsService, IScopedService
 {
@@ -141,13 +142,19 @@ public sealed class PlatformSmsSettingsService(
             e.VendorBankVerified,
             e.VendorDocumentVerified,
             e.VendorServiceAreaUpdated,
-            TwilioConfigured: sms.IsEnabled || IsTwilioConfigured());
+            TwilioConfigured: sms.IsEnabled || IsSmsProviderConfigured());
 
-    private bool IsTwilioConfigured()
+    private bool IsSmsProviderConfigured()
     {
-        var o = twilioOptions.Value;
-        return o.Enabled
-               && !string.IsNullOrWhiteSpace(o.AccountSid)
-               && !string.IsNullOrWhiteSpace(o.AuthToken);
+        var twilio = twilioOptions.Value;
+        if (twilio.Enabled
+            && !string.IsNullOrWhiteSpace(twilio.AccountSid)
+            && !string.IsNullOrWhiteSpace(twilio.AuthToken))
+        {
+            return true;
+        }
+
+        var twoFactor = twoFactorOptions.Value;
+        return twoFactor.Enabled && !string.IsNullOrWhiteSpace(twoFactor.ApiKey);
     }
 }

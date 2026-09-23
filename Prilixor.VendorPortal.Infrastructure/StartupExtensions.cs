@@ -60,9 +60,27 @@ namespace Prilixor.VendorPortal.Infrastructure
 
             services.AddScoped<IEmailService, SmtpEmailService>();
             services.AddScoped<IPushNotificationService, WebPushNotificationService>();
+            services.Configure<SmsOptions>(configuration.GetSection(SmsOptions.SectionName));
             services.Configure<TwilioOptions>(configuration.GetSection(TwilioOptions.SectionName));
-            services.AddScoped<ISmsService, TwilioSmsService>();
-            services.AddSingleton<IPhoneVerificationService, TwilioPhoneVerificationService>();
+            services.Configure<TwoFactorOptions>(configuration.GetSection(TwoFactorOptions.SectionName));
+            services.AddHttpClient("TwoFactor", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+
+            var smsProvider = configuration.GetSection(SmsOptions.SectionName).GetValue<string>("Provider")
+                ?? "Twilio";
+            if (string.Equals(smsProvider, "2Factor", StringComparison.OrdinalIgnoreCase))
+            {
+                services.AddScoped<ISmsService, TwoFactorSmsService>();
+                services.AddSingleton<IPhoneVerificationService, TwoFactorPhoneVerificationService>();
+            }
+            else
+            {
+                services.AddScoped<ISmsService, TwilioSmsService>();
+                services.AddSingleton<IPhoneVerificationService, TwilioPhoneVerificationService>();
+            }
+
             services.AddScoped<IPlatformSmsSettingsService, PlatformSmsSettingsService>();
             services.AddMemoryCache();
             services.AddScoped<IWebsiteContentRepository, WebsiteContentRepository>();
