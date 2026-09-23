@@ -521,6 +521,7 @@ export interface ProductDto {
   favoriteCount: number;
   variants?: ProductVariantDto[];
   rentalPricingPlans?: ProductRentalPricingPlanDto[];
+  minimumRentalDays?: number | null;
 }
 
 export interface ProductImageDto {
@@ -680,6 +681,7 @@ export interface CreateProductRequest {
   coaDocumentUrl?: string;
   variants?: ProductVariantDto[];
   rentalPricingPlans?: ProductRentalPricingPlanDto[];
+  minimumRentalDays?: number | null;
 }
 
 export interface UpdateProductRequest {
@@ -713,6 +715,7 @@ export interface UpdateProductRequest {
   coaDocumentUrl?: string;
   variants?: ProductVariantDto[];
   rentalPricingPlans?: ProductRentalPricingPlanDto[];
+  minimumRentalDays?: number | null;
 }
 
 export interface ExcelUploadErrorDto {
@@ -1047,6 +1050,7 @@ export const adminApi = {
     dailyRent: number;
     buyPrice?: number | null;
     isRentEnabled: boolean;
+    minimumRentalDays?: number | null;
     existingPlans?: ProductRentalPricingPlanDto[];
   }): Promise<{
     plans: ProductRentalPricingPlanDto[];
@@ -1059,6 +1063,7 @@ export const adminApi = {
       dailyRent: data.dailyRent,
       buyPrice: data.buyPrice,
       isRentEnabled: data.isRentEnabled,
+      minimumRentalDays: data.minimumRentalDays ?? null,
       existingPlans: data.existingPlans,
     });
   },

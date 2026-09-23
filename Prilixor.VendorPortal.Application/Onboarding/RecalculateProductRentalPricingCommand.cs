@@ -105,7 +105,8 @@ internal sealed class RecalculateProductRentalPricingCommandHandler(
                 rentalPricingOptions.Value,
                 fileUrlResolver,
                 liveIcons),
-            ProductCatalogDocuments.ToDtos(entity, fileUrlResolver)));
+            ProductCatalogDocuments.ToDtos(entity, fileUrlResolver),
+            entity.MinimumRentalDays));
     }
 }
 
@@ -134,7 +135,8 @@ public sealed record PreviewProductRentalPricingQuery(
     decimal DailyRent,
     decimal? BuyPrice,
     bool IsRentEnabled,
-    List<CreateOrUpdateProductRentalPricingPlanDto>? ExistingPlans = null)
+    List<CreateOrUpdateProductRentalPricingPlanDto>? ExistingPlans = null,
+    int? MinimumRentalDays = null)
     : IQuery<PreviewProductRentalPricingDto>;
 
 public sealed record PreviewProductRentalPricingDto(
@@ -192,7 +194,8 @@ internal sealed class PreviewProductRentalPricingQueryHandler(
             request.BuyPrice,
             ProductRentalPricingApplicator.ToDurationInputs(masters),
             existing,
-            rentalPricingOptions.Value);
+            rentalPricingOptions.Value,
+            minimumRentalDays: request.MinimumRentalDays);
 
         var plans = ProductRentalPricingPlanSync.ToDtosFromCalculation(
             Guid.Empty,

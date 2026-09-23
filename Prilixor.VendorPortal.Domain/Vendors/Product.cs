@@ -23,6 +23,11 @@ public class Product : AuditableEntity<Guid>, ISoftDelete
     public decimal GstPercent { get; set; } = 18m;
     public bool IsRentEnabled { get; set; } = true;
     public bool IsBuyEnabled { get; set; } = true;
+    /// <summary>
+    /// When set, duration plans shorter than this many days are unavailable.
+    /// Null means every duration master is offered, subject to the buy-price cap.
+    /// </summary>
+    public int? MinimumRentalDays { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
