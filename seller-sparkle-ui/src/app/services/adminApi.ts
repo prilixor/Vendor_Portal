@@ -12,6 +12,40 @@ export interface VendorDto {
   createdAt: string;
 }
 
+export interface AdminVendorListRow {
+  id: string;
+  email: string;
+  accountStatus: string;
+  businessName?: string | null;
+  ownerName?: string | null;
+  city?: string | null;
+  documentCount: number;
+  listingCount: number;
+}
+
+export interface AdminVendorListResult {
+  items: AdminVendorListRow[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminVerificationListRow {
+  id: string;
+  email: string;
+  accountStatus: string;
+  registrationStage: string;
+  isEmailVerified: boolean;
+  businessName?: string | null;
+}
+
+export interface AdminVerificationListResult {
+  items: AdminVerificationListRow[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface VendorProfileDto {
   id: string;
   vendorId: string;
@@ -487,6 +521,7 @@ export interface ProductDto {
   favoriteCount: number;
   variants?: ProductVariantDto[];
   rentalPricingPlans?: ProductRentalPricingPlanDto[];
+  minimumRentalDays?: number | null;
 }
 
 export interface ProductImageDto {
@@ -646,6 +681,7 @@ export interface CreateProductRequest {
   coaDocumentUrl?: string;
   variants?: ProductVariantDto[];
   rentalPricingPlans?: ProductRentalPricingPlanDto[];
+  minimumRentalDays?: number | null;
 }
 
 export interface UpdateProductRequest {
@@ -679,6 +715,7 @@ export interface UpdateProductRequest {
   coaDocumentUrl?: string;
   variants?: ProductVariantDto[];
   rentalPricingPlans?: ProductRentalPricingPlanDto[];
+  minimumRentalDays?: number | null;
 }
 
 export interface ExcelUploadErrorDto {
@@ -726,6 +763,23 @@ export interface AdminOrderDto {
   doctorContactNumber?: string;
 }
 
+export interface AdminOrderListStats {
+  totalCount: number;
+  revenue: number;
+  active: number;
+  returned: number;
+  failed: number;
+}
+
+export interface AdminOrderListResult {
+  items: AdminOrderDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  stats: AdminOrderListStats;
+  statusCounts: Record<string, number>;
+}
+
 export interface AdminExpiringOrderDto {
   orderId: string;
   orderNumber: string;
@@ -765,6 +819,36 @@ export const adminApi = {
   // Vendors
   async getVendors(options?: ApiClientOptions): Promise<VendorDto[]> {
     return apiClient.get<VendorDto[]>('/admin/vendors', options);
+  },
+
+  async getVendorSummaries(params: {
+    search?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminVendorListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.status && params.status !== "all") qs.set("status", params.status);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 9));
+    return apiClient.get<AdminVendorListResult>(`/admin/vendors/summaries?${qs.toString()}`, options);
+  },
+
+  async getVendorVerificationSummaries(params: {
+    search?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminVerificationListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.status && params.status !== "all") qs.set("status", params.status);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminVerificationListResult>(`/admin/vendors/verification-summaries?${qs.toString()}`, options);
   },
 
   async getVendorProfile(vendorId: string): Promise<VendorProfileDto> {
@@ -970,6 +1054,7 @@ export const adminApi = {
     dailyRent: number;
     buyPrice?: number | null;
     isRentEnabled: boolean;
+    minimumRentalDays?: number | null;
     existingPlans?: ProductRentalPricingPlanDto[];
   }): Promise<{
     plans: ProductRentalPricingPlanDto[];
@@ -982,6 +1067,7 @@ export const adminApi = {
       dailyRent: data.dailyRent,
       buyPrice: data.buyPrice,
       isRentEnabled: data.isRentEnabled,
+      minimumRentalDays: data.minimumRentalDays ?? null,
       existingPlans: data.existingPlans,
     });
   },
@@ -1076,6 +1162,21 @@ export const adminApi = {
 
   async getAdminOrders(options?: ApiClientOptions): Promise<AdminOrderDto[]> {
     return apiClient.get<AdminOrderDto[]>('/admin/orders', options);
+  },
+
+  async getAdminOrderSummaries(params: {
+    search?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminOrderListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.status && params.status !== "all") qs.set("status", params.status);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminOrderListResult>(`/admin/orders/summaries?${qs.toString()}`, options);
   },
 
   async getAdminOrderPrescriptions(orderId: string) {

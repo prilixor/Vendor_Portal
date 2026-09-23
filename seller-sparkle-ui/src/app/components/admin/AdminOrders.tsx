@@ -44,16 +44,6 @@ const statusTabs = [
   { id: "dispatch_failed", label: "Dispatch Failed" },
 ] as const;
 
-function matchesAdminStatus(status: string, tabId: (typeof statusTabs)[number]["id"]): boolean {
-  if (tabId === "all") return true;
-  const s = status.trim().toLowerCase().replace(/_/g, " ");
-  if (tabId === "pending") return s === "pending" || s === "awaiting vendor acceptance";
-  if (tabId === "in_transit") return s.includes("transit");
-  if (tabId === "dispatch_failed") return s === "dispatch failed";
-  if (tabId === "cancelled") return s === "cancelled" || s === "canceled";
-  return s === tabId.replace(/_/g, " ");
-}
-
 function orderStatusBadgeClass(status: string): string {
   const s = status.toLowerCase().replace(/_/g, " ");
   if (s === "pending" || s.includes("awaiting")) {
@@ -113,10 +103,21 @@ export const AdminOrders = () => {
   }, [urlTab]);
   const [page, setPage] = useState(1);
 
-  const { data: orders = [], isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ["admin-order-summaries", page, debouncedSearch, activeTab],
+    queryFn: () =>
+      adminApi.getAdminOrderSummaries({
+        search: debouncedSearch,
+        status: activeTab,
+        page,
+        pageSize: PAGE_SIZE,
+      }, { quiet: true }),
   });
+
+  const orders = data?.items ?? [];
+  const stats = data?.stats ?? { totalCount: 0, revenue: 0, active: 0, returned: 0, failed: 0 };
+  const statusCounts = data?.statusCounts ?? {};
+  const totalCount = data?.totalCount ?? 0;
 
   useEffect(() => {
     const openParam = searchParams.get("open");
@@ -137,64 +138,6 @@ export const AdminOrders = () => {
     setPage(1);
   }, [debouncedSearch, activeTab]);
 
-  // Statistics Computations
-  const stats = useMemo(() => {
-    const totalCount = orders.length;
-    const revenue = orders.reduce((sum, o) => sum + o.totalAmount, 0);
-    const active = orders.filter((o) => {
-      const s = o.status.toLowerCase().replace(/_/g, " ");
-      return s === "active";
-    }).length;
-    const returned = orders.filter((o) => {
-      const s = o.status.toLowerCase().replace(/_/g, " ");
-      return s === "returned";
-    }).length;
-    const failed = orders.filter((o) => {
-      const s = o.status.toLowerCase().replace(/_/g, " ");
-      return s.includes("dispatch failed");
-    }).length;
-
-    return { totalCount, revenue, active, returned, failed };
-  }, [orders]);
-
-  // Filtering Logic
-  const filtered = useMemo(() => {
-    let list = orders;
-    const q = debouncedSearch.toLowerCase();
-    if (q) {
-      list = list.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.listingTitle.toLowerCase().includes(q) ||
-          o.customerName.toLowerCase().includes(q) ||
-          o.customerEmail.toLowerCase().includes(q) ||
-          o.vendorName.toLowerCase().includes(q) ||
-          o.orderId.toLowerCase().includes(q)
-      );
-    }
-    return list.filter((o) => matchesAdminStatus(o.status, activeTab));
-  }, [orders, debouncedSearch, activeTab]);
-
-  const statusCounts = useMemo(() => {
-    let searchable = orders;
-    const q = debouncedSearch.toLowerCase();
-    if (q) {
-      searchable = searchable.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.listingTitle.toLowerCase().includes(q) ||
-          o.customerName.toLowerCase().includes(q) ||
-          o.customerEmail.toLowerCase().includes(q) ||
-          o.vendorName.toLowerCase().includes(q) ||
-          o.orderId.toLowerCase().includes(q)
-      );
-    }
-    return statusTabs.reduce<Record<(typeof statusTabs)[number]["id"], number>>((acc, tab) => {
-      acc[tab.id] = tab.id === "all" ? searchable.length : searchable.filter((o) => matchesAdminStatus(o.status, tab.id)).length;
-      return acc;
-    }, {} as Record<(typeof statusTabs)[number]["id"], number>);
-  }, [orders, debouncedSearch]);
-
   const statusOptions = statusTabs.filter(
     (tab) => tab.id !== "bought_out" || (statusCounts[tab.id] ?? 0) > 0,
   );
@@ -211,15 +154,13 @@ export const AdminOrders = () => {
           },
         ];
 
-  // Pagination
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageSlice = useMemo(
-    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filtered, safePage]
-  );
 
-  // Grouping by Base Order Number
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
   const groupedOrders = useMemo(() => {
     const groups: Array<{
       baseOrderNumber: string;
@@ -230,7 +171,7 @@ export const AdminOrders = () => {
       totalAmount: number;
     }> = [];
 
-    pageSlice.forEach((order) => {
+    orders.forEach((order) => {
       const baseNum = order.orderNumber.split("-").slice(0, 3).join("-");
       let g = groups.find((x) => x.baseOrderNumber === baseNum);
       if (!g) {
@@ -249,7 +190,7 @@ export const AdminOrders = () => {
     });
 
     return groups;
-  }, [pageSlice]);
+  }, [orders]);
 
   return (
     <div className="space-y-6">
@@ -464,7 +405,7 @@ export const AdminOrders = () => {
             <TablePagination
               page={safePage}
               pageSize={PAGE_SIZE}
-              total={filtered.length}
+              total={totalCount}
               onPageChange={setPage}
               label="order items"
             />

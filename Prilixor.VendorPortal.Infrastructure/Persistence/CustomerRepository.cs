@@ -849,6 +849,89 @@ public sealed class CustomerRepository(
         return await AttachVariantDescriptionsAsync(withMedical, cancellationToken);
     }
 
+    public async Task<AdminOrderListResult> SearchAdminOrderSummariesAsync(
+        AdminOrderListQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 100);
+        var search = spec.Search?.Trim() ?? string.Empty;
+        var status = (spec.Status ?? "all").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(status)) status = "all";
+
+        var live = customerDb.CustomerRentalOrders.AsNoTracking().Where(o => !o.IsDeleted);
+
+        var stats = new AdminOrderListStats(
+            await live.CountAsync(cancellationToken),
+            await live.SumAsync(o => (decimal?)o.TotalAmount, cancellationToken) ?? 0,
+            await live.CountAsync(o => o.Status.ToLower() == "active", cancellationToken),
+            await live.CountAsync(o => o.Status.ToLower() == "returned", cancellationToken),
+            await live.CountAsync(o => o.Status.ToLower() == "dispatch_failed", cancellationToken));
+
+        Dictionary<string, int> statusCounts;
+        List<CustomerRentalOrder> pageOrders;
+
+        if (string.IsNullOrEmpty(search))
+        {
+            statusCounts = await BuildStatusCountsFromQueryAsync(live, cancellationToken);
+            var filtered = ApplyAdminOrderStatusFilter(live, status);
+            var totalCount = status == "all"
+                ? stats.TotalCount
+                : await filtered.CountAsync(cancellationToken);
+            pageOrders = await filtered
+                .Include(o => o.Customer)
+                .OrderByDescending(o => o.CreatedOnUtc)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+
+            var items = await MapAdminOrderListRowsAsync(pageOrders, cancellationToken);
+            return new AdminOrderListResult
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize,
+                Stats = stats,
+                StatusCounts = statusCounts,
+            };
+        }
+
+        var candidates = await live
+            .Include(o => o.Customer)
+            .OrderByDescending(o => o.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+
+        var listingHints = await LoadAdminOrderListingHintsAsync(
+            candidates.Select(o => o.VendorProductListingId),
+            cancellationToken);
+
+        var searchable = candidates
+            .Where(o => MatchesAdminOrderSearch(o, listingHints, search))
+            .ToList();
+
+        statusCounts = BuildStatusCountsFromOrders(searchable);
+        var statusFiltered = searchable
+            .Where(o => MatchesAdminOrderStatus(o.Status, status))
+            .ToList();
+        var searchTotal = statusFiltered.Count;
+        pageOrders = statusFiltered
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+
+        var searchItems = await MapAdminOrderListRowsAsync(pageOrders, cancellationToken);
+        return new AdminOrderListResult
+        {
+            Items = searchItems,
+            TotalCount = searchTotal,
+            Page = page,
+            PageSize = pageSize,
+            Stats = stats,
+            StatusCounts = statusCounts,
+        };
+    }
+
     public async Task AddCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken)
     {
         await customerDb.CustomerRentalOrderExtensions.AddAsync(extension, cancellationToken);
@@ -1588,6 +1671,183 @@ public sealed class CustomerRepository(
             .FirstOrDefaultAsync(l => l.Id == listingId && !l.IsDeleted, cancellationToken);
 
 
+
+    private static readonly string[] AdminOrderStatusTabs =
+    [
+        "all", "pending", "confirmed", "in_transit", "active", "returned", "bought_out", "cancelled", "dispatch_failed"
+    ];
+
+    private static IQueryable<CustomerRentalOrder> ApplyAdminOrderStatusFilter(
+        IQueryable<CustomerRentalOrder> query,
+        string status)
+    {
+        return status switch
+        {
+            "all" or "" => query,
+            "pending" => query.Where(o =>
+                o.Status.ToLower() == "pending" || o.Status.ToLower() == "awaiting_vendor_acceptance"),
+            "in_transit" => query.Where(o => o.Status.ToLower().Contains("transit")),
+            "cancelled" => query.Where(o =>
+                o.Status.ToLower() == "cancelled" || o.Status.ToLower() == "canceled"),
+            "dispatch_failed" => query.Where(o => o.Status.ToLower() == "dispatch_failed"),
+            _ => query.Where(o => o.Status.ToLower() == status),
+        };
+    }
+
+    private static bool MatchesAdminOrderStatus(string rawStatus, string tab)
+    {
+        if (tab is "all" or "") return true;
+        var s = rawStatus.Trim().ToLowerInvariant().Replace('_', ' ');
+        return tab switch
+        {
+            "pending" => s is "pending" or "awaiting vendor acceptance",
+            "in_transit" => s.Contains("transit", StringComparison.Ordinal),
+            "dispatch_failed" => s == "dispatch failed",
+            "cancelled" => s is "cancelled" or "canceled",
+            _ => s == tab.Replace('_', ' '),
+        };
+    }
+
+    private static bool MatchesAdminOrderSearch(
+        CustomerRentalOrder order,
+        IReadOnlyDictionary<Guid, (string ListingTitle, string VendorName)> listingHints,
+        string search)
+    {
+        var q = search.Trim();
+        if (q.Length == 0) return true;
+        if (order.OrderNumber.Contains(q, StringComparison.OrdinalIgnoreCase)) return true;
+        if (order.Id.ToString().Contains(q, StringComparison.OrdinalIgnoreCase)) return true;
+        if (order.Customer?.FullName.Contains(q, StringComparison.OrdinalIgnoreCase) == true) return true;
+        if (order.Customer?.Email.Contains(q, StringComparison.OrdinalIgnoreCase) == true) return true;
+        if (listingHints.TryGetValue(order.VendorProductListingId, out var hint))
+        {
+            if (hint.ListingTitle.Contains(q, StringComparison.OrdinalIgnoreCase)) return true;
+            if (hint.VendorName.Contains(q, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
+
+    private async Task<Dictionary<string, int>> BuildStatusCountsFromQueryAsync(
+        IQueryable<CustomerRentalOrder> query,
+        CancellationToken cancellationToken)
+    {
+        var groups = await query
+            .GroupBy(o => o.Status.ToLower())
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        return BuildStatusCountsFromPairs(groups.Select(g => (g.Status, g.Count)));
+    }
+
+    private static Dictionary<string, int> BuildStatusCountsFromOrders(IEnumerable<CustomerRentalOrder> orders)
+    {
+        return BuildStatusCountsFromPairs(
+            orders.GroupBy(o => o.Status.Trim().ToLowerInvariant())
+                .Select(g => (g.Key, g.Count())));
+    }
+
+    private static Dictionary<string, int> BuildStatusCountsFromPairs(IEnumerable<(string Status, int Count)> groups)
+    {
+        var counts = AdminOrderStatusTabs.ToDictionary(tab => tab, _ => 0);
+        foreach (var (status, count) in groups)
+        {
+            counts["all"] += count;
+            foreach (var tab in AdminOrderStatusTabs)
+            {
+                if (tab == "all") continue;
+                if (MatchesAdminOrderStatus(status, tab))
+                    counts[tab] += count;
+            }
+        }
+        return counts;
+    }
+
+    private async Task<Dictionary<Guid, (string ListingTitle, string VendorName)>> LoadAdminOrderListingHintsAsync(
+        IEnumerable<Guid> listingIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = listingIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new Dictionary<Guid, (string, string)>();
+
+        var rows = await vendorDb.VendorProductListings
+            .AsNoTracking()
+            .Where(l => ids.Contains(l.Id) && !l.IsDeleted)
+            .Select(l => new
+            {
+                l.Id,
+                l.ListingTitle,
+                VendorName = l.Vendor.Profile != null && l.Vendor.Profile.BusinessName != null
+                    ? l.Vendor.Profile.BusinessName
+                    : l.Vendor.Email,
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(
+            r => r.Id,
+            r => (r.ListingTitle, string.IsNullOrWhiteSpace(r.VendorName) ? "Vendor" : r.VendorName));
+    }
+
+    private async Task<List<AdminOrderListRow>> MapAdminOrderListRowsAsync(
+        List<CustomerRentalOrder> orders,
+        CancellationToken cancellationToken)
+    {
+        if (orders.Count == 0)
+            return [];
+
+        var listingIds = orders.ConvertAll(o => o.VendorProductListingId);
+        var map = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
+        var productMap = await LoadProductsWithImagesAsync(map.Values.Select(l => l.ProductId), cancellationToken);
+        var variantIds = orders
+            .Where(o => o.ProductVariantId.HasValue)
+            .Select(o => o.ProductVariantId!.Value)
+            .Distinct()
+            .ToList();
+        var variants = variantIds.Count == 0
+            ? new Dictionary<Guid, ProductVariant>()
+            : await commonDb.Set<ProductVariant>()
+                .AsNoTracking()
+                .Where(v => variantIds.Contains(v.Id))
+                .ToDictionaryAsync(v => v.Id, cancellationToken);
+
+        return orders.ConvertAll(o =>
+        {
+            var listing = map.GetValueOrDefault(o.VendorProductListingId);
+            var unassigned = string.Equals(o.Status, "dispatch_failed", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(o.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase);
+            var vendorName = unassigned
+                ? "Unassigned"
+                : (listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor");
+            var title = listing?.ListingTitle ?? "Deleted Product";
+            if (o.ProductVariantId.HasValue && variants.TryGetValue(o.ProductVariantId.Value, out var variant))
+            {
+                var desc = Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(variant.SizeValue, variant.SizeUnit);
+                if (!string.IsNullOrWhiteSpace(desc))
+                    title = $"{title} ({desc})";
+            }
+
+            return new AdminOrderListRow(
+                o.Id,
+                o.OrderNumber,
+                o.CustomerId,
+                o.Customer?.FullName ?? "Customer",
+                o.Customer?.Email ?? "customer@example.com",
+                vendorName,
+                title,
+                o.Status,
+                o.OrderType,
+                o.Quantity,
+                o.RentalDays,
+                o.TotalAmount,
+                o.DepositAmount,
+                o.VendorSubtotalAmount,
+                o.CreatedOnUtc,
+                o.StartDate,
+                o.EndDate,
+                ResolveOrderPrimaryImageUrl(listing, productMap),
+                o.IsExtended);
+        });
+    }
 
     private async Task<Dictionary<Guid, VendorProductListing>> LoadListingsWithVendorAsync(
 

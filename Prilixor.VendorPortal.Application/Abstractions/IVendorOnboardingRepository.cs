@@ -1,6 +1,7 @@
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.VendorPortal.Domain.Auth;
 using Prilixor.VendorPortal.Domain.Support;
+using Prilixor.VendorPortal.Application.Onboarding;
 
 namespace Prilixor.VendorPortal.Application.Abstractions;
 
@@ -11,6 +12,8 @@ public interface IVendorOnboardingRepository
     Task<Vendor?> GetVendorByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
     Task<Vendor?> GetVendorByEmailVerificationTokenAsync(string token, CancellationToken cancellationToken);
     Task<List<Vendor>> GetVendorsAsync(CancellationToken cancellationToken);
+    Task<AdminVendorListResult> SearchVendorSummariesAsync(AdminVendorListQuerySpec spec, CancellationToken cancellationToken);
+    Task<AdminVerificationListResult> SearchVendorVerificationSummariesAsync(AdminVerificationListQuerySpec spec, CancellationToken cancellationToken);
     Task AddVendorAsync(Vendor vendor, CancellationToken cancellationToken);
     Task UpdateVendorAsync(Vendor vendor, CancellationToken cancellationToken);
 

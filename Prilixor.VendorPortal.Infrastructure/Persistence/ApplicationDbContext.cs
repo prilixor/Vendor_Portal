@@ -324,6 +324,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.GstPercent).HasColumnName("gst_percent");
             entity.Property(x => x.IsRentEnabled).HasColumnName("is_rent_enabled");
             entity.Property(x => x.IsBuyEnabled).HasColumnName("is_buy_enabled");
+            entity.Property(x => x.MinimumRentalDays).HasColumnName("minimum_rental_days");
             entity.Property(x => x.IsActive).HasColumnName("is_active");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");

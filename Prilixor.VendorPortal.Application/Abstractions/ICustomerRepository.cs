@@ -32,6 +32,7 @@ public interface ICustomerRepository
     Task<CustomerRentalOrderWithListing?> GetCustomerOrderByIdAsync(Guid orderId, CancellationToken cancellationToken);
     Task<CustomerRentalOrder?> GetCustomerOrderEntityByIdAsync(Guid orderId, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderWithListing>> GetAllCustomerOrdersForAdminAsync(CancellationToken cancellationToken);
+    Task<AdminOrderListResult> SearchAdminOrderSummariesAsync(AdminOrderListQuerySpec spec, CancellationToken cancellationToken);
     Task<bool> OrderNumberExistsAsync(string orderNumber, CancellationToken cancellationToken);
     
     Task AddCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken);
