@@ -128,7 +128,8 @@ public sealed record ProductDto(
     string? CoaDocumentUrl = null,
     int FavoriteCount = 0,
     List<ProductRentalPricingPlanDto>? RentalPricingPlans = null,
-    List<ProductDocumentDto>? Documents = null);
+    List<ProductDocumentDto>? Documents = null,
+    int? MinimumRentalDays = null);
 
 public sealed record ProductVariantDto(
     string Id,
