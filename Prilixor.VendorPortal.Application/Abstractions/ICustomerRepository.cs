@@ -89,6 +89,7 @@ public interface ICustomerRepository
     Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForVendorAsync(Guid vendorId, DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
     Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForAdminAsync(DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
     Task<AdminExpirationListResult> SearchAdminExpirationSummariesAsync(AdminExpirationListQuerySpec spec, CancellationToken cancellationToken);
+    Task<int> CountAdminExpirationGroupsAsync(int withinDays, CancellationToken cancellationToken);
 
     Task<List<CustomerNotification>> GetCustomerNotificationsAsync(Guid customerId, CancellationToken cancellationToken);
     Task<CustomerNotification?> GetCustomerNotificationByIdAsync(Guid customerId, Guid notificationId, CancellationToken cancellationToken);

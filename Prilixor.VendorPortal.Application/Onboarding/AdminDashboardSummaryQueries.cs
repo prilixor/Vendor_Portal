@@ -6,7 +6,9 @@ namespace Prilixor.VendorPortal.Application.Onboarding;
 
 public sealed record GetAdminDashboardSummaryQuery : IQuery<AdminDashboardSummaryDto>;
 
-internal sealed class GetAdminDashboardSummaryQueryHandler(IVendorOnboardingRepository vendors)
+internal sealed class GetAdminDashboardSummaryQueryHandler(
+    IVendorOnboardingRepository vendors,
+    ICustomerRepository customers)
     : IQueryHandler<GetAdminDashboardSummaryQuery, AdminDashboardSummaryDto>
 {
     public async Task<Result<AdminDashboardSummaryDto>> Handle(
@@ -18,6 +20,7 @@ internal sealed class GetAdminDashboardSummaryQueryHandler(IVendorOnboardingRepo
         // Vendor repo shares DbContext instances — do not run its queries in parallel.
         var vendorSnap = await vendors.GetAdminDashboardVendorSnapshotAsync(5, cancellationToken);
         var auditSnap = await vendors.GetAdminDashboardAuditSnapshotAsync(sinceUtc, 5, cancellationToken);
+        var dueReturnsCount = await customers.CountAdminExpirationGroupsAsync(7, cancellationToken);
 
         return Result.Success(new AdminDashboardSummaryDto
         {
@@ -25,6 +28,7 @@ internal sealed class GetAdminDashboardSummaryQueryHandler(IVendorOnboardingRepo
             PendingVendorCount = vendorSnap.PendingVendorCount,
             ActiveVendorCount = vendorSnap.ActiveVendorCount,
             AuditEventCountLast7Days = auditSnap.AuditEventCountLast7Days,
+            DueReturnsCount = dueReturnsCount,
             PendingVendors = vendorSnap.PendingVendors,
             RecentAuditLogs = auditSnap.RecentAuditLogs,
         });

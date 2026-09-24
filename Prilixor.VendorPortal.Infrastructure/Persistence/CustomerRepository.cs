@@ -1457,6 +1457,30 @@ public sealed class CustomerRepository(
         };
     }
 
+    public async Task<int> CountAdminExpirationGroupsAsync(int withinDays, CancellationToken cancellationToken)
+    {
+        var days = Math.Clamp(withinDays, 1, 60);
+        var fromDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var toDate = fromDate.AddDays(days);
+
+        var orderNumbers = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Where(o =>
+                !o.IsDeleted &&
+                o.EndDate.HasValue &&
+                o.EndDate.Value >= fromDate &&
+                o.EndDate.Value <= toDate &&
+                o.OrderType.ToLower() != "buy" &&
+                o.Status == "active")
+            .Select(o => o.OrderNumber)
+            .ToListAsync(cancellationToken);
+
+        return orderNumbers
+            .Select(AdminExpirationGroupKey)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+    }
+
     public Task<List<CustomerNotification>> GetCustomerNotificationsAsync(Guid customerId, CancellationToken cancellationToken) =>
 
         customerDb.CustomerNotifications

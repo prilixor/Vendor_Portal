@@ -34,6 +34,7 @@ public sealed class AdminDashboardSummaryDto
     public int PendingVendorCount { get; init; }
     public int ActiveVendorCount { get; init; }
     public int AuditEventCountLast7Days { get; init; }
+    public int DueReturnsCount { get; init; }
     public List<AdminDashboardPendingVendorRow> PendingVendors { get; init; } = [];
     public List<AdminDashboardAuditLogRow> RecentAuditLogs { get; init; } = [];
 }

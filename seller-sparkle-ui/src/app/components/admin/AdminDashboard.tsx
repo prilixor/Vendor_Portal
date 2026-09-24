@@ -15,6 +15,7 @@ const emptySummary: AdminDashboardSummaryDto = {
   pendingVendorCount: 0,
   activeVendorCount: 0,
   auditEventCountLast7Days: 0,
+  dueReturnsCount: 0,
   pendingVendors: [],
   recentAuditLogs: [],
 };
@@ -22,7 +23,6 @@ const emptySummary: AdminDashboardSummaryDto = {
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [summary, setSummary] = useState<AdminDashboardSummaryDto>(emptySummary);
-  const [dueReturnsCount, setDueReturnsCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -32,12 +32,7 @@ const AdminDashboard = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [summaryData, expirationsData] = await Promise.all([
-        adminApi.getAdminDashboardSummary(),
-        adminApi.getAdminOrderExpirations(7).catch(() => []),
-      ]);
-      setSummary(summaryData);
-      setDueReturnsCount(expirationsData.length);
+      setSummary(await adminApi.getAdminDashboardSummary());
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load data.";
       toast.error(message);
@@ -83,7 +78,7 @@ const AdminDashboard = () => {
           />
           <StatCard
             label="Due in 7 days"
-            value={dueReturnsCount}
+            value={summary.dueReturnsCount}
             icon={TimerReset}
             accent="warning"
             onClick={() => navigate("/admin/expirations")}
