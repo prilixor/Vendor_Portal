@@ -317,6 +317,64 @@ public sealed class LegalDocumentRepository(
             .ToListAsync(ct);
     }
 
+    public async Task<(List<LegalAcceptance> Items, int TotalCount)> SearchAcceptancesForAdminPagedAsync(
+        string? searchTerm,
+        string? actorType,
+        Guid? documentId,
+        string? screen,
+        IReadOnlyCollection<Guid>? matchingActorIds,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = dbContext.LegalAcceptances
+            .AsNoTracking()
+            .Include(a => a.Document)
+            .Include(a => a.Version)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(actorType))
+            query = query.Where(a => a.ActorType == actorType.Trim().ToLowerInvariant());
+        if (documentId is { } id && id != Guid.Empty)
+            query = query.Where(a => a.DocumentId == id);
+        if (!string.IsNullOrWhiteSpace(screen))
+            query = query.Where(a => a.SourceScreen == screen.Trim().ToLowerInvariant());
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var raw = searchTerm.Trim();
+            var term = $"%{raw}%";
+            int? versionNumber = null;
+            var versionText = raw.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? raw[1..] : raw;
+            if (int.TryParse(versionText, out var parsedVersion))
+                versionNumber = parsedVersion;
+
+            var actorIds = matchingActorIds is { Count: > 0 } ? matchingActorIds.ToList() : [];
+
+            query = query.Where(a =>
+                (a.Document != null && (
+                    EF.Functions.ILike(a.Document.Title, term)
+                    || EF.Functions.ILike(a.Document.Slug, term)))
+                || EF.Functions.ILike(a.SignedName ?? "", term)
+                || EF.Functions.ILike(a.IpAddress ?? "", term)
+                || EF.Functions.ILike(a.SourceScreen, term)
+                || (versionNumber.HasValue && a.Version != null && a.Version.VersionNumber == versionNumber.Value)
+                || (actorIds.Count > 0 && actorIds.Contains(a.ActorId)));
+        }
+
+        var totalCount = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(a => a.AcceptedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, totalCount);
+    }
+
     public Task SaveChangesAsync(CancellationToken ct = default) =>
         dbContext.SaveChangesAsync(ct);
 

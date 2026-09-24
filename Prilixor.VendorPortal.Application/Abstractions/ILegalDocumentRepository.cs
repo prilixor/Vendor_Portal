@@ -27,6 +27,15 @@ public interface ILegalDocumentRepository
         string? screen,
         int take,
         CancellationToken ct = default);
+    Task<(List<LegalAcceptance> Items, int TotalCount)> SearchAcceptancesForAdminPagedAsync(
+        string? searchTerm,
+        string? actorType,
+        Guid? documentId,
+        string? screen,
+        IReadOnlyCollection<Guid>? matchingActorIds,
+        int page,
+        int pageSize,
+        CancellationToken ct = default);
 
     Task SaveChangesAsync(CancellationToken ct = default);
 }
