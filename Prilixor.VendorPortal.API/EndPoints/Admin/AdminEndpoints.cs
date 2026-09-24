@@ -44,6 +44,14 @@ public sealed class GetAdminOrderExpirationsRequest
     public int WithinDays { get; set; } = 7;
 }
 
+public sealed class GetAdminExpirationSummariesRequest
+{
+    public int WithinDays { get; set; } = 7;
+    public string? Search { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
 public sealed class GetAdminOrderSummariesRequest
 {
     public string? Search { get; set; }
@@ -723,6 +731,30 @@ public sealed class GetAdminOrderExpirationsEndpoint(IMediator mediator)
     public override async Task<Results<Ok<List<ExpiringOrderDto>>, ProblemHttpResult>> ExecuteAsync(GetAdminOrderExpirationsRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new GetAdminOrderExpirationsQuery(req.WithinDays), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminExpirationSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminExpirationSummariesRequest, Results<Ok<AdminExpirationListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("orders/expirations/summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:orders.view");
+    }
+
+    public override async Task<Results<Ok<AdminExpirationListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminExpirationSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var withinDays = req.WithinDays is < 1 or > 60 ? 7 : req.WithinDays;
+        var result = await mediator.Send(
+            new GetAdminExpirationListQuery(withinDays, req.Search, page, pageSize),
+            ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

@@ -912,6 +912,13 @@ export interface AdminExpiringOrderDto {
   listingPrimaryImageUrl?: string | null;
 }
 
+export interface AdminExpirationListResult {
+  items: AdminExpiringOrderDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface UpdateAdminOrderStatusRequest {
   adminUserId: string;
   orderId: string;
@@ -1387,6 +1394,21 @@ export const adminApi = {
 
   async getAdminOrderExpirations(withinDays = 7): Promise<AdminExpiringOrderDto[]> {
     return apiClient.get<AdminExpiringOrderDto[]>(`/admin/orders/expirations?withinDays=${withinDays}`);
+  },
+
+  async getAdminExpirationSummaries(params: {
+    withinDays?: number;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminExpirationListResult> {
+    const qs = new URLSearchParams();
+    qs.set("withinDays", String(params.withinDays && params.withinDays > 0 ? params.withinDays : 7));
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminExpirationListResult>(`/admin/orders/expirations/summaries?${qs.toString()}`, options);
   },
 
   async updateAdminOrderStatus(data: UpdateAdminOrderStatusRequest): Promise<AdminOrderDto> {

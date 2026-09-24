@@ -1383,7 +1383,79 @@ public sealed class CustomerRepository(
         return await MapExpiringOrdersAsync(orders, cancellationToken);
     }
 
+    public async Task<AdminExpirationListResult> SearchAdminExpirationSummariesAsync(
+        AdminExpirationListQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 100);
+        var days = Math.Clamp(spec.WithinDays, 1, 60);
+        var fromDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var toDate = fromDate.AddDays(days);
+        var search = spec.Search?.Trim() ?? string.Empty;
 
+        var orders = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Include(o => o.Customer)
+            .Where(o =>
+                !o.IsDeleted &&
+                o.EndDate.HasValue &&
+                o.EndDate.Value >= fromDate &&
+                o.EndDate.Value <= toDate &&
+                o.OrderType.ToLower() != "buy" &&
+                o.Status == "active")
+            .OrderBy(o => o.EndDate)
+            .ThenBy(o => o.OrderNumber)
+            .ToListAsync(cancellationToken);
+
+        IEnumerable<CustomerRentalOrder> filtered = orders;
+        if (!string.IsNullOrEmpty(search))
+        {
+            var hints = await LoadAdminOrderListingHintsAsync(
+                orders.Select(o => o.VendorProductListingId),
+                cancellationToken);
+            filtered = orders.Where(o => MatchesAdminExpirationSearch(o, hints, search));
+        }
+
+        var groups = new List<List<CustomerRentalOrder>>();
+        var index = new Dictionary<string, List<CustomerRentalOrder>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var order in filtered)
+        {
+            var key = AdminExpirationGroupKey(order.OrderNumber);
+            if (!index.TryGetValue(key, out var bucket))
+            {
+                bucket = [];
+                index[key] = bucket;
+                groups.Add(bucket);
+            }
+            bucket.Add(order);
+        }
+
+        var pageOrders = groups
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .SelectMany(g => g)
+            .ToList();
+        var aggregates = await MapExpiringOrdersAsync(pageOrders, cancellationToken);
+
+        return new AdminExpirationListResult
+        {
+            Items = aggregates.ConvertAll(r => new ExpiringOrderDto(
+                r.OrderId,
+                r.OrderNumber,
+                r.CustomerName,
+                r.VendorName,
+                r.ListingTitle,
+                r.Status,
+                r.OrderType,
+                r.EndDate,
+                Math.Max(0, r.EndDate.DayNumber - fromDate.DayNumber),
+                r.ListingPrimaryImageUrl)),
+            TotalCount = groups.Count,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
 
     public Task<List<CustomerNotification>> GetCustomerNotificationsAsync(Guid customerId, CancellationToken cancellationToken) =>
 
@@ -1961,6 +2033,34 @@ public sealed class CustomerRepository(
             return item with { VariantDescription = desc };
         }
         return item;
+    }
+
+    private static string AdminExpirationGroupKey(string orderNumber)
+    {
+        var parts = orderNumber.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 3 ? string.Join("-", parts.Take(3)) : orderNumber;
+    }
+
+    private static bool MatchesAdminExpirationSearch(
+        CustomerRentalOrder order,
+        Dictionary<Guid, (string ListingTitle, string VendorName)> hints,
+        string search)
+    {
+        if (order.OrderNumber.Contains(search, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var groupKey = AdminExpirationGroupKey(order.OrderNumber);
+        if (groupKey.Contains(search, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if ((order.Customer?.FullName ?? string.Empty).Contains(search, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!hints.TryGetValue(order.VendorProductListingId, out var hint))
+            return false;
+
+        return hint.ListingTitle.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || hint.VendorName.Contains(search, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<List<ExpiringOrderAggregate>> MapExpiringOrdersAsync(
