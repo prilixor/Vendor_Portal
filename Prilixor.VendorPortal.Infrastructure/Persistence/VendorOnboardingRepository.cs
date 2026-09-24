@@ -1945,6 +1945,70 @@ public sealed class VendorOnboardingRepository(
         };
     }
 
+    public async Task<AdminDashboardVendorSnapshot> GetAdminDashboardVendorSnapshotAsync(
+        int pendingTake,
+        CancellationToken cancellationToken)
+    {
+        var limit = Math.Clamp(pendingTake, 1, 20);
+
+        var statusCounts = await dbContext.Vendors
+            .AsNoTracking()
+            .Where(v => !v.IsDeleted)
+            .GroupBy(v => v.AccountStatus.ToLower())
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        var pendingVendors = await dbContext.Vendors
+            .AsNoTracking()
+            .Where(v => !v.IsDeleted && v.AccountStatus.ToLower() == "pending")
+            .OrderByDescending(v => v.CreatedOnUtc)
+            .Take(limit)
+            .Select(v => new AdminDashboardPendingVendorRow(
+                v.Id.ToString(),
+                v.Email,
+                v.RegistrationStage,
+                v.IsEmailVerified))
+            .ToListAsync(cancellationToken);
+
+        return new AdminDashboardVendorSnapshot
+        {
+            TotalVendorCount = statusCounts.Sum(x => x.Count),
+            PendingVendorCount = statusCounts.FirstOrDefault(x => x.Status == "pending")?.Count ?? 0,
+            ActiveVendorCount = statusCounts.FirstOrDefault(x => x.Status == "active")?.Count ?? 0,
+            PendingVendors = pendingVendors,
+        };
+    }
+
+    public async Task<AdminDashboardAuditSnapshot> GetAdminDashboardAuditSnapshotAsync(
+        DateTime sinceUtc,
+        int take,
+        CancellationToken cancellationToken)
+    {
+        var limit = Math.Clamp(take, 1, 20);
+        var query = adminDbContext.AdminAuditLogs
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.CreatedOnUtc >= sinceUtc);
+
+        var count = await query.CountAsync(cancellationToken);
+        var rows = await query
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .Take(limit)
+            .Select(x => new AdminDashboardAuditLogRow(
+                x.Id.ToString(),
+                x.ActionType,
+                x.AdminUser != null ? x.AdminUser.FullName : null,
+                x.AdminUser != null ? x.AdminUser.Email : null,
+                x.AdminId.ToString(),
+                x.EntityType))
+            .ToListAsync(cancellationToken);
+
+        return new AdminDashboardAuditSnapshot
+        {
+            AuditEventCountLast7Days = count,
+            RecentAuditLogs = rows,
+        };
+    }
+
     public Task<PasswordResetToken?> GetPasswordResetTokenAsync(string token, CancellationToken cancellationToken)
     {
         return adminDbContext.PasswordResetTokens

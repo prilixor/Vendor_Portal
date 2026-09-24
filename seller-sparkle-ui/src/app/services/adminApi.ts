@@ -97,6 +97,31 @@ export interface AdminAlertFeedResult {
   counts: AdminAlertFeedCounts;
 }
 
+export interface AdminDashboardPendingVendorRow {
+  id: string;
+  email: string;
+  registrationStage: string;
+  isEmailVerified: boolean;
+}
+
+export interface AdminDashboardAuditLogRow {
+  id: string;
+  actionType: string;
+  adminName?: string | null;
+  adminEmail?: string | null;
+  adminId: string;
+  entityType: string;
+}
+
+export interface AdminDashboardSummaryDto {
+  totalVendorCount: number;
+  pendingVendorCount: number;
+  activeVendorCount: number;
+  auditEventCountLast7Days: number;
+  pendingVendors: AdminDashboardPendingVendorRow[];
+  recentAuditLogs: AdminDashboardAuditLogRow[];
+}
+
 export interface VendorProfileDto {
   id: string;
   vendorId: string;
@@ -1271,6 +1296,10 @@ export const adminApi = {
     qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
     qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 15));
     return apiClient.get<AdminAlertFeedResult>(`/admin/alerts/feed?${qs.toString()}`, options);
+  },
+
+  async getAdminDashboardSummary(options?: ApiClientOptions): Promise<AdminDashboardSummaryDto> {
+    return apiClient.get<AdminDashboardSummaryDto>('/admin/dashboard/summary', options);
   },
 
   async getAdminOrders(options?: ApiClientOptions): Promise<AdminOrderDto[]> {

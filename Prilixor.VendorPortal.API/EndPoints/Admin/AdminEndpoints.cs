@@ -378,6 +378,23 @@ public sealed class GetAdminAlertFeedEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminDashboardSummaryEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<AdminDashboardSummaryDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("dashboard/summary");
+        Group<AdminApiGroup>();
+        Policies("Perm:dashboard.view");
+    }
+
+    public override async Task<Results<Ok<AdminDashboardSummaryDto>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetAdminDashboardSummaryQuery(), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class AddAdminAuditLogEndpoint(IMediator mediator)
     : Endpoint<AddAdminAuditLogRequest, Results<Ok<AdminAuditLogDto>, ProblemHttpResult>>
 {

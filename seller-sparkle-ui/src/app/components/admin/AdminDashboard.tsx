@@ -4,16 +4,24 @@ import { StatCard } from "@/app/components/shared/StatCard";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { PageContentGate } from "@/app/components/shared/PageLoader";
-import { adminApi, AdminAuditLogDto, VendorDto } from "@/app/services/adminApi";
+import { adminApi, AdminDashboardSummaryDto } from "@/app/services/adminApi";
 import { Building2, Clock, CheckCircle2, ScrollText, ArrowUpRight, TimerReset } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 
+const emptySummary: AdminDashboardSummaryDto = {
+  totalVendorCount: 0,
+  pendingVendorCount: 0,
+  activeVendorCount: 0,
+  auditEventCountLast7Days: 0,
+  pendingVendors: [],
+  recentAuditLogs: [],
+};
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const [auditLogs, setAuditLogs] = useState<AdminAuditLogDto[]>([]);
-  const [vendors, setVendors] = useState<VendorDto[]>([]);
+  const [summary, setSummary] = useState<AdminDashboardSummaryDto>(emptySummary);
   const [dueReturnsCount, setDueReturnsCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -24,13 +32,11 @@ const AdminDashboard = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [logsData, vendorsData, expirationsData] = await Promise.all([
-        adminApi.getAuditLogs().catch(() => []),
-        adminApi.getVendors().catch(() => []),
+      const [summaryData, expirationsData] = await Promise.all([
+        adminApi.getAdminDashboardSummary(),
         adminApi.getAdminOrderExpirations(7).catch(() => []),
       ]);
-      setAuditLogs(logsData);
-      setVendors(vendorsData);
+      setSummary(summaryData);
       setDueReturnsCount(expirationsData.length);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load data.";
@@ -39,18 +45,6 @@ const AdminDashboard = () => {
       setLoading(false);
     }
   };
-
-  const total = vendors.length;
-  const pending = vendors.filter(v => v.accountStatus === "pending").length;
-  const active = vendors.filter(v => v.accountStatus === "active").length;
-
-  // Filter audit logs for last 7 days
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const recentAuditLogs = auditLogs.filter(log => {
-    const logDate = new Date(log.createdAt);
-    return logDate >= sevenDaysAgo;
-  });
 
   return (
     <div>
@@ -61,28 +55,28 @@ const AdminDashboard = () => {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard 
             label="Total vendors" 
-            value={total} 
+            value={summary.totalVendorCount} 
             icon={Building2} 
             accent="primary" 
             onClick={() => navigate("/admin/vendors")}
           />
           <StatCard 
             label="Pending verifications" 
-            value={pending} 
+            value={summary.pendingVendorCount} 
             icon={Clock} 
             accent="warning" 
             onClick={() => navigate("/admin/verification?status=pending")}
           />
           <StatCard 
             label="Active vendors" 
-            value={active} 
+            value={summary.activeVendorCount} 
             icon={CheckCircle2} 
             accent="success" 
             onClick={() => navigate("/admin/verification?status=active")}
           />
           <StatCard 
             label="Audit events (7d)" 
-            value={recentAuditLogs.length} 
+            value={summary.auditEventCountLast7Days} 
             icon={ScrollText} 
             accent="info" 
             onClick={() => navigate("/admin/notifications?tab=logs")}
@@ -105,7 +99,7 @@ const AdminDashboard = () => {
             </Button>
           </div>
             <ul className="divide-y divide-border">
-              {vendors.filter(v => v.accountStatus === "pending").slice(0, 5).map((vendor) => (
+              {summary.pendingVendors.map((vendor) => (
                 <li key={vendor.id} className="p-4 hover:bg-muted/50 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
@@ -126,7 +120,7 @@ const AdminDashboard = () => {
                   </div>
                 </li>
               ))}
-              {vendors.filter(v => v.accountStatus === "pending").length === 0 && (
+              {summary.pendingVendors.length === 0 && (
                 <li className="p-8 text-center text-muted-foreground text-sm">No pending verifications</li>
               )}
             </ul>
@@ -137,7 +131,7 @@ const AdminDashboard = () => {
             <h2 className="font-semibold">Recent audit events (Last 7 days)</h2>
           </div>
             <ul className="divide-y divide-border">
-              {recentAuditLogs.slice(0, 5).map((log) => (
+              {summary.recentAuditLogs.map((log) => (
                 <li key={log.id} className="p-3">
                   <p className="text-xs font-mono font-semibold text-primary">{log.actionType}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -145,7 +139,7 @@ const AdminDashboard = () => {
                   </p>
                 </li>
               ))}
-              {recentAuditLogs.length === 0 && (
+              {summary.recentAuditLogs.length === 0 && (
                 <li className="p-8 text-center text-muted-foreground text-sm">No recent audit events</li>
               )}
             </ul>
@@ -158,5 +152,3 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
-
-

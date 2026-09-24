@@ -163,6 +163,8 @@ public interface IVendorOnboardingRepository
     Task<int> CountAdminAuditLogsAsync(CancellationToken cancellationToken);
     Task<List<AdminAlertPendingVendorRow>> SearchPendingVendorAlertsAsync(int take, CancellationToken cancellationToken);
     Task<AdminAlertAuditLogPage> SearchAdminAlertAuditLogsAsync(string kind, int page, int pageSize, CancellationToken cancellationToken);
+    Task<AdminDashboardVendorSnapshot> GetAdminDashboardVendorSnapshotAsync(int pendingTake, CancellationToken cancellationToken);
+    Task<AdminDashboardAuditSnapshot> GetAdminDashboardAuditSnapshotAsync(DateTime sinceUtc, int take, CancellationToken cancellationToken);
 
     Task<PasswordResetToken?> GetPasswordResetTokenAsync(string token, CancellationToken cancellationToken);
     Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken);
