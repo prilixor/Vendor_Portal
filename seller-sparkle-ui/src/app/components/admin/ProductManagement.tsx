@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useQueryTab } from "@/app/helpers/queryTab";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
@@ -16,9 +17,9 @@ import { TablePagination } from "@/app/components/shared/TablePagination";
 import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { Textarea } from "@/app/components/ui/textarea";
-import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto, ProductRentalPricingPlanDto, RentalDurationMasterDto, RentalDurationIconDto } from "@/app/services/adminApi";
+import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto, ProductRentalPricingPlanDto, RentalDurationMasterDto, RentalDurationIconDto, type PagedResult } from "@/app/services/adminApi";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
-import { resolveCatalogProductImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, resolveCatalogProductImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -53,14 +54,14 @@ function toRentalPlanSaveDto(plan: ProductRentalPricingPlanDto, index: number): 
 }
 
 const ProductManagement = () => {
+  const queryClient = useQueryClient();
   const [categories, setCategories] = useState<ProductCategoryDto[]>([]);
-  const [products, setProducts] = useState<ProductDto[]>([]);
-  const [productTotalCount, setProductTotalCount] = useState(0);
   const [rentalDurationMasters, setRentalDurationMasters] = useState<RentalDurationMasterDto[]>([]);
   const [rentalDurationIcons, setRentalDurationIcons] = useState<RentalDurationIconDto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useQueryTab(PRODUCT_TABS, "equipment");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [categoryPage, setCategoryPage] = useState(1);
@@ -160,16 +161,17 @@ const ProductManagement = () => {
   };
 
   const loadProducts = async () => {
-    const result = await adminApi.getProductSummaries({
-      search: search.trim() || undefined,
-      status: statusFilter,
-      favoritesOnly: showFavoritesOnly,
-      isChemical: false,
-      page: productPage,
-      pageSize: PAGE_SIZE,
-    });
-    setProducts(result.items);
-    setProductTotalCount(result.totalCount);
+    await queryClient.invalidateQueries({ queryKey: ["admin-product-summaries", "equipment"] });
+  };
+
+  const patchListedProduct = (productId: string, patch: (row: ProductDto) => ProductDto) => {
+    queryClient.setQueriesData<PagedResult<ProductDto>>(
+      { queryKey: ["admin-product-summaries", "equipment"] },
+      (current) =>
+        current
+          ? { ...current, items: current.items.map((row) => (row.id === productId ? patch(row) : row)) }
+          : current,
+    );
   };
 
   const refreshPage = async () => {
@@ -194,42 +196,39 @@ const ProductManagement = () => {
   });
 
   useEffect(() => {
-    setCategoryPage(1);
-    setProductPage(1);
-  }, [search, statusFilter, showFavoritesOnly, activeTab]);
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
-    let cancelled = false;
-    const delay = search.trim() ? 300 : 0;
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        setLoading(true);
-        try {
-          const result = await adminApi.getProductSummaries({
-            search: search.trim() || undefined,
-            status: statusFilter,
-            favoritesOnly: showFavoritesOnly,
-            isChemical: false,
-            page: productPage,
-            pageSize: PAGE_SIZE,
-          });
-          if (cancelled) return;
-          setProducts(result.items);
-          setProductTotalCount(result.totalCount);
-        } catch (error) {
-          if (cancelled) return;
-          const message = error instanceof Error ? error.message : "Failed to load catalog data.";
-          toast.error(message);
-        } finally {
-          if (!cancelled) setLoading(false);
-        }
-      })();
-    }, delay);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [search, statusFilter, showFavoritesOnly, productPage]);
+    setCategoryPage(1);
+  }, [search, statusFilter, activeTab]);
+
+  useEffect(() => {
+    setProductPage(1);
+  }, [debouncedSearch, statusFilter, showFavoritesOnly, activeTab]);
+
+  const { data, isLoading: productsLoading, isPlaceholderData } = useQuery({
+    queryKey: ["admin-product-summaries", "equipment", productPage, debouncedSearch, statusFilter, showFavoritesOnly],
+    queryFn: () =>
+      adminApi.getProductSummaries({
+        search: debouncedSearch || undefined,
+        status: statusFilter,
+        favoritesOnly: showFavoritesOnly,
+        isChemical: false,
+        page: productPage,
+        pageSize: PAGE_SIZE,
+      }),
+    placeholderData: keepPreviousData,
+  });
+  const isPageChanging = isPlaceholderData && !productsLoading;
+  const products = data?.items ?? [];
+  const productTotalCount = data?.totalCount ?? 0;
+  const productTotalPages = Math.max(1, Math.ceil(productTotalCount / PAGE_SIZE));
+
+  useEffect(() => {
+    if (productPage > productTotalPages) setProductPage(productTotalPages);
+  }, [productPage, productTotalPages]);
 
   useEffect(() => {
     if (!productDialogOpen) return;
@@ -381,7 +380,7 @@ const ProductManagement = () => {
         rentalPricingPlans: product.rentalPricingPlans,
       });
 
-      setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...updated, images: p.images, rentalPricingPlans: undefined } : p)));
+      patchListedProduct(id, (p) => ({ ...p, ...updated, images: p.images, rentalPricingPlans: undefined }));
       toast.success(`Product ${action}d successfully`);
       setStatusConfirmId(null);
       setStatusConfirmAction(null);
@@ -487,7 +486,7 @@ const ProductManagement = () => {
       const images = await adminApi.getProductImages(productId);
       setProductImages(images);
       setNewImageIsPrimary(images.length === 0);
-      setProducts((prev) => prev.map((p) => (p.id === productId ? { ...p, images } : p)));
+      patchListedProduct(productId, (p) => ({ ...p, images }));
     } catch (error) {
       if (!silent) {
         const message = error instanceof Error ? error.message : "Failed to load product images.";
@@ -928,8 +927,8 @@ const ProductManagement = () => {
   };
 
   const renderProductGrid = () => (
-    <PageContentGate loading={loading}>
-      <>
+    <PageContentGate loading={productsLoading}>
+      <div className={cn("space-y-4 transition-opacity duration-200", isPageChanging && "opacity-50")}>
       <div className="max-w-full overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
           <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -1020,16 +1019,14 @@ const ProductManagement = () => {
           </tbody>
         </table>
       </div>
-      {!loading && (
-        <TablePagination
-          page={productPage}
-          pageSize={PAGE_SIZE}
-          total={productTotalCount}
-          onPageChange={setProductPage}
-          label="products"
-        />
-      )}
-    </>
+      <TablePagination
+        page={Math.min(productPage, productTotalPages)}
+        pageSize={PAGE_SIZE}
+        total={productTotalCount}
+        onPageChange={setProductPage}
+        label="products"
+      />
+      </div>
     </PageContentGate>
   );
 
